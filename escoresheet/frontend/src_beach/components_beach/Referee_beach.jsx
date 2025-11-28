@@ -719,8 +719,7 @@ export default function Referee({ matchId, onExit }) {
             >
               C
             </span>
-          )
-        })()}
+        )}
         {/* Beach volleyball: No substitutions */}
         {/* Beach volleyball: No libero indicator */}
         {number}
