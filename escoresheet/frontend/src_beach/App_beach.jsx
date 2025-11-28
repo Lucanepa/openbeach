@@ -1304,7 +1304,19 @@ export default function App() {
                     className="home-download-link"
                     target="_blank"
                     rel="noopener noreferrer"
-                    download
+                    onClick={(e) => {
+                      // Check if file exists, if not show message
+                      fetch(e.currentTarget.href, { method: 'HEAD' })
+                        .then(res => {
+                          if (!res.ok) {
+                            e.preventDefault()
+                            alert('Windows installer not yet available. Please check back soon or build it yourself using: npm run electron:build:win')
+                          }
+                        })
+                        .catch(() => {
+                          // Allow download attempt even if check fails
+                        })
+                    }}
                   >
                     <div className="home-download-item">
                       <div className="home-download-icon">🪟</div>
@@ -1319,7 +1331,19 @@ export default function App() {
                     className="home-download-link"
                     target="_blank"
                     rel="noopener noreferrer"
-                    download
+                    onClick={(e) => {
+                      // Check if file exists, if not show message
+                      fetch(e.currentTarget.href, { method: 'HEAD' })
+                        .then(res => {
+                          if (!res.ok) {
+                            e.preventDefault()
+                            alert('macOS installer not yet available. Please check back soon or build it yourself using: npm run electron:build:mac')
+                          }
+                        })
+                        .catch(() => {
+                          // Allow download attempt even if check fails
+                        })
+                    }}
                   >
                     <div className="home-download-item">
                       <div className="home-download-icon">🍎</div>
@@ -1370,6 +1394,9 @@ export default function App() {
                 </div>
                 <div className="home-download-note">
                   <p>💡 <strong>Mobile:</strong> Visit this site on your device and use "Add to Home Screen" to install as an app.</p>
+                  <p style={{ marginTop: '8px', fontSize: '11px', opacity: 0.8 }}>
+                    <strong>Desktop:</strong> Download links point to GitHub Releases. If files aren't available yet, build them locally using the commands in README_ELECTRON.md
+                  </p>
                 </div>
               </div>
             </div>

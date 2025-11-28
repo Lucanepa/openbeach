@@ -45,13 +45,15 @@
       "electron/**/*"
     ],
     "win": {
-      "target": ["nsis", "portable"],
-      "icon": "build/icon.ico"
+      "target": ["nsis"],
+      "icon": "build/icon.ico",
+      "artifactName": "OpenBeach-eScoresheet-Setup.${ext}"
     },
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": ["dmg"],
       "icon": "build/icon.icns",
-      "category": "public.app-category.sports"
+      "category": "public.app-category.sports",
+      "artifactName": "OpenBeach-eScoresheet.${ext}"
     },
     "linux": {
       "target": ["AppImage", "deb"],
