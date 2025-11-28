@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db_beach/db_beach'
 import Modal from './Modal_beach'
-import { useSyncQueue } from '../hooks_beach/useSyncQueue_beach'
 import SignaturePad from './SignaturePad_beach'
 import mikasaVolleyball from '../mikasa_BV550C_beach.png'
 import challengeIcon from '../challenge.png'
@@ -10,7 +9,6 @@ import { generateScoresheetPDF } from '../utils_beach/generateScoresheetPDF_beac
 import { generateBeachScoresheetPDF } from '../utils_beach/generateBeachScoresheetPDF_beach'
 
 export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMatchSetup, onOpenCoinToss }) {
-  const { syncStatus } = useSyncQueue()
   const [now, setNow] = useState(() => new Date())
   const [isOnline, setIsOnline] = useState(() =>
     typeof navigator !== 'undefined' ? navigator.onLine : true
@@ -222,25 +220,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       awayPoints: 0,
       finished: false,
       serviceOrder: serviceOrder
-    })
-    
-    const isTest = match?.test || false
-    
-    await db.sync_queue.add({
-      resource: 'set',
-      action: 'insert',
-      payload: {
-        external_id: String(setId),
-        match_id: match?.externalId || String(matchId),
-        index: nextIndex,
-        home_points: 0,
-        away_points: 0,
-        finished: false,
-        test: isTest,
-        created_at: new Date().toISOString()
-      },
-      ts: new Date().toISOString(),
-      status: 'queued'
     })
   }, [matchId])
 
@@ -764,26 +743,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         seq: nextSeq // Use sequence for ordering
       })
       
-      // Get match to check if it's a test match
-      const match = await db.matches.get(matchId)
-      const isTest = match?.test || false
-      
-      // Only sync official matches to Supabase, not test matches
-      if (!isTest) {
-        await db.sync_queue.add({
-          resource: 'event',
-          action: 'insert',
-          payload: {
-            match_id: match?.externalId || null,
-            set_index: data.set.index,
-            type,
-            payload,
-            test: false
-          },
-          ts: Date.now(),
-          status: 'queued'
-        })
-      }
     },
     [data?.set, matchId, getNextSeq]
   )
@@ -866,17 +825,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       // - Only update match status to 'final' - DO NOT DELETE ANYTHING
       await db.matches.update(set.matchId, { status: 'final' })
       
-      await db.sync_queue.add({
-        resource: 'match',
-        action: 'update',
-        payload: {
-          id: String(set.matchId),
-          status: 'final'
-        },
-        ts: new Date().toISOString(),
-        status: 'queued'
-      })
-      
       if (onFinishSet) onFinishSet(set)
     } else {
       // Get match to calculate service order for next set
@@ -896,26 +844,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       // Reset set5CourtSwitched flag when starting a new set
       await db.matches.update(set.matchId, { set5CourtSwitched: false })
       
-      // Get match to check if it's a test match
-      const matchForSync = await db.matches.get(set.matchId)
-      const isTest = matchForSync?.test || false
-      
-      await db.sync_queue.add({
-        resource: 'set',
-        action: 'insert',
-        payload: {
-          external_id: String(newSetId),
-          match_id: matchForSync?.externalId || String(set.matchId),
-          index: set.index + 1,
-          home_points: 0,
-          away_points: 0,
-          finished: false,
-          test: isTest,
-          created_at: new Date().toISOString()
-        },
-        ts: new Date().toISOString(),
-        status: 'queued'
-      })
     }
     
     setSetEndModal(null)
@@ -945,22 +873,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     
     // Delete the event
     await db.events.delete(lastEvent.id)
-    
-    // Also remove from sync_queue if it exists
-    const allSyncItems = await db.sync_queue
-      .where('status')
-      .equals('queued')
-      .toArray()
-    
-    const syncItems = allSyncItems.filter(item => 
-      item.payload?.type === lastEvent.type && 
-      item.payload?.set_index === lastEvent.setIndex
-    )
-    
-    if (syncItems.length > 0) {
-      const lastSyncItem = syncItems[syncItems.length - 1]
-      await db.sync_queue.delete(lastSyncItem.id)
-    }
     
     setSetEndModal(null)
   }, [setEndModal, data?.events, data?.set])
@@ -1525,7 +1437,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
               ts: new Date().toISOString(),
               seq: await getNextSeq() // Sequential ID for ordering
             })
-            // Don't add to sync_queue for rotation lineups
           }
         }
       }
@@ -1803,20 +1714,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       // - Only update match status to 'final' - DO NOT DELETE ANYTHING
       await db.matches.update(matchId, { status: 'final' })
       
-      // Add match update to sync queue
-      const matchRecord = await db.matches.get(matchId)
-      if (matchRecord?.test !== true) {
-        await db.sync_queue.add({
-          resource: 'match',
-          action: 'update',
-          payload: {
-            id: String(matchId),
-            status: 'final'
-          },
-          ts: new Date().toISOString(),
-          status: 'queued'
-        })
-      }
       
       // Close the set end time modal
       setSetEndTimeModal(null)
@@ -1893,26 +1790,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       // Reset set5CourtSwitched flag when starting a new set
       await db.matches.update(matchId, { set5CourtSwitched: false })
       
-      // Get match to check if it's a test match
-      const matchForSync = await db.matches.get(matchId)
-      const isTest = matchForSync?.test || false
-      
-      await db.sync_queue.add({
-        resource: 'set',
-        action: 'insert',
-        payload: {
-          external_id: String(newSetId),
-          match_id: matchForSync?.externalId || String(matchId),
-          index: setIndex + 1,
-          home_points: 0,
-          away_points: 0,
-          finished: false,
-          test: isTest,
-          created_at: new Date().toISOString()
-        },
-        ts: new Date().toISOString(),
-        status: 'queued'
-      })
     }
     
     setSetEndTimeModal(null)
@@ -1957,26 +1834,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       serviceOrder: serviceOrder
     })
     
-    // Get match to check if it's a test match
-    const match = await db.matches.get(matchId)
-    const isTest = match?.test || false
-    
-    await db.sync_queue.add({
-      resource: 'set',
-      action: 'insert',
-      payload: {
-        external_id: String(newSetId),
-        match_id: match?.externalId || String(matchId),
-        index: setIndex,
-        home_points: 0,
-        away_points: 0,
-        finished: false,
-        test: isTest,
-        created_at: new Date().toISOString()
-      },
-      ts: new Date().toISOString(),
-      status: 'queued'
-    })
     
     setSetTransitionModal(null)
   }, [setTransitionModal, setTransitionSelectedLeftTeam, setTransitionSelectedFirstServe, set3CoinTossWinner, data?.match, matchId, calculateServiceOrder])
@@ -2013,26 +1870,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     // Reset set5CourtSwitched flag when starting set 5
     await db.matches.update(matchId, { set5CourtSwitched: false })
     
-    // Get match to check if it's a test match
-    const match = await db.matches.get(matchId)
-    const isTest = match?.test || false
-    
-    await db.sync_queue.add({
-      resource: 'set',
-      action: 'insert',
-      payload: {
-        external_id: String(newSetId),
-        match_id: match?.externalId || String(matchId),
-        index: setIndex,
-        home_points: 0,
-        away_points: 0,
-        finished: false,
-        test: isTest,
-        created_at: new Date().toISOString()
-      },
-      ts: new Date().toISOString(),
-      status: 'queued'
-    })
     
     setSet5SideServiceModal(null)
   }, [set5SideServiceModal, data?.match, matchId])
@@ -2833,22 +2670,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       await db.events.delete(lastEvent.id)
     }
     
-    // Also remove from sync_queue if it exists
-    // Note: payload.type is not indexed, so we filter in memory
-    const allSyncItems = await db.sync_queue
-      .where('status')
-      .equals('queued')
-      .toArray()
-    
-    const syncItems = allSyncItems.filter(item => 
-      item.payload?.type === lastEvent.type && 
-      item.payload?.set_index === lastEvent.setIndex
-    )
-    
-    if (syncItems.length > 0) {
-      const lastSyncItem = syncItems[syncItems.length - 1]
-      await db.sync_queue.delete(lastSyncItem.id)
-    }
     } catch (error) {
       // Silently handle error
     } finally {
@@ -3274,20 +3095,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       // Mark match as final
       await db.matches.update(matchId, { status: 'final' })
       
-      // Add match update to sync queue
-      const matchRecord = await db.matches.get(matchId)
-      if (matchRecord?.test !== true) {
-        await db.sync_queue.add({
-          resource: 'match',
-          action: 'update',
-          payload: {
-            id: String(matchId),
-            status: 'final'
-          },
-          ts: new Date().toISOString(),
-          status: 'queued'
-        })
-      }
     }
     
     // Log forfait event

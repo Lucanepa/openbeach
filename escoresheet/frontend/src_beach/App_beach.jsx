@@ -5,7 +5,6 @@ import MatchSetup from './components_beach/MatchSetup_beach'
 import Scoreboard from './components_beach/Scoreboard_beach'
 import MatchEnd from './components_beach/MatchEnd_beach'
 import Modal from './components_beach/Modal_beach'
-import { useSyncQueue } from './hooks_beach/useSyncQueue_beach'
 import mikasaVolleyball from './mikasa_BV550C_beach.png'
 import {
   TEST_REFEREE_SEED_DATA,
@@ -13,7 +12,6 @@ import {
   TEST_TEAM_SEED_DATA,
   TEST_LINE_JUDGE_SEED_DATA
 } from './constants_beach/testSeeds_beach'
-import { supabase } from './lib_beach/supabaseClient_beach'
 
 const TEST_MATCH_SEED_KEY = 'test-match-default'
 const TEST_MATCH_EXTERNAL_ID = 'test-match-default'
@@ -66,8 +64,6 @@ export default function App() {
   const [testMatchLoading, setTestMatchLoading] = useState(false)
   const [alertModal, setAlertModal] = useState(null) // { message: string }
   const [confirmModal, setConfirmModal] = useState(null) // { message: string, onConfirm: function, onCancel: function }
-  const { syncStatus, isOnline } = useSyncQueue()
-  const canUseSupabase = Boolean(supabase)
 
   const activeMatch = useLiveQuery(async () => {
     try {
@@ -355,19 +351,6 @@ export default function App() {
       // - Only update match status to 'final' - DO NOT DELETE ANYTHING
       await db.matches.update(cur.matchId, { status: 'final' })
       
-      // Only sync official matches
-      if (!isTestMatch) {
-        await db.sync_queue.add({
-          resource: 'match',
-          action: 'update',
-          payload: {
-            id: String(cur.matchId),
-            status: 'final'
-          },
-          ts: new Date().toISOString(),
-          status: 'queued'
-        })
-      }
       
       // Show match end screen
       setShowMatchEnd(true)
@@ -376,25 +359,6 @@ export default function App() {
     
     // Continue to next set (legacy logic - shouldn't reach here with new logic)
     const setId = await db.sets.add({ matchId: cur.matchId, index: cur.index + 1, homePoints: 0, awayPoints: 0, finished: false })
-    
-    // Only sync official matches
-    if (!isTestMatch) {
-      await db.sync_queue.add({
-        resource: 'set',
-        action: 'insert',
-        payload: {
-          external_id: String(setId),
-          match_id: matchRecord?.externalId || String(cur.matchId),
-          index: cur.index + 1,
-          home_points: 0,
-          away_points: 0,
-          finished: false,
-          created_at: new Date().toISOString()
-        },
-        ts: new Date().toISOString(),
-        status: 'queued'
-      })
-    }
   }
 
   const openMatchSetup = () => setMatchId(null)
@@ -441,362 +405,6 @@ export default function App() {
 
   }
 
-  async function resetSupabaseTestMatch() {
-    if (!supabase) {
-      throw new Error('Supabase client is not configured.')
-    }
-
-    const { data: matchRecord, error: matchLookupError } = await supabase
-      .from('matches')
-      .select('id')
-      .eq('external_id', TEST_MATCH_EXTERNAL_ID)
-      .single()
-
-    if (matchLookupError) {
-      throw new Error(matchLookupError.message)
-    }
-    if (!matchRecord) {
-      throw new Error('Test match not found on Supabase.')
-    }
-
-    const matchUuid = matchRecord.id
-
-    const { error: deleteEventsError } = await supabase
-      .from('events')
-      .delete()
-      .eq('match_id', matchUuid)
-    if (deleteEventsError) {
-      throw new Error(deleteEventsError.message)
-    }
-
-    const { error: deleteSetsError } = await supabase
-      .from('sets')
-      .delete()
-      .eq('match_id', matchUuid)
-    if (deleteSetsError) {
-      throw new Error(deleteSetsError.message)
-    }
-
-    const newScheduled = getNextTestMatchStartTime()
-    const { error: updateMatchError } = await supabase
-      .from('matches')
-      .update({
-        status: 'scheduled',
-        scheduled_at: newScheduled,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', matchUuid)
-
-    if (updateMatchError) {
-      throw new Error(updateMatchError.message)
-    }
-  }
-
-  async function loadTestMatchFromSupabase({ resetRemote = false, targetView = 'setup' } = {}) {
-    if (!supabase) {
-      throw new Error('Supabase client is not configured.')
-    }
-
-    if (resetRemote) {
-      await resetSupabaseTestMatch()
-    }
-
-    const { data: matchData, error: matchError } = await supabase
-      .from('matches')
-      .select('*')
-      .eq('external_id', TEST_MATCH_EXTERNAL_ID)
-      .single()
-
-    if (matchError) {
-      throw new Error(matchError.message)
-    }
-    if (!matchData) {
-      throw new Error('Test match not found on Supabase.')
-    }
-
-
-    const [homeTeamRes, awayTeamRes] = await Promise.all([
-      supabase.from('teams').select('*').eq('id', matchData.home_team_id).single(),
-      supabase.from('teams').select('*').eq('id', matchData.away_team_id).single()
-    ])
-
-    if (homeTeamRes.error) {
-      throw new Error(homeTeamRes.error.message)
-    }
-    if (awayTeamRes.error) {
-      throw new Error(awayTeamRes.error.message)
-    }
-
-    const homeTeamData = homeTeamRes.data
-    const awayTeamData = awayTeamRes.data
-
-
-    const { data: playersData, error: playersError } = await supabase
-      .from('players')
-      .select('*')
-      .in('team_id', [matchData.home_team_id, matchData.away_team_id])
-
-    if (playersError) {
-      throw new Error(playersError.message)
-    }
-
-    const { data: setsData, error: setsError } = await supabase
-      .from('sets')
-      .select('*')
-      .eq('match_id', matchData.id)
-      .order('index')
-
-    if (setsError) {
-      throw new Error(setsError.message)
-    }
-
-    const { data: eventsData, error: eventsError } = await supabase
-      .from('events')
-      .select('*')
-      .eq('match_id', matchData.id)
-      .order('ts')
-
-    if (eventsError) {
-      throw new Error(eventsError.message)
-    }
-
-    await clearLocalTestData()
-
-    const normalizeBenchMember = member => ({
-      role: member?.role || '',
-      firstName: member?.firstName || member?.first_name || '',
-      lastName: member?.lastName || member?.last_name || '',
-      dob: member?.dob || member?.date_of_birth || member?.dateOfBirth || ''
-    })
-
-    // Beach volleyball: No bench staff
-    const homeBench = []
-    const awayBench = []
-
-    const homeTeamId = await db.teams.add({
-      name: homeTeamData?.name || 'Home',
-      color: homeTeamData?.color || '#89bdc3',
-      seedKey: homeTeamData?.seed_key || TEST_HOME_TEAM_EXTERNAL_ID,
-      externalId: homeTeamData?.external_id || TEST_HOME_TEAM_EXTERNAL_ID,
-      benchStaff: homeBench,
-      test: true,
-      createdAt: homeTeamData?.created_at || new Date().toISOString()
-    })
-
-    const awayTeamId = await db.teams.add({
-      name: awayTeamData?.name || 'Away',
-      color: awayTeamData?.color || '#323134',
-      seedKey: awayTeamData?.seed_key || TEST_AWAY_TEAM_EXTERNAL_ID,
-      externalId: awayTeamData?.external_id || TEST_AWAY_TEAM_EXTERNAL_ID,
-      benchStaff: awayBench,
-      test: true,
-      createdAt: awayTeamData?.created_at || new Date().toISOString()
-    })
-
-    const normalizePlayer = (player, teamId) => ({
-      teamId,
-      number: player.number,
-      name: `${player.last_name || ''} ${player.first_name || ''}`.trim(),
-      lastName: player.last_name || '',
-      firstName: player.first_name || '',
-      dob: player.dob || '',
-      isCaptain: player.is_captain || false,
-      functions: Array.isArray(player.functions) && player.functions.length > 0 ? player.functions : ['player'],
-      test: player.test ?? true,
-      createdAt: player.created_at || new Date().toISOString(),
-      externalId: player.external_id
-    })
-
-    const buildFallbackPlayers = (seedKey) => {
-      const teamSeed = TEST_TEAM_SEED_DATA.find(t => t.seedKey === seedKey)
-      if (!teamSeed) return []
-      return teamSeed.players.map(player => ({
-        team_id: null,
-        number: player.number,
-        first_name: player.firstName,
-        last_name: player.lastName,
-        dob: player.dob,
-        is_captain: player.isCaptain || false,
-        functions: player.functions || ['player']
-      }))
-    }
-
-    let homePlayersData = (playersData || []).filter(p => p.team_id === matchData.home_team_id)
-    if (!homePlayersData.length) {
-      homePlayersData = buildFallbackPlayers('test-team-alpha')
-      console.warn('[TestMatch] Supabase returned no home players, using fallback seed roster')
-    }
-
-    let awayPlayersData = (playersData || []).filter(p => p.team_id === matchData.away_team_id)
-    if (!awayPlayersData.length) {
-      awayPlayersData = buildFallbackPlayers('test-team-bravo')
-      console.warn('[TestMatch] Supabase returned no away players, using fallback seed roster')
-    }
-
-    const fetchOfficialByExternalId = async (table, externalId) => {
-      if (!externalId) return null
-      const { data, error } = await supabase.from(table).select('first_name,last_name,country,dob').eq('external_id', externalId).maybeSingle()
-      if (error) {
-        console.warn(`Unable to load ${table} ${externalId}:`, error.message)
-        return null
-      }
-      return data
-    }
-
-    const resolvedOfficials = async () => {
-      const officialTemplates = [
-        {
-          role: '1st referee',
-          table: 'referees',
-          defaultExternalId: 'test-referee-alpha',
-          fallback: TEST_REFEREE_SEED_DATA[0] || {}
-        },
-        {
-          role: '2nd referee',
-          table: 'referees',
-          defaultExternalId: 'test-referee-bravo',
-          fallback: TEST_REFEREE_SEED_DATA[1] || TEST_REFEREE_SEED_DATA[0] || {}
-        },
-        {
-          role: 'scorer',
-          table: 'scorers',
-          defaultExternalId: 'test-scorer-alpha',
-          fallback: TEST_SCORER_SEED_DATA[0] || {}
-        },
-        {
-          role: 'assistant scorer',
-          table: 'scorers',
-          defaultExternalId: 'test-scorer-bravo',
-          fallback: TEST_SCORER_SEED_DATA[1] || TEST_SCORER_SEED_DATA[0] || {}
-        }
-      ]
-
-      const sourceOfficials = Array.isArray(matchData.officials) ? matchData.officials : []
-
-      const normalizeOfficialEntry = async (template) => {
-        const record = sourceOfficials.find(o => o.role === template.role) || {}
-        const externalId = record.external_id || record.externalId || template.defaultExternalId
-
-        let fetched = null
-        if (externalId && (!record.firstName && !record.lastName) && (!record.first_name && !record.last_name)) {
-          fetched = await fetchOfficialByExternalId(template.table, externalId)
-        }
-
-        const firstName = record.firstName || record.first_name || fetched?.first_name || template.fallback.firstName || ''
-        const lastName = record.lastName || record.last_name || fetched?.last_name || template.fallback.lastName || ''
-        const country = record.country || fetched?.country || template.fallback.country || 'CH'
-        const dob = record.dob || fetched?.dob || template.fallback.dob || ''
-
-        return {
-          role: template.role,
-          firstName,
-          lastName,
-          country,
-          dob,
-          externalId
-        }
-      }
-
-      const results = await Promise.all(officialTemplates.map(normalizeOfficialEntry))
-      const missingNames = results.filter(o => !o.firstName || !o.lastName)
-
-      if (missingNames.length === 0) {
-        return results
-      }
-
-      // As a safety fallback, merge with seed data for any remaining blanks
-      return results.map(entry => {
-        if (entry.firstName && entry.lastName) return entry
-        const fallback = officialTemplates.find(t => t.role === entry.role)?.fallback || {}
-        return {
-          ...entry,
-          firstName: entry.firstName || fallback.firstName || '',
-          lastName: entry.lastName || fallback.lastName || '',
-          country: entry.country || fallback.country || 'CH',
-          dob: entry.dob || fallback.dob || ''
-        }
-      })
-    }
-
-    const officials = await resolvedOfficials()
-
-    if (homePlayersData.length) {
-      await db.players.bulkAdd(homePlayersData.map(p => normalizePlayer(p, homeTeamId)))
-    }
-    if (awayPlayersData.length) {
-      await db.players.bulkAdd(awayPlayersData.map(p => normalizePlayer(p, awayTeamId)))
-    }
-
-    const matchDexieId = await db.matches.add({
-      status: matchData.status || 'scheduled',
-      scheduledAt: matchData.scheduled_at,
-      eventName: matchData.event_name || TEST_MATCH_DEFAULTS.eventName,
-      site: matchData.site || TEST_MATCH_DEFAULTS.site,
-      beach: matchData.beach || TEST_MATCH_DEFAULTS.beach,
-      court: matchData.court || TEST_MATCH_DEFAULTS.court,
-      matchPhase: matchData.match_phase || TEST_MATCH_DEFAULTS.matchPhase,
-      matchRound: matchData.match_round || TEST_MATCH_DEFAULTS.matchRound,
-      matchNumber: matchData.match_number ? Number(matchData.match_number) : (TEST_MATCH_DEFAULTS.matchNumber ? Number(TEST_MATCH_DEFAULTS.matchNumber) : null),
-      refereePin: matchData.referee_pin || generateRefereePin(),
-      homeTeamId,
-      awayTeamId,
-      bench_home: homeBench,
-      bench_away: awayBench,
-      officials,
-      test: matchData.test ?? true,
-      createdAt: matchData.created_at || new Date().toISOString(),
-      updatedAt: matchData.updated_at || new Date().toISOString(),
-      externalId: matchData.external_id,
-      seedKey: TEST_MATCH_SEED_KEY,
-      supabaseId: matchData.id,
-      homeCoachSignature: matchData.home_coach_signature || null,
-      homeCaptainSignature: matchData.home_captain_signature || null,
-      awayCoachSignature: matchData.away_coach_signature || null,
-      awayCaptainSignature: matchData.away_captain_signature || null,
-      coinTossTeamA: matchData.coin_toss_team_a || null,
-      coinTossTeamB: matchData.coin_toss_team_b || null,
-      coinTossServeA: matchData.coin_toss_serve_a ?? null,
-      coinTossServeB: matchData.coin_toss_serve_b ?? null
-    })
-    console.log('[TestMatch] Created Dexie match', matchDexieId)
-
-    if (Array.isArray(setsData) && setsData.length > 0) {
-      await db.sets.bulkAdd(setsData.map(set => ({
-        matchId: matchDexieId,
-        index: set.index ?? set.set_index ?? 1,
-        homePoints: set.home_points ?? 0,
-        awayPoints: set.away_points ?? 0,
-        finished: set.finished ?? false,
-        startTime: set.start_time || null,
-        endTime: set.end_time || null,
-        externalId: set.external_id,
-        createdAt: set.created_at,
-        updatedAt: set.updated_at
-      })))
-    } else {
-      await db.sets.add({
-        matchId: matchDexieId,
-        index: 1,
-        homePoints: 0,
-        awayPoints: 0,
-        finished: false
-      })
-    }
-
-    if (Array.isArray(eventsData) && eventsData.length > 0) {
-      await db.events.bulkAdd(eventsData.map(event => ({
-        matchId: matchDexieId,
-        setIndex: event.set_index ?? 1,
-        type: event.type,
-        payload: event.payload || {},
-        ts: event.ts || new Date().toISOString()
-      })))
-    }
-
-    setMatchId(matchDexieId)
-    setShowCoinToss(false)
-    setShowMatchSetup(targetView === 'setup')
-  }
 
 
   const firstNames = ['Max', 'Luca', 'Tom', 'Jonas', 'Felix', 'Noah', 'David', 'Simon', 'Daniel', 'Michael', 'Anna', 'Sarah', 'Lisa', 'Emma', 'Sophie', 'Laura', 'Julia', 'Maria', 'Nina', 'Sara']
@@ -893,7 +501,7 @@ export default function App() {
   async function confirmDeleteMatch() {
     if (!deleteMatchModal) return
 
-    await db.transaction('rw', db.matches, db.sets, db.events, db.players, db.teams, db.sync_queue, db.match_setup, async () => {
+    await db.transaction('rw', db.matches, db.sets, db.events, db.players, db.teams, db.match_setup, async () => {
       // Delete sets
       const sets = await db.sets.where('matchId').equals(deleteMatchModal.matchId).toArray()
       if (sets.length > 0) {
@@ -924,9 +532,6 @@ export default function App() {
       if (match?.awayTeamId) {
         await db.teams.delete(match.awayTeamId)
       }
-      
-      // Delete all sync queue items (since we can't filter by matchId easily)
-      await db.sync_queue.clear()
       
       // Delete match setup draft
       await db.match_setup.clear()
@@ -976,7 +581,7 @@ export default function App() {
 
     // Delete current match first
     if (currentMatch) {
-      await db.transaction('rw', db.matches, db.sets, db.events, db.players, db.teams, db.sync_queue, db.match_setup, async () => {
+      await db.transaction('rw', db.matches, db.sets, db.events, db.players, db.teams, db.match_setup, async () => {
         // Delete sets
         const sets = await db.sets.where('matchId').equals(currentMatch.id).toArray()
         if (sets.length > 0) {
@@ -1004,9 +609,6 @@ export default function App() {
         if (currentMatch.awayTeamId) {
           await db.teams.delete(currentMatch.awayTeamId)
         }
-        
-        // Delete all sync queue items
-        await db.sync_queue.clear()
         
         // Delete match setup draft
         await db.match_setup.clear()
@@ -1055,7 +657,7 @@ export default function App() {
   async function ensureSeedTestTeams() {
     const seededTeams = []
 
-    await db.transaction('rw', db.teams, db.players, db.sync_queue, async () => {
+    await db.transaction('rw', db.teams, db.players, async () => {
       for (const definition of TEST_TEAM_SEED_DATA) {
         let team = await db.teams.filter(t => t.seedKey === definition.seedKey).first()
         const isTestSeed = definition.seedKey?.startsWith('test-')
@@ -1128,56 +730,10 @@ export default function App() {
     const seededReferees = []
     const seededScorers = []
 
-    await db.transaction('rw', db.referees, db.scorers, db.sync_queue, async () => {
-      const queueRefereeRecord = async (record, timestamp = new Date().toISOString()) => {
-        if (!record) return
-        if (record.seedKey?.startsWith('test-')) return
-        const createdAt = record.createdAt || timestamp
-        await db.sync_queue.add({
-          resource: 'referee',
-          action: 'insert',
-          payload: {
-            external_id: String(record.id),
-            seed_key: record.seedKey,
-            first_name: record.firstName,
-            last_name: record.lastName,
-            country: record.country || null,
-            dob: record.dob || null,
-            test: true,
-            created_at: createdAt
-          },
-          ts: timestamp,
-          status: 'queued'
-        })
-        await db.referees.update(record.id, { synced: false })
-      }
-
-      const queueScorerRecord = async (record, timestamp = new Date().toISOString()) => {
-        if (!record) return
-        if (record.seedKey?.startsWith('test-')) return
-        const createdAt = record.createdAt || timestamp
-        await db.sync_queue.add({
-          resource: 'scorer',
-          action: 'insert',
-          payload: {
-            external_id: String(record.id),
-            seed_key: record.seedKey,
-            first_name: record.firstName,
-            last_name: record.lastName,
-            country: record.country || null,
-            dob: record.dob || null,
-            test: true,
-            created_at: createdAt
-          },
-          ts: timestamp,
-          status: 'queued'
-        })
-        await db.scorers.update(record.id, { synced: false })
-      }
+    await db.transaction('rw', db.referees, db.scorers, async () => {
 
       for (const definition of TEST_REFEREE_SEED_DATA) {
         let referee = await db.referees.filter(r => r.seedKey === definition.seedKey).first()
-        let queued = false
 
         if (!referee) {
           const timestamp = new Date().toISOString()
@@ -1193,8 +749,6 @@ export default function App() {
           }
           const refereeId = await db.referees.add(baseRecord)
           referee = { id: refereeId, ...baseRecord }
-          await queueRefereeRecord(referee, timestamp)
-          queued = true
         } else {
           const definitionChanged =
             referee.firstName !== definition.firstName ||
@@ -1217,28 +771,17 @@ export default function App() {
               lastName: definition.lastName,
               country: definition.country,
               dob: definition.dob,
-              synced: false
-            }
-            await queueRefereeRecord(referee, timestamp)
-            queued = true
+            synced: false
+          }
           }
         }
 
-        if (referee && !queued) {
-          if (referee.synced === true) {
-            await db.referees.update(referee.id, { synced: false })
-            referee = { ...referee, synced: false }
-          }
-          await queueRefereeRecord(referee)
-          queued = true
-        }
 
         seededReferees.push(referee)
       }
 
       for (const definition of TEST_SCORER_SEED_DATA) {
         let scorer = await db.scorers.filter(s => s.seedKey === definition.seedKey).first()
-        let queued = false
 
         if (!scorer) {
           const timestamp = new Date().toISOString()
@@ -1254,8 +797,6 @@ export default function App() {
           }
           const scorerId = await db.scorers.add(baseRecord)
           scorer = { id: scorerId, ...baseRecord }
-          await queueScorerRecord(scorer, timestamp)
-          queued = true
         } else {
           const definitionChanged =
             scorer.firstName !== definition.firstName ||
@@ -1278,21 +819,11 @@ export default function App() {
               lastName: definition.lastName,
               country: definition.country,
               dob: definition.dob,
-              synced: false
-            }
-            await queueScorerRecord(scorer, timestamp)
-            queued = true
+            synced: false
+          }
           }
         }
 
-        if (scorer && !queued) {
-          if (scorer.synced === true) {
-            await db.scorers.update(scorer.id, { synced: false })
-            scorer = { ...scorer, synced: false }
-          }
-          await queueScorerRecord(scorer)
-          queued = true
-        }
 
         seededScorers.push(scorer)
       }
@@ -1369,7 +900,7 @@ export default function App() {
 
     let createdMatchId = null
 
-    await db.transaction('rw', db.matches, db.sets, db.events, db.sync_queue, async () => {
+    await db.transaction('rw', db.matches, db.sets, db.events, async () => {
       let existingMatch =
         (await db.matches.filter(m => m.seedKey === TEST_MATCH_SEED_KEY).first()) ||
         (await db.matches.filter(m => m.test === true && !m.seedKey).first())
@@ -1705,20 +1236,6 @@ export default function App() {
               <div className="home-card">
                 <div className="home-card-header">
                   <h2>Official Match</h2>
-                  <div className="connection-status-inline">
-                    <span className="connection-status-label">Connection:</span>
-                    <div className={`status-indicator status-${syncStatus}`}>
-                      <span className="status-dot" />
-                      <span>
-                        {syncStatus === 'offline' && 'Offline'}
-                        {syncStatus === 'online_no_supabase' && 'Online (No Supabase)'}
-                        {syncStatus === 'connecting' && 'Connecting...'}
-                        {syncStatus === 'syncing' && 'Syncing...'}
-                        {syncStatus === 'synced' && 'Synced'}
-                        {syncStatus === 'error' && 'Sync Error'}
-                      </span>
-                    </div>
-                  </div>
                 </div>
                 <div className="home-card-actions">
                   <button 

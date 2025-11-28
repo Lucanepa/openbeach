@@ -30,7 +30,7 @@ jobs:
           export VITE_BASE_PATH="$BASE_PATH"
           npm run build
           # Create SPA fallback for GitHub Pages
-          cp dist/index.html dist/404.html
+          cp dist/index_beach.html dist/404.html
           # Write CNAME when provided
           if [ -n "$PAGES_CNAME" ]; then echo $PAGES_CNAME > dist/CNAME; fi
       - name: Setup Pages

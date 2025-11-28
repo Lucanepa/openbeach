@@ -1119,37 +1119,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
       return
     }
 
-    await db.transaction('rw', db.matches, db.teams, db.players, db.sync_queue, async () => {
+    await db.transaction('rw', db.matches, db.teams, db.players, async () => {
     const team_1Id = await db.teams.add({ name: team_1, color: team_1Color, createdAt: new Date().toISOString() })
     const team_2Id = await db.teams.add({ name: team_2, color: team_2Color, createdAt: new Date().toISOString() })
 
       // Add teams to sync queue (official match, so test: false)
-      await db.sync_queue.add({
-        resource: 'team',
-        action: 'insert',
-        payload: {
-          external_id: String(team_1Id),
-          name: team_1,
-          color: team_1Color,
-          test: false,
-          created_at: new Date().toISOString()
-        },
-        ts: new Date().toISOString(),
-        status: 'queued'
-      })
-      await db.sync_queue.add({
-        resource: 'team',
-        action: 'insert',
-        payload: {
-          external_id: String(team_2Id),
-          name: team_2,
-          color: team_2Color,
-          test: false,
-          created_at: new Date().toISOString()
-        },
-        ts: new Date().toISOString(),
-        status: 'queued'
-      })
 
     const scheduledAt = (() => {
       if (!date && !time) return new Date().toISOString()
@@ -1226,29 +1200,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
       createdAt: new Date().toISOString()
     })
 
-      // Add match to sync queue (official match, so test: false)
-      await db.sync_queue.add({
-        resource: 'match',
-        action: 'insert',
-        payload: {
-          external_id: String(matchId),
-          home_team_id: String(team_1Id),
-          away_team_id: String(team_2Id),
-          status: 'live',
-          eventName: eventName || null,
-          site: site || null,
-          // beach and court fields not in Supabase schema - removed
-          matchPhase: matchPhase || null,
-          matchRound: matchRound || null,
-          matchNumber: matchNumber || null,
-          scheduled_at: scheduledAt || null,
-          test: false,
-          created_at: new Date().toISOString()
-        },
-        ts: new Date().toISOString(),
-        status: 'queued'
-      })
-
     if (team_1Roster.length) {
         const homePlayerIds = await db.players.bulkAdd(
         team_1Roster.map(p => ({
@@ -1263,27 +1214,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         }))
       )
         
-        // Add home players to sync queue
-        for (let i = 0; i < team_1Roster.length; i++) {
-          const p = team_1Roster[i]
-          await db.sync_queue.add({
-            resource: 'player',
-            action: 'insert',
-            payload: {
-              external_id: String(homePlayerIds[i]),
-              team_id: String(homeId),
-              number: p.number,
-              name: `${p.lastName} ${p.firstName}`,
-              first_name: p.firstName,
-              last_name: p.lastName,
-              is_captain: !!p.isCaptain,
-              role: null,
-              created_at: new Date().toISOString()
-            },
-            ts: new Date().toISOString(),
-            status: 'queued'
-          })
-        }
     }
     if (team_2Roster.length) {
         const awayPlayerIds = await db.players.bulkAdd(
@@ -1299,29 +1229,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         }))
       )
         
-        // Add away players to sync queue (official match, so test: false)
-        for (let i = 0; i < team_2Roster.length; i++) {
-          const p = team_2Roster[i]
-          await db.sync_queue.add({
-            resource: 'player',
-            action: 'insert',
-            payload: {
-              external_id: String(awayPlayerIds[i]),
-              team_id: String(awayId),
-              number: p.number,
-              name: `${p.lastName} ${p.firstName}`,
-              first_name: p.firstName,
-              last_name: p.lastName,
-              is_captain: !!p.isCaptain,
-              role: null,
-              test: false,
-              created_at: new Date().toISOString()
-            },
-            ts: new Date().toISOString(),
-            status: 'queued'
-          })
-        }
-      }
+    }
       
     // Don't start match yet - go to coin toss first
     // Check if team names are set
@@ -1545,7 +1453,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
     console.log('='.repeat(80))
     
     // Update match with signatures and rosters
-    await db.transaction('rw', db.matches, db.players, db.sync_queue, async () => {
+    await db.transaction('rw', db.matches, db.players, async () => {
     // Update match with signatures, first serve, and coin toss result
     // Store coin toss data as a complete structured object
     const updateResult = await db.matches.update(targetMatchId, {
@@ -1561,36 +1469,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
       coinTossPlayerData: enrichedCoinTossPlayerData,
       coinTossData: coinTossData // Store complete structured coin toss data
       })
-    
-    // Add match update to sync queue (only sync fields that exist in Supabase)
-    const updatedMatch = await db.matches.get(targetMatchId)
-    if (updatedMatch) {
-      await db.sync_queue.add({
-        resource: 'match',
-        action: 'update',
-        payload: {
-          id: String(targetMatchId),
-          status: updatedMatch.status || null,
-          eventName: updatedMatch.eventName || null,
-          site: updatedMatch.site || null,
-          // beach and court fields not in Supabase schema - removed
-          matchPhase: updatedMatch.matchPhase || null,
-          matchRound: updatedMatch.matchRound || null,
-          matchNumber: updatedMatch.matchNumber || null,
-          scheduled_at: updatedMatch.scheduledAt || null
-        },
-        ts: new Date().toISOString(),
-        status: 'queued'
-      })
-    }
-    
-    // Update saved signatures to match current state
-    setSavedSignatures({
-      homeCoach: homeCoachSignature,
-      team_1Captain: team_1CaptainSignature,
-      awayCoach: awayCoachSignature,
-      team_2Captain: team_2CaptainSignature
-    })
       
       // Update players for both teams
       // IMPORTANT: Match players by ID first (if available), then by number, then by index
@@ -1726,30 +1604,16 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
       }
     })
     
+    // Update saved signatures to match current state
+    setSavedSignatures({
+      homeCoach: homeCoachSignature,
+      team_1Captain: team_1CaptainSignature,
+      awayCoach: awayCoachSignature,
+      team_2Captain: team_2CaptainSignature
+    })
+    
     // Create first set
     const firstSetId = await db.sets.add({ matchId: targetMatchId, index: 1, homePoints: 0, awayPoints: 0, finished: false })
-    
-    // Get match to check if it's a test match
-    const matchForSet = await db.matches.get(targetMatchId)
-    const isTest = matchForSet?.test || false
-    
-    // Add first set to sync queue
-    await db.sync_queue.add({
-      resource: 'set',
-      action: 'insert',
-      payload: {
-        external_id: String(firstSetId),
-        match_id: String(targetMatchId),
-        index: 1,
-        home_points: 0,
-        away_points: 0,
-        finished: false,
-        test: isTest,
-        created_at: new Date().toISOString()
-      },
-      ts: new Date().toISOString(),
-      status: 'queued'
-    })
     
     // Update match status to 'live' to indicate match has started
     await db.matches.update(targetMatchId, { status: 'live' })
@@ -3048,29 +2912,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                   coinTossServeA: serveA,
                   coinTossServeB: serveB
                 })
-                
-                // Add match update to sync queue
-                const match = await db.matches.get(matchId)
-                if (match) {
-                  await db.sync_queue.add({
-                    resource: 'match',
-                    action: 'update',
-                    payload: {
-                      id: String(matchId),
-                      status: match.status || null,
-                      eventName: match.eventName || null,
-                      site: match.site || null,
-                      beach: match.beach || null,
-                      court: match.court || null,
-                      matchPhase: match.matchPhase || null,
-                      matchRound: match.matchRound || null,
-                      matchNumber: match.matchNumber || null,
-                      scheduled_at: match.scheduledAt || null
-                    },
-                    ts: new Date().toISOString(),
-                    status: 'queued'
-                  })
-                }
               }
               onReturn()
             }} style={{ padding: '12px 24px', fontSize: '14px' }}>
