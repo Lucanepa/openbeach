@@ -1932,34 +1932,61 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       const currentPoints = data.set[field]
         
         
+      const newTeam_1Points = teamKey === 'team_1' ? currentPoints - 1 : data.set.team_1Points
+      const newTeam_2Points = teamKey === 'team_2' ? currentPoints - 1 : data.set.team_2Points
+      
       if (currentPoints > 0) {
         await db.sets.update(data.set.id, {
           [field]: currentPoints - 1
         })
       }
       
-      // Check if the scoring team rotated (they didn't have serve before scoring)
-      // We need to find the point event BEFORE this one to determine who had serve
-      const allPointEvents = data.events
-        .filter(e => e.type === 'point' && e.setIndex === data.set.index)
-        .sort((a, b) => (b.seq || 0) - (a.seq || 0)) // Most recent first by sequence
+      // Calculate total points BEFORE this point was scored (for court switch flag cleanup)
+      const totalPointsBeforeUndo = (data.set.team_1Points || 0) + (data.set.team_2Points || 0)
+      const totalPointsAfterUndo = newTeam_1Points + newTeam_2Points
       
-      const currentPointIndex = allPointEvents.findIndex(e => e.id === lastEvent.id)
-      const previousPointEvent = currentPointIndex >= 0 && currentPointIndex < allPointEvents.length - 1
-        ? allPointEvents[currentPointIndex + 1]
-        : null
+      // Check if this point would have triggered a court switch
+      // If so, remove the court switch flag and handle any court switch events
+      const setIndex = data.set.index
+      const isSet3 = setIndex === 3
+      const switchInterval = isSet3 ? 5 : 7
       
-      // Determine who had serve before this point
-      // If there's a previous point, the team that scored it has serve
-      // Otherwise, use firstServe from match
-      const serveBeforePoint = previousPointEvent 
-        ? previousPointEvent.payload?.team 
-        : (data?.match?.firstServe || 'team_1')
-      
-      const scoringTeamHadServe = serveBeforePoint === teamKey
+      // Check if the point that's being undone was at a switch interval
+      if (totalPointsBeforeUndo > 0 && totalPointsBeforeUndo % switchInterval === 0) {
+        // Remove the court switch flag for this point total
+        const setSwitchKey = `set${setIndex}_switch_${totalPointsBeforeUndo}`
+        const match = await db.matches.get(matchId)
+        if (match?.[setSwitchKey]) {
+          await db.matches.update(matchId, { [setSwitchKey]: false })
+        }
+        
+        // Check if there's a court_switch event that was logged after this point
+        // If so, we need to undo the court switch (decrease switch count)
+        const pointSeq = lastEvent.seq || 0
+        const courtSwitchEvents = data.events.filter(e => 
+          e.type === 'court_switch' && 
+          e.setIndex === setIndex &&
+          (e.seq || 0) > pointSeq
+        )
+        
+        if (courtSwitchEvents.length > 0) {
+          // There's a court switch event after this point - undo it
+          // Get the most recent court switch event
+          const latestCourtSwitch = courtSwitchEvents.sort((a, b) => (b.seq || 0) - (a.seq || 0))[0]
+          
+          // Delete the court switch event
+          await db.events.delete(latestCourtSwitch.id)
+          
+          // Decrease the switch count
+          const switchCountKey = `set${setIndex}_switchCount`
+          const currentSwitchCount = match?.[switchCountKey] || 0
+          if (currentSwitchCount > 0) {
+            await db.matches.update(matchId, { [switchCountKey]: currentSwitchCount - 1 })
+          }
+        }
+      }
       
       // Beach volleyball: No rotations - players stay on court, only serving changes
-      // If the scoring team didn't have serve, the serve just changed hands (no rotation needed)
       // Point event will be deleted at the end of the function
     }
     
