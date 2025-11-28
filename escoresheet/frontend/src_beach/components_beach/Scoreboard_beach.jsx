@@ -1620,10 +1620,15 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     const firstServeTeamKey = setTransitionSelectedFirstServe === 'A' ? teamAKey : teamBKey
     
     // Update coin toss data if needed (for set 3, update with 3rd set coin toss winner)
+    // Store set 3 coin toss winner separately: 'teamA' | 'teamB' | null
+    // Preserve all existing coin toss data (including set 1 coinTossWinner)
     if (isSet3 && set3CoinTossWinner) {
-      const coinTossData = data.match.coinTossData || {}
-      coinTossData.set3CoinTossWinner = set3CoinTossWinner
-      await db.matches.update(matchId, { coinTossData })
+      const existingCoinTossData = data.match.coinTossData || {}
+      const updatedCoinTossData = {
+        ...existingCoinTossData, // Preserve all existing fields (teamA, teamB, serveA, serveB, firstServe, coinTossWinner, players, timestamp, etc.)
+        set3CoinTossWinner: set3CoinTossWinner // Add set 3 coin toss winner without overwriting set 1 winner
+      }
+      await db.matches.update(matchId, { coinTossData: updatedCoinTossData })
     }
     
     // Update match with first serve for the new set
