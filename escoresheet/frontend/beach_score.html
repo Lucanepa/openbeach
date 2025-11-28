@@ -170,8 +170,8 @@
       db.version(1).stores({
         teams: '++id,name,createdAt',
         players: '++id,teamId,number,name,role,createdAt',
-        matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt',
-        sets: '++id,matchId,index,homePoints,awayPoints,finished',
+         matches: '++id,team_1Id,team_2Id,scheduledAt,status,createdAt',
+         sets: '++id,matchId,index,team_1Points,team_2Points,finished',
         events: '++id,matchId,setIndex,ts,type,payload',
         sync_queue: '++id,resource,action,payload,ts,status'
       })
@@ -374,8 +374,8 @@
           }
           
           const [team1, team2] = await Promise.all([
-            match.homeTeamId ? db.teams.get(match.homeTeamId) : null,
-            match.awayTeamId ? db.teams.get(match.awayTeamId) : null
+              match.team_1Id ? db.teams.get(match.team_1Id) : null,
+              match.team_2Id ? db.teams.get(match.team_2Id) : null
           ])
           
           const sets = await db.sets
@@ -409,10 +409,10 @@
           const teamBLabel = rightIsTeamA ? 'A' : 'B'
           
           // Get current score
-          const homeScore = currentSet ? currentSet.homePoints : 0
-          const awayScore = currentSet ? currentSet.awayPoints : 0
-          const leftScore = leftIsTeam_1 ? homeScore : awayScore
-          const rightScore = leftIsTeam_1 ? awayScore : homeScore
+            const team_1Score = currentSet ? currentSet.team_1Points : 0
+            const team_2Score = currentSet ? currentSet.team_2Points : 0
+            const leftScore = leftIsTeam_1 ? team_1Score : team_2Score
+            const rightScore = leftIsTeam_1 ? team_2Score : team_1Score
           
           // Get current serve
           const currentServeTeam = currentSet ? getCurrentServe(match, events, currentSet) : null

@@ -71,9 +71,9 @@ export default function GameList({ matches, loading, onSelectMatch, onDeleteMatc
                       <span className="game-card-time">{timePart?.trim()}</span>
                     </div>
                     <div className="game-card-teams">
-                      <div className="game-card-team">{match.homeName}</div>
+                      <div className="game-card-team">{match.team_1Name || 'Team 1'}</div>
                       <div className="game-card-vs">vs</div>
-                      <div className="game-card-team">{match.awayName}</div>
+                      <div className="game-card-team">{match.team_2Name || 'Team 2'}</div>
                     </div>
                     {match.hall && (
                       <div className="game-card-location">

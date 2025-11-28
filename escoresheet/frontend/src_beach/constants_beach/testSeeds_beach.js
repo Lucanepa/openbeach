@@ -64,3 +64,19 @@ export const TEST_LINE_JUDGE_SEED_DATA = [
   }
 ]
 
+/**
+ * Format an ISO date string to display format (DD/MM/YYYY)
+ * Used for test data generation
+ */
+export function formatISODateToDisplay(dateString) {
+  if (!dateString) return null
+  const date = new Date(dateString)
+  if (Number.isNaN(date.getTime())) {
+    return dateString
+  }
+  const day = String(date.getDate()).padStart(2, '0')
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const year = date.getFullYear()
+  return `${day}/${month}/${year}`
+}
+

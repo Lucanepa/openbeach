@@ -142,13 +142,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
   }
 
   // Signatures and lock
-  const [homeCoachSignature, setTeam_1CoachSignature] = useState(null)
+  const [team_1CoachSignature, setTeam_1CoachSignature] = useState(null)
   const [team_1CaptainSignature, setTeam_1CaptainSignature] = useState(null)
-  const [awayCoachSignature, setTeam_2CoachSignature] = useState(null)
+  const [team_2CoachSignature, setTeam_2CoachSignature] = useState(null)
   const [team_2CaptainSignature, setTeam_2CaptainSignature] = useState(null)
-  const [savedSignatures, setSavedSignatures] = useState({ homeCoach: null, team_1Captain: null, awayCoach: null, team_2Captain: null })
-  const isHomeLocked = !!(homeCoachSignature && team_1CaptainSignature)
-  const isAwayLocked = !!(awayCoachSignature && team_2CaptainSignature)
+  const [savedSignatures, setSavedSignatures] = useState({ team_1Coach: null, team_1Captain: null, team_2Coach: null, team_2Captain: null })
+  const isTeam_1Locked = !!(team_1CoachSignature && team_1CaptainSignature)
+  const isTeam_2Locked = !!(team_2CoachSignature && team_2CaptainSignature)
   
   // Check if coin toss was previously confirmed (only captain signatures are required)
   const isCoinTossConfirmed = useMemo(() => {
@@ -161,7 +161,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
   const coinTossModalData = useMemo(() => {
     if (!coinTossConfirmModal) return null
     
-    console.log('[COIN TOSS] useMemo calculating modal data')
     // Calculate serve rotation
     const firstServeTeam = serveA ? teamA : teamB
     
@@ -216,7 +215,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         // Update database if matchId exists
         if (matchId) {
           await db.matches.update(matchId, {
-            homeCoachSignature: null,
+            team_1CoachSignature: null,
             team_1CaptainSignature: null
           })
         }
@@ -226,7 +225,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         // Update database if matchId exists
         if (matchId) {
           await db.matches.update(matchId, {
-            awayCoachSignature: null,
+            team_2CoachSignature: null,
             team_2CaptainSignature: null
           })
         }
@@ -263,8 +262,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
       try {
         // Load teams
         const [team_1Team, team_2Team] = await Promise.all([
-          match.homeTeamId ? db.teams.get(match.homeTeamId) : null,
-          match.awayTeamId ? db.teams.get(match.awayTeamId) : null
+          match.team_1Id ? db.teams.get(match.team_1Id) : null,
+          match.team_2Id ? db.teams.get(match.team_2Id) : null
         ])
 
         if (team_1Team && team_1Team.name && typeof team_1Team.name === 'string') {
@@ -323,7 +322,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         if (match.team_1Country) setTeam_1Country(match.team_1Country)
         else if (match.homeShortName) setTeam_1Country(match.homeShortName) // Legacy support
         if (match.team_2Country) setTeam_2Country(match.team_2Country)
-        else if (match.awayShortName) setTeam_2Country(match.awayShortName) // Legacy support
+        else if (match.team_2ShortName) setTeam_2Country(match.team_2ShortName) // Legacy support
         
         // Generate PINs if they don't exist (for matches created before PIN feature)
         const generatePinCode = () => {
@@ -339,11 +338,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         if (!match.refereePin) {
           updates.refereePin = generatePinCode()
         }
-        if (!match.homeTeamPin) {
-          updates.homeTeamPin = generatePinCode()
+        if (!match.team_1Pin) {
+          updates.team_1Pin = generatePinCode()
         }
-        if (!match.awayTeamPin) {
-          updates.awayTeamPin = generatePinCode()
+        if (!match.team_2Pin) {
+          updates.team_2Pin = generatePinCode()
         }
         if (Object.keys(updates).length > 0) {
           await db.matches.update(matchId, updates)
@@ -351,8 +350,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         
         // Load players only on initial load (when matchId changes, not when match updates)
         // This prevents overwriting user edits when the match object updates from the database
-        if (match.homeTeamId) {
-          const team_1Players = await db.players.where('teamId').equals(match.homeTeamId).toArray()
+        if (match.team_1Id) {
+          const team_1Players = await db.players.where('teamId').equals(match.team_1Id).toArray()
           // DON'T sort by number - maintain insertion order to preserve Player 1 and Player 2
           // Sort by ID to maintain consistent order when numbers are null
           team_1Players.sort((a, b) => {
@@ -369,22 +368,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
             // Beach volleyball: No liberos
             isCaptain: p.isCaptain || false
           }))
-          
-          // DEBUG: Log before setting roster to catch duplicates
-          console.log('[MATCH SETUP DEBUG] team_1Players from DB:', team_1Players.map((p, idx) => ({
-            index: idx,
-            id: p.id,
-            firstName: p.firstName,
-            lastName: p.lastName,
-            number: p.number
-          })))
-          console.log('[MATCH SETUP DEBUG] team_1Roster being set:', roster.map((p, idx) => ({
-            index: idx,
-            id: p.id,
-            firstName: p.firstName,
-            lastName: p.lastName,
-            number: p.number
-          })))
           
           setTeam_1Roster(roster)
           // Populate direct player inputs (beach volleyball: exactly 2 players)
@@ -403,7 +386,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
           }
           
           // DEBUG: Log loaded players to catch duplicates
-          console.log('[MATCH SETUP DEBUG] Loaded team_1 players:', {
+          // Loaded team_1 players
             rosterLength: roster.length,
             player1: { firstName: roster[0]?.firstName, lastName: roster[0]?.lastName, id: roster[0]?.id },
             player2: { firstName: roster[1]?.firstName, lastName: roster[1]?.lastName, id: roster[1]?.id },
@@ -415,8 +398,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
             }))
           })
         }
-        if (match.awayTeamId) {
-          const team_2Players = await db.players.where('teamId').equals(match.awayTeamId).toArray()
+        if (match.team_2Id) {
+          const team_2Players = await db.players.where('teamId').equals(match.team_2Id).toArray()
           // DON'T sort by number - maintain insertion order to preserve Player 1 and Player 2
           // Sort by ID to maintain consistent order when numbers are null
           team_2Players.sort((a, b) => {
@@ -434,22 +417,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
             isCaptain: p.isCaptain || false
           }))
           
-          // DEBUG: Log before setting roster to catch duplicates
-          console.log('[MATCH SETUP DEBUG] team_2Players from DB:', team_2Players.map((p, idx) => ({
-            index: idx,
-            id: p.id,
-            firstName: p.firstName,
-            lastName: p.lastName,
-            number: p.number
-          })))
-          console.log('[MATCH SETUP DEBUG] team_2Roster being set:', roster.map((p, idx) => ({
-            index: idx,
-            id: p.id,
-            firstName: p.firstName,
-            lastName: p.lastName,
-            number: p.number
-          })))
-          
           setTeam_2Roster(roster)
           // Populate direct player inputs (beach volleyball: exactly 2 players)
           // Use order (first player is Player 1, second is Player 2)
@@ -466,26 +433,14 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
             setTeam_2Player2({ firstName: '', lastName: '' })
           }
           
-          // DEBUG: Log loaded players to catch duplicates
-          console.log('[MATCH SETUP DEBUG] Loaded team_2 players:', {
-            rosterLength: roster.length,
-            player1: { firstName: roster[0]?.firstName, lastName: roster[0]?.lastName, id: roster[0]?.id },
-            player2: { firstName: roster[1]?.firstName, lastName: roster[1]?.lastName, id: roster[1]?.id },
-            allPlayers: roster.map((p, idx) => ({ 
-              index: idx, 
-              id: p.id, 
-              firstName: p.firstName, 
-              lastName: p.lastName 
-            }))
-          })
         }
         
         // Load referee connection setting (default to enabled if not set)
         setRefereeConnectionEnabled(match.refereeConnectionEnabled !== false)
         
         // Load team connection settings (default to enabled if not set)
-        setTeam_1ConnectionEnabled(match.homeTeamConnectionEnabled !== false)
-        setTeam_2ConnectionEnabled(match.awayTeamConnectionEnabled !== false)
+        setTeam_1ConnectionEnabled(match.team_1ConnectionEnabled !== false)
+        setTeam_2ConnectionEnabled(match.team_2ConnectionEnabled !== false)
         
         // Mark roster as loaded
         rosterLoadedRef.current = true
@@ -541,17 +496,17 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         }
         
         // Load signatures
-        if (match.homeCoachSignature) {
-          setTeam_1CoachSignature(match.homeCoachSignature)
-          setSavedSignatures(prev => ({ ...prev, homeCoach: match.homeCoachSignature }))
+        if (match.team_1CoachSignature) {
+          setTeam_1CoachSignature(match.team_1CoachSignature)
+          setSavedSignatures(prev => ({ ...prev, team_1Coach: match.team_1CoachSignature }))
         }
         if (match.team_1CaptainSignature) {
           setTeam_1CaptainSignature(match.team_1CaptainSignature)
           setSavedSignatures(prev => ({ ...prev, team_1Captain: match.team_1CaptainSignature }))
         }
-        if (match.awayCoachSignature) {
-          setTeam_2CoachSignature(match.awayCoachSignature)
-          setSavedSignatures(prev => ({ ...prev, awayCoach: match.awayCoachSignature }))
+        if (match.team_2CoachSignature) {
+          setTeam_2CoachSignature(match.team_2CoachSignature)
+          setSavedSignatures(prev => ({ ...prev, team_2Coach: match.team_2CoachSignature }))
         }
         if (match.team_2CaptainSignature) {
           setTeam_2CaptainSignature(match.team_2CaptainSignature)
@@ -620,9 +575,9 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
     
     // Update connection settings (these can change without affecting roster)
     setRefereeConnectionEnabled(match.refereeConnectionEnabled !== false)
-    setTeam_1ConnectionEnabled(match.homeTeamConnectionEnabled !== false)
-    setTeam_2ConnectionEnabled(match.awayTeamConnectionEnabled !== false)
-  }, [matchId, match?.refereeConnectionEnabled, match?.homeTeamConnectionEnabled, match?.awayTeamConnectionEnabled])
+    setTeam_1ConnectionEnabled(match.team_1ConnectionEnabled !== false)
+    setTeam_2ConnectionEnabled(match.team_2ConnectionEnabled !== false)
+  }, [matchId, match?.refereeConnectionEnabled, match?.team_1ConnectionEnabled, match?.team_2ConnectionEnabled])
   
   // Show coin toss view if requested
   useEffect(() => {
@@ -669,7 +624,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
           if (draft.team_1Country !== undefined) setTeam_1Country(draft.team_1Country)
           else if (draft.homeShortName !== undefined) setTeam_1Country(draft.homeShortName) // Legacy support
           if (draft.team_2Country !== undefined) setTeam_2Country(draft.team_2Country)
-          else if (draft.awayShortName !== undefined) setTeam_2Country(draft.awayShortName) // Legacy support
+          else if (draft.team_2ShortName !== undefined) setTeam_2Country(draft.team_2ShortName) // Legacy support
           if (draft.team_1Color !== undefined) setTeam_1Color(draft.team_1Color)
           if (draft.team_2Color !== undefined) setTeam_2Color(draft.team_2Color)
           if (draft.team_1Roster !== undefined) setTeam_1Roster(draft.team_1Roster)
@@ -688,9 +643,9 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
           if (draft.asstLast !== undefined) setAsstLast(draft.asstLast)
           if (draft.asstCountry !== undefined) setAsstCountry(draft.asstCountry)
           if (draft.lineJudges !== undefined) setLineJudges(draft.lineJudges)
-          if (draft.homeCoachSignature !== undefined) setTeam_1CoachSignature(draft.homeCoachSignature)
+          if (draft.team_1CoachSignature !== undefined) setTeam_1CoachSignature(draft.team_1CoachSignature)
           if (draft.team_1CaptainSignature !== undefined) setTeam_1CaptainSignature(draft.team_1CaptainSignature)
-          if (draft.awayCoachSignature !== undefined) setTeam_2CoachSignature(draft.awayCoachSignature)
+          if (draft.team_2CoachSignature !== undefined) setTeam_2CoachSignature(draft.team_2CoachSignature)
           if (draft.team_2CaptainSignature !== undefined) setTeam_2CaptainSignature(draft.team_2CaptainSignature)
           // Only load coach names from draft if they're not already loaded from match
           // This prevents overwriting match data with empty draft values
@@ -744,9 +699,9 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         asstLast,
         asstCountry,
         lineJudges,
-        homeCoachSignature,
+        team_1CoachSignature,
         team_1CaptainSignature,
-        awayCoachSignature,
+        team_2CoachSignature,
         team_2CaptainSignature,
         team_1CoachName,
         team_2CoachName,
@@ -803,19 +758,18 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
             })
             return officials
           })(),
-          bench_home: [],
-          bench_away: []
+          // Beach volleyball: No bench staff
         })
         
         // Also update team colors if teams exist
-        if (match?.homeTeamId) {
-          await db.teams.update(match.homeTeamId, { 
+        if (match?.team_1Id) {
+          await db.teams.update(match.team_1Id, { 
             name: team_1,
             color: team_1Color 
           })
         }
-        if (match?.awayTeamId) {
-          await db.teams.update(match.awayTeamId, { 
+        if (match?.team_2Id) {
+          await db.teams.update(match.team_2Id, { 
             name: team_2,
             color: team_2Color 
           })
@@ -841,7 +795,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
       
       return () => clearTimeout(timeoutId)
     }
-  }, [date, time, eventName, site, beach, court, matchPhase, matchRound, matchNumber, matchGender, team_1, team_2, team_1Color, team_2Color, team_1Country, team_2Country, team_1Roster, team_2Roster, ref1First, ref1Last, ref1Country, ref2First, ref2Last, ref2Country, scorerFirst, scorerLast, scorerCountry, asstFirst, asstLast, asstCountry, lineJudges, homeCoachSignature, team_1CaptainSignature, awayCoachSignature, team_2CaptainSignature, currentView])
+  }, [date, time, eventName, site, beach, court, matchPhase, matchRound, matchNumber, matchGender, team_1, team_2, team_1Color, team_2Color, team_1Country, team_2Country, team_1Roster, team_2Roster, ref1First, ref1Last, ref1Country, ref2First, ref2Last, ref2Country, scorerFirst, scorerLast, scorerCountry, asstFirst, asstLast, asstCountry, lineJudges, team_1CoachSignature, team_1CaptainSignature, team_2CoachSignature, team_2CaptainSignature, currentView])
 
   // Helper function to determine if a color is bright/light
   function isBrightColor(color) {
@@ -891,18 +845,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
     setTeam_1Roster(prevRoster => {
       const roster = []
       
-      // DEBUG: Log what we're building from
-      console.log('[MATCH SETUP DEBUG] Building team_1Roster from state:', {
-        player1: { firstName: team_1Player1.firstName, lastName: team_1Player1.lastName },
-        player2: { firstName: team_1Player2.firstName, lastName: team_1Player2.lastName },
-        prevRoster: prevRoster.map((p, idx) => ({ 
-          index: idx, 
-          id: p.id, 
-          firstName: p.firstName, 
-          lastName: p.lastName 
-        }))
-      })
-      
       if (team_1Player1.lastName || team_1Player1.firstName) {
         // Try to find existing player by matching name AND position (first player = index 0)
         // If no match by name, use the first player from prevRoster (by index)
@@ -951,14 +893,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         })
       }
       
-      // DEBUG: Log what we're returning
-      console.log('[MATCH SETUP DEBUG] Built team_1Roster:', roster.map((p, idx) => ({ 
-        index: idx, 
-        id: p.id, 
-        firstName: p.firstName, 
-        lastName: p.lastName 
-      })))
-      
       return roster
     })
   }, [team_1Player1.lastName, team_1Player1.firstName, team_1Player2.lastName, team_1Player2.firstName])
@@ -967,18 +901,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
     // Rebuild roster from state variables, but preserve existing player IDs if available
     setTeam_2Roster(prevRoster => {
       const roster = []
-      
-      // DEBUG: Log what we're building from
-      console.log('[MATCH SETUP DEBUG] Building team_2Roster from state:', {
-        player1: { firstName: team_2Player1.firstName, lastName: team_2Player1.lastName },
-        player2: { firstName: team_2Player2.firstName, lastName: team_2Player2.lastName },
-        prevRoster: prevRoster.map((p, idx) => ({ 
-          index: idx, 
-          id: p.id, 
-          firstName: p.firstName, 
-          lastName: p.lastName 
-        }))
-      })
       
       if (team_2Player1.lastName || team_2Player1.firstName) {
         // Try to find existing player by matching name AND position (first player = index 0)
@@ -1027,14 +949,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
           isCaptain: existingPlayer?.isCaptain || false 
         })
       }
-      
-      // DEBUG: Log what we're returning
-      console.log('[MATCH SETUP DEBUG] Built team_2Roster:', roster.map((p, idx) => ({ 
-        index: idx, 
-        id: p.id, 
-        firstName: p.firstName, 
-        lastName: p.lastName 
-      })))
       
       return roster
     })
@@ -1106,16 +1020,16 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
 
   async function createMatch() {
     // Validate at least one captain per team
-    const homeHasCaptain = team_1Roster.some(p => p.isCaptain)
-    const awayHasCaptain = team_2Roster.some(p => p.isCaptain)
+    const team_1HasCaptain = team_1Roster.some(p => p.isCaptain)
+    const team_2HasCaptain = team_2Roster.some(p => p.isCaptain)
     
-    if (!homeHasCaptain) {
-      setNoticeModal({ message: 'Home team must have at least one captain.' })
+    if (!team_1HasCaptain) {
+      setNoticeModal({ message: 'Team 1 must have at least one captain.' })
       return
     }
     
-    if (!awayHasCaptain) {
-      setNoticeModal({ message: 'Away team must have at least one captain.' })
+    if (!team_2HasCaptain) {
+      setNoticeModal({ message: 'Team 2 must have at least one captain.' })
       return
     }
 
@@ -1149,8 +1063,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
     }
 
     const matchId = await db.matches.add({
-      homeTeamId: team_1Id,
-      awayTeamId: team_2Id,
+      team_1Id: team_1Id,
+      team_2Id: team_2Id,
       status: 'live',
       scheduledAt,
       eventName: eventName || null,
@@ -1164,12 +1078,12 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
       team_1Country: team_1Country || 'SUI',
       team_2Country: team_2Country || 'SUI',
       refereePin: generatePinCode(),
-      homeTeamPin: generatePinCode(),
-      awayTeamPin: generatePinCode(),
+      team_1Pin: generatePinCode(),
+      team_2Pin: generatePinCode(),
       matchPin: matchPin.trim(),
       refereeConnectionEnabled: false,
-      homeTeamConnectionEnabled: false,
-      awayTeamConnectionEnabled: false,
+      team_1ConnectionEnabled: false,
+      team_2ConnectionEnabled: false,
       officials: (() => {
         const officials = [
           { role: '1st referee', firstName: ref1First, lastName: ref1Last, country: ref1Country },
@@ -1191,11 +1105,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         })
         return officials
       })(),
-      bench_home: [],
-      bench_away: [],
-      homeCoachSignature: null,
+      // Beach volleyball: No bench staff
+      team_1CoachSignature: null,
       team_1CaptainSignature: null,
-      awayCoachSignature: null,
+      team_2CoachSignature: null,
       team_2CaptainSignature: null,
       createdAt: new Date().toISOString()
     })
@@ -1287,10 +1200,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         timestamp: new Date().toISOString()
       }
       
-      // DEBUG: Log coin toss data being saved
-      console.log('[COIN TOSS SAVE] Saving coin toss data to match:', targetMatchId)
-      console.log('[COIN TOSS SAVE] Coin toss data structure:', JSON.stringify(coinTossData, null, 2))
-      
       await db.matches.update(targetMatchId, {
         coinTossPlayerData: enrichedCoinTossPlayerData,
         coinTossData: coinTossData // Store complete structured coin toss data
@@ -1324,11 +1233,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
   }
 
   async function confirmCoinToss() {
-    console.log('[COIN TOSS] confirmCoinToss called')
-    
     // Only captain signatures are mandatory, coach signatures are optional
     if (!team_1CaptainSignature || !team_2CaptainSignature) {
-      console.log('[COIN TOSS] Missing captain signatures')
       setNoticeModal({ message: 'Please complete all captain signatures before confirming the coin toss.' })
       return
     }
@@ -1336,12 +1242,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
     // Check that all players have numbers assigned
     if (!coinTossTeamAPlayer1.number || !coinTossTeamAPlayer2.number || 
         !coinTossTeamBPlayer1.number || !coinTossTeamBPlayer2.number) {
-      console.log('[COIN TOSS] Missing player numbers', {
-        teamAP1: coinTossTeamAPlayer1.number,
-        teamAP2: coinTossTeamAPlayer2.number,
-        teamBP1: coinTossTeamBPlayer1.number,
-        teamBP2: coinTossTeamBPlayer2.number
-      })
       setNoticeModal({ message: 'Please assign numbers (1 or 2) to all players before confirming the coin toss.' })
       return
     }
@@ -1350,7 +1250,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
     const teamACaptainSet = coinTossTeamAPlayer1.isCaptain || coinTossTeamAPlayer2.isCaptain
     const teamBCaptainSet = coinTossTeamBPlayer1.isCaptain || coinTossTeamBPlayer2.isCaptain
     if (!teamACaptainSet || !teamBCaptainSet) {
-      console.log('[COIN TOSS] Missing captains')
       setNoticeModal({ message: 'Please select a captain for each team before confirming the coin toss.' })
       return
     }
@@ -1359,7 +1258,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
     const teamAFirstServeSet = coinTossTeamAPlayer1.firstServe || coinTossTeamAPlayer2.firstServe
     const teamBFirstServeSet = coinTossTeamBPlayer1.firstServe || coinTossTeamBPlayer2.firstServe
     if (!teamAFirstServeSet || !teamBFirstServeSet) {
-      console.log('[COIN TOSS] Missing first serve')
       setNoticeModal({ message: 'Please select a first serve player for each team before confirming the coin toss.' })
       return
     }
@@ -1373,7 +1271,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
       return
     }
     
-    console.log('[COIN TOSS] All validations passed, navigating to confirmation page')
     // Navigate to confirmation page instead of showing modal
     setCurrentView('confirm-coin-toss')
   }
@@ -1435,31 +1332,14 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
       timestamp: new Date().toISOString()
     }
     
-    // DEBUG: Log complete coin toss data structure
-    console.log('='.repeat(80))
-    console.log('[COIN TOSS DATA] Complete coin toss data structure:')
-    console.log(JSON.stringify(coinTossData, null, 2))
-    console.log('='.repeat(80))
-    console.log('[COIN TOSS DATA] Team A:', teamA, '| Team B:', teamB)
-    console.log('[COIN TOSS DATA] Serve A:', serveA, '| Serve B:', serveB, '| First Serve:', firstServeTeam)
-    console.log('[COIN TOSS DATA] Team A Roster:', teamARoster.map(p => `${p.firstName} ${p.lastName} (${p.number || 'no number'})`))
-    console.log('[COIN TOSS DATA] Team B Roster:', teamBRoster.map(p => `${p.firstName} ${p.lastName} (${p.number || 'no number'})`))
-    console.log('[COIN TOSS DATA] Team A Players:')
-    console.log('  Player 1:', enrichedCoinTossPlayerData.teamA.player1)
-    console.log('  Player 2:', enrichedCoinTossPlayerData.teamA.player2)
-    console.log('[COIN TOSS DATA] Team B Players:')
-    console.log('  Player 1:', enrichedCoinTossPlayerData.teamB.player1)
-    console.log('  Player 2:', enrichedCoinTossPlayerData.teamB.player2)
-    console.log('='.repeat(80))
-    
     // Update match with signatures and rosters
     await db.transaction('rw', db.matches, db.players, async () => {
     // Update match with signatures, first serve, and coin toss result
     // Store coin toss data as a complete structured object
     const updateResult = await db.matches.update(targetMatchId, {
-      homeCoachSignature,
+      team_1CoachSignature,
       team_1CaptainSignature,
-      awayCoachSignature,
+      team_2CoachSignature,
       team_2CaptainSignature,
       firstServe: firstServeTeam, // 'team_1' or 'team_2'
       coinTossTeamA: teamA, // 'team_1' or 'team_2'
@@ -1473,9 +1353,9 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
       // Update players for both teams
       // IMPORTANT: Match players by ID first (if available), then by number, then by index
       // This ensures we don't mix up players when numbers are null
-      if (matchData.homeTeamId && team_1Roster.length) {
+      if (matchData.team_1Id && team_1Roster.length) {
         // Get existing players
-        const existingPlayers = await db.players.where('teamId').equals(matchData.homeTeamId).toArray()
+        const existingPlayers = await db.players.where('teamId').equals(matchData.team_1Id).toArray()
         // Sort existing players by ID to maintain order
         existingPlayers.sort((a, b) => (a.id || 0) - (b.id || 0))
         
@@ -1512,7 +1392,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
           } else {
             // Add new player
             await db.players.add({
-              teamId: matchData.homeTeamId,
+              teamId: matchData.team_1Id,
               number: p.number,
               name: `${p.lastName} ${p.firstName}`,
               lastName: p.lastName,
@@ -1538,9 +1418,9 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         }
       }
       
-      if (matchData.awayTeamId && team_2Roster.length) {
+      if (matchData.team_2Id && team_2Roster.length) {
         // Get existing players
-        const existingPlayers = await db.players.where('teamId').equals(matchData.awayTeamId).toArray()
+        const existingPlayers = await db.players.where('teamId').equals(matchData.team_2Id).toArray()
         // Sort existing players by ID to maintain order
         existingPlayers.sort((a, b) => (a.id || 0) - (b.id || 0))
         
@@ -1577,7 +1457,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
           } else {
             // Add new player
             await db.players.add({
-              teamId: matchData.awayTeamId,
+              teamId: matchData.team_2Id,
               number: p.number,
               name: `${p.lastName} ${p.firstName}`,
               lastName: p.lastName,
@@ -1606,14 +1486,14 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
     
     // Update saved signatures to match current state
     setSavedSignatures({
-      homeCoach: homeCoachSignature,
+      team_1Coach: team_1CoachSignature,
       team_1Captain: team_1CaptainSignature,
-      awayCoach: awayCoachSignature,
+      team_2Coach: team_2CoachSignature,
       team_2Captain: team_2CaptainSignature
     })
     
     // Create first set
-    const firstSetId = await db.sets.add({ matchId: targetMatchId, index: 1, homePoints: 0, awayPoints: 0, finished: false })
+    const firstSetId = await db.sets.add({ matchId: targetMatchId, index: 1, team_1Points: 0, team_2Points: 0, finished: false })
     
     // Update match status to 'live' to indicate match has started
     await db.matches.update(targetMatchId, { status: 'live' })
@@ -1935,7 +1815,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
           <label className="inline"><span>Name</span><input className="w-180 capitalize" value={team_1} onChange={e=>setTeam_1(e.target.value)} /></label>
           <label className="inline"><span>Team Country</span><input className="w-80" value={team_1Country} onChange={e=>setTeam_1Country(e.target.value.toUpperCase())} placeholder="SUI" maxLength={3} /></label>
         </div>
-        {isHomeLocked && (
+        {isTeam_1Locked && (
           <div className="panel" style={{ marginTop:8 }}>
             <p className="text-sm">Locked (signed by Coach and Captain). <button className="secondary" onClick={()=>{
               unlockTeam('team_1')
@@ -1951,9 +1831,9 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
           marginBottom: '8px'
         }}>
           <div className="row" style={{ width: '100%', maxWidth: '100%', overflow: 'hidden' }}>
-            <input disabled={isHomeLocked} className="w-num" placeholder="#" type="number" inputMode="numeric" value={team_1Num} onChange={e=>setTeam_1Num(e.target.value)} />
-            <input disabled={isHomeLocked} className="w-name capitalize" placeholder="Last Name" value={team_1Last} onChange={e=>setTeam_1Last(e.target.value)} />
-            <input disabled={isHomeLocked} className="w-name capitalize" placeholder="First Name" value={team_1First} onChange={e=>setTeam_1First(e.target.value)} />
+            <input disabled={isTeam_1Locked} className="w-num" placeholder="#" type="number" inputMode="numeric" value={team_1Num} onChange={e=>setTeam_1Num(e.target.value)} />
+            <input disabled={isTeam_1Locked} className="w-name capitalize" placeholder="Last Name" value={team_1Last} onChange={e=>setTeam_1Last(e.target.value)} />
+            <input disabled={isTeam_1Locked} className="w-name capitalize" placeholder="First Name" value={team_1First} onChange={e=>setTeam_1First(e.target.value)} />
             {/* Beach volleyball: No liberos */}
             <label className="inline"><input disabled={isHomeLocked} type="radio" name="team_1Captain" checked={team_1Captain} onChange={()=>setTeam_1Captain(true)} /> Captain</label>
             <button disabled={isHomeLocked} type="button" className="secondary" onClick={() => {
@@ -1976,7 +1856,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
           {team_1Roster.map((p, i) => (
             <div key={`h-${i}`} className="row" style={{ alignItems: 'center' }}>
               <input 
-                disabled={isHomeLocked} 
+                disabled={isTeam_1Locked} 
                 className="w-num" 
                 placeholder="#" 
                 type="number" 
@@ -1989,7 +1869,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                 }} 
               />
               <input 
-                disabled={isHomeLocked} 
+                disabled={isTeam_1Locked} 
                 className="w-name capitalize" 
                 placeholder="Last Name" 
                 value={p.lastName || ''} 
@@ -2000,7 +1880,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                 }} 
               />
               <input 
-                disabled={isHomeLocked} 
+                disabled={isTeam_1Locked} 
                 className="w-name capitalize" 
                 placeholder="First Name" 
                 value={p.firstName || ''} 
@@ -2013,7 +1893,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
               {/* Beach volleyball: No liberos */}
               <label className="inline">
                 <input 
-                  disabled={isHomeLocked} 
+                  disabled={isTeam_1Locked} 
                   type="radio" 
                   name="team_1Captain" 
                   checked={p.isCaptain || false} 
@@ -2040,16 +1920,16 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         {/* Beach volleyball: No bench staff */}
         <div style={{ display:'flex', justifyContent:'flex-end', marginTop:16 }}>
           <button onClick={async () => {
-            // Save home team data to database if matchId exists
-            if (matchId && match?.homeTeamId) {
-              await db.teams.update(match.homeTeamId, {
+            // Save team 1 data to database if matchId exists
+            if (matchId && match?.team_1Id) {
+              await db.teams.update(match.team_1Id, {
                 name: team_1,
                 color: team_1Color
               })
               
               // Update players with captain status
               if (team_1Roster.length) {
-                const existingPlayers = await db.players.where('teamId').equals(match.homeTeamId).toArray()
+                const existingPlayers = await db.players.where('teamId').equals(match.team_1Id).toArray()
                 const rosterNumbers = new Set(team_1Roster.map(p => p.number).filter(n => n != null))
                 
                 for (const rosterPlayer of team_1Roster) {
@@ -2068,7 +1948,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                   } else {
                     // Add new player (including newly added players after unlock)
                     await db.players.add({
-                      teamId: match.homeTeamId,
+                      teamId: match.team_1Id,
                       number: rosterPlayer.number,
                       name: `${rosterPlayer.lastName} ${rosterPlayer.firstName}`,
                       lastName: rosterPlayer.lastName,
@@ -2095,9 +1975,9 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
               }
               
               // Restore signatures if they were previously saved (re-lock the team)
-              if (!homeCoachSignature && savedSignatures.homeCoach) {
-                updateData.homeCoachSignature = savedSignatures.homeCoach
-                setTeam_1CoachSignature(savedSignatures.homeCoach)
+              if (!team_1CoachSignature && savedSignatures.team_1Coach) {
+                updateData.team_1CoachSignature = savedSignatures.team_1Coach
+                setTeam_1CoachSignature(savedSignatures.team_1Coach)
               }
               if (!team_1CaptainSignature && savedSignatures.team_1Captain) {
                 updateData.team_1CaptainSignature = savedSignatures.team_1Captain
@@ -2129,7 +2009,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
           <label className="inline"><span>Name</span><input className="w-180 capitalize" value={team_2} onChange={e=>setTeam_2(e.target.value)} /></label>
           <label className="inline"><span>Team Country</span><input className="w-80" value={team_2Country} onChange={e=>setTeam_2Country(e.target.value.toUpperCase())} placeholder="SUI" maxLength={3} /></label>
         </div>
-        {isAwayLocked && (
+        {isTeam_2Locked && (
           <div className="panel" style={{ marginTop:8 }}>
             <p className="text-sm">Locked (signed by Coach and Captain). <button className="secondary" onClick={()=>{
               unlockTeam('team_2')
@@ -2148,12 +2028,12 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
           marginBottom: '8px'
         }}>
           <div className="row" style={{ width: '100%', maxWidth: '100%', overflow: 'hidden' }}>
-            <input disabled={isAwayLocked} className="w-num" placeholder="#" type="number" inputMode="numeric" value={team_2Num} onChange={e=>setTeam_2Num(e.target.value)} />
-            <input disabled={isAwayLocked} className="w-name capitalize" placeholder="Last Name" value={team_2Last} onChange={e=>setTeam_2Last(e.target.value)} />
-            <input disabled={isAwayLocked} className="w-name capitalize" placeholder="First Name" value={team_2First} onChange={e=>setTeam_2First(e.target.value)} />
+            <input disabled={isTeam_2Locked} className="w-num" placeholder="#" type="number" inputMode="numeric" value={team_2Num} onChange={e=>setTeam_2Num(e.target.value)} />
+            <input disabled={isTeam_2Locked} className="w-name capitalize" placeholder="Last Name" value={team_2Last} onChange={e=>setTeam_2Last(e.target.value)} />
+            <input disabled={isTeam_2Locked} className="w-name capitalize" placeholder="First Name" value={team_2First} onChange={e=>setTeam_2First(e.target.value)} />
             {/* Beach volleyball: No liberos */}
-            <label className="inline"><input disabled={isAwayLocked} type="radio" name="team_2Captain" checked={team_2Captain} onChange={()=>setTeam_2Captain(true)} /> Captain</label>
-            <button disabled={isAwayLocked} type="button" className="secondary" onClick={() => {
+            <label className="inline"><input disabled={isTeam_2Locked} type="radio" name="team_2Captain" checked={team_2Captain} onChange={()=>setTeam_2Captain(true)} /> Captain</label>
+            <button disabled={isTeam_2Locked} type="button" className="secondary" onClick={() => {
               if (!team_2Last || !team_2First) return
               const newPlayer = { number: team_2Num ? Number(team_2Num) : null, lastName: team_2Last, firstName: team_2First, isCaptain: team_2Captain }
               setTeam_2Roster(list => {
@@ -2173,7 +2053,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
           {team_2Roster.map((p, i) => (
             <div key={`a-${i}`} className="row" style={{ alignItems: 'center' }}>
               <input 
-                disabled={isAwayLocked} 
+                disabled={isTeam_2Locked} 
                 className="w-num" 
                 placeholder="#" 
                 type="number" 
@@ -2186,7 +2066,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                 }} 
               />
               <input 
-                disabled={isAwayLocked} 
+                disabled={isTeam_2Locked} 
                 className="w-name capitalize" 
                 placeholder="Last Name" 
                 value={p.lastName || ''} 
@@ -2197,7 +2077,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                 }} 
               />
               <input 
-                disabled={isAwayLocked} 
+                disabled={isTeam_2Locked} 
                 className="w-name capitalize" 
                 placeholder="First Name" 
                 value={p.firstName || ''} 
@@ -2210,7 +2090,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
               {/* Beach volleyball: No liberos */}
               <label className="inline">
                 <input 
-                  disabled={isAwayLocked} 
+                  disabled={isTeam_2Locked} 
                   type="radio" 
                   name="team_2Captain" 
                   checked={p.isCaptain || false} 
@@ -2237,16 +2117,16 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         {/* Beach volleyball: No bench staff */}
         <div style={{ display:'flex', justifyContent:'flex-end', marginTop:16 }}>
           <button onClick={async () => {
-            // Save away team data to database if matchId exists
-            if (matchId && match?.awayTeamId) {
-              await db.teams.update(match.awayTeamId, {
+            // Save team 2 data to database if matchId exists
+            if (matchId && match?.team_2Id) {
+              await db.teams.update(match.team_2Id, {
                 name: team_2,
                 color: team_2Color
               })
               
               // Update players with captain status
               if (team_2Roster.length) {
-                const existingPlayers = await db.players.where('teamId').equals(match.awayTeamId).toArray()
+                const existingPlayers = await db.players.where('teamId').equals(match.team_2Id).toArray()
                 const rosterNumbers = new Set(team_2Roster.map(p => p.number).filter(n => n != null))
                 
                 for (const rosterPlayer of team_2Roster) {
@@ -2265,7 +2145,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                   } else {
                     // Add new player (including newly added players after unlock)
                     await db.players.add({
-                      teamId: match.awayTeamId,
+                      teamId: match.team_2Id,
                       number: rosterPlayer.number,
                       name: `${rosterPlayer.lastName} ${rosterPlayer.firstName}`,
                       lastName: rosterPlayer.lastName,
@@ -2292,9 +2172,9 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
               }
               
               // Restore signatures if they were previously saved (re-lock the team)
-              if (!awayCoachSignature && savedSignatures.awayCoach) {
-                updateData.awayCoachSignature = savedSignatures.awayCoach
-                setTeam_2CoachSignature(savedSignatures.awayCoach)
+              if (!team_2CoachSignature && savedSignatures.team_2Coach) {
+                updateData.team_2CoachSignature = savedSignatures.team_2Coach
+                setTeam_2CoachSignature(savedSignatures.team_2Coach)
               }
               if (!team_2CaptainSignature && savedSignatures.team_2Captain) {
                 updateData.team_2CaptainSignature = savedSignatures.team_2Captain
@@ -2314,9 +2194,9 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
     const teamAInfo = teamA === 'team_1' ? { name: team_1, color: team_1Color, roster: team_1Roster } : { name: team_2, color: team_2Color, roster: team_2Roster }
     const teamBInfo = teamB === 'team_1' ? { name: team_1, color: team_1Color, roster: team_1Roster } : { name: team_2, color: team_2Color, roster: team_2Roster }
     
-    const teamACoachSig = teamA === 'team_1' ? homeCoachSignature : awayCoachSignature
+    const teamACoachSig = teamA === 'team_1' ? team_1CoachSignature : team_2CoachSignature
     const teamACaptainSig = teamA === 'team_1' ? team_1CaptainSignature : team_2CaptainSignature
-    const teamBCoachSig = teamB === 'team_1' ? homeCoachSignature : awayCoachSignature
+    const teamBCoachSig = teamB === 'team_1' ? team_1CoachSignature : team_2CoachSignature
     const teamBCaptainSig = teamB === 'team_1' ? team_1CaptainSignature : team_2CaptainSignature
     // Check if coach names are set
     const teamACoachName = teamA === 'team_1' ? team_1CoachName : team_2CoachName
@@ -3082,7 +2962,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
             <button
               onClick={() => {
-                console.log('[COIN TOSS] Back clicked, going back to coin toss')
                 setCurrentView('coin-toss')
               }}
               style={{
@@ -3100,7 +2979,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
             </button>
             <button
               onClick={async () => {
-                console.log('[COIN TOSS] Confirm clicked on confirmation page')
                 await actuallyConfirmCoinToss()
                 // actuallyConfirmCoinToss will call onStart() which navigates to scoreboard
                 // No need to navigate here, just let it proceed
@@ -3187,23 +3065,23 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
     }
   }
 
-  const handleHomeTeamConnectionToggle = async (enabled) => {
+  const handleTeam_1ConnectionToggle = async (enabled) => {
     if (!matchId) return
     setTeam_1ConnectionEnabled(enabled)
     try {
-      await db.matches.update(matchId, { homeTeamConnectionEnabled: enabled })
+      await db.matches.update(matchId, { team_1TeamConnectionEnabled: enabled })
     } catch (error) {
-      console.error('Failed to update home team connection setting:', error)
+      console.error('Failed to update team 1 connection setting:', error)
     }
   }
 
-  const handleAwayTeamConnectionToggle = async (enabled) => {
+  const handleTeam_2ConnectionToggle = async (enabled) => {
     if (!matchId) return
     setTeam_2ConnectionEnabled(enabled)
     try {
-      await db.matches.update(matchId, { awayTeamConnectionEnabled: enabled })
+      await db.matches.update(matchId, { team_2TeamConnectionEnabled: enabled })
     } catch (error) {
-      console.error('Failed to update away team connection setting:', error)
+      console.error('Failed to update team 2 connection setting:', error)
     }
   }
 
@@ -3321,7 +3199,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
       if (editPinType === 'referee') {
         updateField = { refereePin: newPin }
       }
-      // Beach volleyball: No bench PINs
+      // Beach volleyball: No bench PINs - using team PINs only
       await db.matches.update(matchId, updateField)
       setEditPinModal(false)
       setPinError('')
@@ -3633,11 +3511,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                       style={{ width: '150px' }}
                     />
                   </div>
-                  {homeCoachSignature && (team_1CoachName.firstName || team_1CoachName.lastName) && (
+                  {team_1CoachSignature && (team_1CoachName.firstName || team_1CoachName.lastName) && (
                     <div style={{ marginTop: 12 }}>
                       <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: 6 }}>Coach Signature</div>
                       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <img src={homeCoachSignature} alt="Coach signature" style={{ maxWidth: 200, maxHeight: 60, border: '1px solid rgba(255,255,255,.2)', borderRadius: 4, flexShrink: 0 }} />
+                        <img src={team_1CoachSignature} alt="Coach signature" style={{ maxWidth: 200, maxHeight: 60, border: '1px solid rgba(255,255,255,.2)', borderRadius: 4, flexShrink: 0 }} />
                         <button onClick={() => setTeam_1CoachSignature(null)} style={{ padding: '6px 12px', fontSize: '12px' }}>Remove</button>
                       </div>
                     </div>
@@ -3762,11 +3640,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                       style={{ width: '150px' }}
                     />
                   </div>
-                  {awayCoachSignature && (team_2CoachName.firstName || team_2CoachName.lastName) && (
+                  {team_2CoachSignature && (team_2CoachName.firstName || team_2CoachName.lastName) && (
                     <div style={{ marginTop: 12 }}>
                       <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: 6 }}>Coach Signature</div>
                       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <img src={awayCoachSignature} alt="Coach signature" style={{ maxWidth: 200, maxHeight: 60, border: '1px solid rgba(255,255,255,.2)', borderRadius: 4, flexShrink: 0 }} />
+                        <img src={team_2CoachSignature} alt="Coach signature" style={{ maxWidth: 200, maxHeight: 60, border: '1px solid rgba(255,255,255,.2)', borderRadius: 4, flexShrink: 0 }} />
                         <button onClick={() => setTeam_2CoachSignature(null)} style={{ padding: '6px 12px', fontSize: '12px' }}>Remove</button>
                       </div>
                     </div>
@@ -3786,7 +3664,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
             // Check if match has no data (no sets, no signatures)
             if (matchId && match) {
               const sets = await db.sets.where('matchId').equals(matchId).toArray()
-              const hasNoData = sets.length === 0 && !match.homeCoachSignature && !match.team_1CaptainSignature && !match.awayCoachSignature && !match.team_2CaptainSignature
+              const hasNoData = sets.length === 0 && !match.team_1CoachSignature && !match.team_1CaptainSignature && !match.team_2CoachSignature && !match.team_2CaptainSignature
               
               if (hasNoData) {
                 // Update match with current data before going to coin toss
@@ -3817,20 +3695,20 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                 })
                 
                 // Update teams if needed
-                if (match.homeTeamId) {
-                  await db.teams.update(match.homeTeamId, { name: team_1, color: team_1Color })
+                if (match.team_1Id) {
+                  await db.teams.update(match.team_1Id, { name: team_1, color: team_1Color })
                 }
-                if (match.awayTeamId) {
-                  await db.teams.update(match.awayTeamId, { name: team_2, color: team_2Color })
+                if (match.team_2Id) {
+                  await db.teams.update(match.team_2Id, { name: team_2, color: team_2Color })
                 }
                 
                 // Update players
-                if (match.homeTeamId && team_1Roster.length) {
+                if (match.team_1Id && team_1Roster.length) {
                   // Delete existing players and add new ones
-                  await db.players.where('teamId').equals(match.homeTeamId).delete()
+                  await db.players.where('teamId').equals(match.team_1Id).delete()
                   await db.players.bulkAdd(
                     team_1Roster.map(p => ({
-                      teamId: match.homeTeamId,
+                      teamId: match.team_1Id,
                       number: p.number,
                       name: `${p.lastName} ${p.firstName}`,
                       lastName: p.lastName,
@@ -3842,12 +3720,12 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                     }))
                   )
                 }
-                if (match.awayTeamId && team_2Roster.length) {
+                if (match.team_2Id && team_2Roster.length) {
                   // Delete existing players and add new ones
-                  await db.players.where('teamId').equals(match.awayTeamId).delete()
+                  await db.players.where('teamId').equals(match.team_2Id).delete()
                   await db.players.bulkAdd(
                     team_2Roster.map(p => ({
-                      teamId: match.awayTeamId,
+                      teamId: match.team_2Id,
                       number: p.number,
                       name: `${p.lastName} ${p.firstName}`,
                       lastName: p.lastName,
@@ -3916,7 +3794,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ marginBottom: '12px', fontSize: '14px', fontWeight: 600, color: 'var(--text)' }}>
-              Choose {colorPickerModal.team === 'team_1' ? 'Home' : 'Away'} Team Color
+              Choose {colorPickerModal.team === 'team_1' ? 'Team 1' : 'Team 2'} Team Color
             </div>
             <div
               style={{

@@ -5,10 +5,9 @@ import mikasaVolleyball from '../mikasa_BV550C_beach.png'
 
 export default function Referee({ matchId, onExit }) {
   const [refereeView, setRefereeView] = useState('2nd') // '1st' or '2nd'
-  const [activeTimeout, setActiveTimeout] = useState(null) // { team: 'home'|'away', countdown: number, eventId: number }
+  const [activeTimeout, setActiveTimeout] = useState(null) // { team: 'team_1'|'team_2', countdown: number, eventId: number }
   const [processedTimeouts, setProcessedTimeouts] = useState(new Set()) // Track which timeout events we've already shown
-  const [activeSubstitution, setActiveSubstitution] = useState(null) // { team: 'home'|'away', playerOut, playerIn, eventId: number, countdown: 5 }
-  const [processedSubstitutions, setProcessedSubstitutions] = useState(new Set()) // Track which substitution events we've already shown
+  // Beach volleyball: No substitutions
   
   // Send heartbeat to indicate referee is connected (only if connection is enabled)
   useEffect(() => {
@@ -53,17 +52,17 @@ export default function Referee({ matchId, onExit }) {
     const match = await db.matches.get(matchId)
     if (!match) return null
 
-    const [homeTeam, awayTeam] = await Promise.all([
-      match?.homeTeamId ? db.teams.get(match.homeTeamId) : null,
-      match?.awayTeamId ? db.teams.get(match.awayTeamId) : null
+    const [team_1Team, team_2Team] = await Promise.all([
+      match?.team_1Id ? db.teams.get(match.team_1Id) : null,
+      match?.team_2Id ? db.teams.get(match.team_2Id) : null
     ])
 
-    const [homePlayers, awayPlayers] = await Promise.all([
-      match?.homeTeamId
-        ? db.players.where('teamId').equals(match.homeTeamId).sortBy('number')
+    const [team_1Players, team_2Players] = await Promise.all([
+      match?.team_1Id
+        ? db.players.where('teamId').equals(match.team_1Id).sortBy('number')
         : [],
-      match?.awayTeamId
-        ? db.players.where('teamId').equals(match.awayTeamId).sortBy('number')
+      match?.team_2Id
+        ? db.players.where('teamId').equals(match.team_2Id).sortBy('number')
         : []
     ])
 
@@ -81,10 +80,10 @@ export default function Referee({ matchId, onExit }) {
 
     return {
       match,
-      homeTeam,
-      awayTeam,
-      homePlayers,
-      awayPlayers,
+      team_1Team,
+      team_2Team,
+      team_1Players,
+      team_2Players,
       sets,
       currentSet,
       events
@@ -156,38 +155,38 @@ export default function Referee({ matchId, onExit }) {
     const event = currentSetEvents[0]
     if (!event) return null
     
-    const teamName = event.payload?.team === 'home' 
-      ? (data.homeTeam?.name || 'Home')
-      : event.payload?.team === 'away'
-      ? (data.awayTeam?.name || 'Away')
+    const teamName = event.payload?.team === 'team_1' 
+      ? (data.team_1Team?.name || 'Team 1')
+      : event.payload?.team === 'team_2'
+      ? (data.team_2Team?.name || 'Team 2')
       : null
     
     // Determine team labels (A or B)
-    const teamAKey = data?.match?.coinTossTeamA || 'home'
-    const homeLabel = teamAKey === 'home' ? 'A' : 'B'
-    const awayLabel = teamAKey === 'away' ? 'A' : 'B'
+    const teamAKey = data?.match?.coinTossTeamA || 'team_1'
+    const team_1Label = teamAKey === 'team_1' ? 'A' : 'B'
+    const team_2Label = teamAKey === 'team_2' ? 'A' : 'B'
     
     // Calculate score at time of event
     const setIdx = event.setIndex || 1
     const setEvents = data.events?.filter(e => (e.setIndex || 1) === setIdx) || []
     const eventIndex = setEvents.findIndex(e => e.id === event.id)
     
-    let homeScore = 0
-    let awayScore = 0
+    let team_1Score = 0
+    let team_2Score = 0
     for (let i = 0; i <= eventIndex; i++) {
       const e = setEvents[i]
       if (e.type === 'point') {
-        if (e.payload?.team === 'home') {
-          homeScore++
-        } else if (e.payload?.team === 'away') {
-          awayScore++
+        if (e.payload?.team === 'team_1') {
+          team_1Score++
+        } else if (e.payload?.team === 'team_2') {
+          team_2Score++
         }
       }
     }
     
     let eventDescription = ''
     if (event.type === 'point') {
-      eventDescription = `${teamName} point (${homeLabel} ${homeScore}:${awayScore} ${awayLabel})`
+      eventDescription = `${teamName} point (${team_1Label} ${team_1Score}:${team_2Score} ${team_2Label})`
     } else if (event.type === 'timeout') {
       eventDescription = `Timeout — ${teamName}`
     } else if (event.type === 'substitution') {
@@ -207,27 +206,20 @@ export default function Referee({ matchId, onExit }) {
       } else {
         eventDescription = `Sanction — ${teamName} (${typeLabel})`
       }
-    } else if (event.type === 'libero_entry') {
-      const liberoNumber = event.payload?.liberoIn || '?'
-      const liberoType = event.payload?.liberoType === 'libero1' ? 'L1' : 'L2'
-      eventDescription = `Libero in — ${teamName} (${liberoType}#${liberoNumber})`
-    } else if (event.type === 'libero_exit') {
-      const liberoNumber = event.payload?.liberoOut || '?'
-      const liberoType = event.payload?.liberoType === 'libero1' ? 'L1' : 'L2'
-      eventDescription = `Libero out — ${teamName} (${liberoType}#${liberoNumber})`
+
     } else {
-      return null // Skip other event types
+      return null
     }
     
     return eventDescription
-  }, [data?.events, data?.currentSet, data?.homeTeam, data?.awayTeam, data?.match])
+  }, [data?.events, data?.currentSet, data?.team_1Team, data?.team_2Team, data?.match])
 
   // Calculate statistics
   const stats = useMemo(() => {
     if (!data || !data.events || !data.currentSet) {
       return {
-        home: { timeouts: 0, substitutions: 0, sanctions: [] },
-        away: { timeouts: 0, substitutions: 0, sanctions: [] }
+        team_1: { timeouts: 0, sanctions: [] },
+        team_2: { timeouts: 0, sanctions: [] }
       }
     }
 
@@ -236,20 +228,14 @@ export default function Referee({ matchId, onExit }) {
     )
 
     const homeTimeouts = currentSetEvents.filter(
-      e => e.type === 'timeout' && e.payload?.team === 'home'
+      e => e.type === 'timeout' && e.payload?.team === 'team_1'
     ).length
 
-    const awayTimeouts = currentSetEvents.filter(
-      e => e.type === 'timeout' && e.payload?.team === 'away'
+    const team_2Timeouts = currentSetEvents.filter(
+      e => e.type === 'timeout' && e.payload?.team === 'team_2'
     ).length
 
-    const homeSubstitutions = currentSetEvents.filter(
-      e => e.type === 'substitution' && e.payload?.team === 'home'
-    ).length
-
-    const awaySubstitutions = currentSetEvents.filter(
-      e => e.type === 'substitution' && e.payload?.team === 'away'
-    ).length
+    // Beach volleyball: No substitutions
 
     // Get sanctions for entire match (sanctions persist across sets)
     const homeSanctions = data.events
@@ -265,9 +251,9 @@ export default function Referee({ matchId, onExit }) {
         setIndex: e.setIndex || 1
       }))
 
-    const awaySanctions = data.events
+    const team_2Sanctions = data.events
       .filter(e => 
-        e.type === 'sanction' && e.payload?.team === 'away'
+        e.type === 'sanction' && e.payload?.team === 'team_2'
       )
       .map(e => ({
         type: e.payload?.sanctionType || e.payload?.type || 'unknown',
@@ -279,17 +265,15 @@ export default function Referee({ matchId, onExit }) {
       }))
 
     return {
-      home: { timeouts: homeTimeouts, substitutions: homeSubstitutions, sanctions: homeSanctions },
-      away: { timeouts: awayTimeouts, substitutions: awaySubstitutions, sanctions: awaySanctions }
+      team_1: { timeouts: homeTimeouts, sanctions: homeSanctions },
+      team_2: { timeouts: team_2Timeouts, sanctions: team_2Sanctions }
     }
   }, [data])
-
-  // Get lineup for current set with libero substitution info
   const lineup = useMemo(() => {
     if (!data || !data.events || !data.currentSet) {
       return { 
-        home: { lineup: {}, liberoSubs: {} }, 
-        away: { lineup: {}, liberoSubs: {} } 
+          team_1: { lineup: {}}, 
+          team_2: { lineup: {}}
       }
     }
 
@@ -299,46 +283,36 @@ export default function Referee({ matchId, onExit }) {
 
     // Find latest lineup events
     const homeLineupEvents = currentSetEvents.filter(
-      e => e.type === 'lineup' && e.payload?.team === 'home'
+      e => e.type === 'lineup' && e.payload?.team === 'team_1'
     )
-    const awayLineupEvents = currentSetEvents.filter(
-      e => e.type === 'lineup' && e.payload?.team === 'away'
+    const team_2LineupEvents = currentSetEvents.filter(
+      e => e.type === 'lineup' && e.payload?.team === 'team_2'
     )
 
-    const latestHomeLineup = homeLineupEvents[homeLineupEvents.length - 1]
-    const latestAwayLineup = awayLineupEvents[awayLineupEvents.length - 1]
-
-    // Build libero substitution map (position -> {liberoNumber, playerNumber, liberoType})
-    const buildLiberoSubMap = (lineupEvent) => {
-      const liberoSubs = {}
-      if (lineupEvent?.payload?.liberoSubstitution) {
-        const sub = lineupEvent.payload.liberoSubstitution
-        liberoSubs[sub.position] = sub
-      }
-      return liberoSubs
-    }
+    const latestTeam_1Lineup = homeLineupEvents[homeLineupEvents.length - 1]
+    const latestTeam_2Lineup = team_2LineupEvents[team_2LineupEvents.length - 1]
 
     return {
-      home: {
-        lineup: latestHomeLineup?.payload?.lineup || {},
-        liberoSubs: buildLiberoSubMap(latestHomeLineup)
+      team_1: {
+        lineup: latestTeam_1Lineup?.payload?.lineup || {},
+        liberoSubs: buildLiberoSubMap(latestTeam_1Lineup)
       },
-      away: {
-        lineup: latestAwayLineup?.payload?.lineup || {},
-        liberoSubs: buildLiberoSubMap(latestAwayLineup)
+      team_2: {
+        lineup: latestTeam_2Lineup?.payload?.lineup || {},
+        liberoSubs: buildLiberoSubMap(latestTeam_2Lineup)
       }
     }
   }, [data])
 
   // Calculate set scores
   const setScore = useMemo(() => {
-    if (!data) return { home: 0, away: 0 }
+    if (!data) return { team_1: 0, team_2: 0 }
     
     const finishedSets = data.sets?.filter(s => s.finished) || []
-    const homeSetsWon = finishedSets.filter(s => s.homePoints > s.awayPoints).length
-    const awaySetsWon = finishedSets.filter(s => s.awayPoints > s.homePoints).length
+    const team_1SetsWon = finishedSets.filter(s => s.team_1Points > s.team_2Points).length
+    const team_2SetsWon = finishedSets.filter(s => s.team_2Points > s.team_1Points).length
     
-    return { home: homeSetsWon, away: awaySetsWon }
+    return { team_1: team_1SetsWon, team_2: team_2SetsWon }
   }, [data])
 
   // Determine who has serve based on events
@@ -372,9 +346,9 @@ export default function Referee({ matchId, onExit }) {
   }, [data?.events, data?.currentSet, data?.match])
 
   // Determine team labels (A or B)
-  const teamAKey = data?.match?.coinTossTeamA || 'home'
-  const homeLabel = teamAKey === 'home' ? 'A' : 'B'
-  const awayLabel = teamAKey === 'away' ? 'A' : 'B'
+  const teamAKey = data?.match?.coinTossTeamA || 'team_1'
+  const team_1Label = teamAKey === 'team_1' ? 'A' : 'B'
+  const team_2Label = teamAKey === 'team_2' ? 'A' : 'B'
 
   // Determine which team is on the left based on set index and referee view
   // In set 1, Team A is always on the left (for 2nd referee view)
@@ -390,14 +364,14 @@ export default function Referee({ matchId, onExit }) {
     // Set 5: Special case with court switch at 8 points
     if (data.currentSet.index === 5) {
       // Set 5 starts with teams switched (like set 2+)
-      let isHome = teamAKey !== 'home'
+      let isTeam_1 = teamAKey !== 'team_1'
       
       // If court switch has happened at 8 points, switch again
       if (data.match?.set5CourtSwitched) {
-        isHome = !isHome
+        isTeam_1 = !isTeam_1
       }
       
-      return isHome
+      return isTeam_1
     }
     
     // Set 2, 3, 4: Teams switch sides (Team A goes right, Team B goes left)
@@ -407,33 +381,29 @@ export default function Referee({ matchId, onExit }) {
   // For 1st referee, reverse the sides (they see from opposite end)
   const leftIsHome = refereeView === '1st' ? !leftIsHomeFor2ndRef : leftIsHomeFor2ndRef
   
-  const leftTeam = leftIsHome ? 'home' : 'away'
-  const rightTeam = leftIsHome ? 'away' : 'home'
-
-  const leftTeamData = leftTeam === 'home' ? data?.homeTeam : data?.awayTeam
-  const rightTeamData = rightTeam === 'home' ? data?.homeTeam : data?.awayTeam
-  const leftLabel = leftTeam === 'home' ? homeLabel : awayLabel
-  const rightLabel = rightTeam === 'home' ? homeLabel : awayLabel
-  const leftLineupData = leftTeam === 'home' ? lineup.home : lineup.away
-  const rightLineupData = rightTeam === 'home' ? lineup.home : lineup.away
+  const leftTeam = leftIsHome ? 'team_1' : 'team_2'
+  const rightTeam = leftIsHome ? 'team_2' : 'team_1'
+  
+  const leftTeamData = leftTeam === 'team_1' ? data?.team_1Team : data?.team_2Team
+  const rightTeamData = rightTeam === 'team_1' ? data?.team_1Team : data?.team_2Team
+  const leftLabel = leftTeam === 'team_1' ? team_1Label : team_2Label
+  const rightLabel = rightTeam === 'team_1' ? team_1Label : team_2Label
+  const leftLineupData = leftTeam === 'team_1' ? lineup.team_1 : lineup.team_2
+  const rightLineupData = rightTeam === 'team_1' ? lineup.team_1 : lineup.team_2
   const leftLineup = leftLineupData.lineup
   const rightLineup = rightLineupData.lineup
-  const leftLiberoSubs = leftLineupData.liberoSubs
-  const rightLiberoSubs = rightLineupData.liberoSubs
-  const leftStats = leftTeam === 'home' ? stats.home : stats.away
-  const rightStats = rightTeam === 'home' ? stats.home : stats.away
-  const leftScore = leftTeam === 'home' ? data?.currentSet?.homePoints || 0 : data?.currentSet?.awayPoints || 0
-  const rightScore = rightTeam === 'home' ? data?.currentSet?.homePoints || 0 : data?.currentSet?.awayPoints || 0
-  const leftSetScore = leftTeam === 'home' ? setScore.home : setScore.away
-  const rightSetScore = rightTeam === 'home' ? setScore.home : setScore.away
+  const leftStats = leftTeam === 'team_1' ? stats.team_1 : stats.team_2
+  const rightStats = rightTeam === 'team_1' ? stats.team_1 : stats.team_2
+  const leftScore = leftTeam === 'team_1' ? data?.currentSet?.team_1Points || 0 : data?.currentSet?.team_2Points || 0
+  const rightScore = rightTeam === 'team_1' ? data?.currentSet?.team_1Points || 0 : data?.currentSet?.team_2Points || 0
+  const leftSetScore = leftTeam === 'team_1' ? setScore.team_1 : setScore.team_2
+  const rightSetScore = rightTeam === 'team_1' ? setScore.team_1 : setScore.team_2
   const leftServing = getCurrentServe === leftTeam
   const rightServing = getCurrentServe === rightTeam
-  const leftColor = leftTeamData?.color || (leftTeam === 'home' ? '#ef4444' : '#3b82f6')
-  const rightColor = rightTeamData?.color || (rightTeam === 'home' ? '#ef4444' : '#3b82f6')
+  const leftColor = leftTeamData?.color || (leftTeam === 'team_1' ? '#ef4444' : '#3b82f6')
+  const rightColor = rightTeamData?.color || (rightTeam === 'team_1' ? '#ef4444' : '#3b82f6')
   
-  // Count liberos for each team
-  const leftLiberoCount = (leftTeam === 'home' ? data?.homePlayers : data?.awayPlayers)?.filter(p => p.libero === 'libero1' || p.libero === 'libero2').length || 0
-  const rightLiberoCount = (rightTeam === 'home' ? data?.homePlayers : data?.awayPlayers)?.filter(p => p.libero === 'libero1' || p.libero === 'libero2').length || 0
+  // Beach volleyball: No liberos
   
   // Helper to determine if a color is bright
   const isBrightColor = (color) => {
@@ -636,14 +606,12 @@ export default function Referee({ matchId, onExit }) {
     )
   }
 
-  const PlayerCircle = ({ number, position, team, isServing, liberoSubInfo, teamLiberoCount }) => {
+  const PlayerCircle = ({ number, position, team, isServing }) => {
     if (!number) return null
     
     // Find player data
-    const teamPlayers = team === 'home' ? data.homePlayers : data.awayPlayers
+    const teamPlayers = team === 'team_1' ? data.team_1Players : data.team_2Players
     const player = teamPlayers?.find(p => String(p.number) === String(number))
-    const isLibero = player?.libero === 'libero1' || player?.libero === 'libero2'
-    const liberoType = player?.libero === 'libero1' ? 'L1' : player?.libero === 'libero2' ? 'L2' : null
     const isCaptain = player?.isCaptain || player?.captain
     
     // Get sanctions for this player from events (same logic as scoreboard)
@@ -671,18 +639,11 @@ export default function Referee({ matchId, onExit }) {
     // Beach volleyball: Ball shows for first player when team is serving
     const shouldShowBall = !position && isServing // No position means first player
     
-    // Beach volleyball: No libero
-    const liberoLabel = null
-    
-    // Beach volleyball: No substitutions
-    const substitutedPlayerNumber = null
-    
     return (
       <div 
         className="court-player"
         style={{
           position: 'relative',
-          // Beach volleyball: No libero
           width: 'clamp(28px, 7.8vw, 62px)', // 30% bigger than original clamp(28px, 6vw, 48px)
           height: 'clamp(18px, 7.8vw, 62px)',
           fontSize: 'clamp(12px, 3.25vw, 23px)' // 30% bigger than original clamp(12px, 2.5vw, 18px)
@@ -720,8 +681,6 @@ export default function Referee({ matchId, onExit }) {
               C
             </span>
         )}
-        {/* Beach volleyball: No substitutions */}
-        {/* Beach volleyball: No libero indicator */}
         {number}
         
         {/* Sanction cards indicator */}
@@ -989,7 +948,7 @@ export default function Referee({ matchId, onExit }) {
               {leftLabel}
             </span>
             <div style={{ fontSize: '11px', color: 'var(--muted)', lineHeight: 1 }}>
-              {leftTeamData?.name || (leftTeam === 'home' ? 'Home' : 'Away')}
+              {leftTeamData?.name || (leftTeam === 'team_1' ? 'Team A' : 'Team B')}
             </div>
           </div>
           
@@ -1014,7 +973,7 @@ export default function Referee({ matchId, onExit }) {
               {rightLabel}
             </span>
             <div style={{ fontSize: '11px', color: 'var(--muted)', lineHeight: 1 }}>
-              {rightTeamData?.name || (rightTeam === 'home' ? 'Home' : 'Away')}
+              {rightTeamData?.name || (rightTeam === 'team_1' ? 'Team A' : 'Team B')}
             </div>
           </div>
         </div>
@@ -1110,8 +1069,8 @@ export default function Referee({ matchId, onExit }) {
                 height: '100%',
                 width: '100%'
               }}>
-                <PlayerCircle number={leftLineup?.['1'] || leftLineup?.['I']} position="" team={leftTeam} isServing={leftServing} liberoSubInfo={null} teamLiberoCount={0} />
-                <PlayerCircle number={leftLineup?.['2'] || leftLineup?.['II']} position="" team={leftTeam} isServing={leftServing} liberoSubInfo={null} teamLiberoCount={0} />
+                <PlayerCircle number={leftLineup?.['1'] || leftLineup?.['I']} position="" team={leftTeam} isServing={leftServing} />
+                <PlayerCircle number={leftLineup?.['2'] || leftLineup?.['II']} position="" team={leftTeam} isServing={leftServing} />
               </div>
             </div>
           </div>
@@ -1129,8 +1088,8 @@ export default function Referee({ matchId, onExit }) {
                 height: '100%',
                 width: '100%'
               }}>
-                <PlayerCircle number={rightLineup?.['1'] || rightLineup?.['I']} position="" team={rightTeam} isServing={rightServing} liberoSubInfo={null} teamLiberoCount={0} />
-                <PlayerCircle number={rightLineup?.['2'] || rightLineup?.['II']} position="" team={rightTeam} isServing={rightServing} liberoSubInfo={null} teamLiberoCount={0} />
+                <PlayerCircle number={rightLineup?.['1'] || rightLineup?.['I']} position="" team={rightTeam} isServing={rightServing} />
+                <PlayerCircle number={rightLineup?.['2'] || rightLineup?.['II']} position="" team={rightTeam} isServing={rightServing} />
               </div>
             </div>
           </div>
@@ -1201,8 +1160,8 @@ export default function Referee({ matchId, onExit }) {
               <div style={{ 
                 fontSize: '16px', 
                 fontWeight: 700,
-                color: leftStats.substitutions >= 6 ? '#ef4444' : leftStats.substitutions >= 5 ? '#eab308' : 'inherit'
-              }}>{leftStats.substitutions}</div>
+                    color: 'inherit'
+                  }}>—</div>
             </div>
           </div>
           
@@ -1394,8 +1353,8 @@ export default function Referee({ matchId, onExit }) {
               <div style={{ 
                 fontSize: '16px', 
                 fontWeight: 700,
-                color: rightStats.substitutions >= 6 ? '#ef4444' : rightStats.substitutions >= 5 ? '#eab308' : 'inherit'
-              }}>{rightStats.substitutions}</div>
+                    color: 'inherit'
+                  }}>—</div>
             </div>
           </div>
           
@@ -1534,7 +1493,7 @@ export default function Referee({ matchId, onExit }) {
 
       {/* Court Switch Waiting Modal */}
       {data?.match && data.currentSet?.index === 5 && 
-       (data.currentSet.homePoints === 8 || data.currentSet.awayPoints === 8) && 
+       (data.currentSet.team_1Points === 8 || data.currentSet.team_2Points === 8) && 
        !data.match.set5CourtSwitched && (
         <div style={{
           position: 'fixed',
@@ -1661,13 +1620,13 @@ export default function Referee({ matchId, onExit }) {
         </div>
       )}
 
-      {/* Substitution Notification */}
-      {activeSubstitution && (() => {
-        const teamData = activeSubstitution.team === 'home' ? data?.homeTeam : data?.awayTeam
-        const teamName = teamData?.name || (activeSubstitution.team === 'home' ? 'Home' : 'Away')
-        const teamAKey = data?.match?.coinTossTeamA || 'home'
+      {/* Beach volleyball: No substitution notifications */}
+      {false && activeSubstitution && (() => {
+        const teamData = activeSubstitution.team === 'team_1' ? data?.team_1Team : data?.team_2Team
+        const teamName = teamData?.name || (activeSubstitution.team === 'team_1' ? 'Team 1' : 'Team 2')
+        const teamAKey = data?.match?.coinTossTeamA || 'team_1'
         const teamLabel = activeSubstitution.team === teamAKey ? 'A' : 'B'
-        const teamColor = teamData?.color || (activeSubstitution.team === 'home' ? '#ef4444' : '#3b82f6')
+        const teamColor = teamData?.color || (activeSubstitution.team === 'team_1' ? '#ef4444' : '#3b82f6')
         
         return (
           <div 

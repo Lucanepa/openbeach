@@ -10,13 +10,14 @@ import {
   TEST_REFEREE_SEED_DATA,
   TEST_SCORER_SEED_DATA,
   TEST_TEAM_SEED_DATA,
-  TEST_LINE_JUDGE_SEED_DATA
+  TEST_LINE_JUDGE_SEED_DATA,
+  formatISODateToDisplay
 } from './constants_beach/testSeeds_beach'
 
 const TEST_MATCH_SEED_KEY = 'test-match-default'
 const TEST_MATCH_EXTERNAL_ID = 'test-match-default'
-const TEST_HOME_TEAM_EXTERNAL_ID = 'test-team-alpha'
-const TEST_AWAY_TEAM_EXTERNAL_ID = 'test-team-bravo'
+const TEST_TEAM_1_EXTERNAL_ID = 'test-team-alpha'
+const TEST_TEAM_2_EXTERNAL_ID = 'test-team-bravo'
 const TEST_MATCH_DEFAULTS = {
   eventName: 'BeachTour A1 Switzerland',
   beach: 'HB',
@@ -54,7 +55,7 @@ function generateRefereePin() {
   return pin
 }
 
-export default function App() {
+function App() {
   const [matchId, setMatchId] = useState(null)
   const [showMatchSetup, setShowMatchSetup] = useState(false)
   const [showCoinToss, setShowCoinToss] = useState(false)
@@ -122,10 +123,10 @@ export default function App() {
 
     // For test matches that have been restarted (no signatures, only initial set, no events), don't show status
     if (currentMatch.test === true) {
-      const hasSignatures = currentMatch.homeCoachSignature || 
-                           currentMatch.homeCaptainSignature || 
-                           currentMatch.awayCoachSignature || 
-                           currentMatch.awayCaptainSignature
+      const hasSignatures = currentMatch.team_1CoachSignature || 
+                           currentMatch.team_1CaptainSignature || 
+                           currentMatch.team_2CoachSignature || 
+                           currentMatch.team_2CaptainSignature
       
       if (!hasSignatures) {
         const sets = await db.sets.where('matchId').equals(currentMatch.id).toArray()
@@ -137,32 +138,32 @@ export default function App() {
       }
     }
 
-    const homeTeamPromise = currentMatch.homeTeamId ? db.teams.get(currentMatch.homeTeamId) : Promise.resolve(null)
-    const awayTeamPromise = currentMatch.awayTeamId ? db.teams.get(currentMatch.awayTeamId) : Promise.resolve(null)
+    const team_1TeamPromise = currentMatch.team_1Id ? db.teams.get(currentMatch.team_1Id) : Promise.resolve(null)
+    const team_2TeamPromise = currentMatch.team_2Id ? db.teams.get(currentMatch.team_2Id) : Promise.resolve(null)
 
     const setsPromise = db.sets.where('matchId').equals(currentMatch.id).toArray()
     const eventsPromise = db.events.where('matchId').equals(currentMatch.id).toArray()
-    const homePlayersPromise = currentMatch.homeTeamId
-      ? db.players.where('teamId').equals(currentMatch.homeTeamId).count()
+    const team_1PlayersPromise = currentMatch.team_1Id
+      ? db.players.where('teamId').equals(currentMatch.team_1Id).count()
       : Promise.resolve(0)
-    const awayPlayersPromise = currentMatch.awayTeamId
-      ? db.players.where('teamId').equals(currentMatch.awayTeamId).count()
+    const team_2PlayersPromise = currentMatch.team_2Id
+      ? db.players.where('teamId').equals(currentMatch.team_2Id).count()
       : Promise.resolve(0)
 
-    const [homeTeam, awayTeam, sets, events, homePlayers, awayPlayers] = await Promise.all([
-      homeTeamPromise,
-      awayTeamPromise,
+    const [team_1Team, team_2Team, sets, events, team_1Players, team_2Players] = await Promise.all([
+      team_1TeamPromise,
+      team_2TeamPromise,
       setsPromise,
       eventsPromise,
-      homePlayersPromise,
-      awayPlayersPromise
+      team_1PlayersPromise,
+      team_2PlayersPromise
     ])
 
     const signaturesComplete = Boolean(
-      currentMatch.homeCoachSignature &&
-      currentMatch.homeCaptainSignature &&
-      currentMatch.awayCoachSignature &&
-      currentMatch.awayCaptainSignature
+      currentMatch.team_1CoachSignature &&
+      currentMatch.team_1CaptainSignature &&
+      currentMatch.team_2CoachSignature &&
+      currentMatch.team_2CaptainSignature
     )
 
     const infoConfigured = Boolean(
@@ -173,15 +174,15 @@ export default function App() {
       (currentMatch.eventName && String(currentMatch.eventName).trim() !== '')
     )
 
-    const rostersReady = homePlayers >= 6 && awayPlayers >= 6
+    const rostersReady = team_1Players >= 6 && team_2Players >= 6
     const matchReadyForPlay = infoConfigured && signaturesComplete && rostersReady
 
     const hasActiveSet = sets.some(set => {
       return Boolean(
         set.finished ||
         set.startTime ||
-        set.homePoints > 0 ||
-        set.awayPoints > 0
+        set.team_1Points > 0 ||
+        set.team_2Points > 0
       )
     })
 
@@ -194,7 +195,7 @@ export default function App() {
       status = 'Match ended'
     } else if ((currentMatch.status === 'live' || hasActiveSet || hasEventActivity) && matchReadyForPlay) {
       status = 'Match recording'
-    } else if (homePlayers > 0 || awayPlayers > 0 || currentMatch.homeCoachSignature || currentMatch.awayCoachSignature) {
+    } else if (team_1Players > 0 || team_2Players > 0 || currentMatch.team_1CoachSignature || currentMatch.team_2CoachSignature) {
       if (signaturesComplete) {
         status = 'Coin toss'
       } else {
@@ -204,8 +205,8 @@ export default function App() {
 
     return {
       match: currentMatch,
-      homeTeam,
-      awayTeam,
+      team_1Team,
+      team_2Team,
       status
     }
   }, [currentMatch])
@@ -336,11 +337,11 @@ export default function App() {
     // Calculate current set scores
     const sets = await db.sets.where({ matchId: cur.matchId }).toArray()
     const finishedSets = sets.filter(s => s.finished)
-    const homeSetsWon = finishedSets.filter(s => s.homePoints > s.awayPoints).length
-    const awaySetsWon = finishedSets.filter(s => s.awayPoints > s.homePoints).length
+    const team_1SetsWon = finishedSets.filter(s => s.team_1Points > s.team_2Points).length
+    const team_2SetsWon = finishedSets.filter(s => s.team_2Points > s.team_1Points).length
     
     // Check if either team has won 3 sets (match win)
-    const isMatchEnd = homeSetsWon >= 3 || awaySetsWon >= 3
+    const isMatchEnd = team_1SetsWon >= 3 || team_2SetsWon >= 3
     
     if (isMatchEnd) {
       // IMPORTANT: When match ends, preserve ALL data in database:
@@ -357,10 +358,8 @@ export default function App() {
       return
     }
     
-    // Continue to next set (legacy logic - shouldn't reach here with new logic)
-    const setId = await db.sets.add({ matchId: cur.matchId, index: cur.index + 1, homePoints: 0, awayPoints: 0, finished: false })
   }
-
+  
   const openMatchSetup = () => setMatchId(null)
   
   const openMatchSetupView = () => setShowMatchSetup(true)
@@ -391,8 +390,8 @@ export default function App() {
       const testTeams = await db.teams
         .filter(
           t =>
-            t.externalId === TEST_HOME_TEAM_EXTERNAL_ID ||
-            t.externalId === TEST_AWAY_TEAM_EXTERNAL_ID ||
+            t.externalId === TEST_TEAM_1_EXTERNAL_ID ||
+            t.externalId === TEST_TEAM_2_EXTERNAL_ID ||
             (t.seedKey && t.seedKey.startsWith('test-'))
         )
         .toArray()
@@ -405,92 +404,15 @@ export default function App() {
 
   }
 
-
-
-  const firstNames = ['Max', 'Luca', 'Tom', 'Jonas', 'Felix', 'Noah', 'David', 'Simon', 'Daniel', 'Michael', 'Anna', 'Sarah', 'Lisa', 'Emma', 'Sophie', 'Laura', 'Julia', 'Maria', 'Nina', 'Sara']
-  const lastNames = ['Müller', 'Schmidt', 'Schneider', 'Fischer', 'Weber', 'Meyer', 'Wagner', 'Becker', 'Schulz', 'Hoffmann', 'Koch', 'Bauer', 'Richter', 'Klein', 'Wolf', 'Schröder', 'Neumann', 'Schwarz', 'Zimmermann', 'Braun']
-  
-  function randomDate(start, end) {
-    const startDate = new Date(start).getTime()
-    const endDate = new Date(end).getTime()
-    const randomTime = startDate + Math.random() * (endDate - startDate)
-    const date = new Date(randomTime)
-    const day = String(date.getDate()).padStart(2, '0')
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const year = date.getFullYear()
-    return `${day}/${month}/${year}`
-  }
-
-  function formatISODateToDisplay(dateString) {
-    if (!dateString) return null
-    const date = new Date(dateString)
-    if (Number.isNaN(date.getTime())) {
-      return dateString
-    }
-    const day = String(date.getDate()).padStart(2, '0')
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const year = date.getFullYear()
-    return `${day}/${month}/${year}`
-  }
-
-  function generateRandomPlayers(teamId, config = {}) {
-    // Config options: { totalPlayers: 12, liberoCount: 1 } or { totalPlayers: 11, liberoCount: 1 }
-    // Valid combinations: 11+1, 12+0, 11+2, 12+2
-    // At least 6 non-libero players required
-    const { totalPlayers = 12, liberoCount = 1 } = config
-    const nonLiberoCount = totalPlayers - liberoCount
-    
-    if (nonLiberoCount < 6) {
-      throw new Error('At least 6 non-libero players required')
-    }
-    
-    const numbers = Array.from({ length: totalPlayers }, (_, i) => i + 1)
-    const shuffled = numbers.sort(() => Math.random() - 0.5)
-    
-    let captainAssigned = false
-    
-    return shuffled.slice(0, totalPlayers).map((number, idx) => {
-      const firstName = firstNames[Math.floor(Math.random() * firstNames.length)]
-      const lastName = lastNames[Math.floor(Math.random() * lastNames.length)]
-      const dob = randomDate('1990-01-01', '2005-12-31')
-      
-      // Assign libero roles
-      let libero = ''
-      if (idx < liberoCount) {
-        libero = idx === 0 ? 'libero1' : 'libero2'
-      }
-      
-      // Assign captain to first non-libero player
-      let isCaptain = false
-      if (!captainAssigned && libero === '') {
-        isCaptain = true
-        captainAssigned = true
-      }
-      
-      return {
-        teamId,
-        number,
-        name: `${lastName} ${firstName}`,
-        lastName,
-        firstName,
-        dob,
-        libero,
-        isCaptain,
-        role: null,
-        createdAt: new Date().toISOString()
-      }
-    })
-  }
-
   async function showDeleteMatchModal() {
     const matchToDelete = currentOfficialMatch || currentMatch
     if (!matchToDelete) return
 
-    const [homeTeam, awayTeam] = await Promise.all([
-      matchToDelete.homeTeamId ? db.teams.get(matchToDelete.homeTeamId) : null,
-      matchToDelete.awayTeamId ? db.teams.get(matchToDelete.awayTeamId) : null
+    const [team_1Team, team_2Team] = await Promise.all([
+      matchToDelete.team_1Id ? db.teams.get(matchToDelete.team_1Id) : null,
+      matchToDelete.team_2Id ? db.teams.get(matchToDelete.team_2Id) : null
     ])
-    const matchName = `${homeTeam?.name || 'Home'} vs ${awayTeam?.name || 'Away'}`
+    const matchName = `${team_1Team?.name || 'Team 1'} vs ${team_2Team?.name || 'Team 2'}`
     
     setDeleteMatchModal({
       matchName,
@@ -518,19 +440,19 @@ export default function App() {
       const match = await db.matches.get(deleteMatchModal.matchId)
       
       // Delete players
-      if (match?.homeTeamId) {
-        await db.players.where('teamId').equals(match.homeTeamId).delete()
+      if (match?.team_1Id) {
+        await db.players.where('teamId').equals(match.team_1Id).delete()
       }
-      if (match?.awayTeamId) {
-        await db.players.where('teamId').equals(match.awayTeamId).delete()
+      if (match?.team_2Id) {
+        await db.players.where('teamId').equals(match.team_2Id).delete()
       }
       
       // Delete teams
-      if (match?.homeTeamId) {
-        await db.teams.delete(match.homeTeamId)
+      if (match?.team_1Id) {
+        await db.teams.delete(match.team_1Id)
       }
-      if (match?.awayTeamId) {
-        await db.teams.delete(match.awayTeamId)
+      if (match?.team_2Id) {
+        await db.teams.delete(match.team_2Id)
       }
       
       // Delete match setup draft
@@ -595,19 +517,19 @@ export default function App() {
         }
         
         // Delete players
-        if (currentMatch.homeTeamId) {
-          await db.players.where('teamId').equals(currentMatch.homeTeamId).delete()
+        if (currentMatch.team_1Id) {
+          await db.players.where('teamId').equals(currentMatch.team_1Id).delete()
         }
-        if (currentMatch.awayTeamId) {
-          await db.players.where('teamId').equals(currentMatch.awayTeamId).delete()
+        if (currentMatch.team_2Id) {
+          await db.players.where('teamId').equals(currentMatch.team_2Id).delete()
         }
         
         // Delete teams
-        if (currentMatch.homeTeamId) {
-          await db.teams.delete(currentMatch.homeTeamId)
+        if (currentMatch.team_1Id) {
+          await db.teams.delete(currentMatch.team_1Id)
         }
-        if (currentMatch.awayTeamId) {
-          await db.teams.delete(currentMatch.awayTeamId)
+        if (currentMatch.team_2Id) {
+          await db.teams.delete(currentMatch.team_2Id)
         }
         
         // Delete match setup draft
@@ -840,7 +762,7 @@ export default function App() {
       return
     }
 
-    const [homeTeam, awayTeam] = seededTeams
+    const [team_1Team, team_2Team] = seededTeams
     const scheduledAt = getNextTestMatchStartTime()
     const timestamp = new Date().toISOString()
 
@@ -912,8 +834,8 @@ export default function App() {
 
       const baseMatchData = {
         status: 'scheduled',
-        homeTeamId: homeTeam.id,
-        awayTeamId: awayTeam.id,
+        team_1Id: team_1Team.id,
+        team_2Id: team_2Team.id,
         eventName: TEST_MATCH_DEFAULTS.eventName,
         site: TEST_MATCH_DEFAULTS.site,
         beach: TEST_MATCH_DEFAULTS.beach,
@@ -924,13 +846,11 @@ export default function App() {
         scheduledAt,
         refereePin: generateRefereePin(),
         matchPin: '1234567', // Test match PIN is always 1234567
-        bench_home: [],
-        bench_away: [],
         officials,
-        homeCoachSignature: null,
-        homeCaptainSignature: null,
-        awayCoachSignature: null,
-        awayCaptainSignature: null,
+        team_1CoachSignature: null,
+        team_1CaptainSignature: null,
+        team_2CoachSignature: null,
+        team_2CaptainSignature: null,
         test: true,
         seedKey: TEST_MATCH_SEED_KEY,
         externalId: TEST_MATCH_EXTERNAL_ID
@@ -1028,10 +948,10 @@ export default function App() {
       }
       
       // Check match state to determine where to continue
-      const isMatchSetupComplete = existing.homeCoachSignature && 
-                                    existing.homeCaptainSignature && 
-                                    existing.awayCoachSignature && 
-                                    existing.awayCaptainSignature
+      const isMatchSetupComplete = existing.team_1CoachSignature && 
+                                    existing.team_1CaptainSignature && 
+                                    existing.team_2CoachSignature && 
+                                    existing.team_2CaptainSignature
       
       // Check if coin toss is confirmed
       const isCoinTossConfirmed = existing.coinTossTeamA !== null && 
@@ -1163,10 +1083,10 @@ export default function App() {
       }
       
       // Check if match setup is complete (all signatures present)
-      const isMatchSetupComplete = match.homeCoachSignature && 
-                                  match.homeCaptainSignature && 
-                                  match.awayCoachSignature && 
-                                  match.awayCaptainSignature
+      const isMatchSetupComplete = match.team_1CoachSignature && 
+                                  match.team_1CaptainSignature && 
+                                  match.team_2CoachSignature && 
+                                  match.team_2CaptainSignature
       
       // Only allow continuation if match setup and coin toss are confirmed
       if (!isMatchSetupComplete || !isCoinTossConfirmed) {
@@ -1209,7 +1129,7 @@ export default function App() {
           <div className="match-status-content">
             <span className="match-status-label">Current Match:</span>
             <span className="match-status-teams">
-              {matchStatus.homeTeam?.name || 'Home'} vs {matchStatus.awayTeam?.name || 'Away'}
+              {matchStatus.team_1Team?.name || 'Team 1'} vs {matchStatus.team_2Team?.name || 'Team 2'}
             </span>
             <span className="match-status-value">{matchStatus.status}</span>
           </div>
@@ -1223,7 +1143,7 @@ export default function App() {
           <MatchEnd 
             matchId={matchId} 
             onShowScoresheet={() => {
-              // TODO: Implement scoresheet view
+              // Scoresheet view is handled in MatchEnd component
             }}
             onGoHome={() => {
               setMatchId(null)
@@ -1304,19 +1224,6 @@ export default function App() {
                     className="home-download-link"
                     target="_blank"
                     rel="noopener noreferrer"
-                    onClick={(e) => {
-                      // Check if file exists, if not show message
-                      fetch(e.currentTarget.href, { method: 'HEAD' })
-                        .then(res => {
-                          if (!res.ok) {
-                            e.preventDefault()
-                            alert('Windows installer not yet available. Please check back soon or build it yourself using: npm run electron:build:win')
-                          }
-                        })
-                        .catch(() => {
-                          // Allow download attempt even if check fails
-                        })
-                    }}
                   >
                     <div className="home-download-item">
                       <div className="home-download-icon">🪟</div>
@@ -1331,19 +1238,6 @@ export default function App() {
                     className="home-download-link"
                     target="_blank"
                     rel="noopener noreferrer"
-                    onClick={(e) => {
-                      // Check if file exists, if not show message
-                      fetch(e.currentTarget.href, { method: 'HEAD' })
-                        .then(res => {
-                          if (!res.ok) {
-                            e.preventDefault()
-                            alert('macOS installer not yet available. Please check back soon or build it yourself using: npm run electron:build:mac')
-                          }
-                        })
-                        .catch(() => {
-                          // Allow download attempt even if check fails
-                        })
-                    }}
                   >
                     <div className="home-download-item">
                       <div className="home-download-icon">🍎</div>
@@ -1588,5 +1482,7 @@ export default function App() {
         </Modal>
       )}
     </div>
-  )
+  );
 }
+
+export default AppBeach;

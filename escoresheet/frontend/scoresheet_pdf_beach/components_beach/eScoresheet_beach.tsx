@@ -127,7 +127,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
   useEffect(() => {
     // Only initialize if matchData exists and is not a test match
     if (matchData && !dataInitialized && matchData.match && matchData.match.test !== true) {
-      const { match, homeTeam, awayTeam, sets, events, homePlayers, awayPlayers } = matchData;
+      const { match, team_1Team, team_2Team, sets, events, team_1Players, team_2Players } = matchData;
       
       if (match) {
         // Match header info
@@ -150,29 +150,29 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
       }
       
       // Teams
-      if (homeTeam) {
-        set('t1_name', homeTeam.name || '');
-        set('t1_country', homeTeam.country || '');
-        set('b_t1_country', homeTeam.country || '');
+      if (team_1Team) {
+        set('t1_name', team_1Team.name || '');
+        set('t1_country', team_1Team.country || '');
+        set('b_t1_country', team_1Team.country || '');
       }
-      if (awayTeam) {
-        set('t2_name', awayTeam.name || '');
-        set('t2_country', awayTeam.country || '');
-        set('b_t2_country', awayTeam.country || '');
+      if (team_2Team) {
+        set('t2_name', team_2Team.name || '');
+        set('t2_country', team_2Team.country || '');
+        set('b_t2_country', team_2Team.country || '');
       }
       
       // Players (for Set 1 starting lineup)
-      if (homePlayers && homePlayers.length >= 2) {
-        set('b_t1_p1_no', String(homePlayers[0]?.number || ''));
-        set('b_t1_p1_name', `${homePlayers[0]?.firstName || ''} ${homePlayers[0]?.lastName || ''}`.trim());
-        set('b_t1_p2_no', String(homePlayers[1]?.number || ''));
-        set('b_t1_p2_name', `${homePlayers[1]?.firstName || ''} ${homePlayers[1]?.lastName || ''}`.trim());
+      if (team_1Players && team_1Players.length >= 2) {
+        set('b_t1_p1_no', String(team_1Players[0]?.number || ''));
+        set('b_t1_p1_name', `${team_1Players[0]?.firstName || ''} ${team_1Players[0]?.lastName || ''}`.trim());
+        set('b_t1_p2_no', String(team_1Players[1]?.number || ''));
+        set('b_t1_p2_name', `${team_1Players[1]?.firstName || ''} ${team_1Players[1]?.lastName || ''}`.trim());
       }
-      if (awayPlayers && awayPlayers.length >= 2) {
-        set('b_t2_p1_no', String(awayPlayers[0]?.number || ''));
-        set('b_t2_p1_name', `${awayPlayers[0]?.firstName || ''} ${awayPlayers[0]?.lastName || ''}`.trim());
-        set('b_t2_p2_no', String(awayPlayers[1]?.number || ''));
-        set('b_t2_p2_name', `${awayPlayers[1]?.firstName || ''} ${awayPlayers[1]?.lastName || ''}`.trim());
+      if (team_2Players && team_2Players.length >= 2) {
+        set('b_t2_p1_no', String(team_2Players[0]?.number || ''));
+        set('b_t2_p1_name', `${team_2Players[0]?.firstName || ''} ${team_2Players[0]?.lastName || ''}`.trim());
+        set('b_t2_p2_no', String(team_2Players[1]?.number || ''));
+        set('b_t2_p2_name', `${team_2Players[1]?.firstName || ''} ${team_2Players[1]?.lastName || ''}`.trim());
       }
       
       // Sets data
@@ -218,14 +218,14 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           const setNum = index + 1;
           if (setNum <= 3) {
             // Set scores
-            const homePoints = set.homePoints || 0;
-            const awayPoints = set.awayPoints || 0;
-            set(`res_s${setNum}_p_a`, String(homePoints));
-            set(`res_s${setNum}_p_b`, String(awayPoints));
-            
-            // Set wins (1 if team won, 0 if lost)
-            set(`res_s${setNum}_w_a`, homePoints > awayPoints ? '1' : '0');
-            set(`res_s${setNum}_w_b`, awayPoints > homePoints ? '1' : '0');
+              const team_1Points = set.team_1Points || 0;
+              const team_2Points = set.team_2Points || 0;
+              set(`res_s${setNum}_p_a`, String(team_1Points));
+              set(`res_s${setNum}_p_b`, String(team_2Points));
+              
+              // Set wins (1 if team won, 0 if lost)
+              set(`res_s${setNum}_w_a`, team_1Points > team_2Points ? '1' : '0');
+              set(`res_s${setNum}_w_b`, team_2Points > team_1Points ? '1' : '0');
             
             // Set duration (calculate from start/end times)
             if (set.startTime && set.endTime) {
@@ -238,14 +238,14 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         });
         
         // Total
-        const totalHome = finishedSets.reduce((sum: number, s: any) => sum + (s.homePoints || 0), 0);
-        const totalAway = finishedSets.reduce((sum: number, s: any) => sum + (s.awayPoints || 0), 0);
-        const totalHomeWins = finishedSets.filter((s: any) => (s.homePoints || 0) > (s.awayPoints || 0)).length;
-        const totalAwayWins = finishedSets.filter((s: any) => (s.awayPoints || 0) > (s.homePoints || 0)).length;
-        set('res_tot_p_a', String(totalHome));
-        set('res_tot_p_b', String(totalAway));
-        set('res_tot_w_a', String(totalHomeWins));
-        set('res_tot_w_b', String(totalAwayWins));
+          const totalTeam_1 = finishedSets.reduce((sum: number, s: any) => sum + (s.team_1Points || 0), 0);
+          const totalTeam_2 = finishedSets.reduce((sum: number, s: any) => sum + (s.team_2Points || 0), 0);
+          const totalTeam_1Wins = finishedSets.filter((s: any) => (s.team_1Points || 0) > (s.team_2Points || 0)).length;
+          const totalTeam_2Wins = finishedSets.filter((s: any) => (s.team_2Points || 0) > (s.team_1Points || 0)).length;
+          set('res_tot_p_a', String(totalTeam_1));
+          set('res_tot_p_b', String(totalTeam_2));
+          set('res_tot_w_a', String(totalTeam_1Wins));
+          set('res_tot_w_b', String(totalTeam_2Wins));
         
         // Total duration (already calculated above in match duration)
         if (finishedSets.length > 0) {
@@ -281,16 +281,16 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           }
         }
         
-        // Winner
-        const homeSetsWon = finishedSets.filter((s: any) => s.homePoints > s.awayPoints).length;
-        const awaySetsWon = finishedSets.filter((s: any) => s.awayPoints > s.homePoints).length;
-        if (homeSetsWon > awaySetsWon && homeTeam) {
-          set('winner_name', homeTeam.name || '');
-          set('winner_country', homeTeam.country || '');
-        } else if (awaySetsWon > homeSetsWon && awayTeam) {
-          set('winner_name', awayTeam.name || '');
-          set('winner_country', awayTeam.country || '');
-        }
+          // Winner
+          const team_1SetsWon = finishedSets.filter((s: any) => s.team_1Points > s.team_2Points).length;
+          const team_2SetsWon = finishedSets.filter((s: any) => s.team_2Points > s.team_1Points).length;
+          if (team_1SetsWon > team_2SetsWon && team_1Team) {
+            set('winner_name', team_1Team.name || '');
+            set('winner_country', team_1Team.country || '');
+          } else if (team_2SetsWon > team_1SetsWon && team_2Team) {
+            set('winner_name', team_2Team.name || '');
+            set('winner_country', team_2Team.country || '');
+          }
       }
       
       // Officials (from match.officials if available)
@@ -344,8 +344,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
       const fixFlexAlignment = (clonedDoc: Document, pageId: string) => {
         const page = clonedDoc.querySelector(`#${pageId}`) as HTMLElement;
         if (!page) return;
-
-        // Find all flex containers and convert them to use line-height or padding for centering
+      
         const allElements = page.querySelectorAll('*');
         allElements.forEach((el) => {
           const element = el as HTMLElement;
@@ -354,29 +353,25 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           
           const display = computed.display;
           const alignItems = computed.alignItems;
+          const justifyContent = computed.justifyContent;
           
           // Fix flex containers with vertical centering
-          if ((display === 'flex' || display === 'inline-flex') && alignItems === 'center') {
+          if ((display === 'flex' || display === 'inline-flex') && 
+              (alignItems === 'center' || justifyContent === 'center')) {
+            
             const height = element.offsetHeight;
+            if (height === 0) return;
             
-            // Check if element has only text content (no child elements or just one text node)
-            const hasOnlyText = element.childNodes.length === 1 && element.childNodes[0].nodeType === Node.TEXT_NODE;
-            const hasSingleChild = element.children.length === 1 && !element.querySelector('br');
+            // Convert to table-cell display which html2canvas handles better
+            element.style.display = 'table-cell';
+            element.style.verticalAlign = 'middle';
+            element.style.textAlign = 'center';
+            element.style.height = `${height}px`;
             
-            if (hasOnlyText && height > 0) {
-              // For pure text, use line-height
-              element.style.display = 'block';
-              element.style.lineHeight = `${height}px`;
-              element.style.textAlign = 'center';
-            } else if (hasSingleChild && height > 0) {
-              // For single child, calculate padding
-              const child = element.children[0] as HTMLElement;
-              const childHeight = child.offsetHeight;
-              const paddingTop = Math.max(0, (height - childHeight) / 2);
-              element.style.paddingTop = `${paddingTop}px`;
-              element.style.boxSizing = 'border-box';
-              element.style.display = 'block';
-              element.style.textAlign = 'center';
+            // Preserve the width
+            const width = element.offsetWidth;
+            if (width > 0) {
+              element.style.width = `${width}px`;
             }
           }
         });

@@ -11,51 +11,7 @@ export default function MatchEntry({ matchId, team, onBack }) {
     return () => clearInterval(timer)
   }, [])
 
-  // Send heartbeat to indicate bench connection is active (only if connection is enabled)
-  useEffect(() => {
-    if (!matchId || !team) return
-    
-    const checkAndStartHeartbeat = async () => {
-      const match = await db.matches.get(matchId)
-      if (!match) return null
-      const connectionEnabled = team === 'home' 
-        ? match.homeTeamConnectionEnabled !== false
-        : match.awayTeamConnectionEnabled !== false
-      if (connectionEnabled === false) return null
-      
-      const updateHeartbeat = async () => {
-        try {
-          const heartbeatField = team === 'home' 
-            ? 'lastHomeTeamHeartbeat' 
-            : 'lastAwayTeamHeartbeat'
-          await db.matches.update(matchId, {
-            [heartbeatField]: new Date().toISOString()
-          })
-        } catch (error) {
-          console.error('Failed to update bench heartbeat:', error)
-        }
-      }
-      
-      // Initial heartbeat
-      updateHeartbeat()
-      
-      // Update heartbeat every 5 seconds
-      return setInterval(updateHeartbeat, 5000)
-    }
-    
-    let interval = null
-    checkAndStartHeartbeat().then(id => { interval = id })
-    
-    return () => {
-      if (interval) clearInterval(interval)
-      // Clear heartbeat on unmount
-      const heartbeatField = team === 'home' 
-        ? 'lastHomeTeamHeartbeat' 
-        : 'lastAwayTeamHeartbeat'
-      db.matches.update(matchId, { [heartbeatField]: null })
-        .catch(err => console.error('Failed to clear heartbeat:', err))
-    }
-  }, [matchId, team])
+  // Beach volleyball: No bench connection/heartbeat
 
   // Load match data
   const data = useLiveQuery(async () => {
@@ -64,9 +20,9 @@ export default function MatchEntry({ matchId, team, onBack }) {
     const match = await db.matches.get(matchId)
     if (!match) return null
 
-    const [homeTeam, awayTeam] = await Promise.all([
-      match.homeTeamId ? db.teams.get(match.homeTeamId) : null,
-      match.awayTeamId ? db.teams.get(match.awayTeamId) : null
+    const [team_1Team, team_2Team] = await Promise.all([
+      match.team_1Id ? db.teams.get(match.team_1Id) : null,
+      match.team_2Id ? db.teams.get(match.team_2Id) : null
     ])
 
     const currentSet = await db.sets
@@ -86,22 +42,22 @@ export default function MatchEntry({ matchId, team, onBack }) {
       .equals(matchId)
       .sortBy('ts')
 
-    const homePlayers = match.homeTeamId
-      ? await db.players.where('teamId').equals(match.homeTeamId).sortBy('number')
+    const team_1Players = match.team_1Id
+      ? await db.players.where('teamId').equals(match.team_1Id).sortBy('number')
       : []
-    const awayPlayers = match.awayTeamId
-      ? await db.players.where('teamId').equals(match.awayTeamId).sortBy('number')
+    const team_2Players = match.team_2Id
+      ? await db.players.where('teamId').equals(match.team_2Id).sortBy('number')
       : []
 
     return {
       match,
-      homeTeam,
-      awayTeam,
+      team_1Team,
+      team_2Team,
       set: currentSet,
       allSets,
       events,
-      homePlayers,
-      awayPlayers
+      team_1Players,
+      team_2Players
     }
   }, [matchId])
 
@@ -110,8 +66,8 @@ export default function MatchEntry({ matchId, team, onBack }) {
     if (!data?.set || !data?.match) return 'left'
     
     // Get Team A and Team B from coin toss
-    const teamAKey = data.match.coinTossTeamA || 'home'
-    const teamBKey = data.match.coinTossTeamB || 'away'
+      const teamAKey = data.match.coinTossTeamA || 'team_1'
+      const teamBKey = data.match.coinTossTeamB || 'team_2'
     
     // Set 1: Team A on left
     if (data.set.index === 1) {
@@ -151,22 +107,22 @@ export default function MatchEntry({ matchId, team, onBack }) {
   // Get team info
   const teamInfo = useMemo(() => {
     if (!data) return null
-    const isHome = team === 'home'
+    const isTeam_1 = team === 'team_1'
     return {
-      name: isHome ? data.homeTeam?.name : data.awayTeam?.name,
-      color: isHome ? data.homeTeam?.color : data.awayTeam?.color,
-      players: isHome ? data.homePlayers : data.awayPlayers,
-      bench: isHome ? (data.match?.bench_home || []) : (data.match?.bench_away || [])
+      name: isTeam_1 ? data.team_1Team?.name : data.team_2Team?.name,
+      color: isTeam_1 ? data.team_1Team?.color : data.team_2Team?.color,
+      players: isTeam_1 ? data.team_1Players : data.team_2Players,
+      // Beach volleyball: No bench staff
     }
   }, [data, team])
 
   // Get current set points
   const points = useMemo(() => {
     if (!data?.set) return { team: 0, opponent: 0 }
-    if (team === 'home') {
-      return { team: data.set.homePoints, opponent: data.set.awayPoints }
+    if (team === 'team_1') {
+      return { team: data.set.team_1Points, opponent: data.set.team_2Points }
     } else {
-      return { team: data.set.awayPoints, opponent: data.set.homePoints }
+      return { team: data.set.team_2Points, opponent: data.set.team_1Points }
     }
   }, [data?.set, team])
 
@@ -177,12 +133,12 @@ export default function MatchEntry({ matchId, team, onBack }) {
     let opponentWins = 0
     for (const set of data.allSets) {
       if (set.finished) {
-        if (team === 'home') {
-          if (set.homePoints > set.awayPoints) teamWins++
-          else if (set.awayPoints > set.homePoints) opponentWins++
+        if (team === 'team_1') {
+          if (set.team_1Points > set.team_2Points) teamWins++
+          else if (set.team_2Points > set.team_1Points) opponentWins++
         } else {
-          if (set.awayPoints > set.homePoints) teamWins++
-          else if (set.homePoints > set.awayPoints) opponentWins++
+          if (set.team_2Points > set.team_1Points) teamWins++
+          else if (set.team_1Points > set.team_2Points) opponentWins++
         }
       }
     }
@@ -231,12 +187,11 @@ export default function MatchEntry({ matchId, team, onBack }) {
   const playersOnCourt = useMemo(() => {
     if (!data?.events || !data?.set) {
       // Return empty placeholders if no set data
-      return ['I', 'II', 'III', 'IV', 'V', 'VI'].map(pos => ({
+      // Beach volleyball: Only positions I and II
+      return ['I', 'II'].map(pos => ({
         number: null,
         position: pos,
-        isCaptain: false,
-        isLibero: false,
-        liberoType: null
+        isCaptain: false
       }))
     }
     
@@ -245,32 +200,27 @@ export default function MatchEntry({ matchId, team, onBack }) {
       .filter(e => e.type === 'lineup' && e.setIndex === data.set.index && e.payload?.team === team)
       .sort((a, b) => new Date(b.ts) - new Date(a.ts))
     
-    const positions = ['I', 'II', 'III', 'IV', 'V', 'VI']
+    // Beach volleyball: Only positions I and II
+    const positions = ['I', 'II']
     
     // If no lineup events, return empty placeholders
     if (lineupEvents.length === 0) {
       return positions.map(pos => ({
         number: null,
         position: pos,
-        isCaptain: false,
-        isLibero: false,
-        liberoType: null
+        isCaptain: false
       }))
     }
     
     const latestLineupEvent = lineupEvents[0]
     const latestLineup = latestLineupEvent?.payload?.lineup
     
-    // Lineup is stored as an object { I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6 }
-    // Convert to array in correct order: I, II, III (front), IV, V, VI (back)
+    // Beach volleyball: Lineup is stored as an object { I: 1, II: 2 }
     if (!latestLineup || typeof latestLineup !== 'object') {
       return positions.map(pos => ({
         number: null,
         position: pos,
-        isCaptain: false,
-        isLibero: false,
-        liberoType: null,
-        substitutedPlayerNumber: null
+        isCaptain: false
       }))
     }
     
@@ -280,30 +230,16 @@ export default function MatchEntry({ matchId, team, onBack }) {
         return {
           number: null,
           position: pos,
-          isCaptain: false,
-          isLibero: false,
-          liberoType: null,
-          substitutedPlayerNumber: null
+          isCaptain: false
         }
       }
       
       const player = teamInfo?.players?.find(p => p.number === playerNum)
       
-      // Check for libero substitution (substituted player number)
-      const liberoSub = latestLineupEvent?.payload?.liberoSubstitution
-      const substitutedPlayerNumber = liberoSub && 
-        String(liberoSub.liberoNumber) === String(playerNum) && 
-        liberoSub.position === pos
-        ? liberoSub.playerNumber
-        : null
-      
       return {
         number: playerNum,
         position: pos,
-        isCaptain: player?.isCaptain || false,
-        isLibero: player?.libero === 'libero1' || player?.libero === 'libero2',
-        liberoType: player?.libero,
-        substitutedPlayerNumber: substitutedPlayerNumber
+        isCaptain: player?.isCaptain || false
       }
     })
     
@@ -331,128 +267,12 @@ export default function MatchEntry({ matchId, team, onBack }) {
     )
   }, [data?.events, team])
 
-  // Get bench players (players not on court, excluding liberos)
-  const benchPlayersWithSanctions = useMemo(() => {
-    if (!teamInfo?.players || !data?.events || !data?.set) return []
-    
-    // Get players currently on court
-    const lineupEvents = data.events
-      .filter(e => e.type === 'lineup' && e.setIndex === data.set.index && e.payload?.team === team)
-      .sort((a, b) => new Date(b.ts) - new Date(a.ts))
-    
-    const playersOnCourtSet = new Set()
-    if (lineupEvents.length > 0) {
-      const latestLineup = lineupEvents[0].payload?.lineup
-      if (latestLineup && typeof latestLineup === 'object') {
-        Object.values(latestLineup).forEach(num => {
-          if (num) playersOnCourtSet.add(Number(num))
-        })
-      }
-    }
-    
-    // Get bench players: all players not on court, excluding liberos
-    const benchPlayers = teamInfo.players
-      .filter(p => {
-        const playerNumber = Number(p.number)
-        if (Number.isNaN(playerNumber)) return false
-        if (playersOnCourtSet.has(playerNumber)) return false
-        if (p.libero && p.libero !== '') return false // Exclude liberos
-        
-        // Filter out players who were exceptionally substituted
-        const wasExceptionallySubstituted = data.events?.some(e =>
-          e.type === 'substitution' &&
-          e.payload?.team === team &&
-          String(e.payload?.playerOut) === String(playerNumber) &&
-          e.payload?.isExceptional === true
-        )
-        if (wasExceptionallySubstituted) return false
-        
-        return true
-      })
-      .map(p => {
-        const sanctions = getPlayerSanctions(p.number)
-        return {
-          number: p.number,
-          firstName: p.firstName || '',
-          lastName: p.lastName || p.name || '',
-          dob: p.dob || '',
-          sanctions,
-          type: 'player'
-        }
-      })
-      .sort((a, b) => (a.number || 0) - (b.number || 0))
-    
-    return benchPlayers
-  }, [teamInfo, data?.events, data?.set, team, getPlayerSanctions])
+  // Beach volleyball: No bench players (only 2 players per team)
+  const benchPlayersWithSanctions = []
 
-  // Get liberos (not currently on court)
-  const benchLiberos = useMemo(() => {
-    if (!teamInfo?.players || !data?.events || !data?.set) return []
-    
-    // Get players currently on court
-    const lineupEvents = data.events
-      .filter(e => e.type === 'lineup' && e.setIndex === data.set.index && e.payload?.team === team)
-      .sort((a, b) => new Date(b.ts) - new Date(a.ts))
-    
-    const playersOnCourtSet = new Set()
-    if (lineupEvents.length > 0) {
-      const latestLineup = lineupEvents[0].payload?.lineup
-      if (latestLineup && typeof latestLineup === 'object') {
-        Object.values(latestLineup).forEach(num => {
-          if (num) playersOnCourtSet.add(Number(num))
-        })
-      }
-    }
-    
-    // Get liberos not on court
-    const liberos = teamInfo.players
-      .filter(p => {
-        const playerNumber = Number(p.number)
-        if (Number.isNaN(playerNumber)) return false
-        if (!p.libero || p.libero === '') return false
-        if (playersOnCourtSet.has(playerNumber)) return false
-        return true
-      })
-      .map(p => {
-        const sanctions = getPlayerSanctions(p.number)
-        return {
-          number: p.number,
-          firstName: p.firstName || '',
-          lastName: p.lastName || p.name || '',
-          dob: p.dob || '',
-          libero: p.libero,
-          sanctions,
-          type: 'libero'
-        }
-      })
-      .sort((a, b) => {
-        // Sort by libero type first (L1 before L2), then by number
-        if (a.libero !== b.libero) {
-          return (a.libero === 'libero1' ? 0 : 1) - (b.libero === 'libero1' ? 0 : 1)
-        }
-        return (a.number || 0) - (b.number || 0)
-      })
-    
-    return liberos
-  }, [teamInfo, data?.events, data?.set, team, getPlayerSanctions])
+  // Beach volleyball: No liberos
 
-  // Get bench officials
-  const benchOfficials = useMemo(() => {
-    if (!teamInfo?.bench) return []
-    return teamInfo.bench
-      .filter(b => b.firstName || b.lastName || b.role)
-      .map(bench => {
-        const sanctions = getOfficialSanctions(bench.role || '')
-        return {
-          role: bench.role || '',
-          firstName: bench.firstName || '',
-          lastName: bench.lastName || '',
-          dob: bench.dob || '',
-          sanctions,
-          type: 'official'
-        }
-      })
-  }, [teamInfo, getOfficialSanctions])
+  // Beach volleyball: No bench officials
 
   // Get overall team sanctions
   const overallSanctions = useMemo(() => {
@@ -732,194 +552,7 @@ export default function MatchEntry({ matchId, team, onBack }) {
               </div>
             </div>
 
-            {/* Bench Section: Players, Liberos, and Officials */}
-            {(benchPlayersWithSanctions.length > 0 || benchLiberos.length > 0 || benchOfficials.length > 0) && (
-              <div style={{
-                background: 'rgba(255,255,255,0.05)',
-                borderRadius: '12px',
-                padding: '20px'
-              }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '16px' }}>
-              Bench
-            </h3>
-            
-            {/* Bench Players */}
-            {benchPlayersWithSanctions.length > 0 && (
-              <div style={{ marginBottom: '20px' }}>
-                <h4 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '12px', color: 'var(--muted)' }}>
-                  Players
-                </h4>
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
-                  gap: '12px'
-                }}>
-                  {benchPlayersWithSanctions.map((player, idx) => (
-                    <div
-                      key={`player-${idx}`}
-                      style={{
-                        background: 'rgba(255,255,255,0.05)',
-                        borderRadius: '8px',
-                        padding: '12px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '8px'
-                      }}
-                    >
-                      <div style={{ fontSize: '14px', fontWeight: 600 }}>
-                        #{player.number} {player.firstName} {player.lastName}
-                      </div>
-                      {player.sanctions.length > 0 && (
-                        <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
-                          {player.sanctions.map((s, sIdx) => {
-                            const type = s.payload?.type || 'warning'
-                            const color = type === 'warning' || type === 'disqualification' ? '#eab308' : '#ef4444'
-                            return (
-                              <div
-                                key={sIdx}
-                                style={{
-                                  width: '12px',
-                                  height: '16px',
-                                  background: color,
-                                  border: '1px solid rgba(0,0,0,0.3)',
-                                  borderRadius: '2px',
-                                  boxShadow: '0 1px 3px rgba(0,0,0,0.8)'
-                                }}
-                                title={type}
-                              ></div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Liberos */}
-            {benchLiberos.length > 0 && (
-              <div style={{ marginBottom: '20px' }}>
-                <h4 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '12px', color: 'var(--muted)' }}>
-                  Liberos
-                </h4>
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
-                  gap: '12px'
-                }}>
-                  {benchLiberos.map((libero, idx) => (
-                    <div
-                      key={`libero-${idx}`}
-                      style={{
-                        background: 'rgba(59, 130, 246, 0.1)',
-                        border: '1px solid rgba(59, 130, 246, 0.3)',
-                        borderRadius: '8px',
-                        padding: '12px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '8px'
-                      }}
-                    >
-                      <div style={{ fontSize: '14px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{
-                          background: '#3b82f6',
-                          color: '#fff',
-                          padding: '2px 6px',
-                          borderRadius: '4px',
-                          fontSize: '10px',
-                          fontWeight: 700
-                        }}>
-                          {libero.libero === 'libero1' ? 'L1' : 'L2'}
-                        </span>
-                        #{libero.number} {libero.firstName} {libero.lastName}
-                      </div>
-                      {libero.sanctions.length > 0 && (
-                        <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
-                          {libero.sanctions.map((s, sIdx) => {
-                            const type = s.payload?.type || 'warning'
-                            const color = type === 'warning' || type === 'disqualification' ? '#eab308' : '#ef4444'
-                            return (
-                              <div
-                                key={sIdx}
-                                style={{
-                                  width: '12px',
-                                  height: '16px',
-                                  background: color,
-                                  border: '1px solid rgba(0,0,0,0.3)',
-                                  borderRadius: '2px',
-                                  boxShadow: '0 1px 3px rgba(0,0,0,0.8)'
-                                }}
-                                title={type}
-                              ></div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Bench Officials */}
-            {benchOfficials.length > 0 && (
-              <div>
-                <h4 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '12px', color: 'var(--muted)' }}>
-                  Officials
-                </h4>
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
-                  gap: '12px'
-                }}>
-                  {benchOfficials.map((official, idx) => (
-                    <div
-                      key={`official-${idx}`}
-                      style={{
-                        background: 'rgba(255,255,255,0.05)',
-                        borderRadius: '8px',
-                        padding: '12px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '8px'
-                      }}
-                    >
-                      <div style={{ fontSize: '14px', fontWeight: 600 }}>
-                        {official.firstName} {official.lastName}
-                      </div>
-                      <div style={{ fontSize: '12px', color: 'var(--muted)' }}>
-                        {official.role}
-                      </div>
-                      {official.sanctions && official.sanctions.length > 0 && (
-                        <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
-                          {official.sanctions.map((s, sIdx) => {
-                            const type = s.payload?.type || 'warning'
-                            const color = type === 'warning' || type === 'disqualification' ? '#eab308' : '#ef4444'
-                            return (
-                              <div
-                                key={sIdx}
-                                style={{
-                                  width: '12px',
-                                  height: '16px',
-                                  background: color,
-                                  border: '1px solid rgba(0,0,0,0.3)',
-                                  borderRadius: '2px',
-                                  boxShadow: '0 1px 3px rgba(0,0,0,0.8)'
-                                }}
-                                title={type}
-                              ></div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+            {/* Beach volleyball: No bench section (only 2 players per team) */}
         </div>
 
         {/* Overall Sanctions */}

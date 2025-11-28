@@ -13,8 +13,8 @@ This directory contains the React-based scoresheet viewer that displays match da
 ### 2. Updated Component Structure
 - `App_Scoresheet.tsx` now accepts a `matchData` prop containing:
   - `match`: Match details (dates, location, officials, etc.)
-  - `homeTeam` / `awayTeam`: Team information
-  - `homePlayers` / `awayPlayers`: Player rosters
+  - `team_1Team` / `team_2Team`: Team information
+  - `team_1Players` / `team_2Players`: Player rosters
   - `sets`: Set-by-set score data
   - `events`: Match events (serves, subs, timeouts, etc.)
   - `sanctions`: Disciplinary actions
@@ -70,13 +70,12 @@ Database player records are mapped to scoresheet format:
 - `number`: Player jersey number (converted to string)
 - `name`: Full name (from `firstName` + `lastName`)
 - `dob`: Date of birth
-- `libero`: Libero designation (libero1, libero2, or empty)
 - `isCaptain`: Captain flag
 
 ### Sets
 Set data from database includes:
 - `startTime` / `endTime`: Set timing
-- `homePoints` / `awayPoints`: Final scores
+- `team_1Points` / `team_2Points`: Final scores
 - Lineup and substitution data (to be implemented from events)
 
 ### Match Info

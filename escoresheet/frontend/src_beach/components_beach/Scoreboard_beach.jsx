@@ -5,8 +5,6 @@ import Modal from './Modal_beach'
 import SignaturePad from './SignaturePad_beach'
 import mikasaVolleyball from '../mikasa_BV550C_beach.png'
 import challengeIcon from '../challenge.png'
-import { generateScoresheetPDF } from '../utils_beach/generateScoresheetPDF_beach'
-import { generateBeachScoresheetPDF } from '../utils_beach/generateBeachScoresheetPDF_beach'
 
 export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMatchSetup, onOpenCoinToss }) {
   const [now, setNow] = useState(() => new Date())
@@ -25,22 +23,22 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
   const [editPinType, setEditPinType] = useState(null) // 'referee' | 'teamA' | 'teamB'
   const [connectionModal, setConnectionModal] = useState(null) // 'referee' | 'teamA' | 'teamB' | null
   const [connectionModalPosition, setConnectionModalPosition] = useState({ x: 0, y: 0 })
-  const [toSubModal, setToSubModal] = useState(null) // { type: 'to' | 'sub', side: 'left' | 'right' } | null
+  const [toSubModal, setToSubModal] = useState(null) // { type: 'to', side: 'left' | 'right' } | null - Beach volleyball: only timeouts
   const [toSubModalPosition, setToSubModalPosition] = useState({ x: 0, y: 0 })
-  const [courtSwitchModal, setCourtSwitchModal] = useState(null) // { set, homePoints, awayPoints, teamThatScored } | null
+  const [courtSwitchModal, setCourtSwitchModal] = useState(null) // { set, team_1Points, team_2Points, teamThatScored } | null
   const [courtSwitchAlert, setCourtSwitchAlert] = useState(null) // { message: string } | null
-  const [technicalTOModal, setTechnicalTOModal] = useState(null) // { set, homePoints, awayPoints, teamThatScored: 'team_1'|'team_2'|null, countdown: number, started: boolean } | null
+  const [technicalTOModal, setTechnicalTOModal] = useState(null) // { set, team_1Points, team_2Points, teamThatScored: 'team_1'|'team_2'|null, countdown: number, started: boolean } | null
   const [timeoutModal, setTimeoutModal] = useState(null) // { team: 'team_1'|'team_2', countdown: number, started: boolean }
-  const [setEndModal, setSetEndModal] = useState(null) // { set, homePoints, awayPoints } | null
+  const [setEndModal, setSetEndModal] = useState(null) // { set, team_1Points, team_2Points } | null
   const [scoresheetErrorModal, setScoresheetErrorModal] = useState(null) // { error: string, details?: string } | null
   const [undoConfirm, setUndoConfirm] = useState(null) // { event: Event, description: string } | null
   const [reopenSetConfirm, setReopenSetConfirm] = useState(null) // { setId: number, setIndex: number } | null
   const [setStartTimeModal, setSetStartTimeModal] = useState(null) // { setIndex: number, defaultTime: string } | null
-  const [setEndTimeModal, setSetEndTimeModal] = useState(null) // { setIndex: number, winner: string, homePoints: number, awayPoints: number, defaultTime: string, isMatchEnd: boolean } | null
+  const [setEndTimeModal, setSetEndTimeModal] = useState(null) // { setIndex: number, winner: string, team_1Points: number, team_2Points: number, defaultTime: string, isMatchEnd: boolean } | null
   const [setTransitionModal, setSetTransitionModal] = useState(null) // { setIndex: number, isSet3: boolean } | null - for after set 1 and before set 3
   const [setTransitionSelectedLeftTeam, setSetTransitionSelectedLeftTeam] = useState('A')
   const [setTransitionSelectedFirstServe, setSetTransitionSelectedFirstServe] = useState('A')
-  const [setTransitionServiceOrder, setSetTransitionServiceOrder] = useState({ teamA: 'I_III', teamB: 'II_IV' }) // 'I_III' | 'II_IV' for each team
+  const [setTransitionServiceOrder, setSetTransitionServiceOrder] = useState({ teamA: '1_2', teamB: '2_1' }) // '1_2' | '2_1' for each team
   const [set3CoinTossWinner, setSet3CoinTossWinner] = useState(null) // 'teamA' | 'teamB' | null - only for set 3
   const [set5SideServiceModal, setSet5SideServiceModal] = useState(null) // { setIndex: number, set4LeftTeamLabel: string, set4RightTeamLabel: string, set4ServingTeamLabel: string } | null - shown after set 4 ends
   const [set5SelectedLeftTeam, setSet5SelectedLeftTeam] = useState('A')
@@ -52,8 +50,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
   const [injuryDropdown, setInjuryDropdown] = useState(null) // { team: 'team_1'|'team_2', position: 'I'|'II'|'III'|'IV'|'V'|'VI', playerNumber: number, element: HTMLElement, x?: number, y?: number } | null
   const [editRosterModal, setEditRosterModal] = useState(null) // 'team_1' | 'team_2' | null
   const [editScoreModal, setEditScoreModal] = useState(null) // { setIndex: number, setId: number } | null
-  const [editScoreHomePoints, setEditScoreHomePoints] = useState(0)
-  const [editScoreAwayPoints, setEditScoreAwayPoints] = useState(0)
+  const [editScoreTeam_1Points, setEditScoreTeam_1Points] = useState(0)
+  const [editScoreTeam_2Points, setEditScoreTeam_2Points] = useState(0)
   const [editSanctionsModal, setEditSanctionsModal] = useState(false)
   const [editMatchInfoModal, setEditMatchInfoModal] = useState(false)
   const [editMatchHall, setEditMatchHall] = useState('')
@@ -62,7 +60,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
   const [editOfficialsModal, setEditOfficialsModal] = useState(false)
   const [editOfficialsState, setEditOfficialsState] = useState([])
   const [playerActionMenu, setPlayerActionMenu] = useState(null) // { team: 'team_1'|'team_2', position: 'I'|'II'|'III'|'IV'|'V'|'VI', playerNumber: number, element: HTMLElement, x?: number, y?: number } | null
-  const [challengeModal, setChallengeModal] = useState(null) // null | 'request' | 'in_progress' - when 'request', contains { team: 'team_1'|'team_2', reason: string } | when 'in_progress', contains { team: 'team_1'|'team_2', reason: string, score: { home: number, away: number }, set: number, servingTeam: 'team_1'|'team_2', time: string }
+  const [challengeModal, setChallengeModal] = useState(null) // null | 'request' | 'in_progress' - when 'request', contains { team: 'team_1'|'team_2', reason: string } | when 'in_progress', contains { team: 'team_1'|'team_2', reason: string, score: { team_1: number, team_2: number }, set: number, servingTeam: 'team_1'|'team_2', time: string }
   const [challengeReason, setChallengeReason] = useState('IN / OUT')
   const [coinTossError, setCoinTossError] = useState(null) // { message: string } | null
   const playerNameDebugLogged = useRef(false)
@@ -72,8 +70,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     if (!match) return null
 
     const [team_1Team, team_2Team] = await Promise.all([
-      match?.homeTeamId ? db.teams.get(match.homeTeamId) : null,
-      match?.awayTeamId ? db.teams.get(match.awayTeamId) : null
+      match?.team_1Id ? db.teams.get(match.team_1Id) : null,
+      match?.team_2Id ? db.teams.get(match.team_2Id) : null
     ])
 
     const sets = await db.sets
@@ -86,11 +84,11 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       null
 
     const [team_1Players, team_2Players] = await Promise.all([
-      match?.homeTeamId
-        ? db.players.where('teamId').equals(match.homeTeamId).toArray()
+      match?.team_1Id
+        ? db.players.where('teamId').equals(match.team_1Id).toArray()
         : [],
-      match?.awayTeamId
-        ? db.players.where('teamId').equals(match.awayTeamId).toArray()
+      match?.team_2Id
+        ? db.players.where('teamId').equals(match.team_2Id).toArray()
         : []
     ])
     
@@ -216,8 +214,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     const setId = await db.sets.add({
       matchId,
       index: nextIndex,
-      homePoints: 0,
-      awayPoints: 0,
+      team_1Points: 0,
+      team_2Points: 0,
       finished: false,
       serviceOrder: serviceOrder
     })
@@ -288,7 +286,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     
     // For sets 1-2: Court switches every 7 points, set 3: every 5 points
     // Count how many court switches have happened in this set
-    const totalPoints = (data.set.homePoints || 0) + (data.set.awayPoints || 0)
+    const totalPoints = (data.set.team_1Points || 0) + (data.set.team_2Points || 0)
     const isSet3 = data.set.index === 3
     const switchInterval = isSet3 ? 5 : 7
     const switchesSoFar = Math.floor(totalPoints / switchInterval)
@@ -317,8 +315,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     const allSets = data.sets || []
     const finishedSets = allSets.filter(s => s.finished)
     
-    const team_1SetsWon = finishedSets.filter(s => s.homePoints > s.awayPoints).length
-    const team_2SetsWon = finishedSets.filter(s => s.awayPoints > s.homePoints).length
+    const team_1SetsWon = finishedSets.filter(s => s.team_1Points > s.team_2Points).length
+    const team_2SetsWon = finishedSets.filter(s => s.team_2Points > s.team_1Points).length
     
     const leftSetsWon = leftIsTeam_1 ? team_1SetsWon : team_2SetsWon
     const rightSetsWon = leftIsTeam_1 ? team_2SetsWon : team_1SetsWon
@@ -351,8 +349,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
   const pointsBySide = useMemo(() => {
     if (!data?.set) return { left: 0, right: 0 }
     return leftIsTeam_1
-      ? { left: data.set.homePoints, right: data.set.awayPoints }
-      : { left: data.set.awayPoints, right: data.set.homePoints }
+      ? { left: data.set.team_1Points, right: data.set.team_2Points }
+      : { left: data.set.team_2Points, right: data.set.team_1Points }
   }, [data?.set, leftIsTeam_1])
 
   const timeoutsUsed = useMemo(() => {
@@ -380,19 +378,19 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     const setEvents = allEvents?.filter(e => (e.setIndex || 1) === setIdx) || []
     const eventIndex = setEvents.findIndex(e => e.id === event.id)
     
-    let homeScore = 0
-    let awayScore = 0
+    let team_1Score = 0
+    let team_2Score = 0
     for (let i = 0; i <= eventIndex; i++) {
       const e = setEvents[i]
       if (e.type === 'point') {
         if (e.payload?.team === 'team_1') {
-          homeScore++
+          team_1Score++
         } else if (e.payload?.team === 'team_2') {
-          awayScore++
+          team_2Score++
         }
       }
     }
-    return { homeScore, awayScore }
+    return { team_1Score, team_2Score }
   }, [])
 
   // Get timeout events with scores for a team
@@ -406,11 +404,11 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         event.payload?.team === teamKey
       )
       .map(event => {
-        const { homeScore, awayScore } = getScoreAtEvent(event, data.events)
+        const { team_1Score, team_2Score } = getScoreAtEvent(event, data.events)
         return {
           ...event,
-          homeScore,
-          awayScore
+          team_1Score,
+          team_2Score
         }
       })
     return timeoutEvents
@@ -525,26 +523,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     }))
   }, [])
 
-  // Legacy function removed - no fallback needed
-  const buildOnCourtLegacy = useCallback((players, isLeft, teamKey) => {
-    // This should never be called, but kept for reference
-    throw new Error('Legacy buildOnCourt called - coin toss data is required')
-    
-    return players.map((player, idx) => {
-      const assignedPos = beachPositions[idx]
-      return {
-        id: player.id ?? `placeholder-${idx}`,
-        number: player.number !== undefined && player.number !== null ? String(player.number) : '',
-        firstName: player.firstName || '',
-        lastName: player.lastName || '',
-        isPlaceholder: !!player.placeholder,
-        position: assignedPos,
-        isCaptain: player.isCaptain || false
-      }
-    })
-  }, [])
-
-
   const leftTeam = useMemo(() => {
     try {
       if (!data) return { name: 'Team A', color: '#ef4444', playersOnCourt: [] }
@@ -627,28 +605,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
   // Debug function for PDF generation (available in console)
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      window.debugGeneratePDF = async () => {
-        try {
-          const allEvents = await db.events.where('matchId').equals(matchId).toArray()
-          const allSets = await db.sets.where('matchId').equals(matchId).toArray()
-          const allReferees = await db.referees.toArray()
-          const allScorers = await db.scorers.toArray()
-          
-          await generateScoresheetPDF({
-            match: data?.match,
-            homeTeam: data?.homeTeam,
-            awayTeam: data?.awayTeam,
-            homePlayers: data?.homePlayers || [],
-            awayPlayers: data?.awayPlayers || [],
-            sets: allSets,
-            events: allEvents,
-            referees: allReferees,
-            scorers: allScorers
-          })
-        } catch (error) {
-        }
-      }
-      
       // Debug function to export match data as JSON (for testing fillable PDF)
       window.debugExportMatchData = async () => {
         try {
@@ -659,10 +615,10 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
           
           const matchData = {
             match: data?.match,
-            homeTeam: data?.homeTeam,
-            awayTeam: data?.awayTeam,
-            homePlayers: data?.homePlayers || [],
-            awayPlayers: data?.awayPlayers || [],
+            team_1Team: data?.team_1Team,
+            team_2Team: data?.team_2Team,
+            team_1Players: data?.team_1Players || [],
+            team_2Players: data?.team_2Players || [],
             sets: allSets,
             events: allEvents,
             referees: allReferees,
@@ -686,43 +642,13 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         }
       }
 
-      // Function to generate fillable PDF (simple form filling)
-      window.debugGenerateFillablePDF = async () => {
-        try {
-          const match = data?.match
-          if (!match) {
-            return
-          }
-
-          // Prepare match data in the format expected by fillPdfForm
-          const fillableData = {
-            match_type_1: match.matchType || match.match_type_1 || 'championship',
-            match_type_2: match.category || match.match_type_2 || '',
-            league: match.league || '',
-            gameNumber: match.gameNumber || match.externalId || '',
-            homeTeam: data?.homeTeam?.name || '',
-            awayTeam: data?.awayTeam?.name || '',
-            city: match.city || '',
-            hall: match.venue || match.hall || '',
-            scheduledAt: match.scheduledAt,
-            bench_home: match.bench_home || [],
-            bench_away: match.bench_away || [],
-            officials: match.officials || []
-          }
-
-          await generateFillablePdf(fillableData)
-        } catch (error) {
-        }
-      }
     }
     return () => {
       if (typeof window !== 'undefined') {
-        if (window.debugGeneratePDF) delete window.debugGeneratePDF
         if (window.debugExportMatchData) delete window.debugExportMatchData
-        if (window.debugGenerateFillablePDF) delete window.debugGenerateFillablePDF
       }
     }
-  }, [matchId, data?.match, data?.homeTeam, data?.awayTeam, data?.homePlayers, data?.awayPlayers])
+  }, [matchId, data?.match, data?.team_1Team, data?.team_2Team, data?.team_1Players, data?.team_2Players])
 
   const logEvent = useCallback(
     async (type, payload = {}, options = {}) => {
@@ -747,40 +673,40 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     [data?.set, matchId, getNextSeq]
   )
 
-  const checkSetEnd = useCallback(async (set, homePoints, awayPoints) => {
+  const checkSetEnd = useCallback(async (set, team_1Points, team_2Points) => {
     // Beach volleyball: Best of 3 sets, deciding set (3rd) is 15 points
     const isDecidingSet = set.index === 3
     const pointsToWin = isDecidingSet ? 15 : 21
     
     // Check if this point would end the set
-    if (homePoints >= pointsToWin && homePoints - awayPoints >= 2) {
+    if (team_1Points >= pointsToWin && team_1Points - team_2Points >= 2) {
       // Calculate current set scores to determine if this is match-ending
       const allSets = await db.sets.where({ matchId }).toArray()
       const finishedSets = allSets.filter(s => s.finished)
-      const homeSetsWon = finishedSets.filter(s => s.homePoints > s.awayPoints).length
-      const awaySetsWon = finishedSets.filter(s => s.awayPoints > s.homePoints).length
+      const team_1SetsWon = finishedSets.filter(s => s.team_1Points > s.team_2Points).length
+      const team_2SetsWon = finishedSets.filter(s => s.team_2Points > s.team_1Points).length
       
       // Beach volleyball: Best of 3 sets (first to 2 sets wins)
-      const isMatchEnd = (homeSetsWon + 1) >= 2
+      const isMatchEnd = (team_1SetsWon + 1) >= 2
       
       // Show set end time confirmation modal
       const defaultTime = new Date().toISOString()
-      setSetEndTimeModal({ setIndex: set.index, winner: 'team_1', homePoints, awayPoints, defaultTime, isMatchEnd })
+      setSetEndTimeModal({ setIndex: set.index, winner: 'team_1', team_1Points, team_2Points, defaultTime, isMatchEnd })
       return true
     }
-    if (awayPoints >= pointsToWin && awayPoints - homePoints >= 2) {
+    if (team_2Points >= pointsToWin && team_2Points - team_1Points >= 2) {
       // Calculate current set scores to determine if this is match-ending
       const allSets = await db.sets.where({ matchId }).toArray()
       const finishedSets = allSets.filter(s => s.finished)
-      const homeSetsWon = finishedSets.filter(s => s.homePoints > s.awayPoints).length
-      const awaySetsWon = finishedSets.filter(s => s.awayPoints > s.homePoints).length
+      const team_1SetsWon = finishedSets.filter(s => s.team_1Points > s.team_2Points).length
+      const team_2SetsWon = finishedSets.filter(s => s.team_2Points > s.team_1Points).length
       
       // Beach volleyball: Best of 3 sets (first to 2 sets wins)
-      const isMatchEnd = (awaySetsWon + 1) >= 2
+      const isMatchEnd = (team_2SetsWon + 1) >= 2
       
       // Show set end time confirmation modal
       const defaultTime = new Date().toISOString()
-      setSetEndTimeModal({ setIndex: set.index, winner: 'team_2', homePoints, awayPoints, defaultTime, isMatchEnd })
+      setSetEndTimeModal({ setIndex: set.index, winner: 'team_2', team_1Points, team_2Points, defaultTime, isMatchEnd })
       return true
     }
     return false
@@ -789,7 +715,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
   const confirmSetEnd = useCallback(async () => {
     if (!setEndModal || !data?.match) return
     
-    const { set, homePoints, awayPoints, winner } = setEndModal
+    const { set, team_1Points, team_2Points, winner } = setEndModal
     
     // Determine team labels (A or B) based on coin toss
     const teamAKey = data.match.coinTossTeamA || 'team_1'
@@ -807,13 +733,13 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       team: winner, 
       teamLabel: winnerLabel,
       setIndex: set.index,
-      homePoints,
-      awayPoints,
+      team_1Points,
+      team_2Points,
       startTime: startTime,
       endTime: endTime
     })
     
-    await db.sets.update(set.id, { finished: true, homePoints, awayPoints, endTime: endTime })
+    await db.sets.update(set.id, { finished: true, team_1Points, team_2Points, endTime: endTime })
     const sets = await db.sets.where({ matchId: set.matchId }).toArray()
     const finished = sets.filter(s => s.finished).length
     if (finished >= 5) {
@@ -835,8 +761,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       const newSetId = await db.sets.add({ 
         matchId: set.matchId, 
         index: set.index + 1, 
-        homePoints: 0, 
-        awayPoints: 0, 
+        team_1Points: 0, 
+        team_2Points: 0, 
         finished: false,
         serviceOrder: serviceOrder
       })
@@ -861,7 +787,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     // If it's a point, decrease the score
     if (lastEvent.type === 'point' && lastEvent.payload?.team) {
       const teamKey = lastEvent.payload.team
-      const field = teamKey === 'team_1' ? 'homePoints' : 'awayPoints'
+      const field = teamKey === 'team_1' ? 'team_1Points' : 'team_2Points'
       const currentPoints = data.set[field]
       
       if (currentPoints > 0) {
@@ -1015,7 +941,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
   }, [])
 
   // Get current serving player numbers
-  const totalPoints = data?.set ? (data.set.homePoints + data.set.awayPoints) : 0
+  const totalPoints = data?.set ? (data.set.team_1Points + data.set.team_2Points) : 0
   let serviceOrder = data?.set?.serviceOrder || {}
   
   // Check for missing coin toss data in useEffect to avoid infinite loops
@@ -1339,30 +1265,16 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
   )
 
 
-  // Rotate lineup: II→I, III→II, IV→III, V→IV, VI→V, I→VI
-  const rotateLineup = useCallback((lineup) => {
-    if (!lineup) return null
-    
-    const newLineup = {
-      I: lineup.II || '',
-      II: lineup.III || '',
-      III: lineup.IV || '',
-      IV: lineup.V || '',
-      V: lineup.VI || '',
-      VI: lineup.I || ''
-    }
-    
-    return newLineup
-  }, [])
+  // Beach volleyball: No rotation (only 2 players)
 
   const handlePoint = useCallback(
     async side => {
       if (!data?.set) return
       const teamKey = mapSideToTeamKey(side)
-      const field = teamKey === 'team_1' ? 'homePoints' : 'awayPoints'
+      const field = teamKey === 'team_1' ? 'team_1Points' : 'team_2Points'
       const newPoints = data.set[field] + 1
-      const homePoints = teamKey === 'team_1' ? newPoints : data.set.homePoints
-      const awayPoints = teamKey === 'team_2' ? newPoints : data.set.awayPoints
+      const team_1Points = teamKey === 'team_1' ? newPoints : data.set.team_1Points
+      const team_2Points = teamKey === 'team_2' ? newPoints : data.set.team_2Points
 
       // Check who has serve BEFORE this point by querying database directly
       // The team that scored the last point has serve, so check the last point in DB
@@ -1393,88 +1305,12 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       })
       await logEvent('point', { team: teamKey })
 
-      // If scoring team didn't have serve, they rotate their lineup AFTER the point
-      if (!scoringTeamHadServe) {
-        // Query database directly for the most recent lineup (data.events might be stale)
-        const allLineupEvents = await db.events
-          .where('matchId')
-          .equals(matchId)
-          .toArray()
-        const teamLineupEvents = allLineupEvents
-          .filter(e => e.type === 'lineup' && e.payload?.team === teamKey && e.setIndex === data.set.index)
-          .sort((a, b) => new Date(b.ts) - new Date(a.ts)) // Most recent first
-        
-        let currentLineup = null
-        
-        if (teamLineupEvents.length > 0) {
-          // Use the most recent lineup
-          const lastLineupEvent = teamLineupEvents[0]
-          currentLineup = lastLineupEvent.payload?.lineup
-        }
-        
-        if (currentLineup) {
-          // Beach volleyball: Rotate the lineup (no liberos to handle)
-          const rotatedLineup = rotateLineup(currentLineup)
-          if (rotatedLineup) {
-            // Ensure rotated lineup only has exactly 6 positions (defensive check)
-            const validPositions = ['I', 'II', 'III', 'IV', 'V', 'VI']
-            const cleanedRotatedLineup = {}
-            for (const pos of validPositions) {
-              if (rotatedLineup[pos] !== undefined) {
-                cleanedRotatedLineup[pos] = rotatedLineup[pos]
-              }
-            }
-            
-            // Save the rotated lineup as a new lineup event (but don't log it - it's automatic rotation)
-            await db.events.add({
-              matchId,
-              setIndex: data.set.index,
-              type: 'lineup',
-              payload: { 
-                team: teamKey, 
-                lineup: cleanedRotatedLineup
-              },
-              ts: new Date().toISOString(),
-              seq: await getNextSeq() // Sequential ID for ordering
-            })
-          }
-        }
-      }
+      // Beach volleyball: No rotation (only 2 players, no rotation needed)
       
-      // Beach volleyball: No libero reentry logic needed
-      
-      // Beach volleyball: Court switch every 7 points (set 1-2) or every 5 points (set 3)
-      const totalPoints = homePoints + awayPoints
-      const isSet3ForSwitch = data.set.index === 3
-      const switchInterval = isSet3ForSwitch ? 5 : 7
-      const pointsSinceLastSwitch = totalPoints % switchInterval
-      
-      // Alert at one point before switch
-      if (pointsSinceLastSwitch === (switchInterval - 1) && totalPoints > 0) {
-        setCourtSwitchAlert({ message: 'One point to switch' })
-        setTimeout(() => setCourtSwitchAlert(null), 3000) // Auto-dismiss after 3 seconds
-      }
-      
-      // Switch at switchInterval point (every multiple of switchInterval)
-      if (pointsSinceLastSwitch === 0 && totalPoints > 0 && totalPoints % switchInterval === 0) {
-        // Check if we've already switched courts at this point in this set
-        const match = await db.matches.get(matchId)
-        const setSwitchKey = `set${data.set.index}_switch_${totalPoints}`
-        const hasSwitched = match?.[setSwitchKey] || false
-        if (!hasSwitched) {
-          // Show court switch modal
-          setCourtSwitchModal({
-            set: data.set,
-            homePoints,
-            awayPoints,
-            teamThatScored: teamKey
-          })
-          await db.matches.update(matchId, { [setSwitchKey]: true })
-          return // Don't check for set end yet, wait for court switch confirmation
-        }
-      }
+      const totalPoints = team_1Points + team_2Points
       
       // Beach volleyball: Technical TO at 21 points total (not in set 3)
+      // Check TTO FIRST before court switch, since 21 is also a multiple of 7
       const isSet3ForTTO = data.set.index === 3
       if (!isSet3ForTTO) {
         // Alert at 20th point (one point before TTO)
@@ -1483,38 +1319,79 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
           setTimeout(() => setCourtSwitchAlert(null), 3000) // Auto-dismiss after 3 seconds
         }
         
-        // Technical TO at 21st point
+        // Technical TO at 21st point - check this BEFORE court switch
         if (totalPoints === 21) {
-        const match = await db.matches.get(matchId)
-        const setTTOKey = `set${data.set.index}_tto`
-        const hasTTO = match?.[setTTOKey] || false
-        if (!hasTTO) {
-          // Show Technical TO modal
-          // Find which team scored the 21st point
-          const pointEvents = data.events
-            .filter(e => e.type === 'point' && e.setIndex === data.set.index)
-            .sort((a, b) => {
-              const aTime = typeof a.ts === 'number' ? a.ts : new Date(a.ts).getTime()
-              const bTime = typeof b.ts === 'number' ? b.ts : new Date(b.ts).getTime()
-              return bTime - aTime
+          const match = await db.matches.get(matchId)
+          const setTTOKey = `set${data.set.index}_tto`
+          const hasTTO = match?.[setTTOKey] || false
+          if (!hasTTO) {
+            // Show Technical TO modal
+            // Find which team scored the 21st point
+            const pointEvents = data.events
+              .filter(e => e.type === 'point' && e.setIndex === data.set.index)
+              .sort((a, b) => {
+                const aTime = typeof a.ts === 'number' ? a.ts : new Date(a.ts).getTime()
+                const bTime = typeof b.ts === 'number' ? b.ts : new Date(b.ts).getTime()
+                return bTime - aTime
+              })
+            const teamThatScored = pointEvents.length > 0 ? pointEvents[0].payload?.team : null
+            
+            setTechnicalTOModal({
+              set: data.set,
+              team_1Points,
+              team_2Points,
+              teamThatScored,
+              countdown: 60,
+              started: false
             })
-          const teamThatScored = pointEvents.length > 0 ? pointEvents[0].payload?.team : null
-          
-          setTechnicalTOModal({
-            set: data.set,
-            homePoints,
-            awayPoints,
-            teamThatScored,
-            countdown: 60,
-            started: false
-          })
-          await db.matches.update(matchId, { [setTTOKey]: true })
-          return // Don't check for set end yet, wait for TTO completion
+            await db.matches.update(matchId, { [setTTOKey]: true })
+            return // Don't check for set end yet, wait for TTO completion
+          }
         }
       }
+      
+      // Beach volleyball: Court switch every 7 points (set 1-2) or every 5 points (set 3)
+      // Skip court switch at 21 points if TTO should happen (already handled above)
+      const isSet3ForSwitch = data.set.index === 3
+      const switchInterval = isSet3ForSwitch ? 5 : 7
+      const pointsSinceLastSwitch = totalPoints % switchInterval
+      
+      // Alert at one point before switch (but not at 20 if TTO is coming)
+      if (pointsSinceLastSwitch === (switchInterval - 1) && totalPoints > 0) {
+        // Don't show court switch alert at 20 if TTO is coming at 21
+        if (!(totalPoints === 20 && !isSet3ForTTO)) {
+          setCourtSwitchAlert({ message: 'One point to switch' })
+          setTimeout(() => setCourtSwitchAlert(null), 3000) // Auto-dismiss after 3 seconds
+        }
       }
       
-      const setEnded = checkSetEnd(data.set, homePoints, awayPoints)
+      // Switch at switchInterval point (every multiple of switchInterval)
+      // Skip at 21 points if it's a TTO point (sets 1-2)
+      if (pointsSinceLastSwitch === 0 && totalPoints > 0 && totalPoints % switchInterval === 0) {
+        // Skip court switch at 21 points for sets 1-2 (TTO takes priority)
+        if (totalPoints === 21 && !isSet3ForTTO) {
+          // TTO already handled above, skip court switch
+        } else {
+          // Check if we've already switched courts at this point in this set
+          const match = await db.matches.get(matchId)
+          const setSwitchKey = `set${data.set.index}_switch_${totalPoints}`
+          const hasSwitched = match?.[setSwitchKey] || false
+          if (!hasSwitched) {
+            // Show court switch modal (DO NOT switch courts yet - wait for confirmation)
+            setCourtSwitchModal({
+              set: data.set,
+              team_1Points,
+              team_2Points,
+              teamThatScored: teamKey
+            })
+            await db.matches.update(matchId, { [setSwitchKey]: true })
+            // DO NOT log event or increment switch count yet - wait for confirmation
+            return // Don't check for set end yet, wait for court switch confirmation
+          }
+        }
+      }
+      
+      const setEnded = checkSetEnd(data.set, team_1Points, team_2Points)
       // If set didn't end, we're done. If it did, checkSetEnd will show the confirmation modal
     },
     [data?.set, data?.events, logEvent, mapSideToTeamKey, checkSetEnd, getCurrentServe, rotateLineup, matchId]
@@ -1523,9 +1400,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
   const handleStartRally = useCallback(async () => {
     // If this is the first rally, show set start time confirmation
     if (isFirstRally) {
-      // Beach volleyball: No liberos, so skip libero reminder check
       // Show set start time confirmation
-      // For set 1, use scheduled time, for set 2+, use 3 minutes after previous set end
+      // For set 1, use scheduled time, for set 2+, use 1 minute after previous set end
       let defaultTime = new Date().toISOString()
       
       if (data?.set?.index === 1) {
@@ -1538,9 +1414,9 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         const allSets = await db.sets.where('matchId').equals(matchId).toArray()
         const previousSet = allSets.find(s => s.index === (data.set.index - 1))
         if (previousSet?.endTime) {
-          // Add 3 minutes to previous set end time
+          // Add 1 minute to previous set end time
           const prevEndTime = new Date(previousSet.endTime)
-          prevEndTime.setMinutes(prevEndTime.getMinutes() + 3)
+          prevEndTime.setMinutes(prevEndTime.getMinutes() + 1)
           defaultTime = prevEndTime.toISOString()
         }
       }
@@ -1550,7 +1426,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     }
     
     await logEvent('rally_start')
-  }, [logEvent, isFirstRally, data?.homePlayers, data?.awayPlayers, data?.events, data?.set, data?.match, matchId])
+  }, [logEvent, isFirstRally, data?.team_1Players, data?.team_2Players, data?.events, data?.set, data?.match, matchId])
 
   const handleReplay = useCallback(async () => {
     await logEvent('replay')
@@ -1602,13 +1478,13 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     // If delay penalty, award point to the other team (but only if lineups are set)
     if (type === 'delay_penalty') {
       // Check if both lineups are set before awarding point
-      const homeLineupSet = data.events?.some(e => 
+      const team_1LineupSet = data.events?.some(e => 
         e.type === 'lineup' && 
         e.payload?.team === 'team_1' && 
         e.setIndex === data.set.index &&
         e.payload?.isInitial
       )
-      const awayLineupSet = data.events?.some(e => 
+      const team_2LineupSet = data.events?.some(e => 
         e.type === 'lineup' && 
         e.payload?.team === 'team_2' && 
         e.setIndex === data.set.index &&
@@ -1617,7 +1493,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       
       setSanctionConfirm(null)
       
-      if (homeLineupSet && awayLineupSet) {
+      if (team_1LineupSet && team_2LineupSet) {
         // Both lineups are set - award point immediately
         const otherSide = side === 'left' ? 'right' : 'left'
         await handlePoint(otherSide)
@@ -1671,7 +1547,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
   const confirmSetEndTime = useCallback(async (time) => {
     if (!setEndTimeModal || !data?.match || !data?.set) return
     
-    const { setIndex, winner, homePoints, awayPoints } = setEndTimeModal
+    const { setIndex, winner, team_1Points, team_2Points } = setEndTimeModal
     
     // Determine team labels (A or B) based on coin toss
     const teamAKey = data.match.coinTossTeamA || 'team_1'
@@ -1687,23 +1563,23 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       team: winner, 
       teamLabel: winnerLabel,
       setIndex: setIndex,
-      homePoints,
-      awayPoints,
+      team_1Points,
+      team_2Points,
       startTime: startTime,
       endTime: time
     })
     
     // Update set with end time and finished status
-    await db.sets.update(data.set.id, { finished: true, homePoints, awayPoints, endTime: time })
+    await db.sets.update(data.set.id, { finished: true, team_1Points, team_2Points, endTime: time })
     
     // Get all sets and calculate sets won by each team
     const sets = await db.sets.where({ matchId }).toArray()
     const finishedSets = sets.filter(s => s.finished)
-    const homeSetsWon = finishedSets.filter(s => s.homePoints > s.awayPoints).length
-    const awaySetsWon = finishedSets.filter(s => s.awayPoints > s.homePoints).length
+    const team_1SetsWon = finishedSets.filter(s => s.team_1Points > s.team_2Points).length
+    const team_2SetsWon = finishedSets.filter(s => s.team_2Points > s.team_1Points).length
     
     // Beach volleyball: Best of 3 sets (first to 2 sets wins)
-    const isMatchEnd = homeSetsWon >= 2 || awaySetsWon >= 2
+    const isMatchEnd = team_1SetsWon >= 2 || team_2SetsWon >= 2
     
     if (isMatchEnd) {
       // IMPORTANT: When match ends, preserve ALL data in database:
@@ -1724,13 +1600,30 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       // After set 1, show transition modal to switch sides, service, and service order
       if (setIndex === 1) {
         setSetEndTimeModal(null)
+        // Get service order from last set (set 1) to use as default
+        const lastSet = await db.sets.where('matchId').equals(matchId).and(s => s.index === setIndex).first()
+        if (lastSet?.serviceOrder) {
+          // Determine service order for each team based on last set
+          const teamAKey = data.match.coinTossTeamA || 'team_1'
+          const teamBKey = data.match.coinTossTeamB || 'team_2'
+          const teamAPlayer1Order = lastSet.serviceOrder[`${teamAKey}_player1`] || 1
+          const teamAPlayer2Order = lastSet.serviceOrder[`${teamAKey}_player2`] || 3
+          const teamBPlayer1Order = lastSet.serviceOrder[`${teamBKey}_player1`] || 2
+          const teamBPlayer2Order = lastSet.serviceOrder[`${teamBKey}_player2`] || 4
+          
+          // Determine which player serves first for each team (lower order number = serves first)
+          const teamAServiceOrder = teamAPlayer1Order < teamAPlayer2Order ? '1_2' : '2_1'
+          const teamBServiceOrder = teamBPlayer1Order < teamBPlayer2Order ? '1_2' : '2_1'
+          
+          setSetTransitionServiceOrder({ teamA: teamAServiceOrder, teamB: teamBServiceOrder })
+        }
         setSetTransitionModal({ setIndex: setIndex + 1, isSet3: false })
         return
       }
       
       // After set 2, check if match is over (2-0) or going to set 3 (1-1)
       if (setIndex === 2) {
-        if (homeSetsWon === 2 || awaySetsWon === 2) {
+        if (team_1SetsWon === 2 || team_2SetsWon === 2) {
           // Match is over (2-0) - this should have been caught by isMatchEnd check above
           // But if we reach here, close the modal and finish the match
           setSetEndTimeModal(null)
@@ -1740,6 +1633,23 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         } else {
           // Going to set 3 (1-1), show transition modal with 3rd set coin toss
           setSetEndTimeModal(null)
+          // Get service order from last set (set 2) to use as default
+          const lastSet = await db.sets.where('matchId').equals(matchId).and(s => s.index === setIndex).first()
+          if (lastSet?.serviceOrder) {
+            // Determine service order for each team based on last set
+            const teamAKey = data.match.coinTossTeamA || 'team_1'
+            const teamBKey = data.match.coinTossTeamB || 'team_2'
+            const teamAPlayer1Order = lastSet.serviceOrder[`${teamAKey}_player1`] || 1
+            const teamAPlayer2Order = lastSet.serviceOrder[`${teamAKey}_player2`] || 3
+            const teamBPlayer1Order = lastSet.serviceOrder[`${teamBKey}_player1`] || 2
+            const teamBPlayer2Order = lastSet.serviceOrder[`${teamBKey}_player2`] || 4
+            
+            // Determine which player serves first for each team (lower order number = serves first)
+            const teamAServiceOrder = teamAPlayer1Order < teamAPlayer2Order ? '1_2' : '2_1'
+            const teamBServiceOrder = teamBPlayer1Order < teamBPlayer2Order ? '1_2' : '2_1'
+            
+            setSetTransitionServiceOrder({ teamA: teamAServiceOrder, teamB: teamBServiceOrder })
+          }
           setSetTransitionModal({ setIndex: setIndex + 1, isSet3: true })
           return
         }
@@ -1781,8 +1691,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       const newSetId = await db.sets.add({ 
         matchId, 
         index: setIndex + 1, 
-        homePoints: 0, 
-        awayPoints: 0, 
+        team_1Points: 0, 
+        team_2Points: 0, 
         finished: false,
         serviceOrder: serviceOrder
       })
@@ -1820,23 +1730,56 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     // Update match with first serve for the new set
     await db.matches.update(matchId, { firstServe: firstServeTeamKey })
     
-    // Calculate service order based on the new configuration
+    // Calculate service order based on the selected service order preference
     const matchData = await db.matches.get(matchId)
-    const serviceOrder = calculateServiceOrder(matchData, firstServeTeamKey)
+    const coinTossData = matchData?.coinTossData?.players
+    if (!coinTossData) {
+      throw new Error('Coin toss data is missing.')
+    }
+    
+    // Build service order based on user selection
+    const serviceOrder = {}
+    const teamAServiceOrder = setTransitionServiceOrder.teamA // '1_2' or '2_1'
+    const teamBServiceOrder = setTransitionServiceOrder.teamB // '1_2' or '2_1'
+    
+    // Determine which team serves first
+    const servingTeamIsA = firstServeTeamKey === teamAKey
+    const servingTeam = servingTeamIsA ? teamAKey : teamBKey
+    const receivingTeam = servingTeamIsA ? teamBKey : teamAKey
+    const servingTeamOrder = servingTeamIsA ? teamAServiceOrder : teamBServiceOrder
+    const receivingTeamOrder = servingTeamIsA ? teamBServiceOrder : teamAServiceOrder
+    
+    // Serving team: first serve player gets order 1, other gets order 3
+    if (servingTeamOrder === '1_2') {
+      serviceOrder[`${servingTeam}_player1`] = 1
+      serviceOrder[`${servingTeam}_player2`] = 3
+    } else {
+      serviceOrder[`${servingTeam}_player1`] = 3
+      serviceOrder[`${servingTeam}_player2`] = 1
+    }
+    
+    // Receiving team: first serve player gets order 2, other gets order 4
+    if (receivingTeamOrder === '1_2') {
+      serviceOrder[`${receivingTeam}_player1`] = 2
+      serviceOrder[`${receivingTeam}_player2`] = 4
+    } else {
+      serviceOrder[`${receivingTeam}_player1`] = 4
+      serviceOrder[`${receivingTeam}_player2`] = 2
+    }
     
     // Create new set
     const newSetId = await db.sets.add({ 
       matchId, 
       index: setIndex, 
-      homePoints: 0, 
-      awayPoints: 0, 
+      team_1Points: 0, 
+      team_2Points: 0, 
       finished: false,
       serviceOrder: serviceOrder
     })
     
     
     setSetTransitionModal(null)
-  }, [setTransitionModal, setTransitionSelectedLeftTeam, setTransitionSelectedFirstServe, set3CoinTossWinner, data?.match, matchId, calculateServiceOrder])
+  }, [setTransitionModal, setTransitionSelectedLeftTeam, setTransitionSelectedFirstServe, setTransitionServiceOrder, set3CoinTossWinner, data?.match, matchId, teamAKey])
   
   // Confirm set 5 side and service choices
   const confirmSet5SideService = useCallback(async (leftTeam, firstServe) => {
@@ -1862,8 +1805,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     const newSetId = await db.sets.add({ 
       matchId, 
       index: setIndex, 
-      homePoints: 0, 
-      awayPoints: 0, 
+      team_1Points: 0, 
+      team_2Points: 0, 
       finished: false 
     })
     
@@ -1890,31 +1833,30 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     const team_1Label = data?.match?.coinTossTeamA === 'team_1' ? 'A' : (data?.match?.coinTossTeamB === 'team_1' ? 'B' : 'A')
     const team_2Label = data?.match?.coinTossTeamA === 'team_2' ? 'A' : (data?.match?.coinTossTeamB === 'team_2' ? 'B' : 'B')
     
-    // Legacy variable names for event descriptions (mapped to team_1/team_2)
-    const homeLabel = team_1Label
-    const awayLabel = team_2Label
+      // Legacy variable names for event descriptions (mapped to team_1/team_2)
+      // team_1Label and team_2Label are already defined above
     
     // Calculate score at time of event
     const setIdx = event.setIndex || 1
     const setEvents = data.events?.filter(e => (e.setIndex || 1) === setIdx) || []
     const eventIndex = setEvents.findIndex(e => e.id === event.id)
     
-    let homeScore = 0
-    let awayScore = 0
+    let team_1Score = 0
+    let team_2Score = 0
     for (let i = 0; i <= eventIndex; i++) {
       const e = setEvents[i]
       if (e.type === 'point') {
         if (e.payload?.team === 'team_1') {
-          homeScore++
+          team_1Score++
         } else if (e.payload?.team === 'team_2') {
-          awayScore++
+          team_2Score++
         }
       }
     }
     
     let eventDescription = ''
     if (event.type === 'point') {
-      eventDescription = `Point — ${teamName} (${homeLabel} ${homeScore}:${awayScore} ${awayLabel})`
+      eventDescription = `Point — ${teamName} (${team_1Label} ${team_1Score}:${team_2Score} ${team_2Label})`
     } else if (event.type === 'timeout') {
       eventDescription = `Timeout — ${teamName}`
     } else if (event.type === 'substitution') {
@@ -1922,7 +1864,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       const playerIn = event.payload?.playerIn || '?'
       const isExceptional = event.payload?.isExceptional === true
       const substitutionType = isExceptional ? 'Exceptional substitution' : 'Substitution'
-      eventDescription = `${substitutionType} — ${teamName} (OUT: ${playerOut} IN: ${playerIn}) (${homeLabel} ${homeScore}:${awayScore} ${awayLabel})`
+      eventDescription = `${substitutionType} — ${teamName} (OUT: ${playerOut} IN: ${playerIn}) (${team_1Label} ${team_1Score}:${team_2Score} ${team_2Label})`
     } else if (event.type === 'set_start') {
       // Format the relative time as MM:SS
       const relativeTime = typeof event.ts === 'number' ? event.ts : 0
@@ -1937,68 +1879,24 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     } else if (event.type === 'replay') {
       eventDescription = 'Replay'
     } else if (event.type === 'lineup') {
-      // Only show initial lineups, not rotation lineups or libero substitution lineups
+      // Only show initial lineups
       const isInitial = event.payload?.isInitial === true
-      const hasSubstitution = event.payload?.fromSubstitution === true
-      const hasLiberoSub = event.payload?.liberoSubstitution !== null && event.payload?.liberoSubstitution !== undefined
-      
-      // Skip rotation lineups (they're part of the point)
-      if (!isInitial && !hasSubstitution && !hasLiberoSub) {
-        return null
-      }
-      
-      // Skip lineup events that have a corresponding libero_entry/exit event (they're redundant)
-      if (hasLiberoSub && !isInitial && !hasSubstitution) {
-        // Check if there's a libero_entry or libero_exit event with the same or higher seq
-        const eventSeq = event.seq || 0
-        const allEvents = data.events || []
-        const hasCorrespondingLiberoEvent = allEvents.some(e => 
-          (e.type === 'libero_entry' || e.type === 'libero_exit') && 
-          (e.seq || 0) >= eventSeq &&
-          (e.seq || 0) <= eventSeq + 1 // Should be right after
-        )
-        if (hasCorrespondingLiberoEvent) {
-          return null // Skip this lineup event
-        }
-      }
       
       // Only show initial lineups as "Line-up setup"
       if (isInitial) {
         eventDescription = `Line-up setup — ${teamName}`
       } else {
-        return null // Skip non-initial lineups (they're either rotations or redundant)
+        return null // Skip non-initial lineups
       }
-    } else if (event.type === 'libero_entry') {
-      const liberoNumber = event.payload?.liberoIn || '?'
-      const playerOut = event.payload?.playerOut || '?'
-      const liberoType = event.payload?.liberoType === 'libero1' ? 'L1' : 'L2'
-      eventDescription = `Libero entry — ${teamName} (${liberoType} ${liberoNumber} in for ${playerOut})`
-    } else if (event.type === 'libero_exit') {
-      const liberoNumber = event.payload?.liberoOut || '?'
-      const playerIn = event.payload?.playerIn || '?'
-      const liberoType = event.payload?.liberoType === 'libero1' ? 'L1' : 'L2'
-      eventDescription = `Libero exit — ${teamName} (${liberoType} ${liberoNumber} out, ${playerIn} in)`
-    } else if (event.type === 'libero_exchange') {
-      const liberoOut = event.payload?.liberoOut || '?'
-      const liberoIn = event.payload?.liberoIn || '?'
-      const liberoOutType = event.payload?.liberoOutType === 'libero1' ? 'L1' : 'L2'
-      const liberoInType = event.payload?.liberoInType === 'libero1' ? 'L1' : 'L2'
-      eventDescription = `Libero substitution — ${teamName} (${liberoOutType} ${liberoOut} ↔ ${liberoInType} ${liberoIn})`
-    } else if (event.type === 'libero_unable') {
-      const liberoNumber = event.payload?.liberoNumber || '?'
-      const liberoType = event.payload?.liberoType === 'libero1' ? 'L1' : 'L2'
-      const reason = event.payload?.reason || 'declared'
-      if (reason === 'declared') {
-        eventDescription = `Libero declared unable — ${teamName} (${liberoType} ${liberoNumber})`
-      } else if (reason === 'injury') {
-        eventDescription = `Libero became unable — ${teamName} (${liberoType} ${liberoNumber} - injury)`
-      } else if (reason === 'expulsion') {
-        eventDescription = `Libero became unable — ${teamName} (${liberoType} ${liberoNumber} - expelled)`
-      } else if (reason === 'disqualification') {
-        eventDescription = `Libero became unable — ${teamName} (${liberoType} ${liberoNumber} - disqualified)`
-      } else {
-        eventDescription = `Libero became unable — ${teamName} (${liberoType} ${liberoNumber})`
-      }
+    } else if (event.type === 'court_switch') {
+      const setIndex = event.payload?.setIndex || event.setIndex || '?'
+      const totalPoints = event.payload?.totalPoints || 0
+      const switchNumber = event.payload?.switchNumber || 0
+      eventDescription = `Court Switch — Set ${setIndex} (${totalPoints} points, switch #${switchNumber})`
+    } else if (event.type === 'technical_to') {
+      const setIndex = event.payload?.setIndex || event.setIndex || '?'
+      const totalPoints = event.payload?.totalPoints || 0
+      eventDescription = `Technical Timeout — Set ${setIndex} (${totalPoints} points)`
     } else if (event.type === 'set_end') {
       const winnerLabel = event.payload?.teamLabel || '?'
       const setIndex = event.payload?.setIndex || event.setIndex || '?'
@@ -2045,7 +1943,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         target = ' Team'
       }
       
-      eventDescription = `Sanction — ${teamName}${target} (${sanctionLabel}) (${homeLabel} ${homeScore}:${awayScore} ${awayLabel})`
+      eventDescription = `Sanction — ${teamName}${target} (${sanctionLabel}) (${team_1Label} ${team_1Score}:${team_2Score} ${team_2Label})`
     } else {
       eventDescription = event.type
       if (teamName) {
@@ -2102,7 +2000,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
           if (e.type === 'lineup') {
             const hasInitial = e.payload?.isInitial === true
             const hasSubstitution = e.payload?.fromSubstitution === true
-            // Skip libero substitution lineups and rotation lineups
             if (!hasInitial && !hasSubstitution) {
               return false
             }
@@ -2149,7 +2046,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
           if (e.type === 'lineup') {
             const eHasInitial = e.payload?.isInitial === true
             const eHasSubstitution = e.payload?.fromSubstitution === true
-            // Skip libero substitution lineups and rotation lineups
             if (!eHasInitial && !eHasSubstitution) return false
           }
           return true
@@ -2171,7 +2067,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     // If it's a point, decrease the score and handle rotation if needed
     if (lastEvent.type === 'point' && lastEvent.payload?.team) {
       const teamKey = lastEvent.payload.team
-      const field = teamKey === 'team_1' ? 'homePoints' : 'awayPoints'
+      const field = teamKey === 'team_1' ? 'team_1Points' : 'team_2Points'
       const currentPoints = data.set[field]
         
         // Check if this is set 5 and we're undoing a point that triggered court switch at 8 points
@@ -2214,186 +2110,19 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         const pointSeq = lastEvent.seq || 0
         const eventsAfterPoint = data.events.filter(e => (e.seq || 0) > pointSeq && e.setIndex === data.set.index)
         
-        // Delete rotation lineup (if exists)
-        const rotationLineup = eventsAfterPoint.find(e => 
-          e.type === 'lineup' && 
-          e.payload?.team === teamKey &&
-          !e.payload?.isInitial &&
-          !e.payload?.fromSubstitution &&
-          !e.payload?.liberoSubstitution
-        )
-        if (rotationLineup) {
-          await db.events.delete(rotationLineup.id)
-        }
-        
-        // Delete libero exit if libero rotated to front row (created after the rotation)
-        const liberoExit = eventsAfterPoint.find(e => 
-          e.type === 'libero_exit' && 
-          e.payload?.team === teamKey &&
-          e.payload?.reason === 'rotation_to_front_row'
-        )
-        if (liberoExit) {
-          await db.events.delete(liberoExit.id)
-        }
+        // Beach volleyball: No rotation lineups to delete
       }
       // Point event will be deleted at the end of the function
     }
     
-    // If it's an initial lineup, delete it (players go back to bench)
+    // If it's an initial lineup, delete it
     if (lastEvent.type === 'lineup' && lastEvent.payload?.isInitial === true) {
       // Simply delete the initial lineup event
-      // This will cause players to go back to the bench
       await db.events.delete(lastEvent.id)
       eventAlreadyDeleted = true
     }
     
-    // If it's a substitution, revert the lineup change
-    if (lastEvent.type === 'substitution' && lastEvent.payload?.team && lastEvent.payload?.position) {
-      const team = lastEvent.payload.team
-      const position = lastEvent.payload.position
-      const playerOut = lastEvent.payload.playerOut
-      
-      // Find the lineup event that was created with this substitution
-      const lineupEvents = data.events
-        .filter(e => e.type === 'lineup' && e.payload?.team === team && e.setIndex === data.set.index)
-        .sort((a, b) => new Date(b.ts) - new Date(a.ts)) // Most recent first
-      
-      if (lineupEvents.length > 1) {
-        // Remove the most recent lineup (the one with the substitution)
-        const mostRecentLineup = lineupEvents[0]
-        await db.events.delete(mostRecentLineup.id)
-        
-        // Get the previous lineup and restore it
-        const previousLineup = lineupEvents[1]?.payload?.lineup || {}
-        const restoredLineup = { ...previousLineup }
-        restoredLineup[position] = String(playerOut)
-        
-        // Save the restored lineup
-        await db.events.add({
-          matchId,
-          setIndex: data.set.index,
-          type: 'lineup',
-          payload: { team, lineup: restoredLineup, fromSubstitution: true },
-          ts: new Date().toISOString(),
-          seq: await getNextSeq()
-        })
-      }
-    }
-    
-    // If it's a libero entry, revert the lineup change
-    if (lastEvent.type === 'libero_entry' && lastEvent.payload?.team && lastEvent.payload?.position) {
-      const team = lastEvent.payload.team
-      const position = lastEvent.payload.position
-      const playerOut = lastEvent.payload.playerOut
-      const liberoEntryTimestamp = new Date(lastEvent.ts)
-      
-      // Find the lineup event that was created with this libero entry
-      // Look for lineup events with liberoSubstitution that matches this libero entry
-      const liberoNumber = lastEvent.payload?.liberoIn
-      const liberoLineupEvents = data.events
-        .filter(e => 
-          e.type === 'lineup' && 
-          e.payload?.team === team && 
-          e.setIndex === data.set.index &&
-          e.payload?.liberoSubstitution &&
-          String(e.payload.liberoSubstitution.liberoNumber) === String(liberoNumber) &&
-          e.payload.liberoSubstitution.position === position
-        )
-        .sort((a, b) => new Date(b.ts) - new Date(a.ts)) // Most recent first
-      
-      if (liberoLineupEvents.length > 0) {
-        // Remove the lineup with the libero entry
-        const liberoLineupEvent = liberoLineupEvents[0]
-        await db.events.delete(liberoLineupEvent.id)
-        
-        // Find the most recent complete lineup event BEFORE the libero entry
-        // Get all lineup events for this team in this set, sorted by time (oldest first)
-        const allLineupEvents = data.events
-          .filter(e => 
-            e.type === 'lineup' && 
-            e.payload?.team === team && 
-            e.setIndex === data.set.index &&
-            e.id !== liberoLineupEvent.id // Exclude the one we just deleted
-          )
-          .sort((a, b) => new Date(a.ts) - new Date(b.ts)) // Oldest first
-        
-        // Find the lineup event that was created before the libero entry event timestamp
-        // Get the most recent one before libero entry
-        const previousLineupEvents = allLineupEvents.filter(e => new Date(e.ts) < liberoEntryTimestamp)
-        const previousLineupEvent = previousLineupEvents.length > 0 
-          ? previousLineupEvents[previousLineupEvents.length - 1] // Most recent before libero entry
-          : null
-        
-        if (previousLineupEvent && previousLineupEvent.payload?.lineup) {
-          // Restore the complete previous lineup
-          const previousLineup = previousLineupEvent.payload.lineup
-          // Ensure we have all 6 positions
-          const restoredLineup = {
-            I: previousLineup.I || '',
-            II: previousLineup.II || '',
-            III: previousLineup.III || '',
-            IV: previousLineup.IV || '',
-            V: previousLineup.V || '',
-            VI: previousLineup.VI || ''
-          }
-          // Restore the player at the position where libero was
-          restoredLineup[position] = String(playerOut)
-          
-          // Save the restored complete lineup
-          await db.events.add({
-            matchId,
-            setIndex: data.set.index,
-            type: 'lineup',
-            payload: { 
-              team, 
-              lineup: restoredLineup,
-              liberoSubstitution: null // Explicitly clear libero substitution
-            },
-            ts: new Date().toISOString(),
-            seq: await getNextSeq()
-          })
-        } else {
-          // No previous lineup found, get the current most recent lineup (after deletion) and restore
-          const currentLineupEvents = data.events
-            .filter(e => 
-              e.type === 'lineup' && 
-              e.payload?.team === team && 
-              e.setIndex === data.set.index &&
-              e.id !== liberoLineupEvent.id // Exclude the one we just deleted
-            )
-            .sort((a, b) => new Date(b.ts) - new Date(a.ts))
-          
-          if (currentLineupEvents.length > 0 && currentLineupEvents[0].payload?.lineup) {
-            const currentLineup = currentLineupEvents[0].payload.lineup
-            // Ensure we have all 6 positions
-            const restoredLineup = {
-              I: currentLineup.I || '',
-              II: currentLineup.II || '',
-              III: currentLineup.III || '',
-              IV: currentLineup.IV || '',
-              V: currentLineup.V || '',
-              VI: currentLineup.VI || ''
-            }
-            // Restore the player at the position where libero was
-            restoredLineup[position] = String(playerOut)
-            
-            // Save the restored complete lineup
-            await db.events.add({
-              matchId,
-              setIndex: data.set.index,
-              type: 'lineup',
-              payload: { 
-                team, 
-                lineup: restoredLineup,
-                liberoSubstitution: null // Explicitly clear libero substitution
-              },
-              ts: new Date().toISOString(),
-              seq: await getNextSeq()
-            })
-          }
-        }
-      }
-    }
+    // Beach volleyball: No substitutions or liberos to undo
     
     // Track if we've already deleted the event (to avoid double deletion)
     let eventAlreadyDeleted = false
@@ -2470,178 +2199,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       
       await db.events.delete(lastEvent.id)
       eventAlreadyDeleted = true
-    }
-    
-    // If it's a libero exit, revert the lineup change
-    if (lastEvent.type === 'libero_exit' && lastEvent.payload?.team && lastEvent.payload?.position) {
-      const team = lastEvent.payload.team
-      const position = lastEvent.payload.position
-      const liberoOut = lastEvent.payload.liberoOut
-      const playerIn = lastEvent.payload.playerIn
-      const liberoExitTimestamp = new Date(lastEvent.ts)
-      
-      // Find the lineup event that was created with this libero exit (the one without libero substitution)
-      const exitLineupEvents = data.events
-        .filter(e => 
-          e.type === 'lineup' && 
-          e.payload?.team === team && 
-          e.setIndex === data.set.index &&
-          (!e.payload?.liberoSubstitution || e.payload.liberoSubstitution === null) &&
-          new Date(e.ts) <= liberoExitTimestamp &&
-          new Date(e.ts) > new Date(liberoExitTimestamp.getTime() - 5000) // Within 5 seconds of exit
-        )
-        .sort((a, b) => new Date(b.ts) - new Date(a.ts)) // Most recent first
-      
-      if (exitLineupEvents.length > 0) {
-        // Remove the lineup with the libero exit
-        const exitLineupEvent = exitLineupEvents[0]
-        await db.events.delete(exitLineupEvent.id)
-        
-        // Find the most recent lineup event BEFORE the libero exit that had the libero
-        const allLineupEvents = data.events
-          .filter(e => 
-            e.type === 'lineup' && 
-            e.payload?.team === team && 
-            e.setIndex === data.set.index &&
-            e.id !== exitLineupEvent.id
-          )
-          .sort((a, b) => new Date(a.ts) - new Date(b.ts))
-        
-        const previousLineupEvents = allLineupEvents.filter(e => new Date(e.ts) < liberoExitTimestamp)
-        const previousLineupEvent = previousLineupEvents.length > 0 
-          ? previousLineupEvents[previousLineupEvents.length - 1]
-          : null
-        
-        if (previousLineupEvent && previousLineupEvent.payload?.lineup) {
-          // Restore the complete previous lineup (which had the libero)
-          const previousLineup = previousLineupEvent.payload.lineup
-          const restoredLineup = {
-            I: previousLineup.I || '',
-            II: previousLineup.II || '',
-            III: previousLineup.III || '',
-            IV: previousLineup.IV || '',
-            V: previousLineup.V || '',
-            VI: previousLineup.VI || ''
-          }
-          // Restore the libero at the position
-          restoredLineup[position] = String(liberoOut)
-          
-          // Restore the libero substitution info from the previous lineup
-          const previousLiberoSub = previousLineupEvent.payload?.liberoSubstitution
-          
-          // Save the restored complete lineup
-          await db.events.add({
-            matchId,
-            setIndex: data.set.index,
-            type: 'lineup',
-            payload: { 
-              team, 
-              lineup: restoredLineup,
-              liberoSubstitution: previousLiberoSub || null
-            },
-            ts: new Date().toISOString(),
-            seq: await getNextSeq()
-          })
-        }
-      }
-    }
-    
-    // If it's a libero exchange, revert the lineup change
-    if (lastEvent.type === 'libero_exchange' && lastEvent.payload?.team && lastEvent.payload?.position) {
-      const team = lastEvent.payload.team
-      const position = lastEvent.payload.position
-      const liberoOut = lastEvent.payload.liberoOut
-      const liberoIn = lastEvent.payload.liberoIn
-      const liberoExchangeTimestamp = new Date(lastEvent.ts)
-      
-      // Find the lineup event that was created with this libero exchange
-      const exchangeLineupEvents = data.events
-        .filter(e => 
-          e.type === 'lineup' && 
-          e.payload?.team === team && 
-          e.setIndex === data.set.index &&
-          e.payload?.liberoSubstitution &&
-          String(e.payload.liberoSubstitution.liberoNumber) === String(liberoIn) &&
-          e.payload.liberoSubstitution.position === position &&
-          new Date(e.ts) <= liberoExchangeTimestamp &&
-          new Date(e.ts) > new Date(liberoExchangeTimestamp.getTime() - 5000) // Within 5 seconds
-        )
-        .sort((a, b) => new Date(b.ts) - new Date(a.ts))
-      
-      if (exchangeLineupEvents.length > 0) {
-        // Remove the lineup with the libero exchange
-        const exchangeLineupEvent = exchangeLineupEvents[0]
-        await db.events.delete(exchangeLineupEvent.id)
-        
-        // Find the most recent lineup event BEFORE the libero exchange
-        const allLineupEvents = data.events
-          .filter(e => 
-            e.type === 'lineup' && 
-            e.payload?.team === team && 
-            e.setIndex === data.set.index &&
-            e.id !== exchangeLineupEvent.id
-          )
-          .sort((a, b) => new Date(a.ts) - new Date(b.ts))
-        
-        const previousLineupEvents = allLineupEvents.filter(e => new Date(e.ts) < liberoExchangeTimestamp)
-        const previousLineupEvent = previousLineupEvents.length > 0 
-          ? previousLineupEvents[previousLineupEvents.length - 1]
-          : null
-        
-        if (previousLineupEvent && previousLineupEvent.payload?.lineup) {
-          // Restore the complete previous lineup (which had the previous libero)
-          const previousLineup = previousLineupEvent.payload.lineup
-          const restoredLineup = {
-            I: previousLineup.I || '',
-            II: previousLineup.II || '',
-            III: previousLineup.III || '',
-            IV: previousLineup.IV || '',
-            V: previousLineup.V || '',
-            VI: previousLineup.VI || ''
-          }
-          // Restore the previous libero at the position
-          restoredLineup[position] = String(liberoOut)
-          
-          // Restore the libero substitution info from the previous lineup
-          const previousLiberoSub = previousLineupEvent.payload?.liberoSubstitution
-          if (previousLiberoSub) {
-            // Update to use the previous libero
-            const restoredLiberoSub = {
-              ...previousLiberoSub,
-              liberoNumber: liberoOut,
-              liberoType: lastEvent.payload?.liberoOutType
-            }
-            
-            // Save the restored complete lineup
-            await db.events.add({
-              matchId,
-              setIndex: data.set.index,
-              type: 'lineup',
-              payload: { 
-                team, 
-                lineup: restoredLineup,
-                liberoSubstitution: restoredLiberoSub
-              },
-              ts: new Date().toISOString(),
-              seq: await getNextSeq()
-            })
-          } else {
-            // No previous libero sub, just restore the lineup
-            await db.events.add({
-              matchId,
-              setIndex: data.set.index,
-              type: 'lineup',
-              payload: { 
-                team, 
-                lineup: restoredLineup,
-                liberoSubstitution: null
-              },
-              ts: new Date().toISOString(),
-              seq: await getNextSeq()
-            })
-          }
-        }
-      }
     }
     
     // If it's a sanction, clear the sanction flag from the match
@@ -2808,8 +2365,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       team,
       reason: challengeReason,
       score: {
-        home: data.set.homePoints,
-        away: data.set.awayPoints
+        team_1: data.set.team_1Points,
+        team_2: data.set.team_2Points
       },
       set: data.set.index,
       servingTeam: currentServeTeam,
@@ -2833,8 +2390,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     const opponentTeam = team === 'team_1' ? 'team_2' : 'team_1'
     
     // Reverse the last point: remove point from opponent, add point to challenging team
-    const opponentField = opponentTeam === 'team_1' ? 'homePoints' : 'awayPoints'
-    const teamField = team === 'team_1' ? 'homePoints' : 'awayPoints'
+    const opponentField = opponentTeam === 'team_1' ? 'team_1Points' : 'team_2Points'
+    const teamField = team === 'team_1' ? 'team_1Points' : 'team_2Points'
     
     // Get current scores
     const currentOpponentPoints = data.set[opponentField]
@@ -2877,8 +2434,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       result: 'successful',
       originalScore: score,
       newScore: {
-        home: team === 'team_1' ? newTeamPoints : newOpponentPoints,
-        away: team === 'team_2' ? newTeamPoints : newOpponentPoints
+        team_1: team === 'team_1' ? newTeamPoints : newOpponentPoints,
+        team_2: team === 'team_2' ? newTeamPoints : newOpponentPoints
       }
     })
     
@@ -3041,8 +2598,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     const currentSet = allSets.find(s => s.index === currentSetIndex)
     if (currentSet && !currentSet.finished) {
       const opponentPoints = pointsToWin
-      const teamPoints = currentSet[teamKey === 'team_1' ? 'homePoints' : 'awayPoints']
-      const currentOpponentPoints = currentSet[opponentKey === 'team_1' ? 'homePoints' : 'awayPoints']
+      const teamPoints = currentSet[teamKey === 'team_1' ? 'team_1Points' : 'team_2Points']
+      const currentOpponentPoints = currentSet[opponentKey === 'team_1' ? 'team_1Points' : 'team_2Points']
       
       // Award points until opponent wins
       const pointsNeeded = opponentPoints - currentOpponentPoints
@@ -3057,16 +2614,16 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       // End the set
       await db.sets.update(currentSet.id, {
         finished: true,
-        [opponentKey === 'team_1' ? 'homePoints' : 'awayPoints']: opponentPoints,
-        [teamKey === 'team_1' ? 'homePoints' : 'awayPoints']: teamPoints
+        [opponentKey === 'team_1' ? 'team_1Points' : 'team_2Points']: opponentPoints,
+        [teamKey === 'team_1' ? 'team_1Points' : 'team_2Points']: teamPoints
       })
       
       // Log set end
       await logEvent('set_end', {
         team: opponentKey,
         setIndex: currentSetIndex,
-        homePoints: opponentKey === 'team_1' ? opponentPoints : teamPoints,
-        awayPoints: opponentKey === 'team_2' ? opponentPoints : teamPoints,
+        team_1Points: opponentKey === 'team_1' ? opponentPoints : teamPoints,
+        team_2Points: opponentKey === 'team_2' ? opponentPoints : teamPoints,
         reason: 'forfait'
       })
     }
@@ -3079,15 +2636,15 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         const setPointsToWin = set.index === 3 ? 15 : 21
         await db.sets.update(set.id, {
           finished: true,
-          [opponentKey === 'team_1' ? 'homePoints' : 'awayPoints']: setPointsToWin,
-          [teamKey === 'team_1' ? 'homePoints' : 'awayPoints']: 0
+          [opponentKey === 'team_1' ? 'team_1Points' : 'team_2Points']: setPointsToWin,
+          [teamKey === 'team_1' ? 'team_1Points' : 'team_2Points']: 0
         })
         
         await logEvent('set_end', {
           team: opponentKey,
           setIndex: set.index,
-          homePoints: opponentKey === 'team_1' ? setPointsToWin : 0,
-          awayPoints: opponentKey === 'team_2' ? setPointsToWin : 0,
+          team_1Points: opponentKey === 'team_1' ? setPointsToWin : 0,
+          team_2Points: opponentKey === 'team_2' ? setPointsToWin : 0,
           reason: 'forfait'
         })
       }
@@ -3304,7 +2861,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       // Beach volleyball: No substitutions - expulsion/disqualification results in forfait
           await handleForfait(team, sanctionType === 'expulsion' ? 'expulsion' : 'disqualification')
     } else if (sanctionType === 'expulsion' || sanctionType === 'disqualification') {
-      // Expulsion/disqualification for bench players or officials - just log the sanction
+      // Expulsion/disqualification - just log the sanction
       await logEvent('sanction', {
         team,
         type: sanctionType,
@@ -3316,7 +2873,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       
       setSanctionConfirmModal(null)
       
-      // Beach volleyball: No liberos - removed libero logic
+
     } else {
       // Regular sanction (warning, penalty, expulsion, disqualification)
       // Note: rude_conduct is treated as penalty - convert it to penalty
@@ -3436,23 +2993,23 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
 
   const isAnyRefereeConnected = isReferee1Connected || isReferee2Connected
   const refereeConnectionEnabled = data?.match?.refereeConnectionEnabled !== false
-  const homeTeamConnectionEnabled = data?.match?.homeTeamConnectionEnabled !== false
-  const awayTeamConnectionEnabled = data?.match?.awayTeamConnectionEnabled !== false
+  const team_1TeamConnectionEnabled = data?.match?.team_1TeamConnectionEnabled !== false
+  const team_2TeamConnectionEnabled = data?.match?.team_2TeamConnectionEnabled !== false
 
-  // Check if bench teams are connected (heartbeat within last 15 seconds)
-  const isHomeTeamConnected = useMemo(() => {
-    if (!data?.match?.lastHomeTeamHeartbeat) return false
-    const lastHeartbeat = new Date(data.match.lastHomeTeamHeartbeat).getTime()
+  // Check if teams are connected (heartbeat within last 15 seconds)
+  const isTeam_1Connected = useMemo(() => {
+    if (!data?.match?.lastTeam_1Heartbeat) return false
+    const lastHeartbeat = new Date(data.match.lastTeam_1Heartbeat).getTime()
     const currentTime = new Date().getTime()
     return (currentTime - lastHeartbeat) < 15000 // 15 seconds threshold
-  }, [data?.match?.lastHomeTeamHeartbeat, now])
+  }, [data?.match?.lastTeam_1Heartbeat, now])
 
-  const isAwayTeamConnected = useMemo(() => {
-    if (!data?.match?.lastAwayTeamHeartbeat) return false
-    const lastHeartbeat = new Date(data.match.lastAwayTeamHeartbeat).getTime()
+  const isTeam_2Connected = useMemo(() => {
+    if (!data?.match?.lastTeam_2Heartbeat) return false
+    const lastHeartbeat = new Date(data.match.lastTeam_2Heartbeat).getTime()
     const currentTime = new Date().getTime()
     return (currentTime - lastHeartbeat) < 15000 // 15 seconds threshold
-  }, [data?.match?.lastAwayTeamHeartbeat, now])
+  }, [data?.match?.lastTeam_2Heartbeat, now])
 
   // Helper function to get connection status and color for individual referees
   const getRefereeStatus = useCallback((refereeNumber) => {
@@ -3479,34 +3036,34 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       // Enabled but not connected
       return { status: 'not_connected', color: '#eab308' } // yellow
     } else if (type === 'teamA') {
-      if (!homeTeamConnectionEnabled) {
+      if (!team_1TeamConnectionEnabled) {
         return { status: 'disabled', color: '#6b7280' } // grey
       }
-      const hasPin = !!data?.match?.homeTeamPin
+      const hasPin = !!data?.match?.team_1Pin
       if (!hasPin) {
         return { status: 'error', color: '#ef4444' } // red - no PIN configured
       }
-      if (isHomeTeamConnected) {
+      if (isTeam_1Connected) {
         return { status: 'connected', color: '#22c55e' } // green
       }
       // Enabled, has PIN, but not connected
       return { status: 'not_connected', color: '#eab308' } // yellow
     } else if (type === 'teamB') {
-      if (!awayTeamConnectionEnabled) {
+      if (!team_2TeamConnectionEnabled) {
         return { status: 'disabled', color: '#6b7280' } // grey
       }
-      const hasPin = !!data?.match?.awayTeamPin
+      const hasPin = !!data?.match?.team_2Pin
       if (!hasPin) {
         return { status: 'error', color: '#ef4444' } // red - no PIN configured
       }
-      if (isAwayTeamConnected) {
+      if (isTeam_2Connected) {
         return { status: 'connected', color: '#22c55e' } // green
       }
       // Enabled, has PIN, but not connected
       return { status: 'not_connected', color: '#eab308' } // yellow
     }
     return { status: 'error', color: '#ef4444' } // red - unknown
-  }, [refereeConnectionEnabled, isReferee1Connected, isReferee2Connected, homeTeamConnectionEnabled, awayTeamConnectionEnabled, isHomeTeamConnected, isAwayTeamConnected, data?.match])
+  }, [refereeConnectionEnabled, isReferee1Connected, isReferee2Connected, team_1TeamConnectionEnabled, team_2TeamConnectionEnabled, isTeam_1Connected, isTeam_2Connected, data?.match])
 
   const callReferee = useCallback(async () => {
     if (!matchId) return
@@ -3528,19 +3085,19 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     }
   }, [matchId])
 
-  const handleHomeTeamConnectionToggle = useCallback(async (enabled) => {
+  const handleTeam_1ConnectionToggle = useCallback(async (enabled) => {
     if (!matchId) return
     try {
-      await db.matches.update(matchId, { homeTeamConnectionEnabled: enabled })
+      await db.matches.update(matchId, { team_1TeamConnectionEnabled: enabled })
     } catch (error) {
       // Silently handle error
     }
   }, [matchId])
 
-  const handleAwayTeamConnectionToggle = useCallback(async (enabled) => {
+  const handleTeam_2ConnectionToggle = useCallback(async (enabled) => {
     if (!matchId) return
     try {
-      await db.matches.update(matchId, { awayTeamConnectionEnabled: enabled })
+      await db.matches.update(matchId, { team_2TeamConnectionEnabled: enabled })
     } catch (error) {
       // Silently handle error
     }
@@ -3551,15 +3108,15 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     if (type === 'referee') {
       currentPin = data?.match?.refereePin || ''
     } else if (type === 'teamA') {
-      currentPin = data?.match?.homeTeamPin || ''
+      currentPin = data?.match?.team_1Pin || ''
     } else if (type === 'teamB') {
-      currentPin = data?.match?.awayTeamPin || ''
+      currentPin = data?.match?.team_2Pin || ''
     }
     setNewPin(currentPin)
     setPinError('')
     setEditPinType(type)
     setEditPinModal(true)
-  }, [data?.match?.refereePin, data?.match?.homeTeamPin, data?.match?.awayTeamPin])
+  }, [data?.match?.refereePin, data?.match?.team_1TeamPin, data?.match?.team_2TeamPin])
 
   const handleSavePin = useCallback(async () => {
     if (!matchId) return
@@ -3579,9 +3136,9 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       if (editPinType === 'referee') {
         updateField = { refereePin: newPin }
       } else if (editPinType === 'teamA') {
-        updateField = { homeTeamPin: newPin }
+        updateField = { team_1TeamPin: newPin }
       } else if (editPinType === 'teamB') {
-        updateField = { awayTeamPin: newPin }
+        updateField = { team_2Pin: newPin }
       }
       await db.matches.update(matchId, updateField)
       setEditPinModal(false)
@@ -3593,31 +3150,48 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
   }, [matchId, newPin, editPinType])
 
   const confirmCourtSwitch = useCallback(async () => {
-    if (!courtSwitchModal || !matchId) return
+    if (!courtSwitchModal || !matchId || !data?.set) return
     
     // Track the court switch in the match
     const match = await db.matches.get(matchId)
     if (!match) return
     
     // Count how many court switches have happened in this set
-          const setIndex = courtSwitchModal.set.index
-          const totalPoints = courtSwitchModal.homePoints + courtSwitchModal.awayPoints
-          const isSet3 = setIndex === 3
-          const switchInterval = isSet3 ? 5 : 7
-          const switchesSoFar = Math.floor(totalPoints / switchInterval)
+    const setIndex = courtSwitchModal.set.index
+    const totalPoints = courtSwitchModal.team_1Points + courtSwitchModal.team_2Points
+    const isSet3 = setIndex === 3
+    const switchInterval = isSet3 ? 5 : 7
+    const switchesSoFar = Math.floor(totalPoints / switchInterval)
     
-    // Store the number of switches for this set
+    // Store the number of switches for this set (THIS ACTUALLY SWITCHES THE COURTS VISUALLY)
     const switchCountKey = `set${setIndex}_switchCount`
     await db.matches.update(matchId, { 
       [switchCountKey]: switchesSoFar 
     })
     
+    // Log court switch as an event
+    await logEvent('court_switch', {
+      setIndex: setIndex,
+      totalPoints: totalPoints,
+      team_1Points: courtSwitchModal.team_1Points,
+      team_2Points: courtSwitchModal.team_2Points,
+      switchNumber: switchesSoFar
+    })
+    
     // Close the modal
     setCourtSwitchModal(null)
-  }, [courtSwitchModal, matchId])
+  }, [courtSwitchModal, matchId, data?.set, logEvent])
   
   const confirmTechnicalTO = useCallback(async () => {
-    if (!technicalTOModal) return
+    if (!technicalTOModal || !data?.set) return
+    
+    // Log TTO as an event
+    await logEvent('technical_to', {
+      setIndex: technicalTOModal.set.index,
+      team_1Points: technicalTOModal.team_1Points,
+      team_2Points: technicalTOModal.team_2Points,
+      totalPoints: technicalTOModal.team_1Points + technicalTOModal.team_2Points
+    })
     
     // Start the 60 second countdown
     setTechnicalTOModal({
@@ -3625,7 +3199,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       countdown: 60,
       started: true
     })
-  }, [technicalTOModal])
+  }, [technicalTOModal, data?.set, logEvent])
   
   // Handle TTO countdown
   useEffect(() => {
@@ -3633,7 +3207,31 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       const timer = setInterval(() => {
         setTechnicalTOModal(prev => {
           if (!prev || prev.countdown <= 1) {
-            // Countdown finished, close TTO modal
+            // Countdown finished, switch courts and close TTO modal
+            if (prev && matchId && data?.set) {
+              // Perform court switch after TTO
+              const setIndex = prev.set.index
+              const totalPoints = prev.team_1Points + prev.team_2Points
+              const isSet3 = setIndex === 3
+              const switchInterval = isSet3 ? 5 : 7
+              const switchesSoFar = Math.floor(totalPoints / switchInterval)
+              
+              // Store the number of switches for this set (THIS ACTUALLY SWITCHES THE COURTS VISUALLY)
+              const switchCountKey = `set${setIndex}_switchCount`
+              db.matches.update(matchId, { 
+                [switchCountKey]: switchesSoFar 
+              }).catch(() => {})
+              
+              // Log court switch as an event
+              logEvent('court_switch', {
+                setIndex: setIndex,
+                totalPoints: totalPoints,
+                team_1Points: prev.team_1Points,
+                team_2Points: prev.team_2Points,
+                switchNumber: switchesSoFar,
+                afterTTO: true
+              }).catch(() => {})
+            }
             return null
           }
           return {
@@ -3645,7 +3243,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       
       return () => clearInterval(timer)
     }
-  }, [technicalTOModal?.started, technicalTOModal?.countdown])
+  }, [technicalTOModal?.started, technicalTOModal?.countdown, matchId, data?.set, logEvent])
   
   const stopTechnicalTO = useCallback(() => {
     if (!technicalTOModal) return
@@ -3675,16 +3273,16 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       await db.events.delete(lastEvent.id)
       
       // Update set points
-      const newHomePoints = technicalTOModal.teamThatScored === 'team_1' 
-        ? technicalTOModal.homePoints - 1 
-        : technicalTOModal.homePoints
-      const newAwayPoints = technicalTOModal.teamThatScored === 'team_2' 
-        ? technicalTOModal.awayPoints - 1 
-        : technicalTOModal.awayPoints
+      const newTeam_1Points = technicalTOModal.teamThatScored === 'team_1' 
+        ? technicalTOModal.team_1Points - 1 
+        : technicalTOModal.team_1Points
+      const newTeam_2Points = technicalTOModal.teamThatScored === 'team_2' 
+        ? technicalTOModal.team_2Points - 1 
+        : technicalTOModal.team_2Points
       
       await db.sets.update(technicalTOModal.set.id, {
-        homePoints: newHomePoints,
-        awayPoints: newAwayPoints
+        team_1Points: newTeam_1Points,
+        team_2Points: newTeam_2Points
       })
       
       // Undo the TTO flag
@@ -3698,9 +3296,9 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
   }, [technicalTOModal, data?.events, matchId])
 
   const cancelCourtSwitch = useCallback(async () => {
-    if (!courtSwitchModal || !data?.events) return
+    if (!courtSwitchModal || !data?.events || !matchId) return
     
-    // Undo the last point that caused the 8-point threshold
+    // Undo the last point that caused the court switch threshold
     // Find the last event by sequence number
     const sortedEvents = [...data.events].sort((a, b) => {
       const aSeq = a.seq || 0
@@ -3719,21 +3317,45 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       await db.events.delete(lastEvent.id)
       
       // Update set points
-      const newHomePoints = courtSwitchModal.teamThatScored === 'team_1' 
-        ? courtSwitchModal.homePoints - 1 
-        : courtSwitchModal.homePoints
-      const newAwayPoints = courtSwitchModal.teamThatScored === 'team_2' 
-        ? courtSwitchModal.awayPoints - 1 
-        : courtSwitchModal.awayPoints
+      const newTeam_1Points = courtSwitchModal.teamThatScored === 'team_1' 
+        ? courtSwitchModal.team_1Points - 1 
+        : courtSwitchModal.team_1Points
+      const newTeam_2Points = courtSwitchModal.teamThatScored === 'team_2' 
+        ? courtSwitchModal.team_2Points - 1 
+        : courtSwitchModal.team_2Points
       
       await db.sets.update(courtSwitchModal.set.id, {
-        homePoints: newHomePoints,
-        awayPoints: newAwayPoints
+        team_1Points: newTeam_1Points,
+        team_2Points: newTeam_2Points
       })
+      
+      // Reset court switch tracking for this set
+      const setIndex = courtSwitchModal.set.index
+      const switchCountKey = `set${setIndex}_switchCount`
+      const match = await db.matches.get(matchId)
+      
+      if (match) {
+        const updateData = {}
+        
+        // For set 5, reset the set5CourtSwitched flag
+        if (setIndex === 5) {
+          updateData.set5CourtSwitched = false
+        }
+        
+        // Reset the switch count for this set
+        // Calculate what the switch count should be after undoing this point
+        const totalPoints = newTeam_1Points + newTeam_2Points
+        const isSet3 = setIndex === 3
+        const switchInterval = isSet3 ? 5 : 7
+        const newSwitchCount = Math.floor(totalPoints / switchInterval)
+        updateData[switchCountKey] = newSwitchCount
+        
+        await db.matches.update(matchId, updateData)
+      }
     }
     
     setCourtSwitchModal(null)
-  }, [courtSwitchModal, data?.events])
+  }, [courtSwitchModal, data?.events, matchId])
 
   if (!data?.set) {
     return <p>Loading…</p>
@@ -3900,10 +3522,10 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                   
                   const scoresheetData = {
                     match,
-                    homeTeam: data?.homeTeam,
-                    awayTeam: data?.awayTeam,
-                    homePlayers: data?.homePlayers || [],
-                    awayPlayers: data?.awayPlayers || [],
+                    team_1Team: data?.team_1Team,
+                    team_2Team: data?.team_2Team,
+                    team_1Players: data?.team_1Players || [],
+                    team_2Players: data?.team_2Players || [],
                     sets: allSets,
                     events: allEvents,
                     sanctions: [] // TODO: Extract sanctions from events
@@ -4304,8 +3926,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, auto)', gap: '12px', alignItems: 'center', justifyContent: 'center' }}>
                       {previousSets.map(set => {
                         // Always show from current left/right perspective
-                        const leftPoints = currentLeftTeamKey === 'team_1' ? set.homePoints : set.awayPoints
-                        const rightPoints = currentRightTeamKey === 'team_1' ? set.homePoints : set.awayPoints
+                        const leftPoints = currentLeftTeamKey === 'team_1' ? set.team_1Points : set.team_2Points
+                        const rightPoints = currentRightTeamKey === 'team_1' ? set.team_1Points : set.team_2Points
                         return (
                           <div key={set.id} style={{ 
                             fontSize: '12px', 
@@ -5344,26 +4966,115 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                 }}
                 style={{ width: '100%', textAlign: 'left', padding: '12px 16px', marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}
               >
-                📥 Download Database Data (JSON)
+                📥 Download Full Database (JSON)
+              </button>
+              <button
+                className="secondary"
+                onClick={() => {
+                  setManualCourtSwitchConfirm(true)
+                  setOptionsModal(false)
+                }}
+                style={{ width: '100%', textAlign: 'left', padding: '12px 16px', marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}
+              >
+                🔄 Manual Court Switch
+              </button>
+              <button
+                className="secondary"
+                onClick={async () => {
+                  try {
+                    // Export game history as list of actions
+                    if (!data?.events || data.events.length === 0) {
+                      alert('No game history to download')
+                      return
+                    }
+                    
+                    // Get all events for this match, sorted by sequence
+                    const allEvents = await db.events
+                      .where('matchId')
+                      .equals(matchId)
+                      .sortBy('seq')
+                    
+                    // Format events as action list
+                    const actions = allEvents.map(event => {
+                      const description = getActionDescription(event)
+                      const teamKey = event.payload?.team
+                      
+                      // Determine which team this action belongs to
+                      let team = 'Both'
+                      if (teamKey === 'team_1') {
+                        const teamALabel = data?.match?.coinTossTeamA === 'team_1' ? 'A' : 'B'
+                        team = teamALabel === 'A' ? 'A' : 'B'
+                      } else if (teamKey === 'team_2') {
+                        const teamBLabel = data?.match?.coinTossTeamB === 'team_2' ? 'B' : 'A'
+                        team = teamBLabel === 'B' ? 'B' : 'A'
+                      } else {
+                        // Events like court_switch, technical_to, set_start, set_end are "Both"
+                        team = 'Both'
+                      }
+                      
+                      return {
+                        id: event.id,
+                        seq: event.seq || 0,
+                        timestamp: event.ts,
+                        set: event.setIndex || 1,
+                        team: team,
+                        type: event.type,
+                        description: description || event.type,
+                        payload: event.payload
+                      }
+                    })
+                    
+                    // Create JSON export
+                    const exportData = {
+                      matchId: matchId,
+                      matchName: data?.match?.eventName || 'Match',
+                      team_1Team: data?.team_1Team?.name || 'Team 1',
+                      team_2Team: data?.team_2Team?.name || 'Team 2',
+                      exportDate: new Date().toISOString(),
+                      totalActions: actions.length,
+                      actions: actions
+                    }
+                    
+                    const jsonStr = JSON.stringify(exportData, null, 2)
+                    const blob = new Blob([jsonStr], { type: 'application/json' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    const matchName = (data?.match?.eventName || 'Match').replace(/[^a-z0-9]/gi, '_').toLowerCase()
+                    a.download = `game-history-${matchName}-${new Date().toISOString().split('T')[0]}.json`
+                    document.body.appendChild(a)
+                    a.click()
+                    document.body.removeChild(a)
+                    URL.revokeObjectURL(url)
+                    
+                    setOptionsModal(false)
+                  } catch (error) {
+                    console.error('Error exporting game history:', error)
+                    alert('Error exporting game history. Please try again.')
+                  }
+                }}
+                style={{ width: '100%', textAlign: 'left', padding: '12px 16px' }}
+              >
+                📥 Download Game History (Actions List)
               </button>
             </div>
           </div>
         </Modal>
       )}
 
-      {/* Action Log Modal */}
+      {/* Action Log Modal - Table format with Team A, B, and Both */}
       {showLogs && (
         <Modal
-          title="Action Log"
+          title="Check Logs - Game History"
           open={true}
           onClose={() => setShowLogs(false)}
-          width={900}
+          width={1200}
         >
           <div style={{ padding: '20px', maxHeight: '80vh', overflowY: 'auto' }}>
-            <div style={{ marginBottom: '16px' }}>
+            <div style={{ marginBottom: '16px', display: 'flex', gap: '12px', alignItems: 'center' }}>
               <input
                 type="text"
-                placeholder="Search events (all shown by default)..."
+                placeholder="Search actions..."
                 value={logSearchQuery}
                 onChange={(e) => setLogSearchQuery(e.target.value)}
                 style={{
@@ -5373,91 +5084,385 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                   border: '1px solid rgba(255, 255, 255, 0.2)',
                   borderRadius: '6px',
                   color: 'var(--text)',
-                  width: '100%'
+                  flex: 1
                 }}
               />
+              <button
+                className="secondary"
+                onClick={async () => {
+                  try {
+                    if (!data?.events || data.events.length === 0) {
+                      alert('No game history to download')
+                      return
+                    }
+                    
+                    const allEvents = await db.events
+                      .where('matchId')
+                      .equals(matchId)
+                      .sortBy('seq')
+                    
+                    const actions = allEvents.map(event => {
+                      const description = getActionDescription(event)
+                      const teamKey = event.payload?.team
+                      
+                      let team = 'Both'
+                      if (teamKey === 'team_1') {
+                        const teamALabel = data?.match?.coinTossTeamA === 'team_1' ? 'A' : 'B'
+                        team = teamALabel === 'A' ? 'A' : 'B'
+                      } else if (teamKey === 'team_2') {
+                        const teamBLabel = data?.match?.coinTossTeamB === 'team_2' ? 'B' : 'A'
+                        team = teamBLabel === 'B' ? 'B' : 'A'
+                      } else {
+                        team = 'Both'
+                      }
+                      
+                      return {
+                        id: event.id,
+                        seq: event.seq || 0,
+                        timestamp: event.ts,
+                        set: event.setIndex || 1,
+                        team: team,
+                        type: event.type,
+                        description: description || event.type,
+                        payload: event.payload
+                      }
+                    })
+                    
+                    const exportData = {
+                      matchId: matchId,
+                      matchName: data?.match?.eventName || 'Match',
+                      team_1Team: data?.team_1Team?.name || 'Team 1',
+                      team_2Team: data?.team_2Team?.name || 'Team 2',
+                      exportDate: new Date().toISOString(),
+                      totalActions: actions.length,
+                      actions: actions
+                    }
+                    
+                    const jsonStr = JSON.stringify(exportData, null, 2)
+                    const blob = new Blob([jsonStr], { type: 'application/json' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    const matchName = (data?.match?.eventName || 'Match').replace(/[^a-z0-9]/gi, '_').toLowerCase()
+                    a.download = `game-history-${matchName}-${new Date().toISOString().split('T')[0]}.json`
+                    document.body.appendChild(a)
+                    a.click()
+                    document.body.removeChild(a)
+                    URL.revokeObjectURL(url)
+                  } catch (error) {
+                    console.error('Error downloading game history:', error)
+                    alert('Error downloading game history. Please try again.')
+                  }
+                }}
+                style={{ padding: '8px 16px', fontSize: '14px' }}
+              >
+                📥 Download
+              </button>
             </div>
             {(() => {
               if (!data?.events || data.events.length === 0) {
-                return <p>No events recorded yet.</p>
+                return <p>No actions recorded yet.</p>
               }
               
+              // Process all events and determine team assignment (A, B, or Both)
+              const processedEvents = [...data.events]
+                .map(event => {
+                  const eventDescription = getActionDescription(event)
+                  if (!eventDescription) return null
+                  
+                  const teamKey = event.payload?.team
+                  
+                  // Determine which team this action belongs to
+                  let team = 'Both'
+                  if (teamKey === 'team_1') {
+                    const teamALabel = data?.match?.coinTossTeamA === 'team_1' ? 'A' : 'B'
+                    team = teamALabel === 'A' ? 'A' : 'B'
+                  } else if (teamKey === 'team_2') {
+                    const teamBLabel = data?.match?.coinTossTeamB === 'team_2' ? 'B' : 'A'
+                    team = teamBLabel === 'B' ? 'B' : 'A'
+                  } else {
+                    // Events like court_switch, technical_to, set_start, set_end are "Both"
+                    team = 'Both'
+                  }
+                  
+                  return {
+                    event,
+                    eventDescription,
+                    team,
+                    teamKey,
+                    seq: event.seq || 0,
+                    timestamp: event.ts,
+                    setIndex: event.setIndex || 1,
+                    id: event.id
+                  }
+                })
+                .filter(item => {
+                  if (!item) return false
+                  if (logSearchQuery.trim() === '') return true
+                  const searchLower = logSearchQuery.toLowerCase()
+                  const descriptionLower = item.eventDescription.toLowerCase()
+                  const setIndex = String(item.setIndex || '')
+                  const actionId = String(item.id || '')
+                  const teamStr = item.team.toLowerCase()
+                  return descriptionLower.includes(searchLower) || 
+                         setIndex.includes(searchLower) ||
+                         actionId.includes(searchLower) ||
+                         teamStr.includes(searchLower)
+                })
+                // Sort by sequence descending (latest first)
+                .sort((a, b) => {
+                  const aSeq = a.seq || 0
+                  const bSeq = b.seq || 0
+                  if (aSeq !== 0 || bSeq !== 0) {
+                    return bSeq - aSeq // Descending (latest first)
+                  }
+                  const aTime = typeof a.timestamp === 'number' ? a.timestamp : new Date(a.timestamp).getTime()
+                  const bTime = typeof b.timestamp === 'number' ? b.timestamp : new Date(b.timestamp).getTime()
+                  return bTime - aTime
+                })
+              
               return (
-                <div style={{ 
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '16px'
-                }}>
-                  {(() => {
-                    // Sort by id descending (most recent first)
-                    const sortedEvents = [...data.events].sort((a, b) => {
-                      const aId = a.id || 0
-                      const bId = b.id || 0
-                      return bId - aId // Descending order
-                    })
-                    
-                    const processedEvents = sortedEvents
-                      .map(event => {
-                        const eventDescription = getActionDescription(event)
-                        if (!eventDescription) return null
-                        
-                        const teamName = event.payload?.team === 'team_1' 
-                          ? (data.team_1Team?.name || 'Team 1')
-                          : (data.team_2Team?.name || 'Team 2')
-                        
-                        return {
-                          event,
-                          eventDescription,
-                          teamName
-                        }
-                      })
-                      .filter(item => {
-                        if (!item) return false
-                        if (logSearchQuery.trim() === '') return true
-                        const searchLower = logSearchQuery.toLowerCase()
-                        const descriptionLower = item.eventDescription.toLowerCase()
-                        const teamNameLower = (item.teamName || '').toLowerCase()
-                        const setIndex = String(item.event.setIndex || '')
-                        const actionId = String(item.event.id || '')
-                        return descriptionLower.includes(searchLower) || 
-                               teamNameLower.includes(searchLower) ||
-                               setIndex.includes(searchLower) ||
-                               actionId.includes(searchLower)
-                      })
-                    
-                    // Group events into rows of 2 (left=most recent, right=second most recent)
-                    const rows = []
-                    for (let i = 0; i < processedEvents.length; i += 2) {
-                      rows.push(processedEvents.slice(i, i + 2))
-                    }
-                    
-                    return rows.map((row, rowIdx) => (
-                      <div key={rowIdx} style={{
-                        display: 'grid',
-                        gridTemplateColumns: '1fr 1fr',
-                        gap: '16px'
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ 
+                    width: '100%', 
+                    borderCollapse: 'collapse',
+                    fontSize: '13px'
+                  }}>
+                    <thead>
+                      <tr style={{ 
+                        borderBottom: '2px solid rgba(255, 255, 255, 0.2)',
+                        background: 'rgba(255, 255, 255, 0.05)'
                       }}>
-                        {row.map((item, colIdx) => (
-                          <div key={item.event.id} style={{
-                            padding: '12px',
-                            background: 'rgba(255, 255, 255, 0.05)',
-                            borderRadius: '8px',
-                            border: '1px solid rgba(255, 255, 255, 0.1)'
-                          }}>
-                            <div style={{ color: 'var(--muted)', fontSize: '12px', marginBottom: '4px' }}>
-                              Action ID: {item.event.id} | Set {item.event.setIndex || data.set?.index || '?'} | {new Date(item.event.ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
-                            </div>
-                            <div style={{ fontWeight: 600, fontSize: '14px' }}>{item.eventDescription}</div>
-                          </div>
-                        ))}
-                        {/* Fill empty slot if odd number of events */}
-                        {row.length === 1 && <div></div>}
-                      </div>
-                    ))
-                  })()}
+                        <th style={{ 
+                          padding: '12px 8px', 
+                          textAlign: 'left', 
+                          fontWeight: 700,
+                          fontSize: '12px',
+                          textTransform: 'uppercase',
+                          color: 'var(--muted)'
+                        }}>Seq</th>
+                        <th style={{ 
+                          padding: '12px 8px', 
+                          textAlign: 'left', 
+                          fontWeight: 700,
+                          fontSize: '12px',
+                          textTransform: 'uppercase',
+                          color: 'var(--muted)'
+                        }}>ID</th>
+                        <th style={{ 
+                          padding: '12px 8px', 
+                          textAlign: 'center', 
+                          fontWeight: 700,
+                          fontSize: '12px',
+                          textTransform: 'uppercase',
+                          color: 'var(--muted)'
+                        }}>Team</th>
+                        <th style={{ 
+                          padding: '12px 8px', 
+                          textAlign: 'center', 
+                          fontWeight: 700,
+                          fontSize: '12px',
+                          textTransform: 'uppercase',
+                          color: 'var(--muted)'
+                        }}>Set</th>
+                        <th style={{ 
+                          padding: '12px 8px', 
+                          textAlign: 'left', 
+                          fontWeight: 700,
+                          fontSize: '12px',
+                          textTransform: 'uppercase',
+                          color: 'var(--muted)'
+                        }}>Action</th>
+                        <th style={{ 
+                          padding: '12px 8px', 
+                          textAlign: 'left', 
+                          fontWeight: 700,
+                          fontSize: '12px',
+                          textTransform: 'uppercase',
+                          color: 'var(--muted)'
+                        }}>Time</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {processedEvents.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)' }}>
+                            No actions found
+                          </td>
+                        </tr>
+                      ) : (
+                        processedEvents.map((item, index) => {
+                          // Determine team color
+                          let teamColor = 'var(--accent)'
+                          if (item.team === 'A') {
+                            teamColor = leftTeam.color || '#ef4444'
+                          } else if (item.team === 'B') {
+                            teamColor = rightTeam.color || '#3b82f6'
+                          }
+                          
+                          return (
+                            <tr 
+                              key={item.id} 
+                              style={{ 
+                                borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                                background: index % 2 === 0 ? 'rgba(255, 255, 255, 0.02)' : 'transparent'
+                              }}
+                            >
+                              <td style={{ 
+                                padding: '10px 8px',
+                                fontFamily: 'monospace',
+                                fontSize: '12px',
+                                color: 'var(--muted)'
+                              }}>
+                                {item.seq}
+                              </td>
+                              <td style={{ 
+                                padding: '10px 8px',
+                                fontFamily: 'monospace',
+                                fontSize: '12px',
+                                color: 'var(--muted)'
+                              }}>
+                                {item.id}
+                              </td>
+                              <td style={{ 
+                                padding: '10px 8px',
+                                textAlign: 'center'
+                              }}>
+                                <span style={{
+                                  display: 'inline-block',
+                                  padding: '4px 8px',
+                                  borderRadius: '4px',
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  background: item.team === 'Both' 
+                                    ? 'rgba(34, 197, 94, 0.2)' 
+                                    : `${teamColor}40`,
+                                  color: item.team === 'Both'
+                                    ? 'var(--accent)'
+                                    : teamColor,
+                                  border: `1px solid ${item.team === 'Both' ? 'var(--accent)' : teamColor}60`
+                                }}>
+                                  {item.team}
+                                </span>
+                              </td>
+                              <td style={{ 
+                                padding: '10px 8px',
+                                textAlign: 'center',
+                                fontSize: '12px',
+                                color: 'var(--text)'
+                              }}>
+                                {item.setIndex}
+                              </td>
+                              <td style={{ 
+                                padding: '10px 8px',
+                                fontWeight: 500,
+                                color: 'var(--text)'
+                              }}>
+                                {item.eventDescription}
+                              </td>
+                              <td style={{ 
+                                padding: '10px 8px',
+                                fontSize: '11px',
+                                color: 'var(--muted)',
+                                fontFamily: 'monospace'
+                              }}>
+                                {new Date(item.timestamp).toLocaleTimeString(undefined, { 
+                                  hour: '2-digit', 
+                                  minute: '2-digit', 
+                                  second: '2-digit', 
+                                  hour12: false 
+                                })}
+                              </td>
+                            </tr>
+                          )
+                        })
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               )
             })()}
+          </div>
+        </Modal>
+      )}
+
+      {/* Manual Court Switch Confirmation Modal */}
+      {manualCourtSwitchConfirm && (
+        <Modal
+          title="Manual Court Switch"
+          open={true}
+          onClose={() => setManualCourtSwitchConfirm(false)}
+          width={450}
+        >
+          <div style={{ padding: '24px', textAlign: 'center' }}>
+            <p style={{ marginBottom: '24px', fontSize: '16px' }}>
+              Are you sure you want to switch courts manually?
+            </p>
+            <p style={{ marginBottom: '24px', fontSize: '14px', color: 'var(--muted)' }}>
+              This will switch the teams' positions on the court.
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button
+                onClick={async () => {
+                  if (!matchId || !data?.set) {
+                    setManualCourtSwitchConfirm(false)
+                    return
+                  }
+                  
+                  const setIndex = data.set.index
+                  const totalPoints = (data.set.team_1Points || 0) + (data.set.team_2Points || 0)
+                  
+                  // Get current switch count
+                  const match = await db.matches.get(matchId)
+                  const switchCountKey = `set${setIndex}_switchCount`
+                  const currentSwitchCount = match?.[switchCountKey] || 0
+                  
+                  // Increment switch count to trigger visual switch
+                  await db.matches.update(matchId, { 
+                    [switchCountKey]: currentSwitchCount + 1
+                  })
+                  
+                  // Log manual court switch as an event
+                  await logEvent('court_switch', {
+                    setIndex: setIndex,
+                    totalPoints: totalPoints,
+                    team_1Points: data.set.team_1Points || 0,
+                    team_2Points: data.set.team_2Points || 0,
+                    switchNumber: currentSwitchCount + 1,
+                    manual: true
+                  })
+                  
+                  setManualCourtSwitchConfirm(false)
+                }}
+                style={{
+                  padding: '12px 32px',
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  background: 'var(--accent)',
+                  color: '#000',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                Confirm Switch
+              </button>
+              <button
+                onClick={() => setManualCourtSwitchConfirm(false)}
+                style={{
+                  padding: '12px 32px',
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  color: 'var(--text)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </Modal>
       )}
@@ -5490,7 +5495,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                     <div>
                       <div style={{ fontWeight: 600 }}>Edit Roster</div>
                       <div style={{ fontSize: '12px', color: 'var(--muted)' }}>
-                        Edit player information (name, number, DOB, libero, captain).
+                        Edit player information (name, number, DOB, captain).
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
@@ -5502,7 +5507,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                           color: isBrightColor(leftTeam.color || '#ef4444') ? '#000' : '#fff'
                         }}
                       >
-                        Edit {data?.homeTeam?.name || 'Home'} Roster
+                        Edit {leftTeam.name || 'Team A'} Roster
                       </button>
                       <button
                         className="secondary"
@@ -5512,7 +5517,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                           color: isBrightColor(rightTeam.color || '#3b82f6') ? '#000' : '#fff'
                         }}
                       >
-                        Edit {data?.awayTeam?.name || 'Away'} Roster
+                        Edit {rightTeam.name || 'Team B'} Roster
                       </button>
                     </div>
                   </div>
@@ -5545,7 +5550,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                           onClick={() => setEditScoreModal({ setIndex: set.index, setId: set.id })}
                           style={{ textAlign: 'left', padding: '8px 12px' }}
                         >
-                          Set {set.index + 1}: {set.homePoints || 0} - {set.awayPoints || 0}
+                          Set {set.index + 1}: {set.team_1Points || 0} - {set.team_2Points || 0}
                         </button>
                       ))}
                     </div>
@@ -5666,7 +5671,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                             onClick={() => setReopenSetConfirm({ setId: set.id, setIndex: set.index })}
                             style={{ textAlign: 'left', padding: '10px 16px' }}
                           >
-                            Reopen Set {set.index + 1} ({set.homePoints} - {set.awayPoints})
+                            Reopen Set {set.index + 1} ({set.team_1Points} - {set.team_2Points})
                           </button>
                         ))}
                       </div>
@@ -5690,7 +5695,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
           <div style={{ padding: '20px', maxHeight: '80vh', overflowY: 'auto' }}>
             {(() => {
               const teamPlayers = editRosterModal === 'team_1' ? (data?.team_1Players || []) : (data?.team_2Players || [])
-              const teamId = editRosterModal === 'team_1' ? data?.match?.homeTeamId : data?.match?.awayTeamId
+              const teamId = editRosterModal === 'team_1' ? data?.match?.team_1Id : data?.match?.team_2Id
               
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -5754,20 +5759,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                         }}
                         style={{ padding: '4px 8px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', color: 'var(--text)' }}
                       />
-                      <select
-                        value={player.libero || ''}
-                        onChange={async (e) => {
-                          const libero = e.target.value || ''
-                          if (player.id) {
-                            await db.players.update(player.id, { libero })
-                          }
-                        }}
-                        style={{ padding: '4px 8px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', color: 'var(--text)' }}
-                      >
-                        <option value="">None</option>
-                        <option value="libero1">Libero 1</option>
-                        <option value="libero2">Libero 2</option>
-                      </select>
                       <input
                         type="checkbox"
                         checked={player.isCaptain || false}
@@ -5798,7 +5789,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                         lastName: '',
                         name: '',
                         dob: null,
-                        libero: '',
                         isCaptain: false,
                         role: null,
                         createdAt: new Date().toISOString()
@@ -5823,8 +5813,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
             open={true}
             onClose={() => {
               setEditScoreModal(null)
-              setEditScoreHomePoints(0)
-              setEditScoreAwayPoints(0)
+              setEditScoreTeam_1Points(0)
+              setEditScoreTeam_2Points(0)
             }}
             width={400}
           >
@@ -5832,39 +5822,39 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <label style={{ minWidth: '100px', fontWeight: 600 }}>
-                    {data?.homeTeam?.name || 'Home'}:
+                    {leftTeam.name || 'Team A'}:
                   </label>
                   <input
                     type="number"
                     min="0"
                     max="50"
-                    value={editScoreHomePoints}
-                    onChange={(e) => setEditScoreHomePoints(Number(e.target.value))}
+                    value={editScoreTeam_1Points}
+                    onChange={(e) => setEditScoreTeam_1Points(Number(e.target.value))}
                     style={{ padding: '8px 12px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: 'var(--text)', fontSize: '16px', width: '80px' }}
                   />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <label style={{ minWidth: '100px', fontWeight: 600 }}>
-                    {data?.awayTeam?.name || 'Away'}:
+                    {rightTeam.name || 'Team B'}:
                   </label>
                   <input
                     type="number"
                     min="0"
                     max="50"
-                    value={editScoreAwayPoints}
-                    onChange={(e) => setEditScoreAwayPoints(Number(e.target.value))}
+                    value={editScoreTeam_2Points}
+                    onChange={(e) => setEditScoreTeam_2Points(Number(e.target.value))}
                     style={{ padding: '8px 12px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: 'var(--text)', fontSize: '16px', width: '80px' }}
                   />
                 </div>
                 <button
                   onClick={async () => {
                     await db.sets.update(editScoreModal.setId, {
-                      homePoints: editScoreHomePoints,
-                      awayPoints: editScoreAwayPoints
+                      team_1Points: editScoreTeam_1Points,
+                      team_2Points: editScoreTeam_2Points
                     })
                     setEditScoreModal(null)
-                    setEditScoreHomePoints(0)
-                    setEditScoreAwayPoints(0)
+                    setEditScoreTeam_1Points(0)
+                    setEditScoreTeam_2Points(0)
                     alert('Score updated successfully')
                   }}
                   style={{ padding: '12px 24px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
@@ -5898,7 +5888,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                         // Add new sanction - open sanction dropdown
                         setEditSanctionsModal(false)
                         // Trigger sanction flow
-                        alert('Click on a player or bench official to add a sanction')
+                        alert('Click on a player to add a sanction')
                       }}
                       style={{ padding: '8px 16px' }}
                     >
@@ -6260,18 +6250,18 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                           // Calculate score at time of sanction
                           const setEvents = (data?.events || []).filter(e => e.setIndex === setIndex)
                           const eventIndex = setEvents.findIndex(e => e.id === event.id)
-                          let homeScore = 0
-                          let awayScore = 0
+                          let team_1Score = 0
+                          let team_2Score = 0
                           for (let i = 0; i <= eventIndex; i++) {
                             const e = setEvents[i]
                             if (e.type === 'point') {
-                              if (e.payload?.team === 'team_1') homeScore++
-                              else if (e.payload?.team === 'team_2') awayScore++
+                              if (e.payload?.team === 'team_1') team_1Score++
+                              else if (e.payload?.team === 'team_2') team_2Score++
                             }
                           }
                           
-                          const sanctionedTeamScore = team === 'team_1' ? homeScore : awayScore
-                          const otherTeamScore = team === 'team_1' ? awayScore : homeScore
+                          const sanctionedTeamScore = team === 'team_1' ? team_1Score : team_2Score
+                          const otherTeamScore = team === 'team_1' ? team_2Score : team_1Score
                           const scoreDisplay = `${sanctionedTeamScore}:${otherTeamScore}`
                           
                           return (
@@ -6350,21 +6340,21 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                       }, 0)
                       
                       const leftTotalWins = finishedSets.filter(s => {
-                        const leftPoints = currentLeftTeamKey === 'team_1' ? s.homePoints : s.awayPoints
-                        const rightPoints = currentRightTeamKey === 'team_1' ? s.homePoints : s.awayPoints
+                        const leftPoints = currentLeftTeamKey === 'team_1' ? s.team_1Points : s.team_2Points
+                        const rightPoints = currentRightTeamKey === 'team_1' ? s.team_1Points : s.team_2Points
                         return leftPoints > rightPoints
                       }).length
                       const rightTotalWins = finishedSets.filter(s => {
-                        const leftPoints = currentLeftTeamKey === 'team_1' ? s.homePoints : s.awayPoints
-                        const rightPoints = currentRightTeamKey === 'team_1' ? s.homePoints : s.awayPoints
+                        const leftPoints = currentLeftTeamKey === 'team_1' ? s.team_1Points : s.team_2Points
+                        const rightPoints = currentRightTeamKey === 'team_1' ? s.team_1Points : s.team_2Points
                         return rightPoints > leftPoints
                       }).length
                       
                       const leftTotalPoints = finishedSets.reduce((sum, set) => {
-                        return sum + (currentLeftTeamKey === 'team_1' ? set.homePoints : set.awayPoints)
+                        return sum + (currentLeftTeamKey === 'team_1' ? set.team_1Points : set.team_2Points)
                       }, 0)
                       const rightTotalPoints = finishedSets.reduce((sum, set) => {
-                        return sum + (currentRightTeamKey === 'team_1' ? set.homePoints : set.awayPoints)
+                        return sum + (currentRightTeamKey === 'team_1' ? set.team_1Points : set.team_2Points)
                       }, 0)
                       
                       // Calculate total match duration
@@ -6401,8 +6391,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                       const winnerScore = `${leftTotalWins}-${rightTotalWins}`
                       
                       // Get captain signatures
-                      const homeCaptainSignature = data?.match?.postMatchSignatureHomeCaptain || null
-                      const awayCaptainSignature = data?.match?.postMatchSignatureAwayCaptain || null
+                      const team_1CaptainSignature = data?.match?.postMatchSignatureTeam_1Captain || null
+                      const team_2CaptainSignature = data?.match?.postMatchSignatureTeam_2Captain || null
                       
                       return (
                         <div>
@@ -6490,68 +6480,15 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                             </tbody>
                           </table>
                           
-                          {/* Download PDF Scoresheet button */}
-                          <div style={{ marginTop: '16px', marginBottom: '16px', textAlign: 'center' }}>
-                            <button
-                              onClick={async () => {
-                                try {
-                                  // Collect all necessary data for PDF generation
-                                  const allEvents = await db.events.where('matchId').equals(matchId).toArray()
-                                  const allSets = await db.sets.where('matchId').equals(matchId).toArray()
-                                  
-                                  // Get referees and scorers if available
-                                  const allReferees = await db.referees.toArray()
-                                  const allScorers = await db.scorers.toArray()
-                                  
-                                  // Use beach volleyball scoresheet for beach matches
-                                  await generateBeachScoresheetPDF({
-                                    match: data.match,
-                                    homeTeam: data.team_1Team,
-                                    awayTeam: data.team_2Team,
-                                    homePlayers: data.team_1Players || [],
-                                    awayPlayers: data.team_2Players || [],
-                                    sets: allSets,
-                                    events: allEvents,
-                                    referees: allReferees,
-                                    scorers: allScorers
-                                  })
-                                } catch (error) {
-                                  alert('Error generating PDF scoresheet. Please try again.')
-                                }
-                              }}
-                              style={{
-                                padding: '10px 20px',
-                                fontSize: '11px',
-                                fontWeight: 600,
-                                background: 'var(--accent)',
-                                color: '#000',
-                                border: 'none',
-                                borderRadius: '6px',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.opacity = '0.9'
-                                e.currentTarget.style.transform = 'scale(1.02)'
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.opacity = '1'
-                                e.currentTarget.style.transform = 'scale(1)'
-                              }}
-                            >
-                              📄 Download PDF Scoresheet
-                            </button>
-                          </div>
-                          
                           {/* Post-match signatures */}
                           <div style={{ marginTop: '16px', display: 'flex', gap: '16px', justifyContent: 'space-around' }}>
                             <div style={{ flex: 1 }}>
                               <div style={{ fontSize: '9px', fontWeight: 600, marginBottom: '4px' }}>
-                                {data?.homeTeam?.name || 'Home'} Captain
+                                {leftTeam.name || 'Team A'} Captain
                               </div>
-                              {homeCaptainSignature ? (
+                              {team_1CaptainSignature ? (
                                 <div style={{ border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', padding: '4px', minHeight: '40px', background: 'rgba(255,255,255,0.05)' }}>
-                                  <img src={homeCaptainSignature} alt="Signature" style={{ maxWidth: '100%', maxHeight: '40px', objectFit: 'contain' }} />
+                                  <img src={team_1CaptainSignature} alt="Signature" style={{ maxWidth: '100%', maxHeight: '40px', objectFit: 'contain' }} />
                                 </div>
                               ) : (
                                 <button
@@ -6573,11 +6510,11 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                             </div>
                             <div style={{ flex: 1 }}>
                               <div style={{ fontSize: '9px', fontWeight: 600, marginBottom: '4px' }}>
-                                {data?.awayTeam?.name || 'Away'} Captain
+                                {rightTeam.name || 'Team B'} Captain
                               </div>
-                              {awayCaptainSignature ? (
+                              {team_2CaptainSignature ? (
                                 <div style={{ border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', padding: '4px', minHeight: '40px', background: 'rgba(255,255,255,0.05)' }}>
-                                  <img src={awayCaptainSignature} alt="Signature" style={{ maxWidth: '100%', maxHeight: '40px', objectFit: 'contain' }} />
+                                  <img src={team_2CaptainSignature} alt="Signature" style={{ maxWidth: '100%', maxHeight: '40px', objectFit: 'contain' }} />
                                 </div>
                               ) : (
                                 <button
@@ -6610,7 +6547,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                     }
                     
                     // Only show sets that have been played (started or have points)
-                    const playedSets = allSets.filter(s => s.homePoints > 0 || s.awayPoints > 0 || s.finished || s.startTime)
+                    const playedSets = allSets.filter(s => s.team_1Points > 0 || s.team_2Points > 0 || s.finished || s.startTime)
                     
                     return (
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px' }}>
@@ -6661,8 +6598,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                         <tbody>
                           {playedSets.map(set => {
                             // Always show from CURRENT left/right perspective
-                            const leftPoints = currentLeftTeamKey === 'team_1' ? set.homePoints : set.awayPoints
-                            const rightPoints = currentRightTeamKey === 'team_1' ? set.homePoints : set.awayPoints
+                            const leftPoints = currentLeftTeamKey === 'team_1' ? set.team_1Points : set.team_2Points
+                            const rightPoints = currentRightTeamKey === 'team_1' ? set.team_1Points : set.team_2Points
                             
                             // Calculate timeouts for current left/right teams
                             const leftTimeouts = (data?.events || []).filter(e => 
@@ -6907,7 +6844,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                 <strong>Reason:</strong> {challengeModal.reason}
               </p>
               <p style={{ fontSize: '16px', marginBottom: '12px' }}>
-                <strong>Score:</strong> {challengeModal.score.home} - {challengeModal.score.away}
+                <strong>Score:</strong> {challengeModal.score.team_1} - {challengeModal.score.team_2}
               </p>
               <p style={{ fontSize: '16px', marginBottom: '12px' }}>
                 <strong>Set:</strong> {challengeModal.set}
@@ -7813,8 +7750,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         <SetEndTimeModal
           setIndex={setEndTimeModal.setIndex}
           winner={setEndTimeModal.winner}
-          homePoints={setEndTimeModal.homePoints}
-          awayPoints={setEndTimeModal.awayPoints}
+          team_1Points={setEndTimeModal.team_1Points}
+          team_2Points={setEndTimeModal.team_2Points}
           defaultTime={setEndTimeModal.defaultTime}
           teamAKey={teamAKey}
           isMatchEnd={setEndTimeModal.isMatchEnd}
@@ -7981,7 +7918,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                   position: 'relative',
                   width: '44px',
                   height: '24px',
-                  background: (connectionModal === 'referee' ? refereeConnectionEnabled : connectionModal === 'teamA' ? homeTeamConnectionEnabled : awayTeamConnectionEnabled) ? '#22c55e' : '#6b7280',
+                  background: (connectionModal === 'referee' ? refereeConnectionEnabled : connectionModal === 'teamA' ? team_1TeamConnectionEnabled : team_2TeamConnectionEnabled) ? '#22c55e' : '#6b7280',
                   borderRadius: '12px',
                   transition: 'background 0.2s',
                   cursor: 'pointer'
@@ -7991,16 +7928,16 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                   if (connectionModal === 'referee') {
                     handleRefereeConnectionToggle(!refereeConnectionEnabled)
                   } else if (connectionModal === 'teamA') {
-                    handleHomeTeamConnectionToggle(!homeTeamConnectionEnabled)
+                    handleTeam_1ConnectionToggle(!team_1TeamConnectionEnabled)
                   } else if (connectionModal === 'teamB') {
-                    handleAwayTeamConnectionToggle(!awayTeamConnectionEnabled)
+                    handleTeam_2ConnectionToggle(!team_2TeamConnectionEnabled)
                   }
                 }}
                 >
                   <div style={{
                     position: 'absolute',
                     top: '2px',
-                    left: (connectionModal === 'referee' ? refereeConnectionEnabled : connectionModal === 'teamA' ? homeTeamConnectionEnabled : awayTeamConnectionEnabled) ? '22px' : '2px',
+                    left: (connectionModal === 'referee' ? refereeConnectionEnabled : connectionModal === 'teamA' ? team_1TeamConnectionEnabled : team_2TeamConnectionEnabled) ? '22px' : '2px',
                     width: '20px',
                     height: '20px',
                     background: '#fff',
@@ -8011,7 +7948,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                 </div>
               </label>
               
-              {(connectionModal === 'referee' ? refereeConnectionEnabled : connectionModal === 'teamA' ? homeTeamConnectionEnabled : awayTeamConnectionEnabled) && (
+              {(connectionModal === 'referee' ? refereeConnectionEnabled : connectionModal === 'teamA' ? team_1TeamConnectionEnabled : team_2TeamConnectionEnabled) && (
                 <div style={{
                   marginTop: '12px',
                   padding: '12px',
@@ -8037,8 +7974,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                       {connectionModal === 'referee' 
                         ? (data?.match?.refereePin || '—') 
                         : connectionModal === 'teamA'
-                        ? (data?.match?.homeTeamPin || '—')
-                        : (data?.match?.awayTeamPin || '—')}
+                        ? (data?.match?.team_1Pin || '—')
+                        : (data?.match?.team_2Pin || '—')}
                     </span>
                     <button
                       onClick={(e) => {
@@ -8164,7 +8101,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                 marginBottom: '8px'
               }}>
                 <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)' }}>
-                  {toSubModal.type === 'to' ? 'Timeouts' : 'Substitutions'} — {toSubModal.side === 'left' ? leftTeam.name : rightTeam.name}
+                  Timeouts — {toSubModal.side === 'left' ? leftTeam.name : rightTeam.name}
                 </span>
                 <button
                   onClick={() => setToSubModal(null)}
@@ -8199,8 +8136,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                       const teamBLabel = data?.match?.coinTossTeamB === 'team_1' ? 'A' : 'B'
                       const team_1Label = data?.match?.coinTossTeamA === 'team_1' ? 'A' : (data?.match?.coinTossTeamB === 'team_1' ? 'B' : 'A')
                       const team_2Label = data?.match?.coinTossTeamA === 'team_2' ? 'A' : (data?.match?.coinTossTeamB === 'team_2' ? 'B' : 'B')
-                      const homeLabel = team_1Label
-                      const awayLabel = team_2Label
                       return (
                         <div key={event.id || index} style={{
                           padding: '8px',
@@ -8213,51 +8148,14 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                             Timeout {index + 1}
                           </div>
                           <div style={{ color: 'var(--muted)' }}>
-                            {homeLabel} {event.homeScore} : {event.awayScore} {awayLabel}
+                            {team_1Label} {event.team_1Score} : {event.team_2Score} {team_2Label}
                           </div>
                         </div>
                       )
                     })
                   )}
                 </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {getSubstitutionEvents(toSubModal.side).length === 0 ? (
-                    <div style={{ fontSize: '11px', color: 'var(--muted)', textAlign: 'center', padding: '8px' }}>
-                      No substitutions requested
-                    </div>
-                  ) : (
-                    getSubstitutionEvents(toSubModal.side).map((event, index) => {
-                      const teamALabel = data?.match?.coinTossTeamA === 'team_1' ? 'A' : 'B'
-                      const teamBLabel = data?.match?.coinTossTeamB === 'team_1' ? 'A' : 'B'
-                      const team_1Label = data?.match?.coinTossTeamA === 'team_1' ? 'A' : (data?.match?.coinTossTeamB === 'team_1' ? 'B' : 'A')
-                      const team_2Label = data?.match?.coinTossTeamA === 'team_2' ? 'A' : (data?.match?.coinTossTeamB === 'team_2' ? 'B' : 'B')
-                      const homeLabel = team_1Label
-                      const awayLabel = team_2Label
-                      const isExceptional = event.payload?.isExceptional === true
-                      return (
-                        <div key={event.id || index} style={{
-                          padding: '8px',
-                          background: 'rgba(0,0,0,0.3)',
-                          borderRadius: '6px',
-                          fontSize: '11px',
-                          color: 'var(--text)'
-                        }}>
-                          <div style={{ fontWeight: 600, marginBottom: '4px' }}>
-                            {isExceptional ? 'Exceptional ' : ''}Substitution {index + 1}
-                          </div>
-                          <div style={{ color: 'var(--muted)', marginBottom: '2px' }}>
-                            OUT: {event.playerOut} → IN: {event.playerIn}
-                          </div>
-                          <div style={{ color: 'var(--muted)' }}>
-                            {homeLabel} {event.homeScore} : {event.awayScore} {awayLabel}
-                          </div>
-                        </div>
-                      )
-                    })
-                  )}
-                </div>
-              )}
+              ) : null}
             </div>
           </div>
         </div>
@@ -8388,10 +8286,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
               Court Switch
             </p>
             <p style={{ marginBottom: '16px', fontSize: '16px' }}>
-              Score: {courtSwitchModal.homePoints} - {courtSwitchModal.awayPoints}
-            </p>
-            <p style={{ marginBottom: '24px', fontSize: '14px', color: 'var(--muted)' }}>
-              Teams must change courts every 7 points (sets 1-2) or every 5 points (set 3).
+              Score: Team {teamALabel} {leftIsTeam_1 ? courtSwitchModal.team_1Points : courtSwitchModal.team_2Points} - {leftIsTeam_1 ? courtSwitchModal.team_2Points : courtSwitchModal.team_1Points} Team {teamBLabel}
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
@@ -8499,16 +8394,10 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
               ) : (
                 <>
                   <p style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 700, color: 'var(--accent)' }}>
-                    Technical Time-out (1 minute)
+                    Technical Time-out
                   </p>
                   <p style={{ marginBottom: '16px', fontSize: '16px' }}>
-                    Score: {technicalTOModal.homePoints} - {technicalTOModal.awayPoints}
-                  </p>
-                  <p style={{ marginBottom: '24px', fontSize: '14px', color: 'var(--muted)' }}>
-                    Total points: {technicalTOModal.homePoints + technicalTOModal.awayPoints}
-                  </p>
-                  <p style={{ marginBottom: '24px', fontSize: '14px', color: 'var(--muted)' }}>
-                    A Technical Time-out is taken when the sum of points reaches 21.
+                    Score: Team {teamALabel} {leftIsTeam_1 ? technicalTOModal.team_1Points : technicalTOModal.team_2Points} - {leftIsTeam_1 ? technicalTOModal.team_2Points : technicalTOModal.team_1Points} Team {teamBLabel}
                   </p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
                     <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
@@ -8809,23 +8698,23 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                         <input
                           type="radio"
                           name="teamAServiceOrder"
-                          value="I_III"
-                          checked={setTransitionServiceOrder.teamA === 'I_III'}
-                          onChange={(e) => setSetTransitionServiceOrder({ ...setTransitionServiceOrder, teamA: 'I_III' })}
+                          value="1_2"
+                          checked={setTransitionServiceOrder.teamA === '1_2'}
+                          onChange={(e) => setSetTransitionServiceOrder({ ...setTransitionServiceOrder, teamA: '1_2' })}
                           style={{ width: '16px', height: '16px', cursor: 'pointer' }}
                         />
-                        <span style={{ fontSize: '14px' }}>I, III</span>
+                        <span style={{ fontSize: '14px' }}>1 - 2</span>
                       </label>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                         <input
                           type="radio"
                           name="teamAServiceOrder"
-                          value="II_IV"
-                          checked={setTransitionServiceOrder.teamA === 'II_IV'}
-                          onChange={(e) => setSetTransitionServiceOrder({ ...setTransitionServiceOrder, teamA: 'II_IV' })}
+                          value="2_1"
+                          checked={setTransitionServiceOrder.teamA === '2_1'}
+                          onChange={(e) => setSetTransitionServiceOrder({ ...setTransitionServiceOrder, teamA: '2_1' })}
                           style={{ width: '16px', height: '16px', cursor: 'pointer' }}
                         />
-                        <span style={{ fontSize: '14px' }}>II, IV</span>
+                        <span style={{ fontSize: '14px' }}>2 - 1</span>
                       </label>
                     </div>
                     <div>
@@ -8834,23 +8723,23 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                         <input
                           type="radio"
                           name="teamBServiceOrder"
-                          value="I_III"
-                          checked={setTransitionServiceOrder.teamB === 'I_III'}
-                          onChange={(e) => setSetTransitionServiceOrder({ ...setTransitionServiceOrder, teamB: 'I_III' })}
+                          value="1_2"
+                          checked={setTransitionServiceOrder.teamB === '1_2'}
+                          onChange={(e) => setSetTransitionServiceOrder({ ...setTransitionServiceOrder, teamB: '1_2' })}
                           style={{ width: '16px', height: '16px', cursor: 'pointer' }}
                         />
-                        <span style={{ fontSize: '14px' }}>I, III</span>
+                        <span style={{ fontSize: '14px' }}>1 - 2</span>
                       </label>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                         <input
                           type="radio"
                           name="teamBServiceOrder"
-                          value="II_IV"
-                          checked={setTransitionServiceOrder.teamB === 'II_IV'}
-                          onChange={(e) => setSetTransitionServiceOrder({ ...setTransitionServiceOrder, teamB: 'II_IV' })}
+                          value="2_1"
+                          checked={setTransitionServiceOrder.teamB === '2_1'}
+                          onChange={(e) => setSetTransitionServiceOrder({ ...setTransitionServiceOrder, teamB: '2_1' })}
                           style={{ width: '16px', height: '16px', cursor: 'pointer' }}
                         />
-                        <span style={{ fontSize: '14px' }}>II, IV</span>
+                        <span style={{ fontSize: '14px' }}>2 - 1</span>
                       </label>
                     </div>
                   </div>
@@ -9117,7 +9006,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
           <div style={{ padding: '24px' }}>
             <SignaturePad
               onSave={async (signatureDataUrl) => {
-                const fieldName = postMatchSignature === 'team_1-captain' ? 'postMatchSignatureHomeCaptain' : 'postMatchSignatureAwayCaptain'
+                const fieldName = postMatchSignature === 'team_1-captain' ? 'postMatchSignatureTeam_1Captain' : 'postMatchSignatureTeam_2Captain'
                 await db.matches.update(matchId, { [fieldName]: signatureDataUrl })
                 setPostMatchSignature(null)
               }}
@@ -9133,11 +9022,14 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
 function LineupModal({ team, teamData, players, matchId, setIndex, mode = 'initial', lineup: presetLineup = null, teamAKey, teamBKey, onClose, onSave }) {
   const [lineup, setLineup] = useState(() => {
     if (presetLineup) {
-      const positionMapping = ['IV', 'III', 'II', 'V', 'VI', 'I']
-      return positionMapping.map(pos => (presetLineup[pos] !== undefined ? String(presetLineup[pos] ?? '') : ''))
+      // Beach volleyball: Only positions I and II
+      return [
+        presetLineup['I'] !== undefined ? String(presetLineup['I'] ?? '') : '',
+        presetLineup['II'] !== undefined ? String(presetLineup['II'] ?? '') : ''
+      ]
     }
-    return ['', '', '', '', '', '']
-  }) // [IV, III, II, V, VI, I]
+    return ['', ''] // [I, II]
+  })
   const [errors, setErrors] = useState({}) // Use an object for specific error messages
   const [confirmMessage, setConfirmMessage] = useState(null)
   
@@ -9194,13 +9086,7 @@ function LineupModal({ team, teamData, players, matchId, setIndex, mode = 'initi
         return
       }
 
-      // 4. Is a libero
-      if (player.libero && player.libero !== '') {
-        newErrors[i] = 'Cannot be libero'
-        return
-      }
-      
-      // 5. Is disqualified - cannot enter the game ever again (check all events, not just current set)
+      // 4. Is disqualified - cannot enter the game ever again (check all events, not just current set)
       if (events) {
         const isDisqualified = events.some(e => 
           e.type === 'sanction' && 
@@ -9214,19 +9100,7 @@ function LineupModal({ team, teamData, players, matchId, setIndex, mode = 'initi
         }
       }
       
-      // 6. Was exceptionally substituted - cannot take part in the game anymore
-      if (events) {
-        const wasExceptionallySubstituted = events.some(e => 
-          e.type === 'substitution' && 
-          e.payload?.team === team &&
-          String(e.payload?.playerOut) === String(num) &&
-          e.payload?.isExceptional === true
-        )
-        if (wasExceptionallySubstituted) {
-          newErrors[i] = 'Exceptionally substituted'
-          return
-        }
-      }
+      // 5. Beach volleyball: No substitutions
     })
     
     // Re-check for duplicates to mark all of them
@@ -9246,13 +9120,11 @@ function LineupModal({ team, teamData, players, matchId, setIndex, mode = 'initi
     const captain = players?.find(p => p.isCaptain)
     const captainInCourt = captain && lineupNumbers.includes(captain.number)
     
-    // Save lineup: Map positions I->I, II->II, III->III, IV->IV, V->V, VI->VI
-    // Lineup array indices: [0=IV, 1=III, 2=II, 3=V, 4=VI, 5=I]
-    const positionMapping = ['IV', 'III', 'II', 'V', 'VI', 'I']
-    const lineupData = {}
-    positionMapping.forEach((pos, idx) => {
-      lineupData[pos] = lineupNumbers[idx]
-    })
+    // Beach volleyball: Only positions I and II
+    const lineupData = {
+      I: lineupNumbers[0] || '',
+      II: lineupNumbers[1] || ''
+    }
     
     // Save lineup as an event (mark as initial lineup or manual override)
     if (matchId && setIndex) {
@@ -9279,20 +9151,20 @@ function LineupModal({ team, teamData, players, matchId, setIndex, mode = 'initi
         
         // Check if both lineups are now set - if so, award any pending penalty points
         // Reuse allEvents from above to avoid redeclaration
-        const homeLineupSet = allEvents.some(e => 
+        const team_1LineupSet = allEvents.some(e => 
           e.type === 'lineup' && 
           e.payload?.team === 'team_1' && 
           e.setIndex === setIndex &&
           e.payload?.isInitial
         )
-        const awayLineupSet = allEvents.some(e => 
+        const team_2LineupSet = allEvents.some(e => 
           e.type === 'lineup' && 
           e.payload?.team === 'team_2' && 
           e.setIndex === setIndex &&
           e.payload?.isInitial
         )
         
-        if (homeLineupSet && awayLineupSet) {
+        if (team_1LineupSet && team_2LineupSet) {
           // Both lineups are set - check for pending penalty sanctions in this set
           const pendingPenalties = allEvents.filter(e => 
             e.type === 'sanction' && 
@@ -9312,7 +9184,7 @@ function LineupModal({ team, teamData, players, matchId, setIndex, mode = 'initi
               // Award point to the other team
               const currentSet = await db.sets.where('matchId').equals(matchId).and(s => s.index === setIndex).first()
               if (currentSet) {
-                const field = otherTeam === 'team_1' ? 'homePoints' : 'awayPoints'
+                const field = otherTeam === 'team_1' ? 'team_1Points' : 'team_2Points'
                 const currentPoints = currentSet[field] || 0
                 await db.sets.update(currentSet.id, {
                   [field]: currentPoints + 1
@@ -9415,11 +9287,9 @@ function LineupModal({ team, teamData, players, matchId, setIndex, mode = 'initi
           }}>
           </div>
 
-          {/* Top row (closer to net) */}
+          {/* Beach volleyball: Only 2 players - Position I */}
           {[
-            { idx: 0, pos: 'IV' },
-            { idx: 1, pos: 'III' },
-            { idx: 2, pos: 'II' }
+            { idx: 0, pos: 'I' }
           ].map(({ idx, pos }) => (
             <div key={`top-${idx}`} style={{ position: 'relative' }}>
               <label style={{ 
@@ -9463,11 +9333,9 @@ function LineupModal({ team, teamData, players, matchId, setIndex, mode = 'initi
             </div>
           ))}
 
-          {/* Bottom row (further from net) */}
+          {/* Beach volleyball: Position II */}
           {[
-            { idx: 3, pos: 'V' },
-            { idx: 4, pos: 'VI' },
-            { idx: 5, pos: 'I' }
+            { idx: 1, pos: 'II' }
           ].map(({ idx, pos }) => (
             <div 
               key={`bottom-${idx}`} 
@@ -9536,9 +9404,6 @@ function LineupModal({ team, teamData, players, matchId, setIndex, mode = 'initi
             gap: '8px'
           }}>
             {players?.filter(p => {
-              // Exclude liberos
-              if (p.libero && p.libero !== '') return false
-              
               if (events) {
                 // Exclude disqualified players (cannot take part ever again)
                 const isDisqualified = events.some(e => 
@@ -9634,7 +9499,7 @@ function LineupModal({ team, teamData, players, matchId, setIndex, mode = 'initi
             color: '#ef4444',
             fontSize: '14px'
           }}>
-            Please check: All numbers must exist in roster, not be liberos, and not be duplicated.
+            Please check: All numbers must exist in roster and not be duplicated.
           </div>
         )}
 
@@ -9761,7 +9626,7 @@ function SetStartTimeModal({ setIndex, defaultTime, onConfirm, onCancel }) {
   )
 }
 
-function SetEndTimeModal({ setIndex, winner, homePoints, awayPoints, defaultTime, teamAKey, isMatchEnd, onConfirm, onCancel }) {
+function SetEndTimeModal({ setIndex, winner, team_1Points, team_2Points, defaultTime, teamAKey, isMatchEnd, onConfirm, onCancel }) {
   const [time, setTime] = useState(() => {
     const date = new Date(defaultTime)
     const hours = String(date.getHours()).padStart(2, '0')
@@ -9794,7 +9659,7 @@ function SetEndTimeModal({ setIndex, winner, homePoints, awayPoints, defaultTime
           {isMatchEnd ? `Team ${winnerLabel} won the Match!` : `Team ${winnerLabel} won Set ${setIndex}!`}
         </p>
         <p style={{ marginBottom: '24px', fontSize: '16px', color: 'var(--muted)' }}>
-          Set {setIndex}: {homePoints} - {awayPoints}
+          Set {setIndex}: {team_1Points} - {team_2Points}
         </p>
         <p style={{ marginBottom: '16px', fontSize: '16px' }}>
           Confirm the end time:

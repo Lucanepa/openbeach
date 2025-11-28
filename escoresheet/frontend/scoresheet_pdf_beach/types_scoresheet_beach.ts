@@ -12,7 +12,6 @@ export interface Player {
   firstName?: string;
   lastName?: string;
   isCaptain?: boolean;
-  // Beach volleyball: only 2 players per team, no libero
 }
 
 // Sub event structure for the UI

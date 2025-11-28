@@ -5,8 +5,8 @@ export const db = new Dexie('escoresheet_beach')
 db.version(1).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt',
-  sets: '++id,matchId,index,homePoints,awayPoints,finished',
+  matches: '++id,team_1Id,team_2Id,scheduledAt,status,createdAt',
+  sets: '++id,matchId,index,team_1Points,team_2Points,finished',
   events: '++id,matchId,setIndex,ts,type,payload',
   sync_queue: '++id,resource,action,payload,ts,status' // status: queued|sent|error
 })
@@ -15,17 +15,17 @@ db.version(1).stores({
 db.version(2).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt',
-  sets: '++id,matchId,index,homePoints,awayPoints,finished',
+  matches: '++id,team_1Id,team_2Id,scheduledAt,status,createdAt',
+  sets: '++id,matchId,index,team_1Points,team_2Points,finished',
   events: '++id,matchId,setIndex,ts,type,payload',
   sync_queue: '++id,resource,action,payload,ts,status'
 }).upgrade(tx => {
   // Migration: add signature fields to existing matches
   return tx.table('matches').toCollection().modify(match => {
-    if (!match.homeCoachSignature) match.homeCoachSignature = null
-    if (!match.homeCaptainSignature) match.homeCaptainSignature = null
-    if (!match.awayCoachSignature) match.awayCoachSignature = null
-    if (!match.awayCaptainSignature) match.awayCaptainSignature = null
+    if (!match.team_1CoachSignature) match.team_1CoachSignature = null
+    if (!match.team_1CaptainSignature) match.team_1CaptainSignature = null
+    if (!match.team_2CoachSignature) match.team_2CoachSignature = null
+    if (!match.team_2CaptainSignature) match.team_2CaptainSignature = null
   })
 })
 
@@ -33,8 +33,8 @@ db.version(2).stores({
 db.version(3).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt',
-  sets: '++id,matchId,index,homePoints,awayPoints,finished',
+  matches: '++id,team_1Id,team_2Id,scheduledAt,status,createdAt',
+  sets: '++id,matchId,index,team_1Points,team_2Points,finished',
   events: '++id,matchId,setIndex,ts,type,payload',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt' // Single record to store current draft
@@ -44,8 +44,8 @@ db.version(3).stores({
 db.version(4).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt,externalId',
-  sets: '++id,matchId,index,homePoints,awayPoints,finished',
+  matches: '++id,team_1Id,team_2Id,scheduledAt,status,createdAt,externalId',
+  sets: '++id,matchId,index,team_1Points,team_2Points,finished',
   events: '++id,matchId,setIndex,ts,type,payload',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt'
@@ -55,8 +55,8 @@ db.version(4).stores({
 db.version(5).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt,externalId',
-  sets: '++id,matchId,index,homePoints,awayPoints,finished',
+  matches: '++id,team_1Id,team_2Id,scheduledAt,status,createdAt,externalId',
+  sets: '++id,matchId,index,team_1Points,team_2Points,finished',
   events: '++id,matchId,setIndex,ts,type,payload',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt',
@@ -68,8 +68,8 @@ db.version(5).stores({
 db.version(6).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt,externalId',
-  sets: '++id,matchId,index,homePoints,awayPoints,finished,startTime,endTime',
+  matches: '++id,team_1Id,team_2Id,scheduledAt,status,createdAt,externalId',
+  sets: '++id,matchId,index,team_1Points,team_2Points,finished,startTime,endTime',
   events: '++id,matchId,setIndex,ts,type,payload',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt',
@@ -81,8 +81,8 @@ db.version(6).stores({
 db.version(7).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt,externalId,test',
-  sets: '++id,matchId,index,homePoints,awayPoints,finished,startTime,endTime',
+  matches: '++id,team_1Id,team_2Id,scheduledAt,status,createdAt,externalId,test',
+  sets: '++id,matchId,index,team_1Points,team_2Points,finished,startTime,endTime',
   events: '++id,matchId,setIndex,ts,type,payload',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt',
@@ -94,8 +94,8 @@ db.version(7).stores({
 db.version(8).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt,externalId,test',
-  sets: '++id,matchId,index,homePoints,awayPoints,finished,startTime,endTime',
+  matches: '++id,team_1Id,team_2Id,scheduledAt,status,createdAt,externalId,test',
+  sets: '++id,matchId,index,team_1Points,team_2Points,finished,startTime,endTime',
   events: '++id,matchId,setIndex,ts,type,payload,seq',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt',
@@ -103,12 +103,12 @@ db.version(8).stores({
   scorers: '++id,seedKey,lastName,createdAt'
 })
 
-// Version 9: Add homeTeamPin and awayTeamPin to matches
+// Version 9: Add team_1Pin and team_2Pin to matches
 db.version(9).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt,externalId,test',
-  sets: '++id,matchId,index,homePoints,awayPoints,finished,startTime,endTime',
+  matches: '++id,team_1Id,team_2Id,scheduledAt,status,createdAt,externalId,test',
+  sets: '++id,matchId,index,team_1Points,team_2Points,finished,startTime,endTime',
   events: '++id,matchId,setIndex,ts,type,payload,seq',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt',
@@ -117,8 +117,8 @@ db.version(9).stores({
 }).upgrade(tx => {
   // Migration: add team PIN fields to existing matches
   return tx.table('matches').toCollection().modify(match => {
-    if (!match.homeTeamPin) match.homeTeamPin = null
-    if (!match.awayTeamPin) match.awayTeamPin = null
+    if (!match.team_1Pin) match.team_1Pin = null
+    if (!match.team_2Pin) match.team_2Pin = null
   })
 })
 

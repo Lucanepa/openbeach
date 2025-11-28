@@ -6,23 +6,23 @@ import mikasaVolleyball from '../mikasa_BV550C_beach.png'
 import { Results, Sanctions, Remarks } from '../../scoresheet_pdf_beach/components_beach/FooterSection_beach'
 
 export default function MatchEnd({ matchId, onShowScoresheet, onGoHome }) {
-  const [openSignature, setOpenSignature] = useState(null) // 'home-captain', 'away-captain', 'ref1', 'ref2', 'scorer', 'asst-scorer'
+  const [openSignature, setOpenSignature] = useState(null) // 'team_1-captain', 'team_2-captain', 'ref1', 'ref2', 'scorer', 'asst-scorer'
 
   const data = useLiveQuery(async () => {
     const match = await db.matches.get(matchId)
     if (!match) return null
 
-    const [homeTeam, awayTeam] = await Promise.all([
-      match?.homeTeamId ? db.teams.get(match.homeTeamId) : null,
-      match?.awayTeamId ? db.teams.get(match.awayTeamId) : null
+    const [team_1Team, team_2Team] = await Promise.all([
+      match?.team_1Id ? db.teams.get(match.team_1Id) : null,
+      match?.team_2Id ? db.teams.get(match.team_2Id) : null
     ])
 
-    const [homePlayers, awayPlayers] = await Promise.all([
-      match?.homeTeamId
-        ? db.players.where('teamId').equals(match.homeTeamId).sortBy('number')
+    const [team_1Players, team_2Players] = await Promise.all([
+      match?.team_1Id
+        ? db.players.where('teamId').equals(match.team_1Id).sortBy('number')
         : [],
-      match?.awayTeamId
-        ? db.players.where('teamId').equals(match.awayTeamId).sortBy('number')
+      match?.team_2Id
+        ? db.players.where('teamId').equals(match.team_2Id).sortBy('number')
         : []
     ])
 
@@ -38,10 +38,10 @@ export default function MatchEnd({ matchId, onShowScoresheet, onGoHome }) {
 
     return {
       match,
-      homeTeam,
-      awayTeam,
-      homePlayers,
-      awayPlayers,
+      team_1Team,
+      team_2Team,
+      team_1Players,
+      team_2Players,
       sets,
       events
     }
@@ -49,22 +49,22 @@ export default function MatchEnd({ matchId, onShowScoresheet, onGoHome }) {
 
   if (!data) return null
 
-  const { match, homeTeam, awayTeam, homePlayers, awayPlayers, sets, events } = data
+  const { match, team_1Team, team_2Team, team_1Players, team_2Players, sets, events } = data
 
   // Calculate set scores
   const finishedSets = sets.filter(s => s.finished)
-  const homeSetsWon = finishedSets.filter(s => s.homePoints > s.awayPoints).length
-  const awaySetsWon = finishedSets.filter(s => s.awayPoints > s.homePoints).length
+  const team_1SetsWon = finishedSets.filter(s => s.team_1Points > s.team_2Points).length
+  const team_2SetsWon = finishedSets.filter(s => s.team_2Points > s.team_1Points).length
 
   // Find captains
-  const homeCaptain = homePlayers.find(p => p.captain)
-  const awayCaptain = awayPlayers.find(p => p.captain)
+  const team_1Captain = team_1Players.find(p => p.captain)
+  const team_2Captain = team_2Players.find(p => p.captain)
 
   // Determine team labels (A or B)
-  const teamAKey = match.coinTossTeamA || 'home'
-  const teamBKey = teamAKey === 'home' ? 'away' : 'home'
-  const homeLabel = teamAKey === 'home' ? 'A' : 'B'
-  const awayLabel = teamAKey === 'away' ? 'A' : 'B'
+  const teamAKey = match.coinTossTeamA || 'team_1'
+  const teamBKey = teamAKey === 'team_1' ? 'team_2' : 'team_1'
+  const teamALabel = teamAKey === 'team_1' ? 'A' : 'B'
+  const teamBLabel = teamAKey === 'team_2' ? 'A' : 'B'
 
   // Calculate set results for Results component
   const calculateSetResults = useMemo(() => {
@@ -76,10 +76,10 @@ export default function MatchEnd({ matchId, onShowScoresheet, onGoHome }) {
       const isSetFinished = setInfo?.finished === true
       
       const teamAPoints = isSetFinished
-        ? (teamAKey === 'home' ? (setInfo?.homePoints || 0) : (setInfo?.awayPoints || 0))
+        ? (teamAKey === 'team_1' ? (setInfo?.team_1Points || 0) : (setInfo?.team_2Points || 0))
         : null
       const teamBPoints = isSetFinished
-        ? (teamBKey === 'home' ? (setInfo?.homePoints || 0) : (setInfo?.awayPoints || 0))
+        ? (teamBKey === 'team_1' ? (setInfo?.team_1Points || 0) : (setInfo?.team_2Points || 0))
         : null
       
       const teamATimeouts = isSetFinished
@@ -136,7 +136,7 @@ export default function MatchEnd({ matchId, onShowScoresheet, onGoHome }) {
   }, [sets, events, teamAKey, teamBKey, match])
 
   // Calculate match-level results
-  const isMatchFinished = homeSetsWon === 3 || awaySetsWon === 3
+  const isMatchFinished = team_1SetsWon === 3 || team_2SetsWon === 3
   const matchStart = match?.scheduledAt 
     ? new Date(match.scheduledAt).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })
     : ''
@@ -154,10 +154,10 @@ export default function MatchEnd({ matchId, onShowScoresheet, onGoHome }) {
       })()
     : ''
   const winner = isMatchFinished
-    ? (homeSetsWon > awaySetsWon ? (homeTeam?.name || 'Home') : (awayTeam?.name || 'Away'))
+    ? (team_1SetsWon > team_2SetsWon ? (team_1Team?.name || 'Team 1') : (team_2Team?.name || 'Team 2'))
     : ''
   const result = isMatchFinished
-    ? `3:${Math.min(homeSetsWon, awaySetsWon)}`
+    ? `3:${Math.min(team_1SetsWon, team_2SetsWon)}`
     : ''
 
   // Process sanctions
@@ -190,16 +190,16 @@ export default function MatchEnd({ matchId, onShowScoresheet, onGoHome }) {
           return new Date(a.ts).getTime() - new Date(b.ts).getTime()
         })
       
-      let homeScore = 0
-      let awayScore = 0
+      let team_1Score = 0
+      let team_2Score = 0
       
       for (const e of pointEvents) {
-        if (e.payload?.team === 'home') homeScore++
-        else if (e.payload?.team === 'away') awayScore++
+        if (e.payload?.team === 'team_1') team_1Score++
+        else if (e.payload?.team === 'team_2') team_2Score++
       }
       
-      const teamAScore = teamAKey === 'home' ? homeScore : awayScore
-      const teamBScore = teamBKey === 'home' ? homeScore : awayScore
+      const teamAScore = teamAKey === 'team_1' ? team_1Score : team_2Score
+      const teamBScore = teamBKey === 'team_1' ? team_1Score : team_2Score
       
       return `${teamAScore}:${teamBScore}`
     }
@@ -276,9 +276,9 @@ export default function MatchEnd({ matchId, onShowScoresheet, onGoHome }) {
 
   const handleSaveSignature = async (role, signatureData) => {
     if (role === 'home-captain') {
-      await db.matches.update(matchId, { homeCaptainSignature: signatureData })
-    } else if (role === 'away-captain') {
-      await db.matches.update(matchId, { awayCaptainSignature: signatureData })
+      await db.matches.update(matchId, { team_1CaptainSignature: signatureData })
+    } else if (role === 'team_2-captain') {
+      await db.matches.update(matchId, { team_2CaptainSignature: signatureData })
     } else if (role === 'ref1') {
       await db.matches.update(matchId, { ref1Signature: signatureData })
     } else if (role === 'ref2') {
@@ -293,9 +293,9 @@ export default function MatchEnd({ matchId, onShowScoresheet, onGoHome }) {
 
   const getSignatureDisplayName = (role) => {
     if (role === 'home-captain') {
-      return `${homeTeam?.name || 'Home'} Captain ${homeCaptain ? `(#${homeCaptain.number})` : ''}`
-    } else if (role === 'away-captain') {
-      return `${awayTeam?.name || 'Away'} Captain ${awayCaptain ? `(#${awayCaptain.number})` : ''}`
+      return `${team_1Team?.name || 'Team 1'} Captain ${team_1Captain ? `(#${team_1Captain.number})` : ''}`
+    } else if (role === 'team_2-captain') {
+      return `${team_2Team?.name || 'Team 2'} Captain ${team_2Captain ? `(#${team_2Captain.number})` : ''}`
     } else if (role === 'ref1') {
       return '1st Referee'
     } else if (role === 'ref2') {
@@ -309,8 +309,8 @@ export default function MatchEnd({ matchId, onShowScoresheet, onGoHome }) {
   }
 
   const getSignatureData = (role) => {
-    if (role === 'home-captain') return match.homeCaptainSignature
-    if (role === 'away-captain') return match.awayCaptainSignature
+      if (role === 'team_1-captain') return match.team_1CaptainSignature
+      if (role === 'team_2-captain') return match.team_2CaptainSignature
     if (role === 'ref1') return match.ref1Signature
     if (role === 'ref2') return match.ref2Signature
     if (role === 'scorer') return match.scorerSignature
@@ -426,20 +426,20 @@ export default function MatchEnd({ matchId, onShowScoresheet, onGoHome }) {
           alignItems: 'center',
           marginBottom: '24px'
         }}>
-          {/* Home Team */}
+          {/* Team 1 */}
           <div style={{ textAlign: 'center', flex: 1 }}>
             <div style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>
-              Team {homeLabel}
+              Team {teamALabel}
             </div>
             <div style={{ fontSize: '14px', color: 'var(--muted)', marginBottom: '12px' }}>
-              {homeTeam?.name || 'Home'}
+              {team_1Team?.name || 'Home'}
             </div>
             <div style={{ 
               fontSize: '48px', 
               fontWeight: 700,
-              color: homeSetsWon > awaySetsWon ? 'var(--accent)' : 'var(--text)'
+              color: team_1SetsWon > team_2SetsWon ? 'var(--accent)' : 'var(--text)'
             }}>
-              {homeSetsWon}
+              {team_1SetsWon}
             </div>
           </div>
 
@@ -453,20 +453,20 @@ export default function MatchEnd({ matchId, onShowScoresheet, onGoHome }) {
             -
           </div>
 
-          {/* Away Team */}
+          {/* Team 2 */}
           <div style={{ textAlign: 'center', flex: 1 }}>
             <div style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>
-              Team {awayLabel}
+              Team {teamBLabel}
             </div>
             <div style={{ fontSize: '14px', color: 'var(--muted)', marginBottom: '12px' }}>
-              {awayTeam?.name || 'Away'}
+              {team_2Team?.name || 'Team 2'}
             </div>
             <div style={{ 
               fontSize: '48px', 
               fontWeight: 700,
-              color: awaySetsWon > homeSetsWon ? 'var(--accent)' : 'var(--text)'
+              color: team_2SetsWon > team_1SetsWon ? 'var(--accent)' : 'var(--text)'
             }}>
-              {awaySetsWon}
+              {team_2SetsWon}
             </div>
           </div>
         </div>
@@ -491,8 +491,8 @@ export default function MatchEnd({ matchId, onShowScoresheet, onGoHome }) {
             minHeight: '300px'
           }}>
             <Results
-              teamAShortName={homeLabel === 'A' ? (homeTeam?.shortName || homeTeam?.name || '') : (awayTeam?.shortName || awayTeam?.name || '')}
-              teamBShortName={awayLabel === 'B' ? (awayTeam?.shortName || awayTeam?.name || '') : (homeTeam?.shortName || homeTeam?.name || '')}
+              teamAShortName={teamALabel === 'A' ? (team_1Team?.shortName || team_1Team?.name || '') : (team_2Team?.shortName || team_2Team?.name || '')}
+              teamBShortName={teamBLabel === 'B' ? (team_2Team?.shortName || team_2Team?.name || '') : (team_1Team?.shortName || team_1Team?.name || '')}
               setResults={calculateSetResults}
               matchStart={matchStart}
               matchEnd={matchEndFinal}
@@ -543,10 +543,10 @@ export default function MatchEnd({ matchId, onShowScoresheet, onGoHome }) {
             // Create a data package to pass to the scoresheet
             const scoresheetData = {
               match,
-              homeTeam,
-              awayTeam,
-              homePlayers,
-              awayPlayers,
+              team_1Team,
+              team_2Team,
+              team_1Players,
+              team_2Players,
               sets: allSets,
               events: allEvents,
               sanctions: [] // TODO: Extract sanctions from events
