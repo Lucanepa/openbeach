@@ -15,7 +15,9 @@ jobs:
       pages: write
       id-token: write
     env:
-      PAGES_CNAME: app.OpenBeach.app
+      # Set PAGES_CNAME to your custom domain (e.g., "beachapp.openvolley.app")
+      # Leave empty ("") to use project page: lucanepa.github.io/openbeach/
+      PAGES_CNAME: "beachapp.openvolley.app"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
