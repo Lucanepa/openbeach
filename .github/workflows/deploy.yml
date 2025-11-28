@@ -26,7 +26,18 @@ jobs:
         run: |
           npm install
           # Determine base path: use '/' when CNAME set, else '/<repo-name>/'
-          if [ -n "$PAGES_CNAME" ]; then BASE_PATH="/"; else BASE_PATH="/$(echo $GITHUB_REPOSITORY | cut -d'/' -f2)/"; fi
+          # For user/org pages (repo name ends with .github.io), always use '/'
+          REPO_NAME=$(echo $GITHUB_REPOSITORY | cut -d'/' -f2)
+          if [ -n "$PAGES_CNAME" ]; then 
+            BASE_PATH="/"
+          elif [[ "$REPO_NAME" == *.github.io ]]; then
+            # User/org page - deploy at root
+            BASE_PATH="/"
+          else
+            # Project page - deploy in subdirectory
+            BASE_PATH="/$REPO_NAME/"
+          fi
+          echo "Building with base path: $BASE_PATH (repo: $REPO_NAME, CNAME: $PAGES_CNAME)"
           export VITE_BASE_PATH="$BASE_PATH"
           npm run build
           # Create SPA fallback for GitHub Pages
