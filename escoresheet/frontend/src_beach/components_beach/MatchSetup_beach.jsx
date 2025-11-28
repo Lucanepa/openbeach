@@ -2388,39 +2388,23 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
           )}
         </div>
         
-        {/* Coin Toss Winner Selection */}
-        <div style={{ marginBottom: 24, padding: '16px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-          <h3 style={{ marginBottom: '12px', fontSize: '18px', fontWeight: 600 }}>Coin Toss Winner</h3>
-          <div style={{ display: 'flex', gap: '24px', justifyContent: 'center' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-              <input
-                type="radio"
-                name="coinTossWinner"
-                value="teamA"
-                checked={coinTossWinner === 'teamA'}
-                onChange={(e) => setCoinTossWinner('teamA')}
-                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-              />
-              <span style={{ fontSize: '16px', fontWeight: 600 }}>Team A</span>
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-              <input
-                type="radio"
-                name="coinTossWinner"
-                value="teamB"
-                checked={coinTossWinner === 'teamB'}
-                onChange={(e) => setCoinTossWinner('teamB')}
-                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-              />
-              <span style={{ fontSize: '16px', fontWeight: 600 }}>Team B</span>
-            </label>
-          </div>
-        </div>
-        
         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 24, marginBottom: 24, alignItems: 'start' }}>
           {/* Team A */}
           <div>
-            <h3 style={{ textAlign: 'center', fontSize: '30px' }}>Team A</h3>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '8px' }}>
+              <h3 style={{ textAlign: 'center', fontSize: '30px', margin: 0 }}>Team A</h3>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="coinTossWinner"
+                  value="teamA"
+                  checked={coinTossWinner === 'teamA'}
+                  onChange={(e) => setCoinTossWinner('teamA')}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--muted)' }}>Won coin toss</span>
+              </label>
+            </div>
             <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, height: '48px' }}>
               <button 
                 type="button"
@@ -2667,7 +2651,20 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
           
           {/* Team B */}
           <div>
-            <h3 style={{ textAlign: 'center', fontSize: '30px' }}>Team B</h3>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '8px' }}>
+              <h3 style={{ textAlign: 'center', fontSize: '30px', margin: 0 }}>Team B</h3>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="coinTossWinner"
+                  value="teamB"
+                  checked={coinTossWinner === 'teamB'}
+                  onChange={(e) => setCoinTossWinner('teamB')}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--muted)' }}>Won coin toss</span>
+              </label>
+            </div>
             <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, height: '48px' }}>
               <button 
                 type="button"
