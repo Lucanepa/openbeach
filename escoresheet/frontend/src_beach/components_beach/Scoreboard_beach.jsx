@@ -27,6 +27,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
   const [toSubModalPosition, setToSubModalPosition] = useState({ x: 0, y: 0 })
   const [courtSwitchModal, setCourtSwitchModal] = useState(null) // { set, team_1Points, team_2Points, teamThatScored } | null
   const [courtSwitchAlert, setCourtSwitchAlert] = useState(null) // { message: string } | null
+  const [manualCourtSwitchConfirm, setManualCourtSwitchConfirm] = useState(false) // boolean - for manual court switch confirmation
   const [technicalTOModal, setTechnicalTOModal] = useState(null) // { set, team_1Points, team_2Points, teamThatScored: 'team_1'|'team_2'|null, countdown: number, started: boolean } | null
   const [timeoutModal, setTimeoutModal] = useState(null) // { team: 'team_1'|'team_2', countdown: number, started: boolean }
   const [setEndModal, setSetEndModal] = useState(null) // { set, team_1Points, team_2Points } | null
@@ -424,7 +425,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       return 'idle'
     }
     
-    // For lineup events after points, the rally is idle (waiting for next rally_start)
+    // Beach volleyball: No lineup events after points (only initial lineups exist)
     return 'idle'
   }, [data?.events, data?.set])
 
@@ -1335,7 +1336,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       const setEnded = checkSetEnd(data.set, team_1Points, team_2Points)
       // If set didn't end, we're done. If it did, checkSetEnd will show the confirmation modal
     },
-    [data?.set, data?.events, logEvent, mapSideToTeamKey, checkSetEnd, getCurrentServe, rotateLineup, matchId]
+    [data?.set, data?.events, logEvent, mapSideToTeamKey, checkSetEnd, getCurrentServe, matchId]
   )
 
   const handleStartRally = useCallback(async () => {
@@ -1831,15 +1832,27 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     const lastEvent = allEvents[0]
     if (!lastEvent) return
     
-    // If it's a rotation lineup, find the point before it and undo that instead
+    // Beach volleyball: No rotation lineups - only initial lineups exist
+    // If it's a non-initial lineup event, skip it (shouldn't happen in beach volleyball)
     if (lastEvent.type === 'lineup' && !lastEvent.payload?.isInitial) {
-      // This is a rotation lineup - find the point that triggered it
-      const pointBefore = allEvents.find(e => e.type === 'point' && (e.seq || 0) < (lastEvent.seq || 0))
-      if (pointBefore) {
-        const description = getActionDescription(pointBefore)
-        setUndoConfirm({ event: pointBefore, description })
+      // Find the next undoable event
+      const currentIndex = allEvents.findIndex(e => e.id === lastEvent.id)
+      const nextUndoableEvent = allEvents.slice(currentIndex + 1).find(e => {
+        // Skip non-initial lineup events
+        if (e.type === 'lineup' && !e.payload?.isInitial) {
+          return false
+        }
+        const desc = getActionDescription(e)
+        return desc && desc !== 'Unknown action' && desc.trim() !== ''
+      })
+      if (nextUndoableEvent) {
+        const description = getActionDescription(nextUndoableEvent)
+        setUndoConfirm({ event: nextUndoableEvent, description })
         return
       }
+      // No other events to undo
+      setUndoConfirm(null)
+      return
     }
     
     const lastUndoableEvent = lastEvent
@@ -1847,17 +1860,15 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     if (!lastUndoableEvent) return
     
     const description = getActionDescription(lastUndoableEvent)
-    // getActionDescription returns null for rotation lineups, but we've already filtered those out
+    // getActionDescription returns null for non-initial lineup events
     // So if it returns null here, try to find the next undoable event
     if (!description || description === 'Unknown action') {
       // Find the next undoable event after this one
       const currentIndex = allEvents.findIndex(e => e.id === lastUndoableEvent.id)
       const nextUndoableEvent = allEvents.slice(currentIndex + 1).find(e => {
-          if (e.type === 'lineup') {
-            const hasInitial = e.payload?.isInitial === true
-            if (!hasInitial) {
-              return false
-            }
+          // Beach volleyball: Skip non-initial lineup events (shouldn't exist)
+          if (e.type === 'lineup' && !e.payload?.isInitial) {
+            return false
           }
         // Allow rally_start, set_start, and replay events to be undone
         const desc = getActionDescription(e)
@@ -1887,36 +1898,34 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     const lastEvent = undoConfirm.event
     
     try {
-    // Skip rotation lineups (they don't have isInitial)
-    if (lastEvent.type === 'lineup') {
-      const hasInitial = lastEvent.payload?.isInitial === true
-      // Only skip if it's a pure rotation lineup
-      if (!hasInitial) {
-        // Find the next non-rotation event to undo
-        const allEvents = data.events.sort((a, b) => new Date(b.ts) - new Date(a.ts))
-        const nextEvent = allEvents.find(e => {
-          if (e.id === lastEvent.id) return false
-          if (e.type === 'lineup') {
-            const eHasInitial = e.payload?.isInitial === true
-            if (!eHasInitial) return false
-          }
+    // Beach volleyball: Skip non-initial lineup events (shouldn't exist, but handle gracefully)
+    if (lastEvent.type === 'lineup' && !lastEvent.payload?.isInitial) {
+      // Find the next undoable event
+      const allEvents = data.events.sort((a, b) => new Date(b.ts) - new Date(a.ts))
+      const nextEvent = allEvents.find(e => {
+        if (e.id === lastEvent.id) return false
+        // Skip non-initial lineup events
+        if (e.type === 'lineup' && !e.payload?.isInitial) return false
+        const desc = getActionDescription(e)
+        if (desc && desc !== 'Unknown action' && desc.trim() !== '') {
           return true
-        })
-        
-        if (nextEvent) {
-          const description = getActionDescription(nextEvent)
-          if (description && description !== 'Unknown action' && description.trim() !== '') {
-            setUndoConfirm({ event: nextEvent, description })
-            return
-          }
         }
-        // No other events to undo
-        setUndoConfirm(null)
-        return
+        return false
+      })
+      
+      if (nextEvent) {
+        const description = getActionDescription(nextEvent)
+        if (description && description !== 'Unknown action' && description.trim() !== '') {
+          setUndoConfirm({ event: nextEvent, description })
+          return
+        }
       }
+      // No other events to undo
+      setUndoConfirm(null)
+      return
     }
     
-    // If it's a point, decrease the score and handle rotation if needed
+    // If it's a point, decrease the score (beach volleyball: no rotations, only serving changes)
     if (lastEvent.type === 'point' && lastEvent.payload?.team) {
       const teamKey = lastEvent.payload.team
       const field = teamKey === 'team_1' ? 'team_1Points' : 'team_2Points'
@@ -1949,14 +1958,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       
       const scoringTeamHadServe = serveBeforePoint === teamKey
       
-      // If the scoring team didn't have serve, they rotated, so we need to undo the rotation
-      if (!scoringTeamHadServe) {
-        // Find all events created after this point (higher sequence numbers)
-        const pointSeq = lastEvent.seq || 0
-        const eventsAfterPoint = data.events.filter(e => (e.seq || 0) > pointSeq && e.setIndex === data.set.index)
-        
-        // Beach volleyball: No rotation lineups to delete
-      }
+      // Beach volleyball: No rotations - players stay on court, only serving changes
+      // If the scoring team didn't have serve, the serve just changed hands (no rotation needed)
       // Point event will be deleted at the end of the function
     }
     

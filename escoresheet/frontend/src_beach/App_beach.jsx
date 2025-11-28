@@ -55,7 +55,7 @@ function generateRefereePin() {
   return pin
 }
 
-function App() {
+function AppBeach() {
   const [matchId, setMatchId] = useState(null)
   const [showMatchSetup, setShowMatchSetup] = useState(false)
   const [showCoinToss, setShowCoinToss] = useState(false)
