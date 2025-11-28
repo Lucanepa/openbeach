@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Openbeach Scoresheet</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* Global Font Setting */
+      body {
+        font-family: 'Aptos Display', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      }
+
+      /* Custom print styles */
+      @media print {
+        @page {
+          size: A4 landscape;
+          margin: 5mm;
+        }
+        * {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        html, body {
+          margin: 0 !important;
+          padding: 0 !important;
+          width: auto !important;
+          height: auto !important;
+        }
+        #root, #root > div {
+          display: block !important;
+          width: auto !important;
+          height: auto !important;
+          overflow: visible !important;
+        }
+        /* Hide visual debugging elements */
+        .page-size-info,
+        .page-break-indicator,
+        .margin-label,
+        .print-corner {
+          display: none !important;
+        }
+        .page-boundary::before,
+        .page-boundary::after {
+          display: none !important;
+        }
+        /* Page boundaries */
+        .page-boundary {
+          display: block !important;
+          border: none !important;
+          box-shadow: none !important;
+          background: white !important;
+        }
+        #page-1 {
+          width: 287mm !important;
+          height: 200mm !important;
+          max-height: 200mm !important;
+          page-break-after: always !important;
+          break-after: page !important;
+          overflow: hidden !important;
+          margin: 0 !important;
+          padding: 2mm !important;
+          box-sizing: border-box !important;
+        }
+        #page-2 {
+          width: 287mm !important;
+          height: 200mm !important;
+          max-height: 200mm !important;
+          page-break-before: always !important;
+          break-before: page !important;
+          overflow: hidden !important;
+          margin: 0 !important;
+          padding: 2mm !important;
+          box-sizing: border-box !important;
+        }
+      }
+      /* Show page size info in screen view (hidden in print) */
+      .page-size-info {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        z-index: 9999;
+      }
+      /* Page break indicators - visible on screen, hidden in print */
+      .page-break-indicator {
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(to right, transparent, #ef4444, transparent);
+        z-index: 1000;
+        pointer-events: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .page-break-indicator::after {
+        content: "PAGE BREAK";
+        background: #ef4444;
+        color: white;
+        padding: 2px 8px;
+        font-size: 10px;
+        font-weight: bold;
+        border-radius: 2px;
+      }
+      .page-break-after-always .page-break-indicator {
+        bottom: -2px;
+      }
+      .page-break-before-always .page-break-indicator {
+        top: -2px;
+      }
+      /* Page boundaries - visible on screen */
+      .page-boundary {
+        position: relative;
+        border: 3px solid #3b82f6;
+        margin: 20px auto;
+        background: white;
+        /* Show 1cm margin area with a lighter border */
+        box-shadow: 
+          0 0 0 1cm rgba(59, 130, 246, 0.2),
+          inset 0 0 0 2px rgba(59, 130, 246, 0.1);
+      }
+      /* Margin indicator - shows the 1cm margin area */
+      .page-boundary::after {
+        content: "";
+        position: absolute;
+        top: -1cm;
+        left: -1cm;
+        right: -1cm;
+        bottom: -1cm;
+        border: 2px dashed rgba(59, 130, 246, 0.4);
+        pointer-events: none;
+        z-index: -1;
+        background: rgba(59, 130, 246, 0.03);
+      }
+      /* Margin label */
+      .margin-label {
+        position: absolute;
+        top: -0.8cm;
+        left: 8px;
+        background: rgba(59, 130, 246, 0.2);
+        color: rgba(59, 130, 246, 0.8);
+        padding: 2px 6px;
+        font-size: 9px;
+        font-weight: bold;
+        border-radius: 2px;
+        pointer-events: none;
+        z-index: 1;
+      }
+      .page-boundary::before {
+        content: "PAGE 1 - A4 LANDSCAPE: 297mm × 210mm";
+        position: absolute;
+        top: -24px;
+        left: 0;
+        background: #3b82f6;
+        color: white;
+        padding: 4px 12px;
+        font-size: 11px;
+        font-weight: bold;
+        border-radius: 4px 4px 0 0;
+        white-space: nowrap;
+      }
+      .page-boundary.page-2::before {
+        content: "PAGE 2 - A4 LANDSCAPE: 297mm × 210mm";
+        background: #10b981;
+      }
+      /* Corner indicators for print area */
+      .page-boundary .print-corner {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        border: 2px solid #3b82f6;
+        background: rgba(59, 130, 246, 0.1);
+      }
+      .page-boundary .print-corner.tl {
+        top: -2px;
+        left: -2px;
+        border-right: none;
+        border-bottom: none;
+      }
+      .page-boundary .print-corner.tr {
+        top: -2px;
+        right: -2px;
+        border-left: none;
+        border-bottom: none;
+      }
+      .page-boundary .print-corner.bl {
+        bottom: -2px;
+        left: -2px;
+        border-right: none;
+        border-top: none;
+      }
+      .page-boundary .print-corner.br {
+        bottom: -2px;
+        right: -2px;
+        border-left: none;
+        border-top: none;
+      }
+      /* Hide scrollbar for cleaner look in inputs */
+      input[type="number"]::-webkit-inner-spin-button,
+      input[type="number"]::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+      .vertical-text {
+        writing-mode: vertical-lr;
+        transform: rotate(180deg);
+      }
+      /* Dense table utils */
+      .input-dense {
+        text-align: center;
+        background-color: transparent;
+        width: 100%;
+        height: 100%;
+        outline: none;
+      }
+      .input-dense:focus {
+        background-color: rgba(59, 130, 246, 0.1);
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-gray-100 text-gray-900 antialiased print:bg-white text-[10px] ml-1 mr-1 print:ml-1 print:mr-1">
+    <div id="root"></div>
+  <script type="module" src="./index.tsx"></script>
+</body>
+</html>

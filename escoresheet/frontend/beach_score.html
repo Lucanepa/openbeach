@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Beach Score Display</title>
+    <script src="https://unpkg.com/dexie@latest/dist/dexie.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+        background: #0f172a;
+        color: #fff;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        padding: 20px;
+      }
+      
+      .score-display {
+        width: 100%;
+        max-width: 1400px;
+        display: flex;
+        flex-direction: column;
+        gap: 30px;
+      }
+      
+      .score-row {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 40px;
+      }
+      
+      .team-side {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+        flex: 0 0 200px;
+      }
+      
+      .team-top-row {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+        width: 100%;
+      }
+      
+      .team-badge-container {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        justify-content: center;
+      }
+      
+      .team-badge {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 64px;
+        font-weight: 800;
+        color: #fff;
+        border: 4px solid rgba(255, 255, 255, 0.3);
+        position: relative;
+      }
+      
+      .team-to {
+        font-size: 32px;
+        font-weight: 700;
+        color: #22c55e;
+        text-align: center;
+        width: 100%;
+      }
+      
+      .score-counter {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 40px;
+        font-size: 210px;
+        font-weight: 800;
+        padding: 40px 60px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.1);
+        flex: 1;
+        min-width: 400px;
+        position: relative;
+      }
+      
+      .score-separator {
+        color: rgba(255, 255, 255, 0.5);
+      }
+      
+      .serve-ball-in-counter {
+        position: absolute;
+        width: 160px;
+        height: 160px;
+        top: 50%;
+        transform: translateY(-50%);
+        filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
+      }
+      
+      .serve-ball-left {
+        left: 20px;
+      }
+      
+      .serve-ball-right {
+        right: 20px;
+      }
+      
+      .player-at-serve {
+        text-align: center;
+        padding: 30px;
+        background: #ffffff;
+        border-radius: 12px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+      }
+      
+      .player-at-serve-label {
+        font-size: 24px;
+        color: #ef4444;
+        margin-bottom: 16px;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        font-weight: 600;
+      }
+      
+      .player-at-serve-value {
+        font-size: 180px;
+        font-weight: 800;
+        color: #ef4444;
+      }
+      
+      .loading {
+        text-align: center;
+        font-size: 24px;
+        color: rgba(255, 255, 255, 0.5);
+        padding: 40px;
+      }
+      
+      .error {
+        text-align: center;
+        font-size: 24px;
+        color: #ef4444;
+        padding: 40px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="score-display" id="scoreDisplay">
+      <div class="loading">Loading...</div>
+    </div>
+
+    <script>
+      // Initialize Dexie database
+      const db = new Dexie('escoresheet_beach')
+      
+      db.version(1).stores({
+        teams: '++id,name,createdAt',
+        players: '++id,teamId,number,name,role,createdAt',
+        matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt',
+        sets: '++id,matchId,index,homePoints,awayPoints,finished',
+        events: '++id,matchId,setIndex,ts,type,payload',
+        sync_queue: '++id,resource,action,payload,ts,status'
+      })
+      
+      // Get matchId from URL parameters, or find the active/live match
+      let matchId = null
+      
+      async function findMatchId() {
+        const urlParams = new URLSearchParams(window.location.search)
+        matchId = parseInt(urlParams.get('matchId')) || null
+        
+        // If no matchId in URL, try to find the live match
+        if (!matchId) {
+          try {
+            const liveMatch = await db.matches.where('status').equals('live').first()
+            if (liveMatch) {
+              matchId = liveMatch.id
+              console.log('Found live match:', matchId)
+            } else {
+              // Try to find the most recent non-final match
+              const matches = await db.matches.orderBy('createdAt').reverse().toArray()
+              const activeMatch = matches.find(m => m.status !== 'final')
+              if (activeMatch) {
+                matchId = activeMatch.id
+                console.log('Found active match:', matchId)
+              }
+            }
+          } catch (error) {
+            console.error('Error finding match:', error)
+          }
+        }
+        
+        if (!matchId) {
+          document.getElementById('scoreDisplay').innerHTML = '<div class="error">No active match found. Please start a match in the main application, or add ?matchId=123 to the URL.</div>'
+          return
+        }
+        
+        // Start updating the display
+        updateDisplay()
+        setInterval(updateDisplay, 500)
+      }
+      
+      // Initialize and find match ID
+      findMatchId()
+      
+      // Helper function to calculate service order
+      function calculateServiceOrder(match, firstServeTeam) {
+        const coinTossData = match?.coinTossData?.players
+        if (!coinTossData) return {}
+        
+        const teamAKey = match?.coinTossTeamA || 'team_1'
+        const teamBKey = match?.coinTossTeamB || 'team_2'
+        
+        const servingTeamIsA = firstServeTeam === teamAKey
+        const servingTeamData = servingTeamIsA ? coinTossData.teamA : coinTossData.teamB
+        const receivingTeamData = servingTeamIsA ? coinTossData.teamB : coinTossData.teamA
+        const receivingTeamKey = servingTeamIsA ? teamBKey : teamAKey
+        
+        const serviceOrder = {}
+        
+        if (servingTeamData?.player1?.firstServe) {
+          serviceOrder[`${firstServeTeam}_player1`] = 1
+          serviceOrder[`${firstServeTeam}_player2`] = 3
+        } else if (servingTeamData?.player2?.firstServe) {
+          serviceOrder[`${firstServeTeam}_player1`] = 3
+          serviceOrder[`${firstServeTeam}_player2`] = 1
+        }
+        
+        if (receivingTeamData?.player1?.firstServe) {
+          serviceOrder[`${receivingTeamKey}_player1`] = 2
+          serviceOrder[`${receivingTeamKey}_player2`] = 4
+        } else if (receivingTeamData?.player2?.firstServe) {
+          serviceOrder[`${receivingTeamKey}_player1`] = 4
+          serviceOrder[`${receivingTeamKey}_player2`] = 2
+        }
+        
+        return serviceOrder
+      }
+      
+      // Get current serving player
+      // In beach volleyball: serving player only changes when the serving team LOSES a point (serve goes to other team)
+      // When a team scores, the SAME player continues serving (no rotation within team)
+      function getCurrentServingPlayer(teamKey, serviceOrder, events, currentSet, match) {
+        if (!serviceOrder || !teamKey || Object.keys(serviceOrder).length === 0) return null
+        if (!events || !currentSet) return null
+        
+        // Get all point events for the current set, sorted by time (most recent first)
+        const pointEvents = events
+          .filter(e => e.type === 'point' && e.setIndex === currentSet.index)
+          .sort((a, b) => {
+            const aTime = typeof a.ts === 'number' ? a.ts : new Date(a.ts).getTime()
+            const bTime = typeof b.ts === 'number' ? b.ts : new Date(b.ts).getTime()
+            return bTime - aTime // Most recent first
+          })
+        
+        if (pointEvents.length === 0) {
+          // No points yet - use first serve
+          const firstServeTeam = match?.firstServe || 'team_1'
+          const isFirstServeTeam = teamKey === firstServeTeam
+          const player1Key = `${teamKey}_player1`
+          const player2Key = `${teamKey}_player2`
+          
+          // First serve: order 1 if first serve team, order 2 if receiving team
+          const firstOrder = isFirstServeTeam ? 1 : 2
+          if (serviceOrder[player1Key] === firstOrder) return 1
+          if (serviceOrder[player2Key] === firstOrder) return 2
+          return null
+        }
+        
+        // The current serving team is the team that scored the last point
+        const currentServingTeam = pointEvents[0].payload?.team || match?.firstServe || 'team_1'
+        
+        if (currentServingTeam !== teamKey) {
+          // This team is not serving
+          return null
+        }
+        
+        // Count how many times serve has changed hands (service changes)
+        // Service changes when the serving team loses a point
+        let serviceChanges = 0
+        let lastServingTeam = match?.firstServe || 'team_1'
+        
+        for (const event of pointEvents) {
+          const scoringTeam = event.payload?.team
+          if (scoringTeam !== lastServingTeam) {
+            // The serving team lost a point - serve changed hands
+            serviceChanges++
+            lastServingTeam = scoringTeam
+          }
+        }
+        
+        // Service order cycles: 1, 2, 3, 4, 1, 2, 3, 4...
+        // Each time serve changes hands, we advance to the next order
+        const servingOrderNumber = (serviceChanges % 4) + 1
+        
+        const player1Key = `${teamKey}_player1`
+        const player2Key = `${teamKey}_player2`
+        
+        // Find which player (1 or 2) has this service order number for this team
+        if (serviceOrder[player1Key] === servingOrderNumber) {
+          return 1
+        } else if (serviceOrder[player2Key] === servingOrderNumber) {
+          return 2
+        }
+        
+        return null
+      }
+      
+      // Get player number from position using coin toss data
+      function getPlayerNumberFromPosition(teamKey, playerPosition, coinTossData, teamAKey) {
+        if (!playerPosition || !coinTossData) return playerPosition
+        const isTeamA = teamKey === teamAKey
+        const teamData = isTeamA ? coinTossData.teamA : coinTossData.teamB
+        if (!teamData) return playerPosition
+        
+        const playerData = playerPosition === 1 ? teamData.player1 : teamData.player2
+        if (!playerData) return playerPosition
+        
+        return playerData.number !== undefined && playerData.number !== null ? playerData.number : playerPosition
+      }
+      
+      // Get current serve team
+      function getCurrentServe(match, events, currentSet) {
+        if (!currentSet) return match?.firstServe || 'team_1'
+        
+        const pointEvents = events
+          .filter(e => e.type === 'point' && e.setIndex === currentSet.index)
+          .sort((a, b) => {
+            const aTime = typeof a.ts === 'number' ? a.ts : new Date(a.ts).getTime()
+            const bTime = typeof b.ts === 'number' ? b.ts : new Date(b.ts).getTime()
+            return bTime - aTime
+          })
+        
+        if (pointEvents.length === 0) {
+          return match.firstServe || 'team_1'
+        }
+        
+        return pointEvents[0].payload?.team || match.firstServe || 'team_1'
+      }
+      
+      // Calculate timeouts used
+      function getTimeoutsUsed(events, currentSet, teamKey) {
+        if (!events || !currentSet) return 0
+        return events.filter(e => 
+          e.type === 'timeout' && 
+          e.setIndex === currentSet.index && 
+          e.payload?.team === teamKey
+        ).length
+      }
+      
+      // Update display
+      async function updateDisplay() {
+        if (!matchId) return
+        
+        try {
+          const match = await db.matches.get(matchId)
+          if (!match) {
+            document.getElementById('scoreDisplay').innerHTML = '<div class="error">Match not found</div>'
+            return
+          }
+          
+          const [team1, team2] = await Promise.all([
+            match.homeTeamId ? db.teams.get(match.homeTeamId) : null,
+            match.awayTeamId ? db.teams.get(match.awayTeamId) : null
+          ])
+          
+          const sets = await db.sets
+            .where('matchId')
+            .equals(matchId)
+            .sortBy('index')
+          
+          const currentSet = sets.find(s => !s.finished) || null
+          
+          const events = await db.events
+            .where('matchId')
+            .equals(matchId)
+            .toArray()
+          
+          // Determine which team is A and which is B
+          const teamAKey = match.coinTossTeamA || 'team_1'
+          const teamBKey = match.coinTossTeamB || 'team_2'
+          
+          // Determine left/right teams (assuming left is team_1, right is team_2)
+          const leftIsTeam_1 = true // You may need to adjust this based on court switches
+          const leftTeamKey = leftIsTeam_1 ? 'team_1' : 'team_2'
+          const rightTeamKey = leftIsTeam_1 ? 'team_2' : 'team_1'
+          
+          const leftTeamName = leftIsTeam_1 ? (team1?.name || 'Team 1') : (team2?.name || 'Team 2')
+          const rightTeamName = leftIsTeam_1 ? (team2?.name || 'Team 2') : (team1?.name || 'Team 1')
+          
+          const leftIsTeamA = leftTeamKey === teamAKey
+          const rightIsTeamA = rightTeamKey === teamAKey
+          
+          const teamALabel = leftIsTeamA ? 'A' : 'B'
+          const teamBLabel = rightIsTeamA ? 'A' : 'B'
+          
+          // Get current score
+          const homeScore = currentSet ? currentSet.homePoints : 0
+          const awayScore = currentSet ? currentSet.awayPoints : 0
+          const leftScore = leftIsTeam_1 ? homeScore : awayScore
+          const rightScore = leftIsTeam_1 ? awayScore : homeScore
+          
+          // Get current serve
+          const currentServeTeam = currentSet ? getCurrentServe(match, events, currentSet) : null
+          const leftServing = currentSet ? currentServeTeam === leftTeamKey : false
+          const rightServing = currentSet ? currentServeTeam === rightTeamKey : false
+          
+          // Read serving player from set (calculated by scoreboard)
+          const servingPlayer = currentSet?.servingPlayer || null
+          
+          // Get timeouts
+          const leftTO = getTimeoutsUsed(events, currentSet, leftTeamKey)
+          const rightTO = getTimeoutsUsed(events, currentSet, rightTeamKey)
+          
+          // servingPlayer is already read from currentSet.servingPlayer above
+          
+          // Get team colors
+          const leftTeamColor = leftIsTeam_1 ? (team1?.color || '#ef4444') : (team2?.color || '#3b82f6')
+          const rightTeamColor = leftIsTeam_1 ? (team2?.color || '#3b82f6') : (team1?.color || '#ef4444')
+          
+          // Helper to determine if color is bright
+          function isBrightColor(color) {
+            if (!color) return false
+            const hex = color.replace('#', '')
+            const r = parseInt(hex.substr(0, 2), 16)
+            const g = parseInt(hex.substr(2, 2), 16)
+            const b = parseInt(hex.substr(4, 2), 16)
+            const brightness = (r * 299 + g * 587 + b * 114) / 1000
+            return brightness > 155
+          }
+          
+          const leftTextColor = isBrightColor(leftTeamColor) ? '#000' : '#fff'
+          const rightTextColor = isBrightColor(rightTeamColor) ? '#000' : '#fff'
+          
+          // Determine which side is serving for player at serve positioning
+          const servingSide = leftServing ? 'left' : (rightServing ? 'right' : null)
+          
+          // Render display
+          const html = `
+            <div class="score-row">
+              <div class="team-side">
+                <div class="team-top-row">
+                  <div class="team-badge-container">
+                    <div class="team-badge" style="background: ${leftTeamColor}; color: ${leftTextColor};">
+                      ${teamALabel}
+                    </div>
+                  </div>
+                  <div class="team-to">TO: ${leftTO}</div>
+                </div>
+                ${servingSide === 'left' ? `
+                  <div class="player-at-serve" style="margin-top: 20px;">
+                    <div class="player-at-serve-label">Player at Serve</div>
+                    <div class="player-at-serve-value">${servingPlayer || '-'}</div>
+                  </div>
+                ` : ''}
+              </div>
+              
+              <div class="score-counter">
+                ${servingSide === 'left' ? '<img src="/src_beach/mikasa_BV550C_beach.png" alt="Serve" class="serve-ball-in-counter serve-ball-left" />' : ''}
+                <span>${leftScore}</span>
+                <span class="score-separator">:</span>
+                <span>${rightScore}</span>
+                ${servingSide === 'right' ? '<img src="/src_beach/mikasa_BV550C_beach.png" alt="Serve" class="serve-ball-in-counter serve-ball-right" />' : ''}
+              </div>
+              
+              <div class="team-side">
+                <div class="team-top-row">
+                  <div class="team-badge-container">
+                    <div class="team-badge" style="background: ${rightTeamColor}; color: ${rightTextColor};">
+                      ${teamBLabel}
+                    </div>
+                  </div>
+                  <div class="team-to">TO: ${rightTO}</div>
+                </div>
+                ${servingSide === 'right' ? `
+                  <div class="player-at-serve" style="margin-top: 20px;">
+                    <div class="player-at-serve-label">Player at Serve</div>
+                    <div class="player-at-serve-value">${servingPlayer || '-'}</div>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+          `
+          
+          document.getElementById('scoreDisplay').innerHTML = html
+        } catch (error) {
+          console.error('Error updating display:', error)
+          document.getElementById('scoreDisplay').innerHTML = `<div class="error">Error: ${error.message}</div>`
+        }
+      }
+      
+      // The update interval is started in findMatchId() after matchId is found
+    </script>
+  </body>
+</html>
+
