@@ -76,7 +76,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
     { firstName: '', lastName: '', country: 'SUI' }
   ])
 
-  // Beach volleyball: No bench staff
+
 
   // UI state for views
   const [currentView, setCurrentView] = useState('main') // 'main', 'info', 'officials', 'team_1', 'team_2', 'coin-toss'
@@ -107,7 +107,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
   const [newPin, setNewPin] = useState('')
   const [pinError, setPinError] = useState('')
   
-  // Beach volleyball: No bench connection
   const [team_1ConnectionEnabled, setTeam_1ConnectionEnabled] = useState(false)
   const [team_2ConnectionEnabled, setTeam_2ConnectionEnabled] = useState(false)
 
@@ -134,11 +133,9 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
 
   const team_1Counts = {
     players: team_1Roster.length,
-    bench: 0 // Beach volleyball: No bench staff
   }
   const team_2Counts = {
     players: team_2Roster.length,
-    bench: 0 // Beach volleyball: No bench staff
   }
 
   // Signatures and lock
@@ -286,8 +283,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
           dob: member?.dob || member?.date_of_birth || member?.dateOfBirth || ''
         })
 
-        // Beach volleyball: No bench staff
-        
         // Load match info
         if (match.scheduledAt) {
           const scheduledDate = new Date(match.scheduledAt)
@@ -365,7 +360,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
             number: p.number,
             firstName: p.firstName || '',
             lastName: p.lastName || p.name || '',
-            // Beach volleyball: No liberos
             isCaptain: p.isCaptain || false
           }))
           
@@ -384,19 +378,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
           } else {
             setTeam_1Player2({ firstName: '', lastName: '' })
           }
-          
-          // DEBUG: Log loaded players to catch duplicates
-          // Loaded team_1 players
-            rosterLength: roster.length,
-            player1: { firstName: roster[0]?.firstName, lastName: roster[0]?.lastName, id: roster[0]?.id },
-            player2: { firstName: roster[1]?.firstName, lastName: roster[1]?.lastName, id: roster[1]?.id },
-            allPlayers: roster.map((p, idx) => ({ 
-              index: idx, 
-              id: p.id, 
-              firstName: p.firstName, 
-              lastName: p.lastName 
-            }))
-          })
         }
         if (match.team_2Id) {
           const team_2Players = await db.players.where('teamId').equals(match.team_2Id).toArray()
@@ -413,7 +394,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
             number: p.number,
             firstName: p.firstName || '',
             lastName: p.lastName || p.name || '',
-            // Beach volleyball: No liberos
             isCaptain: p.isCaptain || false
           }))
           
@@ -444,8 +424,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         
         // Mark roster as loaded
         rosterLoadedRef.current = true
-        
-        // Beach volleyball: No bench officials
         
         // Load match officials
         if (match.officials && match.officials.length > 0) {
@@ -629,7 +607,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
           if (draft.team_2Color !== undefined) setTeam_2Color(draft.team_2Color)
           if (draft.team_1Roster !== undefined) setTeam_1Roster(draft.team_1Roster)
           if (draft.team_2Roster !== undefined) setTeam_2Roster(draft.team_2Roster)
-          // Beach volleyball: No bench staff
+          
           if (draft.ref1First !== undefined) setRef1First(draft.ref1First)
           if (draft.ref1Last !== undefined) setRef1Last(draft.ref1Last)
           if (draft.ref1Country !== undefined) setRef1Country(draft.ref1Country)
@@ -685,7 +663,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         team_2Country,
         team_1Roster,
         team_2Roster,
-        // Beach volleyball: No bench staff
         ref1First,
         ref1Last,
         ref1Country,
@@ -758,7 +735,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
             })
             return officials
           })(),
-          // Beach volleyball: No bench staff
+          
         })
         
         // Also update team colors if teams exist
@@ -1009,7 +986,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
   }
 
   function formatRoster(roster) {
-    // Beach volleyball: All players sorted by number (ascending), no bench
     const players = [...roster].sort((a, b) => {
       const an = a.number ?? 999
       const bn = b.number ?? 999
@@ -1105,7 +1081,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         })
         return officials
       })(),
-      // Beach volleyball: No bench staff
+      
       team_1CoachSignature: null,
       team_1CaptainSignature: null,
       team_2CoachSignature: null,
@@ -1114,7 +1090,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
     })
 
     if (team_1Roster.length) {
-        const homePlayerIds = await db.players.bulkAdd(
+        const team_1PlayerIds = await db.players.bulkAdd(
         team_1Roster.map(p => ({
           teamId: team_1Id,
           number: p.number,
@@ -1129,7 +1105,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         
     }
     if (team_2Roster.length) {
-        const awayPlayerIds = await db.players.bulkAdd(
+        const team_2PlayerIds = await db.players.bulkAdd(
         team_2Roster.map(p => ({
           teamId: team_2Id,
           number: p.number,
@@ -1196,6 +1172,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         serveA: serveA,
         serveB: serveB,
         firstServe: firstServeTeam,
+        coinTossWinner: coinTossWinner, // 'teamA' | 'teamB' | null - stores who won the coin toss for set 1
         players: enrichedCoinTossPlayerData,
         timestamp: new Date().toISOString()
       }
@@ -1822,7 +1799,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
             }}>Unlock</button></p>
           </div>
         )}
-        <h4>Roster</h4>
+        <h4>Roster {team_1Roster.length >= 2 && <span style={{ fontSize: '14px', color: 'var(--muted)' }}>(2/2)</span>}</h4>
         <div style={{ 
           border: '1px solid rgba(255, 255, 255, 0.2)', 
           borderRadius: '8px', 
@@ -1834,10 +1811,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
             <input disabled={isTeam_1Locked} className="w-num" placeholder="#" type="number" inputMode="numeric" value={team_1Num} onChange={e=>setTeam_1Num(e.target.value)} />
             <input disabled={isTeam_1Locked} className="w-name capitalize" placeholder="Last Name" value={team_1Last} onChange={e=>setTeam_1Last(e.target.value)} />
             <input disabled={isTeam_1Locked} className="w-name capitalize" placeholder="First Name" value={team_1First} onChange={e=>setTeam_1First(e.target.value)} />
-            {/* Beach volleyball: No liberos */}
-            <label className="inline"><input disabled={isHomeLocked} type="radio" name="team_1Captain" checked={team_1Captain} onChange={()=>setTeam_1Captain(true)} /> Captain</label>
-            <button disabled={isHomeLocked} type="button" className="secondary" onClick={() => {
+            
+            <label className="inline"><input disabled={isTeam_1Locked} type="radio" name="team_1Captain" checked={team_1Captain} onChange={()=>setTeam_1Captain(true)} /> Captain</label>
+            <button disabled={isTeam_1Locked || team_1Roster.length >= 2} type="button" className="secondary" onClick={() => {
               if (!team_1Last || !team_1First) return
+              if (team_1Roster.length >= 2) return // Beach volleyball: Exactly 2 players
               const newPlayer = { number: team_1Num ? Number(team_1Num) : null, lastName: team_1Last, firstName: team_1First, isCaptain: team_1Captain }
               setTeam_1Roster(list => {
                 const cleared = team_1Captain ? list.map(p => ({ ...p, isCaptain: false })) : [...list]
@@ -1890,7 +1868,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                   setTeam_1Roster(updated)
                 }} 
               />
-              {/* Beach volleyball: No liberos */}
+              
               <label className="inline">
                 <input 
                   disabled={isTeam_1Locked} 
@@ -1917,7 +1895,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
             </div>
           ))}
           </div>
-        {/* Beach volleyball: No bench staff */}
         <div style={{ display:'flex', justifyContent:'flex-end', marginTop:16 }}>
           <button onClick={async () => {
             // Save team 1 data to database if matchId exists
@@ -1942,7 +1919,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                       name: `${rosterPlayer.lastName} ${rosterPlayer.firstName}`,
                       lastName: rosterPlayer.lastName,
                       firstName: rosterPlayer.firstName,
-                      // Beach volleyball: No liberos
+                     
                       isCaptain: !!rosterPlayer.isCaptain
                     })
                   } else {
@@ -1953,7 +1930,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                       name: `${rosterPlayer.lastName} ${rosterPlayer.firstName}`,
                       lastName: rosterPlayer.lastName,
                       firstName: rosterPlayer.firstName,
-                      // Beach volleyball: No liberos
+                     
                       isCaptain: !!rosterPlayer.isCaptain,
                       role: null,
                       createdAt: new Date().toISOString()
@@ -2016,7 +1993,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
             }}>Unlock</button></p>
           </div>
         )}
-        <h4>Roster</h4>
+        <h4>Roster {team_2Roster.length >= 2 && <span style={{ fontSize: '14px', color: 'var(--muted)' }}>(2/2)</span>}</h4>
         
         {/* Beach volleyball: No PDF roster import */}
         
@@ -2031,10 +2008,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
             <input disabled={isTeam_2Locked} className="w-num" placeholder="#" type="number" inputMode="numeric" value={team_2Num} onChange={e=>setTeam_2Num(e.target.value)} />
             <input disabled={isTeam_2Locked} className="w-name capitalize" placeholder="Last Name" value={team_2Last} onChange={e=>setTeam_2Last(e.target.value)} />
             <input disabled={isTeam_2Locked} className="w-name capitalize" placeholder="First Name" value={team_2First} onChange={e=>setTeam_2First(e.target.value)} />
-            {/* Beach volleyball: No liberos */}
+            
             <label className="inline"><input disabled={isTeam_2Locked} type="radio" name="team_2Captain" checked={team_2Captain} onChange={()=>setTeam_2Captain(true)} /> Captain</label>
-            <button disabled={isTeam_2Locked} type="button" className="secondary" onClick={() => {
+            <button disabled={isTeam_2Locked || team_2Roster.length >= 2} type="button" className="secondary" onClick={() => {
               if (!team_2Last || !team_2First) return
+              if (team_2Roster.length >= 2) return // Beach volleyball: Exactly 2 players
               const newPlayer = { number: team_2Num ? Number(team_2Num) : null, lastName: team_2Last, firstName: team_2First, isCaptain: team_2Captain }
               setTeam_2Roster(list => {
                 const cleared = team_2Captain ? list.map(p => ({ ...p, isCaptain: false })) : [...list]
@@ -2087,7 +2065,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                   setTeam_2Roster(updated)
                 }} 
               />
-              {/* Beach volleyball: No liberos */}
+              
               <label className="inline">
                 <input 
                   disabled={isTeam_2Locked} 
@@ -2114,7 +2092,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
             </div>
           ))}
           </div>
-        {/* Beach volleyball: No bench staff */}
         <div style={{ display:'flex', justifyContent:'flex-end', marginTop:16 }}>
           <button onClick={async () => {
             // Save team 2 data to database if matchId exists
@@ -2139,7 +2116,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                       name: `${rosterPlayer.lastName} ${rosterPlayer.firstName}`,
                       lastName: rosterPlayer.lastName,
                       firstName: rosterPlayer.firstName,
-                      // Beach volleyball: No liberos
+                     
                       isCaptain: !!rosterPlayer.isCaptain
                     })
                   } else {
@@ -2150,7 +2127,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                       name: `${rosterPlayer.lastName} ${rosterPlayer.firstName}`,
                       lastName: rosterPlayer.lastName,
                       firstName: rosterPlayer.firstName,
-                      // Beach volleyball: No liberos
+                     
                       isCaptain: !!rosterPlayer.isCaptain,
                       role: null,
                       createdAt: new Date().toISOString()
@@ -2479,8 +2456,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
               </table>
             </div>
             
-            {/* Beach volleyball: No bench officials */}
-            
             <div style={{ display: 'flex', flexDirection: 'row', gap: 16, marginTop: 24, paddingTop: 16,  }}>
               {matchWithCoaches && teamAHasCoach && (
                 <div style={{ flex: 1 }}>
@@ -2738,8 +2713,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                 </tbody>
               </table>
             </div>
-            
-            {/* Beach volleyball: No bench officials */}
             
             <div style={{ display: 'flex', flexDirection: 'row', gap: 16, marginTop: 24, paddingTop: 16,  }}>
               {matchWithCoaches && teamBHasCoach && (
@@ -3174,7 +3147,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
     if (type === 'referee') {
       currentPin = match?.refereePin || ''
     }
-    // Beach volleyball: No bench PINs
     setNewPin(currentPin)
     setPinError('')
     setEditPinType(type)
@@ -3199,7 +3171,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
       if (editPinType === 'referee') {
         updateField = { refereePin: newPin }
       }
-      // Beach volleyball: No bench PINs - using team PINs only
       await db.matches.update(matchId, updateField)
       setEditPinModal(false)
       setPinError('')
@@ -3713,7 +3684,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                       name: `${p.lastName} ${p.firstName}`,
                       lastName: p.lastName,
                       firstName: p.firstName,
-                      // Beach volleyball: No liberos
+                     
                       isCaptain: !!p.isCaptain,
                       role: null,
                       createdAt: new Date().toISOString()
@@ -3730,7 +3701,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                       name: `${p.lastName} ${p.firstName}`,
                       lastName: p.lastName,
                       firstName: p.firstName,
-                      // Beach volleyball: No liberos
+                     
                       isCaptain: !!p.isCaptain,
                       role: null,
                       createdAt: new Date().toISOString()

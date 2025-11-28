@@ -40,14 +40,11 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
   const [setTransitionSelectedFirstServe, setSetTransitionSelectedFirstServe] = useState('A')
   const [setTransitionServiceOrder, setSetTransitionServiceOrder] = useState({ teamA: '1_2', teamB: '2_1' }) // '1_2' | '2_1' for each team
   const [set3CoinTossWinner, setSet3CoinTossWinner] = useState(null) // 'teamA' | 'teamB' | null - only for set 3
-  const [set5SideServiceModal, setSet5SideServiceModal] = useState(null) // { setIndex: number, set4LeftTeamLabel: string, set4RightTeamLabel: string, set4ServingTeamLabel: string } | null - shown after set 4 ends
-  const [set5SelectedLeftTeam, setSet5SelectedLeftTeam] = useState('A')
-  const [set5SelectedFirstServe, setSet5SelectedFirstServe] = useState('A')
   const [postMatchSignature, setPostMatchSignature] = useState(null) // 'team_1-captain' | 'team_2-captain' | null
   const [sanctionConfirm, setSanctionConfirm] = useState(null) // { side: 'left'|'right', type: 'improper_request'|'delay_warning'|'delay_penalty' } | null
   const [sanctionDropdown, setSanctionDropdown] = useState(null) // { team: 'team_1'|'team_2', type: 'player'|'official', playerNumber?: number, position?: string, role?: string, element: HTMLElement, x?: number, y?: number } | null
   const [sanctionConfirmModal, setSanctionConfirmModal] = useState(null) // { team: 'team_1'|'team_2', type: 'player'|'official', playerNumber?: number, position?: string, role?: string, sanctionType: 'warning'|'penalty'|'expulsion'|'disqualification' } | null
-  const [injuryDropdown, setInjuryDropdown] = useState(null) // { team: 'team_1'|'team_2', position: 'I'|'II'|'III'|'IV'|'V'|'VI', playerNumber: number, element: HTMLElement, x?: number, y?: number } | null
+  const [injuryDropdown, setInjuryDropdown] = useState(null) // { team: 'team_1'|'team_2', position: 'I'|'II', playerNumber: number, element: HTMLElement, x?: number, y?: number } | null
   const [editRosterModal, setEditRosterModal] = useState(null) // 'team_1' | 'team_2' | null
   const [editScoreModal, setEditScoreModal] = useState(null) // { setIndex: number, setId: number } | null
   const [editScoreTeam_1Points, setEditScoreTeam_1Points] = useState(0)
@@ -59,7 +56,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
   const [editMatchScheduledAt, setEditMatchScheduledAt] = useState('')
   const [editOfficialsModal, setEditOfficialsModal] = useState(false)
   const [editOfficialsState, setEditOfficialsState] = useState([])
-  const [playerActionMenu, setPlayerActionMenu] = useState(null) // { team: 'team_1'|'team_2', position: 'I'|'II'|'III'|'IV'|'V'|'VI', playerNumber: number, element: HTMLElement, x?: number, y?: number } | null
+  const [playerActionMenu, setPlayerActionMenu] = useState(null) // { team: 'team_1'|'team_2', position: 'I'|'II', playerNumber: number, element: HTMLElement, x?: number, y?: number } | null
   const [challengeModal, setChallengeModal] = useState(null) // null | 'request' | 'in_progress' - when 'request', contains { team: 'team_1'|'team_2', reason: string } | when 'in_progress', contains { team: 'team_1'|'team_2', reason: string, score: { team_1: number, team_2: number }, set: number, servingTeam: 'team_1'|'team_2', time: string }
   const [challengeReason, setChallengeReason] = useState('IN / OUT')
   const [coinTossError, setCoinTossError] = useState(null) // { message: string } | null
@@ -253,36 +250,10 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     if (!data?.set) return true
     
     // Determine base position: Set 1 starts with Team A on left
-    // Sets 2, 3, 4 start with teams switched (Team A on right)
+    // Sets 2, 3 start with teams switched (Team A on right)
     const baseIsTeam_1 = data.set.index === 1 
       ? (teamAKey === 'team_1')
       : (teamAKey !== 'team_1')
-    
-    // Set 5: Special case with court switch at 8 points
-    if (data.set.index === 5) {
-      // Use set5LeftTeam if specified, otherwise default to teams switched (like set 2)
-      if (data.match?.set5LeftTeam) {
-        const leftTeamKey = data.match.set5LeftTeam === 'A' ? teamAKey : teamBKey
-        let isTeam_1 = leftTeamKey === 'team_1'
-        
-        // If court switch has happened at 8 points, switch again
-        if (data.match?.set5CourtSwitched) {
-          isTeam_1 = !isTeam_1
-        }
-        
-        return isTeam_1
-      }
-      
-      // Fallback: Set 5 starts with teams switched (like set 2)
-      let isTeam_1 = teamAKey !== 'team_1'
-      
-      // If court switch has happened at 8 points, switch again
-      if (data.match?.set5CourtSwitched) {
-        isTeam_1 = !isTeam_1
-      }
-      
-      return isTeam_1
-    }
     
     // For sets 1-2: Court switches every 7 points, set 3: every 5 points
     // Count how many court switches have happened in this set
@@ -306,7 +277,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     }
     
     return isTeam_1
-  }, [data?.set, data?.match?.set5CourtSwitched, data?.match?.set5LeftTeam, data?.match, teamAKey])
+  }, [data?.set, data?.match, teamAKey])
 
   // Calculate set score (number of sets won by each team)
   const setScore = useMemo(() => {
@@ -370,7 +341,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       )
   }, [data?.events, data?.set])
 
-  // Beach volleyball: No substitutions
+  
 
   // Helper function to calculate score at time of event
   const getScoreAtEvent = useCallback((event, allEvents) => {
@@ -414,7 +385,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     return timeoutEvents
   }, [data?.events, data?.set, mapSideToTeamKey, getScoreAtEvent])
 
-  // Beach volleyball: No substitutions
+  
 
   const rallyStatus = useMemo(() => {
     if (!data?.events || !data?.set || data.events.length === 0) return 'idle'
@@ -767,8 +738,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         serviceOrder: serviceOrder
       })
       
-      // Reset set5CourtSwitched flag when starting a new set
-      await db.matches.update(set.matchId, { set5CourtSwitched: false })
       
     }
     
@@ -809,34 +778,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       return data?.match?.firstServe || 'team_1'
     }
     
-    // For set 5, use set5FirstServe if specified
-    if (data.set.index === 5 && data.match?.set5FirstServe) {
-      const teamAKey = data.match.coinTossTeamA || 'team_1'
-      const teamBKey = data.match.coinTossTeamB || 'team_2'
-      const firstServeTeamKey = data.match.set5FirstServe === 'A' ? teamAKey : teamBKey
-      
-      if (!data?.events || data.events.length === 0) {
-        return firstServeTeamKey
-      }
-      
-      // Find the last point event in the current set to determine serve
-      const pointEvents = data.events
-        .filter(e => e.type === 'point' && e.setIndex === data.set.index)
-        .sort((a, b) => {
-          const aTime = typeof a.ts === 'number' ? a.ts : new Date(a.ts).getTime()
-          const bTime = typeof b.ts === 'number' ? b.ts : new Date(b.ts).getTime()
-          return bTime - aTime // Most recent first
-        })
-      
-      if (pointEvents.length === 0) {
-        return firstServeTeamKey
-      }
-      
-      // The team that scored the last point now has serve
-      const lastPoint = pointEvents[0]
-      return lastPoint.payload?.team || firstServeTeamKey
-    }
-    
     if (!data?.events || data.events.length === 0) {
       // First rally: use firstServe from match
       return data.match.firstServe || 'team_1'
@@ -859,7 +800,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     // The team that scored the last point now has serve
     const lastPoint = pointEvents[0]
     return lastPoint.payload?.team || data.match.firstServe || 'team_1'
-  }, [data?.events, data?.set, data?.match, data?.match?.set5FirstServe])
+  }, [data?.events, data?.set, data?.match])
 
   const leftServeTeamKey = leftIsTeam_1 ? 'team_1' : 'team_2'
   const rightServeTeamKey = leftIsTeam_1 ? 'team_2' : 'team_1'
@@ -1655,51 +1596,9 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         }
       }
       
-      // If set 4 just ended, show modal to choose sides and service for set 5
-      if (setIndex === 4) {
-        setSetEndTimeModal(null)
-        
-        // Determine current positions at end of set 4 (set 2, 3, 4 have teams switched)
-        const set4LeftIsTeam_1 = teamAKey !== 'team_1'
-        const set4LeftTeamKey = set4LeftIsTeam_1 ? 'team_1' : 'team_2'
-        const set4RightTeamKey = set4LeftIsTeam_1 ? 'team_2' : 'team_1'
-        const set4LeftTeamLabel = set4LeftTeamKey === teamAKey ? 'A' : 'B'
-        const set4RightTeamLabel = set4RightTeamKey === teamAKey ? 'A' : 'B'
-        
-        // Get current serve at end of set 4
-        const currentServe = getCurrentServe()
-        const set4ServingTeamKey = currentServe
-        const set4ServingTeamLabel = set4ServingTeamKey === teamAKey ? 'A' : 'B'
-        
-        // Use existing values if set, otherwise use current positions
-        setSet5SelectedLeftTeam(data.match?.set5LeftTeam || set4LeftTeamLabel)
-        setSet5SelectedFirstServe(data.match?.set5FirstServe || set4ServingTeamLabel)
-        setSet5SideServiceModal({ 
-          setIndex: setIndex + 1,
-          set4LeftTeamLabel,
-          set4RightTeamLabel,
-          set4ServingTeamLabel
-        })
-        return
-      }
-      
-      // Get match to calculate service order for next set
-      const matchData = await db.matches.get(matchId)
-      const firstServeTeam = matchData?.firstServe || 'team_1'
-      const serviceOrder = calculateServiceOrder(matchData, firstServeTeam)
-      
-      const newSetId = await db.sets.add({ 
-        matchId, 
-        index: setIndex + 1, 
-        team_1Points: 0, 
-        team_2Points: 0, 
-        finished: false,
-        serviceOrder: serviceOrder
-      })
-      
-      // Reset set5CourtSwitched flag when starting a new set
-      await db.matches.update(matchId, { set5CourtSwitched: false })
-      
+      // Beach volleyball: Only sets 1, 2, 3 exist (best of 3)
+      // If we reach here, something went wrong - match should have ended
+      console.warn('Unexpected set index after set 2 handling:', setIndex)
     }
     
     setSetEndTimeModal(null)
@@ -1781,41 +1680,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     setSetTransitionModal(null)
   }, [setTransitionModal, setTransitionSelectedLeftTeam, setTransitionSelectedFirstServe, setTransitionServiceOrder, set3CoinTossWinner, data?.match, matchId, teamAKey])
   
-  // Confirm set 5 side and service choices
-  const confirmSet5SideService = useCallback(async (leftTeam, firstServe) => {
-    if (!set5SideServiceModal || !data?.match) return
-    
-    const { setIndex } = set5SideServiceModal
-    const teamAKey = data.match.coinTossTeamA || 'team_1'
-    const teamBKey = data.match.coinTossTeamB || 'team_2'
-    
-    // Determine which team (team_1/team_2) is on the left
-    const leftTeamKey = leftTeam === 'A' ? teamAKey : teamBKey
-    
-    // Determine which team (team_1/team_2) serves first
-    const firstServeTeamKey = firstServe === 'A' ? teamAKey : teamBKey
-    
-    // Update match with set 5 configuration
-    await db.matches.update(matchId, {
-      set5LeftTeam: leftTeam,
-      set5FirstServe: firstServe
-    })
-    
-    // Create set 5
-    const newSetId = await db.sets.add({ 
-      matchId, 
-      index: setIndex, 
-      team_1Points: 0, 
-      team_2Points: 0, 
-      finished: false 
-    })
-    
-    // Reset set5CourtSwitched flag when starting set 5
-    await db.matches.update(matchId, { set5CourtSwitched: false })
-    
-    
-    setSet5SideServiceModal(null)
-  }, [set5SideServiceModal, data?.match, matchId])
 
   // Get action description for an event
   const getActionDescription = useCallback((event) => {
@@ -1859,12 +1723,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       eventDescription = `Point — ${teamName} (${team_1Label} ${team_1Score}:${team_2Score} ${team_2Label})`
     } else if (event.type === 'timeout') {
       eventDescription = `Timeout — ${teamName}`
-    } else if (event.type === 'substitution') {
-      const playerOut = event.payload?.playerOut || '?'
-      const playerIn = event.payload?.playerIn || '?'
-      const isExceptional = event.payload?.isExceptional === true
-      const substitutionType = isExceptional ? 'Exceptional substitution' : 'Substitution'
-      eventDescription = `${substitutionType} — ${teamName} (OUT: ${playerOut} IN: ${playerIn}) (${team_1Label} ${team_1Score}:${team_2Score} ${team_2Label})`
     } else if (event.type === 'set_start') {
       // Format the relative time as MM:SS
       const relativeTime = typeof event.ts === 'number' ? event.ts : 0
@@ -1879,15 +1737,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     } else if (event.type === 'replay') {
       eventDescription = 'Replay'
     } else if (event.type === 'lineup') {
-      // Only show initial lineups
-      const isInitial = event.payload?.isInitial === true
-      
-      // Only show initial lineups as "Line-up setup"
-      if (isInitial) {
-        eventDescription = `Line-up setup — ${teamName}`
-      } else {
-        return null // Skip non-initial lineups
-      }
+      // Beach volleyball: No lineup events (lineup is always players 1 and 2, only serving changes)
+      return null
     } else if (event.type === 'court_switch') {
       const setIndex = event.payload?.setIndex || event.setIndex || '?'
       const totalPoints = event.payload?.totalPoints || 0
@@ -1976,7 +1827,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     if (!lastEvent) return
     
     // If it's a rotation lineup, find the point before it and undo that instead
-    if (lastEvent.type === 'lineup' && !lastEvent.payload?.isInitial && !lastEvent.payload?.fromSubstitution && !lastEvent.payload?.liberoSubstitution) {
+    if (lastEvent.type === 'lineup' && !lastEvent.payload?.isInitial) {
       // This is a rotation lineup - find the point that triggered it
       const pointBefore = allEvents.find(e => e.type === 'point' && (e.seq || 0) < (lastEvent.seq || 0))
       if (pointBefore) {
@@ -1999,8 +1850,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       const nextUndoableEvent = allEvents.slice(currentIndex + 1).find(e => {
           if (e.type === 'lineup') {
             const hasInitial = e.payload?.isInitial === true
-            const hasSubstitution = e.payload?.fromSubstitution === true
-            if (!hasInitial && !hasSubstitution) {
+            if (!hasInitial) {
               return false
             }
           }
@@ -2032,21 +1882,18 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     const lastEvent = undoConfirm.event
     
     try {
-    // Skip rotation lineups (they don't have isInitial, fromSubstitution, or liberoSubstitution)
+    // Skip rotation lineups (they don't have isInitial)
     if (lastEvent.type === 'lineup') {
       const hasInitial = lastEvent.payload?.isInitial === true
-      const hasSubstitution = lastEvent.payload?.fromSubstitution === true
-      const hasLiberoSub = lastEvent.payload?.liberoSubstitution !== null && lastEvent.payload?.liberoSubstitution !== undefined
       // Only skip if it's a pure rotation lineup
-      if (!hasInitial && !hasSubstitution && !hasLiberoSub) {
+      if (!hasInitial) {
         // Find the next non-rotation event to undo
         const allEvents = data.events.sort((a, b) => new Date(b.ts) - new Date(a.ts))
         const nextEvent = allEvents.find(e => {
           if (e.id === lastEvent.id) return false
           if (e.type === 'lineup') {
             const eHasInitial = e.payload?.isInitial === true
-            const eHasSubstitution = e.payload?.fromSubstitution === true
-            if (!eHasInitial && !eHasSubstitution) return false
+            if (!eHasInitial) return false
           }
           return true
         })
@@ -2070,13 +1917,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       const field = teamKey === 'team_1' ? 'team_1Points' : 'team_2Points'
       const currentPoints = data.set[field]
         
-        // Check if this is set 5 and we're undoing a point that triggered court switch at 8 points
-        const is5thSet = data.set.index === 5
-        const wasAt8Points = currentPoints === 8
-        if (is5thSet && wasAt8Points && data.match?.set5CourtSwitched) {
-          // Undo the court switch
-          await db.matches.update(matchId, { set5CourtSwitched: false })
-        }
         
       if (currentPoints > 0) {
         await db.sets.update(data.set.id, {
@@ -2121,8 +1961,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       await db.events.delete(lastEvent.id)
       eventAlreadyDeleted = true
     }
-    
-    // Beach volleyball: No substitutions or liberos to undo
     
     // Track if we've already deleted the event (to avoid double deletion)
     let eventAlreadyDeleted = false
@@ -2338,13 +2176,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     [mapSideToTeamKey, timeoutsUsed]
   )
 
-  // Beach volleyball: No substitutions
-  const getSubstitutionsUsed = useCallback(
-    side => {
-      return 0
-    },
-    []
-  )
+  
 
   const handlePlaceholder = message => () => {
     alert(`${message} — coming soon.`)
@@ -2505,31 +2337,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     return pointsBefore.team_1 !== pointsAfter.team_1 || pointsBefore.team_2 !== pointsAfter.team_2
   }, [data?.events])
 
-  // Beach volleyball: No substitutions
+  
 
-  // Get available substitutes for a player being substituted out
-  // Beach volleyball: No substitutions, so always return empty array
-  const getAvailableSubstitutes = useCallback((teamKey, playerOutNumber, allowExceptional = false) => {
-    return [] // Beach volleyball: no substitutions
-  }, [])
-
-  // Get available players for exceptional substitution
-  // Beach volleyball: No substitutions, so always return empty array
-  const getAvailableExceptionalSubstitutes = useCallback((teamKey, playerOutNumber) => {
-    return [] // Beach volleyball: no substitutions
-  }, [])
-      
-  // Beach volleyball: No substitutions, so players can never come back
-  const canPlayerComeBack = useCallback((teamKey, playerNumber) => {
-    return false // Beach volleyball: no substitutions
-  }, [])
-    
-  // Beach volleyball: No substitutions, so players never come back
-  const hasPlayerComeBack = useCallback((teamKey, playerNumber) => {
-    return false // Beach volleyball: no substitutions
-  }, [])
-
-  // Beach volleyball: No liberos
 
   // Handle player click for sanction (only when rally is not in play)
   const handlePlayerClick = useCallback((teamKey, position, playerNumber, event) => {
@@ -2573,9 +2382,9 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     })
   }, [rallyStatus, playerActionMenu])
 
-  // Beach volleyball: No substitutions
+  
 
-  // Beach volleyball: No liberos
+ 
 
   // Handle forfait - award points/sets to opponent
   // For beach volleyball:
@@ -2664,9 +2473,9 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     })
   }, [data?.set, data?.match, matchId, logEvent])
 
-  // Beach volleyball: No substitutions
+  
 
-  // Beach volleyball: No substitutions
+  
 
   // Common modal position - all modals use the same position
   const getCommonModalPosition = useCallback((element, menuX, menuY) => {
@@ -2683,7 +2492,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     }
   }, [])
 
-  // Beach volleyball: No substitutions or liberos
+  
 
   // Open sanction modal from action menu
   const openSanctionFromMenu = useCallback(() => {
@@ -2702,7 +2511,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     setPlayerActionMenu(null)
   }, [playerActionMenu, getCommonModalPosition])
 
-  // Beach volleyball: No substitutions - injury results in forfait
+  // Beach volleyball: Injury results in forfait
   const openInjuryFromMenu = useCallback(async () => {
     if (!playerActionMenu || !data?.set) return
     const { team } = playerActionMenu
@@ -2710,7 +2519,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         await handleForfait(team, 'injury')
   }, [playerActionMenu, data?.set, handleForfait])
 
-  // Beach volleyball: No substitutions - injury results in forfait
+  // Beach volleyball: Injury results in forfait
   const handleInjury = useCallback(async () => {
     if (!injuryDropdown || !data?.set) return
     const { team } = injuryDropdown
@@ -2841,7 +2650,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     
     const { team, type, playerNumber, position, role, sanctionType } = sanctionConfirmModal
     
-    // If expulsion or disqualification for a court player, need to handle substitution
+
     if ((sanctionType === 'expulsion' || sanctionType === 'disqualification') && type === 'player' && playerNumber && position) {
       // Log the sanction event first
       await logEvent('sanction', {
@@ -2853,13 +2662,13 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         role
       })
       
-      // Beach volleyball: No liberos
+     
       
       // Close the confirmation modal
       setSanctionConfirmModal(null)
       
-      // Beach volleyball: No substitutions - expulsion/disqualification results in forfait
-          await handleForfait(team, sanctionType === 'expulsion' ? 'expulsion' : 'disqualification')
+      // Beach volleyball: Expulsion/disqualification results in forfait
+      await handleForfait(team, sanctionType === 'expulsion' ? 'expulsion' : 'disqualification')
     } else if (sanctionType === 'expulsion' || sanctionType === 'disqualification') {
       // Expulsion/disqualification - just log the sanction
       await logEvent('sanction', {
@@ -2907,7 +2716,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
           
           setSanctionConfirmModal(null)
           
-          // Beach volleyball: No substitutions - expulsion results in forfait
+          // Beach volleyball: Expulsion results in forfait
           await handleForfait(team, 'expulsion')
           return
         }
@@ -2940,7 +2749,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     }
   }, [sanctionConfirmModal, data?.set, data?.events, logEvent, mapTeamKeyToSide, handlePoint, leftIsTeam_1, getCurrentServe, handleForfait])
 
-  // Beach volleyball: No liberos
+ 
 
   const sanctionButtonStyles = useMemo(() => ({
     improper: {
@@ -3332,26 +3141,17 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       // Reset court switch tracking for this set
       const setIndex = courtSwitchModal.set.index
       const switchCountKey = `set${setIndex}_switchCount`
-      const match = await db.matches.get(matchId)
+      const updateData = {}
       
-      if (match) {
-        const updateData = {}
-        
-        // For set 5, reset the set5CourtSwitched flag
-        if (setIndex === 5) {
-          updateData.set5CourtSwitched = false
-        }
-        
-        // Reset the switch count for this set
-        // Calculate what the switch count should be after undoing this point
-        const totalPoints = newTeam_1Points + newTeam_2Points
-        const isSet3 = setIndex === 3
-        const switchInterval = isSet3 ? 5 : 7
-        const newSwitchCount = Math.floor(totalPoints / switchInterval)
-        updateData[switchCountKey] = newSwitchCount
-        
-        await db.matches.update(matchId, updateData)
-      }
+      // Reset the switch count for this set
+      // Calculate what the switch count should be after undoing this point
+      const totalPoints = newTeam_1Points + newTeam_2Points
+      const isSet3 = setIndex === 3
+      const switchInterval = isSet3 ? 5 : 7
+      const newSwitchCount = Math.floor(totalPoints / switchInterval)
+      updateData[switchCountKey] = newSwitchCount
+      
+      await db.matches.update(matchId, updateData)
     }
     
     setCourtSwitchModal(null)
@@ -3971,15 +3771,9 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
               // Find events with valid descriptions
               let lastEvent = null
               for (const e of allEvents) {
-                // Skip rally_start and replay from display
-                if (e.type === 'rally_start' || e.type === 'replay') continue
-                
-                // For lineup events, only show initial or substitution
-                if (e.type === 'lineup') {
-                  const hasInitial = e.payload?.isInitial === true
-                  const hasSubstitution = e.payload?.fromSubstitution === true
-                  if (!hasInitial && !hasSubstitution) continue
-                }
+                // Skip rally_start, replay, and lineup events from display
+                // Beach volleyball: Lineup is always players 1 and 2, only serving changes
+                if (e.type === 'rally_start' || e.type === 'replay' || e.type === 'lineup') continue
                 
                 // Try to get description
                 const desc = getActionDescription(e)
@@ -4020,7 +3814,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                 }}>
                   {(leftTeam.playersOnCourt || []).slice(0, 2).map((player, idx) => {
                     const teamKey = leftIsTeam_1 ? 'team_1' : 'team_2'
-                    const canSubstitute = false // Beach volleyball: no substitutions
+
                     
                     // Get player number from coin toss data - required, no fallback
                     const coinTossData = data?.match?.coinTossData?.players
@@ -4370,8 +4164,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                 }}>
                   {(rightTeam.playersOnCourt || []).slice(0, 2).map((player, idx) => {
                     const teamKey = leftIsTeam_1 ? 'team_2' : 'team_1'
-                    const teamSubstitutions = 0 // Beach volleyball: no substitutions
-                    const canSubstitute = false // Beach volleyball: no substitutions
                     
                     // Get player number from coin toss data - required, no fallback
                     const coinTossData = data?.match?.coinTossData?.players
@@ -5704,7 +5496,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                     <div style={{ fontWeight: 600, fontSize: '12px' }}>Last Name</div>
                     <div style={{ fontWeight: 600, fontSize: '12px' }}>First Name</div>
                     <div style={{ fontWeight: 600, fontSize: '12px' }}>DOB</div>
-                    <div style={{ fontWeight: 600, fontSize: '12px' }}>Libero</div>
                     <div style={{ fontWeight: 600, fontSize: '12px' }}>Captain</div>
                   </div>
                   {teamPlayers.map((player, idx) => (
@@ -6328,16 +6119,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                         ).length
                       }, 0)
                       
-                      const leftTotalSubs = finishedSets.reduce((sum, set) => {
-                        return sum + (data?.events || []).filter(e => 
-                          e.type === 'substitution' && e.setIndex === set.index && e.payload?.team === currentLeftTeamKey
-                        ).length
-                      }, 0)
-                      const rightTotalSubs = finishedSets.reduce((sum, set) => {
-                        return sum + (data?.events || []).filter(e => 
-                          e.type === 'substitution' && e.setIndex === set.index && e.payload?.team === currentRightTeamKey
-                        ).length
-                      }, 0)
                       
                       const leftTotalWins = finishedSets.filter(s => {
                         const leftPoints = currentLeftTeamKey === 'team_1' ? s.team_1Points : s.team_2Points
@@ -6429,26 +6210,22 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                               </tr>
                               <tr style={{ borderBottom: '2px solid rgba(255,255,255,0.2)' }}>
                                 <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>T</th>
-                                <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>S</th>
                                 <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>W</th>
                                 <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>P</th>
                                 <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}></th>
                                 <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>P</th>
                                 <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>W</th>
-                                <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>S</th>
                                 <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>T</th>
                               </tr>
                             </thead>
                             <tbody>
                               <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
                                 <td style={{ padding: '4px 2px', textAlign: 'center' }}>{leftTotalTimeouts}</td>
-                                <td style={{ padding: '4px 2px', textAlign: 'center' }}>{leftTotalSubs}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center' }}>{leftTotalWins}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center' }}>{leftTotalPoints}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center', fontSize: '8px', color: 'var(--muted)' }}>{totalDurationMin}'</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center' }}>{rightTotalPoints}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center' }}>{rightTotalWins}</td>
-                                <td style={{ padding: '4px 2px', textAlign: 'center' }}>{rightTotalSubs}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center' }}>{rightTotalTimeouts}</td>
                               </tr>
                             </tbody>
@@ -6585,13 +6362,11 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                           <tr style={{ borderBottom: '2px solid rgba(255,255,255,0.2)' }}>
                             <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>Set</th>
                             <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>T</th>
-                            <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>S</th>
                             <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>W</th>
                             <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>P</th>
                             <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}></th>
                             <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>P</th>
                             <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>W</th>
-                            <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>S</th>
                             <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>T</th>
                           </tr>
                         </thead>
@@ -6609,13 +6384,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                               e.type === 'timeout' && e.setIndex === set.index && e.payload?.team === currentRightTeamKey
                             ).length
                             
-                            // Calculate substitutions for current left/right teams
-                            const leftSubs = (data?.events || []).filter(e => 
-                              e.type === 'substitution' && e.setIndex === set.index && e.payload?.team === currentLeftTeamKey
-                            ).length
-                            const rightSubs = (data?.events || []).filter(e => 
-                              e.type === 'substitution' && e.setIndex === set.index && e.payload?.team === currentRightTeamKey
-                            ).length
                             
                             // Determine winner for current left/right teams
                             const leftWon = leftPoints > rightPoints ? 1 : 0
@@ -6635,13 +6403,11 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                               <tr key={set.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
                                 <td style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>{toRoman(set.index)}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center', fontSize: '8px' }}>{leftTimeouts || 0}</td>
-                                <td style={{ padding: '4px 2px', textAlign: 'center', fontSize: '8px' }}>{leftSubs || 0}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center', fontSize: '8px' }}>{leftWon}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center', fontSize: '8px' }}>{leftPoints}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center', fontSize: '8px', color: 'var(--muted)' }}>{duration}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center', fontSize: '8px' }}>{rightPoints}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center', fontSize: '8px' }}>{rightWon}</td>
-                                <td style={{ padding: '4px 2px', textAlign: 'center', fontSize: '8px' }}>{rightSubs || 0}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center', fontSize: '8px' }}>{rightTimeouts || 0}</td>
                               </tr>
                             )
@@ -7136,8 +6902,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         )
       })()}
       
-      {/* Beach volleyball: No substitutions or liberos */}
-      
+
       {sanctionDropdown && (() => {
         // Get element position - use stored coordinates if available
         let dropdownStyle
@@ -7446,35 +7211,12 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
               <div style={{ marginBottom: '8px', fontSize: '11px', fontWeight: 600, color: 'var(--text)', textAlign: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '6px' }}>
                 Injury
               </div>
-              <div style={{ marginBottom: '8px', fontSize: '11px', color: 'var(--muted)', textAlign: 'center' }}>
+              <div style={{ fontSize: '11px', color: 'var(--muted)', textAlign: 'center' }}>
                 # {injuryDropdown.playerNumber}
               </div>
-              <button
-                onClick={handleInjury}
-                style={{
-                  padding: '6px 12px',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  background: 'rgba(239, 68, 68, 0.2)',
-                  color: '#f87171',
-                  border: '1px solid rgba(239, 68, 68, 0.4)',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  textAlign: 'center',
-                  width: '100%',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(239, 68, 68, 0.3)'
-                  e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.6)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'
-                  e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)'
-                }}
-              >
-                Substitute
-              </button>
+              <div style={{ marginTop: '8px', fontSize: '10px', color: 'var(--muted)', textAlign: 'center', fontStyle: 'italic' }}>
+                Action to be determined
+              </div>
               </div>
             </div>
           </>
@@ -7569,100 +7311,12 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         )
       })()}
       
-      {/* Beach volleyball: No substitutions */}
-      {false && (() => {
-        const teamData = substitutionConfirm.team === 'team_1' ? data?.team_1Team : data?.team_2Team
-        const teamColor = teamData?.color || (substitutionConfirm.team === 'team_1' ? '#ef4444' : '#3b82f6')
-        const teamLabel = substitutionConfirm.team === teamAKey ? 'A' : 'B'
-        const teamName = teamData?.name || (substitutionConfirm.team === 'team_1' ? 'Team 1' : 'Team 2')
-        const isBright = isBrightColor(teamColor)
-        
-        return (
-          <Modal
-            title={
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span>{teamName}</span>
-                <span
-                  style={{
-                    padding: '4px 12px',
-                    borderRadius: '6px',
-                    fontSize: '14px',
-                    fontWeight: 700,
-                    background: teamColor,
-                    color: isBright ? '#000' : '#fff'
-                  }}
-                >
-                  {teamLabel}
-                </span>
-              </div>
-            }
-            open={true}
-            onClose={cancelSubstitutionConfirm}
-            width="auto"
-            hideCloseButton={true}
-          >
-            <div style={{ padding: '24px', textAlign: 'center' }}>
-              {substitutionConfirm.isExceptional && (
-                <div style={{ marginBottom: '16px', padding: '8px', background: 'rgba(234, 179, 8, 0.2)', border: '1px solid rgba(234, 179, 8, 0.4)', borderRadius: '6px', fontSize: '12px', color: '#facc15', fontWeight: 600 }}>
-                  Exceptional Substitution - Player cannot take part anymore
-                </div>
-              )}
-            <div style={{ marginBottom: '24px', fontSize: '16px', fontWeight: 600 }}>
-              <div style={{ marginBottom: '8px', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                <span>OUT: # {substitutionConfirm.playerOut}</span>
-                {(substitutionConfirm.isExpelled || substitutionConfirm.isDisqualified) ? (
-                  <span style={{ fontSize: '24px', fontWeight: 700, color: '#ef4444' }}>✕</span>
-                ) : (
-                  <span style={{ fontSize: '24px', fontWeight: 700 }}>↓</span>
-                )}
-              </div>
-              <div style={{ color: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                <span>IN: # {substitutionConfirm.playerIn}</span>
-                <span style={{ fontSize: '24px', fontWeight: 700 }}>↑</span>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-              <button
-                onClick={confirmSubstitution}
-                style={{
-                  padding: '12px 24px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  background: 'var(--accent)',
-                  color: '#000',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
-                Yes
-              </button>
-              <button
-                onClick={cancelSubstitutionConfirm}
-                style={{
-                  padding: '12px 24px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  color: 'var(--text)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </Modal>
-        )
-      })()}
       
-      {/* Beach volleyball: No liberos */}
       
-      {/* Beach volleyball: No liberos */}
       
-      {/* Beach volleyball: No liberos */}
+      
+      
+      
       
       {reopenSetConfirm && (
         <Modal
@@ -7733,9 +7387,9 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       )}
 
 
-      {/* Beach volleyball: No liberos */}
       
-      {/* Beach volleyball: No liberos */}
+      
+      
       
       {setStartTimeModal && (
         <SetStartTimeModal
@@ -8468,7 +8122,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
           </Modal>
       )}
       
-      {/* Beach volleyball: No substitutions */}
       
       {/* Set Transition Modal (after set 1 or before set 3) */}
       {setTransitionModal && (() => {
@@ -8769,182 +8422,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         )
       })()}
       
-      {/* Set 5 Side and Service Modal */}
-      {set5SideServiceModal && (() => {
-        const { set4LeftTeamLabel, set4RightTeamLabel, set4ServingTeamLabel } = set5SideServiceModal
-        
-        // Get team data based on selected left team
-        const leftTeamKey = set5SelectedLeftTeam === 'A' ? teamAKey : teamBKey
-        const rightTeamKey = set5SelectedLeftTeam === 'A' ? teamBKey : teamAKey
-        const leftTeamData = leftTeamKey === 'team_1' ? data?.team_1Team : data?.team_2Team
-        const rightTeamData = rightTeamKey === 'team_1' ? data?.team_1Team : data?.team_2Team
-        const leftTeamName = leftTeamData?.name || `Team ${set5SelectedLeftTeam}`
-        const rightTeamName = rightTeamData?.name || `Team ${set5SelectedLeftTeam === 'A' ? 'B' : 'A'}`
-        const leftTeamColor = leftTeamData?.color || (leftTeamKey === 'team_1' ? '#ef4444' : '#3b82f6')
-        const rightTeamColor = rightTeamData?.color || (rightTeamKey === 'team_1' ? '#ef4444' : '#3b82f6')
-        
-        // Determine which side is serving (left or right)
-        const servingTeamLabel = set5SelectedFirstServe
-        const leftTeamLabel = set5SelectedLeftTeam
-        const rightTeamLabel = set5SelectedLeftTeam === 'A' ? 'B' : 'A'
-        const leftIsServing = servingTeamLabel === leftTeamLabel
-        const rightIsServing = servingTeamLabel === rightTeamLabel
-        
-        return (
-          <Modal
-            title="Set 5 - Choose Side and Service"
-            open={true}
-            onClose={() => {}}
-            width={500}
-            hideCloseButton={true}
-          >
-            <div style={{ padding: '24px' }}>
-              <p style={{ marginBottom: '24px', fontSize: '16px', textAlign: 'center' }}>
-                Configure teams and service for Set 5.
-              </p>
-              
-              {/* Teams on Sides */}
-              <div style={{ marginBottom: '24px' }}>
-                <div style={{ 
-                  display: 'flex', 
-                  gap: '16px', 
-                  alignItems: 'center',
-                  padding: '16px',
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(255, 255, 255, 0.1)'
-                }}>
-                  {/* Team A Box */}
-                  <div style={{ 
-                    flex: 1, 
-                    textAlign: 'center',
-                    padding: '16px',
-                    background: leftTeamColor,
-                    borderRadius: '8px',
-                    border: '2px solid rgba(255, 255, 255, 0.3)',
-                    position: 'relative'
-                  }}>
-                    <div style={{ fontSize: '18px', fontWeight: 700, color: '#fff', marginBottom: '4px' }}>
-                      Team {leftTeamLabel}
-                    </div>
-                    <div style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.9)', marginBottom: '8px' }}>
-                      {leftTeamName}
-                    </div>
-                    {/* Serve ball underneath if serving */}
-                    {leftIsServing && (
-                      <img
-                        src={mikasaVolleyball}
-                        alt="Serving team"
-                        style={{
-                          width: '38px',
-                          height: '38px',
-                          filter: 'drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35))',
-                          marginTop: '8px'
-                        }}
-                      />
-                    )}
-                  </div>
-                  
-                  {/* Team B Box */}
-                  <div style={{ 
-                    flex: 1, 
-                    textAlign: 'center',
-                    padding: '16px',
-                    background: rightTeamColor,
-                    borderRadius: '8px',
-                    border: '2px solid rgba(255, 255, 255, 0.3)',
-                    position: 'relative'
-                  }}>
-                    <div style={{ fontSize: '18px', fontWeight: 700, color: '#fff', marginBottom: '4px' }}>
-                      Team {rightTeamLabel}
-                    </div>
-                    <div style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.9)', marginBottom: '8px' }}>
-                      {rightTeamName}
-                    </div>
-                    {/* Serve ball underneath if serving */}
-                    {rightIsServing && (
-                      <img
-                        src={mikasaVolleyball}
-                        alt="Serving team"
-                        style={{
-                          width: '38px',
-                          height: '38px',
-                          filter: 'drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35))',
-                          marginTop: '8px'
-                        }}
-                      />
-                    )}
-                  </div>
-                </div>
-                
-                {/* Switch Teams Button */}
-                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
-                  <button
-                    onClick={() => {
-                      setSet5SelectedLeftTeam(set5SelectedLeftTeam === 'A' ? 'B' : 'A')
-                    }}
-                    style={{
-                      padding: '8px 16px',
-                      fontSize: '14px',
-                      fontWeight: 600,
-                      background: 'rgba(255, 255, 255, 0.1)',
-                      color: 'var(--text)',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    Switch Teams
-                  </button>
-                </div>
-                
-                {/* Switch Serve Button */}
-                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '12px' }}>
-                  <button
-                    onClick={() => {
-                      setSet5SelectedFirstServe(set5SelectedFirstServe === 'A' ? 'B' : 'A')
-                    }}
-                    style={{
-                      padding: '8px 16px',
-                      fontSize: '14px',
-                      fontWeight: 600,
-                      background: 'rgba(255, 255, 255, 0.1)',
-                      color: 'var(--text)',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    Switch Serve
-                  </button>
-                </div>
-              </div>
-              
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                <button
-                  onClick={() => confirmSet5SideService(set5SelectedLeftTeam, set5SelectedFirstServe)}
-                  style={{
-                    padding: '12px 32px',
-                    fontSize: '16px',
-                    fontWeight: 600,
-                    background: 'var(--accent)',
-                    color: '#000',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Confirm
-                </button>
-              </div>
-            </div>
-          </Modal>
-        )
-      })()}
-      
-      {/* Beach volleyball: No liberos */}
       
       {undoConfirm && (
         <Modal
@@ -9099,8 +8576,7 @@ function LineupModal({ team, teamData, players, matchId, setIndex, mode = 'initi
           return
         }
       }
-      
-      // 5. Beach volleyball: No substitutions
+
     })
     
     // Re-check for duplicates to mark all of them
@@ -9383,7 +8859,7 @@ function LineupModal({ team, teamData, players, matchId, setIndex, mode = 'initi
           ))}
         </div>
 
-        {/* Available players (excluding liberos and disqualified) */}
+        {/* Available players (excluding disqualified) */}
         <div style={{
           marginBottom: '16px',
           padding: '12px',
@@ -9416,16 +8892,7 @@ function LineupModal({ team, teamData, players, matchId, setIndex, mode = 'initi
                   return false
                 }
                 
-                // Exclude exceptionally substituted players (cannot take part anymore)
-                const wasExceptionallySubstituted = events.some(e => 
-                  e.type === 'substitution' && 
-                  e.payload?.team === team &&
-                  String(e.payload?.playerOut) === String(p.number) &&
-                  e.payload?.isExceptional === true
-                )
-                if (wasExceptionallySubstituted) {
-                  return false
-                }
+                
                 
                 // Exclude expelled players in the current set (cannot take part in this set)
                 // Note: Disqualification is checked above and applies to all sets

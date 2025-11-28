@@ -194,14 +194,15 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           }
           
           // Set sides (A/B) - determine from match data
-          // For Set 1, home team is typically on side A
           if (setNum === 1) {
             set('t1_side', 'A');
             set('t2_side', 'B');
             set('b_t1_side', 'A');
             set('b_t2_side', 'B');
           } else if (setNum === 2) {
-            // For Set 2, teams typically switch sides
+            // Set 2: The team who lost the initial coin toss chooses sides
+            // Set 3: Another coin toss decides sides
+            // For now, default to switching sides (actual sides determined by coin toss data)
             set('b_t1_side', 'B');
             set('b_t2_side', 'A');
           }

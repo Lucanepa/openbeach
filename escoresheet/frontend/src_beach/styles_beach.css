@@ -133,8 +133,6 @@
       0 0 4px rgba(255,255,255,0.15);
     z-index: 1;
   }
-
-  /* Beach volleyball: No bench row spacing */
   
   /* Officials aligned grid */
   .officials-grid {
@@ -358,12 +356,6 @@
   .status-indicator.status-offline .status-dot {
     background: var(--danger);
     box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
-  }
-
-  /* Online but no Supabase - Orange */
-  .status-indicator.status-online_no_supabase .status-dot {
-    background: #f59e0b;
-    box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
   }
 
   /* Connecting - Yellow/Orange pulsing */

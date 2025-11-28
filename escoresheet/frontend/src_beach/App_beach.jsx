@@ -594,7 +594,6 @@ function App() {
             createdAt: timestamp
           })
 
-          // Don't sync test seed data to Supabase - it comes from the seed script
 
           const playersToCreate = definition.players.map(player => ({
             teamId,
@@ -610,7 +609,6 @@ function App() {
           }))
 
           await db.players.bulkAdd(playersToCreate, undefined, { allKeys: true })
-          // Don't sync test seed players to Supabase - they come from the seed script
 
           team = {
             id: teamId,
@@ -869,7 +867,6 @@ function App() {
         })
 
         createdMatchId = existingMatch.id
-        // Don't sync test match metadata to Supabase - it comes from the seed script
       } else {
         const newMatchId = await db.matches.add({
           ...baseMatchData,
@@ -878,7 +875,6 @@ function App() {
         })
 
         createdMatchId = newMatchId
-        // Don't sync test match metadata to Supabase - it comes from the seed script
       }
     })
 
@@ -922,7 +918,7 @@ function App() {
       // Clear previous test match locally
       await clearLocalTestData()
 
-      // Create test match locally only - no Supabase interaction
+      // Create test match locally only
       await createTestMatchData()
     } catch (error) {
       console.error('Failed to prepare test match:', error)

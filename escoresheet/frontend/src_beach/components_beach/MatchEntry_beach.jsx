@@ -11,7 +11,6 @@ export default function MatchEntry({ matchId, team, onBack }) {
     return () => clearInterval(timer)
   }, [])
 
-  // Beach volleyball: No bench connection/heartbeat
 
   // Load match data
   const data = useLiveQuery(async () => {
@@ -74,33 +73,7 @@ export default function MatchEntry({ matchId, team, onBack }) {
       return team === teamAKey ? 'left' : 'right'
     }
     
-    // Set 5: Special case with court switch at 8 points
-    if (data.set.index === 5) {
-      // Use set5LeftTeam if specified
-      if (data.match.set5LeftTeam) {
-        const leftTeamKey = data.match.set5LeftTeam === 'A' ? teamAKey : teamBKey
-        let isLeft = team === leftTeamKey
-        
-        // If court switch has happened at 8 points, switch again
-        if (data.match.set5CourtSwitched) {
-          isLeft = !isLeft
-        }
-        
-        return isLeft ? 'left' : 'right'
-      }
-      
-      // Fallback: Set 5 starts with teams switched (like set 2+)
-      let isLeft = team !== teamAKey
-      
-      // If court switch has happened at 8 points, switch again
-      if (data.match.set5CourtSwitched) {
-        isLeft = !isLeft
-      }
-      
-      return isLeft ? 'left' : 'right'
-    }
-    
-    // Set 2, 3, 4: Teams switch sides (Team A goes right, Team B goes left)
+    // Set 2, 3: Teams switch sides (Team A goes right, Team B goes left)
     return team === teamAKey ? 'right' : 'left'
   }, [data?.set, data?.match, team])
 
@@ -112,7 +85,7 @@ export default function MatchEntry({ matchId, team, onBack }) {
       name: isTeam_1 ? data.team_1Team?.name : data.team_2Team?.name,
       color: isTeam_1 ? data.team_1Team?.color : data.team_2Team?.color,
       players: isTeam_1 ? data.team_1Players : data.team_2Players,
-      // Beach volleyball: No bench staff
+
     }
   }, [data, team])
 
@@ -150,16 +123,6 @@ export default function MatchEntry({ matchId, team, onBack }) {
     if (!data?.events || !data?.set) return 0
     return data.events.filter(
       event => event.type === 'timeout' && 
-      event.setIndex === data.set.index && 
-      event.payload?.team === team
-    ).length
-  }, [data?.events, data?.set, team])
-
-  // Get substitutions used in current set
-  const substitutionsUsed = useMemo(() => {
-    if (!data?.events || !data?.set) return 0
-    return data.events.filter(
-      event => event.type === 'substitution' && 
       event.setIndex === data.set.index && 
       event.payload?.team === team
     ).length
@@ -266,14 +229,6 @@ export default function MatchEntry({ matchId, team, onBack }) {
       !e.payload?.playerNumber // Only team/official sanctions, not player sanctions
     )
   }, [data?.events, team])
-
-  // Beach volleyball: No bench players (only 2 players per team)
-  const benchPlayersWithSanctions = []
-
-  // Beach volleyball: No liberos
-
-  // Beach volleyball: No bench officials
-
   // Get overall team sanctions
   const overallSanctions = useMemo(() => {
     if (!data?.events) return []
@@ -514,14 +469,13 @@ export default function MatchEntry({ matchId, team, onBack }) {
             flex: teamSide === 'right' ? '1' : 'none',
             minWidth: teamSide === 'right' ? '300px' : 'auto'
           }}>
-            {/* Timeouts and Substitutions */}
+            {/* Timeouts */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: teamSide === 'right' ? '1fr 1fr' : 'repeat(auto-fit, minmax(200px, 1fr))',
+              gridTemplateColumns: '1fr',
               gap: '12px',
               marginBottom: teamSide === 'right' ? '0' : '20px'
             }}>
-              {/* Timeouts */}
               <div style={{
                 background: 'rgba(255,255,255,0.05)',
                 borderRadius: '8px',
@@ -535,24 +489,8 @@ export default function MatchEntry({ matchId, team, onBack }) {
                   {timeoutsUsed} / 2
                 </div>
               </div>
-
-              {/* Substitutions */}
-              <div style={{
-                background: 'rgba(255,255,255,0.05)',
-                borderRadius: '8px',
-                padding: '12px',
-                textAlign: 'center'
-              }}>
-                <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '4px' }}>
-                  Sub
-                </div>
-                <div style={{ fontSize: '20px', fontWeight: 700 }}>
-                  {substitutionsUsed} / 6
-                </div>
-              </div>
             </div>
 
-            {/* Beach volleyball: No bench section (only 2 players per team) */}
         </div>
 
         {/* Overall Sanctions */}

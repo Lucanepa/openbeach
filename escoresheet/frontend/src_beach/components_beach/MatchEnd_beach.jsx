@@ -89,13 +89,6 @@ export default function MatchEnd({ matchId, onShowScoresheet, onGoHome }) {
         ? setEvents.filter(e => e.type === 'timeout' && e.payload?.team === teamBKey).length
         : null
       
-      const teamASubstitutions = isSetFinished
-        ? setEvents.filter(e => e.type === 'substitution' && e.payload?.team === teamAKey).length
-        : null
-      const teamBSubstitutions = isSetFinished
-        ? setEvents.filter(e => e.type === 'substitution' && e.payload?.team === teamBKey).length
-        : null
-      
       const teamAWon = isSetFinished && teamAPoints !== null && teamBPoints !== null
         ? (teamAPoints > teamBPoints ? 1 : 0)
         : null
@@ -122,11 +115,9 @@ export default function MatchEnd({ matchId, onShowScoresheet, onGoHome }) {
       results.push({
         setNumber: setNum,
         teamATimeouts,
-        teamASubstitutions,
         teamAWon,
         teamAPoints,
         teamBTimeouts,
-        teamBSubstitutions,
         teamBWon,
         teamBPoints,
         duration
@@ -275,7 +266,7 @@ export default function MatchEnd({ matchId, onShowScoresheet, onGoHome }) {
   const overflowSanctions = processedSanctions.slice(10)
 
   const handleSaveSignature = async (role, signatureData) => {
-    if (role === 'home-captain') {
+    if (role === 'team_1-captain') {
       await db.matches.update(matchId, { team_1CaptainSignature: signatureData })
     } else if (role === 'team_2-captain') {
       await db.matches.update(matchId, { team_2CaptainSignature: signatureData })
@@ -292,7 +283,7 @@ export default function MatchEnd({ matchId, onShowScoresheet, onGoHome }) {
   }
 
   const getSignatureDisplayName = (role) => {
-    if (role === 'home-captain') {
+    if (role === 'team_1-captain') {
       return `${team_1Team?.name || 'Team 1'} Captain ${team_1Captain ? `(#${team_1Captain.number})` : ''}`
     } else if (role === 'team_2-captain') {
       return `${team_2Team?.name || 'Team 2'} Captain ${team_2Captain ? `(#${team_2Captain.number})` : ''}`
@@ -432,7 +423,7 @@ export default function MatchEnd({ matchId, onShowScoresheet, onGoHome }) {
               Team {teamALabel}
             </div>
             <div style={{ fontSize: '14px', color: 'var(--muted)', marginBottom: '12px' }}>
-              {team_1Team?.name || 'Home'}
+              {team_1Team?.name || 'Team 1'}
             </div>
             <div style={{ 
               fontSize: '48px', 

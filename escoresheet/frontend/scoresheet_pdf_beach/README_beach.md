@@ -76,7 +76,6 @@ Database player records are mapped to scoresheet format:
 Set data from database includes:
 - `startTime` / `endTime`: Set timing
 - `team_1Points` / `team_2Points`: Final scores
-- Lineup and substitution data (to be implemented from events)
 
 ### Match Info
 Match metadata includes:
@@ -84,15 +83,6 @@ Match metadata includes:
 - Officials (referees, scorer, assistant scorer)
 - Venue and date information
 - Signatures (coaches and captains)
-
-## TODO: Future Enhancements
-
-1. **Parse Events**: Extract lineups, substitutions, and timeouts from event log
-2. **Sanctions**: Parse sanction events and display in sanctions table
-3. **Set 5 Logic**: Handle court change at 8 points in deciding set
-4. **Validation**: Add validation for incomplete data
-5. **Offline Support**: Ensure scoresheet works without network connection
-6. **Export Options**: Add PDF export functionality (currently uses browser print)
 
 ## Development
 

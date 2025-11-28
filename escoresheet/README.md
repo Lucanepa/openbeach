@@ -1,6 +1,6 @@
-# Open eScoresheet (PWA + Supabase)
+# Open eScoresheet (PWA)
 
-An offline-first, installable volleyball e-scoresheet. Works fully offline (IndexedDB). When online, it can sync to Supabase (Pro-ready). Licensed GPL-3.0.
+An offline-first, installable volleyball e-scoresheet. Works fully offline (IndexedDB). Licensed GPL-3.0.
 
 ## Quick start
 
@@ -11,7 +11,6 @@ cd escoresheet/frontend
 
 # 2) Configure
 cp .env.example .env
-# set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
 
 # 3) Run locally
 npm i
@@ -35,21 +34,12 @@ Open [http://localhost:5173](http://localhost:5173) during dev. The app is a PWA
 Add DNS records in Squarespace:
 
 * **CNAME**: `app` → `<your-username>.github.io`
-* (Optional) apex stays on Squarespace for the marketing site.
-* (Optional) **CNAME**: `api` → `<your-project-ref>.supabase.co` then set a custom domain in Supabase.
-
-## Supabase (optional sync)
-
-* Create a new project and run the SQL from `supabase/sql/schema.sql`.
-* Enable Realtime on `matches`, `sets`, `events` if you want live updates.
-* Add `https://app.<domain>` to Auth → Redirect URLs (if using auth later).
 
 ## Tech
 
 * React + Vite + PWA
 * IndexedDB (Dexie)
 * jsPDF (export)
-* Supabase JS client (optional online sync)
 
 ## License
 

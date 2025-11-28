@@ -7,7 +7,7 @@ export default function Referee({ matchId, onExit }) {
   const [refereeView, setRefereeView] = useState('2nd') // '1st' or '2nd'
   const [activeTimeout, setActiveTimeout] = useState(null) // { team: 'team_1'|'team_2', countdown: number, eventId: number }
   const [processedTimeouts, setProcessedTimeouts] = useState(new Set()) // Track which timeout events we've already shown
-  // Beach volleyball: No substitutions
+  
   
   // Send heartbeat to indicate referee is connected (only if connection is enabled)
   useEffect(() => {
@@ -189,10 +189,6 @@ export default function Referee({ matchId, onExit }) {
       eventDescription = `${teamName} point (${team_1Label} ${team_1Score}:${team_2Score} ${team_2Label})`
     } else if (event.type === 'timeout') {
       eventDescription = `Timeout — ${teamName}`
-    } else if (event.type === 'substitution') {
-      const playerOut = event.payload?.playerOut || '?'
-      const playerIn = event.payload?.playerIn || '?'
-      eventDescription = `Sub — ${teamName} (${playerOut}→${playerIn})`
     } else if (event.type === 'rally_start') {
       eventDescription = 'Rally started'
     } else if (event.type === 'replay') {
@@ -227,7 +223,7 @@ export default function Referee({ matchId, onExit }) {
       e => (e.setIndex || 1) === (data.currentSet?.index || 1)
     )
 
-    const homeTimeouts = currentSetEvents.filter(
+    const team_1Timeouts = currentSetEvents.filter(
       e => e.type === 'timeout' && e.payload?.team === 'team_1'
     ).length
 
@@ -235,12 +231,12 @@ export default function Referee({ matchId, onExit }) {
       e => e.type === 'timeout' && e.payload?.team === 'team_2'
     ).length
 
-    // Beach volleyball: No substitutions
+    
 
     // Get sanctions for entire match (sanctions persist across sets)
-    const homeSanctions = data.events
+    const team_1Sanctions = data.events
       .filter(e => 
-        e.type === 'sanction' && e.payload?.team === 'home'
+        e.type === 'sanction' && e.payload?.team === 'team_1'
       )
       .map(e => ({
         type: e.payload?.sanctionType || e.payload?.type || 'unknown',
@@ -265,7 +261,7 @@ export default function Referee({ matchId, onExit }) {
       }))
 
     return {
-      team_1: { timeouts: homeTimeouts, sanctions: homeSanctions },
+      team_1: { timeouts: team_1Timeouts, sanctions: team_1Sanctions },
       team_2: { timeouts: team_2Timeouts, sanctions: team_2Sanctions }
     }
   }, [data])
@@ -282,24 +278,22 @@ export default function Referee({ matchId, onExit }) {
     )
 
     // Find latest lineup events
-    const homeLineupEvents = currentSetEvents.filter(
+    const team_1LineupEvents = currentSetEvents.filter(
       e => e.type === 'lineup' && e.payload?.team === 'team_1'
     )
     const team_2LineupEvents = currentSetEvents.filter(
       e => e.type === 'lineup' && e.payload?.team === 'team_2'
     )
 
-    const latestTeam_1Lineup = homeLineupEvents[homeLineupEvents.length - 1]
+    const latestTeam_1Lineup = team_1LineupEvents[team_1LineupEvents.length - 1]
     const latestTeam_2Lineup = team_2LineupEvents[team_2LineupEvents.length - 1]
 
     return {
       team_1: {
-        lineup: latestTeam_1Lineup?.payload?.lineup || {},
-        liberoSubs: buildLiberoSubMap(latestTeam_1Lineup)
+        lineup: latestTeam_1Lineup?.payload?.lineup || {}
       },
       team_2: {
-        lineup: latestTeam_2Lineup?.payload?.lineup || {},
-        liberoSubs: buildLiberoSubMap(latestTeam_2Lineup)
+        lineup: latestTeam_2Lineup?.payload?.lineup || {}
       }
     }
   }, [data])
@@ -318,12 +312,12 @@ export default function Referee({ matchId, onExit }) {
   // Determine who has serve based on events
   const getCurrentServe = useMemo(() => {
     if (!data?.currentSet || !data?.match) {
-      return data?.match?.firstServe || 'home'
+      return data?.match?.firstServe || 'team_1'
     }
     
     if (!data?.events || data.events.length === 0) {
       // First rally: use firstServe from match
-      return data.match.firstServe || 'home'
+      return data.match.firstServe || 'team_1'
     }
     
     // Find the last point event in the current set to determine serve
@@ -337,12 +331,12 @@ export default function Referee({ matchId, onExit }) {
     
     if (pointEvents.length === 0) {
       // No points yet, use firstServe
-      return data.match.firstServe || 'home'
+      return data.match.firstServe || 'team_1'
     }
     
     // The team that scored the last point now has serve
     const lastPoint = pointEvents[0]
-    return lastPoint.payload?.team || data.match.firstServe || 'home'
+    return lastPoint.payload?.team || data.match.firstServe || 'team_1'
   }, [data?.events, data?.currentSet, data?.match])
 
   // Determine team labels (A or B)
@@ -353,36 +347,23 @@ export default function Referee({ matchId, onExit }) {
   // Determine which team is on the left based on set index and referee view
   // In set 1, Team A is always on the left (for 2nd referee view)
   // In subsequent sets, teams switch sides
-  const leftIsHomeFor2ndRef = useMemo(() => {
+  const leftIsTeam_1For2ndRef = useMemo(() => {
     if (!data?.currentSet) return true
     
     // Set 1: Team A on left
     if (data.currentSet.index === 1) {
-      return teamAKey === 'home'
+      return teamAKey === 'team_1'
     }
     
-    // Set 5: Special case with court switch at 8 points
-    if (data.currentSet.index === 5) {
-      // Set 5 starts with teams switched (like set 2+)
-      let isTeam_1 = teamAKey !== 'team_1'
-      
-      // If court switch has happened at 8 points, switch again
-      if (data.match?.set5CourtSwitched) {
-        isTeam_1 = !isTeam_1
-      }
-      
-      return isTeam_1
-    }
-    
-    // Set 2, 3, 4: Teams switch sides (Team A goes right, Team B goes left)
-    return teamAKey !== 'home'
-  }, [data?.currentSet, data?.match?.set5CourtSwitched, teamAKey])
+    // Set 2, 3: Teams switch sides (Team A goes right, Team B goes left)
+    return teamAKey !== 'team_1'
+  }, [data?.currentSet, teamAKey])
 
   // For 1st referee, reverse the sides (they see from opposite end)
-  const leftIsHome = refereeView === '1st' ? !leftIsHomeFor2ndRef : leftIsHomeFor2ndRef
+  const leftIsTeam_1 = refereeView === '1st' ? !leftIsTeam_1For2ndRef : leftIsTeam_1For2ndRef
   
-  const leftTeam = leftIsHome ? 'team_1' : 'team_2'
-  const rightTeam = leftIsHome ? 'team_2' : 'team_1'
+  const leftTeam = leftIsTeam_1 ? 'team_1' : 'team_2'
+  const rightTeam = leftIsTeam_1 ? 'team_2' : 'team_1'
   
   const leftTeamData = leftTeam === 'team_1' ? data?.team_1Team : data?.team_2Team
   const rightTeamData = rightTeam === 'team_1' ? data?.team_1Team : data?.team_2Team
@@ -403,7 +384,7 @@ export default function Referee({ matchId, onExit }) {
   const leftColor = leftTeamData?.color || (leftTeam === 'team_1' ? '#ef4444' : '#3b82f6')
   const rightColor = rightTeamData?.color || (rightTeam === 'team_1' ? '#ef4444' : '#3b82f6')
   
-  // Beach volleyball: No liberos
+ 
   
   // Helper to determine if a color is bright
   const isBrightColor = (color) => {
@@ -424,10 +405,9 @@ export default function Referee({ matchId, onExit }) {
     return (currentTime - lastUpdate) < 30000 // 30 seconds threshold
   }, [data?.match?.updatedAt])
 
-  // Reset processed timeouts and substitutions when set changes
+  // Reset processed timeouts when set changes
   useEffect(() => {
     setProcessedTimeouts(new Set())
-    setProcessedSubstitutions(new Set())
   }, [data?.currentSet?.index])
 
   // Monitor timeout events and start countdown
@@ -501,60 +481,7 @@ export default function Referee({ matchId, onExit }) {
     return () => clearInterval(timer)
   }, [activeTimeout])
 
-  // Monitor substitution events and show notification
-  useEffect(() => {
-    if (!data?.events || !data?.currentSet) return
-    
-    // Find the most recent substitution event in current set
-    const currentSetEvents = data.events.filter(e => 
-      e.type === 'substitution' && 
-      (e.setIndex || 1) === (data.currentSet?.index || 1)
-    )
-    
-    if (currentSetEvents.length === 0) {
-      return
-    }
-    
-    const latestSubstitution = currentSetEvents[currentSetEvents.length - 1]
-    
-    // Check if we've already processed this substitution
-    if (processedSubstitutions.has(latestSubstitution.id)) {
-      return
-    }
-    
-    // Mark as processed and show notification
-    setProcessedSubstitutions(prevSet => new Set([...prevSet, latestSubstitution.id]))
-    setActiveSubstitution({
-      team: latestSubstitution.payload?.team,
-      playerOut: latestSubstitution.payload?.playerOut,
-      playerIn: latestSubstitution.payload?.playerIn,
-      eventId: latestSubstitution.id,
-      countdown: 5
-    })
-  }, [data?.events, data?.currentSet, processedSubstitutions])
   
-  // Countdown timer for active substitution (auto-dismiss after 5 seconds)
-  useEffect(() => {
-    if (!activeSubstitution) return
-    
-    if (activeSubstitution.countdown <= 0) {
-      setActiveSubstitution(null)
-      return
-    }
-    
-    const timer = setInterval(() => {
-      setActiveSubstitution(prev => {
-        if (!prev) return null
-        const newCountdown = prev.countdown - 1
-        if (newCountdown <= 0) {
-          return null
-        }
-        return { ...prev, countdown: newCountdown }
-      })
-    }, 1000)
-    
-    return () => clearInterval(timer)
-  }, [activeSubstitution])
 
   if (!data) return null
 
@@ -1491,62 +1418,6 @@ export default function Referee({ matchId, onExit }) {
         </div>
       </div>
 
-      {/* Court Switch Waiting Modal */}
-      {data?.match && data.currentSet?.index === 5 && 
-       (data.currentSet.team_1Points === 8 || data.currentSet.team_2Points === 8) && 
-       !data.match.set5CourtSwitched && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'rgba(0, 0, 0, 0.9)',
-          zIndex: 9999
-        }}>
-          <div style={{
-            background: 'var(--bg-secondary)',
-            borderRadius: '12px',
-            padding: '32px',
-            maxWidth: '400px',
-            width: '90%',
-            textAlign: 'center',
-            border: '4px solid var(--accent)',
-            boxShadow: '0 0 40px rgba(251, 191, 36, 0.6)'
-          }}>
-            <div style={{
-              fontSize: '48px',
-              marginBottom: '16px'
-            }}>
-              🔄
-            </div>
-            <h2 style={{
-              fontSize: '20px',
-              fontWeight: 700,
-              marginBottom: '16px',
-              color: 'var(--accent)'
-            }}>
-              Court Switch Required
-            </h2>
-            <p style={{
-              fontSize: '16px',
-              marginBottom: '16px',
-              color: 'var(--text)'
-            }}>
-              Set 5 — A team has reached 8 points
-            </p>
-            <p style={{
-              fontSize: '14px',
-              color: 'var(--muted)'
-            }}>
-              Waiting for scorer to confirm court switch...
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* Referee Call Alert Modal */}
       {data?.match?.refereeCallActive && (
@@ -1620,97 +1491,6 @@ export default function Referee({ matchId, onExit }) {
         </div>
       )}
 
-      {/* Beach volleyball: No substitution notifications */}
-      {false && activeSubstitution && (() => {
-        const teamData = activeSubstitution.team === 'team_1' ? data?.team_1Team : data?.team_2Team
-        const teamName = teamData?.name || (activeSubstitution.team === 'team_1' ? 'Team 1' : 'Team 2')
-        const teamAKey = data?.match?.coinTossTeamA || 'team_1'
-        const teamLabel = activeSubstitution.team === teamAKey ? 'A' : 'B'
-        const teamColor = teamData?.color || (activeSubstitution.team === 'team_1' ? '#ef4444' : '#3b82f6')
-        
-        return (
-          <div 
-            onClick={() => setActiveSubstitution(null)}
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'rgba(0, 0, 0, 0.5)',
-              zIndex: 9998,
-              cursor: 'pointer'
-            }}
-          >
-            <div 
-              style={{
-                background: 'rgba(0, 0, 0, 1)',
-                borderRadius: '12px',
-                padding: '20px 32px',
-                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.6)',
-                border: `3px solid ${teamColor}`,
-                minWidth: '300px',
-                textAlign: 'center'
-              }}
-            >
-              <div style={{
-                fontSize: '14px',
-                fontWeight: 700,
-                marginBottom: '12px',
-                color: 'var(--text)'
-              }}>
-                Substitution — Team {teamLabel}
-              </div>
-              <div style={{
-                fontSize: '12px',
-                color: 'var(--muted)',
-                marginBottom: '8px'
-              }}>
-                {teamName}
-              </div>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '24px',
-                fontSize: '28px',
-                fontWeight: 700
-              }}>
-                <div style={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  alignItems: 'center',
-                  gap: '8px'
-                }}>
-                  <div style={{ fontSize: '10px', color: '#ef4444', fontWeight: 700 }}>OUT</div>
-                  <div style={{ color: '#ef4444' }}>{activeSubstitution.playerOut}</div>
-                  <div style={{ fontSize: '24px', color: '#ef4444' }}>↓</div>
-                </div>
-                <div style={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  alignItems: 'center',
-                  gap: '8px'
-                }}>
-                  <div style={{ fontSize: '10px', color: '#22c55e', fontWeight: 700 }}>IN</div>
-                  <div style={{ color: '#22c55e' }}>{activeSubstitution.playerIn}</div>
-                  <div style={{ fontSize: '24px', color: '#22c55e' }}>↑</div>
-                </div>
-              </div>
-              <div style={{
-                marginTop: '12px',
-                fontSize: '10px',
-                color: 'var(--muted)'
-              }}>
-                Tap to dismiss
-              </div>
-            </div>
-          </div>
-        )
-      })()}
 
     </div>
   )
