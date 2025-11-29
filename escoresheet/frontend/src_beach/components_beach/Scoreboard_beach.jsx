@@ -1314,12 +1314,14 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         if (totalPoints === 21 && !isSet3ForTTO) {
           // TTO already handled above, skip court switch
         } else {
-          // Check if we've already switched courts at this point in this set
+          // Check if we've already shown the modal for this point total (to prevent duplicate modals)
           const match = await db.matches.get(matchId)
           const setSwitchKey = `set${data.set.index}_switch_${totalPoints}`
-          const hasSwitched = match?.[setSwitchKey] || false
-          if (!hasSwitched) {
+          const modalShown = match?.[setSwitchKey] || false
+          if (!modalShown) {
             // Show court switch modal (DO NOT switch courts yet - wait for confirmation)
+            // Set a flag to prevent showing the modal again for this point total
+            // This flag does NOT mean the switch happened - it just prevents duplicate modals
             setCourtSwitchModal({
               set: data.set,
               team_1Points,
@@ -2243,8 +2245,46 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     setChallengeModal(challengeData)
   }, [challengeModal, challengeReason, data?.set, data?.match, teamAKey, getCurrentServe])
 
-  // Handle challenge request rejection/cancel
-  const handleRejectChallengeRequest = useCallback(() => {
+  // Handle challenge request rejection (prevents further requests)
+  const handleRejectChallengeRequest = useCallback(async () => {
+    if (!challengeModal || challengeModal.type !== 'request' || !data?.set || !data?.match) return
+    
+    const { team } = challengeModal
+    
+    // Log the rejection as an event
+    await logEvent('challenge_rejected', {
+      team,
+      reason: challengeReason,
+      score: {
+        team_1: data.set.team_1Points,
+        team_2: data.set.team_2Points
+      },
+      set: data.set.index
+    })
+    
+    // Increment challenge count to prevent further requests (counts as used challenge)
+    const challengeRequests = data.match.challengeRequests || {}
+    const setChallenges = challengeRequests[data.set.index] || {}
+    const currentCount = setChallenges[team] || 0
+    
+    const updatedChallengeRequests = {
+      ...challengeRequests,
+      [data.set.index]: {
+        ...setChallenges,
+        [team]: currentCount + 1
+      }
+    }
+    
+    await db.matches.update(matchId, {
+      challengeRequests: updatedChallengeRequests
+    })
+    
+    setChallengeModal(null)
+    setChallengeReason('IN / OUT')
+  }, [challengeModal, challengeReason, data?.set, data?.match, matchId, logEvent])
+  
+  // Handle challenge request cancel (just closes modal, doesn't prevent further requests)
+  const handleCancelChallengeRequest = useCallback(() => {
     setChallengeModal(null)
     setChallengeReason('IN / OUT')
   }, [])
@@ -3007,10 +3047,17 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     const switchInterval = isSet3 ? 5 : 7
     const switchesSoFar = Math.floor(totalPoints / switchInterval)
     
-    // Store the number of switches for this set (THIS ACTUALLY SWITCHES THE COURTS VISUALLY)
+    // NOW actually switch the courts by updating the switch count
+    // This is what causes the visual court switch
     const switchCountKey = `set${setIndex}_switchCount`
     await db.matches.update(matchId, { 
       [switchCountKey]: switchesSoFar 
+    })
+    
+    // Mark that the switch was confirmed (not just the modal shown)
+    const setSwitchConfirmedKey = `set${setIndex}_switch_confirmed_${totalPoints}`
+    await db.matches.update(matchId, { 
+      [setSwitchConfirmedKey]: true 
     })
     
     // Log court switch as an event
@@ -3141,6 +3188,12 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
 
   const cancelCourtSwitch = useCallback(async () => {
     if (!courtSwitchModal || !data?.events || !matchId) return
+    
+    // Clear the modal flag so the modal can show again if they score another point
+    const setIndex = courtSwitchModal.set.index
+    const totalPoints = courtSwitchModal.team_1Points + courtSwitchModal.team_2Points
+    const setSwitchKey = `set${setIndex}_switch_${totalPoints}`
+    await db.matches.update(matchId, { [setSwitchKey]: false })
     
     // Undo the last point that caused the court switch threshold
     // Find the last event by sequence number
@@ -6552,7 +6605,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         <Modal
           title="Challenge request"
           open={true}
-          onClose={handleRejectChallengeRequest}
+          onClose={handleCancelChallengeRequest}
           width={500}
         >
           <div style={{ padding: '24px' }}>
@@ -6608,7 +6661,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                 Reject challenge request
               </button>
               <button
-                onClick={handleRejectChallengeRequest}
+                onClick={handleCancelChallengeRequest}
                 style={{
                   padding: '12px 24px',
                   fontSize: '14px',
