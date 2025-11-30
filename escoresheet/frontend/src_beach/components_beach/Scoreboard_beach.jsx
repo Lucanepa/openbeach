@@ -670,11 +670,14 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     
     if (isDecidingSet) {
       // Set 3: Check if either team has reached 15 AND leads by 2, OR if score is 14-14 or higher, continue until 2-point lead
+      // First check: if a team reaches 15 and leads by 2, set ends
       if (team_1Points >= 15 && team_1Points - team_2Points >= 2) {
         setEnded = true
       } else if (team_2Points >= 15 && team_2Points - team_1Points >= 2) {
         setEnded = true
-      } else if (team_1Points >= 14 && team_2Points >= 14) {
+      } 
+      // Second check: if both teams are at 14 or higher, continue until 2-point lead (no cap at 15)
+      else if (team_1Points >= 14 && team_2Points >= 14) {
         // Score is 14-14 or higher, check for 2-point lead
         if (team_1Points - team_2Points >= 2) {
           setEnded = true
@@ -1338,54 +1341,70 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       
       // Beach volleyball: Court switch every 7 points (set 1-2) or every 5 points (set 3)
       // Skip court switch at 21 points if TTO should happen (sets 1-2 only)
-      const switchInterval = isSet3 ? 5 : 7
       
       if (isSet3) {
         // Set 3: switches every 5 points (5, 10, 15, 20, etc.)
         // Alert at one point before switch: 4, 9, 14, 19, 24, etc.
-        const pointsSinceLastSwitchSet3 = totalPoints % 5
-        if (pointsSinceLastSwitchSet3 === 4 && totalPoints > 0) {
+        const set3Remainder = totalPoints % 5
+        if (set3Remainder === 4 && totalPoints >= 4) {
           setCourtSwitchAlert({ message: 'One point to switch' })
           setTimeout(() => setCourtSwitchAlert(null), 3000) // Auto-dismiss after 3 seconds
         }
-      } else {
-        // Sets 1-2: switches every 7 points (7, 14, 21=TTO, 28, etc.)
-        // Alert at one point before switch: 6, 13, 20 (but skip 20 if TTO is coming at 21)
-        const pointsSinceLastSwitchSet12 = totalPoints % 7
-        if (pointsSinceLastSwitchSet12 === 6 && totalPoints > 0) {
-          // Don't show court switch alert at 20 if TTO is coming at 21
-          if (totalPoints !== 20) {
-            setCourtSwitchAlert({ message: 'One point to switch' })
-            setTimeout(() => setCourtSwitchAlert(null), 3000) // Auto-dismiss after 3 seconds
-          }
-        }
-      }
-      
-      // Switch at switchInterval point (every multiple of switchInterval)
-      // Skip at 21 points if it's a TTO point (sets 1-2)
-      const pointsSinceLastSwitch = totalPoints % switchInterval
-      if (pointsSinceLastSwitch === 0 && totalPoints > 0 && totalPoints % switchInterval === 0) {
-        // Skip court switch at 21 points for sets 1-2 (TTO takes priority)
-        if (totalPoints === 21 && !isSet3ForTTO) {
-          // TTO already handled above, skip court switch
-        } else {
+        
+        // Switch at 5, 10, 15, 20, etc. (when remainder is 0)
+        if (set3Remainder === 0 && totalPoints > 0 && totalPoints >= 5) {
           // Check if we've already shown the modal for this point total (to prevent duplicate modals)
           const match = await db.matches.get(matchId)
-          const setSwitchKey = `set${data.set.index}_switch_${totalPoints}`
-          const modalShown = match?.[setSwitchKey] || false
-          if (!modalShown) {
+          const set3SwitchKey = `set3_switch_${totalPoints}`
+          const set3ModalShown = match?.[set3SwitchKey] || false
+          if (!set3ModalShown) {
             // Show court switch modal (DO NOT switch courts yet - wait for confirmation)
-            // Set a flag to prevent showing the modal again for this point total
-            // This flag does NOT mean the switch happened - it just prevents duplicate modals
             setCourtSwitchModal({
               set: data.set,
               team_1Points,
               team_2Points,
               teamThatScored: teamKey
             })
-            await db.matches.update(matchId, { [setSwitchKey]: true })
+            await db.matches.update(matchId, { [set3SwitchKey]: true })
             // DO NOT log event or increment switch count yet - wait for confirmation
             return // Don't check for set end yet, wait for court switch confirmation
+          }
+        }
+      } else {
+        // Sets 1-2: switches every 7 points (7, 14, 21=TTO, 28, etc.)
+        const switchIntervalSet12 = 7
+        // Alert at one point before switch: 6, 13, 20 (but skip 20 if TTO is coming at 21)
+        const set12Remainder = totalPoints % switchIntervalSet12
+        if (set12Remainder === 6 && totalPoints > 0) {
+          // Don't show court switch alert at 20 if TTO is coming at 21
+          if (totalPoints !== 20) {
+            setCourtSwitchAlert({ message: 'One point to switch' })
+            setTimeout(() => setCourtSwitchAlert(null), 3000) // Auto-dismiss after 3 seconds
+          }
+        }
+        
+        // Switch at 7, 14, 28, etc. (when remainder is 0, but skip 21 for TTO)
+        if (set12Remainder === 0 && totalPoints > 0) {
+          // Skip court switch at 21 points for sets 1-2 (TTO takes priority)
+          if (totalPoints === 21) {
+            // TTO already handled above, skip court switch
+          } else {
+            // Check if we've already shown the modal for this point total (to prevent duplicate modals)
+            const match = await db.matches.get(matchId)
+            const set12SwitchKey = `set${data.set.index}_switch_${totalPoints}`
+            const set12ModalShown = match?.[set12SwitchKey] || false
+            if (!set12ModalShown) {
+              // Show court switch modal (DO NOT switch courts yet - wait for confirmation)
+              setCourtSwitchModal({
+                set: data.set,
+                team_1Points,
+                team_2Points,
+                teamThatScored: teamKey
+              })
+              await db.matches.update(matchId, { [set12SwitchKey]: true })
+              // DO NOT log event or increment switch count yet - wait for confirmation
+              return // Don't check for set end yet, wait for court switch confirmation
+            }
           }
         }
       }
@@ -1397,6 +1416,9 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
   )
 
   const handleStartRally = useCallback(async () => {
+    // Clear court switch alert when starting a new rally
+    setCourtSwitchAlert(null)
+    
     // If this is the first rally, show set start time confirmation
     if (isFirstRally) {
       // Show set start time confirmation
@@ -1444,7 +1466,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       servingPlayer: servingPlayer,
       teamLabel: teamALabel
     })
-  }, [logEvent, isFirstRally, data?.team_1Players, data?.team_2Players, data?.events, data?.set, data?.match, matchId, getCurrentServe, getCurrentServingPlayer])
+  }, [logEvent, isFirstRally, data?.team_1Players, data?.team_2Players, data?.events, data?.set, data?.match, matchId, getCurrentServe, getCurrentServingPlayer, setCourtSwitchAlert])
 
   const handleReplay = useCallback(async () => {
     await logEvent('replay')
@@ -1614,8 +1636,24 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       // Show match end modal with signatures and download options
       setMatchEndModal(true)
       
-      return // Match is over, don't continue to set transition logic
+      return // Match is over, don't continue to set transition logic - stay on last set
     } else {
+      // Double-check match is not over before showing transition modal
+      // This prevents race conditions where match might have ended
+      const doubleCheckSets = await db.sets.where({ matchId }).toArray()
+      const doubleCheckFinishedSets = doubleCheckSets.filter(s => s.finished)
+      const doubleCheckTeam_1SetsWon = doubleCheckFinishedSets.filter(s => s.team_1Points > s.team_2Points).length
+      const doubleCheckTeam_2SetsWon = doubleCheckFinishedSets.filter(s => s.team_2Points > s.team_1Points).length
+      const doubleCheckIsMatchEnd = doubleCheckTeam_1SetsWon >= 2 || doubleCheckTeam_2SetsWon >= 2
+      
+      if (doubleCheckIsMatchEnd) {
+        // Match ended, show match end modal instead of transition
+        setSetEndTimeModal(null)
+        await db.matches.update(matchId, { status: 'final' })
+        setMatchEndModal(true)
+        return
+      }
+      
       // After set 1, show transition modal to switch sides, service, and service order
       if (setIndex === 1) {
         setSetEndTimeModal(null)
@@ -1647,11 +1685,15 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
           // Match is over (2-0) - this should have been caught by isMatchEnd check above
           // But if we reach here, close the modal and finish the match
           setSetEndTimeModal(null)
-          // Match should already be marked as final by isMatchEnd check above
-          if (onFinishSet) onFinishSet(data.set)
+          await db.matches.update(matchId, { status: 'final' })
+          setMatchEndModal(true)
           return
         } else {
           // Going to set 3 (1-1), show transition modal with 3rd set coin toss
+          // IMPORTANT: Explicitly set setIndex to 3 to ensure we create set 3, not set 2
+          const nextSetIndex = 3
+          console.log(`Set 2 ended with 1-1. Creating set ${nextSetIndex} (not ${setIndex + 1})`)
+          
           setSetEndTimeModal(null)
           // Reset coin toss winner state for set 3
           setSet3CoinTossWinner(null)
@@ -1673,7 +1715,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
             setSetTransitionServiceOrder({ teamA: teamAServiceOrder, teamB: teamBServiceOrder })
           }
           setSetTransitionCountdown(60) // Reset countdown to 60 seconds
-          setSetTransitionModal({ setIndex: setIndex + 1, isSet3: true })
+          setSetTransitionModal({ setIndex: nextSetIndex, isSet3: true })
           return
         }
       }
@@ -1694,6 +1736,23 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     if (!setTransitionModal || !data?.match) return
     
     const { setIndex, isSet3 } = setTransitionModal
+    
+    // Check if match is already over - don't create new set if match is finished
+    const sets = await db.sets.where({ matchId }).toArray()
+    const finishedSets = sets.filter(s => s.finished)
+    const team_1SetsWon = finishedSets.filter(s => s.team_1Points > s.team_2Points).length
+    const team_2SetsWon = finishedSets.filter(s => s.team_2Points > s.team_1Points).length
+    const isMatchEnd = team_1SetsWon >= 2 || team_2SetsWon >= 2
+    
+    if (isMatchEnd) {
+      console.warn('Match is already over. Cannot create new set.')
+      setSetTransitionModal(null)
+      // Show match end modal if not already shown
+      if (!matchEndModal) {
+        setMatchEndModal(true)
+      }
+      return
+    }
     
     // Prevent creating set 4 - beach volleyball only has sets 1, 2, 3
     if (setIndex > 3) {
@@ -1763,6 +1822,14 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       serviceOrder[`${receivingTeam}_player2`] = 2
     }
     
+    // Check if set with this index already exists (prevent duplicates)
+    const existingSet = await db.sets.where('matchId').equals(matchId).and(s => s.index === setIndex).first()
+    if (existingSet) {
+      console.warn(`Set ${setIndex} already exists with ID ${existingSet.id}. Not creating duplicate.`)
+      setSetTransitionModal(null)
+      return
+    }
+    
     // Create new set
     const newSetId = await db.sets.add({ 
       matchId, 
@@ -1800,7 +1867,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         console.error(`Failed to find newly created set ${newSetId}`)
       }
     }, 100) // Small delay to allow useLiveQuery to refresh
-  }, [setTransitionModal, setTransitionSelectedLeftTeam, setTransitionSelectedFirstServe, setTransitionServiceOrder, set3CoinTossWinner, data?.match, matchId, teamAKey, setSetStartTimeModal, setSetTransitionModal])
+  }, [setTransitionModal, setTransitionSelectedLeftTeam, setTransitionSelectedFirstServe, setTransitionServiceOrder, set3CoinTossWinner, data?.match, matchId, teamAKey, setSetStartTimeModal, setSetTransitionModal, matchEndModal, setMatchEndModal])
   
 
   // Get action description for an event
@@ -8994,9 +9061,9 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                 unsuccessfulRightScore = rightScore
                 currentServingTeamLabel = servingTeam === leftTeamKey ? leftTeamLabel : rightTeamLabel
                 
-                // Button labels: show challenging team for successful, opponent for unsuccessful
-                successfulButtonLabel = challengingTeamIsLeft ? leftTeamLabel : rightTeamLabel
-                unsuccessfulButtonLabel = challengingTeamIsLeft ? rightTeamLabel : leftTeamLabel
+                // Button labels: for team-initiated, show SUC and UNSUC instead of A/B
+                successfulButtonLabel = 'SUC'
+                unsuccessfulButtonLabel = 'UNSUC'
               }
               
               return (
@@ -9230,7 +9297,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                           e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.2)'
                         }}
                       >
-                        Judgment impossible
+                        {isRefereeInitiated ? 'Judgment impossible' : 'MUNAV'}
               </button>
                     </div>
 
@@ -10353,11 +10420,12 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
             }
           }}
           onConfirmEnd={async () => {
-            // Download screenshots and data in ZIP
+            // Download PDF from screenshots and data in ZIP
             try {
               // Dynamic imports
               const JSZip = (await import('jszip')).default;
               const html2canvas = (await import('html2canvas')).default;
+              const { jsPDF } = await import('jspdf');
               
               const zip = new JSZip();
               
@@ -10390,8 +10458,17 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                     // Wait for scoresheet to render
                     await new Promise(r => setTimeout(r, 2000));
                     
-                    // Capture each page
+                    // Create PDF (A4 landscape: 297mm x 210mm)
+                    const pdf = new jsPDF({
+                      orientation: 'landscape',
+                      unit: 'mm',
+                      format: [297, 210]
+                    });
+                    
+                    // Capture each page and add to PDF
                     const pages = ['page-1', 'page-2', 'page-3'];
+                    const imageDataUrls = [];
+                    
                     for (let i = 0; i < pages.length; i++) {
                       const pageElement = iframe.contentDocument?.getElementById(pages[i]);
                       if (pageElement) {
@@ -10401,10 +10478,25 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                           logging: false
                         });
                         const imgData = canvas.toDataURL('image/png');
+                        imageDataUrls.push(imgData);
+                        
+                        // Add page to PDF (except first page which is added automatically)
+                        if (i > 0) {
+                          pdf.addPage([297, 210], 'landscape');
+                        }
+                        
+                        // Add image to PDF page (full page, landscape A4)
+                        pdf.addImage(imgData, 'PNG', 0, 0, 297, 210, undefined, 'FAST');
+                        
+                        // Also add to ZIP for backup
                         const base64Data = imgData.split(',')[1];
                         zip.file(`scoresheet_page_${i + 1}.png`, base64Data, { base64: true });
                       }
                     }
+                    
+                    // Add PDF to ZIP
+                    const pdfBlob = pdf.output('blob');
+                    zip.file('scoresheet.pdf', pdfBlob);
                     
                     // Add data JSON
                     const allData = {
@@ -10418,7 +10510,10 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                     };
                     zip.file('match_data.json', JSON.stringify(allData, null, 2));
                     
-                    // Generate and download ZIP
+                    // Download PDF directly
+                    pdf.save(`match_${matchId}_scoresheet.pdf`);
+                    
+                    // Also generate and download ZIP (with PDF, PNGs, and JSON)
                     const blob = await zip.generateAsync({ type: 'blob' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
@@ -10430,6 +10525,9 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                     URL.revokeObjectURL(url);
                     
                     document.body.removeChild(iframe);
+                    
+                    // Close modal and go home after downloads complete
+                    onGoHome();
                     resolve();
                   } catch (error) {
                     console.error('Error capturing screenshots:', error);
@@ -10440,13 +10538,17 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                 };
               });
             } catch (error) {
-              console.error('Error creating ZIP:', error);
-              alert('Error creating ZIP file: ' + error.message);
+              console.error('Error creating PDF/ZIP:', error);
+              alert('Error creating PDF/ZIP file: ' + error.message);
             }
           }}
           onGoHome={() => {
             setMatchEndModal(false);
             if (onFinishSet) onFinishSet(data.set);
+          }}
+          onReopenMatch={() => {
+            setMatchEndModal(false);
+            // Just close the modal, don't call onFinishSet - allows user to continue viewing the match
           }}
         />
       )}
@@ -12508,7 +12610,7 @@ function SetEndTimeModal({ setIndex, winner, team_1Points, team_2Points, default
   )
 }
 
-function MatchEndModal({ matchId, data, teamAKey, openSignature, setOpenSignature, onShowScoresheet, onDownloadData, onConfirmEnd, onGoHome }) {
+function MatchEndModal({ matchId, data, teamAKey, openSignature, setOpenSignature, onShowScoresheet, onDownloadData, onConfirmEnd, onGoHome, onReopenMatch }) {
   const teamBKey = teamAKey === 'team_1' ? 'team_2' : 'team_1'
   const finishedSets = (data?.sets || []).filter(s => s.finished).sort((a, b) => a.index - b.index)
   const team_1SetsWon = finishedSets.filter(s => s.team_1Points > s.team_2Points).length
@@ -12524,6 +12626,21 @@ function MatchEndModal({ matchId, data, teamAKey, openSignature, setOpenSignatur
   // Get captains
   const team_1Captain = (data?.team_1Players || []).find(p => p.captain)
   const team_2Captain = (data?.team_2Players || []).find(p => p.captain)
+  
+  // Calculate timeout counts per set
+  const timeoutCounts = {}
+  finishedSets.forEach(set => {
+    const setEvents = (data?.events || []).filter(e => e.setIndex === set.index && e.type === 'timeout')
+    const teamATimeouts = setEvents.filter(e => e.payload?.team === teamAKey).length
+    const teamBTimeouts = setEvents.filter(e => e.payload?.team === teamBKey).length
+    timeoutCounts[set.index] = { teamA: teamATimeouts, teamB: teamBTimeouts }
+  })
+  
+  // Calculate total timeouts
+  const totalTimeouts = Object.values(timeoutCounts).reduce((acc, counts) => ({
+    teamA: acc.teamA + counts.teamA,
+    teamB: acc.teamB + counts.teamB
+  }), { teamA: 0, teamB: 0 })
   
   const handleSaveSignature = async (role, signatureData) => {
     const updateData = {}
@@ -12560,104 +12677,155 @@ function MatchEndModal({ matchId, data, teamAKey, openSignature, setOpenSignatur
         title="Match End"
         open={true}
         onClose={() => {}}
-        width={900}
+        width={1000}
         hideCloseButton={true}
       >
         <div style={{ padding: '24px', maxHeight: '80vh', overflowY: 'auto' }}>
-          {/* Results Table */}
+          {/* Results Table - matching scoresheet format */}
           <div style={{ marginBottom: '24px' }}>
             <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 600 }}>Results</h3>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', background: 'var(--bg-secondary)', borderRadius: '8px', overflow: 'hidden' }}>
-              <thead>
-                <tr style={{ background: 'rgba(255,255,255,0.1)' }}>
-                  <th style={{ padding: '8px', textAlign: 'center' }}>Set</th>
-                  <th style={{ padding: '8px', textAlign: 'center' }}>Team {teamAKey === 'team_1' ? 'A' : 'B'}</th>
-                  <th style={{ padding: '8px', textAlign: 'center' }}>Team {teamBKey === 'team_1' ? 'A' : 'B'}</th>
-                  <th style={{ padding: '8px', textAlign: 'center' }}>Winner</th>
-                </tr>
-              </thead>
-              <tbody>
-                {finishedSets.map((set) => {
-                  const teamAPoints = teamAKey === 'team_1' ? set.team_1Points : set.team_2Points
-                  const teamBPoints = teamBKey === 'team_1' ? set.team_1Points : set.team_2Points
-                  const winner = teamAPoints > teamBPoints ? 'A' : 'B'
-                  return (
-                    <tr key={set.index} style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                      <td style={{ padding: '8px', textAlign: 'center' }}>Set {set.index}</td>
-                      <td style={{ padding: '8px', textAlign: 'center' }}>{teamAPoints}</td>
-                      <td style={{ padding: '8px', textAlign: 'center' }}>{teamBPoints}</td>
-                      <td style={{ padding: '8px', textAlign: 'center', fontWeight: 600 }}>Team {winner}</td>
-                    </tr>
-                  )
-                })}
-                <tr style={{ borderTop: '2px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)' }}>
-                  <td style={{ padding: '8px', textAlign: 'center', fontWeight: 600 }}>Total</td>
-                  <td style={{ padding: '8px', textAlign: 'center', fontWeight: 600 }}>{team_1SetsWon}</td>
-                  <td style={{ padding: '8px', textAlign: 'center', fontWeight: 600 }}>{team_2SetsWon}</td>
-                  <td style={{ padding: '8px', textAlign: 'center', fontWeight: 600 }}>
-                    {team_1SetsWon > team_2SetsWon ? 'Team A' : 'Team B'}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <div style={{ border: '2px solid rgba(255,255,255,0.2)', borderRadius: '8px', overflow: 'hidden', background: 'var(--bg-secondary)' }}>
+              {/* Table Header */}
+              <div style={{ display: 'flex', fontSize: '11px', fontWeight: 600, background: 'rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
+                <div style={{ flex: 1, padding: '8px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.2)' }}>Time-Outs</div>
+                <div style={{ flex: 1, padding: '8px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.2)' }}>Wins</div>
+                <div style={{ flex: 1, padding: '8px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.2)' }}>Points</div>
+                <div style={{ width: '120px', padding: '8px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.2)' }}>Set Duration</div>
+                <div style={{ flex: 1, padding: '8px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.2)' }}>Points</div>
+                <div style={{ flex: 1, padding: '8px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.2)' }}>Wins</div>
+                <div style={{ flex: 1, padding: '8px', textAlign: 'center' }}>Time-Outs</div>
+              </div>
+              
+              {/* Set Rows */}
+              {[1, 2, 3].map(setNum => {
+                const set = finishedSets.find(s => s.index === setNum)
+                if (!set) return null
+                
+                const teamAPoints = teamAKey === 'team_1' ? set.team_1Points : set.team_2Points
+                const teamBPoints = teamBKey === 'team_1' ? set.team_1Points : set.team_2Points
+                const teamAWins = teamAPoints > teamBPoints ? 1 : 0
+                const teamBWins = teamBPoints > teamAPoints ? 1 : 0
+                const timeouts = timeoutCounts[setNum] || { teamA: 0, teamB: 0 }
+                
+                // Calculate set duration (simplified - would need actual start/end times)
+                const duration = set.endTime && set.startTime 
+                  ? Math.round((new Date(set.endTime) - new Date(set.startTime)) / 60000)
+                  : ''
+                
+                return (
+                  <div key={setNum} style={{ display: 'flex', fontSize: '13px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                    <div style={{ flex: 1, padding: '8px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.1)' }}>{timeouts.teamA}</div>
+                    <div style={{ flex: 1, padding: '8px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.1)' }}>{teamAWins}</div>
+                    <div style={{ flex: 1, padding: '8px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.1)' }}>{teamAPoints}</div>
+                    <div style={{ width: '120px', padding: '8px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.1)', fontSize: '11px' }}>
+                      Set {setNum} ({duration} min)
+                    </div>
+                    <div style={{ flex: 1, padding: '8px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.1)' }}>{teamBPoints}</div>
+                    <div style={{ flex: 1, padding: '8px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.1)' }}>{teamBWins}</div>
+                    <div style={{ flex: 1, padding: '8px', textAlign: 'center' }}>{timeouts.teamB}</div>
+                  </div>
+                )
+              })}
+              
+              {/* Total Row */}
+              <div style={{ display: 'flex', fontSize: '13px', fontWeight: 600, background: 'rgba(255,255,255,0.05)', borderTop: '2px solid rgba(255,255,255,0.2)' }}>
+                <div style={{ flex: 1, padding: '8px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.1)' }}>{totalTimeouts.teamA}</div>
+                <div style={{ flex: 1, padding: '8px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.1)' }}>{team_1SetsWon}</div>
+                <div style={{ flex: 1, padding: '8px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.1)' }}>
+                  {finishedSets.reduce((sum, s) => sum + (teamAKey === 'team_1' ? s.team_1Points : s.team_2Points), 0)}
+                </div>
+                <div style={{ width: '120px', padding: '8px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.1)', fontSize: '11px' }}>
+                  Total
+                </div>
+                <div style={{ flex: 1, padding: '8px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.1)' }}>
+                  {finishedSets.reduce((sum, s) => sum + (teamBKey === 'team_1' ? s.team_1Points : s.team_2Points), 0)}
+                </div>
+                <div style={{ flex: 1, padding: '8px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.1)' }}>{team_2SetsWon}</div>
+                <div style={{ flex: 1, padding: '8px', textAlign: 'center' }}>{totalTimeouts.teamB}</div>
+              </div>
+              
+              {/* Winner Row */}
+              <div style={{ padding: '12px', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontWeight: 600, fontSize: '14px' }}>Winning team:</span>
+                <span style={{ fontWeight: 600, fontSize: '14px' }}>
+                  {team_1SetsWon > team_2SetsWon 
+                    ? (data?.team_1Team?.name || 'Team 1')
+                    : (data?.team_2Team?.name || 'Team 2')}
+                </span>
+                <span style={{ fontWeight: 600, fontSize: '14px', marginLeft: 'auto' }}>
+                  2 : {team_1SetsWon > team_2SetsWon ? team_2SetsWon : team_1SetsWon}
+                </span>
+              </div>
+            </div>
           </div>
           
-          {/* Signatures */}
+          {/* Signatures - reorganized as requested */}
           <div style={{ marginBottom: '24px' }}>
             <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 600 }}>Signatures</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
-              {/* Team 1 Captain */}
-              <SignatureBox
-                role="team_1-captain"
-                label={`${data?.team_1Team?.name || 'Team 1'} Captain${team_1Captain ? ` (#${team_1Captain.number})` : ''}`}
-                signatureData={getSignatureData('team_1-captain')}
-                onSign={() => setOpenSignature('team_1-captain')}
-              />
-              
-              {/* Team 2 Captain */}
-              <SignatureBox
-                role="team_2-captain"
-                label={`${data?.team_2Team?.name || 'Team 2'} Captain${team_2Captain ? ` (#${team_2Captain.number})` : ''}`}
-                signatureData={getSignatureData('team_2-captain')}
-                onSign={() => setOpenSignature('team_2-captain')}
-              />
-              
-              {/* 1st Referee */}
-              <SignatureBox
-                role="ref1"
-                label={`1st Referee${ref1 ? ` (${ref1.firstName || ''} ${ref1.lastName || ''})` : ''}`}
-                signatureData={getSignatureData('ref1')}
-                onSign={() => setOpenSignature('ref1')}
-              />
-              
-              {/* 2nd Referee */}
-              <SignatureBox
-                role="ref2"
-                label={`2nd Referee${ref2 ? ` (${ref2.firstName || ''} ${ref2.lastName || ''})` : ''}`}
-                signatureData={getSignatureData('ref2')}
-                onSign={() => setOpenSignature('ref2')}
-              />
-              
-              {/* Scorer */}
-              <SignatureBox
-                role="scorer"
-                label={`Scorer${scorer ? ` (${scorer.firstName || ''} ${scorer.lastName || ''})` : ''}`}
-                signatureData={getSignatureData('scorer')}
-                onSign={() => setOpenSignature('scorer')}
-              />
-              
-              {/* Assistant Scorer */}
-              <SignatureBox
-                role="asst-scorer"
-                label={`Assistant Scorer${asstScorer ? ` (${asstScorer.firstName || ''} ${asstScorer.lastName || ''})` : ''}`}
-                signatureData={getSignatureData('asst-scorer')}
-                onSign={() => setOpenSignature('asst-scorer')}
-              />
+            
+            {/* Captains underneath RESULTS table columns */}
+            <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
+              <div style={{ flex: 1 }}>
+                <SignatureBox
+                  role="team_1-captain"
+                  label={`${data?.team_1Team?.name || 'Team 1'} Captain${team_1Captain ? ` (#${team_1Captain.number})` : ''}`}
+                  signatureData={getSignatureData('team_1-captain')}
+                  onSign={() => setOpenSignature('team_1-captain')}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <SignatureBox
+                  role="team_2-captain"
+                  label={`${data?.team_2Team?.name || 'Team 2'} Captain${team_2Captain ? ` (#${team_2Captain.number})` : ''}`}
+                  signatureData={getSignatureData('team_2-captain')}
+                  onSign={() => setOpenSignature('team_2-captain')}
+                />
+              </div>
+            </div>
+            
+            {/* Assistant Scorer and Scorer on same row */}
+            <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
+              <div style={{ flex: 1 }}>
+                <SignatureBox
+                  role="asst-scorer"
+                  label={`Assistant Scorer${asstScorer ? ` (${asstScorer.firstName || ''} ${asstScorer.lastName || ''})` : ''}`}
+                  signatureData={getSignatureData('asst-scorer')}
+                  onSign={() => setOpenSignature('asst-scorer')}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <SignatureBox
+                  role="scorer"
+                  label={`Scorer${scorer ? ` (${scorer.firstName || ''} ${scorer.lastName || ''})` : ''}`}
+                  signatureData={getSignatureData('scorer')}
+                  onSign={() => setOpenSignature('scorer')}
+                />
+              </div>
+            </div>
+            
+            {/* 2nd Ref and 1st Ref on same row */}
+            <div style={{ display: 'flex', gap: '16px' }}>
+              <div style={{ flex: 1 }}>
+                <SignatureBox
+                  role="ref2"
+                  label={`2nd Referee${ref2 ? ` (${ref2.firstName || ''} ${ref2.lastName || ''})` : ''}`}
+                  signatureData={getSignatureData('ref2')}
+                  onSign={() => setOpenSignature('ref2')}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <SignatureBox
+                  role="ref1"
+                  label={`1st Referee${ref1 ? ` (${ref1.firstName || ''} ${ref1.lastName || ''})` : ''}`}
+                  signatureData={getSignatureData('ref1')}
+                  onSign={() => setOpenSignature('ref1')}
+                />
+              </div>
             </div>
           </div>
           
           {/* Action Buttons */}
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap', marginTop: '32px' }}>
             <button
               onClick={onShowScoresheet}
               style={{
@@ -12704,7 +12872,7 @@ function MatchEndModal({ matchId, data, teamAKey, openSignature, setOpenSignatur
               Confirm End of Match
             </button>
             <button
-              onClick={onGoHome}
+              onClick={onReopenMatch}
               style={{
                 padding: '12px 24px',
                 fontSize: '14px',
@@ -12716,24 +12884,23 @@ function MatchEndModal({ matchId, data, teamAKey, openSignature, setOpenSignatur
                 cursor: 'pointer'
               }}
             >
-              Go Home
+              Reopen Match
             </button>
           </div>
         </div>
       </Modal>
       
-      {openSignature && (
-        <SignaturePad
-          title={openSignature === 'team_1-captain' ? `${data?.team_1Team?.name || 'Team 1'} Captain` :
-                 openSignature === 'team_2-captain' ? `${data?.team_2Team?.name || 'Team 2'} Captain` :
-                 openSignature === 'ref1' ? '1st Referee' :
-                 openSignature === 'ref2' ? '2nd Referee' :
-                 openSignature === 'scorer' ? 'Scorer' :
-                 'Assistant Scorer'}
-          onSave={(signatureData) => handleSaveSignature(openSignature, signatureData)}
-          onClose={() => setOpenSignature(null)}
-        />
-      )}
+      <SignaturePad
+        open={!!openSignature}
+        title={openSignature === 'team_1-captain' ? `${data?.team_1Team?.name || 'Team 1'} Captain` :
+               openSignature === 'team_2-captain' ? `${data?.team_2Team?.name || 'Team 2'} Captain` :
+               openSignature === 'ref1' ? '1st Referee' :
+               openSignature === 'ref2' ? '2nd Referee' :
+               openSignature === 'scorer' ? 'Scorer' :
+               'Assistant Scorer'}
+        onSave={(signatureData) => handleSaveSignature(openSignature, signatureData)}
+        onClose={() => setOpenSignature(null)}
+      />
     </>
   )
 }

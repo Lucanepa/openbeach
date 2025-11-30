@@ -244,7 +244,8 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
       set('b_t2_side', teamBKey === 'team_1' ? 'A' : 'B');
       
       // Team 1 players (left side of TEAMS table) - always team_1
-      if (team_1Players && team_1Players.length >= 2) {
+      // Always try to populate, even if array is empty or missing
+      if (team_1Players && Array.isArray(team_1Players)) {
         // Determine which coin toss data to use based on whether team_1 is A or B
         const coinTossData = match?.coinTossData;
         const isTeam1A = teamAKey === 'team_1';
@@ -261,8 +262,15 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         let p2FirstName = '';
         let p2LastName = '';
         
+        // Always use player objects for names (they should always have names)
+        // Use coin toss data as fallback if player objects don't have names
+        p1FirstName = team_1Players[0]?.firstName || team1CoinTossData?.player1?.firstName || '';
+        p1LastName = team_1Players[0]?.lastName || team1CoinTossData?.player1?.lastName || '';
+        p2FirstName = team_1Players[1]?.firstName || team1CoinTossData?.player2?.firstName || '';
+        p2LastName = team_1Players[1]?.lastName || team1CoinTossData?.player2?.lastName || '';
+        
+        // Use coin toss data for numbers, captain, and first serve if available
         if (team1CoinTossData) {
-          // Use coin toss data if available
           p1No = team1CoinTossData.player1?.number !== undefined && team1CoinTossData.player1?.number !== null 
             ? String(team1CoinTossData.player1.number) 
             : String(team_1Players[0]?.number || '');
@@ -270,25 +278,18 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
             ? String(team1CoinTossData.player2.number) 
             : String(team_1Players[1]?.number || '');
           
-          p1IsCaptain = team1CoinTossData.player1?.isCaptain || false;
-          p2IsCaptain = team1CoinTossData.player2?.isCaptain || false;
+          p1IsCaptain = team1CoinTossData.player1?.isCaptain || team_1Players[0]?.isCaptain || false;
+          p2IsCaptain = team1CoinTossData.player2?.isCaptain || team_1Players[1]?.isCaptain || false;
           p1FirstServe = team1CoinTossData.player1?.firstServe || false;
           p2FirstServe = team1CoinTossData.player2?.firstServe || false;
-          
-          p1FirstName = team1CoinTossData.player1?.firstName || team_1Players[0]?.firstName || '';
-          p1LastName = team1CoinTossData.player1?.lastName || team_1Players[0]?.lastName || '';
-          p2FirstName = team1CoinTossData.player2?.firstName || team_1Players[1]?.firstName || '';
-          p2LastName = team1CoinTossData.player2?.lastName || team_1Players[1]?.lastName || '';
         } else {
           // Fallback to player objects directly
           p1No = String(team_1Players[0]?.number || '');
           p2No = String(team_1Players[1]?.number || '');
           p1IsCaptain = team_1Players[0]?.isCaptain || false;
           p2IsCaptain = team_1Players[1]?.isCaptain || false;
-          p1FirstName = team_1Players[0]?.firstName || '';
-          p1LastName = team_1Players[0]?.lastName || '';
-          p2FirstName = team_1Players[1]?.firstName || '';
-          p2LastName = team_1Players[1]?.lastName || '';
+          p1FirstServe = false;
+          p2FirstServe = false;
         }
         
         // Format player number: circle if captain, asterisk on right if first serve
@@ -314,12 +315,40 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         set('b_t1_p1_name', `${p1FirstName} ${p1LastName}`.trim());
         set('b_t1_p2_no', p2Display);
         set('b_t1_p2_name', `${p2FirstName} ${p2LastName}`.trim());
-        
+      } else {
+        // If team_1Players array is missing or empty, try to use coin toss data
+        const isTeam1A = teamAKey === 'team_1';
+        const team1CoinTossData = isTeam1A ? coinTossData?.players?.teamA : coinTossData?.players?.teamB;
+        if (team1CoinTossData) {
+          const p1Name = `${team1CoinTossData.player1?.firstName || ''} ${team1CoinTossData.player1?.lastName || ''}`.trim();
+          const p2Name = `${team1CoinTossData.player2?.firstName || ''} ${team1CoinTossData.player2?.lastName || ''}`.trim();
+          const p1No = String(team1CoinTossData.player1?.number || '');
+          const p2No = String(team1CoinTossData.player2?.number || '');
+          const p1IsCaptain = team1CoinTossData.player1?.isCaptain || false;
+          const p2IsCaptain = team1CoinTossData.player2?.isCaptain || false;
+          const p1FirstServe = team1CoinTossData.player1?.firstServe || false;
+          const p2FirstServe = team1CoinTossData.player2?.firstServe || false;
+          
+          let p1Display = p1No;
+          if (p1IsCaptain && p1FirstServe) p1Display = `(${p1No})*`;
+          else if (p1IsCaptain) p1Display = `(${p1No})`;
+          else if (p1FirstServe) p1Display = `${p1No}*`;
+          
+          let p2Display = p2No;
+          if (p2IsCaptain && p2FirstServe) p2Display = `(${p2No})*`;
+          else if (p2IsCaptain) p2Display = `(${p2No})`;
+          else if (p2FirstServe) p2Display = `${p2No}*`;
+          
+          set('b_t1_p1_no', p1Display);
+          set('b_t1_p1_name', p1Name);
+          set('b_t1_p2_no', p2Display);
+          set('b_t1_p2_name', p2Name);
+        }
       }
       
       // Team 2 players (right side of TEAMS table) - always team_2
       // Always try to populate, even if some data is missing
-      if (team_2Players && team_2Players.length >= 2) {
+      if (team_2Players && Array.isArray(team_2Players)) {
         // Determine which coin toss data to use based on whether team_2 is A or B
         const isTeam2A = teamAKey === 'team_2';
         const team2CoinTossData = isTeam2A ? coinTossData?.players?.teamA : coinTossData?.players?.teamB;
@@ -335,8 +364,15 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         let p2FirstName = '';
         let p2LastName = '';
         
+        // Always use player objects for names (they should always have names)
+        // Use coin toss data as fallback if player objects don't have names
+        p1FirstName = team_2Players[0]?.firstName || team2CoinTossData?.player1?.firstName || '';
+        p1LastName = team_2Players[0]?.lastName || team2CoinTossData?.player1?.lastName || '';
+        p2FirstName = team_2Players[1]?.firstName || team2CoinTossData?.player2?.firstName || '';
+        p2LastName = team_2Players[1]?.lastName || team2CoinTossData?.player2?.lastName || '';
+        
+        // Use coin toss data for numbers, captain, and first serve if available
         if (team2CoinTossData) {
-          // Use coin toss data if available
           p1No = team2CoinTossData.player1?.number !== undefined && team2CoinTossData.player1?.number !== null 
             ? String(team2CoinTossData.player1.number) 
             : String(team_2Players[0]?.number || '');
@@ -344,25 +380,18 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
             ? String(team2CoinTossData.player2.number) 
             : String(team_2Players[1]?.number || '');
           
-          p1IsCaptain = team2CoinTossData.player1?.isCaptain || false;
-          p2IsCaptain = team2CoinTossData.player2?.isCaptain || false;
+          p1IsCaptain = team2CoinTossData.player1?.isCaptain || team_2Players[0]?.isCaptain || false;
+          p2IsCaptain = team2CoinTossData.player2?.isCaptain || team_2Players[1]?.isCaptain || false;
           p1FirstServe = team2CoinTossData.player1?.firstServe || false;
           p2FirstServe = team2CoinTossData.player2?.firstServe || false;
-          
-          p1FirstName = team2CoinTossData.player1?.firstName || team_2Players[0]?.firstName || '';
-          p1LastName = team2CoinTossData.player1?.lastName || team_2Players[0]?.lastName || '';
-          p2FirstName = team2CoinTossData.player2?.firstName || team_2Players[1]?.firstName || '';
-          p2LastName = team2CoinTossData.player2?.lastName || team_2Players[1]?.lastName || '';
         } else {
           // Fallback to player objects directly
           p1No = String(team_2Players[0]?.number || '');
           p2No = String(team_2Players[1]?.number || '');
           p1IsCaptain = team_2Players[0]?.isCaptain || false;
           p2IsCaptain = team_2Players[1]?.isCaptain || false;
-          p1FirstName = team_2Players[0]?.firstName || '';
-          p1LastName = team_2Players[0]?.lastName || '';
-          p2FirstName = team_2Players[1]?.firstName || '';
-          p2LastName = team_2Players[1]?.lastName || '';
+          p1FirstServe = false;
+          p2FirstServe = false;
         }
         
         // Format player number: circle if captain, asterisk on right if first serve
@@ -388,7 +417,35 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         set('b_t2_p1_name', `${p1FirstName} ${p1LastName}`.trim());
         set('b_t2_p2_no', p2Display);
         set('b_t2_p2_name', `${p2FirstName} ${p2LastName}`.trim());
-        
+      } else {
+        // If team_2Players array is missing or empty, try to use coin toss data
+        const isTeam2A = teamAKey === 'team_2';
+        const team2CoinTossData = isTeam2A ? coinTossData?.players?.teamA : coinTossData?.players?.teamB;
+        if (team2CoinTossData) {
+          const p1Name = `${team2CoinTossData.player1?.firstName || ''} ${team2CoinTossData.player1?.lastName || ''}`.trim();
+          const p2Name = `${team2CoinTossData.player2?.firstName || ''} ${team2CoinTossData.player2?.lastName || ''}`.trim();
+          const p1No = String(team2CoinTossData.player1?.number || '');
+          const p2No = String(team2CoinTossData.player2?.number || '');
+          const p1IsCaptain = team2CoinTossData.player1?.isCaptain || false;
+          const p2IsCaptain = team2CoinTossData.player2?.isCaptain || false;
+          const p1FirstServe = team2CoinTossData.player1?.firstServe || false;
+          const p2FirstServe = team2CoinTossData.player2?.firstServe || false;
+          
+          let p1Display = p1No;
+          if (p1IsCaptain && p1FirstServe) p1Display = `(${p1No})*`;
+          else if (p1IsCaptain) p1Display = `(${p1No})`;
+          else if (p1FirstServe) p1Display = `${p1No}*`;
+          
+          let p2Display = p2No;
+          if (p2IsCaptain && p2FirstServe) p2Display = `(${p2No})*`;
+          else if (p2IsCaptain) p2Display = `(${p2No})`;
+          else if (p2FirstServe) p2Display = `${p2No}*`;
+          
+          set('b_t2_p1_no', p1Display);
+          set('b_t2_p1_name', p1Name);
+          set('b_t2_p2_no', p2Display);
+          set('b_t2_p2_name', p2Name);
+        }
       }
       
       // Sets data - process ALL sets (including current unfinished set)
@@ -813,14 +870,32 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
             });
           } else {
             // Fallback to coin toss data if serviceOrder not available (for set 1)
-            if (teamAData) {
-              set(`${prefix}_r1_player`, String(teamAData.player1?.number || ''));
-              set(`${prefix}_r3_player`, String(teamAData.player2?.number || ''));
-            }
+            // Determine which team serves first - that team goes in rows I and III (ABOVE)
+            const firstServeTeam = match?.firstServe || coinTossData?.firstServe || teamAKey;
+            const servingTeamIsA = firstServeTeam === teamAKey;
             
-            if (teamBData) {
-              set(`${prefix}_r2_player`, String(teamBData.player1?.number || ''));
-              set(`${prefix}_r4_player`, String(teamBData.player2?.number || ''));
+            if (servingTeamIsA) {
+              // Team A serves first - goes in rows I and III (ABOVE)
+              if (teamAData) {
+                set(`${prefix}_r1_player`, String(teamAData.player1?.number || ''));
+                set(`${prefix}_r3_player`, String(teamAData.player2?.number || ''));
+              }
+              // Team B serves second - goes in rows II and IV (BELOW)
+              if (teamBData) {
+                set(`${prefix}_r2_player`, String(teamBData.player1?.number || ''));
+                set(`${prefix}_r4_player`, String(teamBData.player2?.number || ''));
+              }
+            } else {
+              // Team B serves first - goes in rows I and III (ABOVE)
+              if (teamBData) {
+                set(`${prefix}_r1_player`, String(teamBData.player1?.number || ''));
+                set(`${prefix}_r3_player`, String(teamBData.player2?.number || ''));
+              }
+              // Team A serves second - goes in rows II and IV (BELOW)
+              if (teamAData) {
+                set(`${prefix}_r2_player`, String(teamAData.player1?.number || ''));
+                set(`${prefix}_r4_player`, String(teamAData.player2?.number || ''));
+              }
             }
           }
           
@@ -838,17 +913,46 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           // Track service rotation: columns used for each player row (1-21)
           const serviceRotationColumn: Record<string, number> = { r1: 0, r2: 0, r3: 0, r4: 0 }; // Next column to use for each row
           
-          // Determine initial serving player from serviceOrder
+          // Map service order to row keys (global rotation: I=1, II=2, III=3, IV=4)
+          const orderToRow: Record<number, string> = { 1: 'r1', 2: 'r2', 3: 'r3', 4: 'r4' };
+          
+          // Determine initial serving player from first rally_start event
           // Service rotation order is global: I (1) -> II (2) -> III (3) -> IV (4) -> I (1) -> ...
-          let currentServiceOrder = 1; // Start with I (order 1) - this is the global service order
-          if (setData?.serviceOrder) {
-            // Find which player serves first - the one with service order 1
-            // This is already set to 1, but we'll use it to track rotation
-            currentServiceOrder = 1;
+          let currentServiceOrder: number | null = null; // Will be set from first rally_start event
+          
+          // Find first rally_start to determine initial service order
+          const firstRallyStart = setEvents.find((e: any) => e.type === 'rally_start');
+          if (firstRallyStart && setData?.serviceOrder) {
+            const servingTeamFromEvent = firstRallyStart.payload?.servingTeam;
+            const servingPlayerNumber = firstRallyStart.payload?.servingPlayerNumber;
+            const serviceOrder = setData.serviceOrder;
+            const teamKey = servingTeamFromEvent === teamAKey ? teamAKey : teamBKey;
+            
+            // Determine which player this is (player1 or player2)
+            let playerKey = '';
+            if (teamKey === teamAKey) {
+              if (teamAData?.player1?.number === servingPlayerNumber) {
+                playerKey = `${teamKey}_player1`;
+              } else if (teamAData?.player2?.number === servingPlayerNumber) {
+                playerKey = `${teamKey}_player2`;
+              }
+            } else if (teamKey === teamBKey) {
+              if (teamBData?.player1?.number === servingPlayerNumber) {
+                playerKey = `${teamKey}_player1`;
+              } else if (teamBData?.player2?.number === servingPlayerNumber) {
+                playerKey = `${teamKey}_player2`;
+              }
+            }
+            
+            if (playerKey && serviceOrder[playerKey]) {
+              currentServiceOrder = serviceOrder[playerKey];
+            }
           }
           
-          // Map service order to row keys (global rotation)
-          const orderToRow: Record<number, string> = { 1: 'r1', 2: 'r2', 3: 'r3', 4: 'r4' };
+          // Fallback: if no rally_start found, start with order 1
+          if (currentServiceOrder === null) {
+            currentServiceOrder = 1;
+          }
           
           // Track delay/misconduct penalty points (these should be circled, not slashed)
           const delayPenaltyPoints: Set<number> = new Set();
@@ -925,7 +1029,8 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
               }
               
               // Service rotation tracking: when serving team loses point, record score and rotate
-              if (servingTeamLostPoint && servingTeam && setData?.serviceOrder) {
+              // currentServiceOrder is already updated from rally_start events, so use it directly
+              if (servingTeamLostPoint && servingTeam && setData?.serviceOrder && currentServiceOrder !== null) {
                 const currentRowKey = orderToRow[currentServiceOrder];
                 if (currentRowKey && serviceRotationColumn[currentRowKey] !== undefined) {
                   // Record the score of the team that lost service (at the time they lost it)
@@ -943,6 +1048,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
               }
             } else if (event.type === 'rally_start') {
               // Update current serving player from rally_start event
+              // This is the authoritative source for who is serving
               const servingTeamFromEvent = event.payload?.servingTeam;
               const servingPlayerNumber = event.payload?.servingPlayerNumber;
               
@@ -968,6 +1074,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
                 }
                 
                 if (playerKey && serviceOrder[playerKey]) {
+                  // Update currentServiceOrder to match the actual serving player
                   currentServiceOrder = serviceOrder[playerKey];
                 }
               }

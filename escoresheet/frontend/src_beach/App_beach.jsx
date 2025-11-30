@@ -1224,87 +1224,90 @@ function AppBeach() {
                 </div>
               </div>
             </div>
-            <div className="home-download-section">
-              <div className="home-card home-card--download">
-                <div className="home-card-header">
-                  <h2>Download App</h2>
-                </div>
-                <div className="home-download-grid">
-                  <a 
-                    href="https://github.com/Lucanepa/openbeach/releases/latest/download/OpenBeach-eScoresheet-Setup.exe"
-                    className="home-download-link"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <div className="home-download-item">
-                      <div className="home-download-icon">🪟</div>
-                      <div className="home-download-info">
-                        <div className="home-download-platform">Windows</div>
-                        <div className="home-download-desc">Desktop App (.exe)</div>
+            {/* Download section hidden temporarily */}
+            {false && (
+              <div className="home-download-section">
+                <div className="home-card home-card--download">
+                  <div className="home-card-header">
+                    <h2>Download App</h2>
+                  </div>
+                  <div className="home-download-grid">
+                    <a 
+                      href="https://github.com/Lucanepa/openbeach/releases/latest/download/OpenBeach-eScoresheet-Setup.exe"
+                      className="home-download-link"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <div className="home-download-item">
+                        <div className="home-download-icon">🪟</div>
+                        <div className="home-download-info">
+                          <div className="home-download-platform">Windows</div>
+                          <div className="home-download-desc">Desktop App (.exe)</div>
+                        </div>
                       </div>
-                    </div>
-                  </a>
-                  <a 
-                    href="https://github.com/Lucanepa/openbeach/releases/latest/download/OpenBeach-eScoresheet.dmg"
-                    className="home-download-link"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <div className="home-download-item">
-                      <div className="home-download-icon">🍎</div>
-                      <div className="home-download-info">
-                        <div className="home-download-platform">macOS</div>
-                        <div className="home-download-desc">Desktop App (.dmg)</div>
+                    </a>
+                    <a 
+                      href="https://github.com/Lucanepa/openbeach/releases/latest/download/OpenBeach-eScoresheet.dmg"
+                      className="home-download-link"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <div className="home-download-item">
+                        <div className="home-download-icon">🍎</div>
+                        <div className="home-download-info">
+                          <div className="home-download-platform">macOS</div>
+                          <div className="home-download-desc">Desktop App (.dmg)</div>
+                        </div>
                       </div>
-                    </div>
-                  </a>
-                  <a 
-                    href="https://beachapp.openvolley.app"
-                    className="home-download-link"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => {
-                      // For Android, show install prompt if available
-                      if (window.deferredPrompt) {
-                        e.preventDefault()
-                        window.deferredPrompt.prompt()
-                        window.deferredPrompt.userChoice.then((choiceResult) => {
-                          window.deferredPrompt = null
-                        })
-                      }
-                    }}
-                  >
-                    <div className="home-download-item">
-                      <div className="home-download-icon">🤖</div>
-                      <div className="home-download-info">
-                        <div className="home-download-platform">Android</div>
-                        <div className="home-download-desc">Install PWA</div>
+                    </a>
+                    <a 
+                      href="https://beachapp.openvolley.app"
+                      className="home-download-link"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => {
+                        // For Android, show install prompt if available
+                        if (window.deferredPrompt) {
+                          e.preventDefault()
+                          window.deferredPrompt.prompt()
+                          window.deferredPrompt.userChoice.then((choiceResult) => {
+                            window.deferredPrompt = null
+                          })
+                        }
+                      }}
+                    >
+                      <div className="home-download-item">
+                        <div className="home-download-icon">🤖</div>
+                        <div className="home-download-info">
+                          <div className="home-download-platform">Android</div>
+                          <div className="home-download-desc">Install PWA</div>
+                        </div>
                       </div>
-                    </div>
-                  </a>
-                  <a 
-                    href="https://beachapp.openvolley.app"
-                    className="home-download-link"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <div className="home-download-item">
-                      <div className="home-download-icon">📱</div>
-                      <div className="home-download-info">
-                        <div className="home-download-platform">iOS</div>
-                        <div className="home-download-desc">Install PWA</div>
+                    </a>
+                    <a 
+                      href="https://beachapp.openvolley.app"
+                      className="home-download-link"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <div className="home-download-item">
+                        <div className="home-download-icon">📱</div>
+                        <div className="home-download-info">
+                          <div className="home-download-platform">iOS</div>
+                          <div className="home-download-desc">Install PWA</div>
+                        </div>
                       </div>
-                    </div>
-                  </a>
-                </div>
-                <div className="home-download-note">
-                  <p>💡 <strong>Mobile:</strong> Visit this site on your device and use "Add to Home Screen" to install as an app.</p>
-                  <p style={{ marginTop: '8px', fontSize: '11px', opacity: 0.8 }}>
-                    <strong>Desktop:</strong> Download links point to GitHub Releases. If files aren't available yet, build them locally using the commands in README_ELECTRON.md
-                  </p>
+                    </a>
+                  </div>
+                  <div className="home-download-note">
+                    <p>💡 <strong>Mobile:</strong> Visit this site on your device and use "Add to Home Screen" to install as an app.</p>
+                    <p style={{ marginTop: '8px', fontSize: '11px', opacity: 0.8 }}>
+                      <strong>Desktop:</strong> Download links point to GitHub Releases. If files aren't available yet, build them locally using the commands in README_ELECTRON.md
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         ) : (
           <Scoreboard matchId={matchId} onFinishSet={finishSet} onOpenSetup={openMatchSetup} onOpenMatchSetup={openMatchSetupView} onOpenCoinToss={openCoinTossView} />

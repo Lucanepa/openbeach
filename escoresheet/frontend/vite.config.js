@@ -14,6 +14,36 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
+      workbox: {
+        // Cache all assets for offline use
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        // Use NetworkFirst for API calls, but CacheFirst for assets
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/.*\.(?:png|jpg|jpeg|svg|gif|webp|woff|woff2|ttf|eot)$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'static-assets',
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
+              }
+            }
+          },
+          {
+            urlPattern: /^https:\/\/.*/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'network-cache',
+              networkTimeoutSeconds: 3,
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * 24 // 1 day
+              }
+            }
+          }
+        ]
+      },
       manifest: {
         name: process.env.VITE_APP_TITLE || 'Open eScoresheet',
         short_name: 'eScoresheet',
