@@ -82,7 +82,7 @@ Match metadata includes:
 - Teams (A/B designation based on coin toss)
 - Officials (referees, scorer, assistant scorer)
 - Venue and date information
-- Signatures (coaches and captains)
+- Signatures (captains)
 
 ## Development
 

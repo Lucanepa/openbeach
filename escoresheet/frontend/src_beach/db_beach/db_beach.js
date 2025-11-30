@@ -31,9 +31,7 @@ db.version(2).stores({
 }).upgrade(tx => {
   // Migration: add signature fields to existing matches
   return tx.table('matches').toCollection().modify(match => {
-    if (!match.team_1CoachSignature) match.team_1CoachSignature = null
     if (!match.team_1CaptainSignature) match.team_1CaptainSignature = null
-    if (!match.team_2CoachSignature) match.team_2CoachSignature = null
     if (!match.team_2CaptainSignature) match.team_2CaptainSignature = null
   })
 })

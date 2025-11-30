@@ -21,7 +21,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
   const [matchRound, setMatchRound] = useState('pool_play') // pool_play | winner_bracket | class | semi_final | finals
   const [matchNumber, setMatchNumber] = useState('')
   const [matchGender, setMatchGender] = useState('men') // men | women
-  const [matchWithCoaches, setMatchWithCoaches] = useState(false) // Toggle for coaches
   const [team_1Color, setTeam_1Color] = useState('#89bdc3') // Light cyan
   const [team_2Color, setTeam_2Color] = useState('#323134') // Dark gray
   const [team_1Country, setTeam_1Country] = useState('SUI')
@@ -35,9 +34,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
   const [team_1Player2, setTeam_1Player2] = useState({ firstName: '', lastName: '' })
   const [team_2Player1, setTeam_2Player1] = useState({ firstName: '', lastName: '' })
   const [team_2Player2, setTeam_2Player2] = useState({ firstName: '', lastName: '' })
-  // Coach names
-  const [team_1CoachName, setTeam_1CoachName] = useState({ firstName: '', lastName: '' })
-  const [team_2CoachName, setTeam_2CoachName] = useState({ firstName: '', lastName: '' })
   // Legacy state (kept for compatibility with existing code)
   const [team_1Num, setTeam_1Num] = useState('')
   const [team_1First, setTeam_1First] = useState('')
@@ -80,7 +76,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
 
   // UI state for views
   const [currentView, setCurrentView] = useState('main') // 'main', 'info', 'officials', 'team_1', 'team_2', 'coin-toss'
-  const [openSignature, setOpenSignature] = useState(null) // 'team_1-coach', 'team_1-captain', 'team_2-coach', 'team_2-captain'
+  const [openSignature, setOpenSignature] = useState(null) // 'team_1-captain', 'team_2-captain'
   const [colorPickerModal, setColorPickerModal] = useState(null) // { team: 'team_1'|'team_2', position: { x, y } } | null
   const [noticeModal, setNoticeModal] = useState(null) // { message: string } | null
   
@@ -145,13 +141,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
   }
 
   // Signatures and lock
-  const [team_1CoachSignature, setTeam_1CoachSignature] = useState(null)
   const [team_1CaptainSignature, setTeam_1CaptainSignature] = useState(null)
-  const [team_2CoachSignature, setTeam_2CoachSignature] = useState(null)
   const [team_2CaptainSignature, setTeam_2CaptainSignature] = useState(null)
-  const [savedSignatures, setSavedSignatures] = useState({ team_1Coach: null, team_1Captain: null, team_2Coach: null, team_2Captain: null })
-  const isTeam_1Locked = !!(team_1CoachSignature && team_1CaptainSignature)
-  const isTeam_2Locked = !!(team_2CoachSignature && team_2CaptainSignature)
+  const [savedSignatures, setSavedSignatures] = useState({ team_1Captain: null, team_2Captain: null })
+  const isTeam_1Locked = !!team_1CaptainSignature
+  const isTeam_2Locked = !!team_2CaptainSignature
   
   // Check if coin toss was previously confirmed (only captain signatures are required)
   const isCoinTossConfirmed = useMemo(() => {
@@ -213,22 +207,18 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
     if (password === '1234') {
       
       if (side === 'team_1') {
-        setTeam_1CoachSignature(null)
         setTeam_1CaptainSignature(null)
         // Update database if matchId exists
         if (matchId) {
           await db.matches.update(matchId, {
-            team_1CoachSignature: null,
             team_1CaptainSignature: null
           })
         }
       } else if (side === 'team_2') { 
-        setTeam_2CoachSignature(null)
         setTeam_2CaptainSignature(null)
         // Update database if matchId exists
         if (matchId) {
           await db.matches.update(matchId, {
-            team_2CoachSignature: null,
             team_2CaptainSignature: null
           })
         }
@@ -480,29 +470,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         }
         
         // Load signatures
-        if (match.team_1CoachSignature) {
-          setTeam_1CoachSignature(match.team_1CoachSignature)
-          setSavedSignatures(prev => ({ ...prev, team_1Coach: match.team_1CoachSignature }))
-        }
         if (match.team_1CaptainSignature) {
           setTeam_1CaptainSignature(match.team_1CaptainSignature)
           setSavedSignatures(prev => ({ ...prev, team_1Captain: match.team_1CaptainSignature }))
         }
-        if (match.team_2CoachSignature) {
-          setTeam_2CoachSignature(match.team_2CoachSignature)
-          setSavedSignatures(prev => ({ ...prev, team_2Coach: match.team_2CoachSignature }))
-        }
         if (match.team_2CaptainSignature) {
           setTeam_2CaptainSignature(match.team_2CaptainSignature)
           setSavedSignatures(prev => ({ ...prev, team_2Captain: match.team_2CaptainSignature }))
-        }
-        
-        // Load coach names from match or draft
-        if (match.team_1CoachName) {
-          setTeam_1CoachName(match.team_1CoachName)
-        }
-        if (match.team_2CoachName) {
-          setTeam_2CoachName(match.team_2CoachName)
         }
         
         // Load coin toss data if available
@@ -627,18 +601,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
           if (draft.asstLast !== undefined) setAsstLast(draft.asstLast)
           if (draft.asstCountry !== undefined) setAsstCountry(draft.asstCountry)
           if (draft.lineJudges !== undefined) setLineJudges(draft.lineJudges)
-          if (draft.team_1CoachSignature !== undefined) setTeam_1CoachSignature(draft.team_1CoachSignature)
           if (draft.team_1CaptainSignature !== undefined) setTeam_1CaptainSignature(draft.team_1CaptainSignature)
-          if (draft.team_2CoachSignature !== undefined) setTeam_2CoachSignature(draft.team_2CoachSignature)
           if (draft.team_2CaptainSignature !== undefined) setTeam_2CaptainSignature(draft.team_2CaptainSignature)
-          // Only load coach names from draft if they're not already loaded from match
-          // This prevents overwriting match data with empty draft values
-          if (draft.team_1CoachName !== undefined && (!team_1CoachName.firstName && !team_1CoachName.lastName)) {
-            setTeam_1CoachName(draft.team_1CoachName)
-          }
-          if (draft.team_2CoachName !== undefined && (!team_2CoachName.firstName && !team_2CoachName.lastName)) {
-            setTeam_2CoachName(draft.team_2CoachName)
-          }
         }
       } catch (error) {
         console.error('Error loading draft:', error)
@@ -682,12 +646,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         asstLast,
         asstCountry,
         lineJudges,
-        team_1CoachSignature,
         team_1CaptainSignature,
-        team_2CoachSignature,
         team_2CaptainSignature,
-        team_1CoachName,
-        team_2CoachName,
         updatedAt: new Date().toISOString()
       }
       // Get existing draft or create new one
@@ -717,8 +677,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
           matchGender: matchGender || 'men',
           team_1Country: team_1Country || 'SUI',
           team_2Country: team_2Country || 'SUI',
-          team_1CoachName: team_1CoachName || null,
-          team_2CoachName: team_2CoachName || null,
           scheduledAt,
           officials: (() => {
             const officials = [
@@ -778,7 +736,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
       
       return () => clearTimeout(timeoutId)
     }
-  }, [date, time, eventName, site, beach, court, matchPhase, matchRound, matchNumber, matchGender, team_1, team_2, team_1Color, team_2Color, team_1Country, team_2Country, team_1Roster, team_2Roster, ref1First, ref1Last, ref1Country, ref2First, ref2Last, ref2Country, scorerFirst, scorerLast, scorerCountry, asstFirst, asstLast, asstCountry, lineJudges, team_1CoachSignature, team_1CaptainSignature, team_2CoachSignature, team_2CaptainSignature, currentView])
+  }, [date, time, eventName, site, beach, court, matchPhase, matchRound, matchNumber, matchGender, team_1, team_2, team_1Color, team_2Color, team_1Country, team_2Country, team_1Roster, team_2Roster, ref1First, ref1Last, ref1Country, ref2First, ref2Last, ref2Country, scorerFirst, scorerLast, scorerCountry, asstFirst, asstLast, asstCountry, lineJudges, team_1CaptainSignature, team_2CaptainSignature, currentView])
 
   // Helper function to determine if a color is bright/light
   function isBrightColor(color) {
@@ -979,12 +937,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
   }
 
   function handleSignatureSave(signatureImage) {
-    if (openSignature === 'team_1-coach') {
-      setTeam_1CoachSignature(signatureImage)
-    } else if (openSignature === 'team_1-captain') {
+    if (openSignature === 'team_1-captain') {
       setTeam_1CaptainSignature(signatureImage)
-    } else if (openSignature === 'team_2-coach') {
-      setTeam_2CoachSignature(signatureImage)
     } else if (openSignature === 'team_2-captain') {
       setTeam_2CaptainSignature(signatureImage)
     }
@@ -1088,9 +1042,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         return officials
       })(),
       
-      team_1CoachSignature: null,
       team_1CaptainSignature: null,
-      team_2CoachSignature: null,
       team_2CaptainSignature: null,
       createdAt: new Date().toISOString()
     })
@@ -1216,7 +1168,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
   }
 
   async function confirmCoinToss() {
-    // Only captain signatures are mandatory, coach signatures are optional
+    // Only captain signatures are mandatory
     if (!team_1CaptainSignature || !team_2CaptainSignature) {
       setNoticeModal({ message: 'Please complete all captain signatures before confirming the coin toss.' })
       return
@@ -1320,9 +1272,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
     // Update match with signatures, first serve, and coin toss result
     // Store coin toss data as a complete structured object
     const updateResult = await db.matches.update(targetMatchId, {
-      team_1CoachSignature,
       team_1CaptainSignature,
-      team_2CoachSignature,
       team_2CaptainSignature,
       firstServe: firstServeTeam, // 'team_1' or 'team_2'
       coinTossTeamA: teamA, // 'team_1' or 'team_2'
@@ -1469,9 +1419,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
     
     // Update saved signatures to match current state
     setSavedSignatures({
-      team_1Coach: team_1CoachSignature,
       team_1Captain: team_1CaptainSignature,
-      team_2Coach: team_2CoachSignature,
       team_2Captain: team_2CaptainSignature
     })
     
@@ -1568,23 +1516,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
             </div>
           </div>
 
-          {/* Match with Coaches Toggle */}
-          <div className="card">
-            <h3 style={{ margin: '0 0 12px 0' }}>Coaches</h3>
-            <div className="row">
-              <div className="field">
-                <label style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}>
-                  <input 
-                    type="checkbox" 
-                    checked={matchWithCoaches} 
-                    onChange={e => setMatchWithCoaches(e.target.checked)}
-                    style={{ width: '20px', height: '20px', cursor: 'pointer' }}
-                  />
-                  <span>Match with coaches</span>
-                </label>
-              </div>
-            </div>
-          </div>
         </div>
         <div style={{ display:'flex', justifyContent:'flex-end', marginTop:16 }}>
           <button onClick={() => setCurrentView('main')}>Confirm</button>
@@ -1799,7 +1730,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         </div>
         {isTeam_1Locked && (
           <div className="panel" style={{ marginTop:8 }}>
-            <p className="text-sm">Locked (signed by Coach and Captain). <button className="secondary" onClick={()=>{
+            <p className="text-sm">Locked (signed by Captain). <button className="secondary" onClick={()=>{
               unlockTeam('team_1')
             }}>Unlock</button></p>
           </div>
@@ -1957,10 +1888,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
               }
               
               // Restore signatures if they were previously saved (re-lock the team)
-              if (!team_1CoachSignature && savedSignatures.team_1Coach) {
-                updateData.team_1CoachSignature = savedSignatures.team_1Coach
-                setTeam_1CoachSignature(savedSignatures.team_1Coach)
-              }
               if (!team_1CaptainSignature && savedSignatures.team_1Captain) {
                 updateData.team_1CaptainSignature = savedSignatures.team_1Captain
                 setTeam_1CaptainSignature(savedSignatures.team_1Captain)
@@ -1993,7 +1920,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         </div>
         {isTeam_2Locked && (
           <div className="panel" style={{ marginTop:8 }}>
-            <p className="text-sm">Locked (signed by Coach and Captain). <button className="secondary" onClick={()=>{
+            <p className="text-sm">Locked (signed by Captain). <button className="secondary" onClick={()=>{
               unlockTeam('team_2')
             }}>Unlock</button></p>
           </div>
@@ -2154,10 +2081,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
               }
               
               // Restore signatures if they were previously saved (re-lock the team)
-              if (!team_2CoachSignature && savedSignatures.team_2Coach) {
-                updateData.team_2CoachSignature = savedSignatures.team_2Coach
-                setTeam_2CoachSignature(savedSignatures.team_2Coach)
-              }
               if (!team_2CaptainSignature && savedSignatures.team_2Captain) {
                 updateData.team_2CaptainSignature = savedSignatures.team_2Captain
                 setTeam_2CaptainSignature(savedSignatures.team_2Captain)
@@ -2176,15 +2099,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
     const teamAInfo = teamA === 'team_1' ? { name: team_1, color: team_1Color, roster: team_1Roster } : { name: team_2, color: team_2Color, roster: team_2Roster }
     const teamBInfo = teamB === 'team_1' ? { name: team_1, color: team_1Color, roster: team_1Roster } : { name: team_2, color: team_2Color, roster: team_2Roster }
     
-    const teamACoachSig = teamA === 'team_1' ? team_1CoachSignature : team_2CoachSignature
     const teamACaptainSig = teamA === 'team_1' ? team_1CaptainSignature : team_2CaptainSignature
-    const teamBCoachSig = teamB === 'team_1' ? team_1CoachSignature : team_2CoachSignature
     const teamBCaptainSig = teamB === 'team_1' ? team_1CaptainSignature : team_2CaptainSignature
-    // Check if coach names are set
-    const teamACoachName = teamA === 'team_1' ? team_1CoachName : team_2CoachName
-    const teamBCoachName = teamB === 'team_1' ? team_1CoachName : team_2CoachName
-    const teamAHasCoach = teamACoachName?.firstName || teamACoachName?.lastName
-    const teamBHasCoach = teamBCoachName?.firstName || teamBCoachName?.lastName
     // Use roster in original order (not sorted by number) to maintain player 1 and player 2 order
     const teamARosterEntries = (teamAInfo.roster || [])
       .slice(0, 2)
@@ -2484,39 +2400,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                       </tr>
                     )
                   })}
-                  {((teamA === 'team_1' && (team_1CoachName.firstName || team_1CoachName.lastName)) || 
-                    (teamA === 'team_2' && (team_2CoachName.firstName || team_2CoachName.lastName))) && (
-                    <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                      <td style={{ padding: '8px', textAlign: 'center', fontWeight: 600 }}>C</td>
-                      <td style={{ padding: '8px' }}>
-                        {teamA === 'team_1' 
-                          ? `${team_1CoachName.lastName || ''}, ${team_1CoachName.firstName ? team_1CoachName.firstName.charAt(0).toUpperCase() + '.' : ''}`.trim()
-                          : `${team_2CoachName.lastName || ''}, ${team_2CoachName.firstName ? team_2CoachName.firstName.charAt(0).toUpperCase() + '.' : ''}`.trim()
-                        }
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </div>
             
             <div style={{ display: 'flex', flexDirection: 'row', gap: 16, marginTop: 24, paddingTop: 16,  }}>
-              {matchWithCoaches && teamAHasCoach && (
-                <div style={{ flex: 1 }}>
-                  <h4 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Coach Signature</h4>
-                  {teamACoachSig ? (
-                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                      <img src={teamACoachSig} alt="Coach signature" style={{ maxWidth: 200, maxHeight: 60, border: '1px solid rgba(255,255,255,.2)', borderRadius: 4, flexShrink: 0 }} />
-                      <button onClick={() => {
-                        if (teamA === 'team_1') setTeam_1CoachSignature(null)
-                        else setTeam_2CoachSignature(null)
-                      }}>Remove</button>
-                    </div>
-                  ) : (
-                    <button onClick={() => setOpenSignature(teamA === 'team_1' ? 'team_1-coach' : 'team_2-coach')} style={{ padding: '10px 20px', fontSize: '14px', fontWeight: 600 }}>Sign Coach</button>
-                  )}
-                </div>
-              )}
               <div style={{ flex: 1 }}>
                 <h4 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Captain Signature</h4>
                 {teamACaptainSig ? (
@@ -2776,39 +2664,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                       </tr>
                     )
                   })}
-                  {matchWithCoaches && ((teamB === 'team_1' && (team_1CoachName.firstName || team_1CoachName.lastName)) || 
-                    (teamB === 'team_2' && (team_2CoachName.firstName || team_2CoachName.lastName))) && (
-                    <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                      <td style={{ padding: '8px', textAlign: 'center', fontWeight: 600 }}>C</td>
-                      <td style={{ padding: '8px' }}>
-                        {teamB === 'team_1' 
-                          ? `${team_1CoachName.lastName || ''}, ${team_1CoachName.firstName ? team_1CoachName.firstName.charAt(0).toUpperCase() + '.' : ''}`.trim()
-                          : `${team_2CoachName.lastName || ''}, ${team_2CoachName.firstName ? team_2CoachName.firstName.charAt(0).toUpperCase() + '.' : ''}`.trim()
-                        }
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </div>
             
             <div style={{ display: 'flex', flexDirection: 'row', gap: 16, marginTop: 24, paddingTop: 16,  }}>
-              {matchWithCoaches && teamBHasCoach && (
-                <div style={{ flex: 1 }}>
-                  <h4 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Coach Signature</h4>
-                  {teamBCoachSig ? (
-                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                      <img src={teamBCoachSig} alt="Coach signature" style={{ maxWidth: 200, maxHeight: 60, border: '1px solid rgba(255,255,255,.2)', borderRadius: 4, flexShrink: 0 }} />
-                      <button onClick={() => {
-                        if (teamB === 'team_1') setTeam_1CoachSignature(null)
-                        else setTeam_2CoachSignature(null)
-                      }}>Remove</button>
-                    </div>
-                  ) : (
-                    <button onClick={() => setOpenSignature(teamB === 'team_1' ? 'team_1-coach' : 'team_2-coach')} style={{ padding: '10px 20px', fontSize: '14px', fontWeight: 600 }}>Sign Coach</button>
-                  )}
-                </div>
-              )}
               <div style={{ flex: 1 }}>
                 <h4 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Captain Signature</h4>
                 {teamBCaptainSig ? (
@@ -2891,9 +2751,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
           open={openSignature !== null} 
           onClose={() => setOpenSignature(null)} 
           onSave={handleSignatureSave}
-          title={openSignature === 'team_1-coach' ? 'Team 1 Coach Signature' : 
-                 openSignature === 'team_1-captain' ? 'Team 1 Captain Signature' :
-                 openSignature === 'team_2-coach' ? 'Team 2 Coach Signature' :
+          title={openSignature === 'team_1-captain' ? 'Team 1 Captain Signature' :
                  openSignature === 'team_2-captain' ? 'Team 2 Captain Signature' : 'Sign'}
         />
 
@@ -3893,13 +3751,14 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                   placeholder="SUI"
                   maxLength={3}
                   style={{
-                    width: '20px',
+                    width: '30px',
                     padding: '4px 8px',
                     borderRadius: 4,
                     border: '1px solid rgba(255, 255, 255, 0.2)',
                     background: 'rgba(15, 23, 42, 0.35)',
                     color: 'var(--text)',
-                    fontSize: '12px'
+                    fontSize: '12px',
+                    textAlign: 'center'
                   }}
                 />
               </div>
@@ -3947,38 +3806,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                   </div>
                 </div>
               </div>
-              {matchWithCoaches && (
-                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: 6 }}>Coach</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <label style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.7)' }}>First name:</label>
-                    <input
-                      className="w-name capitalize"
-                      placeholder="First Name"
-                      value={team_1CoachName.firstName}
-                      onChange={e => setTeam_1CoachName({ ...team_1CoachName, firstName: e.target.value })}
-                      style={{ width: '150px' }}
-                    />
-                    <label style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.7)', marginLeft: 8 }}>Last name:</label>
-                    <input
-                      className="w-name capitalize"
-                      placeholder="Last Name"
-                      value={team_1CoachName.lastName}
-                      onChange={e => setTeam_1CoachName({ ...team_1CoachName, lastName: e.target.value })}
-                      style={{ width: '150px' }}
-                    />
-                  </div>
-                  {team_1CoachSignature && (team_1CoachName.firstName || team_1CoachName.lastName) && (
-                    <div style={{ marginTop: 12 }}>
-                      <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: 6 }}>Coach Signature</div>
-                      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <img src={team_1CoachSignature} alt="Coach signature" style={{ maxWidth: 200, maxHeight: 60, border: '1px solid rgba(255,255,255,.2)', borderRadius: 4, flexShrink: 0 }} />
-                        <button onClick={() => setTeam_1CoachSignature(null)} style={{ padding: '6px 12px', fontSize: '12px' }}>Remove</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -4022,13 +3849,14 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                   placeholder="SUI"
                   maxLength={3}
                     style={{
-                      width: '20px',
+                      width: '30px',
                     padding: '4px 8px',
                     borderRadius: 4,
                     border: '1px solid rgba(255, 255, 255, 0.2)',
                     background: 'rgba(15, 23, 42, 0.35)',
                     color: 'var(--text)',
-                    fontSize: '12px'
+                    fontSize: '12px',
+                    textAlign: 'center'
                   }}
                 />
               </div>
@@ -4076,38 +3904,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                   </div>
                 </div>
               </div>
-              {matchWithCoaches && (
-                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: 6 }}>Coach</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <label style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.7)' }}>First name:</label>
-                    <input
-                      className="w-name capitalize"
-                      placeholder="First Name"
-                      value={team_2CoachName.firstName}
-                      onChange={e => setTeam_2CoachName({ ...team_2CoachName, firstName: e.target.value })}
-                      style={{ width: '150px' }}
-                    />
-                    <label style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.7)', marginLeft: 8 }}>Last name:</label>
-                    <input
-                      className="w-name capitalize"
-                      placeholder="Last Name"
-                      value={team_2CoachName.lastName}
-                      onChange={e => setTeam_2CoachName({ ...team_2CoachName, lastName: e.target.value })}
-                      style={{ width: '150px' }}
-                    />
-                  </div>
-                  {team_2CoachSignature && (team_2CoachName.firstName || team_2CoachName.lastName) && (
-                    <div style={{ marginTop: 12 }}>
-                      <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: 6 }}>Coach Signature</div>
-                      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <img src={team_2CoachSignature} alt="Coach signature" style={{ maxWidth: 200, maxHeight: 60, border: '1px solid rgba(255,255,255,.2)', borderRadius: 4, flexShrink: 0 }} />
-                        <button onClick={() => setTeam_2CoachSignature(null)} style={{ padding: '6px 12px', fontSize: '12px' }}>Remove</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -4121,7 +3917,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
             // Check if match has no data (no sets, no signatures)
             if (matchId && match) {
               const sets = await db.sets.where('matchId').equals(matchId).toArray()
-              const hasNoData = sets.length === 0 && !match.team_1CoachSignature && !match.team_1CaptainSignature && !match.team_2CoachSignature && !match.team_2CaptainSignature
+              const hasNoData = sets.length === 0 && !match.team_1CaptainSignature && !match.team_2CaptainSignature
               
               if (hasNoData) {
                 // Update match with current data before going to coin toss
@@ -4833,9 +4629,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
         open={openSignature !== null} 
         onClose={() => setOpenSignature(null)} 
         onSave={handleSignatureSave}
-        title={openSignature === 'team_1-coach' ? 'Team 1 Coach Signature' : 
-               openSignature === 'team_1-captain' ? 'Team 1 Captain Signature' :
-               openSignature === 'team_2-coach' ? 'Team 2 Coach Signature' :
+        title={openSignature === 'team_1-captain' ? 'Team 1 Captain Signature' :
                openSignature === 'team_2-captain' ? 'Team 2 Captain Signature' : 'Sign'}
       />
 

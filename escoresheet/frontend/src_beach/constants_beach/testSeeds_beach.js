@@ -2,17 +2,20 @@ export const TEST_TEAM_SEED_DATA = [
   {
     seedKey: 'test-team-alpha',
     color: '#89bdc3',
+    country: 'SUI',
     players: [
-      { number: "", firstName: 'Luca', lastName: 'Keller', isCaptain: false },
+      { number: "", firstName: 'Lucas', lastName: 'Keller', isCaptain: false },
       { number: "", firstName: 'Jonas', lastName: 'Hofmann', isCaptain: false },
     ]
   },
   {
     seedKey: 'test-team-bravo',
     color: '#323134',
+    country: 'GER',
     players: [
-      { number: "", firstName: 'Tom', lastName: 'Weber', isCaptain: false },
-      { number: "", firstName: 'Max', lastName: 'Schneider', isCaptain: false },
+      { number: "", firstName: 'Thomas', lastName: 'Weber', isCaptain: false },
+      { number: "", firstName: 'Maximilian', lastName: 'Schneider', isCaptain: false },
+    
 
     ]
   }
@@ -21,46 +24,45 @@ export const TEST_TEAM_SEED_DATA = [
 export const TEST_REFEREE_SEED_DATA = [
   {
     seedKey: 'test-referee-alpha',
-    firstName: 'Claudia',
-    lastName: 'Moser',
-    country: 'SUI'
+    firstName: 'Amadeus',
+    lastName: 'Mozart',
+    country: 'AUT'
   },
   {
     seedKey: 'test-referee-bravo',
-    firstName: 'Martin',
-    lastName: 'Kunz',
-    country: 'SUI'
+    firstName: 'Donald',
+    lastName: 'Trump',
+    country: 'USA'
   }
 ]
 
 export const TEST_SCORER_SEED_DATA = [
   {
     seedKey: 'test-scorer-alpha',
-    firstName: 'Petra',
-    lastName: 'Schneider',
-    country: 'SUI'
+    firstName: 'Napoleon',
+    lastName: 'Bonaparte',
+    country: 'FRA'
   },
   {
     seedKey: 'test-scorer-bravo',
-    firstName: 'Lukas',
-    lastName: 'Baumann',
-    country: 'SUI'
+    firstName: 'Leonardo',
+    lastName: 'Da Vinci',
+    country: 'ITA'
   }
 ]
 
 export const TEST_LINE_JUDGE_SEED_DATA = [
   {
     seedKey: 'test-line-judge-alpha',
-    firstName: 'Simon',
-    lastName: 'Meier',
-    country: 'SUI',
-    dob: '1992-03-14'
+    firstName: 'Johannes',
+    lastName: 'Kepler',
+    country: 'GER'
   },
   {
     seedKey: 'test-line-judge-bravo',
-    firstName: 'Thomas',
-    lastName: 'Müller',
-    country: 'SUI'
+    firstName: 'Isaac',
+    lastName: 'Newton',
+    country: 'ENG'
   }
 ]
 

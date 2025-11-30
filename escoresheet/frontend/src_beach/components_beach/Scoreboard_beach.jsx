@@ -687,7 +687,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       }
     } else {
       // Sets 1-2: Standard 21 points with 2-point lead
-      if (team_1Points >= pointsToWin && team_1Points - team_2Points >= 2) {
+    if (team_1Points >= pointsToWin && team_1Points - team_2Points >= 2) {
         setEnded = true
       } else if (team_2Points >= pointsToWin && team_2Points - team_1Points >= 2) {
         setEnded = true
@@ -1232,17 +1232,17 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         </div>
         {/* Set transition countdown - show in main scoreboard until start rally is pressed */}
         {setTransitionModal && setTransitionCountdown > 0 && (
-          <div style={{
+        <div style={{
             marginTop: '16px',
             padding: '12px 20px',
             background: 'rgba(59, 130, 246, 0.2)',
             borderRadius: '8px',
             border: '2px solid rgba(59, 130, 246, 0.5)',
-            textAlign: 'center'
-          }}>
+          textAlign: 'center'
+        }}>
             <div style={{ fontSize: '36px', fontWeight: 700, color: 'var(--accent)', fontFamily: 'monospace' }}>
               {setTransitionCountdown}"
-            </div>
+        </div>
           </div>
         )}
       </div>
@@ -1376,34 +1376,34 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         // Alert at one point before switch: 6, 13, 20 (but skip 20 if TTO is coming at 21)
         const set12Remainder = totalPoints % switchIntervalSet12
         if (set12Remainder === 6 && totalPoints > 0) {
-          // Don't show court switch alert at 20 if TTO is coming at 21
+        // Don't show court switch alert at 20 if TTO is coming at 21
           if (totalPoints !== 20) {
-            setCourtSwitchAlert({ message: 'One point to switch' })
-            setTimeout(() => setCourtSwitchAlert(null), 3000) // Auto-dismiss after 3 seconds
-          }
+          setCourtSwitchAlert({ message: 'One point to switch' })
+          setTimeout(() => setCourtSwitchAlert(null), 3000) // Auto-dismiss after 3 seconds
         }
-        
+      }
+      
         // Switch at 7, 14, 28, etc. (when remainder is 0, but skip 21 for TTO)
         if (set12Remainder === 0 && totalPoints > 0) {
-          // Skip court switch at 21 points for sets 1-2 (TTO takes priority)
+        // Skip court switch at 21 points for sets 1-2 (TTO takes priority)
           if (totalPoints === 21) {
-            // TTO already handled above, skip court switch
-          } else {
+          // TTO already handled above, skip court switch
+        } else {
             // Check if we've already shown the modal for this point total (to prevent duplicate modals)
-            const match = await db.matches.get(matchId)
+          const match = await db.matches.get(matchId)
             const set12SwitchKey = `set${data.set.index}_switch_${totalPoints}`
             const set12ModalShown = match?.[set12SwitchKey] || false
             if (!set12ModalShown) {
-              // Show court switch modal (DO NOT switch courts yet - wait for confirmation)
-              setCourtSwitchModal({
-                set: data.set,
-                team_1Points,
-                team_2Points,
-                teamThatScored: teamKey
-              })
+            // Show court switch modal (DO NOT switch courts yet - wait for confirmation)
+            setCourtSwitchModal({
+              set: data.set,
+              team_1Points,
+              team_2Points,
+              teamThatScored: teamKey
+            })
               await db.matches.update(matchId, { [set12SwitchKey]: true })
-              // DO NOT log event or increment switch count yet - wait for confirmation
-              return // Don't check for set end yet, wait for court switch confirmation
+            // DO NOT log event or increment switch count yet - wait for confirmation
+            return // Don't check for set end yet, wait for court switch confirmation
             }
           }
         }
@@ -1520,7 +1520,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     if (type === 'delay_penalty') {
       setSanctionConfirm(null)
       // Award point immediately to the other team
-      const otherSide = side === 'left' ? 'right' : 'left'
+        const otherSide = side === 'left' ? 'right' : 'left'
       await handlePoint(otherSide, 'delay_penalty')
     } else {
       setSanctionConfirm(null)
@@ -1556,7 +1556,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     
     setSetStartTimeModal(null)
     
-            // Now actually start the rally
+    // Now actually start the rally
     // Get current serving team and player
     const currentServeTeam = data?.match?.firstServe || 'team_1'
     const serviceOrder = data?.set?.serviceOrder || {}
@@ -1724,8 +1724,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       // If we reach here, something went wrong - match should have ended
       console.warn('Unexpected set index after set 2 handling:', setIndex)
       // Prevent creating set 4 - match should have ended
-      setSetEndTimeModal(null)
-      return
+        setSetEndTimeModal(null)
+        return
     }
     
     setSetEndTimeModal(null)
@@ -1930,7 +1930,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       if (servingTeam && servingPlayer && teamLabel) {
         eventDescription = `Rally started — Team ${teamLabel}, Player ${servingPlayer} serves`
       } else {
-        eventDescription = 'Rally started'
+      eventDescription = 'Rally started'
       }
     } else if (event.type === 'replay') {
       eventDescription = 'Replay'
@@ -1992,10 +1992,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       if (event.payload?.playerNumber) {
         target = ` ${event.payload.playerNumber}`
       } else if (event.payload?.role) {
-        const roleAbbr = event.payload.role === 'Coach' ? 'C' : 
-                        event.payload.role === 'Assistant Coach 1' ? 'AC1' :
-                        event.payload.role === 'Assistant Coach 2' ? 'AC2' :
-                        event.payload.role === 'Physiotherapist' ? 'P' :
+        const roleAbbr = event.payload.role === 'Physiotherapist' ? 'P' :
                         event.payload.role === 'Medic' ? 'M' : event.payload.role
         target = ` ${roleAbbr}`
       } else {
@@ -7799,10 +7796,10 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                 style={{ padding: '12px 24px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
               >
                 {document.getElementById('timeoutActionSelect')?.value === 'add' ? 'Add Timeout' : 'Remove Timeout'}
-              </button>
+                </button>
+              </div>
             </div>
-          </div>
-        </Modal>
+          </Modal>
       )}
 
       {/* Remarks Modal */}
@@ -8413,10 +8410,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                           // Get the identifier to display (player number or role abbreviation)
                           let identifier = null
                           if (role) {
-                            identifier = role === 'Coach' ? 'C' : 
-                                         role === 'Assistant Coach 1' ? 'AC1' :
-                                         role === 'Assistant Coach 2' ? 'AC2' :
-                                         role === 'Physiotherapist' ? 'P' :
+                            identifier = role === 'Physiotherapist' ? 'P' :
                                          role === 'Medic' ? 'M' : role
                           } else if (playerNumber !== undefined && playerNumber !== null) {
                             identifier = String(playerNumber)
@@ -9620,10 +9614,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                   const { type, playerNumber, role } = sanctionDropdown
                   if (type === 'official') {
                     // Map role to abbreviation
-                    const roleAbbr = role === 'Coach' ? 'C' : 
-                                     role === 'Assistant Coach 1' ? 'AC1' :
-                                     role === 'Assistant Coach 2' ? 'AC2' :
-                                     role === 'Physiotherapist' ? 'P' :
+                    const roleAbbr = role === 'Physiotherapist' ? 'P' :
                                      role === 'Medic' ? 'M' : role
                     return `Sanction for ${roleAbbr}`
                   } else if (playerNumber) {

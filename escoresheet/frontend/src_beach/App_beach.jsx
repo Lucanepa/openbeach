@@ -138,9 +138,7 @@ function AppBeach() {
 
     // For test matches that have been restarted (no signatures, only initial set, no events), don't show status
     if (currentMatch.test === true) {
-      const hasSignatures = currentMatch.team_1CoachSignature || 
-                           currentMatch.team_1CaptainSignature || 
-                           currentMatch.team_2CoachSignature || 
+      const hasSignatures = currentMatch.team_1CaptainSignature || 
                            currentMatch.team_2CaptainSignature
       
       if (!hasSignatures) {
@@ -175,9 +173,7 @@ function AppBeach() {
     ])
 
     const signaturesComplete = Boolean(
-      currentMatch.team_1CoachSignature &&
       currentMatch.team_1CaptainSignature &&
-      currentMatch.team_2CoachSignature &&
       currentMatch.team_2CaptainSignature
     )
 
@@ -210,7 +206,7 @@ function AppBeach() {
       status = 'Match ended'
     } else if ((currentMatch.status === 'live' || hasActiveSet || hasEventActivity) && matchReadyForPlay) {
       status = 'Match recording'
-    } else if (team_1Players > 0 || team_2Players > 0 || currentMatch.team_1CoachSignature || currentMatch.team_2CoachSignature) {
+    } else if (team_1Players > 0 || team_2Players > 0) {
       if (signaturesComplete) {
         status = 'Coin toss'
       } else {
@@ -604,6 +600,7 @@ function AppBeach() {
           const teamId = await db.teams.add({
             name: definition.name,
             color: definition.color,
+            country: definition.country || 'SUI',
             seedKey: definition.seedKey,
             test: true,
             createdAt: timestamp
@@ -629,11 +626,18 @@ function AppBeach() {
             id: teamId,
             name: definition.name,
             color: definition.color,
+            country: definition.country || 'SUI',
             seedKey: definition.seedKey,
             test: true,
             createdAt: timestamp
           }
         } else {
+          // Update existing team with country if missing
+          if (!team.country && definition.country) {
+            await db.teams.update(team.id, { country: definition.country })
+            team.country = definition.country
+          }
+          
           const playerCount = await db.players.where('teamId').equals(team.id).count()
           if (playerCount === 0) {
             const timestamp = new Date().toISOString()
@@ -845,10 +849,18 @@ function AppBeach() {
         existingMatch = await db.matches.get(existingMatch.id)
       }
 
+      // Get country from seed data for each team
+      const team_1Seed = TEST_TEAM_SEED_DATA.find(seed => seed.seedKey === team_1Team.seedKey)
+      const team_2Seed = TEST_TEAM_SEED_DATA.find(seed => seed.seedKey === team_2Team.seedKey)
+      const team_1Country = team_1Seed?.country || team_1Team.country || 'SUI'
+      const team_2Country = team_2Seed?.country || team_2Team.country || 'SUI'
+      
       const baseMatchData = {
         status: 'scheduled',
         team_1Id: team_1Team.id,
         team_2Id: team_2Team.id,
+        team_1Country: team_1Country,
+        team_2Country: team_2Country,
         eventName: TEST_MATCH_DEFAULTS.eventName,
         site: TEST_MATCH_DEFAULTS.site,
         beach: TEST_MATCH_DEFAULTS.beach,
@@ -860,9 +872,7 @@ function AppBeach() {
         refereePin: generateRefereePin(),
         matchPin: '1234567', // Test match PIN is always 1234567
         officials,
-        team_1CoachSignature: null,
         team_1CaptainSignature: null,
-        team_2CoachSignature: null,
         team_2CaptainSignature: null,
         test: true,
         seedKey: TEST_MATCH_SEED_KEY,
@@ -959,9 +969,7 @@ function AppBeach() {
       }
       
       // Check match state to determine where to continue
-      const isMatchSetupComplete = existing.team_1CoachSignature && 
-                                    existing.team_1CaptainSignature && 
-                                    existing.team_2CoachSignature && 
+      const isMatchSetupComplete = existing.team_1CaptainSignature && 
                                     existing.team_2CaptainSignature
       
       // Check if coin toss is confirmed
@@ -1094,9 +1102,7 @@ function AppBeach() {
       }
       
       // Check if match setup is complete (all signatures present)
-      const isMatchSetupComplete = match.team_1CoachSignature && 
-                                  match.team_1CaptainSignature && 
-                                  match.team_2CoachSignature && 
+      const isMatchSetupComplete = match.team_1CaptainSignature && 
                                   match.team_2CaptainSignature
       
       // Only allow continuation if match setup and coin toss are confirmed

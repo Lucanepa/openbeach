@@ -480,38 +480,77 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
             set(`${prefix}_end_mm`, String(end.getMinutes()).padStart(2, '0'));
           }
           
-          // Set sides (A/B) - determine from match data
-          if (setNum === 1) {
-            set('t1_side', 'A');
-            set('t2_side', 'B');
-            set('b_t1_side', 'A');
-            set('b_t2_side', 'B');
-          } else if (setNum === 2) {
-            // Set 2: The team who lost the initial coin toss chooses sides
-            // For now, default to switching sides (actual sides determined by coin toss data)
-            set('b_t1_side', 'B');
-            set('b_t2_side', 'A');
-          } else if (setNum === 3) {
-            // Set 3: Another coin toss decides sides
-            // Determine from set3CoinTossWinner if available, otherwise default
-            const coinTossData = match?.coinTossData;
-            if (coinTossData?.set3CoinTossWinner) {
-              const set3Winner = coinTossData.set3CoinTossWinner;
-              const teamAKey = match?.coinTossTeamA || 'team_1';
-              // If set3CoinTossWinner is teamAKey, then team A chooses (default to A left, B right)
-              // If set3CoinTossWinner is teamBKey, then team B chooses (default to B left, A right)
-              if (set3Winner === teamAKey) {
-                set('b_t1_side', 'A');
-                set('b_t2_side', 'B');
-              } else {
-                set('b_t1_side', 'B');
-                set('b_t2_side', 'A');
+          // Set sides (A/B) - determine from who serves first in this set
+          // The team that serves first goes ABOVE (rows I and III), the other team goes BELOW (rows II and IV)
+          const teamAKey = match?.coinTossTeamA || 'team_1';
+          const teamBKey = match?.coinTossTeamB || 'team_2';
+          
+          // Get the set data to access serviceOrder
+          const setDataForSides = sets?.find((s: any) => s.index === setNum);
+          
+          // Determine which team serves first in this set from serviceOrder
+          // Check serviceOrder to see which team has order 1 (row I)
+          let firstServeTeam: string | null = null;
+          if (setDataForSides && setDataForSides.serviceOrder) {
+            // Find which team has a player with service order 1 (row I)
+            const serviceOrder = setDataForSides.serviceOrder;
+            for (const [key, order] of Object.entries(serviceOrder)) {
+              if (order === 1) {
+                // Extract team from key (e.g., "team_1_player1" -> "team_1")
+                const matchKey = key.match(/^(team_[12])_player/);
+                if (matchKey) {
+                  firstServeTeam = matchKey[1];
+                  break;
+                }
               }
-            } else {
-              // Default: switch from set 2 (B left, A right)
-              set('b_t1_side', 'B');
-              set('b_t2_side', 'A');
             }
+          }
+          
+          // Fallback: use match.firstServe or coin toss data
+          if (!firstServeTeam) {
+            if (setNum === 1) {
+              firstServeTeam = match?.firstServe || match?.coinTossData?.firstServe || teamAKey;
+            } else if (setNum === 2) {
+              const set1FirstServe = match?.firstServe || match?.coinTossData?.firstServe || teamAKey;
+              firstServeTeam = set1FirstServe === teamAKey ? teamBKey : teamAKey;
+            } else {
+              const coinTossData = match?.coinTossData;
+              if (coinTossData?.set3CoinTossWinner) {
+                firstServeTeam = coinTossData.set3CoinTossWinner;
+              } else {
+                const set1FirstServe = match?.firstServe || match?.coinTossData?.firstServe || teamAKey;
+                const set2FirstServe = set1FirstServe === teamAKey ? teamBKey : teamAKey;
+                firstServeTeam = set2FirstServe === teamAKey ? teamBKey : teamAKey;
+              }
+            }
+          }
+          
+          // Determine which team is above (serves first) and which is below
+          const aboveTeamKey = firstServeTeam;
+          const belowTeamKey = firstServeTeam === teamAKey ? teamBKey : teamAKey;
+          
+          // Determine A/B labels based on coin toss (teamAKey is always A, teamBKey is always B)
+          const aboveIsA = aboveTeamKey === teamAKey;
+          const belowIsA = belowTeamKey === teamAKey;
+          
+          // Set sides for this set: above team (serves first) gets rows I and III
+          // team_1 is always on the left (t1), team_2 is always on the right (t2)
+          if (aboveTeamKey === 'team_1') {
+            // Team 1 serves first (above) - gets A if team_1 is teamAKey, B if team_1 is teamBKey
+            set(`${prefix}_t1_side`, aboveIsA ? 'A' : 'B');
+            set(`${prefix}_t2_side`, belowIsA ? 'A' : 'B');
+          } else {
+            // Team 2 serves first (above) - gets A if team_2 is teamAKey, B if team_2 is teamBKey
+            set(`${prefix}_t1_side`, belowIsA ? 'A' : 'B');
+            set(`${prefix}_t2_side`, aboveIsA ? 'A' : 'B');
+          }
+          
+          // Update TEAMS table A/B labels for set 1 only (these are global, not per-set)
+          // The TEAMS table shows team_1 on left, team_2 on right
+          // A/B labels should match which team is A and which is B from coin toss
+          if (setNum === 1) {
+            set('b_t1_side', teamAKey === 'team_1' ? 'A' : 'B');
+            set('b_t2_side', teamBKey === 'team_1' ? 'A' : 'B');
           }
         });
       }

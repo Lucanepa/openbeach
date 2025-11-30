@@ -33,7 +33,7 @@ export interface SetData {
 
 export interface SanctionRecord {
   team: 'A' | 'B';
-  playerNr: string; // or Coach 'C'
+  playerNr: string;
   type: 'warning' | 'penalty' | 'expulsion' | 'disqualification'; // W, P, E, D
   set: number;
   score: string;

@@ -235,9 +235,6 @@ export default function MatchEnd({ matchId, onShowScoresheet, onGoHome }) {
           playerNr = String(payload.playerNumber)
         } else if (payload.role) {
           const roleMap = {
-            'Coach': 'C',
-            'Assistant Coach 1': 'AC1',
-            'Assistant Coach 2': 'AC2',
             'Physiotherapist': 'P',
             'Medic': 'M'
           }
