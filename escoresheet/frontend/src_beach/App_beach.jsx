@@ -956,7 +956,6 @@ function AppBeach() {
   async function continueTestMatch() {
     if (testMatchLoading) return
 
-    // Test matches are local only - just load from Dexie
     // Use toArray and filter to avoid index requirement
     const matches = await db.matches.orderBy('createdAt').reverse().toArray()
     const existing = matches.find(m => m.test === true && m.status !== 'final')
@@ -1202,7 +1201,6 @@ function AppBeach() {
               <div className="home-card home-card--test">
                 <div className="home-card-header">
                   <h2>Test Match</h2>
-                  <span className="home-card-hint">Local only</span>
                 </div>
                 <div className="home-card-actions">
                   <button 

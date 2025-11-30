@@ -1168,6 +1168,12 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
   }
 
   async function confirmCoinToss() {
+    // Check that a coin toss winner is selected
+    if (!coinTossWinner || (coinTossWinner !== 'teamA' && coinTossWinner !== 'teamB')) {
+      setNoticeModal({ message: 'Please select which team won the coin toss before confirming.' })
+      return
+    }
+    
     // Only captain signatures are mandatory
     if (!team_1CaptainSignature || !team_2CaptainSignature) {
       setNoticeModal({ message: 'Please complete all captain signatures before confirming the coin toss.' })

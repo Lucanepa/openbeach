@@ -78,6 +78,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
   const [challengeReason, setChallengeReason] = useState('IN / OUT')
   const [coinTossError, setCoinTossError] = useState(null) // { message: string } | null
   const playerNameDebugLogged = useRef(false)
+  const scoresheetWindowRef = useRef(null) // Reference to the scoresheet window
 
   const data = useLiveQuery(async () => {
     const match = await db.matches.get(matchId)
@@ -224,6 +225,15 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     const match = await db.matches.get(matchId)
     const firstServeTeam = match?.firstServe || 'team_1'
     const serviceOrder = calculateServiceOrder(match, firstServeTeam)
+    
+    // For set 1, Team A (coin toss winner) is on the left
+    // Save this to the database
+    const teamAKey = match?.coinTossTeamA || 'team_1'
+    if (nextIndex === 1) {
+      await db.matches.update(matchId, {
+        [`set${nextIndex}_leftTeam`]: teamAKey
+      })
+    }
 
     const setId = await db.sets.add({
       matchId,
@@ -274,7 +284,17 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
   const leftIsTeam_1 = useMemo(() => {
     if (!data?.set) return true
     
-    // Determine base position: Set 1 starts with Team A on left
+    // Check if left team is explicitly stored in database (from set transition modal)
+    const setLeftTeamKey = `set${data.set.index}_leftTeam`
+    const storedLeftTeam = data.match?.[setLeftTeamKey]
+    
+    if (storedLeftTeam) {
+      // Use the stored left team from the database
+      return storedLeftTeam === 'team_1'
+    }
+    
+    // Fallback to default logic if not stored:
+    // Set 1 starts with Team A on left
     // Sets 2, 3 start with teams switched (Team A on right)
     const baseIsTeam_1 = data.set.index === 1 
       ? (teamAKey === 'team_1')
@@ -1353,6 +1373,13 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         
         // Switch at 5, 10, 15, 20, etc. (when remainder is 0)
         if (set3Remainder === 0 && totalPoints > 0 && totalPoints >= 5) {
+          // Check if set/match is ending - if so, skip court switch and go straight to set/match end
+          const setEnded = await checkSetEnd(data.set, team_1Points, team_2Points)
+          if (setEnded) {
+            // Set/match is ending, skip court switch
+            return
+          }
+          
           // Check if we've already shown the modal for this point total (to prevent duplicate modals)
           const match = await db.matches.get(matchId)
           const set3SwitchKey = `set3_switch_${totalPoints}`
@@ -1389,6 +1416,13 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
           if (totalPoints === 21) {
           // TTO already handled above, skip court switch
         } else {
+            // Check if set/match is ending - if so, skip court switch and go straight to set/match end
+            const setEnded = await checkSetEnd(data.set, team_1Points, team_2Points)
+            if (setEnded) {
+              // Set/match is ending, skip court switch
+              return
+            }
+            
             // Check if we've already shown the modal for this point total (to prevent duplicate modals)
           const match = await db.matches.get(matchId)
             const set12SwitchKey = `set${data.set.index}_switch_${totalPoints}`
@@ -1783,7 +1817,12 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     }
     
     // Update match with first serve for the new set
-    await db.matches.update(matchId, { firstServe: firstServeTeamKey })
+    // Also save which team is on the left for this set
+    const setLeftTeamKey = `set${setIndex}_leftTeam`
+    await db.matches.update(matchId, { 
+      firstServe: firstServeTeamKey,
+      [setLeftTeamKey]: leftTeamKey
+    })
     
     // Calculate service order based on the selected service order preference
     const matchData = await db.matches.get(matchId)
@@ -1793,16 +1832,22 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     }
     
     // Build service order based on user selection
-    const serviceOrder = {}
-    const teamAServiceOrder = setTransitionServiceOrder.teamA // '1_2' or '2_1'
-    const teamBServiceOrder = setTransitionServiceOrder.teamB // '1_2' or '2_1'
+    // Map service order from Team A/B to left/right teams
+    const leftTeamLabel = setTransitionSelectedLeftTeam // 'A' or 'B'
+    const rightTeamLabel = setTransitionSelectedLeftTeam === 'A' ? 'B' : 'A'
     
-    // Determine which team serves first
-    const servingTeamIsA = firstServeTeamKey === teamAKey
-    const servingTeam = servingTeamIsA ? teamAKey : teamBKey
-    const receivingTeam = servingTeamIsA ? teamBKey : teamAKey
-    const servingTeamOrder = servingTeamIsA ? teamAServiceOrder : teamBServiceOrder
-    const receivingTeamOrder = servingTeamIsA ? teamBServiceOrder : teamAServiceOrder
+    // Get service order for left and right teams (based on their Team A/B label)
+    const leftTeamServiceOrder = setTransitionServiceOrder[leftTeamLabel === 'A' ? 'teamA' : 'teamB'] // '1_2' or '2_1'
+    const rightTeamServiceOrder = setTransitionServiceOrder[rightTeamLabel === 'A' ? 'teamA' : 'teamB'] // '1_2' or '2_1'
+    
+    // Determine which team serves first (left or right)
+    const servingTeamIsLeft = firstServeTeamKey === leftTeamKey
+    const servingTeam = servingTeamIsLeft ? leftTeamKey : rightTeamKey
+    const receivingTeam = servingTeamIsLeft ? rightTeamKey : leftTeamKey
+    const servingTeamOrder = servingTeamIsLeft ? leftTeamServiceOrder : rightTeamServiceOrder
+    const receivingTeamOrder = servingTeamIsLeft ? rightTeamServiceOrder : leftTeamServiceOrder
+    
+    const serviceOrder = {}
     
     // Serving team: first serve player gets order 1, other gets order 3
     if (servingTeamOrder === '1_2') {
@@ -2634,7 +2679,10 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       set: data.set.index,
       servingTeam: currentServeTeam,
       time: new Date().toISOString(),
-      isRefereeInitiated: false
+      isRefereeInitiated: false,
+      // Preserve pending court switch/TTO info if it exists
+      pendingCourtSwitch: challengeModal?.pendingCourtSwitch,
+      pendingTTO: challengeModal?.pendingTTO
     }
     
     setChallengeModal(challengeData)
@@ -2668,6 +2716,24 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     setChallengeReason('IN / OUT')
   }, [])
 
+  // Helper function to execute pending court switch or TTO after BMP outcome
+  const executePendingCourtSwitchOrTTO = useCallback((challengeModal) => {
+    if (!challengeModal) return
+    
+    const pendingCourtSwitch = challengeModal.pendingCourtSwitch
+    const pendingTTO = challengeModal.pendingTTO
+    
+    if (pendingCourtSwitch) {
+      setCourtSwitchModal(pendingCourtSwitch)
+    } else if (pendingTTO) {
+      setTechnicalTOModal({
+        ...pendingTTO,
+        countdown: 60,
+        started: false
+      })
+    }
+  }, [])
+
   // Handle team cancels BMP - cancels everything, logs cancellation, does NOT use challenge count
   const handleTeamCancelsBMP = useCallback(async () => {
     if (!challengeModal || challengeModal.type !== 'in_progress' || !data?.set || !data?.match) return
@@ -2697,10 +2763,13 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     
     // Do NOT increment challenge count - challenge is not used
     
+    // Execute pending court switch or TTO after BMP cancellation
+    executePendingCourtSwitchOrTTO(challengeModal)
+    
     setChallengeModal(null)
     setChallengeReason('IN / OUT')
-  }, [challengeModal, data?.set, data?.match, logEvent])
-
+  }, [challengeModal, data?.set, data?.match, logEvent, executePendingCourtSwitchOrTTO])
+  
   // Handle successful challenge/BMP
   const handleSuccessfulChallenge = useCallback(async () => {
     if (!challengeModal || challengeModal.type !== 'in_progress' || !data?.set || !data?.match) return
@@ -2805,9 +2874,12 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     }
     
     // Challenge/BMP successful - don't decrement challenge count
+    // Execute pending court switch or TTO after BMP outcome
+    executePendingCourtSwitchOrTTO(challengeModal)
+    
     setChallengeModal(null)
     setChallengeReason('IN / OUT')
-  }, [challengeModal, data?.set, data?.match, data?.events, leftIsTeam_1, logEvent])
+  }, [challengeModal, data?.set, data?.match, data?.events, leftIsTeam_1, logEvent, executePendingCourtSwitchOrTTO])
 
   // Handle unsuccessful challenge/BMP
   const handleUnsuccessfulChallenge = useCallback(async () => {
@@ -2885,9 +2957,12 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     })
     }
     
+    // Execute pending court switch or TTO after BMP outcome
+    executePendingCourtSwitchOrTTO(challengeModal)
+    
     setChallengeModal(null)
     setChallengeReason('IN / OUT')
-  }, [challengeModal, data?.set, data?.match, matchId, leftIsTeam_1, logEvent])
+  }, [challengeModal, data?.set, data?.match, matchId, leftIsTeam_1, logEvent, executePendingCourtSwitchOrTTO])
   
   // Handle judgment impossible challenge (keeps score, does NOT decrease available challenges)
   const handleJudgmentImpossibleChallenge = useCallback(async () => {
@@ -2986,9 +3061,12 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     
     // Do NOT increment challenge count - challenge is not used
     
+    // Execute pending court switch or TTO after BMP outcome
+    executePendingCourtSwitchOrTTO(challengeModal)
+    
     setChallengeModal(null)
     setChallengeReason('IN / OUT')
-  }, [challengeModal, data?.set, data?.match, data?.events, logEvent])
+  }, [challengeModal, data?.set, data?.match, data?.events, logEvent, executePendingCourtSwitchOrTTO])
 
   // Check if there was a point change between two events
   const hasPointChangeBetween = useCallback((event1Index, event2Index, setIndex) => {
@@ -4717,6 +4795,25 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
           <div className="set-summary">
             <div className="set-info">
               <h3 className="set-title">Set {data.set.index}</h3>
+              {data.set.index === 2 && currentServeTeam && (() => {
+                // Show which team is currently at service in set 2
+                const isLeftTeamServing = currentServeTeam === leftServeTeamKey;
+                const servingTeamLabel = isLeftTeamServing ? teamALabel : teamBLabel;
+                return (
+                  <div style={{
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: 'var(--muted)',
+                    marginTop: '4px',
+                    padding: '4px 8px',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    borderRadius: '4px',
+                    border: '1px solid rgba(255, 255, 255, 0.1)'
+                  }}>
+                    Team at service: {servingTeamLabel}
+                  </div>
+                );
+              })()}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', width: '100%' }}>
                 {/* Current score */}
                 {renderScoreDisplay({ margin: '0 auto' })}
@@ -5743,8 +5840,24 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
               // Store data in sessionStorage
               sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
               
-              // Open scoresheet in new tab (just render HTML, no PDF generation)
-              window.open('/scoresheet_beach.html', '_blank')
+              // Check if scoresheet window is already open
+              if (scoresheetWindowRef.current && !scoresheetWindowRef.current.closed) {
+                // Window is open - send refresh message
+                try {
+                  scoresheetWindowRef.current.postMessage({ type: 'REFRESH_SCORESHEET' }, '*')
+                  // Also update sessionStorage (in case message doesn't work)
+                  scoresheetWindowRef.current.location.reload()
+                } catch (e) {
+                  // If postMessage fails, just reload
+                  scoresheetWindowRef.current.location.reload()
+                }
+              } else {
+                // Window is not open - open a new one
+                const newWindow = window.open('/scoresheet_beach.html', '_blank')
+                if (newWindow) {
+                  scoresheetWindowRef.current = newWindow
+                }
+              }
             } catch (error) {
               console.error('Error opening scoresheet:', error)
               alert('Error opening scoresheet: ' + error.message)
@@ -8325,65 +8438,23 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                 {/* Left half: Sanctions */}
                 <div>
                   <h4 style={{ marginBottom: '16px', fontSize: '14px', fontWeight: 600 }}>Sanctions</h4>
-                  {/* Improper Request Row */}
-                  <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ fontWeight: 600, fontSize: '12px', minWidth: '100px' }}>Improper Request:</div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      {['A', 'B'].map(team => {
-                        const teamKey = team === 'A' ? teamAKey : teamBKey
-                        const sideKey = (team === 'A' && teamAKey === 'team_1' && leftIsTeam_1) || (team === 'A' && teamAKey === 'team_2' && !leftIsTeam_1) || (team === 'B' && teamBKey === 'team_1' && leftIsTeam_1) || (team === 'B' && teamBKey === 'team_2' && !leftIsTeam_1) ? 'Left' : 'Right'
-                        const hasImproperRequest = data?.match?.sanctions?.[`improperRequest${sideKey}`]
-                        
-                        return (
-                          <div key={team} style={{
-                            width: '28px',
-                            height: '28px',
-                            borderRadius: '50%',
-                            border: '2px solid rgba(255,255,255,0.3)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            position: 'relative'
-                          }}>
-                            {team}
-                            {hasImproperRequest && (
-                              <div style={{
-                                position: 'absolute',
-                                inset: 0,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '20px',
-                                color: '#ef4444',
-                                fontWeight: 900
-                              }}>
-                                ✕
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
                   
                   {/* Sanctions Table */}
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                     <thead>
                       <tr style={{ borderBottom: '2px solid rgba(255,255,255,0.2)' }}>
-                        <th style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600 }}>Warn</th>
-                        <th style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600 }}>Pen</th>
-                        <th style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600 }}>Exp</th>
-                        <th style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600 }}>Disq</th>
-                        <th style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600 }}>Team</th>
-                        <th style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600 }}>Set</th>
-                        <th style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600 }}>Score</th>
+                        <th style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600, width: '12%' }}>Warn</th>
+                        <th style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600, width: '12%' }}>Pen</th>
+                        <th style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600, width: '12%' }}>Exp</th>
+                        <th style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600, width: '12%' }}>Disq</th>
+                        <th style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600, width: '12%' }}>Team</th>
+                        <th style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600, width: '12%' }}>Set</th>
+                        <th style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600, width: '28%' }}>Score</th>
                       </tr>
                     </thead>
                     <tbody>
                     {(() => {
-                      // Get all sanction events except improper_request (already shown in box above)
+                      // Get all sanction events except improper_request (will be shown at bottom)
                       const sanctionEvents = (data?.events || []).filter(e => 
                         e.type === 'sanction' && e.payload?.type !== 'improper_request'
                       )
@@ -8457,6 +8528,54 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                         })
                       })()}
                     </tbody>
+                    <tfoot>
+                      {/* Improper Request Row - moved to bottom */}
+                      <tr style={{ borderTop: '2px solid rgba(255,255,255,0.2)' }}>
+                        <td colSpan="4" style={{ padding: '8px 4px', textAlign: 'left', fontWeight: 600, fontSize: '11px' }}>
+                          Improper Request:
+                        </td>
+                        <td colSpan="3" style={{ padding: '8px 4px', textAlign: 'left' }}>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            {['A', 'B'].map(team => {
+                              const teamKey = team === 'A' ? teamAKey : teamBKey
+                              const sideKey = (team === 'A' && teamAKey === 'team_1' && leftIsTeam_1) || (team === 'A' && teamAKey === 'team_2' && !leftIsTeam_1) || (team === 'B' && teamBKey === 'team_1' && leftIsTeam_1) || (team === 'B' && teamBKey === 'team_2' && !leftIsTeam_1) ? 'Left' : 'Right'
+                              const hasImproperRequest = data?.match?.sanctions?.[`improperRequest${sideKey}`]
+                              
+                              return (
+                                <div key={team} style={{
+                                  width: '24px',
+                                  height: '24px',
+                                  borderRadius: '50%',
+                                  border: '2px solid rgba(255,255,255,0.3)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  position: 'relative'
+                                }}>
+                                  {team}
+                                  {hasImproperRequest && (
+                                    <div style={{
+                                      position: 'absolute',
+                                      inset: 0,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontSize: '18px',
+                                      color: '#ef4444',
+                                      fontWeight: 900
+                                    }}>
+                                      ✕
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
                 
@@ -8571,7 +8690,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                                     }}>{leftTeamLabel}</span>
                                   </div>
                                 </th>
-                                <th style={{ padding: '4px', fontSize: '8px' }}>Dur</th>
+                                <th style={{ padding: '4px', fontSize: '8px', textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.2)' }}>Dur</th>
                                 <th colSpan="4" style={{ padding: '4px', textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                                     <span style={{ fontSize: '10px' }}>{rightTeamName}</span>
@@ -8591,6 +8710,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                                 <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>W</th>
                                 <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>P</th>
                                 <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}></th>
+                                <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}></th>
+                                <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}></th>
                                 <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>P</th>
                                 <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>W</th>
                                 <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>T</th>
@@ -8601,7 +8722,9 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                                 <td style={{ padding: '4px 2px', textAlign: 'center' }}>{leftTotalTimeouts}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center' }}>{leftTotalWins}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center' }}>{leftTotalPoints}</td>
+                                <td style={{ padding: '4px 2px', textAlign: 'center' }}></td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center', fontSize: '8px', color: 'var(--muted)' }}>{totalDurationMin}'</td>
+                                <td style={{ padding: '4px 2px', textAlign: 'center' }}></td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center' }}>{rightTotalPoints}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center' }}>{rightTotalWins}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center' }}>{rightTotalTimeouts}</td>
@@ -8948,22 +9071,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                   cursor: 'pointer'
                 }}
               >
-                Reject BMP request
-              </button>
-              <button
-                onClick={handleCancelChallengeRequest}
-                style={{
-                  padding: '12px 24px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  color: 'var(--text)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
-                Cancel
+                Reject/Cancel BMP Request
               </button>
             </div>
           </div>
@@ -10355,6 +10463,49 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
           isMatchEnd={setEndTimeModal.isMatchEnd}
           onConfirm={confirmSetEndTime}
           onCancel={() => setSetEndTimeModal(null)}
+          onUndo={async () => {
+            // Undo last point/rally
+            if (!data?.events || !data?.set) return
+            
+            const sortedEvents = [...data.events].sort((a, b) => {
+              const aSeq = a.seq || 0
+              const bSeq = b.seq || 0
+              if (aSeq !== 0 || bSeq !== 0) {
+                return bSeq - aSeq
+              }
+              const aTime = typeof a.ts === 'number' ? a.ts : new Date(a.ts).getTime()
+              const bTime = typeof b.ts === 'number' ? b.ts : new Date(b.ts).getTime()
+              return bTime - aTime
+            })
+            
+            const lastEvent = sortedEvents[0]
+            if (lastEvent) {
+              await db.events.delete(lastEvent.id)
+              
+              // Update set points
+              const newTeam_1Points = lastEvent.payload?.team === 'team_1' 
+                ? setEndTimeModal.team_1Points - 1 
+                : setEndTimeModal.team_1Points
+              const newTeam_2Points = lastEvent.payload?.team === 'team_2' 
+                ? setEndTimeModal.team_2Points - 1 
+                : setEndTimeModal.team_2Points
+              
+              await db.sets.update(data.set.id, {
+                team_1Points: newTeam_1Points,
+                team_2Points: newTeam_2Points
+              })
+              
+              // Close the modal
+              setSetEndTimeModal(null)
+            }
+          }}
+          onBMP={(teamKey) => {
+            // Request BMP
+            setSetEndTimeModal(null)
+            setChallengeModal({ type: 'request', team: teamKey })
+          }}
+          leftTeamKey={leftIsTeam_1 ? 'team_1' : 'team_2'}
+          rightTeamKey={leftIsTeam_1 ? 'team_2' : 'team_1'}
         />
       )}
       
@@ -10378,7 +10529,25 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                 sanctions: []
               };
               sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData));
-              window.open('/scoresheet_beach.html', '_blank');
+              
+              // Check if scoresheet window is already open
+              if (scoresheetWindowRef.current && !scoresheetWindowRef.current.closed) {
+                // Window is open - send refresh message
+                try {
+                  scoresheetWindowRef.current.postMessage({ type: 'REFRESH_SCORESHEET' }, '*')
+                  // Also update sessionStorage (in case message doesn't work)
+                  scoresheetWindowRef.current.location.reload()
+                } catch (e) {
+                  // If postMessage fails, just reload
+                  scoresheetWindowRef.current.location.reload()
+                }
+              } else {
+                // Window is not open - open a new one
+                const newWindow = window.open('/scoresheet_beach.html', '_blank')
+                if (newWindow) {
+                  scoresheetWindowRef.current = newWindow
+                }
+              }
             } catch (error) {
               console.error('Error opening scoresheet:', error);
               alert('Error opening scoresheet: ' + error.message);
@@ -11108,9 +11277,17 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
               {courtSwitchModal.teamThatScored && (
                 <button
                   onClick={() => {
-                    const teamKey = courtSwitchModal.teamThatScored
+                    // BMP request should be from the team that LOST the point (opposite of teamThatScored)
+                    const teamThatLost = courtSwitchModal.teamThatScored === 'team_1' ? 'team_2' : 'team_1'
+                    // Store court switch info to execute after BMP outcome
+                    const pendingCourtSwitch = {
+                      set: courtSwitchModal.set,
+                      team_1Points: courtSwitchModal.team_1Points,
+                      team_2Points: courtSwitchModal.team_2Points,
+                      teamThatScored: courtSwitchModal.teamThatScored
+                    }
                     setCourtSwitchModal(null)
-                    setChallengeModal({ type: 'request', team: teamKey })
+                    setChallengeModal({ type: 'request', team: teamThatLost, pendingCourtSwitch })
                   }}
                   style={{
                     padding: '12px 32px',
@@ -11131,7 +11308,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                     alt="BMP" 
                     style={{ width: '20px', height: '20px' }}
                   />
-                  BMP {courtSwitchModal.teamThatScored === teamAKey ? 'Team A' : 'Team B'}
+                  BMP {(courtSwitchModal.teamThatScored === 'team_1' ? 'team_2' : 'team_1') === teamAKey ? 'Team A' : 'Team B'}
                 </button>
               )}
             </div>
@@ -11219,9 +11396,17 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                     {technicalTOModal.teamThatScored && (
                       <button
                         onClick={() => {
-                          const teamKey = technicalTOModal.teamThatScored
+                          // BMP request should be from the team that LOST the point (opposite of teamThatScored)
+                          const teamThatLost = technicalTOModal.teamThatScored === 'team_1' ? 'team_2' : 'team_1'
+                          // Store TTO info to execute after BMP outcome
+                          const pendingTTO = {
+                            set: technicalTOModal.set,
+                            team_1Points: technicalTOModal.team_1Points,
+                            team_2Points: technicalTOModal.team_2Points,
+                            teamThatScored: technicalTOModal.teamThatScored
+                          }
                           setTechnicalTOModal(null)
-                          setChallengeModal({ type: 'request', team: teamKey })
+                          setChallengeModal({ type: 'request', team: teamThatLost, pendingTTO })
                         }}
                         style={{
                           padding: '12px 32px',
@@ -11242,7 +11427,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                           alt="BMP" 
                           style={{ width: '20px', height: '20px' }}
                         />
-                        Challenge {technicalTOModal.teamThatScored === teamAKey ? 'Team A' : 'Team B'}
+                        Challenge {(technicalTOModal.teamThatScored === 'team_1' ? 'team_2' : 'team_1') === teamAKey ? 'Team A' : 'Team B'}
                       </button>
                     )}
                   </div>
@@ -11569,14 +11754,13 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                       borderRadius: '6px',
                       textAlign: 'left'
                     }}>
-                      <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.8)', marginBottom: '8px', fontWeight: 600, textAlign: 'center' }}>
-                        {leftIsServing ? 'Service Order' : 'Reception Order'}
-                    </div>
-                      {leftPositions && (leftIsServing ? ['I', 'III'] : ['II', 'IV']).map((position) => {
+                      <div style={{ fontSize: '13px', color: '#fff', marginBottom: '10px', fontWeight: 700, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        Service Rotation
+                      </div>
+                      {leftPositions && ['I', 'II', 'III', 'IV'].map((position) => {
                         const player = leftPositions[position]
                         if (!player) return null
-                        const hasName = (player.lastName && player.lastName.trim()) || (player.firstName && player.firstName.trim())
-                        if (!hasName) return null
+                        const isServingPosition = position === 'I' || position === 'III'
                         return (
                           <div key={position} style={{ 
                             display: 'flex', 
@@ -11586,34 +11770,51 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                             fontSize: '12px'
                           }}>
                             <div style={{ 
-                              minWidth: '24px',
+                              minWidth: '32px',
                               fontWeight: 700,
-                              color: '#fff'
+                              color: '#fff',
+                              fontSize: '14px'
                             }}>
                               {position}
-                    </div>
-                            {player.number !== null && player.number !== undefined && (
+                            </div>
+                            {player.number !== null && player.number !== undefined ? (
                               <div style={{
-                                width: '20px',
-                                height: '20px',
+                                width: player.isCaptain ? '28px' : '24px',
+                                height: player.isCaptain ? '28px' : '24px',
                                 borderRadius: '50%',
                                 background: player.isCaptain ? '#fbbf24' : 'rgba(255, 255, 255, 0.3)',
                                 border: player.isCaptain ? '2px solid #f59e0b' : '1px solid rgba(255, 255, 255, 0.5)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                fontSize: '10px',
+                                fontSize: '12px',
                                 fontWeight: 700,
                                 color: player.isCaptain ? '#000' : '#fff'
                               }}>
                                 {player.number}
                               </div>
+                            ) : (
+                              <div style={{
+                                width: '24px',
+                                height: '24px',
+                                borderRadius: '50%',
+                                background: 'rgba(255, 255, 255, 0.1)',
+                                border: '1px solid rgba(255, 255, 255, 0.3)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '10px',
+                                color: 'rgba(255, 255, 255, 0.5)'
+                              }}>
+                                ?
+                              </div>
                             )}
-                            <div style={{ color: '#fff', flex: 1 }}>
-                              {player.lastName && <span style={{ fontWeight: 600 }}>{player.lastName}</span>}
-                              {player.firstName && (
-                                <span>{player.lastName ? ', ' : ''}{player.firstName.charAt(0).toUpperCase()}.</span>
-                              )}
+                            <div style={{ 
+                              fontSize: '10px', 
+                              color: isServingPosition ? 'rgba(255, 255, 255, 0.8)' : 'rgba(255, 255, 255, 0.6)',
+                              fontStyle: 'italic'
+                            }}>
+                              {isServingPosition ? 'Serve' : 'Receive'}
                             </div>
                           </div>
                         )
@@ -11730,14 +11931,13 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                       borderRadius: '6px',
                       textAlign: 'left'
                     }}>
-                      <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.8)', marginBottom: '8px', fontWeight: 600, textAlign: 'center' }}>
-                        {rightIsServing ? 'Service Order' : 'Reception Order'}
-                    </div>
-                      {rightPositions && (rightIsServing ? ['I', 'III'] : ['II', 'IV']).map((position) => {
+                      <div style={{ fontSize: '13px', color: '#fff', marginBottom: '10px', fontWeight: 700, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        Service Rotation
+                      </div>
+                      {rightPositions && ['I', 'II', 'III', 'IV'].map((position) => {
                         const rightPlayer = rightPositions[position]
                         if (!rightPlayer) return null
-                        const hasName = (rightPlayer.lastName && rightPlayer.lastName.trim()) || (rightPlayer.firstName && rightPlayer.firstName.trim())
-                        if (!hasName) return null
+                        const isServingPosition = position === 'I' || position === 'III'
                         return (
                           <div key={position} style={{ 
                             display: 'flex', 
@@ -11747,36 +11947,53 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                             fontSize: '12px'
                           }}>
                             <div style={{ 
-                              minWidth: '24px',
+                              minWidth: '32px',
                               fontWeight: 700,
-                              color: '#fff'
+                              color: '#fff',
+                              fontSize: '14px'
                             }}>
                               {position}
-                    </div>
-                            {rightPlayer.number !== null && rightPlayer.number !== undefined && (
+                            </div>
+                            {rightPlayer.number !== null && rightPlayer.number !== undefined ? (
                               <div style={{
-                                width: '20px',
-                                height: '20px',
+                                width: rightPlayer.isCaptain ? '28px' : '24px',
+                                height: rightPlayer.isCaptain ? '28px' : '24px',
                                 borderRadius: '50%',
                                 background: rightPlayer.isCaptain ? '#fbbf24' : 'rgba(255, 255, 255, 0.3)',
                                 border: rightPlayer.isCaptain ? '2px solid #f59e0b' : '1px solid rgba(255, 255, 255, 0.5)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                fontSize: '10px',
+                                fontSize: '12px',
                                 fontWeight: 700,
                                 color: rightPlayer.isCaptain ? '#000' : '#fff'
                               }}>
                                 {rightPlayer.number}
                               </div>
+                            ) : (
+                              <div style={{
+                                width: '24px',
+                                height: '24px',
+                                borderRadius: '50%',
+                                background: 'rgba(255, 255, 255, 0.1)',
+                                border: '1px solid rgba(255, 255, 255, 0.3)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '10px',
+                                color: 'rgba(255, 255, 255, 0.5)'
+                              }}>
+                                ?
+                              </div>
                             )}
-                            <div style={{ color: '#fff', flex: 1 }}>
-                              {rightPlayer.lastName && <span style={{ fontWeight: 600 }}>{rightPlayer.lastName}</span>}
-                              {rightPlayer.firstName && (
-                                <span>{rightPlayer.lastName ? ', ' : ''}{rightPlayer.firstName.charAt(0).toUpperCase()}.</span>
-                    )}
-                  </div>
-                </div>
+                            <div style={{ 
+                              fontSize: '10px', 
+                              color: isServingPosition ? 'rgba(255, 255, 255, 0.8)' : 'rgba(255, 255, 255, 0.6)',
+                              fontStyle: 'italic'
+                            }}>
+                              {isServingPosition ? 'Serve' : 'Receive'}
+                            </div>
+                          </div>
                         )
                       })}
                   <button
@@ -12509,7 +12726,7 @@ function SetStartTimeModal({ setIndex, defaultTime, onConfirm, onCancel }) {
   )
 }
 
-function SetEndTimeModal({ setIndex, winner, team_1Points, team_2Points, defaultTime, teamAKey, isMatchEnd, onConfirm, onCancel }) {
+function SetEndTimeModal({ setIndex, winner, team_1Points, team_2Points, defaultTime, teamAKey, isMatchEnd, onConfirm, onCancel, onUndo, onBMP, leftTeamKey, rightTeamKey }) {
   const [time, setTime] = useState(() => {
     const date = new Date(defaultTime)
     const hours = String(date.getHours()).padStart(2, '0')
@@ -12534,7 +12751,7 @@ function SetEndTimeModal({ setIndex, winner, team_1Points, team_2Points, default
       title={isMatchEnd ? 'Match End' : `Set ${setIndex} End`}
       open={true}
       onClose={onCancel}
-      width={400}
+      width={500}
       hideCloseButton={true}
     >
       <div style={{ padding: '24px', textAlign: 'center' }}>
@@ -12564,6 +12781,67 @@ function SetEndTimeModal({ setIndex, winner, team_1Points, team_2Points, default
             width: '150px'
           }}
         />
+        
+        {/* BMP and Undo options */}
+        <div style={{ marginBottom: '24px', padding: '16px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+          <p style={{ marginBottom: '12px', fontSize: '14px', fontWeight: 600, color: 'var(--muted)' }}>
+            Additional Options:
+          </p>
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            {onBMP && (
+              <>
+                <button
+                  onClick={() => onBMP(leftTeamKey)}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    background: '#f97316',
+                    color: '#fff',
+                    border: '1px solid #ea580c',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  BMP (Left Team)
+                </button>
+                <button
+                  onClick={() => onBMP(rightTeamKey)}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    background: '#f97316',
+                    color: '#fff',
+                    border: '1px solid #ea580c',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  BMP (Right Team)
+                </button>
+              </>
+            )}
+            {onUndo && (
+              <button
+                onClick={onUndo}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  background: '#ef4444',
+                  color: '#fff',
+                  border: '1px solid #dc2626',
+                  borderRadius: '6px',
+                  cursor: 'pointer'
+                }}
+              >
+                Undo Last Point
+              </button>
+            )}
+          </div>
+        </div>
+        
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
           <button
             onClick={handleConfirm}
@@ -12578,7 +12856,7 @@ function SetEndTimeModal({ setIndex, winner, team_1Points, team_2Points, default
               cursor: 'pointer'
             }}
           >
-            Confirm
+            Confirm End
           </button>
           <button
             onClick={onCancel}
