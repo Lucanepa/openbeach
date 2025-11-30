@@ -37,6 +37,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
   const [setStartTimeModal, setSetStartTimeModal] = useState(null) // { setIndex: number, defaultTime: string } | null
   const [setEndTimeModal, setSetEndTimeModal] = useState(null) // { setIndex: number, winner: string, team_1Points: number, team_2Points: number, defaultTime: string, isMatchEnd: boolean } | null
   const [setTransitionModal, setSetTransitionModal] = useState(null) // { setIndex: number, isSet3: boolean } | null - for after set 1 and before set 3
+  const [setTransitionCountdown, setSetTransitionCountdown] = useState(60) // 60 second countdown between sets
   const [setTransitionSelectedLeftTeam, setSetTransitionSelectedLeftTeam] = useState('A')
   const [setTransitionSelectedFirstServe, setSetTransitionSelectedFirstServe] = useState('A')
   const [setTransitionServiceOrder, setSetTransitionServiceOrder] = useState({ teamA: '1_2', teamB: '2_1' }) // '1_2' | '2_1' for each team
@@ -46,6 +47,11 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
   const [sanctionDropdown, setSanctionDropdown] = useState(null) // { team: 'team_1'|'team_2', type: 'player'|'official', playerNumber?: number, position?: string, role?: string, element: HTMLElement, x?: number, y?: number } | null
   const [sanctionConfirmModal, setSanctionConfirmModal] = useState(null) // { team: 'team_1'|'team_2', type: 'player'|'official', playerNumber?: number, position?: string, role?: string, sanctionType: 'warning'|'penalty'|'expulsion'|'disqualification' } | null
   const [injuryDropdown, setInjuryDropdown] = useState(null) // { team: 'team_1'|'team_2', position: 'I'|'II', playerNumber: number, element: HTMLElement, x?: number, y?: number } | null
+  const [mtoRitConfirmModal, setMtoRitConfirmModal] = useState(null) // { team: 'team_1'|'team_2', position: 'I'|'II', playerNumber: number, type: 'mto_blood'|'rit_no_blood'|'rit_weather'|'rit_toilet' } | null
+  const [mtoRitCountdownModal, setMtoRitCountdownModal] = useState(null) // { team: 'team_1'|'team_2', position: 'I'|'II', playerNumber: number, type: 'mto_blood'|'rit_no_blood'|'rit_weather'|'rit_toilet', countdown: number, started: boolean, startTime: string, setIndex: number, team_1Points: number, team_2Points: number } | null
+  const [specialCasesModal, setSpecialCasesModal] = useState(false) // boolean - opens special cases submenu
+  const [forfaitModal, setForfaitModal] = useState(null) // { type: 'injury_before'|'injury_during'|'no_show', team?: string, playerNumber?: string, setIndex?: number, time?: string, score?: string, mtoRitDuration?: string, remarks?: string } | null
+  const [protestModal, setProtestModal] = useState(null) // { status?: string, remarks?: string } | null
   const [editRosterModal, setEditRosterModal] = useState(null) // 'team_1' | 'team_2' | null
   const [editScoreModal, setEditScoreModal] = useState(null) // { setIndex: number, setId: number } | null
   const [editScoreTeam_1Points, setEditScoreTeam_1Points] = useState(0)
@@ -56,9 +62,17 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
   const [editMatchCity, setEditMatchCity] = useState('')
   const [editMatchScheduledAt, setEditMatchScheduledAt] = useState('')
   const [editOfficialsModal, setEditOfficialsModal] = useState(false)
+  // Manual Changes modals
+  const [manualChangesMenuModal, setManualChangesMenuModal] = useState(false)
+  const [manualChangeSetCountModal, setManualChangeSetCountModal] = useState(false)
+  const [manualChangeCurrentScoreModal, setManualChangeCurrentScoreModal] = useState(false)
+  const [manualChangeLastSetPointsModal, setManualChangeLastSetPointsModal] = useState(null) // { setIndex: number, setId: number } | null
+  const [manualInterruptMatchModal, setManualInterruptMatchModal] = useState(false)
+  const [manualModifyLineupsModal, setManualModifyLineupsModal] = useState(false)
+  const [manualModifyTimeoutsModal, setManualModifyTimeoutsModal] = useState(false)
   const [editOfficialsState, setEditOfficialsState] = useState([])
   const [playerActionMenu, setPlayerActionMenu] = useState(null) // { team: 'team_1'|'team_2', position: 'I'|'II', playerNumber: number, element: HTMLElement, x?: number, y?: number } | null
-  const [challengeModal, setChallengeModal] = useState(null) // null | 'request' | 'in_progress' - when 'request', contains { team: 'team_1'|'team_2', reason: string } | when 'in_progress', contains { team: 'team_1'|'team_2', reason: string, score: { team_1: number, team_2: number }, set: number, servingTeam: 'team_1'|'team_2', time: string }
+  const [challengeModal, setChallengeModal] = useState(null) // null | 'request' | 'in_progress' | 'referee_request' - when 'request', contains { team: 'team_1'|'team_2', reason: string } | when 'in_progress', contains { team: 'team_1'|'team_2', reason: string, score: { team_1: number, team_2: number }, set: number, servingTeam: 'team_1'|'team_2', time: string, isRefereeInitiated?: boolean } | when 'referee_request', contains { reason: string }
   const [challengeReason, setChallengeReason] = useState('IN / OUT')
   const [coinTossError, setCoinTossError] = useState(null) // { message: string } | null
   const playerNameDebugLogged = useRef(false)
@@ -231,6 +245,14 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       })
   }, [data, ensureActiveSet, matchId])
 
+  // Update clock every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(new Date())
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
   // Determine which team is A and which is B based on coin toss
   const teamAKey = useMemo(() => {
     if (!data?.match) return 'team_1'
@@ -256,24 +278,15 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       ? (teamAKey === 'team_1')
       : (teamAKey !== 'team_1')
     
-    // For sets 1-2: Court switches every 7 points, set 3: every 5 points
-    // Count how many court switches have happened in this set
-    const totalPoints = (data.set.team_1Points || 0) + (data.set.team_2Points || 0)
-    const isSet3 = data.set.index === 3
-    const switchInterval = isSet3 ? 5 : 7
-    const switchesSoFar = Math.floor(totalPoints / switchInterval)
-    
-    // Get the stored switch count (in case we're viewing after switches)
+    // Get the stored switch count - this is ONLY updated when user confirms the switch
+    // We NEVER calculate from points - we only use the stored count that was set after confirmation
     const switchCountKey = `set${data.set.index}_switchCount`
     const storedSwitchCount = data.match?.[switchCountKey] || 0
-    
-    // Use the stored count if available, otherwise calculate from current points
-    const effectiveSwitchCount = storedSwitchCount > 0 ? storedSwitchCount : switchesSoFar
     
     // Each switch flips the teams
     // If odd number of switches, teams are flipped from base position
     let isTeam_1 = baseIsTeam_1
-    if (effectiveSwitchCount % 2 === 1) {
+    if (storedSwitchCount % 2 === 1) {
       isTeam_1 = !isTeam_1
     }
     
@@ -546,15 +559,14 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
 
 
   const formatTimestamp = useCallback(date => {
-    return date.toLocaleString(undefined, {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
-    })
+    // Format date as dd.mm.yyyy HH:mm:ss
+    const day = String(date.getDate()).padStart(2, '0')
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const year = date.getFullYear()
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+    const seconds = String(date.getSeconds()).padStart(2, '0')
+    return `${day}.${month}.${year} ${hours}:${minutes}:${seconds}`
   }, [])
 
   const isBrightColor = useCallback(color => {
@@ -1173,9 +1185,9 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                 gap: '8px'
               }}
             >
-              <span style={{ minWidth: 28, textAlign: 'right' }}>{pointsBySide.left}</span>
+              <span style={{ minWidth: 48, textAlign: 'right' }}>{pointsBySide.left}</span>
               <span>:</span>
-              <span style={{ minWidth: 28, textAlign: 'left' }}>{pointsBySide.right}</span>
+              <span style={{ minWidth: 48, textAlign: 'left' }}>{pointsBySide.right}</span>
             </div>
             {rightServing && (
               <img
@@ -1192,25 +1204,34 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
             )}
           </div>
         </div>
-        {/* Set score display */}
-        <div style={{
-          fontSize: '14px',
-          fontWeight: 600,
-          color: 'var(--muted)',
-          textAlign: 'center'
-        }}>
-          {setScore.left}-{setScore.right}
-        </div>
+        {/* Set transition countdown - show in main scoreboard until start rally is pressed */}
+        {setTransitionModal && setTransitionCountdown > 0 && (
+          <div style={{
+            marginTop: '16px',
+            padding: '12px 20px',
+            background: 'rgba(59, 130, 246, 0.2)',
+            borderRadius: '8px',
+            border: '2px solid rgba(59, 130, 246, 0.5)',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '4px', fontWeight: 600 }}>
+              Break Between Sets
+            </div>
+            <div style={{ fontSize: '36px', fontWeight: 700, color: 'var(--accent)', fontFamily: 'monospace' }}>
+              {setTransitionCountdown}"
+            </div>
+            <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '4px' }}>
+              Time remaining before next set
+            </div>
+          </div>
+        )}
       </div>
     ),
-    [leftServing, rightServing, leftServingPlayer, rightServingPlayer, pointsBySide.left, pointsBySide.right, serveBallBaseStyle, setScore.left, setScore.right]
+    [leftServing, rightServing, leftServingPlayer, rightServingPlayer, pointsBySide.left, pointsBySide.right, serveBallBaseStyle, setScore.left, setScore.right, setTransitionModal, setTransitionCountdown]
   )
 
-
-  // Beach volleyball: No rotation (only 2 players)
-
   const handlePoint = useCallback(
-    async side => {
+    async (side, reason = null) => {
       if (!data?.set) return
       const teamKey = mapSideToTeamKey(side)
       const field = teamKey === 'team_1' ? 'team_1Points' : 'team_2Points'
@@ -1245,7 +1266,13 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       await db.sets.update(data.set.id, {
         [field]: newPoints
       })
-      await logEvent('point', { team: teamKey })
+      // Include fromPenalty flag if point is from delay_penalty or misconduct penalty
+      const pointPayload = { team: teamKey }
+      if (reason === 'delay_penalty' || reason === 'misconduct_penalty' || reason === 'penalty') {
+        pointPayload.fromPenalty = true
+        pointPayload.reason = reason
+      }
+      await logEvent('point', pointPayload)
 
       // Beach volleyball: No rotation (only 2 players, no rotation needed)
       
@@ -1355,6 +1382,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         }
       } else {
         // Get previous set's end time
+        // Query directly from database to ensure we have the latest data
         const allSets = await db.sets.where('matchId').equals(matchId).toArray()
         const previousSet = allSets.find(s => s.index === (data.set.index - 1))
         if (previousSet?.endTime) {
@@ -1362,6 +1390,12 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
           const prevEndTime = new Date(previousSet.endTime)
           prevEndTime.setMinutes(prevEndTime.getMinutes() + 1)
           defaultTime = prevEndTime.toISOString()
+          console.log(`Set ${data.set.index} start time: Previous set ${previousSet.index} ended at ${previousSet.endTime}, adding 1 minute = ${defaultTime}`)
+        } else {
+          // If previous set end time is not available, use current time
+          // This shouldn't happen, but fallback to current time
+          console.warn(`Previous set ${data.set.index - 1} end time not found, using current time`)
+          defaultTime = new Date().toISOString()
         }
       }
       
@@ -1369,8 +1403,20 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       return
     }
     
-    await logEvent('rally_start')
-  }, [logEvent, isFirstRally, data?.team_1Players, data?.team_2Players, data?.events, data?.set, data?.match, matchId])
+    // Get current serving team and player
+    const currentServeTeam = getCurrentServe()
+    const serviceOrder = data?.set?.serviceOrder || {}
+    const servingPlayer = currentServeTeam ? getCurrentServingPlayer(currentServeTeam, serviceOrder, data?.events || [], data?.set, data?.match) : null
+    
+    // Determine team label (A or B)
+    const teamALabel = data?.match?.coinTossTeamA === currentServeTeam ? 'A' : 'B'
+    
+    await logEvent('rally_start', {
+      servingTeam: currentServeTeam,
+      servingPlayer: servingPlayer,
+      teamLabel: teamALabel
+    })
+  }, [logEvent, isFirstRally, data?.team_1Players, data?.team_2Players, data?.events, data?.set, data?.match, matchId, getCurrentServe, getCurrentServingPlayer])
 
   const handleReplay = useCallback(async () => {
     await logEvent('replay')
@@ -1419,32 +1465,13 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       type: type
     })
     
-    // If delay penalty, award point to the other team (but only if lineups are set)
+    // If delay penalty, award point to the other team immediately
+    // Beach volleyball: lineups are always set (2 players, no rotation), so no need to check
     if (type === 'delay_penalty') {
-      // Check if both lineups are set before awarding point
-      const team_1LineupSet = data.events?.some(e => 
-        e.type === 'lineup' && 
-        e.payload?.team === 'team_1' && 
-        e.setIndex === data.set.index &&
-        e.payload?.isInitial
-      )
-      const team_2LineupSet = data.events?.some(e => 
-        e.type === 'lineup' && 
-        e.payload?.team === 'team_2' && 
-        e.setIndex === data.set.index &&
-        e.payload?.isInitial
-      )
-      
       setSanctionConfirm(null)
-      
-      if (team_1LineupSet && team_2LineupSet) {
-        // Both lineups are set - award point immediately
-        const otherSide = side === 'left' ? 'right' : 'left'
-        await handlePoint(otherSide)
-      } else {
-        // Lineups not set - show message
-        alert('Delay penalty recorded. Point will be awarded after both teams set their lineups.')
-      }
+      // Award point immediately to the other team
+      const otherSide = side === 'left' ? 'right' : 'left'
+      await handlePoint(otherSide, 'delay_penalty')
     } else {
       setSanctionConfirm(null)
     }
@@ -1453,6 +1480,9 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
   // Confirm set start time
   const confirmSetStartTime = useCallback(async (time) => {
     if (!setStartTimeModal || !data?.set) return
+    
+    // Stop the countdown when set starts
+    setSetTransitionCountdown(0)
     
     // Update set with start time (absolute timestamp)
     await db.sets.update(data.set.id, { startTime: time })
@@ -1476,16 +1506,28 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     
     setSetStartTimeModal(null)
     
-    // Now actually start the rally
+            // Now actually start the rally
+    // Get current serving team and player
+    const currentServeTeam = data?.match?.firstServe || 'team_1'
+    const serviceOrder = data?.set?.serviceOrder || {}
+    const servingPlayer = getCurrentServingPlayer(currentServeTeam, serviceOrder, data?.events || [], data?.set, data?.match)
+    
+    // Determine team label (A or B)
+    const teamALabel = data?.match?.coinTossTeamA === currentServeTeam ? 'A' : 'B'
+    
     await db.events.add({
       matchId,
       setIndex: data.set.index,
       type: 'rally_start',
-      payload: {},
+      payload: {
+        servingTeam: currentServeTeam,
+        servingPlayer: servingPlayer,
+        teamLabel: teamALabel
+      },
       ts: new Date().toISOString(),
       seq: nextSeq2
     })
-  }, [setStartTimeModal, data?.set, matchId])
+  }, [setStartTimeModal, data?.set, data?.match, data?.events, matchId, getCurrentServingPlayer])
 
   // Confirm set end time
   const confirmSetEndTime = useCallback(async (time) => {
@@ -1561,6 +1603,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
           
           setSetTransitionServiceOrder({ teamA: teamAServiceOrder, teamB: teamBServiceOrder })
         }
+        setSetTransitionCountdown(60) // Reset countdown to 60 seconds
         setSetTransitionModal({ setIndex: setIndex + 1, isSet3: false })
         return
       }
@@ -1577,6 +1620,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         } else {
           // Going to set 3 (1-1), show transition modal with 3rd set coin toss
           setSetEndTimeModal(null)
+          // Reset coin toss winner state for set 3
+          setSet3CoinTossWinner(null)
           // Get service order from last set (set 2) to use as default
           const lastSet = await db.sets.where('matchId').equals(matchId).and(s => s.index === setIndex).first()
           if (lastSet?.serviceOrder) {
@@ -1594,6 +1639,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
             
             setSetTransitionServiceOrder({ teamA: teamAServiceOrder, teamB: teamBServiceOrder })
           }
+          setSetTransitionCountdown(60) // Reset countdown to 60 seconds
           setSetTransitionModal({ setIndex: setIndex + 1, isSet3: true })
           return
         }
@@ -1684,9 +1730,34 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       serviceOrder: serviceOrder
     })
     
+    console.log(`Set ${setIndex} created with ID: ${newSetId}`)
     
+    // Close transition modal
     setSetTransitionModal(null)
-  }, [setTransitionModal, setTransitionSelectedLeftTeam, setTransitionSelectedFirstServe, setTransitionServiceOrder, set3CoinTossWinner, data?.match, matchId, teamAKey])
+    
+    // Wait a bit for useLiveQuery to refresh, then automatically show set start time modal
+    // This ensures the new set is loaded before we try to start it
+    setTimeout(async () => {
+      // Fetch the newly created set to ensure it exists
+      const newSet = await db.sets.get(newSetId)
+      if (newSet) {
+        // Calculate default start time (previous set end + 1 minute)
+        let defaultTime = new Date().toISOString()
+        const allSets = await db.sets.where('matchId').equals(matchId).toArray()
+        const previousSet = allSets.find(s => s.index === (setIndex - 1))
+        if (previousSet?.endTime) {
+          const prevEndTime = new Date(previousSet.endTime)
+          prevEndTime.setMinutes(prevEndTime.getMinutes() + 1)
+          defaultTime = prevEndTime.toISOString()
+        }
+        
+        // Show set start time modal
+        setSetStartTimeModal({ setIndex: setIndex, defaultTime })
+      } else {
+        console.error(`Failed to find newly created set ${newSetId}`)
+      }
+    }, 100) // Small delay to allow useLiveQuery to refresh
+  }, [setTransitionModal, setTransitionSelectedLeftTeam, setTransitionSelectedFirstServe, setTransitionServiceOrder, set3CoinTossWinner, data?.match, matchId, teamAKey, setSetStartTimeModal, setSetTransitionModal])
   
 
   // Get action description for an event
@@ -1741,7 +1812,16 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       const secondsStr = String(seconds).padStart(2, '0')
       eventDescription = `Set start — ${minutesStr}:${secondsStr}`
     } else if (event.type === 'rally_start') {
-      eventDescription = 'Rally started'
+      // Show serving team (A/B) and player number (1-2)
+      const servingTeam = event.payload?.servingTeam
+      const servingPlayer = event.payload?.servingPlayer
+      const teamLabel = event.payload?.teamLabel
+      
+      if (servingTeam && servingPlayer && teamLabel) {
+        eventDescription = `Rally started — Team ${teamLabel}, Player ${servingPlayer} serves`
+      } else {
+        eventDescription = 'Rally started'
+      }
     } else if (event.type === 'replay') {
       eventDescription = 'Replay'
     } else if (event.type === 'lineup') {
@@ -1749,9 +1829,19 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       return null
     } else if (event.type === 'court_switch') {
       const setIndex = event.payload?.setIndex || event.setIndex || '?'
-      const totalPoints = event.payload?.totalPoints || 0
-      const switchNumber = event.payload?.switchNumber || 0
-      eventDescription = `Court Switch — Set ${setIndex} (${totalPoints} points, switch #${switchNumber})`
+      // Get team labels for score display
+      const teamALabel = data?.match?.coinTossTeamA === 'team_1' ? 'A' : 'B'
+      const teamBLabel = data?.match?.coinTossTeamB === 'team_1' ? 'A' : 'B'
+      // Calculate which team is on left/right at time of switch
+      // At court switch, teams are flipped, so we need to determine the score display
+      const team_1Score = event.payload?.team_1Points || 0
+      const team_2Score = event.payload?.team_2Points || 0
+      // Determine which team is A and which is B
+      const teamAKey = data?.match?.coinTossTeamA || 'team_1'
+      const teamBKey = data?.match?.coinTossTeamB || 'team_2'
+      const teamAScore = teamAKey === 'team_1' ? team_1Score : team_2Score
+      const teamBScore = teamAKey === 'team_1' ? team_2Score : team_1Score
+      eventDescription = `Court Switch — Set ${setIndex}, ${teamALabel} ${teamAScore}:${teamBScore} ${teamBLabel}`
     } else if (event.type === 'technical_to') {
       const setIndex = event.payload?.setIndex || event.setIndex || '?'
       const totalPoints = event.payload?.totalPoints || 0
@@ -1803,6 +1893,106 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       }
       
       eventDescription = `Sanction — ${teamName}${target} (${sanctionLabel}) (${team_1Label} ${team_1Score}:${team_2Score} ${team_2Label})`
+    } else if (event.type === 'challenge_request') {
+      const status = event.payload?.status || 'unknown'
+      const statusLabel = status === 'accepted' ? 'Accepted' : status === 'refused' ? 'Refused' : status
+      const reason = event.payload?.reason || 'Unknown'
+      const teamLabel = event.payload?.team === teamAKey ? 'A' : event.payload?.team === teamBKey ? 'B' : '?'
+      eventDescription = `BMP Request — Team ${teamLabel} (${statusLabel}) — ${reason} (${team_1Label} ${team_1Score}:${team_2Score} ${team_2Label})`
+    } else if (event.type === 'challenge_outcome') {
+      const result = event.payload?.result || 'unknown'
+      const resultLabel = result === 'successful' ? 'Successful' : 
+                         result === 'unsuccessful' ? 'Unsuccessful' : 
+                         result === 'judgment_impossible' ? 'Judgment Impossible' : 
+                         result === 'mark_deliberately_altered' ? 'Mark Deliberately Altered (Rally Replayed)' : 
+                         result === 'cancelled' ? 'Cancelled by Team' : result
+      const reason = event.payload?.reason || 'Unknown'
+      const teamLabel = event.payload?.team === teamAKey ? 'A' : event.payload?.team === teamBKey ? 'B' : '?'
+      const originalScore = event.payload?.originalScore || event.payload?.score
+      const newScore = event.payload?.newScore
+      const replayRally = event.payload?.replayRally
+      
+      let scoreInfo = ''
+      if (originalScore) {
+        const origA = teamAKey === 'team_1' ? originalScore.team_1 : originalScore.team_2
+        const origB = teamAKey === 'team_1' ? originalScore.team_2 : originalScore.team_1
+        scoreInfo = ` (${team_1Label} ${origA}:${origB} ${team_2Label}`
+        if (newScore && result === 'successful') {
+          const newA = teamAKey === 'team_1' ? newScore.team_1 : newScore.team_2
+          const newB = teamAKey === 'team_1' ? newScore.team_2 : newScore.team_1
+          scoreInfo += ` → ${team_1Label} ${newA}:${newB} ${team_2Label}`
+        } else if (replayRally) {
+          scoreInfo += ` — Rally replayed, score unchanged)`
+        } else {
+          scoreInfo += ')'
+        }
+      } else {
+        scoreInfo = ` (${team_1Label} ${team_1Score}:${team_2Score} ${team_2Label})`
+      }
+      
+      eventDescription = `BMP Outcome — Team ${teamLabel} (${resultLabel}) — ${reason}${scoreInfo}`
+    } else if (event.type === 'referee_bmp_request') {
+      const reason = event.payload?.reason || 'Unknown'
+      const servingTeam = event.payload?.servingTeam
+      const servingLabel = servingTeam === teamAKey ? 'A' : servingTeam === teamBKey ? 'B' : '?'
+      eventDescription = `Referee BMP Request — ${reason} (Serving: Team ${servingLabel}, ${team_1Label} ${team_1Score}:${team_2Score} ${team_2Label})`
+    } else if (event.type === 'referee_bmp_outcome') {
+      const result = event.payload?.result || 'unknown'
+      const resultLabel = result === 'left' ? 'Left (Team A)' : 
+                         result === 'right' ? 'Right (Team B)' : 
+                         result === 'judgment_impossible' ? 'Judgment Impossible' : 
+                         result === 'mark_deliberately_altered' ? 'Mark Deliberately Altered (Rally Replayed)' : 
+                         result === 'cancelled' ? 'Cancelled by Team' : result
+      const reason = event.payload?.reason || 'Unknown'
+      const originalScore = event.payload?.originalScore || event.payload?.score
+      const newScore = event.payload?.newScore
+      const replayRally = event.payload?.replayRally
+      
+      let scoreInfo = ''
+      if (originalScore) {
+        const origA = teamAKey === 'team_1' ? originalScore.team_1 : originalScore.team_2
+        const origB = teamAKey === 'team_1' ? originalScore.team_2 : originalScore.team_1
+        scoreInfo = ` (${team_1Label} ${origA}:${origB} ${team_2Label}`
+        if (newScore && result !== 'judgment_impossible' && result !== 'mark_deliberately_altered') {
+          const newA = teamAKey === 'team_1' ? newScore.team_1 : newScore.team_2
+          const newB = teamAKey === 'team_1' ? newScore.team_2 : newScore.team_1
+          scoreInfo += ` → ${team_1Label} ${newA}:${newB} ${team_2Label}`
+        } else if (replayRally) {
+          scoreInfo += ` — Rally replayed, score unchanged)`
+        } else {
+          scoreInfo += ')'
+        }
+      } else {
+        scoreInfo = ` (${team_1Label} ${team_1Score}:${team_2Score} ${team_2Label})`
+      }
+      
+      eventDescription = `Referee BMP Outcome — ${resultLabel} — ${reason}${scoreInfo}`
+    } else if (event.type === 'bmp') {
+      // Legacy bmp event (for backward compatibility)
+      const result = event.payload?.result || 'unknown'
+      const resultLabel = result === 'left' ? 'Left (Team A)' : 
+                         result === 'right' ? 'Right (Team B)' : 
+                         result === 'judgment_impossible' ? 'Judgment Impossible' : result
+      const reason = event.payload?.reason || 'Unknown'
+      const originalScore = event.payload?.originalScore
+      const newScore = event.payload?.newScore
+      
+      let scoreInfo = ''
+      if (originalScore) {
+        const origA = teamAKey === 'team_1' ? originalScore.team_1 : originalScore.team_2
+        const origB = teamAKey === 'team_1' ? originalScore.team_2 : originalScore.team_1
+        scoreInfo = ` (${team_1Label} ${origA}:${origB} ${team_2Label}`
+        if (newScore && result !== 'judgment_impossible') {
+          const newA = teamAKey === 'team_1' ? newScore.team_1 : newScore.team_2
+          const newB = teamAKey === 'team_1' ? newScore.team_2 : newScore.team_1
+          scoreInfo += ` → ${team_1Label} ${newA}:${newB} ${team_2Label}`
+        }
+        scoreInfo += ')'
+      } else {
+        scoreInfo = ` (${team_1Label} ${team_1Score}:${team_2Score} ${team_2Label})`
+      }
+      
+      eventDescription = `Referee BMP Outcome — ${resultLabel} — ${reason}${scoreInfo}`
     } else {
       eventDescription = event.type
       if (teamName) {
@@ -1811,7 +2001,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     }
     
     return eventDescription
-  }, [data])
+  }, [data, teamAKey, teamBKey])
 
   // Show undo confirmation
   const showUndoConfirm = useCallback(() => {
@@ -1870,7 +2060,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       const nextUndoableEvent = allEvents.slice(currentIndex + 1).find(e => {
           // Beach volleyball: Skip non-initial lineup events (shouldn't exist)
           if (e.type === 'lineup' && !e.payload?.isInitial) {
-            return false
+              return false
           }
         // Allow rally_start, set_start, and replay events to be undone
         const desc = getActionDescription(e)
@@ -1903,9 +2093,9 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     // Beach volleyball: Skip non-initial lineup events (shouldn't exist, but handle gracefully)
     if (lastEvent.type === 'lineup' && !lastEvent.payload?.isInitial) {
       // Find the next undoable event
-      const allEvents = data.events.sort((a, b) => new Date(b.ts) - new Date(a.ts))
-      const nextEvent = allEvents.find(e => {
-        if (e.id === lastEvent.id) return false
+        const allEvents = data.events.sort((a, b) => new Date(b.ts) - new Date(a.ts))
+        const nextEvent = allEvents.find(e => {
+          if (e.id === lastEvent.id) return false
         // Skip non-initial lineup events
         if (e.type === 'lineup' && !e.payload?.isInitial) return false
         const desc = getActionDescription(e)
@@ -1913,18 +2103,18 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
           return true
         }
         return false
-      })
-      
-      if (nextEvent) {
-        const description = getActionDescription(nextEvent)
-        if (description && description !== 'Unknown action' && description.trim() !== '') {
-          setUndoConfirm({ event: nextEvent, description })
-          return
+        })
+        
+        if (nextEvent) {
+          const description = getActionDescription(nextEvent)
+          if (description && description !== 'Unknown action' && description.trim() !== '') {
+            setUndoConfirm({ event: nextEvent, description })
+            return
+          }
         }
-      }
-      // No other events to undo
-      setUndoConfirm(null)
-      return
+        // No other events to undo
+        setUndoConfirm(null)
+        return
     }
     
     // If it's a point, decrease the score (beach volleyball: no rotations, only serving changes)
@@ -1936,7 +2126,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         
       const newTeam_1Points = teamKey === 'team_1' ? currentPoints - 1 : data.set.team_1Points
       const newTeam_2Points = teamKey === 'team_2' ? currentPoints - 1 : data.set.team_2Points
-      
+        
       if (currentPoints > 0) {
         await db.sets.update(data.set.id, {
           [field]: currentPoints - 1
@@ -1975,6 +2165,54 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
           // There's a court switch event after this point - undo it
           // Get the most recent court switch event
           const latestCourtSwitch = courtSwitchEvents.sort((a, b) => (b.seq || 0) - (a.seq || 0))[0]
+          
+          // Delete the court switch event
+          await db.events.delete(latestCourtSwitch.id)
+          
+          // Decrease the switch count
+          const switchCountKey = `set${setIndex}_switchCount`
+          const currentSwitchCount = match?.[switchCountKey] || 0
+          if (currentSwitchCount > 0) {
+            await db.matches.update(matchId, { [switchCountKey]: currentSwitchCount - 1 })
+          }
+        }
+      }
+      
+      // Check if this point was at 21 points (TTO trigger for sets 1-2)
+      const isSet3ForTTO = setIndex === 3
+      if (!isSet3ForTTO && totalPointsBeforeUndo === 21) {
+        // Clear the TTO flag so it can be triggered again
+        const setTTOKey = `set${setIndex}_tto`
+        const match = await db.matches.get(matchId)
+        if (match?.[setTTOKey]) {
+          await db.matches.update(matchId, { [setTTOKey]: false })
+        }
+        
+        // Check if there's a technical_to event that was logged after this point
+        // If so, delete it
+        const pointSeq = lastEvent.seq || 0
+        const ttoEvents = data.events.filter(e => 
+          e.type === 'technical_to' && 
+          e.setIndex === setIndex &&
+          (e.seq || 0) > pointSeq
+        )
+        
+        for (const ttoEvent of ttoEvents) {
+          await db.events.delete(ttoEvent.id)
+        }
+        
+        // Check if there's a court_switch event that was logged after TTO (from TTO completion)
+        // If so, undo it
+        const courtSwitchAfterTTO = data.events.filter(e => 
+          e.type === 'court_switch' && 
+          e.setIndex === setIndex &&
+          e.payload?.afterTTO === true &&
+          (e.seq || 0) > pointSeq
+        )
+        
+        if (courtSwitchAfterTTO.length > 0) {
+          // Get the most recent court switch event after TTO
+          const latestCourtSwitch = courtSwitchAfterTTO.sort((a, b) => (b.seq || 0) - (a.seq || 0))[0]
           
           // Delete the court switch event
           await db.events.delete(latestCourtSwitch.id)
@@ -2219,6 +2457,43 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     alert(`${message} — coming soon.`)
   }
 
+  // Handle referee BMP request (during rally, no point assigned yet)
+  const handleRefereeBMPRequest = useCallback(async () => {
+    if (!data?.set || !data?.match) return
+    
+    const currentServeTeam = getCurrentServe()
+    const requestTime = new Date().toISOString()
+    
+    // Log referee BMP request
+    await logEvent('referee_bmp_request', {
+      reason: challengeReason,
+      score: {
+        team_1: data.set.team_1Points,
+        team_2: data.set.team_2Points
+      },
+      set: data.set.index,
+      servingTeam: currentServeTeam,
+      requestTime: requestTime
+    })
+    
+    // Record referee BMP request data (no team assigned yet, will be determined by outcome)
+    const bmpData = {
+      type: 'in_progress',
+      team: null, // Will be determined by outcome
+      reason: challengeReason,
+      score: {
+        team_1: data.set.team_1Points,
+        team_2: data.set.team_2Points
+      },
+      set: data.set.index,
+      servingTeam: currentServeTeam,
+      time: requestTime,
+      isRefereeInitiated: true
+    }
+    
+    setChallengeModal(bmpData)
+  }, [challengeReason, data?.set, data?.match, getCurrentServe, logEvent])
+
   // Handle challenge request confirmation
   const handleConfirmChallengeRequest = useCallback(async () => {
     if (!challengeModal || challengeModal.type !== 'request' || !data?.set || !data?.match) return
@@ -2227,6 +2502,18 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     const currentServeTeam = getCurrentServe()
     const teamLabel = team === teamAKey ? 'A' : 'B'
     const servingTeamLabel = currentServeTeam === teamAKey ? 'A' : 'B'
+    
+    // Log challenge request as accepted
+    await logEvent('challenge_request', {
+      team,
+      reason: challengeReason,
+      status: 'accepted',
+      score: {
+        team_1: data.set.team_1Points,
+        team_2: data.set.team_2Points
+      },
+      set: data.set.index
+    })
     
     // Record challenge request data
     const challengeData = {
@@ -2239,22 +2526,24 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       },
       set: data.set.index,
       servingTeam: currentServeTeam,
-      time: new Date().toISOString()
+      time: new Date().toISOString(),
+      isRefereeInitiated: false
     }
     
     setChallengeModal(challengeData)
-  }, [challengeModal, challengeReason, data?.set, data?.match, teamAKey, getCurrentServe])
+  }, [challengeModal, challengeReason, data?.set, data?.match, teamAKey, getCurrentServe, logEvent])
 
-  // Handle challenge request rejection (prevents further requests)
+  // Handle challenge request rejection (does NOT decrease available challenges)
   const handleRejectChallengeRequest = useCallback(async () => {
     if (!challengeModal || challengeModal.type !== 'request' || !data?.set || !data?.match) return
     
     const { team } = challengeModal
     
-    // Log the rejection as an event
-    await logEvent('challenge_rejected', {
+    // Log the rejection as an event (but do NOT increment challenge count)
+    await logEvent('challenge_request', {
       team,
       reason: challengeReason,
+      status: 'refused',
       score: {
         team_1: data.set.team_1Points,
         team_2: data.set.team_2Points
@@ -2262,26 +2551,9 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       set: data.set.index
     })
     
-    // Increment challenge count to prevent further requests (counts as used challenge)
-    const challengeRequests = data.match.challengeRequests || {}
-    const setChallenges = challengeRequests[data.set.index] || {}
-    const currentCount = setChallenges[team] || 0
-    
-    const updatedChallengeRequests = {
-      ...challengeRequests,
-      [data.set.index]: {
-        ...setChallenges,
-        [team]: currentCount + 1
-      }
-    }
-    
-    await db.matches.update(matchId, {
-      challengeRequests: updatedChallengeRequests
-    })
-    
     setChallengeModal(null)
     setChallengeReason('IN / OUT')
-  }, [challengeModal, challengeReason, data?.set, data?.match, matchId, logEvent])
+  }, [challengeModal, challengeReason, data?.set, data?.match, logEvent])
   
   // Handle challenge request cancel (just closes modal, doesn't prevent further requests)
   const handleCancelChallengeRequest = useCallback(() => {
@@ -2289,11 +2561,89 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     setChallengeReason('IN / OUT')
   }, [])
 
-  // Handle successful challenge
+  // Handle team cancels BMP - cancels everything, logs cancellation, does NOT use challenge count
+  const handleTeamCancelsBMP = useCallback(async () => {
+    if (!challengeModal || challengeModal.type !== 'in_progress' || !data?.set || !data?.match) return
+    
+    const { team, isRefereeInitiated } = challengeModal
+    const confirmationTime = new Date().toISOString()
+    
+    // Log the cancellation event
+    if (isRefereeInitiated) {
+      await logEvent('referee_bmp_outcome', {
+        type: 'referee_initiated',
+        result: 'cancelled',
+        reason: challengeModal.reason,
+        requestTime: challengeModal.time,
+        confirmationTime: confirmationTime,
+        score: challengeModal.score,
+        set: data.set.index
+      })
+    } else {
+      await logEvent('challenge_outcome', {
+        team,
+        reason: challengeModal.reason,
+        result: 'cancelled',
+        score: challengeModal.score
+      })
+    }
+    
+    // Do NOT increment challenge count - challenge is not used
+    
+    setChallengeModal(null)
+    setChallengeReason('IN / OUT')
+  }, [challengeModal, data?.set, data?.match, logEvent])
+
+  // Handle successful challenge/BMP
   const handleSuccessfulChallenge = useCallback(async () => {
     if (!challengeModal || challengeModal.type !== 'in_progress' || !data?.set || !data?.match) return
     
-    const { team, score } = challengeModal
+    const { team, score, isRefereeInitiated } = challengeModal
+    
+    if (isRefereeInitiated) {
+      // Referee-initiated BMP: assign point to left team (Team A)
+      const leftTeamKey = leftIsTeam_1 ? 'team_1' : 'team_2'
+      const teamField = leftTeamKey === 'team_1' ? 'team_1Points' : 'team_2Points'
+      const currentPoints = data.set[teamField]
+      const newPoints = currentPoints + 1
+      const confirmationTime = new Date().toISOString()
+      
+      // Update scores
+      await db.sets.update(data.set.id, {
+        [teamField]: newPoints
+      })
+      
+      // Add point event for left team
+      await logEvent('point', { team: leftTeamKey, fromRefereeBMP: true })
+      
+      // Log referee BMP outcome with timestamps
+      await logEvent('referee_bmp_outcome', {
+        type: 'referee_initiated',
+        result: 'left',
+        reason: challengeModal.reason,
+        requestTime: challengeModal.time,
+        confirmationTime: confirmationTime,
+        originalScore: score,
+        newScore: {
+          team_1: leftTeamKey === 'team_1' ? newPoints : score.team_1,
+          team_2: leftTeamKey === 'team_2' ? newPoints : score.team_2
+        },
+        set: data.set.index
+      })
+      
+      // Also log as bmp for backward compatibility
+      await logEvent('bmp', {
+        type: 'referee_initiated',
+        result: 'left',
+        reason: challengeModal.reason,
+        originalScore: score,
+        newScore: {
+          team_1: leftTeamKey === 'team_1' ? newPoints : score.team_1,
+          team_2: leftTeamKey === 'team_2' ? newPoints : score.team_2
+        }
+      })
+    } else {
+      // Team-initiated challenge: reverse the last point
     const opponentTeam = team === 'team_1' ? 'team_2' : 'team_1'
     
     // Reverse the last point: remove point from opponent, add point to challenging team
@@ -2334,8 +2684,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     // Add point event for the challenging team
     await logEvent('point', { team, fromChallenge: true })
     
-    // Log challenge success
-    await logEvent('challenge', {
+      // Log challenge outcome
+      await logEvent('challenge_outcome', {
       team,
       reason: challengeModal.reason,
       result: 'successful',
@@ -2345,27 +2695,72 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         team_2: team === 'team_2' ? newTeamPoints : newOpponentPoints
       }
     })
+    }
     
-    // Challenge successful - don't decrement challenge count
+    // Challenge/BMP successful - don't decrement challenge count
     setChallengeModal(null)
     setChallengeReason('IN / OUT')
-  }, [challengeModal, data?.set, data?.match, data?.events, logEvent])
+  }, [challengeModal, data?.set, data?.match, data?.events, leftIsTeam_1, logEvent])
 
-  // Handle unsuccessful challenge
+  // Handle unsuccessful challenge/BMP
   const handleUnsuccessfulChallenge = useCallback(async () => {
     if (!challengeModal || challengeModal.type !== 'in_progress' || !data?.set || !data?.match) return
     
-    const { team } = challengeModal
+    const { team, isRefereeInitiated } = challengeModal
     
-    // Log challenge failure
-    await logEvent('challenge', {
+    if (isRefereeInitiated) {
+      // Referee-initiated BMP: assign point to right team (Team B)
+      const rightTeamKey = leftIsTeam_1 ? 'team_2' : 'team_1'
+      const teamField = rightTeamKey === 'team_1' ? 'team_1Points' : 'team_2Points'
+      const currentPoints = data.set[teamField]
+      const newPoints = currentPoints + 1
+      const confirmationTime = new Date().toISOString()
+      
+      // Update scores
+      await db.sets.update(data.set.id, {
+        [teamField]: newPoints
+      })
+      
+      // Add point event for right team
+      await logEvent('point', { team: rightTeamKey, fromRefereeBMP: true })
+      
+      // Log referee BMP outcome with timestamps
+      await logEvent('referee_bmp_outcome', {
+        type: 'referee_initiated',
+        result: 'right',
+        reason: challengeModal.reason,
+        requestTime: challengeModal.time,
+        confirmationTime: confirmationTime,
+        originalScore: challengeModal.score,
+        newScore: {
+          team_1: rightTeamKey === 'team_1' ? newPoints : challengeModal.score.team_1,
+          team_2: rightTeamKey === 'team_2' ? newPoints : challengeModal.score.team_2
+        },
+        set: data.set.index
+      })
+      
+      // Also log as bmp for backward compatibility
+      await logEvent('bmp', {
+        type: 'referee_initiated',
+        result: 'right',
+        reason: challengeModal.reason,
+        originalScore: challengeModal.score,
+        newScore: {
+          team_1: rightTeamKey === 'team_1' ? newPoints : challengeModal.score.team_1,
+          team_2: rightTeamKey === 'team_2' ? newPoints : challengeModal.score.team_2
+        }
+      })
+    } else {
+      // Team-initiated challenge: log failure and increment challenge count
+      // Log challenge outcome
+      await logEvent('challenge_outcome', {
       team,
       reason: challengeModal.reason,
       result: 'unsuccessful',
       score: challengeModal.score
     })
     
-    // Update challenge requests count (decrement by 1)
+      // Update challenge requests count (increment by 1 - challenge is used)
     const challengeRequests = data.match.challengeRequests || {}
     const setChallenges = challengeRequests[data.set.index] || {}
     const currentCount = setChallenges[team] || 0
@@ -2381,10 +2776,112 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     await db.matches.update(matchId, {
       challengeRequests: updatedChallengeRequests
     })
+    }
     
     setChallengeModal(null)
     setChallengeReason('IN / OUT')
-  }, [challengeModal, data?.set, data?.match, matchId])
+  }, [challengeModal, data?.set, data?.match, matchId, leftIsTeam_1, logEvent])
+  
+  // Handle judgment impossible challenge (keeps score, does NOT decrease available challenges)
+  const handleJudgmentImpossibleChallenge = useCallback(async () => {
+    if (!challengeModal || challengeModal.type !== 'in_progress' || !data?.set || !data?.match) return
+    
+    const { team, isRefereeInitiated } = challengeModal
+    const confirmationTime = new Date().toISOString()
+    
+    if (isRefereeInitiated) {
+      // Log referee BMP outcome with timestamps
+      await logEvent('referee_bmp_outcome', {
+        type: 'referee_initiated',
+        result: 'judgment_impossible',
+        reason: challengeModal.reason,
+        requestTime: challengeModal.time,
+        confirmationTime: confirmationTime,
+        score: challengeModal.score,
+        set: data.set.index
+      })
+    } else {
+      // Log challenge outcome
+      await logEvent('challenge_outcome', {
+        team,
+        reason: challengeModal.reason,
+        result: 'judgment_impossible',
+        score: challengeModal.score
+      })
+    }
+    
+    // Do NOT increment challenge count - challenge is not used
+    
+    setChallengeModal(null)
+    setChallengeReason('IN / OUT')
+  }, [challengeModal, data?.set, data?.match, logEvent])
+
+  // Handle "Mark Deliberately Altered" - undo last point (replay rally), keep score unvaried, does NOT decrease challenge count
+  const handleMarkDeliberatelyAltered = useCallback(async () => {
+    if (!challengeModal || challengeModal.type !== 'in_progress' || !data?.set || !data?.match) return
+    
+    const { team, isRefereeInitiated, score } = challengeModal
+    const confirmationTime = new Date().toISOString()
+    
+    // Find and undo the last point event
+    const pointEvents = data.events
+      .filter(e => e.type === 'point' && e.setIndex === data.set.index)
+      .sort((a, b) => {
+        const aSeq = a.seq || 0
+        const bSeq = b.seq || 0
+        if (aSeq !== 0 || bSeq !== 0) return bSeq - aSeq
+        const aTime = typeof a.ts === 'number' ? a.ts : new Date(a.ts).getTime()
+        const bTime = typeof b.ts === 'number' ? b.ts : new Date(b.ts).getTime()
+        return bTime - aTime
+      })
+    
+    if (pointEvents.length > 0) {
+      const lastPointEvent = pointEvents[0]
+      const teamKey = lastPointEvent.payload?.team
+      
+      if (teamKey) {
+        // Decrease the score (undo the point)
+        const field = teamKey === 'team_1' ? 'team_1Points' : 'team_2Points'
+        const currentPoints = data.set[field]
+        
+        if (currentPoints > 0) {
+          await db.sets.update(data.set.id, {
+            [field]: currentPoints - 1
+          })
+        }
+        
+        // Delete the point event
+        await db.events.delete(lastPointEvent.id)
+      }
+    }
+    
+    // Log the "Mark Deliberately Altered" event
+    if (isRefereeInitiated) {
+      await logEvent('referee_bmp_outcome', {
+        type: 'referee_initiated',
+        result: 'mark_deliberately_altered',
+        reason: challengeModal.reason,
+        requestTime: challengeModal.time,
+        confirmationTime: confirmationTime,
+        originalScore: score,
+        replayRally: true,
+        set: data.set.index
+      })
+    } else {
+      await logEvent('challenge_outcome', {
+        team,
+        reason: challengeModal.reason,
+        result: 'mark_deliberately_altered',
+        originalScore: score,
+        replayRally: true
+      })
+    }
+    
+    // Do NOT increment challenge count - challenge is not used
+    
+    setChallengeModal(null)
+    setChallengeReason('IN / OUT')
+  }, [challengeModal, data?.set, data?.match, data?.events, logEvent])
 
   // Check if there was a point change between two events
   const hasPointChangeBetween = useCallback((event1Index, event2Index, setIndex) => {
@@ -2413,18 +2910,24 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
   }, [data?.events])
 
   
-
+ 
 
   // Handle player click for sanction (only when rally is not in play)
   const handlePlayerClick = useCallback((teamKey, position, playerNumber, event) => {
+    // Prevent event bubbling
+    event.stopPropagation()
+    event.preventDefault()
+    
     // Only allow when rally is not in play
     if (rallyStatus !== 'idle') return
-    // For beach volleyball, allow clicks even if playerNumber is empty (use position instead)
-    // playerNumber can be empty string, null, or undefined - check for all
-    if (playerNumber === null || playerNumber === undefined || playerNumber === '') {
-      // Use position as fallback for beach volleyball
+    
+    // For beach volleyball, we need at least position to identify the player
       if (!position) return
-    }
+    
+    // Normalize playerNumber - convert to number or null
+    const normalizedPlayerNumber = (playerNumber !== null && playerNumber !== undefined && playerNumber !== '') 
+      ? (typeof playerNumber === 'string' ? (playerNumber.trim() === '' ? null : Number(playerNumber)) : Number(playerNumber))
+      : null
     
     // Get the clicked element position (the circle)
     const element = event.currentTarget
@@ -2441,7 +2944,12 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     const offset = radius + 30 // Add 30px extra spacing
     
     // Close menu if it's already open for this player
-    if (playerActionMenu?.playerNumber === playerNumber && playerActionMenu?.position === position) {
+    const isSamePlayer = playerActionMenu?.position === position && 
+                        playerActionMenu?.team === teamKey &&
+                        ((playerActionMenu?.playerNumber === normalizedPlayerNumber) || 
+                         (playerActionMenu?.playerNumber === null && normalizedPlayerNumber === null))
+    
+    if (isSamePlayer) {
       setPlayerActionMenu(null)
       return
     }
@@ -2450,7 +2958,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     setPlayerActionMenu({
       team: teamKey,
       position,
-      playerNumber,
+      playerNumber: normalizedPlayerNumber,
       element,
       x: centerX + offset,
       y: centerY
@@ -2548,9 +3056,105 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     })
   }, [data?.set, data?.match, matchId, logEvent])
 
-  
-
-  
+  // Handle forfait with detailed information
+  const handleForfaitWithDetails = useCallback(async (forfaitData) => {
+    if (!matchId || !data?.match) return
+    
+    const { type, team, playerNumber, setIndex, time, score, mtoRitDuration, remarks } = forfaitData
+    
+    // Build remark text based on type
+    let remarkText = ''
+    const teamName = team === 'team_1' ? (data.team_1Team?.name || 'Team 1') : (data.team_2Team?.name || 'Team 2')
+    
+    if (type === 'injury_before') {
+      remarkText = `Team ${teamName} forfeits the match due to ${remarks || '(injury as confirmed by the official medical personnel)'} of player #${playerNumber || 'N/A'}. Appropriate official medical personnel came to the court. Both teams and players were present.`
+    } else if (type === 'injury_during') {
+      const timeStr = time || new Date().toLocaleTimeString()
+      const setStr = setIndex ? `set ${setIndex}` : 'current set'
+      const scoreStr = score || `${data?.set?.team_1Points || 0}:${data?.set?.team_2Points || 0}`
+      const servingTeam = data?.set ? getCurrentServe() : null
+      const servingTeamName = servingTeam === 'team_1' ? (data.team_1Team?.name || 'Team 1') : (data.team_2Team?.name || 'Team 2')
+      remarkText = `At ${timeStr} time, ${setStr}, ${scoreStr} score, team ${servingTeamName} serving, team ${teamName} forfeits the match due to ${remarks || '(injury as confirmed by the official medical personnel' + (mtoRitDuration ? `; MTO/RIT duration: ${mtoRitDuration}` : '') + ')'} of player #${playerNumber || 'N/A'}.`
+    } else if (type === 'no_show') {
+      remarkText = `Team ${teamName} forfeits the match due to no show.`
+    }
+    
+    // Append to existing remarks
+    const existingRemarks = data.match.remarks || ''
+    const newRemarks = existingRemarks ? `${existingRemarks}\n\n${remarkText}` : remarkText
+    await db.matches.update(matchId, { remarks: newRemarks })
+    
+    // If forfait before match start, complete match with defaults
+    if (type === 'injury_before' || type === 'no_show') {
+      // Set team A as the complete team (default)
+      const completeTeamKey = 'team_1' // Default to team_1 as team A
+      const forfaitTeamKey = team
+      
+      // Award all sets to complete team
+      const allSets = await db.sets.where({ matchId }).sortBy('index')
+      for (const set of allSets) {
+        const pointsToWin = set.index === 3 ? 15 : 21
+        await db.sets.update(set.id, {
+          finished: true,
+          [completeTeamKey === 'team_1' ? 'team_1Points' : 'team_2Points']: pointsToWin,
+          [forfaitTeamKey === 'team_1' ? 'team_1Points' : 'team_2Points']: 0
+        })
+        
+        await logEvent('set_end', {
+          team: completeTeamKey,
+          setIndex: set.index,
+          team_1Points: completeTeamKey === 'team_1' ? pointsToWin : 0,
+          team_2Points: completeTeamKey === 'team_2' ? pointsToWin : 0,
+          reason: 'forfait'
+        })
+      }
+      
+      // Set coin toss winner to complete team (default)
+      const coinTossData = data.match.coinTossData || {}
+      const updatedCoinTossData = { ...coinTossData }
+      if (!updatedCoinTossData.winner) {
+        updatedCoinTossData.winner = completeTeamKey === 'team_1' ? 'teamA' : 'teamB'
+      }
+      
+      // Set service order to 1-2 if not available
+      if (!updatedCoinTossData.players) {
+        // Initialize with default service order
+        updatedCoinTossData.players = {
+          teamA: {
+            player1: { number: 1, serviceOrder: 1 },
+            player2: { number: 2, serviceOrder: 2 }
+          },
+          teamB: {
+            player1: { number: 1, serviceOrder: 1 },
+            player2: { number: 2, serviceOrder: 2 }
+          }
+        }
+      }
+      
+      await db.matches.update(matchId, { coinTossData: updatedCoinTossData })
+      
+      // Mark match as final
+      await db.matches.update(matchId, { status: 'final' })
+    } else {
+      // Forfait during match - use existing handleForfait logic
+      await handleForfait(team, 'injury')
+    }
+    
+    // Log forfait event
+    await logEvent('forfait', {
+      team,
+      type,
+      playerNumber,
+      setIndex,
+      time,
+      score,
+      mtoRitDuration,
+      remarks: remarkText
+    })
+    
+    setForfaitModal(null)
+    setShowRemarks(true) // Open remarks to show the added text
+  }, [data?.match, data?.set, data?.team_1Team, data?.team_2Team, matchId, logEvent, handleForfait, getCurrentServe])
 
   // Common modal position - all modals use the same position
   const getCommonModalPosition = useCallback((element, menuX, menuY) => {
@@ -2586,21 +3190,142 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     setPlayerActionMenu(null)
   }, [playerActionMenu, getCommonModalPosition])
 
-  // Beach volleyball: Injury results in forfait
-  const openInjuryFromMenu = useCallback(async () => {
-    if (!playerActionMenu || !data?.set) return
-    const { team } = playerActionMenu
+  // Open MTO/RIT submenu from player action menu
+  const openMtoRitFromMenu = useCallback(() => {
+    if (!playerActionMenu) return
+    const { team, position, playerNumber, element } = playerActionMenu
+    const pos = getCommonModalPosition(element, playerActionMenu.x, playerActionMenu.y)
+    setInjuryDropdown({
+      team,
+      position,
+      playerNumber,
+      element,
+      x: pos.x,
+      y: pos.y
+    })
         setPlayerActionMenu(null)
-        await handleForfait(team, 'injury')
-  }, [playerActionMenu, data?.set, handleForfait])
+  }, [playerActionMenu, getCommonModalPosition])
 
-  // Beach volleyball: Injury results in forfait
-  const handleInjury = useCallback(async () => {
+  // Check if player has already used RIT (one per player per match)
+  const hasPlayerUsedRit = useCallback((teamKey, playerNumber) => {
+    if (!data?.events) return false
+    return data.events.some(e => 
+      e.type === 'mto_rit' && 
+      (e.payload?.type === 'rit_no_blood' || e.payload?.type === 'rit_weather' || e.payload?.type === 'rit_toilet') &&
+      e.payload?.team === teamKey &&
+      e.payload?.playerNumber === playerNumber
+    )
+  }, [data?.events])
+
+  // Handle MTO/RIT selection
+  const handleMtoRitSelection = useCallback((type) => {
     if (!injuryDropdown || !data?.set) return
-    const { team } = injuryDropdown
+    
+    const { team, position, playerNumber } = injuryDropdown
+    
+    // Check RIT limit (one per player per match)
+    const isRit = type !== 'mto_blood'
+    if (isRit && hasPlayerUsedRit(team, playerNumber)) {
+      // Show error - RIT already used
+      alert(`Player #${playerNumber} has already used their RIT for this match.`)
         setInjuryDropdown(null)
+      return
+    }
+    
+    // Show confirmation modal
+    setMtoRitConfirmModal({
+      team,
+      position,
+      playerNumber,
+      type
+    })
+    setInjuryDropdown(null)
+  }, [injuryDropdown, data?.set, hasPlayerUsedRit])
+
+  // Confirm MTO/RIT and start countdown
+  const confirmMtoRit = useCallback(async () => {
+    if (!mtoRitConfirmModal || !data?.set || !matchId) return
+    
+    const { team, position, playerNumber, type } = mtoRitConfirmModal
+    const currentTime = new Date().toISOString()
+    const setIndex = data.set.index
+    const team_1Points = data.set.team_1Points || 0
+    const team_2Points = data.set.team_2Points || 0
+    
+    // Log the MTO/RIT event
+    await logEvent('mto_rit', {
+      team,
+      position,
+      playerNumber,
+      type,
+      setIndex,
+      team_1Points,
+      team_2Points,
+      startTime: currentTime
+    })
+    
+    // Start countdown modal
+    setMtoRitCountdownModal({
+      team,
+      position,
+      playerNumber,
+      type,
+      countdown: 300, // 5 minutes = 300 seconds
+      started: true,
+      startTime: currentTime,
+      setIndex,
+      team_1Points,
+      team_2Points
+    })
+    
+    setMtoRitConfirmModal(null)
+  }, [mtoRitConfirmModal, data?.set, matchId, logEvent])
+
+  // Cancel MTO/RIT confirmation
+  const cancelMtoRitConfirm = useCallback(() => {
+    setMtoRitConfirmModal(null)
+  }, [])
+
+  // Stop MTO/RIT countdown (with confirmation)
+  const stopMtoRitCountdown = useCallback(() => {
+    if (!mtoRitCountdownModal) return
+    if (window.confirm('Stop the countdown? You can still record recovery or forfait.')) {
+      setMtoRitCountdownModal(prev => prev ? { ...prev, started: false } : null)
+    }
+  }, [mtoRitCountdownModal])
+
+  // Handle player recovered
+  const handlePlayerRecovered = useCallback(async () => {
+    if (!mtoRitCountdownModal || !matchId) return
+    
+    const { team, position, playerNumber, type, startTime, setIndex, team_1Points, team_2Points } = mtoRitCountdownModal
+    const endTime = new Date().toISOString()
+    const duration = Math.floor((new Date(endTime).getTime() - new Date(startTime).getTime()) / 1000) // seconds
+    
+    // Log recovery event
+    await logEvent('mto_rit_recovery', {
+      team,
+      position,
+      playerNumber,
+      type,
+      setIndex,
+      team_1Points,
+      team_2Points,
+      startTime,
+      endTime,
+      duration
+    })
+    
+    setMtoRitCountdownModal(null)
+  }, [mtoRitCountdownModal, matchId, logEvent])
+
+  // Handle player not recovered (forfait)
+  const handlePlayerNotRecovered = useCallback(async () => {
+    if (!mtoRitCountdownModal || !data?.set) return
+    const { team } = mtoRitCountdownModal
+    setMtoRitCountdownModal(null)
         await handleForfait(team, 'injury')
-  }, [injuryDropdown, data?.set, handleForfait])
+  }, [mtoRitCountdownModal, data?.set, handleForfait])
 
   // Cancel injury dropdown
   const cancelInjury = useCallback(() => {
@@ -2690,6 +3415,50 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     return teamSanctions.length > 0
   }, [data?.events])
 
+  // Helper to get sanction flags for the team currently on the left side
+  const getLeftTeamSanctions = useMemo(() => {
+    if (!data?.events) return { improperRequest: false, delayWarning: false }
+    const leftTeamKey = leftIsTeam_1 ? 'team_1' : 'team_2'
+    // Check events to see if this team has these sanctions
+    const leftTeamHasImproperRequest = data.events.some(e => 
+      e.type === 'sanction' && 
+      e.payload?.team === leftTeamKey &&
+      e.payload?.type === 'improper_request'
+    ) || false
+    const leftTeamHasDelayWarning = data.events.some(e => 
+      e.type === 'sanction' && 
+      e.payload?.team === leftTeamKey &&
+      e.payload?.type === 'delay_warning'
+    ) || false
+    
+    return {
+      improperRequest: leftTeamHasImproperRequest,
+      delayWarning: leftTeamHasDelayWarning
+    }
+  }, [data?.events, leftIsTeam_1])
+
+  // Helper to get sanction flags for the team currently on the right side
+  const getRightTeamSanctions = useMemo(() => {
+    if (!data?.events) return { improperRequest: false, delayWarning: false }
+    const rightTeamKey = leftIsTeam_1 ? 'team_2' : 'team_1'
+    // Check events to see if this team has these sanctions
+    const rightTeamHasImproperRequest = data.events.some(e => 
+      e.type === 'sanction' && 
+      e.payload?.team === rightTeamKey &&
+      e.payload?.type === 'improper_request'
+    ) || false
+    const rightTeamHasDelayWarning = data.events.some(e => 
+      e.type === 'sanction' && 
+      e.payload?.team === rightTeamKey &&
+      e.payload?.type === 'delay_warning'
+    ) || false
+    
+    return {
+      improperRequest: rightTeamHasImproperRequest,
+      delayWarning: rightTeamHasDelayWarning
+    }
+  }, [data?.events, leftIsTeam_1])
+
   // Get sanctions for a player or official
   const getPlayerSanctions = useCallback((teamKey, playerNumber, role = null) => {
     if (!data?.events) return []
@@ -2743,7 +3512,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       setSanctionConfirmModal(null)
       
       // Beach volleyball: Expulsion/disqualification results in forfait
-      await handleForfait(team, sanctionType === 'expulsion' ? 'expulsion' : 'disqualification')
+          await handleForfait(team, sanctionType === 'expulsion' ? 'expulsion' : 'disqualification')
     } else if (sanctionType === 'expulsion' || sanctionType === 'disqualification') {
       // Expulsion/disqualification - just log the sanction
       await logEvent('sanction', {
@@ -2814,7 +3583,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         // Award point to the other team (this automatically causes loss of service if serving)
         const otherTeam = team === 'team_1' ? 'team_2' : 'team_1'
         const otherSide = mapTeamKeyToSide(otherTeam)
-        await handlePoint(otherSide)
+        await handlePoint(otherSide, 'misconduct_penalty')
         
         // Note: handlePoint already handles service change when the other team scores
         // So if the sanctioned team was serving, service is automatically lost
@@ -3040,33 +3809,48 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     const match = await db.matches.get(matchId)
     if (!match) return
     
-    // Count how many court switches have happened in this set
+    // Get current set data to ensure we have the latest scores
+    const currentSet = await db.sets.get(courtSwitchModal.set.id)
+    if (!currentSet) return
+    
+    // Get current switch count
     const setIndex = courtSwitchModal.set.index
-    const totalPoints = courtSwitchModal.team_1Points + courtSwitchModal.team_2Points
+    const totalPoints = (currentSet.team_1Points || 0) + (currentSet.team_2Points || 0)
+    const switchCountKey = `set${setIndex}_switchCount`
+    const currentSwitchCount = match[switchCountKey] || 0
+    
+    // Calculate expected switch number based on points
     const isSet3 = setIndex === 3
     const switchInterval = isSet3 ? 5 : 7
-    const switchesSoFar = Math.floor(totalPoints / switchInterval)
+    const expectedSwitchCount = Math.floor(totalPoints / switchInterval)
     
-    // NOW actually switch the courts by updating the switch count
-    // This is what causes the visual court switch
-    const switchCountKey = `set${setIndex}_switchCount`
+    // Only increment if we haven't already switched for this point total
+    // This prevents double-switching if the modal is confirmed multiple times
+    if (currentSwitchCount < expectedSwitchCount) {
+      // Increment the switch count by 1 - this will flip the teams
+      // Each increment flips the teams (odd = flipped, even = base)
+      const newSwitchCount = currentSwitchCount + 1
+      
+      // NOW actually switch the courts by updating the switch count
+      // This is what causes the visual court switch
     await db.matches.update(matchId, { 
-      [switchCountKey]: switchesSoFar 
-    })
-    
-    // Mark that the switch was confirmed (not just the modal shown)
-    const setSwitchConfirmedKey = `set${setIndex}_switch_confirmed_${totalPoints}`
-    await db.matches.update(matchId, { 
-      [setSwitchConfirmedKey]: true 
+        [switchCountKey]: newSwitchCount 
     })
     
     // Log court switch as an event
     await logEvent('court_switch', {
       setIndex: setIndex,
       totalPoints: totalPoints,
-      team_1Points: courtSwitchModal.team_1Points,
-      team_2Points: courtSwitchModal.team_2Points,
-      switchNumber: switchesSoFar
+        team_1Points: currentSet.team_1Points || 0,
+        team_2Points: currentSet.team_2Points || 0,
+        switchNumber: newSwitchCount
+      })
+    }
+    
+    // Mark that the switch was confirmed (not just the modal shown)
+    const setSwitchConfirmedKey = `set${setIndex}_switch_confirmed_${totalPoints}`
+    await db.matches.update(matchId, { 
+      [setSwitchConfirmedKey]: true 
     })
     
     // Close the modal
@@ -3100,28 +3884,47 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
           if (!prev || prev.countdown <= 1) {
             // Countdown finished, switch courts and close TTO modal
             if (prev && matchId && data?.set) {
+              // Perform court switch after TTO (async operation)
+              ;(async () => {
+                // Get current set data to ensure we have the latest scores
+                const currentSet = await db.sets.get(prev.set.id)
+                if (currentSet) {
               // Perform court switch after TTO
               const setIndex = prev.set.index
-              const totalPoints = prev.team_1Points + prev.team_2Points
+                  const totalPoints = (currentSet.team_1Points || 0) + (currentSet.team_2Points || 0)
+                  
+                  // Get current switch count
+                  const match = await db.matches.get(matchId)
+                  const switchCountKey = `set${setIndex}_switchCount`
+                  const currentSwitchCount = match?.[switchCountKey] || 0
+                  
+                  // Calculate expected switch number based on points
               const isSet3 = setIndex === 3
               const switchInterval = isSet3 ? 5 : 7
-              const switchesSoFar = Math.floor(totalPoints / switchInterval)
+                  const expectedSwitchCount = Math.floor(totalPoints / switchInterval)
+                  
+                  // Only increment if we haven't already switched for this point total
+                  if (currentSwitchCount < expectedSwitchCount) {
+                    // Increment the switch count by 1 - this will flip the teams
+                    const newSwitchCount = currentSwitchCount + 1
               
               // Store the number of switches for this set (THIS ACTUALLY SWITCHES THE COURTS VISUALLY)
-              const switchCountKey = `set${setIndex}_switchCount`
-              db.matches.update(matchId, { 
-                [switchCountKey]: switchesSoFar 
-              }).catch(() => {})
+                    await db.matches.update(matchId, { 
+                      [switchCountKey]: newSwitchCount 
+                    })
               
               // Log court switch as an event
-              logEvent('court_switch', {
+                    await logEvent('court_switch', {
                 setIndex: setIndex,
                 totalPoints: totalPoints,
-                team_1Points: prev.team_1Points,
-                team_2Points: prev.team_2Points,
-                switchNumber: switchesSoFar,
+                      team_1Points: currentSet.team_1Points || 0,
+                      team_2Points: currentSet.team_2Points || 0,
+                      switchNumber: newSwitchCount,
                 afterTTO: true
-              }).catch(() => {})
+                    })
+                  }
+                }
+              })().catch(() => {})
             }
             return null
           }
@@ -3136,12 +3939,90 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     }
   }, [technicalTOModal?.started, technicalTOModal?.countdown, matchId, data?.set, logEvent])
   
-  const stopTechnicalTO = useCallback(() => {
-    if (!technicalTOModal) return
+  // Handle MTO/RIT countdown
+  useEffect(() => {
+    if (mtoRitCountdownModal?.started && mtoRitCountdownModal.countdown > 0) {
+      const timer = setInterval(() => {
+        setMtoRitCountdownModal(prev => {
+          if (!prev || !prev.started || prev.countdown <= 0) {
+            return prev
+          }
+          return {
+            ...prev,
+            countdown: prev.countdown - 1
+          }
+        })
+      }, 1000)
+      
+      return () => clearInterval(timer)
+    }
+  }, [mtoRitCountdownModal?.started, mtoRitCountdownModal?.countdown])
+  
+  // Handle set transition countdown
+  useEffect(() => {
+    if (setTransitionModal && setTransitionCountdown > 0) {
+      const timer = setInterval(() => {
+        setSetTransitionCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(timer)
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+      
+      return () => clearInterval(timer)
+    }
+  }, [setTransitionModal, setTransitionCountdown])
+  
+  const stopTechnicalTO = useCallback(async () => {
+    if (!technicalTOModal || !matchId || !data?.set) return
+    
+    // Get current set data to ensure we have the latest scores
+    const currentSet = await db.sets.get(technicalTOModal.set.id)
+    if (!currentSet) {
+      setTechnicalTOModal(null)
+      return
+    }
+    
+    // Switch courts after TTO
+    const setIndex = technicalTOModal.set.index
+    const totalPoints = (currentSet.team_1Points || 0) + (currentSet.team_2Points || 0)
+    
+    // Get current switch count
+    const match = await db.matches.get(matchId)
+    const switchCountKey = `set${setIndex}_switchCount`
+    const currentSwitchCount = match?.[switchCountKey] || 0
+    
+    // Calculate expected switch number based on points
+    const isSet3 = setIndex === 3
+    const switchInterval = isSet3 ? 5 : 7
+    const expectedSwitchCount = Math.floor(totalPoints / switchInterval)
+    
+    // Only increment if we haven't already switched for this point total
+    if (currentSwitchCount < expectedSwitchCount) {
+      // Increment the switch count by 1 - this will flip the teams
+      const newSwitchCount = currentSwitchCount + 1
+      
+      // Store the number of switches for this set (THIS ACTUALLY SWITCHES THE COURTS VISUALLY)
+      await db.matches.update(matchId, { 
+        [switchCountKey]: newSwitchCount 
+      })
+      
+      // Log court switch as an event
+      await logEvent('court_switch', {
+        setIndex: setIndex,
+        totalPoints: totalPoints,
+        team_1Points: currentSet.team_1Points || 0,
+        team_2Points: currentSet.team_2Points || 0,
+        switchNumber: newSwitchCount,
+        afterTTO: true
+      })
+    }
     
     // Stop countdown and close TTO modal
     setTechnicalTOModal(null)
-  }, [technicalTOModal])
+  }, [technicalTOModal, matchId, data?.set, logEvent])
   
   const cancelTechnicalTO = useCallback(async () => {
     if (!technicalTOModal || !data?.events || !matchId) return
@@ -3229,17 +4110,17 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       // Reset court switch tracking for this set
       const setIndex = courtSwitchModal.set.index
       const switchCountKey = `set${setIndex}_switchCount`
-      const updateData = {}
-      
-      // Reset the switch count for this set
-      // Calculate what the switch count should be after undoing this point
-      const totalPoints = newTeam_1Points + newTeam_2Points
-      const isSet3 = setIndex === 3
-      const switchInterval = isSet3 ? 5 : 7
-      const newSwitchCount = Math.floor(totalPoints / switchInterval)
-      updateData[switchCountKey] = newSwitchCount
-      
-      await db.matches.update(matchId, updateData)
+        const updateData = {}
+        
+        // Reset the switch count for this set
+        // Calculate what the switch count should be after undoing this point
+        const totalPoints = newTeam_1Points + newTeam_2Points
+        const isSet3 = setIndex === 3
+        const switchInterval = isSet3 ? 5 : 7
+        const newSwitchCount = Math.floor(totalPoints / switchInterval)
+        updateData[switchCountKey] = newSwitchCount
+        
+        await db.matches.update(matchId, updateData)
     }
     
     setCourtSwitchModal(null)
@@ -3356,7 +4237,59 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
           
         </div>
         <div className="toolbar-center">
-          <div style={{ width: '100%' }}></div>
+          {/* Set counter and previous set results */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
+            {/* Set score counter */}
+            <div style={{ 
+              fontSize: '14px', 
+              fontWeight: 600,
+              color: 'var(--text)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}>
+              <span>Sets:</span>
+              <span style={{ color: 'var(--accent)' }}>{setScore.left}-{setScore.right}</span>
+            </div>
+            
+            {/* Previous set results - show all finished sets */}
+            {data?.sets && (() => {
+              const finishedSets = data.sets.filter(s => s.finished).sort((a, b) => a.index - b.index)
+              const currentLeftTeamKey = leftIsTeam_1 ? 'team_1' : 'team_2'
+              const currentRightTeamKey = leftIsTeam_1 ? 'team_2' : 'team_1'
+              
+              // Helper to convert to Roman numeral
+              const toRoman = (num) => {
+                const romanNumerals = ['I', 'II', 'III']
+                return romanNumerals[num - 1] || num.toString()
+              }
+              
+              if (finishedSets.length === 0) return null
+              
+              return (
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  {finishedSets.map(set => {
+                    // Always show from current left/right perspective
+                    const leftPoints = currentLeftTeamKey === 'team_1' ? set.team_1Points : set.team_2Points
+                    const rightPoints = currentRightTeamKey === 'team_1' ? set.team_1Points : set.team_2Points
+                    return (
+                      <div key={set.id} style={{ 
+                        fontSize: '12px', 
+                        fontWeight: 600,
+                        color: 'var(--muted)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}>
+                        <span style={{ fontSize: '11px', fontWeight: 700 }}>{toRoman(set.index)}</span>
+                        <span>{leftPoints}:{rightPoints}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+          </div>
         </div>
         <div className="toolbar-actions">
           {refereeConnectionEnabled && isAnyRefereeConnected && (
@@ -3381,125 +4314,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
               Call Referee
             </button>
           )}
-          <button 
-            className="secondary" 
-            onClick={() => setOptionsModal(true)}
-            style={{ background: '#22c55e', color: '#000', fontWeight: 600 }}
-          >
-            Options
-          </button>
-          <button 
-            className="secondary" 
-            onClick={async () => {
-              try {
-                const match = data?.match
-                if (!match) {
-                  alert('No match data available')
-                  return
-                }
-                
-                // Keep test matches completely offline - don't pass data to scoresheet
-                // If official match overwrites test match, show no data
-                if (match.test === true) {
-                  // Test match - store empty/null data (completely offline)
-                  sessionStorage.setItem('scoresheetData', JSON.stringify(null))
-                } else {
-                  // Official match - gather all match data for the scoresheet
-                  const allSets = data?.sets || []
-                  const allEvents = data?.events || []
-                  
-                  const scoresheetData = {
-                    match,
-                    team_1Team: data?.team_1Team,
-                    team_2Team: data?.team_2Team,
-                    team_1Players: data?.team_1Players || [],
-                    team_2Players: data?.team_2Players || [],
-                    sets: allSets,
-                    events: allEvents,
-                    sanctions: [] // TODO: Extract sanctions from events
-                  }
-                  
-                  // Store data in sessionStorage to pass to new window
-                  sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
-                }
-                
-                // Calculate optimal window size for A3 scoresheet (410mm x 287mm)
-                // At 96 DPI: ~1549px x 1084px, but add padding and controls
-                const scoresheetWidth = 410; // mm
-                const scoresheetHeight = 287; // mm
-                const mmToPx = 3.779527559; // 1mm = 3.779527559px at 96 DPI
-                const windowWidth = Math.max(1600, Math.min(screen.width - 100, scoresheetWidth * mmToPx + 200));
-                const windowHeight = Math.max(1200, Math.min(screen.height - 100, scoresheetHeight * mmToPx + 200));
-                
-                // Open scoresheet in new window with calculated size
-                const scoresheetWindow = window.open(
-                  '/scoresheet_beach.html', 
-                  '_blank', 
-                  `width=${Math.round(windowWidth)},height=${Math.round(windowHeight)},scrollbars=yes,resizable=yes`
-                )
-                
-                if (!scoresheetWindow) {
-                  alert('Please allow popups to view the scoresheet')
-                  return
-                }
-                
-                // Wait for window to load, then adjust zoom if needed
-                const adjustZoom = () => {
-                  try {
-                    if (scoresheetWindow.closed) return;
-                    
-                    // Try to set zoom to fit content (if browser supports it)
-                    const targetWidth = scoresheetWidth * mmToPx;
-                    const availableWidth = windowWidth - 200; // Account for padding/scrollbars
-                    const scale = Math.min(1, availableWidth / targetWidth);
-                    
-                    // Some browsers support document.body.style.zoom
-                    if (scoresheetWindow.document && scoresheetWindow.document.body) {
-                      scoresheetWindow.document.body.style.zoom = scale;
-                    }
-                    
-                    // Also try using CSS transform as fallback
-                    if (scoresheetWindow.document && scoresheetWindow.document.documentElement) {
-                      scoresheetWindow.document.documentElement.style.transform = `scale(${scale})`;
-                      scoresheetWindow.document.documentElement.style.transformOrigin = 'top left';
-                    }
-                  } catch (e) {
-                    // Cross-origin or other restrictions - that's okay
-                    // Will rely on window size and user can manually zoom
-                  }
-                };
-                
-                // Try multiple times as the window loads
-                setTimeout(adjustZoom, 100);
-                setTimeout(adjustZoom, 500);
-                setTimeout(adjustZoom, 1000);
-                
-                // Set up error listener for scoresheet window
-                const errorListener = (event) => {
-                  // Only accept messages from the scoresheet window
-                  if (event.data && event.data.type === 'SCORESHEET_ERROR') {
-                    setScoresheetErrorModal({
-                      error: event.data.error || 'Unknown error',
-                      details: event.data.details || event.data.stack || ''
-                    })
-                    window.removeEventListener('message', errorListener)
-                  }
-                }
-                
-                window.addEventListener('message', errorListener)
-                
-                // Clean up listener after 30 seconds (scoresheet should load by then)
-                setTimeout(() => {
-                  window.removeEventListener('message', errorListener)
-                }, 60000)
-              } catch (error) {
-                alert('Error opening scoresheet: ' + error.message)
-              }
-            }}
-            style={{ marginLeft: '8px' }}
-          >
-            🔍 Scoresheet
-          </button>
         </div>
       </div>
 
@@ -3636,7 +4450,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                 e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
               }}
             >
-              <div style={{ fontSize: '11px', color: 'var(--muted)', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Challenges remaining</div>
+              <div style={{ fontSize: '11px', color: 'var(--muted)', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>BMP remaining</div>
               <div style={{ 
                 fontSize: '24px', 
                 fontWeight: 700,
@@ -3644,14 +4458,16 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: (2 - getChallengesUsed(leftIsTeam_1 ? 'team_1' : 'team_2')) <= 0 ? '#ef4444' : '#f97316'
+                color: (2 - getChallengesUsed(leftIsTeam_1 ? 'team_1' : 'team_2')) <= 0 ? '#ef4444' : 'inherit'
               }}>{2 - getChallengesUsed(leftIsTeam_1 ? 'team_1' : 'team_2')}</div>
             </div>
           </div>
+          {/* Time-out and BMP request buttons on same row */}
+          <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
           <button
             onClick={() => handleTimeout('left')}
             disabled={getTimeoutsUsed('left') >= 1 || rallyStatus === 'in_play'}
-            style={{ width: '100%', marginBottom: '8px' }}
+              style={{ flex: 1 }}
           >
             Time-out
           </button>
@@ -3663,8 +4479,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
             }}
             disabled={!canRequestChallenge(leftIsTeam_1 ? 'team_1' : 'team_2')}
             style={{ 
-              width: '100%', 
-              marginBottom: '8px',
+                flex: 1,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -3677,15 +4492,16 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
           >
             <img 
               src={challengeIcon} 
-              alt="Challenge" 
+                alt="BMP" 
               style={{ width: '20px', height: '20px' }}
             />
-            Challenge
+              BMP
           </button>
+          </div>
           
           {/* Sanctions: Improper Request, Delay Warning, Delay Penalty */}
-          <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
-            {!data?.match?.sanctions?.improperRequestLeft && (
+          <div style={{ display: 'flex', gap: '4px' }}>
+            {!getLeftTeamSanctions.improperRequest && (
               <button
                 onClick={() => handleImproperRequest('left')}
                 disabled={rallyStatus === 'in_play'}
@@ -3694,7 +4510,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                 Improper Request
               </button>
             )}
-            {!data?.match?.sanctions?.delayWarningLeft ? (
+            {!getLeftTeamSanctions.delayWarning ? (
               <button
                 onClick={() => handleDelayWarning('left')}
                 disabled={rallyStatus === 'in_play'}
@@ -3715,7 +4531,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
           
           {/* Status boxes for team sanctions */}
           <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            {data?.match?.sanctions?.improperRequestLeft && (
+            {getLeftTeamSanctions.improperRequest && (
               <div style={{ 
                 padding: '4px 8px', 
                 fontSize: '10px', 
@@ -3727,7 +4543,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                 Sanctioned with an improper request
               </div>
             )}
-            {data?.match?.sanctions?.delayWarningLeft && (
+            {getLeftTeamSanctions.delayWarning && (
               <div style={{ 
                 padding: '4px 8px', 
                 fontSize: '10px', 
@@ -3797,42 +4613,6 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', width: '100%' }}>
                 {/* Current score */}
                 {renderScoreDisplay({ margin: '0 auto' })}
-                
-                {/* Previous set scores (only show if set > 1) */}
-                {data.set.index > 1 && data.sets && (() => {
-                  const previousSets = data.sets.filter(s => s.finished && s.index < data.set.index).sort((a, b) => a.index - b.index)
-                  const currentLeftTeamKey = leftIsTeam_1 ? 'team_1' : 'team_2'
-                  const currentRightTeamKey = leftIsTeam_1 ? 'team_2' : 'team_1'
-                  
-                  // Helper to convert to Roman numeral
-                  const toRoman = (num) => {
-                    const romanNumerals = ['I', 'II', 'III', 'IV', 'V']
-                    return romanNumerals[num - 1] || num.toString()
-                  }
-                  
-                  return (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, auto)', gap: '12px', alignItems: 'center', justifyContent: 'center' }}>
-                      {previousSets.map(set => {
-                        // Always show from current left/right perspective
-                        const leftPoints = currentLeftTeamKey === 'team_1' ? set.team_1Points : set.team_2Points
-                        const rightPoints = currentRightTeamKey === 'team_1' ? set.team_1Points : set.team_2Points
-                        return (
-                          <div key={set.id} style={{ 
-                            fontSize: '12px', 
-                            fontWeight: 600,
-                            color: 'var(--muted)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px'
-                          }}>
-                            <span style={{ fontSize: '11px', fontWeight: 700 }}>{toRoman(set.index)}</span>
-                            <span>{leftPoints}:{rightPoints}</span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )
-                })()}
               </div>
             </div>
             <div>
@@ -3947,12 +4727,13 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                     const playerNumber = parseInt(displayNumber) || (idx === 0 ? 1 : 2) // Fallback to position if no number
                     const isServing = currentServeTeam === teamKey && servingPlayerNumber !== null && playerNumber === servingPlayerNumber
                     
-                    // Get sanctions for this player
-                    const sanctions = getPlayerSanctions(teamKey, player.number)
+                    // Get sanctions for this player - use playerNumber from coin toss data, not player.number
+                    const sanctions = getPlayerSanctions(teamKey, playerNumber)
                     const hasWarning = sanctions.some(s => s.payload?.type === 'warning')
                     const hasPenalty = sanctions.some(s => s.payload?.type === 'penalty')
                     const hasExpulsion = sanctions.some(s => s.payload?.type === 'expulsion')
                     const hasDisqualification = sanctions.some(s => s.payload?.type === 'disqualification')
+                    const penaltyCount = getPlayerPenaltyCount(teamKey, playerNumber)
                     
                     return (
                       <div 
@@ -3994,17 +4775,24 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                               position: 'absolute',
                               left: '-42px', 
                               top: '50%',
-                              transform: 'translateY(-50%)'
+                              transform: 'translateY(-50%)',
+                              pointerEvents: 'none',
+                              zIndex: 0
                             }}
                           />
                         )}
                         <div 
                           className="court-player"
-                          onClick={(e) => handlePlayerClick(teamKey, player.position, displayNumber || player.number, e)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const playerNum = displayNumber ? (isNaN(Number(displayNumber)) ? null : Number(displayNumber)) : (player.number !== null && player.number !== undefined ? Number(player.number) : null)
+                            handlePlayerClick(teamKey, player.position, playerNum, e)
+                          }}
                           style={{ 
                             cursor: 'pointer',
                             transition: 'transform 0.2s',
-                            position: 'relative'
+                            position: 'relative',
+                            zIndex: 1
                           }}
                           onMouseEnter={(e) => {
                               e.currentTarget.style.transform = 'scale(1.05)'
@@ -4093,7 +4881,14 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                                   {(hasWarning || hasDisqualification) && (
                                     <div className="sanction-card yellow" style={{ width: '8px', height: '11px', boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: '1px' }}></div>
                                   )}
-                                  {(hasPenalty || hasDisqualification) && (
+                                  {/* Show 2 red cards if player has 2 penalties, otherwise show 1 */}
+                                  {penaltyCount >= 2 && (
+                                    <>
+                                      <div className="sanction-card red" style={{ width: '8px', height: '11px', boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: '1px' }}></div>
+                                      <div className="sanction-card red" style={{ width: '8px', height: '11px', boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: '1px' }}></div>
+                                    </>
+                                  )}
+                                  {(hasPenalty || hasDisqualification) && penaltyCount < 2 && (
                                     <div className="sanction-card red" style={{ width: '8px', height: '11px', boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: '1px' }}></div>
                                   )}
                                 </div>
@@ -4159,6 +4954,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                       }}>
                         1<sup style={{ fontSize: '8px' }}>st</sup> Ref
                       </span>
+                      {/* Always show name if it exists, regardless of connection status */}
                       {ref1Name && (
                         <span style={{ 
                           color: 'rgba(255, 255, 255, 0.8)',
@@ -4172,6 +4968,34 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                   )
                 })()}
               </div>
+
+              {/* Referee BMP Request button - right below 1st referee icon, only visible when rally is in play */}
+              {rallyStatus === 'in_play' && (
+                <button
+                  onClick={handleRefereeBMPRequest}
+                  style={{
+                    position: 'absolute',
+                    top: '40px', // Position below the 1st referee icon
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    padding: '6px 12px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    backgroundColor: '#8b5cf6',
+                    color: '#fff',
+                    border: '1px solid #7c3aed',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    zIndex: 10,
+                    whiteSpace: 'nowrap',
+                    transition: 'background 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#7c3aed'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = '#8b5cf6'}
+                >
+                  Referee BMP
+                </button>
+              )}
 
               {/* 2nd Referee Connection Indicator - Bottom of net */}
               <div
@@ -4224,6 +5048,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                       }}>
                         2<sup style={{ fontSize: '8px' }}>nd</sup> Ref
                       </span>
+                      {/* Always show name if it exists, regardless of connection status */}
                       {ref2Name && (
                         <span style={{ 
                           color: 'rgba(255, 255, 255, 0.8)',
@@ -4296,12 +5121,14 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                     const playerNumber = parseInt(displayNumber) || (idx === 0 ? 1 : 2) // Fallback to position if no number
                     const isServing = currentServeTeam === teamKey && servingPlayerNumber !== null && playerNumber === servingPlayerNumber
                     
-                    // Get sanctions for this player
-                    const sanctions = getPlayerSanctions(teamKey, player.number)
+                    // Get sanctions for this player - use playerNumber from coin toss data, not player.number
+                    const sanctions = getPlayerSanctions(teamKey, playerNumber)
                     const hasWarning = sanctions.some(s => s.payload?.type === 'warning')
                     const hasPenalty = sanctions.some(s => s.payload?.type === 'penalty')
                     const hasExpulsion = sanctions.some(s => s.payload?.type === 'expulsion')
                     const hasDisqualification = sanctions.some(s => s.payload?.type === 'disqualification')
+                    // Count penalties (including rude_conduct which is treated as penalty)
+                    const penaltyCount = getPlayerPenaltyCount(teamKey, playerNumber)
                     
                     return (
                       <div 
@@ -4343,17 +5170,24 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                               position: 'absolute',
                               right: '-42px',
                               top: '50%',
-                              transform: 'translateY(-50%)'
+                              transform: 'translateY(-50%)',
+                              pointerEvents: 'none',
+                              zIndex: 0
                             }}
                           />
                         )}
                         <div 
                           className="court-player"
-                          onClick={(e) => handlePlayerClick(teamKey, player.position, displayNumber || player.number, e)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const playerNum = displayNumber ? (isNaN(Number(displayNumber)) ? null : Number(displayNumber)) : (player.number !== null && player.number !== undefined ? Number(player.number) : null)
+                            handlePlayerClick(teamKey, player.position, playerNum, e)
+                          }}
                           style={{ 
                             cursor: 'pointer',
                             transition: 'transform 0.2s',
-                            position: 'relative'
+                            position: 'relative',
+                            zIndex: 1
                           }}
                           onMouseEnter={(e) => {
                               e.currentTarget.style.transform = 'scale(1.05)'
@@ -4442,7 +5276,14 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                                   {(hasWarning || hasDisqualification) && (
                                     <div className="sanction-card yellow" style={{ width: '8px', height: '11px', boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: '1px' }}></div>
                                   )}
-                                  {(hasPenalty || hasDisqualification) && (
+                                  {/* Show 2 red cards if player has 2 penalties, otherwise show 1 */}
+                                  {penaltyCount >= 2 && (
+                                    <>
+                                      <div className="sanction-card red" style={{ width: '8px', height: '11px', boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: '1px' }}></div>
+                                      <div className="sanction-card red" style={{ width: '8px', height: '11px', boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: '1px' }}></div>
+                                    </>
+                                  )}
+                                  {(hasPenalty || hasDisqualification) && penaltyCount < 2 && (
                                     <div className="sanction-card red" style={{ width: '8px', height: '11px', boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: '1px' }}></div>
                                   )}
                                 </div>
@@ -4572,7 +5413,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                 e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
               }}
             >
-              <div style={{ fontSize: '11px', color: 'var(--muted)', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Challenges remaining</div>
+              <div style={{ fontSize: '11px', color: 'var(--muted)', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>BMP remaining</div>
               <div style={{ 
                 fontSize: '24px', 
                 fontWeight: 700,
@@ -4580,14 +5421,16 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: (2 - getChallengesUsed(leftIsTeam_1 ? 'team_2' : 'team_1')) <= 0 ? '#ef4444' : '#f97316'
+                color: (2 - getChallengesUsed(leftIsTeam_1 ? 'team_2' : 'team_1')) <= 0 ? '#ef4444' : 'inherit'
               }}>{2 - getChallengesUsed(leftIsTeam_1 ? 'team_2' : 'team_1')}</div>
             </div>
           </div>
+          {/* Time-out and BMP request buttons on same row */}
+          <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
           <button
             onClick={() => handleTimeout('right')}
             disabled={getTimeoutsUsed('right') >= 1 || rallyStatus === 'in_play'}
-            style={{ width: '100%', marginBottom: '8px' }}
+              style={{ flex: 1 }}
           >
             Time-out
           </button>
@@ -4599,8 +5442,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
             }}
             disabled={!canRequestChallenge(leftIsTeam_1 ? 'team_2' : 'team_1')}
             style={{ 
-              width: '100%', 
-              marginBottom: '8px',
+                flex: 1,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -4613,15 +5455,16 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
           >
             <img 
               src={challengeIcon} 
-              alt="Challenge" 
+                alt="BMP" 
               style={{ width: '20px', height: '20px' }}
             />
-            Challenge
+              BMP
           </button>
+          </div>
           
           {/* Sanctions: Improper Request, Delay Warning, Delay Penalty */}
-          <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
-            {!data?.match?.sanctions?.improperRequestRight && (
+          <div style={{ display: 'flex', gap: '4px' }}>
+            {!getRightTeamSanctions.improperRequest && (
               <button
                 onClick={() => handleImproperRequest('right')}
                 disabled={rallyStatus === 'in_play'}
@@ -4630,7 +5473,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                 Improper Request
               </button>
             )}
-            {!data?.match?.sanctions?.delayWarningRight ? (
+            {!getRightTeamSanctions.delayWarning ? (
               <button
                 onClick={() => handleDelayWarning('right')}
                 disabled={rallyStatus === 'in_play'}
@@ -4651,7 +5494,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
           
           {/* Status boxes for team sanctions */}
           <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            {data?.match?.sanctions?.improperRequestRight && (
+            {getRightTeamSanctions.improperRequest && (
               <div style={{ 
                 padding: '4px 8px', 
                 fontSize: '10px', 
@@ -4663,7 +5506,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                 Sanctioned with an improper request
               </div>
             )}
-            {data?.match?.sanctions?.delayWarningRight && (
+            {getRightTeamSanctions.delayWarning && (
               <div style={{ 
                 padding: '4px 8px', 
                 fontSize: '10px', 
@@ -4727,81 +5570,265 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         </aside>
       </div>
 
+      {/* Bottom Action Buttons */}
+      <div style={{ 
+        position: 'fixed', 
+        bottom: 0, 
+        left: 0, 
+        right: 0, 
+        padding: '16px', 
+        background: 'rgba(17, 24, 39, 0.95)', 
+        borderTop: '1px solid rgba(255,255,255,0.1)',
+        display: 'flex',
+        justifyContent: 'center',
+        gap: '12px',
+        zIndex: 1000,
+        backdropFilter: 'blur(10px)'
+      }}>
+        <button 
+          className="secondary" 
+          onClick={() => setOptionsModal(true)}
+          style={{ background: '#22c55e', color: '#000', fontWeight: 600, padding: '10px 20px' }}
+        >
+          Menu
+        </button>
+        <button 
+          className="secondary" 
+          onClick={() => {
+            setManualCourtSwitchConfirm(true)
+          }}
+          style={{ background: '#22c55e', color: '#000', fontWeight: 600, padding: '10px 20px' }}
+        >
+          Manual Court Switch
+        </button>
+        <button 
+          className="secondary" 
+          onClick={() => setSpecialCasesModal(true)}
+          style={{ background: '#22c55e', color: '#000', fontWeight: 600, padding: '10px 20px' }}
+        >
+          Forfait/Protest
+        </button>
+        <button 
+          className="secondary" 
+          onClick={() => {
+            try {
+              const match = data?.match
+              if (!match) {
+                alert('No match data available')
+                return
+              }
+              
+              // Gather all match data for the scoresheet (always refresh data)
+              const allSets = data?.sets || []
+              const allEvents = data?.events || []
+              
+              const scoresheetData = {
+                match,
+                team_1Team: data?.team_1Team,
+                team_2Team: data?.team_2Team,
+                team_1Players: data?.team_1Players || [],
+                team_2Players: data?.team_2Players || [],
+                sets: allSets,
+                events: allEvents,
+                sanctions: [] // TODO: Extract sanctions from events
+              }
+              
+              // Store data in sessionStorage
+              sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
+              
+              // Open scoresheet in new tab (just render HTML, no PDF generation)
+              window.open('/scoresheet_beach.html', '_blank')
+            } catch (error) {
+              console.error('Error opening scoresheet:', error)
+              alert('Error opening scoresheet: ' + error.message)
+            }
+          }}
+          style={{ background: '#22c55e', color: '#000', fontWeight: 600, padding: '10px 20px' }}
+        >
+          🔍 Scoresheet
+        </button>
+      </div>
 
-      {/* Options Modal */}
+      {/* Menu Modal */}
       {optionsModal && (
         <Modal
-          title="Options"
+          title="Menu"
           open={true}
           onClose={() => setOptionsModal(false)}
-          width={400}
+          width={500}
         >
           <div style={{ padding: '20px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <button
-                className="secondary"
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Top Section: Action Log and Manual Changes */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div
                 onClick={() => {
                   setShowLogs(true)
                   setOptionsModal(false)
                 }}
-                style={{ width: '100%', textAlign: 'left', padding: '12px 16px' }}
-              >
-                Show Action Log
-              </button>
-              <button
-                className="secondary"
+                  style={{
+                    padding: '16px',
+                    background: 'rgba(255,255,255,0.05)',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+                    e.currentTarget.style.transform = 'translateY(-2px)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                    e.currentTarget.style.transform = 'translateY(0)'
+                  }}
+                >
+                  <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>Action Log</div>
+                  <div style={{ fontSize: '12px', color: 'var(--muted)' }}>View game history</div>
+                </div>
+                <div
                 onClick={() => {
-                  setShowSanctions(true)
+                    setManualChangesMenuModal(true)
                   setOptionsModal(false)
                 }}
-                style={{ width: '100%', textAlign: 'left', padding: '12px 16px' }}
-              >
-                Show Sanctions and Results
-              </button>
-              <button
-                className="secondary"
+                  style={{
+                    padding: '16px',
+                    background: 'rgba(255,255,255,0.05)',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+                    e.currentTarget.style.transform = 'translateY(-2px)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                    e.currentTarget.style.transform = 'translateY(0)'
+                  }}
+                >
+                  <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>Manual Changes</div>
+                  <div style={{ fontSize: '12px', color: 'var(--muted)' }}>Edit scores & data</div>
+                </div>
+              </div>
+
+              {/* Middle Section: Show Sanctions, Results, and Remarks */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div
                 onClick={() => {
-                  setShowManualPanel(true)
+                    setShowSanctions(true)
                   setOptionsModal(false)
                 }}
-                style={{ width: '100%', textAlign: 'left', padding: '12px 16px' }}
-              >
-                Manual Changes
-              </button>
-              <button
-                className="secondary"
+                  style={{
+                    padding: '16px',
+                    background: 'rgba(255,255,255,0.05)',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+                    e.currentTarget.style.transform = 'translateY(-2px)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                    e.currentTarget.style.transform = 'translateY(0)'
+                  }}
+                >
+                  <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>Sanctions & Results</div>
+                  <div style={{ fontSize: '12px', color: 'var(--muted)' }}>View sanctions</div>
+                </div>
+                <div
                 onClick={() => {
                   setShowRemarks(true)
                   setOptionsModal(false)
                 }}
-                style={{ width: '100%', textAlign: 'left', padding: '12px 16px' }}
-              >
-                Open Remarks Recording
-              </button>
+                  style={{
+                    padding: '16px',
+                    background: 'rgba(255,255,255,0.05)',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+                    e.currentTarget.style.transform = 'translateY(-2px)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                    e.currentTarget.style.transform = 'translateY(0)'
+                  }}
+                >
+                  <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>Remarks</div>
+                  <div style={{ fontSize: '12px', color: 'var(--muted)' }}>Record remarks</div>
+                </div>
+              </div>
+
+              {/* Show Match Setup and Coin Toss */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               {onOpenMatchSetup && (
-                <button
-                  className="secondary"
+                  <div
                   onClick={() => {
                     onOpenMatchSetup()
                     setOptionsModal(false)
                   }}
-                  style={{ width: '100%', textAlign: 'left', padding: '12px 16px' }}
-                >
-                  Show Match Setup
-                </button>
+                    style={{
+                      padding: '16px',
+                      background: 'rgba(255,255,255,0.05)',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+                      e.currentTarget.style.transform = 'translateY(-2px)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                      e.currentTarget.style.transform = 'translateY(0)'
+                    }}
+                  >
+                    <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>Match Setup</div>
+                    <div style={{ fontSize: '12px', color: 'var(--muted)' }}>View match details</div>
+                  </div>
               )}
               {onOpenCoinToss && (
-                <button
-                  className="secondary"
+                  <div
                   onClick={() => {
                     onOpenCoinToss()
                     setOptionsModal(false)
                   }}
-                  style={{ width: '100%', textAlign: 'left', padding: '12px 16px' }}
-                >
-                  Show Coin Toss
-                </button>
-              )}
+                    style={{
+                      padding: '16px',
+                      background: 'rgba(255,255,255,0.05)',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+                      e.currentTarget.style.transform = 'translateY(-2px)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                      e.currentTarget.style.transform = 'translateY(0)'
+                    }}
+                  >
+                    <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>Coin Toss</div>
+                    <div style={{ fontSize: '12px', color: 'var(--muted)' }}>View coin toss</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Downloads Section */}
+              <div style={{ marginTop: '8px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px', color: 'var(--muted)' }}>Downloads</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <button
                 className="secondary"
                 onClick={async () => {
@@ -4844,19 +5871,9 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                     alert('Error exporting database data. Please try again.')
                   }
                 }}
-                style={{ width: '100%', textAlign: 'left', padding: '12px 16px', marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}
+                    style={{ width: '100%', textAlign: 'left', padding: '12px 16px' }}
               >
                 📥 Download Full Database (JSON)
-              </button>
-              <button
-                className="secondary"
-                onClick={() => {
-                  setManualCourtSwitchConfirm(true)
-                  setOptionsModal(false)
-                }}
-                style={{ width: '100%', textAlign: 'left', padding: '12px 16px', marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}
-              >
-                🔄 Manual Court Switch
               </button>
               <button
                 className="secondary"
@@ -4937,6 +5954,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
               >
                 📥 Download Game History (Actions List)
               </button>
+                </div>
+              </div>
             </div>
           </div>
         </Modal>
@@ -5564,6 +6583,241 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         </Modal>
       )}
 
+      {/* Manual Changes Main Menu Modal */}
+      {manualChangesMenuModal && (
+        <Modal
+          title="Manual Changes"
+          open={true}
+          onClose={() => setManualChangesMenuModal(false)}
+          width={700}
+        >
+          <div style={{ padding: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              {/* Change Set Count */}
+              <div
+                onClick={() => {
+                  setManualChangeSetCountModal(true)
+                  setManualChangesMenuModal(false)
+                }}
+                style={{
+                  padding: '20px',
+                  background: 'rgba(255,255,255,0.05)',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+                  e.currentTarget.style.transform = 'translateY(-2px)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                  e.currentTarget.style.transform = 'translateY(0)'
+                }}
+              >
+                <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>Change Set Count</div>
+                <div style={{ fontSize: '12px', color: 'var(--muted)' }}>Modify set scores and winners</div>
+              </div>
+
+              {/* Change Current Score */}
+              <div
+                onClick={() => {
+                  setManualChangeCurrentScoreModal(true)
+                  setManualChangesMenuModal(false)
+                }}
+                style={{
+                  padding: '20px',
+                  background: 'rgba(255,255,255,0.05)',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+                  e.currentTarget.style.transform = 'translateY(-2px)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                  e.currentTarget.style.transform = 'translateY(0)'
+                }}
+              >
+                <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>Change Current Score</div>
+                <div style={{ fontSize: '12px', color: 'var(--muted)' }}>Modify current set score</div>
+              </div>
+
+              {/* Change Last Set Points */}
+              <div
+                onClick={() => {
+                  if (data?.sets && data.sets.length > 0) {
+                    const lastSet = data.sets.sort((a, b) => b.index - a.index)[0]
+                    setManualChangeLastSetPointsModal({ setIndex: lastSet.index, setId: lastSet.id })
+                    setManualChangesMenuModal(false)
+                  }
+                }}
+                style={{
+                  padding: '20px',
+                  background: 'rgba(255,255,255,0.05)',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+                  e.currentTarget.style.transform = 'translateY(-2px)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                  e.currentTarget.style.transform = 'translateY(0)'
+                }}
+              >
+                <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>Change Last Set Points</div>
+                <div style={{ fontSize: '12px', color: 'var(--muted)' }}>Modify points in last completed set</div>
+              </div>
+
+              {/* Interrupt Match */}
+              <div
+                onClick={() => {
+                  setManualInterruptMatchModal(true)
+                  setManualChangesMenuModal(false)
+                }}
+                style={{
+                  padding: '20px',
+                  background: 'rgba(255,255,255,0.05)',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+                  e.currentTarget.style.transform = 'translateY(-2px)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                  e.currentTarget.style.transform = 'translateY(0)'
+                }}
+              >
+                <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>Interrupt Match</div>
+                <div style={{ fontSize: '12px', color: 'var(--muted)' }}>Pause or interrupt the match</div>
+              </div>
+
+              {/* Modify Sanctions */}
+              <div
+                onClick={() => {
+                  setEditSanctionsModal(true)
+                  setManualChangesMenuModal(false)
+                }}
+                style={{
+                  padding: '20px',
+                  background: 'rgba(255,255,255,0.05)',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+                  e.currentTarget.style.transform = 'translateY(-2px)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                  e.currentTarget.style.transform = 'translateY(0)'
+                }}
+              >
+                <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>Modify Sanctions</div>
+                <div style={{ fontSize: '12px', color: 'var(--muted)' }}>Add, edit, or remove sanctions</div>
+              </div>
+
+              {/* Modify Team Rosters */}
+              <div
+                onClick={() => {
+                  // Show team selection - user can click on the team they want to edit
+                  // For now, open team 1 roster, but ideally should show a submenu
+                  setEditRosterModal('team_1')
+                  setManualChangesMenuModal(false)
+                }}
+                style={{
+                  padding: '20px',
+                  background: 'rgba(255,255,255,0.05)',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+                  e.currentTarget.style.transform = 'translateY(-2px)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                  e.currentTarget.style.transform = 'translateY(0)'
+                }}
+              >
+                <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>Modify Team Rosters</div>
+                <div style={{ fontSize: '12px', color: 'var(--muted)' }}>Edit player information</div>
+              </div>
+
+              {/* Modify Lineups, Serve, Sides */}
+              <div
+                onClick={() => {
+                  setManualModifyLineupsModal(true)
+                  setManualChangesMenuModal(false)
+                }}
+                style={{
+                  padding: '20px',
+                  background: 'rgba(255,255,255,0.05)',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+                  e.currentTarget.style.transform = 'translateY(-2px)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                  e.currentTarget.style.transform = 'translateY(0)'
+                }}
+              >
+                <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>Modify Lineups, Serve, Sides</div>
+                <div style={{ fontSize: '12px', color: 'var(--muted)' }}>Change lineups, serving order, and court sides</div>
+              </div>
+
+              {/* Modify Timeouts */}
+              <div
+                onClick={() => {
+                  setManualModifyTimeoutsModal(true)
+                  setManualChangesMenuModal(false)
+                }}
+                style={{
+                  padding: '20px',
+                  background: 'rgba(255,255,255,0.05)',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+                  e.currentTarget.style.transform = 'translateY(-2px)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                  e.currentTarget.style.transform = 'translateY(0)'
+                }}
+              >
+                <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>Modify Timeouts</div>
+                <div style={{ fontSize: '12px', color: 'var(--muted)' }}>Edit timeout records</div>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {/* Edit Roster Modal */}
       {editRosterModal && (
         <Modal
@@ -5993,6 +7247,454 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
           </Modal>
       )}
 
+      {/* Manual Change: Set Count Modal */}
+      {manualChangeSetCountModal && (
+        <Modal
+          title="Change Set Count"
+          open={true}
+          onClose={() => setManualChangeSetCountModal(false)}
+          width={600}
+        >
+          <div style={{ padding: '20px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {data?.sets && data.sets.sort((a, b) => a.index - b.index).map(set => {
+                const teamALabel = data?.match?.coinTossTeamA === 'team_1' ? 'A' : 'B'
+                const teamBLabel = data?.match?.coinTossTeamB === 'team_1' ? 'A' : 'B'
+                const setTeamAKey = data?.match?.coinTossTeamA === 'team_1' ? 'team_1' : 'team_2'
+                const setTeamBKey = data?.match?.coinTossTeamB === 'team_1' ? 'team_1' : 'team_2'
+                const teamAPoints = set[setTeamAKey === 'team_1' ? 'team_1Points' : 'team_2Points'] || 0
+                const teamBPoints = set[setTeamBKey === 'team_1' ? 'team_1Points' : 'team_2Points'] || 0
+                
+                return (
+                  <div key={set.id} style={{ padding: '16px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                    <div style={{ fontWeight: 600, marginBottom: '12px' }}>Set {set.index}</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', alignItems: 'center' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px' }}>Team {teamALabel} Points</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={teamAPoints}
+                          onChange={async (e) => {
+                            const points = Math.max(0, parseInt(e.target.value) || 0)
+                            const field = setTeamAKey === 'team_1' ? 'team_1Points' : 'team_2Points'
+                            await db.sets.update(set.id, { [field]: points })
+                            await logEvent('manual_change', {
+                              type: 'set_score',
+                              setIndex: set.index,
+                              team: setTeamAKey,
+                              oldValue: teamAPoints,
+                              newValue: points
+                            })
+                          }}
+                          style={{ width: '100%', padding: '8px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: 'var(--text)' }}
+                        />
+                      </div>
+                      <div style={{ textAlign: 'center', fontSize: '20px', fontWeight: 600 }}>:</div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px' }}>Team {teamBLabel} Points</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={teamBPoints}
+                          onChange={async (e) => {
+                            const points = Math.max(0, parseInt(e.target.value) || 0)
+                            const field = setTeamBKey === 'team_1' ? 'team_1Points' : 'team_2Points'
+                            await db.sets.update(set.id, { [field]: points })
+                            await logEvent('manual_change', {
+                              type: 'set_score',
+                              setIndex: set.index,
+                              team: setTeamBKey,
+                              oldValue: teamBPoints,
+                              newValue: points
+                            })
+                          }}
+                          style={{ width: '100%', padding: '8px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: 'var(--text)' }}
+                        />
+                      </div>
+                    </div>
+                    <div style={{ marginTop: '12px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={set.finished || false}
+                          onChange={async (e) => {
+                            await db.sets.update(set.id, { finished: e.target.checked })
+                            if (e.target.checked) {
+                              const winner = teamAPoints > teamBPoints ? setTeamAKey : (teamBPoints > teamAPoints ? setTeamBKey : null)
+                              if (winner) {
+                                await db.sets.update(set.id, { winner })
+                              }
+                            }
+                            await logEvent('manual_change', {
+                              type: 'set_finished',
+                              setIndex: set.index,
+                              finished: e.target.checked
+                            })
+                          }}
+                        />
+                        <span style={{ fontSize: '12px' }}>Set finished</span>
+                      </label>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Manual Change: Current Score Modal */}
+      {manualChangeCurrentScoreModal && data?.set && (
+        <Modal
+          title="Change Current Score"
+          open={true}
+          onClose={() => setManualChangeCurrentScoreModal(false)}
+          width={500}
+        >
+          <div style={{ padding: '20px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ fontWeight: 600, marginBottom: '8px' }}>Set {data.set.index}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', alignItems: 'center' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px' }}>Team {leftIsTeam_1 ? (data?.match?.coinTossTeamA === 'team_1' ? 'A' : 'B') : (data?.match?.coinTossTeamB === 'team_1' ? 'A' : 'B')} Points</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={leftIsTeam_1 ? (data.set.team_1Points || 0) : (data.set.team_2Points || 0)}
+                    onChange={async (e) => {
+                      const points = Math.max(0, parseInt(e.target.value) || 0)
+                      const field = leftIsTeam_1 ? 'team_1Points' : 'team_2Points'
+                      const oldValue = data.set[field] || 0
+                      await db.sets.update(data.set.id, { [field]: points })
+                      await logEvent('manual_change', {
+                        type: 'current_score',
+                        setIndex: data.set.index,
+                        team: leftIsTeam_1 ? 'team_1' : 'team_2',
+                        oldValue,
+                        newValue: points
+                      })
+                    }}
+                    style={{ width: '100%', padding: '8px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: 'var(--text)' }}
+                  />
+                </div>
+                <div style={{ textAlign: 'center', fontSize: '20px', fontWeight: 600 }}>:</div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px' }}>Team {leftIsTeam_1 ? (data?.match?.coinTossTeamB === 'team_1' ? 'A' : 'B') : (data?.match?.coinTossTeamA === 'team_1' ? 'A' : 'B')} Points</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={leftIsTeam_1 ? (data.set.team_2Points || 0) : (data.set.team_1Points || 0)}
+                    onChange={async (e) => {
+                      const points = Math.max(0, parseInt(e.target.value) || 0)
+                      const field = leftIsTeam_1 ? 'team_2Points' : 'team_1Points'
+                      const oldValue = data.set[field] || 0
+                      await db.sets.update(data.set.id, { [field]: points })
+                      await logEvent('manual_change', {
+                        type: 'current_score',
+                        setIndex: data.set.index,
+                        team: leftIsTeam_1 ? 'team_2' : 'team_1',
+                        oldValue,
+                        newValue: points
+                      })
+                    }}
+                    style={{ width: '100%', padding: '8px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: 'var(--text)' }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Manual Change: Last Set Points Modal */}
+      {manualChangeLastSetPointsModal && (
+        <Modal
+          title="Change Last Set Points"
+          open={true}
+          onClose={() => setManualChangeLastSetPointsModal(null)}
+          width={500}
+        >
+          <div style={{ padding: '20px' }}>
+            {(() => {
+              const set = data?.sets?.find(s => s.id === manualChangeLastSetPointsModal.setId)
+              if (!set) return <div>Set not found</div>
+              
+              const teamALabel = data?.match?.coinTossTeamA === 'team_1' ? 'A' : 'B'
+              const teamBLabel = data?.match?.coinTossTeamB === 'team_1' ? 'A' : 'B'
+              const setTeamAKey = data?.match?.coinTossTeamA === 'team_1' ? 'team_1' : 'team_2'
+              const setTeamBKey = data?.match?.coinTossTeamB === 'team_1' ? 'team_1' : 'team_2'
+              const teamAPoints = set[setTeamAKey === 'team_1' ? 'team_1Points' : 'team_2Points'] || 0
+              const teamBPoints = set[setTeamBKey === 'team_1' ? 'team_1Points' : 'team_2Points'] || 0
+              
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ fontWeight: 600, marginBottom: '8px' }}>Set {set.index}</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', alignItems: 'center' }}>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px' }}>Team {teamALabel} Points</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={teamAPoints}
+                        onChange={async (e) => {
+                          const points = Math.max(0, parseInt(e.target.value) || 0)
+                          const field = setTeamAKey === 'team_1' ? 'team_1Points' : 'team_2Points'
+                          await db.sets.update(set.id, { [field]: points })
+                          await logEvent('manual_change', {
+                            type: 'last_set_points',
+                            setIndex: set.index,
+                            team: setTeamAKey,
+                            oldValue: teamAPoints,
+                            newValue: points
+                          })
+                        }}
+                        style={{ width: '100%', padding: '8px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: 'var(--text)' }}
+                      />
+                    </div>
+                    <div style={{ textAlign: 'center', fontSize: '20px', fontWeight: 600 }}>:</div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px' }}>Team {teamBLabel} Points</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={teamBPoints}
+                        onChange={async (e) => {
+                          const points = Math.max(0, parseInt(e.target.value) || 0)
+                          const field = setTeamBKey === 'team_1' ? 'team_1Points' : 'team_2Points'
+                          await db.sets.update(set.id, { [field]: points })
+                          await logEvent('manual_change', {
+                            type: 'last_set_points',
+                            setIndex: set.index,
+                            team: setTeamBKey,
+                            oldValue: teamBPoints,
+                            newValue: points
+                          })
+                        }}
+                        style={{ width: '100%', padding: '8px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: 'var(--text)' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+        </Modal>
+      )}
+
+      {/* Manual Change: Interrupt Match Modal */}
+      {manualInterruptMatchModal && (
+        <Modal
+          title="Interrupt Match"
+          open={true}
+          onClose={() => setManualInterruptMatchModal(false)}
+          width={500}
+        >
+          <div style={{ padding: '20px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Interruption Type</label>
+                <select
+                  id="interruptType"
+                  style={{ width: '100%', padding: '8px 12px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: 'var(--text)' }}
+                >
+                  <option value="pause">Pause Match</option>
+                  <option value="interrupt">Interrupt Match</option>
+                  <option value="resume">Resume Match</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Reason</label>
+                <textarea
+                  id="interruptReason"
+                  rows={4}
+                  placeholder="Enter reason for interruption..."
+                  style={{ width: '100%', padding: '8px 12px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: 'var(--text)', resize: 'vertical' }}
+                />
+              </div>
+              <button
+                onClick={async () => {
+                  const type = document.getElementById('interruptType')?.value || 'pause'
+                  const reason = document.getElementById('interruptReason')?.value || ''
+                  await logEvent('match_interrupt', {
+                    type,
+                    reason,
+                    setIndex: data?.set?.index,
+                    score: data?.set ? { team_1: data.set.team_1Points || 0, team_2: data.set.team_2Points || 0 } : null
+                  })
+                  setManualInterruptMatchModal(false)
+                  alert('Match interruption recorded')
+                }}
+                style={{ padding: '12px 24px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
+              >
+                Record Interruption
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Manual Change: Modify Lineups, Serve, Sides Modal */}
+      {manualModifyLineupsModal && (
+        <Modal
+          title="Modify Lineups, Serve, Sides"
+          open={true}
+          onClose={() => setManualModifyLineupsModal(false)}
+          width={700}
+        >
+          <div style={{ padding: '20px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Set</label>
+                <select
+                  id="lineupSetSelect"
+                  style={{ width: '100%', padding: '8px 12px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: 'var(--text)' }}
+                >
+                  {data?.sets?.sort((a, b) => a.index - b.index).map(set => (
+                    <option key={set.id} value={set.id}>Set {set.index}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Switch Court Sides</label>
+                <button
+                  onClick={async () => {
+                    const setId = parseInt(document.getElementById('lineupSetSelect')?.value || '0')
+                    const set = data?.sets?.find(s => s.id === setId)
+                    if (set) {
+                      const setIndex = set.index
+                      const switchCountKey = `set${setIndex}_switchCount`
+                      const match = await db.matches.get(matchId)
+                      const currentSwitchCount = match?.[switchCountKey] || 0
+                      await db.matches.update(matchId, { [switchCountKey]: currentSwitchCount + 1 })
+                      await logEvent('court_switch', {
+                        setIndex,
+                        manual: true
+                      })
+                      alert('Court sides switched')
+                    }
+                  }}
+                  style={{ padding: '8px 16px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Switch Sides
+                </button>
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Change Serving Team</label>
+                <select
+                  id="servingTeamSelect"
+                  style={{ width: '100%', padding: '8px 12px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: 'var(--text)' }}
+                >
+                  <option value="team_1">Team {data?.match?.coinTossTeamA === 'team_1' ? 'A' : 'B'}</option>
+                  <option value="team_2">Team {data?.match?.coinTossTeamB === 'team_1' ? 'A' : 'B'}</option>
+                </select>
+                <button
+                  onClick={async () => {
+                    const setId = parseInt(document.getElementById('lineupSetSelect')?.value || '0')
+                    const servingTeam = document.getElementById('servingTeamSelect')?.value || 'team_1'
+                    await db.matches.update(matchId, { firstServe: servingTeam })
+                    await logEvent('manual_change', {
+                      type: 'serving_team',
+                      setIndex: data?.sets?.find(s => s.id === setId)?.index || 1,
+                      team: servingTeam
+                    })
+                    alert('Serving team changed')
+                  }}
+                  style={{ marginTop: '8px', padding: '8px 16px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Update Serving Team
+                </button>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Manual Change: Modify Timeouts Modal */}
+      {manualModifyTimeoutsModal && (
+        <Modal
+          title="Modify Timeouts"
+          open={true}
+          onClose={() => setManualModifyTimeoutsModal(false)}
+          width={600}
+        >
+          <div style={{ padding: '20px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Set</label>
+                <select
+                  id="timeoutSetSelect"
+                  style={{ width: '100%', padding: '8px 12px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: 'var(--text)' }}
+                >
+                  {data?.sets?.sort((a, b) => a.index - b.index).map(set => (
+                    <option key={set.id} value={set.id}>Set {set.index}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Team</label>
+                <select
+                  id="timeoutTeamSelect"
+                  style={{ width: '100%', padding: '8px 12px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: 'var(--text)' }}
+                >
+                  <option value="team_1">Team {data?.match?.coinTossTeamA === 'team_1' ? 'A' : 'B'}</option>
+                  <option value="team_2">Team {data?.match?.coinTossTeamB === 'team_1' ? 'A' : 'B'}</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Action</label>
+                <select
+                  id="timeoutActionSelect"
+                  style={{ width: '100%', padding: '8px 12px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: 'var(--text)' }}
+                >
+                  <option value="add">Add Timeout</option>
+                  <option value="remove">Remove Timeout</option>
+                </select>
+              </div>
+              <button
+                onClick={async () => {
+                  const setId = parseInt(document.getElementById('timeoutSetSelect')?.value || '0')
+                  const team = document.getElementById('timeoutTeamSelect')?.value || 'team_1'
+                  const action = document.getElementById('timeoutActionSelect')?.value || 'add'
+                  const set = data?.sets?.find(s => s.id === setId)
+                  
+                  if (action === 'add') {
+                    await logEvent('timeout', { team, setIndex: set?.index || 1, manual: true })
+                    alert('Timeout added')
+                  } else {
+                    // Find and remove the last timeout for this team in this set
+                    const timeouts = data?.events?.filter(e => 
+                      e.type === 'timeout' && 
+                      e.payload?.team === team && 
+                      (e.setIndex || 1) === (set?.index || 1)
+                    ).sort((a, b) => {
+                      const aTime = typeof a.ts === 'number' ? a.ts : new Date(a.ts).getTime()
+                      const bTime = typeof b.ts === 'number' ? b.ts : new Date(b.ts).getTime()
+                      return bTime - aTime
+                    })
+                    if (timeouts.length > 0) {
+                      await db.events.delete(timeouts[0].id)
+                      await logEvent('manual_change', {
+                        type: 'timeout_removed',
+                        setIndex: set?.index || 1,
+                        team
+                      })
+                      alert('Timeout removed')
+                    } else {
+                      alert('No timeout found to remove')
+                    }
+                  }
+                  setManualModifyTimeoutsModal(false)
+                }}
+                style={{ padding: '12px 24px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
+              >
+                {document.getElementById('timeoutActionSelect')?.value === 'add' ? 'Add Timeout' : 'Remove Timeout'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {/* Remarks Modal */}
       {showRemarks && (
         <Modal
@@ -6013,6 +7715,490 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                 }}
               />
             </section>
+          </div>
+        </Modal>
+      )}
+
+      {/* Special Cases Modal */}
+      {specialCasesModal && (
+        <Modal
+          title=" Forfait/Protest"
+          open={true}
+          onClose={() => setSpecialCasesModal(false)}
+          width={400}
+        >
+          <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <button
+              onClick={() => {
+                setSpecialCasesModal(false)
+                setForfaitModal({ type: null, team: '' })
+              }}
+              style={{
+                padding: '12px 24px',
+                fontSize: '16px',
+                fontWeight: 600,
+                background: '#dc2626',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                textAlign: 'left'
+              }}
+            >
+              Forfait
+            </button>
+            <button
+              onClick={() => {
+                setSpecialCasesModal(false)
+                setProtestModal({ status: '', remarks: '', requestingTeam: '' })
+              }}
+              style={{
+                padding: '12px 24px',
+                fontSize: '16px',
+                fontWeight: 600,
+                background: '#3b82f6',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                textAlign: 'left'
+              }}
+            >
+              Protest
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Forfait Modal */}
+      {forfaitModal && (() => {
+        // Check if coin toss has been made
+        const coinTossData = data?.match?.coinTossData
+        const hasCoinToss = coinTossData && coinTossData.players
+        const teamAKey = data?.match?.coinTossTeamA || 'team_1'
+        const teamBKey = data?.match?.coinTossTeamB || 'team_2'
+        const teamAData = teamAKey === 'team_1' ? data?.team_1Team : data?.team_2Team
+        const teamBData = teamBKey === 'team_1' ? data?.team_1Team : data?.team_2Team
+        const teamAName = teamAData?.name || 'Team A'
+        const teamBName = teamBData?.name || 'Team B'
+        const teamAColor = teamAData?.color || (teamAKey === 'team_1' ? '#ef4444' : '#3b82f6')
+        const teamBColor = teamBData?.color || (teamBKey === 'team_1' ? '#ef4444' : '#3b82f6')
+        
+        // Helper to determine text color for contrast
+        const isBrightColor = (color) => {
+          if (!color) return false
+          const hex = color.replace('#', '')
+          const r = parseInt(hex.substr(0, 2), 16)
+          const g = parseInt(hex.substr(2, 2), 16)
+          const b = parseInt(hex.substr(4, 2), 16)
+          const brightness = (r * 299 + g * 587 + b * 114) / 1000
+          return brightness > 155
+        }
+        
+        return (
+          <Modal
+            title="Forfait Protocol"
+            open={true}
+            onClose={() => setForfaitModal(null)}
+            width={600}
+          >
+            <div style={{ padding: '24px' }}>
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Team to Forfait:</label>
+                {hasCoinToss ? (
+                  // Show clickable team cards if coin toss is done
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <div
+                      onClick={() => setForfaitModal({ ...forfaitModal, team: teamAKey })}
+                      style={{
+                        flex: 1,
+                        padding: '20px',
+                        background: teamAColor,
+                        borderRadius: '8px',
+                        border: forfaitModal.team === teamAKey ? '3px solid #fff' : '2px solid rgba(255, 255, 255, 0.3)',
+                        cursor: 'pointer',
+                        textAlign: 'center',
+                        transition: 'transform 0.2s, box-shadow 0.2s',
+                        transform: forfaitModal.team === teamAKey ? 'scale(1.02)' : 'scale(1)',
+                        boxShadow: forfaitModal.team === teamAKey ? '0 4px 12px rgba(0,0,0,0.3)' : 'none'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (forfaitModal.team !== teamAKey) {
+                          e.currentTarget.style.transform = 'scale(1.02)'
+                          e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (forfaitModal.team !== teamAKey) {
+                          e.currentTarget.style.transform = 'scale(1)'
+                          e.currentTarget.style.boxShadow = 'none'
+                        }
+                      }}
+                    >
+                      <div style={{ fontSize: '18px', fontWeight: 700, color: isBrightColor(teamAColor) ? '#000' : '#fff', marginBottom: '4px' }}>
+                        Team A
+                      </div>
+                      <div style={{ fontSize: '14px', color: isBrightColor(teamAColor) ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.9)' }}>
+                        {teamAName}
+                      </div>
+                    </div>
+                    <div
+                      onClick={() => setForfaitModal({ ...forfaitModal, team: teamBKey })}
+                      style={{
+                        flex: 1,
+                        padding: '20px',
+                        background: teamBColor,
+                        borderRadius: '8px',
+                        border: forfaitModal.team === teamBKey ? '3px solid #fff' : '2px solid rgba(255, 255, 255, 0.3)',
+                        cursor: 'pointer',
+                        textAlign: 'center',
+                        transition: 'transform 0.2s, box-shadow 0.2s',
+                        transform: forfaitModal.team === teamBKey ? 'scale(1.02)' : 'scale(1)',
+                        boxShadow: forfaitModal.team === teamBKey ? '0 4px 12px rgba(0,0,0,0.3)' : 'none'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (forfaitModal.team !== teamBKey) {
+                          e.currentTarget.style.transform = 'scale(1.02)'
+                          e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (forfaitModal.team !== teamBKey) {
+                          e.currentTarget.style.transform = 'scale(1)'
+                          e.currentTarget.style.boxShadow = 'none'
+                        }
+                      }}
+                    >
+                      <div style={{ fontSize: '18px', fontWeight: 700, color: isBrightColor(teamBColor) ? '#000' : '#fff', marginBottom: '4px' }}>
+                        Team B
+                      </div>
+                      <div style={{ fontSize: '14px', color: isBrightColor(teamBColor) ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.9)' }}>
+                        {teamBName}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  // Show dropdown if coin toss hasn't been made
+                  <select
+                    value={forfaitModal.team || ''}
+                    onChange={(e) => setForfaitModal({ ...forfaitModal, team: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      fontSize: '14px',
+                      borderRadius: '4px',
+                      background: '#fff',
+                      color: '#000',
+                      border: '1px solid rgba(255, 255, 255, 0.2)'
+                    }}
+                  >
+                    <option value="">Select team...</option>
+                    <option value="team_1">{data?.team_1Team?.name || 'Team 1'}</option>
+                    <option value="team_2">{data?.team_2Team?.name || 'Team 2'}</option>
+                  </select>
+                )}
+              </div>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Forfait Type:</label>
+                <select
+                  value={forfaitModal.type || ''}
+                  onChange={(e) => setForfaitModal({ ...forfaitModal, type: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    fontSize: '14px',
+                    borderRadius: '4px',
+                    background: '#fff',
+                    color: '#000',
+                    border: '1px solid rgba(255, 255, 255, 0.2)'
+                  }}
+                >
+                  <option value="">Select type...</option>
+                  <option value="injury_before">Team forfaits - Injury before match start</option>
+                  <option value="injury_during">Team forfaits - Injury during match</option>
+                </select>
+              </div>
+
+              {forfaitModal.type && (
+                <>
+
+                {(forfaitModal.type === 'injury_before' || forfaitModal.type === 'injury_during') && (
+                  <div style={{ marginBottom: '20px' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Player Number:</label>
+                    <input
+                      type="number"
+                      value={forfaitModal.playerNumber || ''}
+                      onChange={(e) => setForfaitModal({ ...forfaitModal, playerNumber: e.target.value })}
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        fontSize: '14px',
+                        borderRadius: '4px',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        color: '#fff',
+                        border: '1px solid rgba(255, 255, 255, 0.2)'
+                      }}
+                    />
+                  </div>
+                )}
+
+                {forfaitModal.type === 'injury_during' && (
+                  <>
+                    <div style={{ marginBottom: '20px' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Set:</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="3"
+                        value={forfaitModal.setIndex || data?.set?.index || ''}
+                        onChange={(e) => setForfaitModal({ ...forfaitModal, setIndex: parseInt(e.target.value) })}
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          fontSize: '14px',
+                          borderRadius: '4px',
+                          background: 'rgba(255, 255, 255, 0.1)',
+                          color: '#fff',
+                          border: '1px solid rgba(255, 255, 255, 0.2)'
+                        }}
+                      />
+                    </div>
+                    <div style={{ marginBottom: '20px' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Time:</label>
+                      <input
+                        type="time"
+                        value={forfaitModal.time || ''}
+                        onChange={(e) => setForfaitModal({ ...forfaitModal, time: e.target.value })}
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          fontSize: '14px',
+                          borderRadius: '4px',
+                          background: 'rgba(255, 255, 255, 0.1)',
+                          color: '#fff',
+                          border: '1px solid rgba(255, 255, 255, 0.2)'
+                        }}
+                      />
+                    </div>
+                    <div style={{ marginBottom: '20px' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Score (Team 1 - Team 2):</label>
+                      <input
+                        type="text"
+                        placeholder="e.g., 15-10"
+                        value={forfaitModal.score || `${data?.set?.team_1Points || 0}-${data?.set?.team_2Points || 0}`}
+                        onChange={(e) => setForfaitModal({ ...forfaitModal, score: e.target.value })}
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          fontSize: '14px',
+                          borderRadius: '4px',
+                          background: 'rgba(255, 255, 255, 0.1)',
+                          color: '#fff',
+                          border: '1px solid rgba(255, 255, 255, 0.2)'
+                        }}
+                      />
+                    </div>
+                    <div style={{ marginBottom: '20px' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>MTO/RIT Duration (optional):</label>
+                      <input
+                        type="text"
+                        placeholder="e.g., 3:45"
+                        value={forfaitModal.mtoRitDuration || ''}
+                        onChange={(e) => setForfaitModal({ ...forfaitModal, mtoRitDuration: e.target.value })}
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          fontSize: '14px',
+                          borderRadius: '4px',
+                          background: 'rgba(255, 255, 255, 0.1)',
+                          color: '#fff',
+                          border: '1px solid rgba(255, 255, 255, 0.2)'
+                        }}
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Additional Remarks:</label>
+                  <textarea
+                    value={forfaitModal.remarks || ''}
+                    onChange={(e) => setForfaitModal({ ...forfaitModal, remarks: e.target.value })}
+                    placeholder="Enter additional details..."
+                    rows={4}
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      fontSize: '14px',
+                      borderRadius: '4px',
+                      background: 'rgba(255, 255, 255, 0.1)',
+                      color: '#fff',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      resize: 'vertical'
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => setForfaitModal(null)}
+                    style={{
+                      padding: '10px 24px',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      background: '#6b7280',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleForfaitWithDetails(forfaitModal)}
+                    disabled={!forfaitModal.type || !forfaitModal.team}
+                    style={{
+                      padding: '10px 24px',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      background: forfaitModal.type && forfaitModal.team ? '#dc2626' : '#6b7280',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: forfaitModal.type && forfaitModal.team ? 'pointer' : 'not-allowed'
+                    }}
+                  >
+                    Confirm Forfait
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </Modal>
+        )
+      })()}
+
+      {/* Protest Modal */}
+      {protestModal && (
+        <Modal
+          title="Protest Protocol"
+          open={true}
+          onClose={() => setProtestModal(false)}
+          width={500}
+        >
+          <div style={{ padding: '24px' }}>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Team Requesting:</label>
+              <select
+                value={protestModal.requestingTeam || ''}
+                onChange={(e) => setProtestModal({ ...protestModal, requestingTeam: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  fontSize: '14px',
+                  borderRadius: '4px',
+                  background: '#fff',
+                  color: '#000',
+                  border: '1px solid rgba(255, 255, 255, 0.2)'
+                }}
+              >
+                <option value="">Select team...</option>
+                <option value="team_1">{data?.team_1Team?.name || 'Team 1'}</option>
+                <option value="team_2">{data?.team_2Team?.name || 'Team 2'}</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Protest Status:</label>
+              <select
+                value={protestModal.status || ''}
+                onChange={(e) => setProtestModal({ ...protestModal, status: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  fontSize: '14px',
+                  borderRadius: '4px',
+                  background: '#fff',
+                  color: '#000',
+                  border: '1px solid rgba(255, 255, 255, 0.2)'
+                }}
+              >
+                <option value="">Select status...</option>
+                <option value="REJECTED LEVEL 1">REJECTED LEVEL 1</option>
+                <option value="ACCEPTED LEVEL 1">ACCEPTED LEVEL 1</option>
+                <option value="REJECTED / PENDING LEVEL 1">REJECTED / PENDING LEVEL 1</option>
+                <option value="ACCEPTED / PENDING LEVEL 1">ACCEPTED / PENDING LEVEL 1</option>
+                <option value="PENDING LEVEL 1">PENDING LEVEL 1</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Additional Remarks:</label>
+              <textarea
+                value={protestModal.remarks || ''}
+                onChange={(e) => setProtestModal({ ...protestModal, remarks: e.target.value })}
+                placeholder="Enter additional protest details..."
+                rows={4}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  fontSize: '14px',
+                  borderRadius: '4px',
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  color: '#fff',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  resize: 'vertical'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setProtestModal(false)}
+                style={{
+                  padding: '10px 24px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  background: '#6b7280',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!protestModal.status) return
+                  const remarkText = protestModal.status + (protestModal.remarks ? `\n${protestModal.remarks}` : '')
+                  const existingRemarks = data?.match?.remarks || ''
+                  const newRemarks = existingRemarks ? `${existingRemarks}\n\n${remarkText}` : remarkText
+                  await db.matches.update(matchId, { remarks: newRemarks })
+                  await logEvent('protest', {
+                    status: protestModal.status,
+                    remarks: protestModal.remarks
+                  })
+                  setProtestModal(false)
+                  setShowRemarks(true)
+                }}
+                disabled={!protestModal.status}
+                style={{
+                  padding: '10px 24px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  background: protestModal.status ? '#3b82f6' : '#6b7280',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: protestModal.status ? 'pointer' : 'not-allowed'
+                }}
+              >
+                Record Protest
+              </button>
+            </div>
           </div>
         </Modal>
       )}
@@ -6600,10 +8786,10 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         </Modal>
       )}
 
-      {/* Challenge Request Modal */}
+      {/* BMP Request Modal (Team-initiated) */}
       {challengeModal && challengeModal.type === 'request' && (
         <Modal
-          title="Challenge request"
+          title="Ball Mark Protocol Request"
           open={true}
           onClose={handleCancelChallengeRequest}
           width={500}
@@ -6643,7 +8829,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                   cursor: 'pointer'
                 }}
               >
-                Confirm challenge request
+                Confirm BMP request
               </button>
               <button
                 onClick={handleRejectChallengeRequest}
@@ -6658,7 +8844,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                   cursor: 'pointer'
                 }}
               >
-                Reject challenge request
+                Reject BMP request
               </button>
               <button
                 onClick={handleCancelChallengeRequest}
@@ -6680,174 +8866,446 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         </Modal>
       )}
 
-      {/* Challenge In Progress Modal */}
+      {/* BMP In Progress Modal */}
       {challengeModal && challengeModal.type === 'in_progress' && (
         <Modal
-          title="Challenge in progress"
+          title={`${challengeModal.isRefereeInitiated ? 'Referee ' : ''}Ball Mark Protocol${challengeModal.team ? ` - Team ${challengeModal.team === teamAKey ? 'A' : 'B'}` : ''} (Set ${challengeModal.set})`}
           open={true}
           onClose={() => {}}
-          width={600}
+          width={500}
           hideCloseButton={true}
         >
-          <div style={{ padding: '24px', textAlign: 'center' }}>
-            <div style={{ marginBottom: '20px' }}>
-              <p style={{ fontSize: '16px', marginBottom: '12px' }}>
-                <strong>Team:</strong> {challengeModal.team === teamAKey ? 'A' : 'B'}
-              </p>
-              <p style={{ fontSize: '16px', marginBottom: '12px' }}>
-                <strong>Reason:</strong> {challengeModal.reason}
-              </p>
-              <p style={{ fontSize: '16px', marginBottom: '12px' }}>
-                <strong>Score:</strong> {challengeModal.score.team_1} - {challengeModal.score.team_2}
-              </p>
-              <p style={{ fontSize: '16px', marginBottom: '12px' }}>
-                <strong>Set:</strong> {challengeModal.set}
-              </p>
-              <p style={{ fontSize: '16px', marginBottom: '12px' }}>
-                <strong>Team serving:</strong> {challengeModal.servingTeam === teamAKey ? 'A' : 'B'}
-              </p>
-              <p style={{ fontSize: '16px', marginBottom: '20px' }}>
-                <strong>Time of request:</strong> {new Date(challengeModal.time).toLocaleTimeString()}
-              </p>
-            </div>
-            
-            {/* Animated volleyball hitting sand court */}
+          <div style={{ padding: '20px', textAlign: 'center' }}>
+            {(() => {
+              const { team, score, servingTeam, isRefereeInitiated } = challengeModal
+              
+              // Determine which team is on left and right based on current court position (accounting for switches)
+              const leftTeamKey = leftIsTeam_1 ? 'team_1' : 'team_2'
+              const rightTeamKey = leftIsTeam_1 ? 'team_2' : 'team_1'
+              
+              // Determine which team is A and which is B
+              const teamAIsTeam_1 = teamAKey === 'team_1'
+              
+              // Determine if Team A is on the left or right side (accounting for court switches)
+              const teamAIsLeft = (teamAKey === leftTeamKey)
+              const teamBIsLeft = !teamAIsLeft
+              
+              // Get team colors based on current positions
+              const teamAColor = teamAIsLeft ? (leftTeam.color || '#ef4444') : (rightTeam.color || '#ef4444')
+              const teamBColor = teamAIsLeft ? (rightTeam.color || '#3b82f6') : (leftTeam.color || '#3b82f6')
+              
+              // Get scores for left and right positions (at time of challenge)
+              const leftScore = leftTeamKey === 'team_1' ? score.team_1 : score.team_2
+              const rightScore = rightTeamKey === 'team_1' ? score.team_1 : score.team_2
+              
+              // Determine which team label is on left and right
+              const leftTeamLabel = teamAIsLeft ? 'A' : 'B'
+              const rightTeamLabel = teamAIsLeft ? 'B' : 'A'
+              
+              // Get colors for left and right teams
+              const leftTeamColor = teamAIsLeft ? teamAColor : teamBColor
+              const rightTeamColor = teamAIsLeft ? teamBColor : teamAColor
+              
+              let successfulLeftScore, successfulRightScore, unsuccessfulLeftScore, unsuccessfulRightScore
+              let successfulServingTeam, currentServingTeamLabel
+              let successfulButtonLabel, unsuccessfulButtonLabel
+              
+              if (isRefereeInitiated) {
+                // Referee-initiated: determine which team gets point based on left/right
+                // Left = left team gets point, Right = right team gets point
+                
+                // Left outcome: left team gets point
+                successfulLeftScore = leftScore + 1
+                successfulRightScore = rightScore
+                successfulServingTeam = leftTeamLabel
+                
+                // Right outcome: right team gets point
+                unsuccessfulLeftScore = leftScore
+                unsuccessfulRightScore = rightScore + 1
+                currentServingTeamLabel = rightTeamLabel
+                
+                // Button labels: show A or B instead of Left/Right
+                successfulButtonLabel = leftTeamLabel
+                unsuccessfulButtonLabel = rightTeamLabel
+              } else {
+                // Team-initiated challenge: reverse last point
+                const challengingTeamKey = team
+                const challengingTeamIsLeft = (challengingTeamKey === leftTeamKey)
+                const opponentTeamIsLeft = !challengingTeamIsLeft
+                
+                // Successful: challenging team gets point (reverses last point)
+                if (challengingTeamIsLeft) {
+                  // Challenging team is on left
+                  successfulLeftScore = leftScore + 1
+                  successfulRightScore = Math.max(0, rightScore - 1)
+                  successfulServingTeam = leftTeamLabel
+                } else {
+                  // Challenging team is on right
+                  successfulLeftScore = Math.max(0, leftScore - 1)
+                  successfulRightScore = rightScore + 1
+                  successfulServingTeam = rightTeamLabel
+                }
+                
+                // Unsuccessful: score stays the same
+                unsuccessfulLeftScore = leftScore
+                unsuccessfulRightScore = rightScore
+                currentServingTeamLabel = servingTeam === leftTeamKey ? leftTeamLabel : rightTeamLabel
+                
+                // Button labels: show challenging team for successful, opponent for unsuccessful
+                successfulButtonLabel = challengingTeamIsLeft ? leftTeamLabel : rightTeamLabel
+                unsuccessfulButtonLabel = challengingTeamIsLeft ? rightTeamLabel : leftTeamLabel
+              }
+              
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
+                  {/* Top row: Successful and Unsuccessful side by side */}
+                  <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
+                    {/* Successful card */}
             <div style={{ 
-              margin: '30px 0',
+                      flex: 1,
               display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              height: '200px',
-              position: 'relative',
-              overflow: 'hidden'
+                      flexDirection: 'column', 
+                      gap: '8px',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '2px solid rgba(255, 255, 255, 0.1)',
+                      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
             }}>
               <div style={{
-                position: 'relative',
-                width: '300px',
-                height: '200px',
-                background: 'linear-gradient(to bottom, #fbbf24 0%, #f59e0b 100%)',
-                borderRadius: '8px',
-                border: '2px solid #d97706',
-                perspective: '500px'
-              }}>
-                {/* 3D Side line */}
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        gap: '8px',
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        background: `linear-gradient(to right, ${leftTeamColor}40, ${rightTeamColor}40)`,
+                        border: `2px solid ${leftTeamColor}80`
+                      }}>
                 <div style={{
-                  position: 'absolute',
-                  left: '30px',
-                  top: 0,
-                  bottom: 0,
-                  width: '6px',
-                  background: 'linear-gradient(to right, #fff 0%, #e5e7eb 50%, #fff 100%)',
-                  boxShadow: '2px 0 4px rgba(0, 0, 0, 0.2), -2px 0 4px rgba(255, 255, 255, 0.3)',
-                  transform: 'rotateY(-15deg)',
-                  transformStyle: 'preserve-3d',
-                  zIndex: 1
-                }}>
-                  {/* 3D depth effect */}
+                          padding: '4px 10px',
+                          borderRadius: '4px',
+                          background: leftTeamColor,
+                          color: isBrightColor(leftTeamColor) ? '#000' : '#fff',
+                          fontWeight: 700,
+                          fontSize: '14px'
+                        }}>
+                          {leftTeamLabel} {successfulLeftScore}
+                        </div>
+                        <span style={{ fontSize: '12px', color: 'var(--text)', fontWeight: 600 }}>-</span>
                   <div style={{
-                    position: 'absolute',
-                    right: '-2px',
-                    top: 0,
-                    bottom: 0,
-                    width: '2px',
-                    background: 'rgba(0, 0, 0, 0.2)',
-                    transform: 'rotateY(90deg)',
-                    transformOrigin: 'left center'
-                  }}></div>
+                          padding: '4px 10px',
+                          borderRadius: '4px',
+                          background: rightTeamColor,
+                          color: isBrightColor(rightTeamColor) ? '#000' : '#fff',
+                          fontWeight: 700,
+                          fontSize: '14px'
+                        }}>
+                          {successfulRightScore} {rightTeamLabel}
+                </div>
+                        <span style={{ fontSize: '11px', color: 'var(--muted)', marginLeft: '8px' }}>
+                          Serving: {successfulServingTeam}
+                        </span>
+                      </div>
+                      <button
+                        onClick={handleSuccessfulChallenge}
+                  style={{
+                          padding: '12px 20px',
+                          fontSize: '14px',
+                          fontWeight: 600,
+                          background: '#22c55e',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+                          transition: 'transform 0.1s, box-shadow 0.1s'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'translateY(-2px)'
+                          e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.3)'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'translateY(0)'
+                          e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.2)'
+                        }}
+                      >
+                        {successfulButtonLabel}
+                      </button>
                 </div>
                 
-                {/* Animated volleyball bouncing next to line */}
-                <div
+                    {/* Unsuccessful card */}
+                    <div style={{ 
+                      flex: 1,
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      gap: '8px',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '2px solid rgba(255, 255, 255, 0.1)',
+                      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+                    }}>
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        gap: '8px',
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        background: `linear-gradient(to right, ${leftTeamColor}40, ${rightTeamColor}40)`,
+                        border: `2px solid ${leftTeamColor}80`
+                      }}>
+                        <div style={{ 
+                          padding: '4px 10px',
+                          borderRadius: '4px',
+                          background: leftTeamColor,
+                          color: isBrightColor(leftTeamColor) ? '#000' : '#fff',
+                          fontWeight: 700,
+                          fontSize: '14px'
+                        }}>
+                          {leftTeamLabel} {unsuccessfulLeftScore}
+                        </div>
+                        <span style={{ fontSize: '12px', color: 'var(--text)', fontWeight: 600 }}>-</span>
+                        <div style={{ 
+                          padding: '4px 10px',
+                          borderRadius: '4px',
+                          background: rightTeamColor,
+                          color: isBrightColor(rightTeamColor) ? '#000' : '#fff',
+                          fontWeight: 700,
+                          fontSize: '14px'
+                        }}>
+                          {unsuccessfulRightScore} {rightTeamLabel}
+                        </div>
+                        <span style={{ fontSize: '11px', color: 'var(--muted)', marginLeft: '8px' }}>
+                          Serving: {currentServingTeamLabel}
+                        </span>
+                      </div>
+                      <button
+                        onClick={handleUnsuccessfulChallenge}
                   style={{
-                    position: 'absolute',
-                    left: '50px',
-                    top: '20px',
-                    animation: 'volleyballBounce 1.5s ease-in-out infinite',
-                    zIndex: 2
-                  }}
-                >
-                  <img
-                    src={mikasaVolleyball}
-                    alt="Volleyball"
-                    style={{
-                      width: '50px',
-                      height: '50px',
-                      filter: 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3))',
-                      transform: 'rotateY(-10deg)'
-                    }}
-                  />
-                </div>
-                
-                {/* Sand impact effect next to line */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    left: '50px',
-                    bottom: '40px',
-                    width: '60px',
-                    height: '15px',
-                    background: 'radial-gradient(ellipse, rgba(0,0,0,0.3) 0%, transparent 70%)',
-                    borderRadius: '50%',
-                    animation: 'sandImpact 1.5s ease-in-out infinite',
-                    zIndex: 1
-                  }}
-                ></div>
+                          padding: '12px 20px',
+                          fontSize: '14px',
+                          fontWeight: 600,
+                          background: '#ef4444',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+                          transition: 'transform 0.1s, box-shadow 0.1s'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'translateY(-2px)'
+                          e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.3)'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'translateY(0)'
+                          e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.2)'
+                        }}
+                      >
+                        {unsuccessfulButtonLabel}
+                      </button>
               </div>
             </div>
             
-            <style>{`
-              @keyframes volleyballBounce {
-                0%, 100% {
-                  transform: translateY(0) rotateY(-10deg);
-                }
-                50% {
-                  transform: translateY(120px) rotateY(-10deg);
-                }
-              }
-              @keyframes sandImpact {
-                0%, 100% {
-                  opacity: 0.3;
-                  transform: scale(1);
-                }
-                50% {
-                  opacity: 0.6;
-                  transform: scale(1.3);
-                }
-              }
-            `}</style>
-            
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '24px' }}>
+                  {/* Bottom row: Judgment impossible and Mark Deliberately Altered */}
+                  <div style={{ 
+                    display: 'flex', 
+                    gap: '12px',
+                    justifyContent: 'center',
+                    width: '100%'
+                  }}>
+                    {/* Judgment impossible */}
+                    <div style={{ 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      gap: '8px',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '2px solid rgba(255, 255, 255, 0.1)',
+                      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                      flex: 1,
+                      maxWidth: '250px'
+                    }}>
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        gap: '8px',
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        background: `linear-gradient(to right, ${leftTeamColor}40, ${rightTeamColor}40)`,
+                        border: `2px solid ${leftTeamColor}80`
+                      }}>
+                        <div style={{ 
+                          padding: '4px 10px',
+                          borderRadius: '4px',
+                          background: leftTeamColor,
+                          color: isBrightColor(leftTeamColor) ? '#000' : '#fff',
+                          fontWeight: 700,
+                          fontSize: '14px'
+                        }}>
+                          {leftTeamLabel} {leftScore}
+                        </div>
+                        <span style={{ fontSize: '12px', color: 'var(--text)', fontWeight: 600 }}>-</span>
+                        <div style={{ 
+                          padding: '4px 10px',
+                          borderRadius: '4px',
+                          background: rightTeamColor,
+                          color: isBrightColor(rightTeamColor) ? '#000' : '#fff',
+                          fontWeight: 700,
+                          fontSize: '14px'
+                        }}>
+                          {rightScore} {rightTeamLabel}
+                        </div>
+                        <span style={{ fontSize: '11px', color: 'var(--muted)', marginLeft: '8px' }}>
+                          Serving: {servingTeam === leftTeamKey ? leftTeamLabel : rightTeamLabel}
+                        </span>
+                      </div>
               <button
-                onClick={handleSuccessfulChallenge}
+                        onClick={handleJudgmentImpossibleChallenge}
                 style={{
-                  padding: '12px 24px',
+                          padding: '12px 20px',
                   fontSize: '14px',
                   fontWeight: 600,
-                  background: '#22c55e',
+                          background: '#f59e0b',
                   color: '#fff',
                   border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
-                Successful
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+                          transition: 'transform 0.1s, box-shadow 0.1s'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'translateY(-2px)'
+                          e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.3)'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'translateY(0)'
+                          e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.2)'
+                        }}
+                      >
+                        Judgment impossible
               </button>
+                    </div>
+
+                    {/* Mark Deliberately Altered */}
+                    <div style={{ 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      gap: '8px',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '2px solid rgba(255, 255, 255, 0.1)',
+                      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                      flex: 1,
+                      maxWidth: '250px'
+                    }}>
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        gap: '8px',
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        background: `linear-gradient(to right, ${leftTeamColor}40, ${rightTeamColor}40)`,
+                        border: `2px solid ${leftTeamColor}80`
+                      }}>
+                        <div style={{ 
+                          padding: '4px 10px',
+                          borderRadius: '4px',
+                          background: leftTeamColor,
+                          color: isBrightColor(leftTeamColor) ? '#000' : '#fff',
+                          fontWeight: 700,
+                          fontSize: '14px'
+                        }}>
+                          {leftTeamLabel} {leftScore}
+                        </div>
+                        <span style={{ fontSize: '12px', color: 'var(--text)', fontWeight: 600 }}>-</span>
+                        <div style={{ 
+                          padding: '4px 10px',
+                          borderRadius: '4px',
+                          background: rightTeamColor,
+                          color: isBrightColor(rightTeamColor) ? '#000' : '#fff',
+                          fontWeight: 700,
+                          fontSize: '14px'
+                        }}>
+                          {rightScore} {rightTeamLabel}
+                        </div>
+                        <span style={{ fontSize: '11px', color: 'var(--muted)', marginLeft: '8px' }}>
+                          Serving: {servingTeam === leftTeamKey ? leftTeamLabel : rightTeamLabel}
+                        </span>
+                      </div>
               <button
-                onClick={handleUnsuccessfulChallenge}
+                        onClick={handleMarkDeliberatelyAltered}
                 style={{
-                  padding: '12px 24px',
+                          padding: '12px 20px',
                   fontSize: '14px',
                   fontWeight: 600,
-                  background: '#ef4444',
+                          background: '#dc2626',
                   color: '#fff',
                   border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
-                Unsuccessful
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+                          transition: 'transform 0.1s, box-shadow 0.1s'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'translateY(-2px)'
+                          e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.3)'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'translateY(0)'
+                          e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.2)'
+                        }}
+                      >
+                        Mark Deliberately Altered
               </button>
             </div>
+                  </div>
+
+                  {/* Team cancels BMP button */}
+                  <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'center',
+                    marginTop: '20px',
+                    paddingTop: '20px',
+                    borderTop: '1px solid rgba(255, 255, 255, 0.1)'
+                  }}>
+                    <button
+                      onClick={handleTeamCancelsBMP}
+                      style={{
+                        padding: '12px 24px',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        color: 'var(--text)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+                        transition: 'transform 0.1s, box-shadow 0.1s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-2px)'
+                        e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.3)'
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0)'
+                        e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.2)'
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
+                      }}
+                    >
+                      Team cancels BMP
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         </Modal>
       )}
@@ -6947,7 +9405,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                   </div>
                 </button>
                 <button
-                  onClick={openInjuryFromMenu}
+                  onClick={openMtoRitFromMenu}
                   style={{
                     padding: '8px 12px',
                     fontSize: '12px',
@@ -6990,7 +9448,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         )
       })()}
       
-
+      
       {sanctionDropdown && (() => {
         // Get element position - use stored coordinates if available
         let dropdownStyle
@@ -7292,24 +9750,321 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                   border: '2px solid rgba(255, 255, 255, 0.2)',
                   borderRadius: '8px',
                   padding: '8px',
-                  minWidth: '120px',
+                  minWidth: '160px',
                   boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)'
                 }}
               >
               <div style={{ marginBottom: '8px', fontSize: '11px', fontWeight: 600, color: 'var(--text)', textAlign: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '6px' }}>
-                Injury
+                Player #{injuryDropdown.playerNumber}
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--muted)', textAlign: 'center' }}>
-                # {injuryDropdown.playerNumber}
-              </div>
-              <div style={{ marginTop: '8px', fontSize: '10px', color: 'var(--muted)', textAlign: 'center', fontStyle: 'italic' }}>
-                Action to be determined
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <button
+                  onClick={() => handleMtoRitSelection('mto_blood')}
+                style={{
+                    padding: '6px 10px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                    background: '#dc2626',
+                    color: '#fff',
+                    border: '1px solid #991b1b',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'all 0.2s',
+                    width: '100%'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#ef4444'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#dc2626'
+                  }}
+                >
+                  MTO - Blood
+                </button>
+                <button
+                  onClick={() => handleMtoRitSelection('rit_no_blood')}
+                  disabled={hasPlayerUsedRit(injuryDropdown.team, injuryDropdown.playerNumber)}
+                  style={{
+                    padding: '6px 10px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    background: hasPlayerUsedRit(injuryDropdown.team, injuryDropdown.playerNumber) ? '#666' : '#8b5cf6',
+                    color: '#fff',
+                    border: '1px solid #7c3aed',
+                    borderRadius: '4px',
+                    cursor: hasPlayerUsedRit(injuryDropdown.team, injuryDropdown.playerNumber) ? 'not-allowed' : 'pointer',
+                    textAlign: 'left',
+                    transition: 'all 0.2s',
+                  width: '100%',
+                    opacity: hasPlayerUsedRit(injuryDropdown.team, injuryDropdown.playerNumber) ? 0.5 : 1
+                }}
+                onMouseEnter={(e) => {
+                    if (!hasPlayerUsedRit(injuryDropdown.team, injuryDropdown.playerNumber)) {
+                      e.currentTarget.style.background = '#7c3aed'
+                    }
+                }}
+                onMouseLeave={(e) => {
+                    if (!hasPlayerUsedRit(injuryDropdown.team, injuryDropdown.playerNumber)) {
+                      e.currentTarget.style.background = '#8b5cf6'
+                    }
+                  }}
+                >
+                  RIT - No Blood {hasPlayerUsedRit(injuryDropdown.team, injuryDropdown.playerNumber) && '(Used)'}
+                </button>
+                <button
+                  onClick={() => handleMtoRitSelection('rit_weather')}
+                  disabled={hasPlayerUsedRit(injuryDropdown.team, injuryDropdown.playerNumber)}
+                  style={{
+                    padding: '6px 10px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    background: hasPlayerUsedRit(injuryDropdown.team, injuryDropdown.playerNumber) ? '#666' : '#8b5cf6',
+                    color: '#fff',
+                    border: '1px solid #7c3aed',
+                    borderRadius: '4px',
+                    cursor: hasPlayerUsedRit(injuryDropdown.team, injuryDropdown.playerNumber) ? 'not-allowed' : 'pointer',
+                    textAlign: 'left',
+                    transition: 'all 0.2s',
+                    width: '100%',
+                    opacity: hasPlayerUsedRit(injuryDropdown.team, injuryDropdown.playerNumber) ? 0.5 : 1
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!hasPlayerUsedRit(injuryDropdown.team, injuryDropdown.playerNumber)) {
+                      e.currentTarget.style.background = '#7c3aed'
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!hasPlayerUsedRit(injuryDropdown.team, injuryDropdown.playerNumber)) {
+                      e.currentTarget.style.background = '#8b5cf6'
+                    }
+                  }}
+                >
+                  RIT - Weather {hasPlayerUsedRit(injuryDropdown.team, injuryDropdown.playerNumber) && '(Used)'}
+                </button>
+                <button
+                  onClick={() => handleMtoRitSelection('rit_toilet')}
+                  disabled={hasPlayerUsedRit(injuryDropdown.team, injuryDropdown.playerNumber)}
+                  style={{
+                    padding: '6px 10px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    background: hasPlayerUsedRit(injuryDropdown.team, injuryDropdown.playerNumber) ? '#666' : '#8b5cf6',
+                    color: '#fff',
+                    border: '1px solid #7c3aed',
+                    borderRadius: '4px',
+                    cursor: hasPlayerUsedRit(injuryDropdown.team, injuryDropdown.playerNumber) ? 'not-allowed' : 'pointer',
+                    textAlign: 'left',
+                    transition: 'all 0.2s',
+                    width: '100%',
+                    opacity: hasPlayerUsedRit(injuryDropdown.team, injuryDropdown.playerNumber) ? 0.5 : 1
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!hasPlayerUsedRit(injuryDropdown.team, injuryDropdown.playerNumber)) {
+                      e.currentTarget.style.background = '#7c3aed'
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!hasPlayerUsedRit(injuryDropdown.team, injuryDropdown.playerNumber)) {
+                      e.currentTarget.style.background = '#8b5cf6'
+                    }
+                  }}
+                >
+                  RIT - Toilet {hasPlayerUsedRit(injuryDropdown.team, injuryDropdown.playerNumber) && '(Used)'}
+              </button>
               </div>
               </div>
             </div>
           </>
         )
       })()}
+
+      {/* MTO/RIT Confirmation Modal */}
+      {mtoRitConfirmModal && (
+        <Modal
+          title="Confirm MTO/RIT"
+          open={true}
+          onClose={cancelMtoRitConfirm}
+          width={450}
+        >
+          <div style={{ padding: '24px', textAlign: 'center' }}>
+            {(() => {
+              // Get player information
+              const players = mtoRitConfirmModal.team === 'team_1' ? (data?.team_1Players || []) : (data?.team_2Players || [])
+              const player = players.find(p => p.number === mtoRitConfirmModal.playerNumber)
+              const playerName = player ? `${player.lastName || ''}${player.lastName && player.firstName ? ', ' : ''}${player.firstName || ''}`.trim() : ''
+              const teamName = mtoRitConfirmModal.team === 'team_1' ? (data?.team_1Team?.name || 'Team 1') : (data?.team_2Team?.name || 'Team 2')
+              const teamLabel = mtoRitConfirmModal.team === teamAKey ? 'A' : 'B'
+              
+              return (
+                <>
+                  <p style={{ marginBottom: '16px', fontSize: '16px' }}>
+                    Confirm {mtoRitConfirmModal.type === 'mto_blood' ? 'MTO - Blood' : 
+                            mtoRitConfirmModal.type === 'rit_no_blood' ? 'RIT - No Blood' :
+                            mtoRitConfirmModal.type === 'rit_weather' ? 'RIT - Weather' :
+                            'RIT - Toilet'} for Player #{mtoRitConfirmModal.playerNumber}
+                    {playerName && ` (${playerName})`} - Team {teamLabel} ({teamName})?
+                  </p>
+                  <p style={{ marginBottom: '24px', fontSize: '14px', color: 'var(--muted)' }}>
+                    Set {data?.set?.index || 1} | Score: {data?.set?.team_1Points || 0} - {data?.set?.team_2Points || 0}
+                  </p>
+                </>
+              )
+            })()}
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button
+                onClick={confirmMtoRit}
+                style={{
+                  padding: '12px 32px',
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  background: 'var(--accent)',
+                  color: '#000',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                Confirm
+              </button>
+              <button
+                onClick={cancelMtoRitConfirm}
+                style={{
+                  padding: '12px 32px',
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  background: '#ef4444',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* MTO/RIT Countdown Modal */}
+      {mtoRitCountdownModal && (
+        <Modal
+          title={`${mtoRitCountdownModal.type === 'mto_blood' ? 'MTO - Blood' : 
+                  mtoRitCountdownModal.type === 'rit_no_blood' ? 'RIT - No Blood' :
+                  mtoRitCountdownModal.type === 'rit_weather' ? 'RIT - Weather' :
+                  'RIT - Toilet'} - Player #${mtoRitCountdownModal.playerNumber}`}
+          open={true}
+          onClose={mtoRitCountdownModal.started ? stopMtoRitCountdown : () => setMtoRitCountdownModal(null)}
+          width={500}
+          hideCloseButton={!mtoRitCountdownModal.started}
+        >
+          <div style={{ padding: '24px', textAlign: 'center' }}>
+            {mtoRitCountdownModal.started ? (
+              <>
+                <div style={{ fontSize: '72px', fontWeight: 800, marginBottom: '16px', color: 'var(--accent)', fontFamily: 'monospace' }}>
+                  {Math.floor(mtoRitCountdownModal.countdown / 60)}:{(mtoRitCountdownModal.countdown % 60).toString().padStart(2, '0')}
+                </div>
+                <p style={{ marginBottom: '8px', fontSize: '14px', color: 'var(--muted)' }}>
+                  Set {mtoRitCountdownModal.setIndex} | Score: {mtoRitCountdownModal.team_1Points} - {mtoRitCountdownModal.team_2Points}
+                </p>
+                <p style={{ marginBottom: '24px', fontSize: '14px', color: 'var(--muted)' }}>
+                  Started: {new Date(mtoRitCountdownModal.startTime).toLocaleTimeString()}
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                    <button
+                      onClick={stopMtoRitCountdown}
+                      style={{
+                        padding: '10px 24px',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        background: '#6b7280',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Stop Countdown
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '8px' }}>
+                    <button
+                      onClick={handlePlayerRecovered}
+                      style={{
+                        padding: '12px 32px',
+                        fontSize: '16px',
+                        fontWeight: 600,
+                        background: '#22c55e',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Player Recovered
+                    </button>
+                    <button
+                      onClick={handlePlayerNotRecovered}
+                      style={{
+                        padding: '12px 32px',
+                        fontSize: '16px',
+                        fontWeight: 600,
+                        background: '#dc2626',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Player Not Recovered
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div style={{ textAlign: 'center' }}>
+                <p style={{ marginBottom: '24px', fontSize: '16px' }}>
+                  Countdown stopped
+                </p>
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                  <button
+                    onClick={handlePlayerRecovered}
+                    style={{
+                      padding: '12px 32px',
+                      fontSize: '16px',
+                      fontWeight: 600,
+                      background: '#22c55e',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Player Recovered
+                  </button>
+                  <button
+                    onClick={handlePlayerNotRecovered}
+                    style={{
+                      padding: '12px 32px',
+                      fontSize: '16px',
+                      fontWeight: 600,
+                      background: '#dc2626',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Player Not Recovered
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
       
       {sanctionConfirmModal && (() => {
         const teamData = sanctionConfirmModal.team === 'team_1' ? data?.team_1Team : data?.team_2Team
@@ -8086,10 +10841,10 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                 >
                   <img 
                     src={challengeIcon} 
-                    alt="Challenge" 
+                    alt="BMP" 
                     style={{ width: '20px', height: '20px' }}
                   />
-                  Challenge {courtSwitchModal.teamThatScored === teamAKey ? 'Team A' : 'Team B'}
+                  BMP {courtSwitchModal.teamThatScored === teamAKey ? 'Team A' : 'Team B'}
                 </button>
               )}
             </div>
@@ -8197,7 +10952,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                       >
                         <img 
                           src={challengeIcon} 
-                          alt="Challenge" 
+                          alt="BMP" 
                           style={{ width: '20px', height: '20px' }}
                         />
                         Challenge {technicalTOModal.teamThatScored === teamAKey ? 'Team A' : 'Team B'}
@@ -8242,6 +10997,153 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         const leftIsServing = servingTeamLabel === leftTeamLabel
         const rightIsServing = servingTeamLabel === rightTeamLabel
         
+        // Get players for each team
+        const leftTeamPlayers = leftTeamKey === 'team_1' ? data?.team_1Players : data?.team_2Players
+        const rightTeamPlayers = rightTeamKey === 'team_1' ? data?.team_1Players : data?.team_2Players
+        
+        // Get coin toss data for player info (captain status, names)
+        const coinTossData = data?.match?.coinTossData?.players || {}
+        // Determine which coin toss team (A or B) corresponds to left/right team keys
+        const leftTeamCoinTossTeam = leftTeamKey === teamAKey ? 'teamA' : 'teamB'
+        const rightTeamCoinTossTeam = rightTeamKey === teamAKey ? 'teamA' : 'teamB'
+        const leftTeamCoinTossData = coinTossData[leftTeamCoinTossTeam] || {}
+        const rightTeamCoinTossData = coinTossData[rightTeamCoinTossTeam] || {}
+        
+        // Helper function to get player info for a position
+        const getPlayerInfo = (teamPlayers, coinTossTeamData, playerIndex) => {
+          if (!teamPlayers || teamPlayers.length < 2) {
+            return { number: null, lastName: '', firstName: '', isCaptain: false }
+          }
+          const player = teamPlayers[playerIndex] || {} // 0 for player 1, 1 for player 2
+          const coinTossPlayer = (coinTossTeamData && coinTossTeamData[`player${playerIndex + 1}`]) || {}
+          return {
+            number: (coinTossPlayer.number !== undefined && coinTossPlayer.number !== null) 
+              ? coinTossPlayer.number 
+              : ((player.number !== undefined && player.number !== null) ? player.number : null),
+            lastName: coinTossPlayer.lastName || player.lastName || '',
+            firstName: coinTossPlayer.firstName || player.firstName || '',
+            isCaptain: coinTossPlayer.isCaptain || false
+          }
+        }
+        
+        // Calculate service order positions
+        // I, III = serving team positions
+        // II, IV = receiving team positions
+        const leftServiceOrder = setTransitionServiceOrder[leftTeamLabel === 'A' ? 'teamA' : 'teamB']
+        const rightServiceOrder = setTransitionServiceOrder[rightTeamLabel === 'A' ? 'teamA' : 'teamB']
+        
+        // For serving team: I and III
+        // For receiving team: II and IV
+        const leftPlayer1 = getPlayerInfo(leftTeamPlayers, leftTeamCoinTossData, 0)
+        const leftPlayer2 = getPlayerInfo(leftTeamPlayers, leftTeamCoinTossData, 1)
+        const rightPlayer1 = getPlayerInfo(rightTeamPlayers, rightTeamCoinTossData, 0)
+        const rightPlayer2 = getPlayerInfo(rightTeamPlayers, rightTeamCoinTossData, 1)
+        
+        // Determine positions based on service order and serving status
+        // Ensure we have valid player objects (default to empty object if null)
+        const safeLeftPlayer1 = leftPlayer1 || { number: null, lastName: '', firstName: '', isCaptain: false }
+        const safeLeftPlayer2 = leftPlayer2 || { number: null, lastName: '', firstName: '', isCaptain: false }
+        const safeRightPlayer1 = rightPlayer1 || { number: null, lastName: '', firstName: '', isCaptain: false }
+        const safeRightPlayer2 = rightPlayer2 || { number: null, lastName: '', firstName: '', isCaptain: false }
+        
+        const getLeftPositions = () => {
+          if (leftIsServing) {
+            // Serving: I and III
+            if (leftServiceOrder === '1_2') {
+              return {
+                I: safeLeftPlayer1,
+                III: safeLeftPlayer2,
+                II: safeRightPlayer1,
+                IV: safeRightPlayer2
+              }
+            } else {
+              return {
+                I: safeLeftPlayer2,
+                III: safeLeftPlayer1,
+                II: safeRightPlayer2,
+                IV: safeRightPlayer1
+              }
+            }
+          } else {
+            // Receiving: II and IV
+            if (leftServiceOrder === '1_2') {
+              return {
+                I: safeRightPlayer1,
+                III: safeRightPlayer2,
+                II: safeLeftPlayer1,
+                IV: safeLeftPlayer2
+              }
+            } else {
+              return {
+                I: safeRightPlayer2,
+                III: safeRightPlayer1,
+                II: safeLeftPlayer2,
+                IV: safeLeftPlayer1
+              }
+            }
+          }
+        }
+        
+        const leftPositions = getLeftPositions()
+        
+        // Calculate right team positions
+        const getRightPositions = () => {
+          if (rightIsServing) {
+            // Serving: I and III
+            if (rightServiceOrder === '1_2') {
+              return {
+                I: safeRightPlayer1,
+                III: safeRightPlayer2,
+                II: safeLeftPlayer1,
+                IV: safeLeftPlayer2
+              }
+            } else {
+              return {
+                I: safeRightPlayer2,
+                III: safeRightPlayer1,
+                II: safeLeftPlayer2,
+                IV: safeLeftPlayer1
+              }
+            }
+          } else {
+            // Receiving: II and IV
+            if (rightServiceOrder === '1_2') {
+              return {
+                I: safeLeftPlayer1,
+                III: safeLeftPlayer2,
+                II: safeRightPlayer1,
+                IV: safeRightPlayer2
+              }
+            } else {
+              return {
+                I: safeLeftPlayer2,
+                III: safeLeftPlayer1,
+                II: safeRightPlayer2,
+                IV: safeRightPlayer1
+              }
+            }
+          }
+        }
+        
+        const rightPositions = getRightPositions()
+        
+        // Ensure positions objects exist
+        if (!leftPositions || !rightPositions) {
+          return (
+            <Modal
+              title={isSet3 ? "Set 3 - Configure Teams and Service" : "Set 2 - Configure Teams and Service"}
+              open={true}
+              onClose={() => {}}
+              width={600}
+              hideCloseButton={true}
+            >
+              <div style={{ padding: '24px', textAlign: 'center' }}>
+                <p>Loading player data...</p>
+              </div>
+            </Modal>
+          )
+        }
+        
         return (
           <Modal
             title={isSet3 ? "Set 3 - Configure Teams and Service" : "Set 2 - Configure Teams and Service"}
@@ -8251,6 +11153,26 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
             hideCloseButton={true}
           >
             <div style={{ padding: '24px' }}>
+              {/* 60 Second Countdown Timer - Prominent for Referees */}
+              <div style={{ 
+                marginBottom: '24px', 
+                padding: '16px', 
+                background: 'rgba(59, 130, 246, 0.2)', 
+                borderRadius: '8px',
+                border: '2px solid rgba(59, 130, 246, 0.5)',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '8px', fontWeight: 600 }}>
+                  Break Between Sets
+                </div>
+                <div style={{ fontSize: '48px', fontWeight: 700, color: 'var(--accent)', fontFamily: 'monospace' }}>
+                  {setTransitionCountdown}"
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '4px' }}>
+                  Time remaining before next set
+                </div>
+              </div>
+              
               {/* Show coin toss loser at top (only for after set 1) */}
               {!isSet3 && coinTossLoser && (
                 <div style={{ 
@@ -8279,7 +11201,7 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                   borderRadius: '8px',
                   border: '1px solid rgba(255, 255, 255, 0.1)'
                 }}>
-                  <h3 style={{ marginBottom: '12px', fontSize: '18px', fontWeight: 600 }}>3rd Set Coin Toss Winner</h3>
+                  <h3 style={{ marginBottom: '12px', fontSize: '18px', fontWeight: 600 }}>3rd Set Coin Toss Winner *</h3>
                   <div style={{ display: 'flex', gap: '24px', justifyContent: 'center' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                       <input
@@ -8304,6 +11226,11 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                       <span style={{ fontSize: '16px', fontWeight: 600 }}>Team B</span>
                     </label>
                   </div>
+                  {!set3CoinTossWinner && (
+                    <div style={{ marginTop: '8px', fontSize: '12px', color: '#ef4444', textAlign: 'center' }}>
+                      Please select the coin toss winner for Set 3
+                    </div>
+                  )}
                 </div>
               )}
               
@@ -8315,8 +11242,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
               <div style={{ marginBottom: '24px' }}>
                 <div style={{ 
                   display: 'flex', 
-                  gap: '16px', 
-                  alignItems: 'center',
+                  gap: '12px', 
+                  alignItems: 'flex-start',
                   padding: '16px',
                   background: 'rgba(255, 255, 255, 0.05)',
                   borderRadius: '8px',
@@ -8347,12 +11274,142 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                           width: '38px',
                           height: '38px',
                           filter: 'drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35))',
-                          marginTop: '8px'
+                          marginTop: '8px',
+                          marginBottom: '12px'
                         }}
                       />
                     )}
-                  </div>
                   
+                    {/* Service Order underneath box */}
+                  <div style={{ 
+                      marginTop: '12px', 
+                      padding: '8px',
+                      background: 'rgba(0, 0, 0, 0.2)',
+                      borderRadius: '6px',
+                      textAlign: 'left'
+                    }}>
+                      <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.8)', marginBottom: '8px', fontWeight: 600, textAlign: 'center' }}>
+                        {leftIsServing ? 'Service Order' : 'Reception Order'}
+                    </div>
+                      {leftPositions && (leftIsServing ? ['I', 'III'] : ['II', 'IV']).map((position) => {
+                        const player = leftPositions[position]
+                        if (!player) return null
+                        const hasName = (player.lastName && player.lastName.trim()) || (player.firstName && player.firstName.trim())
+                        if (!hasName) return null
+                        return (
+                          <div key={position} style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '8px',
+                            marginBottom: '6px',
+                            fontSize: '12px'
+                          }}>
+                            <div style={{ 
+                              minWidth: '24px',
+                              fontWeight: 700,
+                              color: '#fff'
+                            }}>
+                              {position}
+                    </div>
+                            {player.number !== null && player.number !== undefined && (
+                              <div style={{
+                                width: '20px',
+                                height: '20px',
+                                borderRadius: '50%',
+                                background: player.isCaptain ? '#fbbf24' : 'rgba(255, 255, 255, 0.3)',
+                                border: player.isCaptain ? '2px solid #f59e0b' : '1px solid rgba(255, 255, 255, 0.5)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                color: player.isCaptain ? '#000' : '#fff'
+                              }}>
+                                {player.number}
+                              </div>
+                            )}
+                            <div style={{ color: '#fff', flex: 1 }}>
+                              {player.lastName && <span style={{ fontWeight: 600 }}>{player.lastName}</span>}
+                              {player.firstName && (
+                                <span>{player.lastName ? ', ' : ''}{player.firstName.charAt(0).toUpperCase()}.</span>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                      <button
+                        onClick={() => {
+                          const teamKey = leftTeamLabel === 'A' ? 'teamA' : 'teamB'
+                          setSetTransitionServiceOrder({ 
+                            ...setTransitionServiceOrder, 
+                            [teamKey]: setTransitionServiceOrder[teamKey] === '1_2' ? '2_1' : '1_2'
+                          })
+                        }}
+                        style={{
+                          padding: '6px 12px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          background: 'rgba(255, 255, 255, 0.2)',
+                          color: '#fff',
+                          border: '1px solid rgba(255, 255, 255, 0.3)',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          width: '100%',
+                          marginTop: '8px'
+                        }}
+                      >
+                        Switch Serve Rotation
+                      </button>
+                  </div>
+                </div>
+                
+                  {/* Switch Teams and Switch Serve Buttons (between boxes) */}
+                  <div style={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    gap: '8px',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    paddingTop: '60px'
+                  }}>
+                  <button
+                    onClick={() => {
+                      setSetTransitionSelectedLeftTeam(setTransitionSelectedLeftTeam === 'A' ? 'B' : 'A')
+                    }}
+                    style={{
+                      padding: '8px 16px',
+                        fontSize: '13px',
+                      fontWeight: 600,
+                      background: 'rgba(255, 255, 255, 0.1)',
+                      color: 'var(--text)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    Switch Teams
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSetTransitionSelectedFirstServe(setTransitionSelectedFirstServe === 'A' ? 'B' : 'A')
+                    }}
+                    style={{
+                      padding: '8px 16px',
+                        fontSize: '13px',
+                      fontWeight: 600,
+                      background: 'rgba(255, 255, 255, 0.1)',
+                      color: 'var(--text)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    Switch Serve
+                  </button>
+                </div>
+                
                   {/* Team B Box */}
                   <div style={{ 
                     flex: 1, 
@@ -8378,111 +11435,93 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                           width: '38px',
                           height: '38px',
                           filter: 'drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35))',
-                          marginTop: '8px'
+                          marginTop: '8px',
+                          marginBottom: '12px'
                         }}
                       />
                     )}
+                  
+                    {/* Service Order underneath box */}
+                  <div style={{ 
+                      marginTop: '12px', 
+                      padding: '8px',
+                      background: 'rgba(0, 0, 0, 0.2)',
+                      borderRadius: '6px',
+                      textAlign: 'left'
+                    }}>
+                      <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.8)', marginBottom: '8px', fontWeight: 600, textAlign: 'center' }}>
+                        {rightIsServing ? 'Service Order' : 'Reception Order'}
+                    </div>
+                      {rightPositions && (rightIsServing ? ['I', 'III'] : ['II', 'IV']).map((position) => {
+                        const rightPlayer = rightPositions[position]
+                        if (!rightPlayer) return null
+                        const hasName = (rightPlayer.lastName && rightPlayer.lastName.trim()) || (rightPlayer.firstName && rightPlayer.firstName.trim())
+                        if (!hasName) return null
+                        return (
+                          <div key={position} style={{ 
+                            display: 'flex', 
+                            alignItems: 'center',
+                            gap: '8px',
+                            marginBottom: '6px',
+                            fontSize: '12px'
+                          }}>
+                            <div style={{ 
+                              minWidth: '24px',
+                              fontWeight: 700,
+                              color: '#fff'
+                            }}>
+                              {position}
+                    </div>
+                            {rightPlayer.number !== null && rightPlayer.number !== undefined && (
+                              <div style={{
+                                width: '20px',
+                                height: '20px',
+                                borderRadius: '50%',
+                                background: rightPlayer.isCaptain ? '#fbbf24' : 'rgba(255, 255, 255, 0.3)',
+                                border: rightPlayer.isCaptain ? '2px solid #f59e0b' : '1px solid rgba(255, 255, 255, 0.5)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                color: rightPlayer.isCaptain ? '#000' : '#fff'
+                              }}>
+                                {rightPlayer.number}
+                              </div>
+                            )}
+                            <div style={{ color: '#fff', flex: 1 }}>
+                              {rightPlayer.lastName && <span style={{ fontWeight: 600 }}>{rightPlayer.lastName}</span>}
+                              {rightPlayer.firstName && (
+                                <span>{rightPlayer.lastName ? ', ' : ''}{rightPlayer.firstName.charAt(0).toUpperCase()}.</span>
+                    )}
                   </div>
                 </div>
-                
-                {/* Switch Teams Button */}
-                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
+                        )
+                      })}
                   <button
                     onClick={() => {
-                      setSetTransitionSelectedLeftTeam(setTransitionSelectedLeftTeam === 'A' ? 'B' : 'A')
+                          const teamKey = rightTeamLabel === 'A' ? 'teamA' : 'teamB'
+                          setSetTransitionServiceOrder({ 
+                            ...setTransitionServiceOrder, 
+                            [teamKey]: setTransitionServiceOrder[teamKey] === '1_2' ? '2_1' : '1_2'
+                          })
                     }}
                     style={{
-                      padding: '8px 16px',
-                      fontSize: '14px',
+                          padding: '6px 12px',
+                          fontSize: '11px',
                       fontWeight: 600,
-                      background: 'rgba(255, 255, 255, 0.1)',
-                      color: 'var(--text)',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      borderRadius: '6px',
+                          background: 'rgba(255, 255, 255, 0.2)',
+                          color: '#fff',
+                          border: '1px solid rgba(255, 255, 255, 0.3)',
+                          borderRadius: '4px',
                       cursor: 'pointer',
-                      whiteSpace: 'nowrap'
+                          width: '100%',
+                          marginTop: '8px'
                     }}
                   >
-                    Switch Teams
+                        Switch Serve Rotation
                   </button>
                 </div>
-                
-                {/* Switch Serve Button */}
-                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '12px' }}>
-                  <button
-                    onClick={() => {
-                      setSetTransitionSelectedFirstServe(setTransitionSelectedFirstServe === 'A' ? 'B' : 'A')
-                    }}
-                    style={{
-                      padding: '8px 16px',
-                      fontSize: '14px',
-                      fontWeight: 600,
-                      background: 'rgba(255, 255, 255, 0.1)',
-                      color: 'var(--text)',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    Switch Serve
-                  </button>
-                </div>
-                
-                {/* Service Order Selection */}
-                <div style={{ marginTop: '24px', padding: '16px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  <h4 style={{ marginBottom: '12px', fontSize: '16px', fontWeight: 600 }}>Service Order</h4>
-                  <div style={{ display: 'flex', gap: '24px', justifyContent: 'center' }}>
-                    <div>
-                      <div style={{ marginBottom: '8px', fontSize: '14px', fontWeight: 600 }}>Team A</div>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: '8px' }}>
-                        <input
-                          type="radio"
-                          name="teamAServiceOrder"
-                          value="1_2"
-                          checked={setTransitionServiceOrder.teamA === '1_2'}
-                          onChange={(e) => setSetTransitionServiceOrder({ ...setTransitionServiceOrder, teamA: '1_2' })}
-                          style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                        />
-                        <span style={{ fontSize: '14px' }}>1 - 2</span>
-                      </label>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                        <input
-                          type="radio"
-                          name="teamAServiceOrder"
-                          value="2_1"
-                          checked={setTransitionServiceOrder.teamA === '2_1'}
-                          onChange={(e) => setSetTransitionServiceOrder({ ...setTransitionServiceOrder, teamA: '2_1' })}
-                          style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                        />
-                        <span style={{ fontSize: '14px' }}>2 - 1</span>
-                      </label>
-                    </div>
-                    <div>
-                      <div style={{ marginBottom: '8px', fontSize: '14px', fontWeight: 600 }}>Team B</div>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: '8px' }}>
-                        <input
-                          type="radio"
-                          name="teamBServiceOrder"
-                          value="1_2"
-                          checked={setTransitionServiceOrder.teamB === '1_2'}
-                          onChange={(e) => setSetTransitionServiceOrder({ ...setTransitionServiceOrder, teamB: '1_2' })}
-                          style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                        />
-                        <span style={{ fontSize: '14px' }}>1 - 2</span>
-                      </label>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                        <input
-                          type="radio"
-                          name="teamBServiceOrder"
-                          value="2_1"
-                          checked={setTransitionServiceOrder.teamB === '2_1'}
-                          onChange={(e) => setSetTransitionServiceOrder({ ...setTransitionServiceOrder, teamB: '2_1' })}
-                          style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                        />
-                        <span style={{ fontSize: '14px' }}>2 - 1</span>
-                      </label>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -8664,7 +11703,7 @@ function LineupModal({ team, teamData, players, matchId, setIndex, mode = 'initi
           return
         }
       }
-
+      
     })
     
     // Re-check for duplicates to mark all of them
@@ -9106,6 +12145,14 @@ function SetStartTimeModal({ setIndex, defaultTime, onConfirm, onCancel }) {
     const minutes = String(date.getMinutes()).padStart(2, '0')
     return `${hours}:${minutes}`
   })
+  
+  // Update time when defaultTime prop changes
+  useEffect(() => {
+    const date = new Date(defaultTime)
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+    setTime(`${hours}:${minutes}`)
+  }, [defaultTime])
 
   const handleConfirm = () => {
     // Convert time string to ISO string

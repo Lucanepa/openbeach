@@ -18,7 +18,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
   const [beach, setBeach] = useState('')
   const [court, setCourt] = useState('')
   const [matchPhase, setMatchPhase] = useState('main_draw') // main_draw | qualification
-  const [matchRound, setMatchRound] = useState('pool_play') // pool_play | double_elimination | winner_bracket | class | semi_final | finals
+  const [matchRound, setMatchRound] = useState('pool_play') // pool_play | winner_bracket | class | semi_final | finals
   const [matchNumber, setMatchNumber] = useState('')
   const [matchGender, setMatchGender] = useState('men') // men | women
   const [matchWithCoaches, setMatchWithCoaches] = useState(false) // Toggle for coaches
@@ -99,6 +99,12 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
   
   // Coin toss modals
   const [coinTossConfirmModal, setCoinTossConfirmModal] = useState(false) // Show confirmation modal before saving
+  
+  // Special cases modals
+  const [specialCasesModal, setSpecialCasesModal] = useState(false) // boolean - opens special cases submenu
+  const [forfaitModal, setForfaitModal] = useState(null) // { type: 'injury_before'|'injury_during'|'no_show', team?: string, playerNumber?: string, setIndex?: number, time?: string, score?: string, mtoRitDuration?: string, remarks?: string } | null
+  const [protestModal, setProtestModal] = useState(null) // { status?: string, remarks?: string } | null
+  const [showRemarks, setShowRemarks] = useState(false) // boolean - show remarks modal
   
   // Referee connection
   const [refereeConnectionEnabled, setRefereeConnectionEnabled] = useState(false)
@@ -1538,7 +1544,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                 <label>Match Round</label>
                 <select className="w-140" value={matchRound} onChange={e=>setMatchRound(e.target.value)}>
                   <option value="pool_play">Pool Play</option>
-                  <option value="double_elimination">Double Elimination</option>
                   <option value="winner_bracket">Winner Bracket</option>
                   <option value="class">Class</option>
                   <option value="semi_final">Semi-Final</option>
@@ -2238,11 +2243,16 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
             if (onCoinTossClose) onCoinTossClose()
           }}>← Back</button>
           <h2>Coin Toss</h2>
-          {onGoHome ? (
-            <button className="secondary" onClick={onGoHome}>Home</button>
-          ) : (
-          <div style={{ width: 80 }}></div>
-          )}
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button className="secondary" onClick={() => setSpecialCasesModal(true)} style={{ fontSize: '14px', padding: '8px 16px' }}>
+              Forfait/Protest
+            </button>
+            {onGoHome ? (
+              <button className="secondary" onClick={onGoHome}>Home</button>
+            ) : (
+            <div style={{ width: 80 }}></div>
+            )}
+          </div>
         </div>
         
         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 24, marginBottom: 24, alignItems: 'start' }}>
@@ -2251,15 +2261,49 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '8px' }}>
               <h3 style={{ textAlign: 'center', fontSize: '30px', margin: 0 }}>Team A</h3>
               <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-                <input
-                  type="radio"
-                  name="coinTossWinner"
-                  value="teamA"
-                  checked={coinTossWinner === 'teamA'}
-                  onChange={(e) => setCoinTossWinner('teamA')}
-                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                />
-                <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--muted)' }}>Won coin toss</span>
+                <div style={{ position: 'relative', display: 'inline-block' }}>
+                  <input
+                    type="radio"
+                    name="coinTossWinner"
+                    value="teamA"
+                    checked={coinTossWinner === 'teamA'}
+                    onChange={(e) => setCoinTossWinner('teamA')}
+                    style={{ 
+                      width: '18px', 
+                      height: '18px', 
+                      cursor: 'pointer',
+                      appearance: 'none',
+                      WebkitAppearance: 'none',
+                      MozAppearance: 'none',
+                      border: '2px solid #22c55e',
+                      borderRadius: '2px',
+                      backgroundColor: coinTossWinner === 'teamA' ? '#22c55e' : 'transparent',
+                      position: 'relative',
+                      margin: 0
+                    }}
+                  />
+                  {coinTossWinner === 'teamA' && (
+                    <span style={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      color: '#fff',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      pointerEvents: 'none',
+                      lineHeight: 1
+                    }}>✓</span>
+                  )}
+                </div>
+                <span style={{ 
+                  fontSize: '14px', 
+                  fontWeight: 600, 
+                  color: '#fff',
+                  background: '#22c55e',
+                  padding: '4px 8px',
+                  borderRadius: '4px'
+                }}>Won coin toss</span>
               </label>
             </div>
             <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, height: '48px' }}>
@@ -2509,15 +2553,49 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '8px' }}>
               <h3 style={{ textAlign: 'center', fontSize: '30px', margin: 0 }}>Team B</h3>
               <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-                <input
-                  type="radio"
-                  name="coinTossWinner"
-                  value="teamB"
-                  checked={coinTossWinner === 'teamB'}
-                  onChange={(e) => setCoinTossWinner('teamB')}
-                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                />
-                <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--muted)' }}>Won coin toss</span>
+                <div style={{ position: 'relative', display: 'inline-block' }}>
+                  <input
+                    type="radio"
+                    name="coinTossWinner"
+                    value="teamB"
+                    checked={coinTossWinner === 'teamB'}
+                    onChange={(e) => setCoinTossWinner('teamB')}
+                    style={{ 
+                      width: '18px', 
+                      height: '18px', 
+                      cursor: 'pointer',
+                      appearance: 'none',
+                      WebkitAppearance: 'none',
+                      MozAppearance: 'none',
+                      border: '2px solid #22c55e',
+                      borderRadius: '2px',
+                      backgroundColor: coinTossWinner === 'teamB' ? '#22c55e' : 'transparent',
+                      position: 'relative',
+                      margin: 0
+                    }}
+                  />
+                  {coinTossWinner === 'teamB' && (
+                    <span style={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      color: '#fff',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      pointerEvents: 'none',
+                      lineHeight: 1
+                    }}>✓</span>
+                  )}
+                </div>
+                <span style={{ 
+                  fontSize: '14px', 
+                  fontWeight: 600, 
+                  color: '#fff',
+                  background: '#22c55e',
+                  padding: '4px 8px',
+                  borderRadius: '4px'
+                }}>Won coin toss</span>
               </label>
             </div>
             <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, height: '48px' }}>
@@ -2818,6 +2896,376 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                  openSignature === 'team_2-coach' ? 'Team 2 Coach Signature' :
                  openSignature === 'team_2-captain' ? 'Team 2 Captain Signature' : 'Sign'}
         />
+
+        {/* Special Cases Modal */}
+        {specialCasesModal && (
+          <Modal
+            title="Special Cases"
+            open={true}
+            onClose={() => setSpecialCasesModal(false)}
+            width={400}
+          >
+            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <button
+                onClick={() => {
+                  setSpecialCasesModal(false)
+                  setForfaitModal({ type: 'no_show', team: null })
+                }}
+                style={{
+                  padding: '12px 24px',
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  background: '#dc2626',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  textAlign: 'left'
+                }}
+              >
+                Forfait
+              </button>
+              <button
+                onClick={() => {
+                  setSpecialCasesModal(false)
+                  setProtestModal({ status: '', remarks: '' })
+                }}
+                style={{
+                  padding: '12px 24px',
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  background: '#3b82f6',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  textAlign: 'left'
+                }}
+              >
+                Protest
+              </button>
+            </div>
+          </Modal>
+        )}
+
+        {/* Forfait Modal - MatchSetup version (No show only) */}
+        {forfaitModal && matchId && (
+          <Modal
+            title="Forfait Protocol - No Show"
+            open={true}
+            onClose={() => setForfaitModal(null)}
+            width={600}
+          >
+            <div style={{ padding: '24px' }}>
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Team to Forfait:</label>
+                {match?.coinTossData ? (
+                  // Show clickable team cards if coin toss is done
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <div
+                      onClick={() => setForfaitModal({ ...forfaitModal, team: 'team_1' })}
+                      style={{
+                        flex: 1,
+                        padding: '20px',
+                        background: team_1Color,
+                        borderRadius: '8px',
+                        border: forfaitModal.team === 'team_1' ? '3px solid #fff' : '2px solid rgba(255, 255, 255, 0.3)',
+                        cursor: 'pointer',
+                        textAlign: 'center',
+                        transition: 'transform 0.2s, box-shadow 0.2s',
+                        transform: forfaitModal.team === 'team_1' ? 'scale(1.02)' : 'scale(1)',
+                        boxShadow: forfaitModal.team === 'team_1' ? '0 4px 12px rgba(0,0,0,0.3)' : 'none'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (forfaitModal.team !== 'team_1') {
+                          e.currentTarget.style.transform = 'scale(1.02)'
+                          e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (forfaitModal.team !== 'team_1') {
+                          e.currentTarget.style.transform = 'scale(1)'
+                          e.currentTarget.style.boxShadow = 'none'
+                        }
+                      }}
+                    >
+                      <div style={{ fontSize: '18px', fontWeight: 700, color: isBrightColor(team_1Color) ? '#000' : '#fff', marginBottom: '4px' }}>
+                        Team 1
+                      </div>
+                      <div style={{ fontSize: '14px', color: isBrightColor(team_1Color) ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.9)' }}>
+                        {team_1}
+                      </div>
+                    </div>
+                    <div
+                      onClick={() => setForfaitModal({ ...forfaitModal, team: 'team_2' })}
+                      style={{
+                        flex: 1,
+                        padding: '20px',
+                        background: team_2Color,
+                        borderRadius: '8px',
+                        border: forfaitModal.team === 'team_2' ? '3px solid #fff' : '2px solid rgba(255, 255, 255, 0.3)',
+                        cursor: 'pointer',
+                        textAlign: 'center',
+                        transition: 'transform 0.2s, box-shadow 0.2s',
+                        transform: forfaitModal.team === 'team_2' ? 'scale(1.02)' : 'scale(1)',
+                        boxShadow: forfaitModal.team === 'team_2' ? '0 4px 12px rgba(0,0,0,0.3)' : 'none'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (forfaitModal.team !== 'team_2') {
+                          e.currentTarget.style.transform = 'scale(1.02)'
+                          e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (forfaitModal.team !== 'team_2') {
+                          e.currentTarget.style.transform = 'scale(1)'
+                          e.currentTarget.style.boxShadow = 'none'
+                        }
+                      }}
+                    >
+                      <div style={{ fontSize: '18px', fontWeight: 700, color: isBrightColor(team_2Color) ? '#000' : '#fff', marginBottom: '4px' }}>
+                        Team 2
+                      </div>
+                      <div style={{ fontSize: '14px', color: isBrightColor(team_2Color) ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.9)' }}>
+                        {team_2}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  // Show dropdown if coin toss hasn't been made
+                  <select
+                    value={forfaitModal.team || ''}
+                    onChange={(e) => setForfaitModal({ ...forfaitModal, team: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      fontSize: '14px',
+                      borderRadius: '4px',
+                      background: '#fff',
+                      color: '#000',
+                      border: '1px solid rgba(255, 255, 255, 0.2)'
+                    }}
+                  >
+                    <option value="">Select team...</option>
+                    <option value="team_1">{team_1}</option>
+                    <option value="team_2">{team_2}</option>
+                  </select>
+                )}
+              </div>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Remarks:</label>
+                <textarea
+                  value={forfaitModal.remarks || ''}
+                  onChange={(e) => setForfaitModal({ ...forfaitModal, remarks: e.target.value })}
+                  placeholder="Enter additional remarks (optional)..."
+                  rows={4}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    fontSize: '14px',
+                    borderRadius: '4px',
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    color: '#fff',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    resize: 'vertical'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => setForfaitModal(null)}
+                  style={{
+                    padding: '10px 24px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    background: '#6b7280',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!forfaitModal.team) {
+                      alert('Please select a team to forfait')
+                      return
+                    }
+                    
+                    const teamName = forfaitModal.team === 'team_1' ? team_1 : team_2
+                    const remarkText = `Team ${teamName} forfeits the match due to no show.${forfaitModal.remarks ? ` ${forfaitModal.remarks}` : ''}`
+                    
+                    // Append to existing remarks
+                    const match = await db.matches.get(matchId)
+                    const existingRemarks = match?.remarks || ''
+                    const newRemarks = existingRemarks ? `${existingRemarks}\n\n${remarkText}` : remarkText
+                    await db.matches.update(matchId, { remarks: newRemarks })
+                    
+                    // Set team A as the complete team (default)
+                    const completeTeamKey = 'team_1' // Default to team_1 as team A
+                    const forfaitTeamKey = forfaitModal.team
+                    
+                    // Award all sets to complete team
+                    const allSets = await db.sets.where({ matchId }).sortBy('index')
+                    for (const set of allSets) {
+                      const pointsToWin = set.index === 3 ? 15 : 21
+                      await db.sets.update(set.id, {
+                        finished: true,
+                        [completeTeamKey === 'team_1' ? 'team_1Points' : 'team_2Points']: pointsToWin,
+                        [forfaitTeamKey === 'team_1' ? 'team_1Points' : 'team_2Points']: 0
+                      })
+                    }
+                    
+                    // Set coin toss winner to complete team (default)
+                    const coinTossData = match?.coinTossData || {}
+                    const updatedCoinTossData = { ...coinTossData }
+                    if (!updatedCoinTossData.winner) {
+                      updatedCoinTossData.winner = completeTeamKey === 'team_1' ? 'teamA' : 'teamB'
+                    }
+                    
+                    // Set service order to 1-2 if not available
+                    if (!updatedCoinTossData.players) {
+                      updatedCoinTossData.players = {
+                        teamA: {
+                          player1: { number: 1, serviceOrder: 1 },
+                          player2: { number: 2, serviceOrder: 2 }
+                        },
+                        teamB: {
+                          player1: { number: 1, serviceOrder: 1 },
+                          player2: { number: 2, serviceOrder: 2 }
+                        }
+                      }
+                    }
+                    
+                    await db.matches.update(matchId, { coinTossData: updatedCoinTossData })
+                    
+                    // Mark match as final
+                    await db.matches.update(matchId, { status: 'final' })
+                    
+                    setForfaitModal(null)
+                    setShowRemarks(true)
+                  }}
+                  disabled={!forfaitModal.team}
+                  style={{
+                    padding: '10px 24px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    background: forfaitModal.team ? '#dc2626' : '#6b7280',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: forfaitModal.team ? 'pointer' : 'not-allowed',
+                    opacity: forfaitModal.team ? 1 : 0.6
+                  }}
+                >
+                  Confirm Forfait
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {/* Protest Modal - MatchSetup version */}
+        {protestModal && matchId && (
+          <Modal
+            title="Protest Protocol"
+            open={true}
+            onClose={() => setProtestModal(null)}
+            width={500}
+          >
+            <div style={{ padding: '24px' }}>
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Protest Status:</label>
+                <select
+                  value={protestModal.status || ''}
+                  onChange={(e) => setProtestModal({ ...protestModal, status: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    fontSize: '14px',
+                    borderRadius: '4px',
+                    background: '#fff',
+                    color: '#000',
+                    border: '1px solid rgba(255, 255, 255, 0.2)'
+                  }}
+                >
+                  <option value="">Select status...</option>
+                  <option value="REJECTED LEVEL 1">REJECTED LEVEL 1</option>
+                  <option value="ACCEPTED LEVEL 1">ACCEPTED LEVEL 1</option>
+                  <option value="REJECTED / PENDING LEVEL 1">REJECTED / PENDING LEVEL 1</option>
+                  <option value="ACCEPTED / PENDING LEVEL 1">ACCEPTED / PENDING LEVEL 1</option>
+                  <option value="PENDING LEVEL 1">PENDING LEVEL 1</option>
+                </select>
+              </div>
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Remarks:</label>
+                <textarea
+                  value={protestModal.remarks || ''}
+                  onChange={(e) => setProtestModal({ ...protestModal, remarks: e.target.value })}
+                  placeholder="Enter protest remarks..."
+                  rows={6}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    fontSize: '14px',
+                    borderRadius: '4px',
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    color: '#fff',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    resize: 'vertical'
+                  }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => setProtestModal(null)}
+                  style={{
+                    padding: '10px 24px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    background: '#6b7280',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    if (matchId && protestModal.status) {
+                      const match = await db.matches.get(matchId)
+                      const existingRemarks = match?.remarks || ''
+                      const newRemarks = existingRemarks ? `${existingRemarks}\n\n${protestModal.status}${protestModal.remarks ? ` - ${protestModal.remarks}` : ''}` : `${protestModal.status}${protestModal.remarks ? ` - ${protestModal.remarks}` : ''}`
+                      await db.matches.update(matchId, { remarks: newRemarks })
+                    }
+                    setProtestModal(null)
+                    setShowRemarks(true)
+                  }}
+                  disabled={!protestModal.status}
+                  style={{
+                    padding: '10px 24px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    background: protestModal.status ? '#3b82f6' : '#6b7280',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: protestModal.status ? 'pointer' : 'not-allowed',
+                    opacity: protestModal.status ? 1 : 0.6
+                  }}
+                >
+                  Save Protest
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )}
       </div>
     )
   }
@@ -2826,9 +3274,9 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
     // Calculate serve rotation
     const firstServeTeam = serveA ? teamA : teamB
     
-    // Get team info
-    const teamAInfo = teamA === 'team_1' ? { name: team_1, roster: team_1Roster } : { name: team_2, roster: team_2Roster }
-    const teamBInfo = teamB === 'team_1' ? { name: team_1, roster: team_1Roster } : { name: team_2, roster: team_2Roster }
+    // Get team info with colors
+    const teamAInfo = teamA === 'team_1' ? { name: team_1, roster: team_1Roster, color: team_1Color } : { name: team_2, roster: team_2Roster, color: team_2Color }
+    const teamBInfo = teamB === 'team_1' ? { name: team_1, roster: team_1Roster, color: team_1Color } : { name: team_2, roster: team_2Roster, color: team_2Color }
     
     // Calculate rotations
     const getPlayerRotation = (teamKey, playerIndex, isFirstServeTeam) => {
@@ -2874,30 +3322,34 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
           <div style={{ marginBottom: '32px', padding: '20px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
             <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 600 }}>Team Assignment</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div>
-                <div style={{ fontSize: '14px', color: 'var(--muted)', marginBottom: '4px' }}>Team A</div>
-                <div style={{ fontSize: '16px', fontWeight: 600 }}>{teamAInfo.name}</div>
+              <div style={{ padding: '16px', background: teamAInfo.color, borderRadius: '8px' }}>
+                <div style={{ fontSize: '14px', color: isBrightColor(teamAInfo.color) ? '#000' : '#fff', marginBottom: '4px', opacity: 0.8 }}>Team A</div>
+                <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '12px', color: isBrightColor(teamAInfo.color) ? '#000' : '#fff' }}>{teamAInfo.name}</div>
+                {coinTossWinner === 'teamA' && (
+                  <div style={{ fontSize: '14px', color: isBrightColor(teamAInfo.color) ? '#000' : '#22c55e', marginBottom: '8px', fontWeight: 500 }}>
+                    ✓ Coin Toss Winner
+                  </div>
+                )}
+                {firstServeTeam === teamA && (
+                  <div style={{ fontSize: '14px', color: isBrightColor(teamAInfo.color) ? '#000' : '#3b82f6', marginBottom: '8px', fontWeight: 500 }}>
+                    ✓ Serves First
+                  </div>
+                )}
               </div>
-              <div>
-                <div style={{ fontSize: '14px', color: 'var(--muted)', marginBottom: '4px' }}>Team B</div>
-                <div style={{ fontSize: '16px', fontWeight: 600 }}>{teamBInfo.name}</div>
+              <div style={{ padding: '16px', background: teamBInfo.color, borderRadius: '8px' }}>
+                <div style={{ fontSize: '14px', color: isBrightColor(teamBInfo.color) ? '#000' : '#fff', marginBottom: '4px', opacity: 0.8 }}>Team B</div>
+                <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '12px', color: isBrightColor(teamBInfo.color) ? '#000' : '#fff' }}>{teamBInfo.name}</div>
+                {coinTossWinner === 'teamB' && (
+                  <div style={{ fontSize: '14px', color: isBrightColor(teamBInfo.color) ? '#000' : '#22c55e', marginBottom: '8px', fontWeight: 500 }}>
+                    ✓ Coin Toss Winner
+                  </div>
+                )}
+                {firstServeTeam === teamB && (
+                  <div style={{ fontSize: '14px', color: isBrightColor(teamBInfo.color) ? '#000' : '#3b82f6', marginBottom: '8px', fontWeight: 500 }}>
+                    ✓ Serves First
+                  </div>
+                )}
               </div>
-            </div>
-          </div>
-          
-          {coinTossWinner && (
-            <div style={{ marginBottom: '32px', padding: '20px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
-              <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 600 }}>Coin Toss Winner</h3>
-              <div style={{ fontSize: '16px' }}>
-                <strong>{coinTossWinner === 'teamA' ? teamAInfo.name : teamBInfo.name}</strong> won the coin toss
-              </div>
-            </div>
-          )}
-          
-          <div style={{ marginBottom: '32px', padding: '20px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
-            <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 600 }}>First Serve</h3>
-            <div style={{ fontSize: '16px' }}>
-              <strong>{firstServeTeam === teamA ? teamAInfo.name : teamBInfo.name}</strong> serves first
             </div>
           </div>
           
@@ -2909,22 +3361,56 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                   <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>Rotation</th>
                   <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>Team</th>
                   <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>Player</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>Number</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>Captain</th>
+                  <th style={{ padding: '12px', textAlign: 'center', fontSize: '14px', fontWeight: 600 }}>Number</th>
                 </tr>
               </thead>
               <tbody>
                 {rotationOrder.map((item, idx) => {
                   const player = item.roster[item.playerIndex]
                   const playerName = `${player?.firstName || ''} ${player?.lastName || ''}`.trim() || 'Player'
-                  const teamName = item.team === teamA ? teamAInfo.name : teamBInfo.name
+                  const teamLabel = item.team === teamA ? 'A' : 'B'
+                  // Convert rotation number to Roman numeral
+                  const romanNumerals = ['', 'I', 'II', 'III', 'IV']
+                  const rotationRoman = romanNumerals[item.rotation] || item.rotation
+                  const playerNumber = item.playerData.number
+                  const isCaptain = item.playerData.isCaptain
+                  
+                  const teamColor = item.team === teamA ? teamAInfo.color : teamBInfo.color
+                  
                   return (
                     <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                      <td style={{ padding: '12px', fontSize: '16px', fontWeight: 600 }}>{item.rotation}</td>
-                      <td style={{ padding: '12px', fontSize: '14px' }}>{teamName}</td>
+                      <td style={{ padding: '12px', fontSize: '16px', fontWeight: 600 }}>{rotationRoman}</td>
+                      <td style={{ padding: '12px', fontSize: '14px', fontWeight: 600 }}>
+                        <span style={{
+                          display: 'inline-block',
+                          padding: '4px 12px',
+                          background: teamColor,
+                          color: isBrightColor(teamColor) ? '#000' : '#fff',
+                          borderRadius: '4px',
+                          fontWeight: 700
+                        }}>
+                          {teamLabel}
+                        </span>
+                      </td>
                       <td style={{ padding: '12px', fontSize: '14px' }}>{playerName}</td>
-                      <td style={{ padding: '12px', fontSize: '14px' }}>{item.playerData.number || '-'}</td>
-                      <td style={{ padding: '12px', fontSize: '14px' }}>{item.playerData.isCaptain ? 'Yes' : 'No'}</td>
+                      <td style={{ padding: '12px', fontSize: '14px', textAlign: 'center' }}>
+                        {playerNumber ? (
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: isCaptain ? '32px' : 'auto',
+                            height: isCaptain ? '32px' : 'auto',
+                            borderRadius: isCaptain ? '50%' : '0',
+                            border: isCaptain ? '2px solid #22c55e' : 'none',
+                            background: isCaptain ? 'rgba(34, 197, 94, 0.1)' : 'transparent',
+                            padding: isCaptain ? '0' : '0',
+                            fontWeight: isCaptain ? 700 : 400
+                          }}>
+                            {playerNumber}
+                          </span>
+                        ) : '-'}
+                      </td>
                     </tr>
                   )
                 })}
@@ -3260,7 +3746,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                       )}
                       {matchRound && (
                         <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)', marginTop: 4 }}>
-                          {matchRound === 'pool_play' ? 'Pool Play' : matchRound === 'double_elimination' ? 'Double Elimination' : matchRound === 'winner_bracket' ? 'Winner Bracket' : matchRound === 'class' ? 'Class' : matchRound === 'semi_final' ? 'Semi-Final' : matchRound === 'finals' ? 'Finals' : 'Not set'}
+                          {matchRound === 'pool_play' ? 'Pool Play' : matchRound === 'winner_bracket' ? 'Winner Bracket' : matchRound === 'class' ? 'Class' : matchRound === 'semi_final' ? 'Semi-Final' : matchRound === 'finals' ? 'Finals' : 'Not set'}
                         </div>
                       )}
                     </div>
@@ -3946,6 +4432,399 @@ export default function MatchSetup({ onStart, matchId, onReturn, onGoHome, showC
                 Save PIN
               </button>
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Special Cases Modal */}
+      {specialCasesModal && (
+        <Modal
+          title="Special Cases"
+          open={true}
+          onClose={() => setSpecialCasesModal(false)}
+          width={400}
+        >
+          <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <button
+              onClick={() => {
+                setSpecialCasesModal(false)
+                setForfaitModal({ type: 'no_show', team: null })
+              }}
+              style={{
+                padding: '12px 24px',
+                fontSize: '16px',
+                fontWeight: 600,
+                background: '#dc2626',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                textAlign: 'left'
+              }}
+            >
+              Forfait
+            </button>
+            <button
+              onClick={() => {
+                setSpecialCasesModal(false)
+                setProtestModal({ status: '', remarks: '' })
+              }}
+              style={{
+                padding: '12px 24px',
+                fontSize: '16px',
+                fontWeight: 600,
+                background: '#3b82f6',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                textAlign: 'left'
+              }}
+            >
+              Protest
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Forfait Modal - MatchSetup version (No show only) */}
+      {forfaitModal && matchId && (
+        <Modal
+          title="Forfait Protocol - No Show"
+          open={true}
+          onClose={() => setForfaitModal(null)}
+          width={600}
+        >
+          <div style={{ padding: '24px' }}>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Team to Forfait:</label>
+              {match?.coinTossData ? (
+                // Show clickable team cards if coin toss is done
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <div
+                    onClick={() => setForfaitModal({ ...forfaitModal, team: 'team_1' })}
+                    style={{
+                      flex: 1,
+                      padding: '20px',
+                      background: team_1Color,
+                      borderRadius: '8px',
+                      border: forfaitModal.team === 'team_1' ? '3px solid #fff' : '2px solid rgba(255, 255, 255, 0.3)',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      transition: 'transform 0.2s, box-shadow 0.2s',
+                      transform: forfaitModal.team === 'team_1' ? 'scale(1.02)' : 'scale(1)',
+                      boxShadow: forfaitModal.team === 'team_1' ? '0 4px 12px rgba(0,0,0,0.3)' : 'none'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (forfaitModal.team !== 'team_1') {
+                        e.currentTarget.style.transform = 'scale(1.02)'
+                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (forfaitModal.team !== 'team_1') {
+                        e.currentTarget.style.transform = 'scale(1)'
+                        e.currentTarget.style.boxShadow = 'none'
+                      }
+                    }}
+                  >
+                    <div style={{ fontSize: '18px', fontWeight: 700, color: isBrightColor(team_1Color) ? '#000' : '#fff', marginBottom: '4px' }}>
+                      Team 1
+                    </div>
+                    <div style={{ fontSize: '14px', color: isBrightColor(team_1Color) ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.9)' }}>
+                      {team_1}
+                    </div>
+                  </div>
+                  <div
+                    onClick={() => setForfaitModal({ ...forfaitModal, team: 'team_2' })}
+                    style={{
+                      flex: 1,
+                      padding: '20px',
+                      background: team_2Color,
+                      borderRadius: '8px',
+                      border: forfaitModal.team === 'team_2' ? '3px solid #fff' : '2px solid rgba(255, 255, 255, 0.3)',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      transition: 'transform 0.2s, box-shadow 0.2s',
+                      transform: forfaitModal.team === 'team_2' ? 'scale(1.02)' : 'scale(1)',
+                      boxShadow: forfaitModal.team === 'team_2' ? '0 4px 12px rgba(0,0,0,0.3)' : 'none'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (forfaitModal.team !== 'team_2') {
+                        e.currentTarget.style.transform = 'scale(1.02)'
+                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (forfaitModal.team !== 'team_2') {
+                        e.currentTarget.style.transform = 'scale(1)'
+                        e.currentTarget.style.boxShadow = 'none'
+                      }
+                    }}
+                  >
+                    <div style={{ fontSize: '18px', fontWeight: 700, color: isBrightColor(team_2Color) ? '#000' : '#fff', marginBottom: '4px' }}>
+                      Team 2
+                    </div>
+                    <div style={{ fontSize: '14px', color: isBrightColor(team_2Color) ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.9)' }}>
+                      {team_2}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                // Show dropdown if coin toss hasn't been made
+                <select
+                  value={forfaitModal.team || ''}
+                  onChange={(e) => setForfaitModal({ ...forfaitModal, team: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    fontSize: '14px',
+                    borderRadius: '4px',
+                    background: '#fff',
+                    color: '#000',
+                    border: '1px solid rgba(255, 255, 255, 0.2)'
+                  }}
+                >
+                  <option value="">Select team...</option>
+                  <option value="team_1">{team_1}</option>
+                  <option value="team_2">{team_2}</option>
+                </select>
+              )}
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Remarks:</label>
+              <textarea
+                value={forfaitModal.remarks || ''}
+                onChange={(e) => setForfaitModal({ ...forfaitModal, remarks: e.target.value })}
+                placeholder="Enter additional remarks (optional)..."
+                rows={4}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  fontSize: '14px',
+                  borderRadius: '4px',
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  color: '#fff',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  resize: 'vertical'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setForfaitModal(null)}
+                style={{
+                  padding: '10px 24px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  background: '#6b7280',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!forfaitModal.team) {
+                    alert('Please select a team to forfait')
+                    return
+                  }
+                  
+                  const teamName = forfaitModal.team === 'team_1' ? team_1 : team_2
+                  const remarkText = `Team ${teamName} forfeits the match due to no show.${forfaitModal.remarks ? ` ${forfaitModal.remarks}` : ''}`
+                  
+                  // Append to existing remarks
+                  const match = await db.matches.get(matchId)
+                  const existingRemarks = match?.remarks || ''
+                  const newRemarks = existingRemarks ? `${existingRemarks}\n\n${remarkText}` : remarkText
+                  await db.matches.update(matchId, { remarks: newRemarks })
+                  
+                  // Set team A as the complete team (default)
+                  const completeTeamKey = 'team_1' // Default to team_1 as team A
+                  const forfaitTeamKey = forfaitModal.team
+                  
+                  // Award all sets to complete team
+                  const allSets = await db.sets.where({ matchId }).sortBy('index')
+                  for (const set of allSets) {
+                    const pointsToWin = set.index === 3 ? 15 : 21
+                    await db.sets.update(set.id, {
+                      finished: true,
+                      [completeTeamKey === 'team_1' ? 'team_1Points' : 'team_2Points']: pointsToWin,
+                      [forfaitTeamKey === 'team_1' ? 'team_1Points' : 'team_2Points']: 0
+                    })
+                  }
+                  
+                  // Set coin toss winner to complete team (default)
+                  const coinTossData = match?.coinTossData || {}
+                  const updatedCoinTossData = { ...coinTossData }
+                  if (!updatedCoinTossData.winner) {
+                    updatedCoinTossData.winner = completeTeamKey === 'team_1' ? 'teamA' : 'teamB'
+                  }
+                  
+                  // Set service order to 1-2 if not available
+                  if (!updatedCoinTossData.players) {
+                    updatedCoinTossData.players = {
+                      teamA: {
+                        player1: { number: 1, serviceOrder: 1 },
+                        player2: { number: 2, serviceOrder: 2 }
+                      },
+                      teamB: {
+                        player1: { number: 1, serviceOrder: 1 },
+                        player2: { number: 2, serviceOrder: 2 }
+                      }
+                    }
+                  }
+                  
+                  await db.matches.update(matchId, { coinTossData: updatedCoinTossData })
+                  
+                  // Mark match as final
+                  await db.matches.update(matchId, { status: 'final' })
+                  
+                  setForfaitModal(null)
+                  setShowRemarks(true)
+                }}
+                disabled={!forfaitModal.team}
+                style={{
+                  padding: '10px 24px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  background: forfaitModal.team ? '#dc2626' : '#6b7280',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: forfaitModal.team ? 'pointer' : 'not-allowed',
+                  opacity: forfaitModal.team ? 1 : 0.6
+                }}
+              >
+                Confirm Forfait
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Protest Modal - MatchSetup version */}
+      {protestModal && matchId && (
+        <Modal
+          title="Protest Protocol"
+          open={true}
+          onClose={() => setProtestModal(false)}
+          width={500}
+        >
+          <div style={{ padding: '24px' }}>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Protest Status:</label>
+              <select
+                value={protestModal.status || ''}
+                onChange={(e) => setProtestModal({ ...protestModal, status: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  fontSize: '14px',
+                  borderRadius: '4px',
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  color: '#fff',
+                  border: '1px solid rgba(255, 255, 255, 0.2)'
+                }}
+              >
+                <option value="">Select status...</option>
+                <option value="REJECTED LEVEL 1">REJECTED LEVEL 1</option>
+                <option value="ACCEPTED LEVEL 1">ACCEPTED LEVEL 1</option>
+                <option value="REJECTED / PENDING LEVEL 1">REJECTED / PENDING LEVEL 1</option>
+                <option value="ACCEPTED / PENDING LEVEL 1">ACCEPTED / PENDING LEVEL 1</option>
+                <option value="PENDING LEVEL 1">PENDING LEVEL 1</option>
+              </select>
+            </div>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Additional Remarks:</label>
+              <textarea
+                value={protestModal.remarks || ''}
+                onChange={(e) => setProtestModal({ ...protestModal, remarks: e.target.value })}
+                placeholder="Enter additional protest details..."
+                rows={4}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  fontSize: '14px',
+                  borderRadius: '4px',
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  color: '#fff',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  resize: 'vertical'
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setProtestModal(null)}
+                style={{
+                  padding: '10px 24px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  background: '#6b7280',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!protestModal.status || !matchId) return
+                  const remarkText = protestModal.status + (protestModal.remarks ? `\n${protestModal.remarks}` : '')
+                  const match = await db.matches.get(matchId)
+                  const existingRemarks = match?.remarks || ''
+                  const newRemarks = existingRemarks ? `${existingRemarks}\n\n${remarkText}` : remarkText
+                  await db.matches.update(matchId, { remarks: newRemarks })
+                  setProtestModal(null)
+                  setShowRemarks(true)
+                }}
+                disabled={!protestModal.status}
+                style={{
+                  padding: '10px 24px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  background: protestModal.status ? '#3b82f6' : '#6b7280',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: protestModal.status ? 'pointer' : 'not-allowed'
+                }}
+              >
+                Record Protest
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Remarks Modal - MatchSetup version */}
+      {showRemarks && matchId && (
+        <Modal
+          title="Remarks Recording"
+          open={true}
+          onClose={() => setShowRemarks(false)}
+          width={600}
+        >
+          <div style={{ padding: '20px', maxHeight: '80vh', overflowY: 'auto' }}>
+            <section className="panel">
+              <h3>Remarks</h3>
+              <textarea
+                className="remarks-area"
+                placeholder="Record match remarks…"
+                value={match?.remarks || ''}
+                onChange={e => {
+                  db.matches.update(matchId, { remarks: e.target.value })
+                }}
+              />
+            </section>
           </div>
         </Modal>
       )}

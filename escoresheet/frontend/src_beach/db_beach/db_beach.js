@@ -1,6 +1,15 @@
 import Dexie from 'dexie'
+import { getSessionId } from '../utils_beach/session_beach'
 
-export const db = new Dexie('escoresheet_beach')
+// Get unique session ID for this browser/device
+// This ensures each browser/device gets its own isolated database
+const sessionId = getSessionId()
+
+// Create session-specific database name
+// This ensures complete data isolation between different browsers/devices
+const dbName = `escoresheet_beach_${sessionId}`
+
+export const db = new Dexie(dbName)
 
 db.version(1).stores({
   teams: '++id,name,createdAt',

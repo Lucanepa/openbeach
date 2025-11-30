@@ -1,6 +1,8 @@
 {
   "name": "escoresheet",
   "version": "0.1.0",
+  "description": "OpenBeach eScoresheet - Offline-first beach volleyball scoresheet application",
+  "author": "OpenBeach",
   "private": true,
   "type": "module",
   "scripts": {
@@ -16,20 +18,21 @@
   },
   "dependencies": {
     "dexie": "^4.0.8",
-    "jspdf": "^2.5.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
     "dexie-react-hooks": "^1.1.7",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^2.5.1",
+    "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^3.11.174",
-    "pdf-lib": "^1.17.1"
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "vite": "^5.4.11",
     "@vitejs/plugin-react": "^4.3.1",
-    "vite-plugin-pwa": "^0.17.5",
+    "concurrently": "^8.2.2",
     "electron": "^28.0.0",
     "electron-builder": "^24.9.1",
-    "concurrently": "^8.2.2",
+    "vite": "^5.4.11",
+    "vite-plugin-pwa": "^0.17.5",
     "wait-on": "^7.2.0"
   },
   "main": "electron/main.cjs",
@@ -44,18 +47,26 @@
       "electron/**/*"
     ],
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "icon": "build/icon.ico",
-      "artifactName": "OpenBeach-eScoresheet-Setup.${ext}"
+      "artifactName": "OpenBeach-eScoresheet-Setup.${ext}",
+      "publisherName": "OpenBeach"
     },
     "mac": {
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "icon": "build/icon.icns",
       "category": "public.app-category.sports",
       "artifactName": "OpenBeach-eScoresheet.${ext}"
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "icon": "build/icon.png",
       "category": "Game"
     },
@@ -65,5 +76,3 @@
     }
   }
 }
-
-

@@ -41,7 +41,12 @@ export default defineConfig({
       },
       output: {
         // Avoid eval in production builds
-        format: 'es'
+        format: 'es',
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom'],
+          'dexie-vendor': ['dexie', 'dexie-react-hooks'],
+          'pdf-vendor': ['jspdf', 'pdfjs-dist', 'pdf-lib']
+        }
       }
     }
   }

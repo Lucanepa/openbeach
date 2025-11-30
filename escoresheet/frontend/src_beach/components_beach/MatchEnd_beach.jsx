@@ -546,25 +546,16 @@ export default function MatchEnd({ matchId, onShowScoresheet, onGoHome }) {
             // Store data in sessionStorage to pass to new window
             sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData));
             
-            // Calculate optimal window size for A3 scoresheet (410mm x 287mm)
-            // At 96 DPI: ~1549px x 1084px, but add padding and controls
-            const scoresheetWidth = 410; // mm
-            const scoresheetHeight = 287; // mm
+            // Calculate optimal window size for A4 scoresheet (297mm x 210mm)
+            // At 96 DPI: ~1123px x 794px, but add padding and controls
+            const scoresheetWidth = 297; // mm
+            const scoresheetHeight = 210; // mm
             const mmToPx = 3.779527559; // 1mm = 3.779527559px at 96 DPI
             const windowWidth = Math.max(1600, Math.min(screen.width - 100, scoresheetWidth * mmToPx + 200));
             const windowHeight = Math.max(1200, Math.min(screen.height - 100, scoresheetHeight * mmToPx + 200));
             
-            // Open scoresheet in new window with calculated size
-            const scoresheetWindow = window.open(
-              '/scoresheet_beach.html', 
-              '_blank', 
-              `width=${Math.round(windowWidth)},height=${Math.round(windowHeight)},scrollbars=yes,resizable=yes`
-            );
-            
-            if (!scoresheetWindow) {
-              alert('Please allow popups to view the scoresheet');
-              return;
-            }
+            // Open scoresheet in new tab (not popup) so user can access console
+            window.open('/scoresheet_beach.html', '_blank');
             
             // Wait for window to load, then adjust zoom if needed
             const adjustZoom = () => {

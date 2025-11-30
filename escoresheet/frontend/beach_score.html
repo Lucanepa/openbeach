@@ -164,8 +164,49 @@
     </div>
 
     <script>
-      // Initialize Dexie database
-      const db = new Dexie('escoresheet_beach')
+      // Session management for unique database per browser/device
+      function getSessionId() {
+        const STORAGE_KEY = 'escoresheet_beach_session_id'
+        let sessionId = localStorage.getItem(STORAGE_KEY)
+        
+        if (!sessionId) {
+          // Generate unique session ID based on browser fingerprint
+          const userAgent = navigator.userAgent || ''
+          const language = navigator.language || ''
+          const platform = navigator.platform || ''
+          const hardwareConcurrency = navigator.hardwareConcurrency || 0
+          const maxTouchPoints = navigator.maxTouchPoints || 0
+          const screenWidth = screen.width || 0
+          const screenHeight = screen.height || 0
+          const colorDepth = screen.colorDepth || 0
+          const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || ''
+          
+          const fingerprint = [
+            userAgent, language, platform, hardwareConcurrency,
+            maxTouchPoints, screenWidth, screenHeight, colorDepth, timezone, Date.now()
+          ].join('|')
+          
+          let hash = 0
+          for (let i = 0; i < fingerprint.length; i++) {
+            const char = fingerprint.charCodeAt(i)
+            hash = ((hash << 5) - hash) + char
+            hash = hash & hash
+          }
+          
+          const random = Math.random().toString(36).substring(2, 15)
+          const timestamp = Date.now().toString(36)
+          sessionId = `session_${Math.abs(hash).toString(36)}_${random}_${timestamp}`
+          
+          localStorage.setItem(STORAGE_KEY, sessionId)
+          localStorage.setItem(`${STORAGE_KEY}_created`, Date.now().toString())
+        }
+        
+        return sessionId
+      }
+      
+      // Initialize Dexie database with session-specific name
+      const sessionId = getSessionId()
+      const db = new Dexie(`escoresheet_beach_${sessionId}`)
       
       db.version(1).stores({
         teams: '++id,name,createdAt',

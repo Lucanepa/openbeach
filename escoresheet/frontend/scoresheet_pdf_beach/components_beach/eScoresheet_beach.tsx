@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
@@ -80,14 +80,25 @@ const ABCircle = ({
 
 // Score Input Pair (Input : Input)
 const ScoreInputPair = ({ 
-  valA, valB, onChangeA, onChangeB, className = "" 
+  valA, valB, onChangeA, onChangeB, className = "", crossed = false
 }: { 
-  valA?: string, valB?: string, onChangeA: (v: string) => void, onChangeB: (v: string) => void, className?: string 
+  valA?: string, valB?: string, onChangeA: (v: string) => void, onChangeB: (v: string) => void, className?: string, crossed?: boolean
 }) => (
-  <div className={`flex items-center justify-center w-full h-full ${className}`}>
-    <Input value={valA} onChange={onChangeA} className="w-1/2 h-full text-[8px] text-right pr-0.5" />
+  <div className={`flex items-center justify-center w-full h-full relative ${className}`}>
+    <Input value={valA} onChange={onChangeA} className="w-1/2 h-full text-[8px] text-center" />
     <span className="text-[8px] leading-none">:</span>
-    <Input value={valB} onChange={onChangeB} className="w-1/2 h-full text-[8px] text-left pl-0.5" />
+    <Input value={valB} onChange={onChangeB} className="w-1/2 h-full text-[8px] text-center" />
+    {crossed && (
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        {/* Full X: both backslash and forward slash */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <svg width="100%" height="100%" viewBox="0 0 32 32" className="absolute left-0 top-0" style={{zIndex:4}}>
+            <line x1="2" y1="2" x2="30" y2="30" stroke="black" strokeWidth="1"/>
+            <line x1="2" y1="30" x2="30" y2="2" stroke="black" strokeWidth="1"/>
+          </svg>
+        </div>
+      </div>
+    )}
   </div>
 );
 
@@ -95,8 +106,12 @@ const ScoreInputPair = ({
 // States: null -> 'slash' -> 'circle' -> null
 const PointCell = ({ num, value, onClick }: { num: number, value: string, onClick: () => void }) => (
   <div onClick={onClick} className="relative flex items-center justify-center h-full w-full cursor-pointer select-none group">
-    {/* Unbolded number */}
+    {/* Hide number if no value (make it white/invisible) */}
+    {value ? (
     <span className="z-10 text-[9px] text-black font-normal">{num}</span>
+    ) : (
+      <span className="z-10 text-[9px] text-white font-normal">{num}</span>
+    )}
     
     {/* Slash: Bottom-Left to Top-Right (-45deg) */}
     {value === 'slash' && (
@@ -119,23 +134,56 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
   const [dataInitialized, setDataInitialized] = useState(false);
   const page1Ref = useRef<HTMLDivElement>(null);
   const page2Ref = useRef<HTMLDivElement>(null);
+  const page3Ref = useRef<HTMLDivElement>(null);
   
   const set = (k: string, v: any) => setData(p => ({ ...p, [k]: v }));
   const get = (k: string) => data[k];
 
-  // Initialize data from matchData (only for non-test matches, completely offline)
+  // Initialize data from matchData
   useEffect(() => {
-    // Only initialize if matchData exists and is not a test match
-    if (matchData && !dataInitialized && matchData.match && matchData.match.test !== true) {
+    
+    // Initialize if matchData exists
+    if (matchData && !dataInitialized) {
       const { match, team_1Team, team_2Team, sets, events, team_1Players, team_2Players } = matchData;
       
       if (match) {
-        // Match header info
-        if (match.league) set('competition', match.league);
-        if (match.externalId) set('match_no', match.externalId);
-        if (match.city) set('site', match.city);
-        if (match.hall) set('beach', match.hall);
+        // Match header info - use match setup fields
+        if (match.eventName) set('competition', match.eventName);
+        else if (match.league) set('competition', match.league);
+        if (match.matchNumber) set('match_no', String(match.matchNumber));
+        else if (match.externalId) set('match_no', match.externalId);
+        if (match.site) set('site', match.site);
+        else if (match.city) set('site', match.city);
+        if (match.beach) set('beach', match.beach);
+        else if (match.hall) set('beach', match.hall);
         if (match.court) set('court', String(match.court));
+        
+        // Gender checkbox
+        if (match.matchGender === 'men') {
+          set('cat_men', true);
+        } else if (match.matchGender === 'women') {
+          set('cat_women', true);
+        }
+        
+        // Phase and Round checkboxes
+        if (match.matchPhase === 'main_draw') {
+          set('md', true);
+        } else if (match.matchPhase === 'qualification') {
+          set('qual', true);
+        }
+        
+        // Round checkboxes based on matchRound
+        if (match.matchRound === 'pool_play') {
+          set('pp', true); // P.P.
+        } else if (match.matchRound === 'winner_bracket') {
+          set('wb', true); // W.B.
+        } else if (match.matchRound === 'class') {
+          set('class', true); // Class.
+        } else if (match.matchRound === 'semi_final') {
+          set('sf', true); // S-F
+        } else if (match.matchRound === 'finals') {
+          set('final', true); // Finals
+        }
         
         // Date
         if (match.scheduledAt) {
@@ -152,43 +200,217 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
       // Teams
       if (team_1Team) {
         set('t1_name', team_1Team.name || '');
-        set('t1_country', team_1Team.country || '');
-        set('b_t1_country', team_1Team.country || '');
+        const t1Country = team_1Team.country || match?.team_1Country || '';
+        set('t1_country', t1Country);
+        set('b_t1_country', t1Country);
       }
       if (team_2Team) {
         set('t2_name', team_2Team.name || '');
-        set('t2_country', team_2Team.country || '');
-        set('b_t2_country', team_2Team.country || '');
+        const t2Country = team_2Team.country || match?.team_2Country || '';
+        set('t2_country', t2Country);
+        set('b_t2_country', t2Country);
       }
       
-      // Players (for Set 1 starting lineup)
+      // Players (for TEAMS table)
+      // TEAMS table always shows team_1 on left, team_2 on right (regardless of A/B)
+      // A/B circles are filled separately based on coin toss
+      
+      // Determine which team is A and which is B for coin toss data lookup
+      const teamAKey = match?.coinTossTeamA || 'team_1';
+      const teamBKey = match?.coinTossTeamB || 'team_2';
+      
+      // Medical Assistance Chart - Set A/B and countries
+      const teamACountry = teamAKey === 'team_1' 
+        ? (team_1Team?.country || match?.team_1Country || '') 
+        : (team_2Team?.country || match?.team_2Country || '');
+      const teamBCountry = teamBKey === 'team_1' 
+        ? (team_1Team?.country || match?.team_1Country || '') 
+        : (team_2Team?.country || match?.team_2Country || '');
+      
+      // Team A (first row, index 1) - A above
+      set('ma_side_1', 'A');
+      set('ma_ctry_1', teamACountry);
+      // Team B (second row, index 2) - B below
+      set('ma_side_2', 'B');
+      set('ma_ctry_2', teamBCountry);
+      
+      // Get coin toss data to determine first serve and player numbers
+      const coinTossData = match?.coinTossData;
+      const teamAData = coinTossData?.players?.teamA;
+      const teamBData = coinTossData?.players?.teamB;
+      
+      // Set A/B circles above TEAMS table based on coin toss
+      set('b_t1_side', teamAKey === 'team_1' ? 'A' : 'B');
+      set('b_t2_side', teamBKey === 'team_1' ? 'A' : 'B');
+      
+      // Team 1 players (left side of TEAMS table) - always team_1
       if (team_1Players && team_1Players.length >= 2) {
-        set('b_t1_p1_no', String(team_1Players[0]?.number || ''));
-        set('b_t1_p1_name', `${team_1Players[0]?.firstName || ''} ${team_1Players[0]?.lastName || ''}`.trim());
-        set('b_t1_p2_no', String(team_1Players[1]?.number || ''));
-        set('b_t1_p2_name', `${team_1Players[1]?.firstName || ''} ${team_1Players[1]?.lastName || ''}`.trim());
-      }
-      if (team_2Players && team_2Players.length >= 2) {
-        set('b_t2_p1_no', String(team_2Players[0]?.number || ''));
-        set('b_t2_p1_name', `${team_2Players[0]?.firstName || ''} ${team_2Players[0]?.lastName || ''}`.trim());
-        set('b_t2_p2_no', String(team_2Players[1]?.number || ''));
-        set('b_t2_p2_name', `${team_2Players[1]?.firstName || ''} ${team_2Players[1]?.lastName || ''}`.trim());
+        // Determine which coin toss data to use based on whether team_1 is A or B
+        const coinTossData = match?.coinTossData;
+        const isTeam1A = teamAKey === 'team_1';
+        const team1CoinTossData = isTeam1A ? coinTossData?.players?.teamA : coinTossData?.players?.teamB;
+        
+        let p1No = '';
+        let p2No = '';
+        let p1IsCaptain = false;
+        let p2IsCaptain = false;
+        let p1FirstServe = false;
+        let p2FirstServe = false;
+        let p1FirstName = '';
+        let p1LastName = '';
+        let p2FirstName = '';
+        let p2LastName = '';
+        
+        if (team1CoinTossData) {
+          // Use coin toss data if available
+          p1No = team1CoinTossData.player1?.number !== undefined && team1CoinTossData.player1?.number !== null 
+            ? String(team1CoinTossData.player1.number) 
+            : String(team_1Players[0]?.number || '');
+          p2No = team1CoinTossData.player2?.number !== undefined && team1CoinTossData.player2?.number !== null 
+            ? String(team1CoinTossData.player2.number) 
+            : String(team_1Players[1]?.number || '');
+          
+          p1IsCaptain = team1CoinTossData.player1?.isCaptain || false;
+          p2IsCaptain = team1CoinTossData.player2?.isCaptain || false;
+          p1FirstServe = team1CoinTossData.player1?.firstServe || false;
+          p2FirstServe = team1CoinTossData.player2?.firstServe || false;
+          
+          p1FirstName = team1CoinTossData.player1?.firstName || team_1Players[0]?.firstName || '';
+          p1LastName = team1CoinTossData.player1?.lastName || team_1Players[0]?.lastName || '';
+          p2FirstName = team1CoinTossData.player2?.firstName || team_1Players[1]?.firstName || '';
+          p2LastName = team1CoinTossData.player2?.lastName || team_1Players[1]?.lastName || '';
+        } else {
+          // Fallback to player objects directly
+          p1No = String(team_1Players[0]?.number || '');
+          p2No = String(team_1Players[1]?.number || '');
+          p1IsCaptain = team_1Players[0]?.isCaptain || false;
+          p2IsCaptain = team_1Players[1]?.isCaptain || false;
+          p1FirstName = team_1Players[0]?.firstName || '';
+          p1LastName = team_1Players[0]?.lastName || '';
+          p2FirstName = team_1Players[1]?.firstName || '';
+          p2LastName = team_1Players[1]?.lastName || '';
+        }
+        
+        // Format player number: circle if captain, asterisk on right if first serve
+        let p1Display = p1No;
+        if (p1IsCaptain && p1FirstServe) {
+          p1Display = `(${p1No})*`;
+        } else if (p1IsCaptain) {
+          p1Display = `(${p1No})`;
+        } else if (p1FirstServe) {
+          p1Display = `${p1No}*`;
+        }
+        
+        let p2Display = p2No;
+        if (p2IsCaptain && p2FirstServe) {
+          p2Display = `(${p2No})*`;
+        } else if (p2IsCaptain) {
+          p2Display = `(${p2No})`;
+        } else if (p2FirstServe) {
+          p2Display = `${p2No}*`;
+        }
+        
+        set('b_t1_p1_no', p1Display);
+        set('b_t1_p1_name', `${p1FirstName} ${p1LastName}`.trim());
+        set('b_t1_p2_no', p2Display);
+        set('b_t1_p2_name', `${p2FirstName} ${p2LastName}`.trim());
+        
       }
       
-      // Sets data
+      // Team 2 players (right side of TEAMS table) - always team_2
+      // Always try to populate, even if some data is missing
+      if (team_2Players && team_2Players.length >= 2) {
+        // Determine which coin toss data to use based on whether team_2 is A or B
+        const isTeam2A = teamAKey === 'team_2';
+        const team2CoinTossData = isTeam2A ? coinTossData?.players?.teamA : coinTossData?.players?.teamB;
+        
+        let p1No = '';
+        let p2No = '';
+        let p1IsCaptain = false;
+        let p2IsCaptain = false;
+        let p1FirstServe = false;
+        let p2FirstServe = false;
+        let p1FirstName = '';
+        let p1LastName = '';
+        let p2FirstName = '';
+        let p2LastName = '';
+        
+        if (team2CoinTossData) {
+          // Use coin toss data if available
+          p1No = team2CoinTossData.player1?.number !== undefined && team2CoinTossData.player1?.number !== null 
+            ? String(team2CoinTossData.player1.number) 
+            : String(team_2Players[0]?.number || '');
+          p2No = team2CoinTossData.player2?.number !== undefined && team2CoinTossData.player2?.number !== null 
+            ? String(team2CoinTossData.player2.number) 
+            : String(team_2Players[1]?.number || '');
+          
+          p1IsCaptain = team2CoinTossData.player1?.isCaptain || false;
+          p2IsCaptain = team2CoinTossData.player2?.isCaptain || false;
+          p1FirstServe = team2CoinTossData.player1?.firstServe || false;
+          p2FirstServe = team2CoinTossData.player2?.firstServe || false;
+          
+          p1FirstName = team2CoinTossData.player1?.firstName || team_2Players[0]?.firstName || '';
+          p1LastName = team2CoinTossData.player1?.lastName || team_2Players[0]?.lastName || '';
+          p2FirstName = team2CoinTossData.player2?.firstName || team_2Players[1]?.firstName || '';
+          p2LastName = team2CoinTossData.player2?.lastName || team_2Players[1]?.lastName || '';
+        } else {
+          // Fallback to player objects directly
+          p1No = String(team_2Players[0]?.number || '');
+          p2No = String(team_2Players[1]?.number || '');
+          p1IsCaptain = team_2Players[0]?.isCaptain || false;
+          p2IsCaptain = team_2Players[1]?.isCaptain || false;
+          p1FirstName = team_2Players[0]?.firstName || '';
+          p1LastName = team_2Players[0]?.lastName || '';
+          p2FirstName = team_2Players[1]?.firstName || '';
+          p2LastName = team_2Players[1]?.lastName || '';
+        }
+        
+        // Format player number: circle if captain, asterisk on right if first serve
+        let p1Display = p1No;
+        if (p1IsCaptain && p1FirstServe) {
+          p1Display = `(${p1No})*`;
+        } else if (p1IsCaptain) {
+          p1Display = `(${p1No})`;
+        } else if (p1FirstServe) {
+          p1Display = `${p1No}*`;
+        }
+        
+        let p2Display = p2No;
+        if (p2IsCaptain && p2FirstServe) {
+          p2Display = `(${p2No})*`;
+        } else if (p2IsCaptain) {
+          p2Display = `(${p2No})`;
+        } else if (p2FirstServe) {
+          p2Display = `${p2No}*`;
+        }
+        
+        set('b_t2_p1_no', p1Display);
+        set('b_t2_p1_name', `${p1FirstName} ${p1LastName}`.trim());
+        set('b_t2_p2_no', p2Display);
+        set('b_t2_p2_name', `${p2FirstName} ${p2LastName}`.trim());
+        
+      }
+      
+      // Sets data - process ALL sets (including current unfinished set)
       if (sets && Array.isArray(sets)) {
-        sets.forEach((set: any, index: number) => {
-          const setNum = index + 1;
+        // Sort sets by index
+        const sortedSets = [...sets].sort((a: any, b: any) => (a.index || 0) - (b.index || 0));
+        
+        sortedSets.forEach((setItem: any) => {
+          const setIndex = setItem.index || 1;
+          const setNum = setIndex;
+          if (setNum > 3) return;
+          
           const prefix = setNum === 1 ? 's1' : setNum === 2 ? 's2' : 's3';
           
           // Set start/end times
-          if (set.startTime) {
-            const start = new Date(set.startTime);
+          if (setItem.startTime) {
+            const start = new Date(setItem.startTime);
             set(`${prefix}_start_hh`, String(start.getHours()).padStart(2, '0'));
             set(`${prefix}_start_mm`, String(start.getMinutes()).padStart(2, '0'));
           }
-          if (set.endTime) {
-            const end = new Date(set.endTime);
+          if (setItem.endTime) {
+            const end = new Date(setItem.endTime);
             set(`${prefix}_end_hh`, String(end.getHours()).padStart(2, '0'));
             set(`${prefix}_end_mm`, String(end.getMinutes()).padStart(2, '0'));
           }
@@ -206,52 +428,82 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
             set('b_t1_side', 'B');
             set('b_t2_side', 'A');
           }
-          
-          // Set scores (will be filled from events/points)
-          // Note: Individual point tracking would require parsing events
         });
       }
       
-      // Results section - calculate from finished sets
+      // Results section - calculate from ALL sets (including current unfinished set)
       if (sets && Array.isArray(sets)) {
-        const finishedSets = sets.filter((s: any) => s.finished);
-        finishedSets.forEach((set: any, index: number) => {
-          const setNum = index + 1;
+        // Sort sets by index and process all (not just finished)
+        const sortedSets = [...sets].sort((a: any, b: any) => (a.index || 0) - (b.index || 0));
+        
+        sortedSets.forEach((setItem: any) => {
+          const setIndex = setItem.index || 1;
+          const setNum = setIndex;
           if (setNum <= 3) {
-            // Set scores
-              const team_1Points = set.team_1Points || 0;
-              const team_2Points = set.team_2Points || 0;
-              set(`res_s${setNum}_p_a`, String(team_1Points));
-              set(`res_s${setNum}_p_b`, String(team_2Points));
-              
-              // Set wins (1 if team won, 0 if lost)
-              set(`res_s${setNum}_w_a`, team_1Points > team_2Points ? '1' : '0');
-              set(`res_s${setNum}_w_b`, team_2Points > team_1Points ? '1' : '0');
+            // Set scores - use current scores even if set not finished
+            const team_1Points = setItem.team_1Points || 0;
+            const team_2Points = setItem.team_2Points || 0;
+            
+            // Determine which team is A and which is B
+            const teamAKey = match?.coinTossTeamA || 'team_1';
+            const teamBKey = match?.coinTossTeamB || 'team_2';
+            
+            const teamAPoints = teamAKey === 'team_1' ? team_1Points : team_2Points;
+            const teamBPoints = teamBKey === 'team_1' ? team_1Points : team_2Points;
+            
+            set(`res_s${setNum}_p_a`, String(teamAPoints));
+            set(`res_s${setNum}_p_b`, String(teamBPoints));
+            
+            // Set wins (1 if team won, 0 if lost or tied) - only if set is finished
+            if (setItem.finished) {
+              set(`res_s${setNum}_w_a`, teamAPoints > teamBPoints ? '1' : '0');
+              set(`res_s${setNum}_w_b`, teamBPoints > teamAPoints ? '1' : '0');
+            }
             
             // Set duration (calculate from start/end times)
-            if (set.startTime && set.endTime) {
-              const start = new Date(set.startTime);
-              const end = new Date(set.endTime);
+            if (setItem.startTime && setItem.endTime) {
+              const start = new Date(setItem.startTime);
+              const end = new Date(setItem.endTime);
               const duration = Math.round((end.getTime() - start.getTime()) / 60000); // minutes
               set(`res_s${setNum}_dur`, String(duration));
             }
           }
         });
         
-        // Total
-          const totalTeam_1 = finishedSets.reduce((sum: number, s: any) => sum + (s.team_1Points || 0), 0);
-          const totalTeam_2 = finishedSets.reduce((sum: number, s: any) => sum + (s.team_2Points || 0), 0);
-          const totalTeam_1Wins = finishedSets.filter((s: any) => (s.team_1Points || 0) > (s.team_2Points || 0)).length;
-          const totalTeam_2Wins = finishedSets.filter((s: any) => (s.team_2Points || 0) > (s.team_1Points || 0)).length;
-          set('res_tot_p_a', String(totalTeam_1));
-          set('res_tot_p_b', String(totalTeam_2));
-          set('res_tot_w_a', String(totalTeam_1Wins));
-          set('res_tot_w_b', String(totalTeam_2Wins));
+        // Total - calculate from all sets
+        const teamAKey = match?.coinTossTeamA || 'team_1';
+        const teamBKey = match?.coinTossTeamB || 'team_2';
+        
+        const totalTeamA = sortedSets.reduce((sum: number, s: any) => {
+          const points = teamAKey === 'team_1' ? (s.team_1Points || 0) : (s.team_2Points || 0);
+          return sum + points;
+        }, 0);
+        const totalTeamB = sortedSets.reduce((sum: number, s: any) => {
+          const points = teamBKey === 'team_1' ? (s.team_1Points || 0) : (s.team_2Points || 0);
+          return sum + points;
+        }, 0);
+        
+        const finishedSets = sortedSets.filter((s: any) => s.finished);
+        const totalTeamAWins = finishedSets.filter((s: any) => {
+          const teamAPoints = teamAKey === 'team_1' ? (s.team_1Points || 0) : (s.team_2Points || 0);
+          const teamBPoints = teamBKey === 'team_1' ? (s.team_1Points || 0) : (s.team_2Points || 0);
+          return teamAPoints > teamBPoints;
+        }).length;
+        const totalTeamBWins = finishedSets.filter((s: any) => {
+          const teamAPoints = teamAKey === 'team_1' ? (s.team_1Points || 0) : (s.team_2Points || 0);
+          const teamBPoints = teamBKey === 'team_1' ? (s.team_1Points || 0) : (s.team_2Points || 0);
+          return teamBPoints > teamAPoints;
+        }).length;
+        
+        set('res_tot_p_a', String(totalTeamA));
+        set('res_tot_p_b', String(totalTeamB));
+        set('res_tot_w_a', String(totalTeamAWins));
+        set('res_tot_w_b', String(totalTeamBWins));
         
         // Total duration (already calculated above in match duration)
-        if (finishedSets.length > 0) {
-          const resFirstSet = finishedSets[0];
-          const resLastSet = finishedSets[finishedSets.length - 1];
+        if (sortedSets.length > 0) {
+          const resFirstSet = sortedSets[0];
+          const resLastSet = sortedSets[sortedSets.length - 1];
           if (resFirstSet?.startTime && resLastSet?.endTime) {
             const resStart = new Date(resFirstSet.startTime);
             const resEnd = new Date(resLastSet.endTime);
@@ -261,74 +513,1139 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         }
         
         // Match duration and times
-        if (finishedSets.length > 0) {
-          const matchFirstSet = finishedSets[0];
-          const matchLastSet = finishedSets[finishedSets.length - 1];
+        if (sortedSets.length > 0) {
+          const matchFirstSet = sortedSets[0];
+          const matchLastSet = sortedSets[sortedSets.length - 1];
           
-          if (matchFirstSet?.startTime && matchLastSet?.endTime) {
+          if (matchFirstSet?.startTime) {
             const matchStart = new Date(matchFirstSet.startTime);
+            set('match_start_h', String(matchStart.getHours()).padStart(2, '0'));
+            set('match_start_m', String(matchStart.getMinutes()).padStart(2, '0'));
+            
+            if (matchLastSet?.endTime) {
             const matchEnd = new Date(matchLastSet.endTime);
             const totalMinutes = Math.round((matchEnd.getTime() - matchStart.getTime()) / 60000);
             const hours = Math.floor(totalMinutes / 60);
             const minutes = totalMinutes % 60;
             set('match_dur_h', String(hours));
             set('match_dur_m', String(minutes));
-            
-            // Match start/end times
-            set('match_start_h', String(matchStart.getHours()).padStart(2, '0'));
-            set('match_start_m', String(matchStart.getMinutes()).padStart(2, '0'));
             set('match_end_h', String(matchEnd.getHours()).padStart(2, '0'));
             set('match_end_m', String(matchEnd.getMinutes()).padStart(2, '0'));
+            }
           }
         }
         
-          // Winner
-          const team_1SetsWon = finishedSets.filter((s: any) => s.team_1Points > s.team_2Points).length;
-          const team_2SetsWon = finishedSets.filter((s: any) => s.team_2Points > s.team_1Points).length;
-          if (team_1SetsWon > team_2SetsWon && team_1Team) {
-            set('winner_name', team_1Team.name || '');
-            set('winner_country', team_1Team.country || '');
-          } else if (team_2SetsWon > team_1SetsWon && team_2Team) {
-            set('winner_name', team_2Team.name || '');
-            set('winner_country', team_2Team.country || '');
+        // Winner - only if match is finished
+        // Always show "2": X format (winner always has 2 wins)
+        if (finishedSets.length >= 2 && finishedSets.some((s: any) => {
+          const teamAPoints = teamAKey === 'team_1' ? (s.team_1Points || 0) : (s.team_2Points || 0);
+          const teamBPoints = teamBKey === 'team_1' ? (s.team_1Points || 0) : (s.team_2Points || 0);
+          return teamAPoints > teamBPoints;
+        })) {
+          if (totalTeamAWins > totalTeamBWins) {
+            const winnerTeam = teamAKey === 'team_1' ? team_1Team : team_2Team;
+            if (winnerTeam) {
+              set('winner_name', winnerTeam.name || '');
+              set('winner_country', winnerTeam.country || '');
+            }
+            set('win_score_winner', '2');
+            set('win_score_other', String(totalTeamBWins));
+          } else if (totalTeamBWins > totalTeamAWins) {
+            const winnerTeam = teamBKey === 'team_1' ? team_1Team : team_2Team;
+            if (winnerTeam) {
+              set('winner_name', winnerTeam.name || '');
+              set('winner_country', winnerTeam.country || '');
+            }
+            set('win_score_winner', '2');
+            set('win_score_other', String(totalTeamAWins));
+          }
           }
       }
       
       // Officials (from match.officials if available)
-      if (match?.officials) {
-        const officials = typeof match.officials === 'string' ? JSON.parse(match.officials) : match.officials;
-        if (officials) {
-          if (officials.referee1) {
-            set('ref1_name', officials.referee1.name || '');
-            set('ref1_country', officials.referee1.country || '');
+      // match.officials is an array of { role, firstName, lastName, country, position? }
+      if (match?.officials && Array.isArray(match.officials)) {
+        console.log('Processing officials:', match.officials.length, 'officials found');
+        
+        // Process line judges separately to handle positions correctly
+        const lineJudges = match.officials
+          .filter((o: any) => o.role === 'line judge')
+          .sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
+        
+        console.log('Line judges found:', lineJudges.length, lineJudges);
+        
+        // Process other officials first
+        match.officials.forEach((official: any) => {
+          const fullName = `${official.firstName || ''} ${official.lastName || ''}`.trim();
+          const country = official.country || '';
+          
+          if (official.role === '1st referee') {
+            set('ref1_name', fullName);
+            set('ref1_country', country);
+          } else if (official.role === '2nd referee') {
+            set('ref2_name', fullName);
+            set('ref2_country', country);
+          } else if (official.role === 'scorer') {
+            set('scorer_name', fullName);
+            set('scorer_country', country);
+          } else if (official.role === 'assistant scorer') {
+            set('asst_scorer_name', fullName);
+            set('asst_scorer_country', country);
           }
-          if (officials.referee2) {
-            set('ref2_name', officials.referee2.name || '');
-            set('ref2_country', officials.referee2.country || '');
+        });
+        
+        // Process line judges with correct position assignment
+        lineJudges.forEach((judge: any, index: number) => {
+          const fullName = `${judge.firstName || ''} ${judge.lastName || ''}`.trim();
+          // Use position from data if available, otherwise use index + 1
+          const position = judge.position !== undefined && judge.position !== null 
+            ? judge.position 
+            : index + 1;
+          
+          console.log(`Line judge ${index + 1}:`, {
+            firstName: judge.firstName,
+            lastName: judge.lastName,
+            fullName,
+            position,
+            hasPosition: judge.position !== undefined && judge.position !== null,
+            willSet: position >= 1 && position <= 4 && fullName ? `lj${position}` : 'SKIPPED'
+          });
+          
+          if (position >= 1 && position <= 4 && fullName) {
+            set(`lj${position}`, fullName);
+            console.log(`Set lj${position} =`, fullName);
           }
-          if (officials.scorer) {
-            set('scorer_name', officials.scorer.name || '');
-            set('scorer_country', officials.scorer.country || '');
+        });
+      } else {
+        console.log('No officials found or officials is not an array:', match?.officials);
+      }
+      
+      // Coin toss data
+      if (match?.coinTossData) {
+        const coinTossData = match.coinTossData;
+        // Determine which team is A and which is B
+        const teamAKey = match.coinTossTeamA || 'team_1';
+        const teamBKey = match.coinTossTeamB || 'team_2';
+        
+        // Set 1 coin toss winner
+        if (coinTossData.coinTossWinner) {
+          const set1Winner = coinTossData.coinTossWinner === teamAKey ? 'A' : 'B';
+          set('coin_s1', set1Winner);
+        }
+        
+        // Set 3 coin toss winner
+        if (coinTossData.set3CoinTossWinner) {
+          const set3Winner = coinTossData.set3CoinTossWinner === teamAKey ? 'A' : 'B';
+          set('coin_s3', set3Winner);
+        }
+        
+        // Service order and player numbers - will be filled per set based on serviceOrder
+        // This is now handled in the set processing loop below
+      }
+      
+      // Process events to fill points, timeouts, sanctions, court switches, medical assistance
+      if (events && Array.isArray(events)) {
+        // Group events by set
+        const eventsBySet: Record<number, any[]> = {};
+        events.forEach((event: any) => {
+          const setIndex = event.setIndex || 1;
+          if (!eventsBySet[setIndex]) {
+            eventsBySet[setIndex] = [];
           }
-          if (officials.assistantScorer) {
-            set('asst_scorer_name', officials.assistantScorer.name || '');
-            set('asst_scorer_country', officials.assistantScorer.country || '');
-          }
-          if (officials.lineJudges && Array.isArray(officials.lineJudges)) {
-            officials.lineJudges.forEach((lj: any, idx: number) => {
-              if (idx < 4) {
-                set(`lj${idx + 1}`, lj.name || '');
+          eventsBySet[setIndex].push(event);
+        });
+        
+        
+        // First pass: Track which teams received formal warnings and delay warnings in each set
+        const formalWarningsBySet: Record<number, Set<string>> = {}; // setIndex -> Set of teamKeys
+        const delayWarningsBySet: Record<number, Set<string>> = {}; // setIndex -> Set of teamKeys
+        
+        Object.keys(eventsBySet).forEach((setIdxStr) => {
+          const setIndex = parseInt(setIdxStr);
+          formalWarningsBySet[setIndex] = new Set();
+          delayWarningsBySet[setIndex] = new Set();
+          
+          eventsBySet[setIndex].forEach((event: any) => {
+            if (event.type === 'sanction') {
+              const sanctionTeam = event.payload?.team;
+              const sanctionType = event.payload?.type;
+              
+              if (sanctionType === 'warning') {
+                formalWarningsBySet[setIndex].add(sanctionTeam);
+              } else if (sanctionType === 'delay_warning') {
+                delayWarningsBySet[setIndex].add(sanctionTeam);
+              }
+            }
+          });
+        });
+        
+        // Process each set
+        Object.keys(eventsBySet).forEach((setIdxStr) => {
+          const setIndex = parseInt(setIdxStr);
+          const setNum = setIndex;
+          if (setNum > 3) return;
+          
+          const prefix = setNum === 1 ? 's1' : setNum === 2 ? 's2' : 's3';
+          const setEvents = eventsBySet[setIndex].sort((a: any, b: any) => {
+            const aTime = typeof a.ts === 'number' ? a.ts : new Date(a.ts).getTime();
+            const bTime = typeof b.ts === 'number' ? b.ts : new Date(b.ts).getTime();
+            return aTime - bTime;
+          });
+          
+          
+          // Determine team A and B for this set
+          const teamAKey = match?.coinTossTeamA || 'team_1';
+          const teamBKey = match?.coinTossTeamB || 'team_2';
+          
+          // Get the set data to access serviceOrder
+          const setData = sets?.find((s: any) => s.index === setNum);
+          
+          // Track points for each team
+          let teamAPointCount = 0;
+          let teamBPointCount = 0;
+          let teamATimeoutCount = 0;
+          let teamBTimeoutCount = 0;
+          
+          // Get coin toss data for player mapping
+          const coinTossData = match?.coinTossData?.players;
+          const teamAData = coinTossData?.teamA;
+          const teamBData = coinTossData?.teamB;
+          
+          // Fill player rotation boxes (I, II, III, IV) based on serviceOrder for this set
+          // ServiceOrder maps: order 1=I, order 2=II, order 3=III, order 4=IV
+          if (setData?.serviceOrder) {
+            const serviceOrder = setData.serviceOrder;
+            
+            // Map order numbers to row keys
+            const orderToRow: Record<number, string> = {
+              1: 'r1', // I
+              2: 'r2', // II
+              3: 'r3', // III
+              4: 'r4'  // IV
+            };
+            
+            // Get player numbers from serviceOrder
+            // serviceOrder format: { "team_1_player1": 1, "team_1_player2": 3, "team_2_player1": 2, "team_2_player2": 4 }
+            Object.keys(serviceOrder).forEach((key: string) => {
+              const order = serviceOrder[key];
+              const rowKey = orderToRow[order];
+              if (rowKey) {
+                // Extract team and player from key (e.g., "team_1_player1")
+                const matchKey = key.match(/^(team_[12])_player([12])$/);
+                if (matchKey) {
+                  const teamKey = matchKey[1];
+                  const playerNum = matchKey[2];
+                  
+                  // Get player number from coin toss data
+                  let playerNumber = '';
+                  if (teamKey === teamAKey) {
+                    if (playerNum === '1' && teamAData?.player1) {
+                      playerNumber = String(teamAData.player1.number || '');
+                    } else if (playerNum === '2' && teamAData?.player2) {
+                      playerNumber = String(teamAData.player2.number || '');
+                    }
+                  } else if (teamKey === teamBKey) {
+                    if (playerNum === '1' && teamBData?.player1) {
+                      playerNumber = String(teamBData.player1.number || '');
+                    } else if (playerNum === '2' && teamBData?.player2) {
+                      playerNumber = String(teamBData.player2.number || '');
+                    }
+                  }
+                  
+                  if (playerNumber) {
+                    set(`${prefix}_${rowKey}_player`, playerNumber);
+                  }
+                }
               }
             });
+          } else {
+            // Fallback to coin toss data if serviceOrder not available (for set 1)
+            if (teamAData) {
+              set(`${prefix}_r1_player`, String(teamAData.player1?.number || ''));
+              set(`${prefix}_r3_player`, String(teamAData.player2?.number || ''));
+            }
+            
+            if (teamBData) {
+              set(`${prefix}_r2_player`, String(teamBData.player1?.number || ''));
+              set(`${prefix}_r4_player`, String(teamBData.player2?.number || ''));
+            }
           }
+          
+          // Map player numbers to row keys (r1=I, r2=II, r3=III, r4=IV) for event processing
+          const playerToRow: Record<string, string> = {};
+          if (teamAData) {
+            if (teamAData.player1?.number) playerToRow[String(teamAData.player1.number)] = 'r1'; // I
+            if (teamAData.player2?.number) playerToRow[String(teamAData.player2.number)] = 'r3'; // III
+          }
+          if (teamBData) {
+            if (teamBData.player1?.number) playerToRow[String(teamBData.player1.number)] = 'r2'; // II
+            if (teamBData.player2?.number) playerToRow[String(teamBData.player2.number)] = 'r4'; // IV
+          }
+          
+          // Track service rotation: columns used for each player row (1-21)
+          const serviceRotationColumn: Record<string, number> = { r1: 0, r2: 0, r3: 0, r4: 0 }; // Next column to use for each row
+          
+          // Determine initial serving player from serviceOrder
+          // Service rotation order is global: I (1) -> II (2) -> III (3) -> IV (4) -> I (1) -> ...
+          let currentServiceOrder = 1; // Start with I (order 1) - this is the global service order
+          if (setData?.serviceOrder) {
+            // Find which player serves first - the one with service order 1
+            // This is already set to 1, but we'll use it to track rotation
+            currentServiceOrder = 1;
+          }
+          
+          // Map service order to row keys (global rotation)
+          const orderToRow: Record<number, string> = { 1: 'r1', 2: 'r2', 3: 'r3', 4: 'r4' };
+          
+          // Track delay/misconduct penalty points (these should be circled, not slashed)
+          const delayPenaltyPoints: Set<number> = new Set();
+          const misconductPenaltyPoints: Set<number> = new Set();
+          
+          // Track court switches to determine which team is on which side at any given point
+          let courtSwitchCount = 0; // Number of court switches that have occurred before current event
+          
+          // Process events in chronological order to track scores at each event
+          setEvents.forEach((event: any, eventIndex: number) => {
+            // Track court switches - each switch flips which team is on left/right
+            if (event.type === 'court_switch') {
+              courtSwitchCount++;
+            }
+            
+            // Determine which team is on left/right at this point in time
+            // After an even number of switches, teams are in base position (A left, B right)
+            // After an odd number of switches, teams are flipped (B left, A right)
+            const isFlipped = courtSwitchCount % 2 === 1;
+            const leftTeamKey = isFlipped ? teamBKey : teamAKey;
+            const rightTeamKey = isFlipped ? teamAKey : teamBKey;
+            
+            // Calculate current score before this event
+            const pointsBefore = setEvents.slice(0, eventIndex).reduce((acc: any, e: any) => {
+              if (e.type === 'point') {
+                if (e.payload?.team === teamAKey) acc.teamA++;
+                else if (e.payload?.team === teamBKey) acc.teamB++;
+              }
+              return acc;
+            }, { teamA: 0, teamB: 0 });
+            
+            if (event.type === 'point') {
+              const pointTeam = event.payload?.team;
+              
+              // Get the serving team from the previous rally_start event
+              // Look backwards to find the most recent rally_start before this point
+              let servingTeam: string | null = null;
+              for (let i = eventIndex - 1; i >= 0; i--) {
+                const prevEvent = setEvents[i];
+                if (prevEvent.type === 'rally_start') {
+                  servingTeam = prevEvent.payload?.servingTeam || null;
+                  break;
+                }
+              }
+              
+              // Check if this point was scored due to the OTHER team getting penalized
+              // Only check the fromPenalty flag - don't check recent events as it can cause false positives
+              const isPointFromOtherTeamPenalty = event.payload?.fromPenalty === true;
+              
+              // Determine if the serving team lost the point (opponent scored)
+              const servingTeamLostPoint = servingTeam && pointTeam !== servingTeam;
+              
+              // Track team totals
+              if (pointTeam === teamAKey) {
+                teamAPointCount++;
+                if (teamAPointCount <= 44) {
+                  // Use 'circle' if point was scored due to other team's penalty, 'slash' for regular points
+                  if (isPointFromOtherTeamPenalty) {
+                    set(`${prefix}_t1_pt_lg_${teamAPointCount}`, 'circle');
+                  } else {
+                    set(`${prefix}_t1_pt_lg_${teamAPointCount}`, 'slash');
+                  }
+                }
+              } else if (pointTeam === teamBKey) {
+                teamBPointCount++;
+                if (teamBPointCount <= 44) {
+                  // Use 'circle' if point was scored due to other team's penalty, 'slash' for regular points
+                  if (isPointFromOtherTeamPenalty) {
+                    set(`${prefix}_t2_pt_lg_${teamBPointCount}`, 'circle');
+                  } else {
+                    set(`${prefix}_t2_pt_lg_${teamBPointCount}`, 'slash');
+                  }
+                }
+              }
+              
+              // Service rotation tracking: when serving team loses point, record score and rotate
+              if (servingTeamLostPoint && servingTeam && setData?.serviceOrder) {
+                const currentRowKey = orderToRow[currentServiceOrder];
+                if (currentRowKey && serviceRotationColumn[currentRowKey] !== undefined) {
+                  // Record the score of the team that lost service (at the time they lost it)
+                  const losingTeamScore = servingTeam === teamAKey ? pointsBefore.teamA : pointsBefore.teamB;
+                  const nextColumn = serviceRotationColumn[currentRowKey] + 1;
+                  
+                  if (nextColumn <= 21) {
+                    set(`${prefix}_${currentRowKey}_pt_${nextColumn}`, String(losingTeamScore));
+                    serviceRotationColumn[currentRowKey] = nextColumn;
+                  }
+                  
+                  // Rotate to next player in service order (I -> II -> III -> IV -> I -> ...)
+                  currentServiceOrder = (currentServiceOrder % 4) + 1;
+                }
+              }
+            } else if (event.type === 'rally_start') {
+              // Update current serving player from rally_start event
+              const servingTeamFromEvent = event.payload?.servingTeam;
+              const servingPlayerNumber = event.payload?.servingPlayerNumber;
+              
+              if (servingPlayerNumber && setData?.serviceOrder) {
+                // Find which service order this player has
+                const serviceOrder = setData.serviceOrder;
+                const teamKey = servingTeamFromEvent === teamAKey ? teamAKey : teamBKey;
+                
+                // Determine which player this is (player1 or player2)
+                let playerKey = '';
+                if (teamKey === teamAKey) {
+                  if (teamAData?.player1?.number === servingPlayerNumber) {
+                    playerKey = `${teamKey}_player1`;
+                  } else if (teamAData?.player2?.number === servingPlayerNumber) {
+                    playerKey = `${teamKey}_player2`;
+                  }
+                } else if (teamKey === teamBKey) {
+                  if (teamBData?.player1?.number === servingPlayerNumber) {
+                    playerKey = `${teamKey}_player1`;
+                  } else if (teamBData?.player2?.number === servingPlayerNumber) {
+                    playerKey = `${teamKey}_player2`;
+                  }
+                }
+                
+                if (playerKey && serviceOrder[playerKey]) {
+                  currentServiceOrder = serviceOrder[playerKey];
+                }
+              }
+            } else if (event.type === 'timeout') {
+              const timeoutTeam = event.payload?.team;
+              // Record timeout with current score (left = requesting team, right = other team)
+              // Use to_a and to_b fields (only one timeout box per team per set, so overwrite with latest)
+              if (timeoutTeam === teamAKey) {
+                teamATimeoutCount++;
+                // Left is requesting team (A) points, right is other team (B) points
+                set(`${prefix}_t1_to_a`, String(pointsBefore.teamA));
+                set(`${prefix}_t1_to_b`, String(pointsBefore.teamB));
+              } else if (timeoutTeam === teamBKey) {
+                teamBTimeoutCount++;
+                // Left is requesting team (B) points, right is other team (A) points
+                set(`${prefix}_t2_to_a`, String(pointsBefore.teamB));
+                set(`${prefix}_t2_to_b`, String(pointsBefore.teamA));
+              }
+            } else if (event.type === 'court_switch') {
+              // Court switch: A left, B right, in the existing court switch column
+              // For sets 1-2: switches at 7, 14, 28, 35, etc. (every 7 points, but 21 is TTO)
+              // Row 0: 7 points, Row 1: 14 points, Row 2: TTO (21), Row 3: 28 points, etc.
+              
+              // Calculate total points at the time of this switch
+              const totalPoints = pointsBefore.teamA + pointsBefore.teamB;
+              
+              let rowIndex: number;
+              
+              if (setNum !== 3) {
+                // Sets 1-2: switches every 7 points (7, 14, 21=TTO, 28, 35, 42, 49, etc.)
+                // Row mapping: 7->0, 14->1, 21->2(TTO), 28->3, 35->4, 42->5, 49->6, etc.
+                if (totalPoints === 7) {
+                  rowIndex = 0;
+                } else if (totalPoints === 14) {
+                  rowIndex = 1;
+                } else if (totalPoints >= 28) {
+                  // After TTO: 28->3, 35->4, 42->5, 49->6, etc.
+                  // Formula: (totalPoints / 7) - 1 (because we skip row 2 for TTO)
+                  rowIndex = Math.floor(totalPoints / 7) - 1;
+                } else {
+                  // Shouldn't happen, but fallback
+                  rowIndex = Math.floor(totalPoints / 7) - 1;
+                }
+              } else {
+                // Set 3: switches every 5 points (5, 10, 15, 20, etc.)
+                // No TTO, so use sequential rows starting from 0
+                rowIndex = Math.floor(totalPoints / 5) - 1;
+              }
+              
+              // Always A left, B right (use pointsBefore which already has teamA and teamB correctly)
+              // pointsBefore.teamA is the score of the team that is Team A (from coin toss)
+              // pointsBefore.teamB is the score of the team that is Team B (from coin toss)
+              if (rowIndex >= 0 && rowIndex < 12 && rowIndex !== 2) { // Don't use row 2 for regular switches
+                set(`${prefix}_cs_${rowIndex}_a`, String(pointsBefore.teamA));
+                set(`${prefix}_cs_${rowIndex}_b`, String(pointsBefore.teamB));
+              }
+            } else if (event.type === 'technical_to') {
+              // Technical Timeout (TTO) - goes in row 2 (index 2) for sets 1-2
+              if (setNum !== 3) {
+                // Always A left, B right
+                set(`${prefix}_cs_2_a`, String(pointsBefore.teamA));
+                set(`${prefix}_cs_2_b`, String(pointsBefore.teamB));
+              }
+            } else if (event.type === 'sanction') {
+              const sanctionTeam = event.payload?.team;
+              const sanctionType = event.payload?.type;
+              const isDelay = sanctionType === 'delay_warning' || sanctionType === 'delay_penalty';
+              const isMisconduct = sanctionType === 'penalty' || sanctionType === 'rude_conduct' || sanctionType === 'expulsion' || sanctionType === 'disqualification';
+              const isFormalWarning = sanctionType === 'warning';
+              
+              // Determine which side the sanctioned team is on at this point (accounting for court switches)
+              // leftTeamKey and rightTeamKey are already calculated above based on courtSwitchCount
+              const isSanctionedTeamOnLeft = sanctionTeam === leftTeamKey;
+              
+              // t1 and t2 are FIXED team positions: t1 = team_1, t2 = team_2 (not left/right)
+              // Determine which team control row to use based on the sanctioned team
+              const isSanctionedTeam1 = sanctionTeam === 'team_1';
+              const teamSuffix = isSanctionedTeam1 ? 't1' : 't2';
+              
+              // Get the actual team scores at this point (left team vs right team)
+              const leftTeamScore = leftTeamKey === teamAKey ? pointsBefore.teamA : pointsBefore.teamB;
+              const rightTeamScore = rightTeamKey === teamAKey ? pointsBefore.teamA : pointsBefore.teamB;
+              
+              // For delay sanctions, we need to determine which score goes in _a and which in _b
+              // _a = penalized team's score, _b = other team's score
+              // But we need to know which side the penalized team is on to get the correct score
+              const penalizedTeamScore = isSanctionedTeamOnLeft ? leftTeamScore : rightTeamScore;
+              const otherTeamScore = isSanctionedTeamOnLeft ? rightTeamScore : leftTeamScore;
+              
+              if (isDelay) {
+                // Count delay penalties (not warnings) BEFORE this event for the SANCTIONED TEAM to determine which penalty box (p1, p2, p3)
+                const delayPenaltyCount = setEvents.filter((e: any, idx: number) => 
+                  idx < eventIndex && e.type === 'sanction' && 
+                  e.payload?.team === sanctionTeam && 
+                  e.payload?.type === 'delay_penalty'
+                ).length;
+                // Delay warning goes to ds_w, delay penalties go to ds_p1, ds_p2, ds_p3
+                if (sanctionType === 'delay_warning') {
+                  set(`${prefix}_${teamSuffix}_ds_w_a`, String(penalizedTeamScore));
+                  set(`${prefix}_${teamSuffix}_ds_w_b`, String(otherTeamScore));
+                } else if (sanctionType === 'delay_penalty') {
+                  // This is the (delayPenaltyCount + 1)th penalty, so use that number
+                  const penaltyNumber = delayPenaltyCount + 1;
+                  // Only write to ONE box based on penalty number (1->p1, 2->p2, 3->p3)
+                  if (penaltyNumber === 1) {
+                    set(`${prefix}_${teamSuffix}_ds_p1_a`, String(penalizedTeamScore));
+                    set(`${prefix}_${teamSuffix}_ds_p1_b`, String(otherTeamScore));
+                  } else if (penaltyNumber === 2) {
+                    set(`${prefix}_${teamSuffix}_ds_p2_a`, String(penalizedTeamScore));
+                    set(`${prefix}_${teamSuffix}_ds_p2_b`, String(otherTeamScore));
+                  } else if (penaltyNumber >= 3) {
+                    set(`${prefix}_${teamSuffix}_ds_p3_a`, String(penalizedTeamScore));
+                    set(`${prefix}_${teamSuffix}_ds_p3_b`, String(otherTeamScore));
+                  }
+                }
+              }
+              
+              // For misconduct and formal warnings, we still need to determine which side the team is on for player row assignment
+              if ((isMisconduct || isFormalWarning) && event.payload?.playerNumber) {
+                if ((isMisconduct || isFormalWarning) && event.payload?.playerNumber) {
+                  // Misconduct sanctions and formal warnings go in player rows (r1, r2, r3, r4)
+                  // Find player row key based on player number and which team they're on
+                  const playerNumber = event.payload.playerNumber;
+                  const coinTossData = match?.coinTossData?.players;
+                  let rowKey: string | null = null;
+                  
+                  // Check if player is on left team (which could be A or B depending on court switches)
+                  if (leftTeamKey === teamAKey && coinTossData?.teamA) {
+                    if (coinTossData.teamA.player1?.number === playerNumber) {
+                      rowKey = 'r1';
+                    } else if (coinTossData.teamA.player2?.number === playerNumber) {
+                      rowKey = 'r3';
+                    }
+                  } else if (leftTeamKey === teamBKey && coinTossData?.teamB) {
+                    if (coinTossData.teamB.player1?.number === playerNumber) {
+                      rowKey = 'r2';
+                    } else if (coinTossData.teamB.player2?.number === playerNumber) {
+                      rowKey = 'r4';
+                    }
+                  }
+                  
+                  if (rowKey) {
+                    const leftTeamScore = leftTeamKey === teamAKey ? pointsBefore.teamA : pointsBefore.teamB;
+                    const rightTeamScore = rightTeamKey === teamAKey ? pointsBefore.teamA : pointsBefore.teamB;
+                    
+                    if (isFormalWarning) {
+                      // Formal warning: use fw_a and fw_b with scores
+                      set(`${prefix}_${rowKey}_fw_a`, String(leftTeamScore));
+                      set(`${prefix}_${rowKey}_fw_b`, String(rightTeamScore));
+                      
+                      // Cross out the other player's formal warning box in the same set
+                      const otherRowKey = (rowKey === 'r1' ? 'r3' : rowKey === 'r3' ? 'r1' : rowKey === 'r2' ? 'r4' : 'r2');
+                      set(`${prefix}_${otherRowKey}_fw_crossed`, 'true');
+                    } else {
+                      // Count penalties (including rude_conduct) for this player in this set
+                      const playerPenalties = setEvents.filter((e: any, idx: number) => 
+                        idx <= eventIndex && e.type === 'sanction' && 
+                        e.payload?.team === leftTeamKey && 
+                        e.payload?.playerNumber === playerNumber &&
+                        (e.payload?.type === 'penalty' || e.payload?.type === 'rude_conduct')
+                      ).length;
+                      
+                      // Map to player row fields: s1/s2 for penalties, s3 for expulsion, s4 for disqualification
+                      if (sanctionType === 'penalty' || sanctionType === 'rude_conduct') {
+                        if (playerPenalties === 1) {
+                          set(`${prefix}_${rowKey}_s1_a`, String(leftTeamScore));
+                          set(`${prefix}_${rowKey}_s1_b`, String(rightTeamScore));
+                        } else if (playerPenalties === 2) {
+                          set(`${prefix}_${rowKey}_s2_a`, String(leftTeamScore));
+                          set(`${prefix}_${rowKey}_s2_b`, String(rightTeamScore));
+                        }
+                      } else if (sanctionType === 'expulsion') {
+                        set(`${prefix}_${rowKey}_s3_a`, String(leftTeamScore));
+                        set(`${prefix}_${rowKey}_s3_b`, String(rightTeamScore));
+                      } else if (sanctionType === 'disqualification') {
+                        set(`${prefix}_${rowKey}_s4_a`, String(leftTeamScore));
+                        set(`${prefix}_${rowKey}_s4_b`, String(rightTeamScore));
+                      }
+                    }
+                  }
+                }
+              if ((isMisconduct || isFormalWarning) && event.payload?.playerNumber) {
+                  // Misconduct sanctions and formal warnings go in player rows (r1, r2, r3, r4)
+                  // Find player row key based on player number and which team they're on
+                  const playerNumber = event.payload.playerNumber;
+                  const coinTossData = match?.coinTossData?.players;
+                  let rowKey: string | null = null;
+                  
+                  // Check if player is on right team (which could be A or B depending on court switches)
+                  if (rightTeamKey === teamAKey && coinTossData?.teamA) {
+                    if (coinTossData.teamA.player1?.number === playerNumber) {
+                      rowKey = 'r1';
+                    } else if (coinTossData.teamA.player2?.number === playerNumber) {
+                      rowKey = 'r3';
+                    }
+                  } else if (rightTeamKey === teamBKey && coinTossData?.teamB) {
+                    if (coinTossData.teamB.player1?.number === playerNumber) {
+                      rowKey = 'r2';
+                    } else if (coinTossData.teamB.player2?.number === playerNumber) {
+                      rowKey = 'r4';
+                    }
+                  }
+                  
+                  if (rowKey) {
+                    const leftTeamScore = leftTeamKey === teamAKey ? pointsBefore.teamA : pointsBefore.teamB;
+                    const rightTeamScore = rightTeamKey === teamAKey ? pointsBefore.teamA : pointsBefore.teamB;
+                    
+                    if (isFormalWarning) {
+                      // Formal warning: use fw_a and fw_b with scores
+                      set(`${prefix}_${rowKey}_fw_a`, String(rightTeamScore));
+                      set(`${prefix}_${rowKey}_fw_b`, String(leftTeamScore));
+                      
+                      // Cross out the other player's formal warning box in the same set
+                      const otherRowKey = (rowKey === 'r1' ? 'r3' : rowKey === 'r3' ? 'r1' : rowKey === 'r2' ? 'r4' : 'r2');
+                      set(`${prefix}_${otherRowKey}_fw_crossed`, 'true');
+                    } else {
+                      // Count penalties (including rude_conduct) for this player in this set
+                      const playerPenalties = setEvents.filter((e: any, idx: number) => 
+                        idx <= eventIndex && e.type === 'sanction' && 
+                        e.payload?.team === rightTeamKey && 
+                        e.payload?.playerNumber === playerNumber &&
+                        (e.payload?.type === 'penalty' || e.payload?.type === 'rude_conduct')
+                      ).length;
+                      
+                      // Map to player row fields: s1/s2 for penalties, s3 for expulsion, s4 for disqualification
+                      if (sanctionType === 'penalty' || sanctionType === 'rude_conduct') {
+                        if (playerPenalties === 1) {
+                          set(`${prefix}_${rowKey}_s1_a`, String(rightTeamScore));
+                          set(`${prefix}_${rowKey}_s1_b`, String(leftTeamScore));
+                        } else if (playerPenalties === 2) {
+                          set(`${prefix}_${rowKey}_s2_a`, String(rightTeamScore));
+                          set(`${prefix}_${rowKey}_s2_b`, String(leftTeamScore));
+                        }
+                      } else if (sanctionType === 'expulsion') {
+                        set(`${prefix}_${rowKey}_s3_a`, String(rightTeamScore));
+                        set(`${prefix}_${rowKey}_s3_b`, String(leftTeamScore));
+                      } else if (sanctionType === 'disqualification') {
+                        set(`${prefix}_${rowKey}_s4_a`, String(rightTeamScore));
+                        set(`${prefix}_${rowKey}_s4_b`, String(leftTeamScore));
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          });
+          
+          // Set team names and A/B in team circle/label for this set
+          const teamAName = teamAKey === 'team_1' ? (team_1Team?.name || 'Team 1') : (team_2Team?.name || 'Team 2');
+          const teamBName = teamBKey === 'team_1' ? (team_1Team?.name || 'Team 1') : (team_2Team?.name || 'Team 2');
+          // Country can be in team object or match object
+          const teamACountry = teamAKey === 'team_1' 
+            ? (team_1Team?.country || match?.team_1Country || '') 
+            : (team_2Team?.country || match?.team_2Country || '');
+          const teamBCountry = teamBKey === 'team_1' 
+            ? (team_1Team?.country || match?.team_1Country || '') 
+            : (team_2Team?.country || match?.team_2Country || '');
+          const teamAColor = teamAKey === 'team_1' ? (team_1Team?.color || '#89bdc3') : (team_2Team?.color || '#323134');
+          const teamBColor = teamBKey === 'team_1' ? (team_1Team?.color || '#89bdc3') : (team_2Team?.color || '#323134');
+          
+          // Helper to convert hex color to short name
+          const getColorShortName = (hex: string): string => {
+            if (!hex || hex === 'image.png') return '';
+            const colorMap: Record<string, string> = {
+              '#89bdc3': 'Cyan', '#323134': 'Gray', '#000000': 'Black', '#ffffff': 'White',
+              '#ff0000': 'Red', '#0000ff': 'Blue', '#00ff00': 'Green', '#ffff00': 'Yellow',
+              '#ff00ff': 'Magenta', '#00ffff': 'Cyan', '#ffa500': 'Orange', '#800080': 'Purple',
+              '#ffc0cb': 'Pink', '#a52a2a': 'Brown', '#808080': 'Gray'
+            };
+            const normalized = hex.toLowerCase();
+            if (colorMap[normalized]) return colorMap[normalized];
+            // Try to guess from hex
+            if (normalized.startsWith('#ff') || normalized.startsWith('#f')) return 'Red/Orange';
+            if (normalized.startsWith('#00') || normalized.startsWith('#0')) return 'Blue/Green';
+            return 'Colored';
+          };
+          
+          const teamAColorName = getColorShortName(teamAColor);
+          const teamBColorName = getColorShortName(teamBColor);
+          
+          // Format: "Team Name (Country) (Color)"
+          const teamALabel = `${teamACountry ? ` ${teamACountry}` : ''}${teamAColorName ? ` (${teamAColorName})` : ''}`;
+          const teamBLabel = `${teamBCountry ? ` ${teamBCountry}` : ''}${teamBColorName ? ` (${teamBColorName})` : ''}`;
+          
+          set(`${prefix}_t1_team_circle`, 'A');
+          set(`${prefix}_t1_team_label`, teamALabel);
+          set(`${prefix}_t2_team_circle`, 'B');
+          set(`${prefix}_t2_team_label`, teamBLabel);
+          
+          // Set timeout counts in RESULTS table
+          if (setNum <= 3) {
+            set(`res_s${setNum}_to_a`, String(teamATimeoutCount));
+            set(`res_s${setNum}_to_b`, String(teamBTimeoutCount));
+          }
+          
+          // Cross out formal warning and delay warning boxes based on previous sets
+          // Check if team got formal warning in any previous set
+          for (let prevSetIndex = 1; prevSetIndex < setNum; prevSetIndex++) {
+            const prevSetPrefix = prevSetIndex === 1 ? 's1' : prevSetIndex === 2 ? 's2' : 's3';
+            const prevTeamAKey = match?.coinTossTeamA || 'team_1';
+            const prevTeamBKey = match?.coinTossTeamB || 'team_2';
+            
+            // Check if Team A got formal warning in previous set
+            if (formalWarningsBySet[prevSetIndex]?.has(prevTeamAKey)) {
+              // Cross out both Team A players' formal warning boxes in current set
+              set(`${prefix}_r1_fw_crossed`, 'true');
+              set(`${prefix}_r3_fw_crossed`, 'true');
+            }
+            
+            // Check if Team B got formal warning in previous set
+            if (formalWarningsBySet[prevSetIndex]?.has(prevTeamBKey)) {
+              // Cross out both Team B players' formal warning boxes in current set
+              set(`${prefix}_r2_fw_crossed`, 'true');
+              set(`${prefix}_r4_fw_crossed`, 'true');
+            }
+            
+            // Check if Team A got delay warning in previous set
+            if (delayWarningsBySet[prevSetIndex]?.has(prevTeamAKey)) {
+              // Cross out Team A's delay warning box in current set
+              set(`${prefix}_t1_ds_w_crossed`, 'true');
+            }
+            
+            // Check if Team B got delay warning in previous set
+            if (delayWarningsBySet[prevSetIndex]?.has(prevTeamBKey)) {
+              // Cross out Team B's delay warning box in current set
+              set(`${prefix}_t2_ds_w_crossed`, 'true');
+            }
+          }
+        });
+        
+        // Calculate total timeouts
+        const totalTeamATimeouts = Object.keys(eventsBySet).reduce((sum, setIdxStr) => {
+          const setIndex = parseInt(setIdxStr);
+          const setEvents = eventsBySet[setIndex] || [];
+          const teamAKey = match?.coinTossTeamA || 'team_1';
+          return sum + setEvents.filter((e: any) => e.type === 'timeout' && e.payload?.team === teamAKey).length;
+        }, 0);
+        const totalTeamBTimeouts = Object.keys(eventsBySet).reduce((sum, setIdxStr) => {
+          const setIndex = parseInt(setIdxStr);
+          const setEvents = eventsBySet[setIndex] || [];
+          const teamBKey = match?.coinTossTeamB || 'team_2';
+          return sum + setEvents.filter((e: any) => e.type === 'timeout' && e.payload?.team === teamBKey).length;
+        }, 0);
+        set('res_tot_to_a', String(totalTeamATimeouts));
+        set('res_tot_to_b', String(totalTeamBTimeouts));
+        
+        // Process improper requests
+        const improperRequests = events.filter((e: any) => 
+          e.type === 'sanction' && e.payload?.type === 'improper_request'
+        );
+        const teamAImproper = improperRequests.filter((e: any) => 
+          e.payload?.team === (match?.coinTossTeamA || 'team_1')
+        ).length > 0;
+        const teamBImproper = improperRequests.filter((e: any) => 
+          e.payload?.team === (match?.coinTossTeamB || 'team_2')
+        ).length > 0;
+        if (teamAImproper) set('improper_a', 'A');
+        if (teamBImproper) set('improper_b', 'B');
+        
+        // Process sanctions
+        const sanctions = events.filter((e: any) => e.type === 'sanction');
+        sanctions.forEach((sanction: any) => {
+          const setIndex = sanction.setIndex || 1;
+          if (setIndex > 3) return;
+          
+          const prefix = setIndex === 1 ? 's1' : setIndex === 2 ? 's2' : 's3';
+          const teamKey = sanction.payload?.team;
+          const playerNumber = sanction.payload?.playerNumber;
+          const sanctionType = sanction.payload?.type;
+          const teamSuffix = teamKey === (match?.coinTossTeamA || 'team_1') ? 't1' : 't2';
+          
+          if (!playerNumber) return; // Skip team sanctions for now
+          
+          // Find player row key (r1=I, r2=II, r3=III, r4=IV)
+          let rowKey: string | null = null;
+          const coinTossData = match?.coinTossData?.players;
+          if (teamKey === (match?.coinTossTeamA || 'team_1')) {
+            // Team A players: r1=I, r3=III
+            if (coinTossData?.teamA) {
+              if (coinTossData.teamA.player1?.number === playerNumber) {
+                rowKey = 'r1';
+              } else if (coinTossData.teamA.player2?.number === playerNumber) {
+                rowKey = 'r3';
+              }
+            }
+          } else {
+            // Team B players: r2=II, r4=IV
+            if (coinTossData?.teamB) {
+              if (coinTossData.teamB.player1?.number === playerNumber) {
+                rowKey = 'r2';
+              } else if (coinTossData.teamB.player2?.number === playerNumber) {
+                rowKey = 'r4';
+              }
+            }
+          }
+          
+          if (!rowKey) return;
+          
+          // Map sanction types to scoresheet fields
+          // Note: Score values are already set in the event processing loop above
+          // This section is no longer needed as all sanctions (including formal warnings) have scores set in the event loop
+        });
+        
+        // Process medical assistance (MTO/RIT)
+        const mtoRitEvents = events.filter((e: any) => e.type === 'mto_rit' || e.type === 'mto_rit_recovery');
+        const medicalData: Record<string, any> = {};
+        
+        mtoRitEvents.forEach((event: any) => {
+          if (event.type === 'mto_rit') {
+            const teamKey = event.payload?.team;
+            const playerNumber = event.payload?.playerNumber;
+            const type = event.payload?.type; // 'mto_blood', 'rit_no_blood', 'rit_weather', 'rit_toilet'
+            const setIndex = event.setIndex || 1;
+            
+            if (!teamKey || !playerNumber) return;
+            
+            const key = `${teamKey}_${playerNumber}_${setIndex}`;
+            if (!medicalData[key]) {
+              medicalData[key] = {
+                team: teamKey,
+                player: playerNumber,
+                set: setIndex,
+                mto_blood: 0,
+                rit_no_blood: 0,
+                rit_weather: 0,
+                rit_toilet: 0
+              };
+            }
+            
+            if (type === 'mto_blood') {
+              medicalData[key].mto_blood++;
+            } else if (type === 'rit_no_blood') {
+              medicalData[key].rit_no_blood++;
+            } else if (type === 'rit_weather') {
+              medicalData[key].rit_weather++;
+            } else if (type === 'rit_toilet') {
+              medicalData[key].rit_toilet++;
+            }
+          }
+        });
+        
+        // Fill medical assistance chart (limited to first few entries)
+        let medicalRowIndex = 0;
+        Object.values(medicalData).forEach((med: any) => {
+          if (medicalRowIndex >= 8) return; // Limit to 8 rows
+          
+          const teamLabel = med.team === (match?.coinTossTeamA || 'team_1') ? 'A' : 'B';
+          const playerName = med.team === (match?.coinTossTeamA || 'team_1') 
+            ? (team_1Players?.find((p: any) => p.number === med.player) 
+                ? `${team_1Players.find((p: any) => p.number === med.player)?.lastName || ''}, ${team_1Players.find((p: any) => p.number === med.player)?.firstName?.charAt(0) || ''}.`.trim()
+                : String(med.player))
+            : (team_2Players?.find((p: any) => p.number === med.player)
+                ? `${team_2Players.find((p: any) => p.number === med.player)?.lastName || ''}, ${team_2Players.find((p: any) => p.number === med.player)?.firstName?.charAt(0) || ''}.`.trim()
+                : String(med.player));
+          
+          set(`med_team_${medicalRowIndex}`, teamLabel);
+          set(`med_player_${medicalRowIndex}`, playerName);
+          set(`med_mto_blood_${medicalRowIndex}`, med.mto_blood > 0 ? String(med.mto_blood) : '');
+          set(`med_rit_no_blood_${medicalRowIndex}`, med.rit_no_blood > 0 ? String(med.rit_no_blood) : '');
+          set(`med_rit_weather_${medicalRowIndex}`, med.rit_weather > 0 ? String(med.rit_weather) : '');
+          set(`med_rit_toilet_${medicalRowIndex}`, med.rit_toilet > 0 ? String(med.rit_toilet) : '');
+          
+          medicalRowIndex++;
+        });
+      }
+      
+      // Process BMP (Ball Mark Protocol) events
+      const bmpEvents: any[] = [];
+      events.forEach((event: any) => {
+        if (event.type === 'challenge_request' || event.type === 'challenge_outcome' || 
+            event.type === 'referee_bmp_request' || event.type === 'referee_bmp_outcome' || 
+            event.type === 'bmp') {
+          bmpEvents.push(event);
         }
+      });
+      
+      // Sort BMP events by timestamp
+      bmpEvents.sort((a, b) => {
+        const aTime = typeof a.ts === 'number' ? a.ts : new Date(a.ts).getTime();
+        const bTime = typeof b.ts === 'number' ? b.ts : new Date(b.ts).getTime();
+        return aTime - bTime;
+      });
+      
+      // Populate BMP header
+      if (match) {
+        set('bmp_event', match.eventName || '');
+        if (match.scheduledAt) {
+          const date = new Date(match.scheduledAt);
+          set('bmp_date', date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }));
+        }
+        set('bmp_match_no', String(match.matchNumber || match.id || ''));
+        // Convert phase to capitalize (replace underscores with spaces and capitalize)
+        const phaseStr = match.matchPhase || '';
+        const formattedPhase = phaseStr
+          .replace(/_/g, ' ')
+          .split(' ')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join(' ');
+        set('bmp_phase', formattedPhase);
+        set('bmp_gender', match.matchGender === 'men' ? 'Men' : match.matchGender === 'women' ? 'Women' : '');
+        
+        const teamAKey = match.coinTossTeamA || 'team_1';
+        const teamBKey = match.coinTossTeamB || 'team_2';
+        const teamAName = teamAKey === 'team_1' ? (team_1Team?.name || '') : (team_2Team?.name || '');
+        const teamBName = teamBKey === 'team_1' ? (team_1Team?.name || '') : (team_2Team?.name || '');
+        set('bmp_team_a', teamAName);
+        set('bmp_team_b', teamBName);
+      }
+      
+      // Process BMP events and fill rows
+      // Group related events (request + outcome) together
+      let bmpRowIndex = 0;
+      const processedBMPs: Set<number> = new Set();
+      
+      bmpEvents.forEach((event: any, idx: number) => {
+        if (processedBMPs.has(idx)) return;
+        
+        if (bmpRowIndex >= 16) return; // Max 16 rows
+        
+        const setIndex = event.setIndex || 1;
+        const eventTime = event.ts ? (typeof event.ts === 'number' ? new Date(event.ts) : new Date(event.ts)) : new Date();
+        const hours = String(eventTime.getHours()).padStart(2, '0');
+        const minutes = String(eventTime.getMinutes()).padStart(2, '0');
+        const seconds = String(eventTime.getSeconds()).padStart(2, '0');
+        const timeStr = `${hours}:${minutes}:${seconds}`;
+        
+        // Find the set to get scores at time of BMP
+        const setData = sets?.find((s: any) => s.index === setIndex);
+        let scoreAtRequest = { team_1: 0, team_2: 0 };
+        let servingTeamBefore = '';
+        let requestBy = '';
+        let outcome = '';
+        let servingTeamAfter = '';
+        let scoreAfterDecision = { team_1: 0, team_2: 0 };
+        let timeResumed = '';
+        let duration = '';
+        
+        if (event.type === 'challenge_request') {
+          // Team-initiated challenge
+          const teamKey = event.payload?.team;
+          const teamLabel = teamKey === teamAKey ? 'A' : teamKey === teamBKey ? 'B' : '';
+          requestBy = teamLabel;
+          
+          // Get score at time of request
+          scoreAtRequest = event.payload?.score || { team_1: setData?.team_1Points || 0, team_2: setData?.team_2Points || 0 };
+          
+          // Determine serving team before challenge using scoreboard logic:
+          // 1. Get the last rally_start event before this challenge
+          // 2. Check score changes: if A increased → A serving, if B increased → B serving, if no increase (replay) → same as last server
+          const previousEvents = events
+            .filter((e: any) => 
+              e.setIndex === setIndex &&
+              e.ts
+            )
+            .sort((a: any, b: any) => {
+              const aTime = typeof a.ts === 'number' ? a.ts : new Date(a.ts).getTime();
+              const bTime = typeof b.ts === 'number' ? b.ts : new Date(b.ts).getTime();
+              return bTime - aTime; // Most recent first
+            });
+          
+          // Find last rally_start before challenge
+          const lastRallyStart = previousEvents.find((e: any) => {
+            if (e.type !== 'rally_start') return false;
+            const eTime = typeof e.ts === 'number' ? new Date(e.ts) : new Date(e.ts);
+            return eTime.getTime() < eventTime.getTime();
+          });
+          
+          if (lastRallyStart && lastRallyStart.payload?.servingTeam) {
+            const lastServingTeam = lastRallyStart.payload.servingTeam;
+            const rallyTime = typeof lastRallyStart.ts === 'number' ? new Date(lastRallyStart.ts) : new Date(lastRallyStart.ts);
+            
+            // Find last point event after this rally_start and before the challenge
+            const lastPointAfterRally = previousEvents.find((e: any) => {
+              if (e.type !== 'point') return false;
+              const eTime = typeof e.ts === 'number' ? new Date(e.ts) : new Date(e.ts);
+              return eTime.getTime() > rallyTime.getTime() && eTime.getTime() < eventTime.getTime();
+            });
+            
+            if (lastPointAfterRally && lastPointAfterRally.payload?.team) {
+              // Team that scored the last point is now serving
+              const scoringTeam = lastPointAfterRally.payload.team;
+              servingTeamBefore = scoringTeam === teamAKey ? 'A' : scoringTeam === teamBKey ? 'B' : '';
+            } else {
+              // No point scored (replay scenario) - serving team unchanged from rally_start
+              servingTeamBefore = lastServingTeam === teamAKey ? 'A' : lastServingTeam === teamBKey ? 'B' : '';
+            }
+          }
+          
+          // Find corresponding outcome
+          const outcomeEvent = bmpEvents.find((e: any, i: number) => 
+            i > idx && 
+            e.type === 'challenge_outcome' && 
+            e.setIndex === setIndex &&
+            e.payload?.team === teamKey
+          );
+          
+          if (outcomeEvent) {
+            processedBMPs.add(bmpEvents.indexOf(outcomeEvent));
+            const result = outcomeEvent.payload?.result || '';
+            if (result === 'successful') outcome = 'SUC';
+            else if (result === 'unsuccessful') outcome = 'UNSUC';
+            else if (result === 'judgment_impossible') outcome = 'MUNAV';
+            else if (result === 'cancelled') outcome = 'MUNAV';
+            
+            scoreAfterDecision = outcomeEvent.payload?.newScore || scoreAtRequest;
+            
+            // Determine serving team after BMP outcome
+            // Check for rally_start event after the outcome to see if service changed
+            const outcomeTime = outcomeEvent.ts ? (typeof outcomeEvent.ts === 'number' ? new Date(outcomeEvent.ts) : new Date(outcomeEvent.ts)) : new Date();
+            const nextRallyStart = events.find((e: any) => 
+              e.type === 'rally_start' && 
+              e.setIndex === setIndex &&
+              e.ts && 
+              (typeof e.ts === 'number' ? new Date(e.ts) : new Date(e.ts)).getTime() > outcomeTime.getTime()
+            );
+            
+            if (nextRallyStart && nextRallyStart.payload?.servingTeam) {
+              // Service team from next rally_start event
+              servingTeamAfter = nextRallyStart.payload.servingTeam === teamAKey ? 'A' : nextRallyStart.payload.servingTeam === teamBKey ? 'B' : servingTeamBefore;
+            } else {
+              // If no rally_start found, service usually doesn't change (same as before)
+              servingTeamAfter = servingTeamBefore;
+            }
+            
+            const resumedHours = String(outcomeTime.getHours()).padStart(2, '0');
+            const resumedMinutes = String(outcomeTime.getMinutes()).padStart(2, '0');
+            const resumedSeconds = String(outcomeTime.getSeconds()).padStart(2, '0');
+            timeResumed = `${resumedHours}:${resumedMinutes}:${resumedSeconds}`;
+            
+            const durationMs = outcomeTime.getTime() - eventTime.getTime();
+            const durationSec = Math.round(durationMs / 1000);
+            duration = `${durationSec}s`;
+          }
+        } else if (event.type === 'referee_bmp_request') {
+          // Referee-initiated BMP
+          requestBy = 'Ref';
+          
+          scoreAtRequest = event.payload?.score || { team_1: setData?.team_1Points || 0, team_2: setData?.team_2Points || 0 };
+          servingTeamBefore = event.payload?.servingTeam === teamAKey ? 'A' : event.payload?.servingTeam === teamBKey ? 'B' : '';
+          
+          // Find corresponding outcome
+          const outcomeEvent = bmpEvents.find((e: any, i: number) => 
+            i > idx && 
+            (e.type === 'referee_bmp_outcome' || e.type === 'bmp') && 
+            e.setIndex === setIndex
+          );
+          
+          if (outcomeEvent) {
+            processedBMPs.add(bmpEvents.indexOf(outcomeEvent));
+            const result = outcomeEvent.payload?.result || '';
+            if (result === 'left') outcome = 'IN';
+            else if (result === 'right') outcome = 'OUT';
+            else if (result === 'referee_decision' || result === 'ref') outcome = 'REF';
+            else outcome = 'MUNAV';
+            
+            scoreAfterDecision = outcomeEvent.payload?.newScore || scoreAtRequest;
+            
+            // Determine serving team after BMP outcome
+            // Check for rally_start event after the outcome to see if service changed
+            const outcomeTime = outcomeEvent.ts ? (typeof outcomeEvent.ts === 'number' ? new Date(outcomeEvent.ts) : new Date(outcomeEvent.ts)) : new Date();
+            const nextRallyStart = events.find((e: any) => 
+              e.type === 'rally_start' && 
+              e.setIndex === setIndex &&
+              e.ts && 
+              (typeof e.ts === 'number' ? new Date(e.ts) : new Date(e.ts)).getTime() > outcomeTime.getTime()
+            );
+            
+            if (nextRallyStart && nextRallyStart.payload?.servingTeam) {
+              // Service team from next rally_start event
+              servingTeamAfter = nextRallyStart.payload.servingTeam === teamAKey ? 'A' : nextRallyStart.payload.servingTeam === teamBKey ? 'B' : servingTeamBefore;
+            } else {
+              // If no rally_start found, service usually doesn't change (same as before)
+              servingTeamAfter = servingTeamBefore;
+            }
+            
+            const resumedHours = String(outcomeTime.getHours()).padStart(2, '0');
+            const resumedMinutes = String(outcomeTime.getMinutes()).padStart(2, '0');
+            const resumedSeconds = String(outcomeTime.getSeconds()).padStart(2, '0');
+            timeResumed = `${resumedHours}:${resumedMinutes}:${resumedSeconds}`;
+            
+            const durationMs = outcomeTime.getTime() - eventTime.getTime();
+            const durationSec = Math.round(durationMs / 1000);
+            duration = `${durationSec}s`;
+          }
+        } else if (event.type === 'challenge_outcome' || event.type === 'referee_bmp_outcome' || event.type === 'bmp') {
+          // Skip if this is an outcome without a corresponding request (shouldn't happen, but handle gracefully)
+          return;
+        }
+        
+        // Fill BMP row
+        set(`bmp_${bmpRowIndex}_start`, timeStr);
+        set(`bmp_${bmpRowIndex}_set`, String(setIndex));
+        set(`bmp_${bmpRowIndex}_score_a`, String(scoreAtRequest.team_1));
+        set(`bmp_${bmpRowIndex}_score_b`, String(scoreAtRequest.team_2));
+        // Ensure serving team values are set (A or B, not empty)
+        set(`bmp_${bmpRowIndex}_serving_before`, servingTeamBefore || '');
+        set(`bmp_${bmpRowIndex}_request`, requestBy);
+        set(`bmp_${bmpRowIndex}_outcome`, outcome);
+        set(`bmp_${bmpRowIndex}_serving_after`, servingTeamAfter || servingTeamBefore || '');
+        set(`bmp_${bmpRowIndex}_score2_a`, String(scoreAfterDecision.team_1));
+        set(`bmp_${bmpRowIndex}_score2_b`, String(scoreAfterDecision.team_2));
+        set(`bmp_${bmpRowIndex}_resumed`, timeResumed);
+        set(`bmp_${bmpRowIndex}_duration`, duration);
+        
+        bmpRowIndex++;
+      });
+      
+      // Fill remarks from match data
+      if (match?.remarks) {
+        set('remarks', match.remarks);
       }
       
       setDataInitialized(true);
+    } else if (!matchData) {
+      // Try to load from sessionStorage as fallback
+      try {
+        const dataStr = sessionStorage.getItem('scoresheetData');
+        if (dataStr) {
+          const fallbackData = JSON.parse(dataStr);
+          // Retry initialization with fallback data
+          if (fallbackData && fallbackData.match) {
+            // This will be handled by the next render cycle
+          }
+        }
+      } catch (e) {
+        // Error loading fallback data
+      }
     }
-  }, [matchData, dataInitialized]);
+  }, [matchData, dataInitialized, data]);
 
-  const handleSavePDF = async () => {
+  const handleSavePDF = useCallback(async () => {
     if (!page1Ref.current || !page2Ref.current) {
       alert('Pages not ready');
       return;
@@ -416,12 +1733,49 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
       const mm = (get('date_m') && get('date_m').padStart(2, '0')) || 'MM';
       const dd = (get('date_d') && get('date_d').padStart(2, '0')) || 'DD';
       const fileName = `${matchid}_${t1}_vs_${t2}_${yy}${mm}${dd}.pdf`;
+      
+      // Generate blob and open in new tab instead of just saving
+      const pdfBlob = pdf.output('blob');
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      window.open(pdfUrl, '_blank');
+      
+      // Also trigger download
       pdf.save(fileName);
+      
+      // Clean up blob URL and sessionStorage after a delay
+      setTimeout(() => {
+        URL.revokeObjectURL(pdfUrl);
+        sessionStorage.removeItem('scoresheetData');
+      }, 1000);
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('Error generating PDF. Please try again.');
     }
-  };
+  }, [get]);
+
+  // Disabled auto-PDF generation - just render HTML for now
+  // useEffect(() => {
+  //   if (!dataInitialized) return;
+  //   
+  //   // Wait for pages to be ready and React to finish rendering
+  //   const checkAndGenerate = () => {
+  //     if (page1Ref.current && page2Ref.current) {
+  //       setTimeout(async () => {
+  //         try {
+  //           await handleSavePDF();
+  //         } catch (error) {
+  //           console.error('Error auto-generating PDF:', error);
+  //         }
+  //       }, 2000);
+  //     } else {
+  //       // Check again after a short delay
+  //       setTimeout(checkAndGenerate, 500);
+  //     }
+  //   };
+  //   
+  //   const timer = setTimeout(checkAndGenerate, 500);
+  //   return () => clearTimeout(timer);
+  // }, [dataInitialized, handleSavePDF]);
 
 
   // --- Layout Constants ---
@@ -578,6 +1932,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           onChangeA={v => set(`${setPrefix}_${rowKeySuffix}_fw_a`, v)}
           valB={get(`${setPrefix}_${rowKeySuffix}_fw_b`)} 
           onChangeB={v => set(`${setPrefix}_${rowKeySuffix}_fw_b`, v)}
+          crossed={get(`${setPrefix}_${rowKeySuffix}_fw_crossed`) === 'true' || get(`${setPrefix}_${rowKeySuffix}_fw_crossed`) === true}
         />
       </div>
       {/* Sanctions */}
@@ -625,9 +1980,9 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
   // 4. Team Control Row
   const renderTeamControlRow = (setPrefix: string, teamSuffix: string, inverted = false, setNum: number) => {
     
-    // Time Out - height should match DelayHeaderBox + DelaySubHeaderBox (2 * H_HEADER_ROW = h-8)
+    // Time Out - height should match DelayHeaderBox + DelaySubHeaderBox (2 * H_HEADER_ROW = h-10)
     const TimeOutLabelBox = (
-        <div className={`h-8 text-[5px] text-center leading-tight bg-gray-50 font-bold ${W_COL1}`} style={centerStyleCol}>
+        <div className={`h-10 text-[5px] text-center leading-tight bg-gray-50 font-bold ${W_COL1}`} style={centerStyleCol}>
              Time<br/>Out
         </div>
     );
@@ -661,6 +2016,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
                <ScoreInputPair 
                   valA={get(`${setPrefix}_${teamSuffix}_ds_w_a`)} onChangeA={v => set(`${setPrefix}_${teamSuffix}_ds_w_a`, v)}
                   valB={get(`${setPrefix}_${teamSuffix}_ds_w_b`)} onChangeB={v => set(`${setPrefix}_${teamSuffix}_ds_w_b`, v)}
+                  crossed={get(`${setPrefix}_${teamSuffix}_ds_w_crossed`) === 'true' || get(`${setPrefix}_${teamSuffix}_ds_w_crossed`) === true}
                />
            </div>
            <div className={`${W_COL3} border-r border-black p-0.5`}>
@@ -691,16 +2047,16 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
 
                 {/* A or B + Team Name Input Box */}
                 <div className={`h-8 flex items-center border border-black`}>
-                    <div className="flex items-center justify-center p-0.5 w-8">
-                       
+                    <div className="flex flex-col items-center justify-center p-0.5 w-8">
                         <ABCircle 
                             value={get(`${setPrefix}_${teamSuffix}_team_circle`)} 
                             onChange={v => set(`${setPrefix}_${teamSuffix}_team_circle`, v)} 
                             size={18}
                         />
+                        <span className="text-[6px] text-gray-600 mt-0.5">{teamSuffix === 't1' ? 'Team 1' : 'Team 2'}</span>
                     </div>
-                    <div className="flex-1 p-0.5 h-full">
-                        <Input value={get(`${setPrefix}_${teamSuffix}_team_label`)} onChange={v => set(`${setPrefix}_${teamSuffix}_team_label`, v)} className="w-full h-full text-[10px] text-left" placeholder=""/>
+                    <div className="flex-1 p-0.5 h-full flex items-center">
+                        <span className="text-[8px] text-left leading-tight">{get(`${setPrefix}_${teamSuffix}_team_label`) || ''}</span>
                     </div>
                 </div>
             </div>
@@ -752,7 +2108,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
             <div className="flex border-b border-black text-black">
                 {/* Time Out */}
                 <div className="flex flex-col border-r border-black">
-                     <div className="border-b border-black">{TimeOutInputBox}</div>
+                     {TimeOutInputBox}
                      {TimeOutLabelBox}
                 </div>
                 {/* Delay */}
@@ -826,22 +2182,32 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
                 A : B
             </div>
             {/* Court Switch Inputs */}
-            {Array.from({ length: 12 }).map((_, i) => (
+            {Array.from({ length: 12 }).map((_, i) => {
+              const valA = get(`${prefix}_cs_${i}_a`);
+              const valB = get(`${prefix}_cs_${i}_b`);
+              const isEmpty = !valA && !valB;
+              
+              // Use only bottom border to avoid overlapping (except for TTO which needs all borders)
+              // For non-TTO boxes, use bottom border only (no top border to prevent doubling)
+              const borderClasses = i === 2 
+                ? 'border border-black' // TTO: all borders black
+                : 'border-l-0 border-r-0 border-t-0 border-b border-black'; // All non-TTO: only bottom border black
+              
+              return (
                 <div
                   key={i}
-                  className={`flex-1 border border-l-0 border-r-0 border-b-0 border-black flex items-center justify-center relative ${
-                    i === 2 ? 'border border-black' : ''
-                  }`}
+                  className={`flex-1 flex items-center justify-center relative ${borderClasses}`}
                 >
-                    {/* TTO with Box for Set 1 & 2 */}
+                    {/* TTO with Box for Set 1 & 2 - Row 2 (index 2) */}
                     {i === 2 && setNum !== 3 && (
                         <div className="absolute top-0 right-0 px-[1px] bg-white text-[5px] font-bold z-10 leading-none" style={{ right: '0px', top: '0px' }}>TTO</div>
                     )}
-                    <Input value={get(`${prefix}_cs_${i}_a`)} onChange={v => set(`${prefix}_cs_${i}_a`, v)} className="w-5 h-full text-[9px]" />
-                    <span className="text-[8px] text-black">:</span>
-                    <Input value={get(`${prefix}_cs_${i}_b`)} onChange={v => set(`${prefix}_cs_${i}_b`, v)} className="w-5 h-full text-[9px]" />
+                    <Input value={valA} onChange={v => set(`${prefix}_cs_${i}_a`, v)} className="w-5 h-full text-[9px]" />
+                    <span className={`text-[8px] ${isEmpty ? 'text-white' : 'text-black'}`}>:</span>
+                    <Input value={valB} onChange={v => set(`${prefix}_cs_${i}_b`, v)} className="w-5 h-full text-[9px]" />
                 </div>
-            ))}
+              );
+            })}
         </div>
       </div>
     );
@@ -849,16 +2215,6 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
 
   return (
     <div className="mx-auto text-black">
-      {/* Save PDF Button */}
-      <div className="mb-4 flex justify-center">
-        <button 
-          onClick={handleSavePDF}
-          className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 font-bold"
-        >
-          Save PDF
-        </button>
-      </div>
-      
       {/* ================= PAGE 1 ================= */}
       <div 
         ref={page1Ref}
@@ -954,6 +2310,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
               <div className="flex-1 flex gap-2 items-end h-full">
                 <div className="flex flex-col items-center justify-center h-full ml-1">
                     <ABCircle value={get('t1_side')} onChange={v => set('t1_side', v)} size={20} />
+                    <span className="text-[8px] text-gray-600 mt-0.5">Team 1</span>
                 </div>
                 <div className="w-[80%] pb-0.5">
                     <Input value={get('t1_name')} onChange={v => set('t1_name', v)} className="w-full text-left font-bold text-lg" placeholder="Team / Team" />
@@ -968,6 +2325,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
               <div className="flex-1 flex gap-2 items-end h-full">
                 <div className="flex flex-col items-center justify-center h-full ml-1">
                     <ABCircle value={get('t2_side')} onChange={v => set('t2_side', v)} size={20} />
+                    <span className="text-[8px] text-gray-600 mt-0.5">Team 2</span>
                 </div>
                 <div className="w-[80%] pb-0.5">
                     <Input value={get('t2_name')} onChange={v => set('t2_name', v)} className="w-full text-left font-bold text-lg" placeholder="Team / Team" />
@@ -1042,15 +2400,30 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
                         </div>
                         {/* Player 1 */}
                         <div className="flex text-[9px] h-5">
-                             <div className="w-6 border border-black"><Input value={get('b_t1_p1_no')} onChange={v => set('b_t1_p1_no', v)} className="w-full" /></div>
-                             <div className="flex-1 border border-l-0 border-black"><Input value={get('b_t1_p1_name')} onChange={v => set('b_t1_p1_name', v)} className="w-full text-left px-1" /></div>
+                             <div className="w-6 border border-black" style={centerStyle}><Input value={get('b_t1_p1_no')} onChange={v => set('b_t1_p1_no', v)} className="w-full text-center" /></div>
+                             <div className="flex-1 border border-l-0 border-black"><Input value={get('b_t1_p1_name')} onChange={v => set('b_t1_p1_name', v)} className="w-full px-1" style={{ textAlign: 'left' }} /></div>
                         </div>
                         {/* Player 2 */}
                         <div className="flex text-[9px] h-5">
-                             <div className="w-6 border border-t-0 border-black"><Input value={get('b_t1_p2_no')} onChange={v => set('b_t1_p2_no', v)} className="w-full" /></div>
-                             <div className="flex-1 border border-l-0 border-t-0 border-black"><Input value={get('b_t1_p2_name')} onChange={v => set('b_t1_p2_name', v)} className="w-full text-left px-1" /></div>
+                             <div className="w-6 border border-t-0 border-black" style={centerStyle}><Input value={get('b_t1_p2_no')} onChange={v => set('b_t1_p2_no', v)} className="w-full text-center" /></div>
+                             <div className="flex-1 border border-l-0 border-t-0 border-black"><Input value={get('b_t1_p2_name')} onChange={v => set('b_t1_p2_name', v)} className="w-full px-1" style={{ textAlign: 'left' }} /></div>
                         </div>
-                        <div className="text-[4px]  pb-4">Captain's pre-match signature:</div>
+                        <div className="text-[4px] mb-1">Captain's pre-match signature:</div>
+                        {/* Signature image for Team 1 */}
+                        {matchData?.match?.team_1CaptainSignature && (
+                          <div className="flex-1 border border-black mb-2" style={{ minHeight: '30px', maxHeight: '50px', overflow: 'hidden' }}>
+                            <img 
+                              src={matchData.match.team_1CaptainSignature} 
+                              alt="Team 1 Captain Signature" 
+                              style={{ 
+                                width: '100%', 
+                                height: '100%', 
+                                objectFit: 'contain',
+                                objectPosition: 'left center'
+                              }} 
+                            />
+                          </div>
+                        )}
                     </div>
 
                     {/* Team B Col */}
@@ -1066,15 +2439,30 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
                         </div>
                          {/* Player 1 */}
                         <div className="flex text-[9px] h-5">
-                             <div className="w-6 border border-t-0 border-black"><Input value={get('b_t2_p1_no')} onChange={v => set('b_t2_p1_no', v)} className="w-full" /></div>
-                             <div className="flex-1 border border-l-0 border-t-0 border-black"><Input value={get('b_t2_p1_name')} onChange={v => set('b_t2_p1_name', v)} className="w-full text-left px-1" /></div>
+                             <div className="w-6 border border-t-0 border-black" style={centerStyle}><Input value={get('b_t2_p1_no')} onChange={v => set('b_t2_p1_no', v)} className="w-full text-center" /></div>
+                             <div className="flex-1 border border-l-0 border-t-0 border-black"><Input value={get('b_t2_p1_name')} onChange={v => set('b_t2_p1_name', v)} className="w-full px-1" style={{ textAlign: 'left' }} /></div>
                         </div>
                         {/* Player 2 */}
                         <div className="flex text-[9px] h-5">
-                             <div className="w-6 border border-t-0 border-black"><Input value={get('b_t2_p2_no')} onChange={v => set('b_t2_p2_no', v)} className="w-full" /></div>
-                             <div className="flex-1 border border-l-0 border-t-0 border-black"><Input value={get('b_t2_p2_name')} onChange={v => set('b_t2_p2_name', v)} className="w-full text-left px-1" /></div>
+                             <div className="w-6 border border-t-0 border-black" style={centerStyle}><Input value={get('b_t2_p2_no')} onChange={v => set('b_t2_p2_no', v)} className="w-full text-center" /></div>
+                             <div className="flex-1 border border-l-0 border-t-0 border-black"><Input value={get('b_t2_p2_name')} onChange={v => set('b_t2_p2_name', v)} className="w-full px-1" style={{ textAlign: 'left' }} /></div>
                         </div>
-                        <div className="text-[4px] h-2 pb-4">Captain's pre-match signature:</div>
+                        <div className="text-[4px] mb-1">Captain's pre-match signature:</div>
+                        {/* Signature image for Team 2 */}
+                        {matchData?.match?.team_2CaptainSignature && (
+                          <div className="flex-1 border border-black mb-2" style={{ minHeight: '30px', maxHeight: '50px', overflow: 'hidden' }}>
+                            <img 
+                              src={matchData.match.team_2CaptainSignature} 
+                              alt="Team 2 Captain Signature" 
+                              style={{ 
+                                width: '100%', 
+                                height: '100%', 
+                                objectFit: 'contain',
+                                objectPosition: 'left center'
+                              }} 
+                            />
+                          </div>
+                        )}
                     </div>
                 </div>
 
@@ -1168,7 +2556,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
                             <Input value={get('winner_name')} onChange={v => set('winner_name', v)} className="flex-1 text-left font-bold" />
                             <Input value={get('winner_country')} onChange={v => set('winner_country', v)} className="w-12 text-center font-bold ml-2" />
                             <div className="ml-4 font-bold text-lg flex items-center">
-                                <span>2</span>
+                                <Input value={get('win_score_winner') || get('res_tot_w_a') || get('res_tot_w_b') || '2'} onChange={v => set('win_score_winner', v)} className="w-6" />
                                 <span className="mx-1">:</span>
                                 <Input value={get('win_score_other')} onChange={v => set('win_score_other', v)} className="w-6" />
                             </div>
@@ -1213,24 +2601,24 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
                                 { l: 'Asst. Scorer', k: 'asst_scorer' }
                             ].map(r => (
                                 <tr key={r.k} className="h-5">
-                                    <td className="border-r border-b border-black px-1 font-bold">{r.l}</td>
-                                    <td className="border-r border-b border-black p-0"><Input value={get(`${r.k}_name`)} onChange={v => set(`${r.k}_name`, v)} className="w-full h-full text-left px-1" /></td>
+                                    <td className="border-r border-b border-black px-1 font-bold text-left">{r.l}</td>
+                                    <td className="border-r border-b border-black p-0"><Input value={get(`${r.k}_name`)} onChange={v => set(`${r.k}_name`, v)} className="w-full h-full px-1" style={{ textAlign: 'left' }} /></td>
                                     <td className="border-r border-b border-black p-0"><Input value={get(`${r.k}_country`)} onChange={v => set(`${r.k}_country`, v)} className="w-full h-full text-center" /></td>
                                     <td className="border-b border-black bg-gray-50"></td>
                                 </tr>
                             ))}
                             {/* Line Judges - spans across Name, Country, Signature columns */}
                             <tr>
-                                <td rowSpan={2} className="border-r border-b border-black px-1 font-bold text-center align-middle">Line<br/>Judges</td>
+                                <td rowSpan={2} className="border-r border-b border-black px-1 font-bold text-left align-middle">Line<br/>Judges</td>
                                 <td colSpan={3} className="border-b border-black p-0">
                                     <div className="flex h-4">
                                         <div className="flex-1 flex border-r border-black">
                                             <span className="w-4 border-r border-black font-bold" style={centerStyle}>1</span>
-                                            <Input value={get('lj1')} onChange={v => set('lj1', v)} className="flex-1 text-left px-1" />
+                                            <Input value={get('lj1')} onChange={v => set('lj1', v)} className="flex-1 px-1" style={{ textAlign: 'left' }} />
                                         </div>
                                         <div className="flex-1 flex">
                                             <span className="w-4 border-r border-black font-bold" style={centerStyle}>2</span>
-                                            <Input value={get('lj2')} onChange={v => set('lj2', v)} className="flex-1 text-left px-1" />
+                                            <Input value={get('lj2')} onChange={v => set('lj2', v)} className="flex-1 px-1" style={{ textAlign: 'left' }} />
                                         </div>
                                     </div>
                                 </td>
@@ -1240,21 +2628,21 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
                                     <div className="flex h-4">
                                         <div className="flex-1 flex border-r border-black">
                                             <span className="w-4 border-r border-black font-bold" style={centerStyle}>3</span>
-                                            <Input value={get('lj3')} onChange={v => set('lj3', v)} className="flex-1 text-left px-1" />
+                                            <Input value={get('lj3')} onChange={v => set('lj3', v)} className="flex-1 px-1" style={{ textAlign: 'left' }} />
                                         </div>
                                         <div className="flex-1 flex">
                                             <span className="w-4 border-r border-black font-bold" style={centerStyle}>4</span>
-                                            <Input value={get('lj4')} onChange={v => set('lj4', v)} className="flex-1 text-left px-1" />
+                                            <Input value={get('lj4')} onChange={v => set('lj4', v)} className="flex-1 px-1" style={{ textAlign: 'left' }} />
                                         </div>
                                     </div>
                                 </td>
                             </tr>
                             {/* Post-match Signatures - each takes half the width */}
-                            <tr style={{ height: '2rem' }}>
-                                <td colSpan={2} className="border-r border-black p-1 align-top">
+                            <tr style={{ height: '1.6rem' }}>
+                                <td colSpan={2} className="border-r border-black p-0.2 align-top">
                                     <span className="text-[4px]">Captain's post-match signature</span>
                                 </td>
-                                <td colSpan={2} className="p-1 align-top">
+                                <td colSpan={2} className="p-0.2 align-top">
                                     <span className="text-[4px]">Captain's post-match signature</span>
                                 </td>
                             </tr>
@@ -1302,11 +2690,11 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
                     {/* "Merged" row with ABCircle and country input on left, and Player 1 & 2 rows to its right */}
                     {([1, 2].map(team => (
                         <div key={team} className={`flex items-stretch box-border  border-black`}>
-                            {/* Team (ABCircle + Country), vertically centered across Player 1 & 2 */}
-                            <div className="w-24 border-r border-t border-black flex items-center justify-start text-black px-1 box-border" style={{ flexDirection: "column", justifyContent: "center" }}>
-                                <div className="flex items-center justify-start h-full">
-                                    <ABCircle value={get(`ma_side_${team}`)} onChange={v => set(`ma_side_${team}`, v)} size={14} className="scale-200 mr-2" />
-                                    <Input value={get(`ma_ctry_${team}`)} onChange={v => set(`ma_ctry_${team}`, v)} className="w-14 text-[20px]" />
+                            {/* Team (A/B + Country), vertically centered across Player 1 & 2 */}
+                            <div className="w-24 border-r border-t border-black flex items-center justify-center text-black px-1 box-border" style={{ flexDirection: "column", justifyContent: "center", gap: '2px' }}>
+                                <div className="flex items-center justify-center h-full">
+                                    <ABCircle value={get(`ma_side_${team}`)} onChange={v => set(`ma_side_${team}`, v)} size={14} className="mr-1" />
+                                    <span className="text-[9px] font-bold">{get(`ma_ctry_${team}`) || ''}</span>
                                 </div>
                             </div>
                             {/* Player column with 2 stacked rows for player 1 and 2 */}
@@ -1385,6 +2773,188 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
 
             </div>
 
+        </div>
+      </div>
+
+      {/* Gap between page 2 and page 3 */}
+      <div style={{ height: '20mm', width: '100%' }}></div>
+
+      {/* ================= PAGE 3 - BMP SHEET ================= */}
+      <div 
+        ref={page3Ref}
+        id="page-3" 
+        className="page-boundary page-3 flex flex-col bg-white mx-auto" 
+        style={{ 
+          width: '297mm', 
+          height: '210mm', 
+          padding: '6mm',
+          boxSizing: 'border-box',
+          overflow: 'hidden',
+          fontFamily: 'Arial, sans-serif'
+        }}
+      >
+        {/* TITLE */}
+        <div className="text-center mb-2">
+          <h1 className="text-lg font-bold text-black">Ball Mark Protocol Remark Form</h1>
+          <div className="text-[9px] text-gray-600">(complementary to Scoresheet)</div>
+        </div>
+
+        {/* EVENT INFO */}
+        <div className="border-2 border-black mb-2">
+          <div className="flex border-b border-black">
+            <div className="flex items-center px-2 py-1 flex-1 border-r border-black">
+              <span className="font-bold mr-2 text-[10px]">EVENT:</span>
+              <Input value={get('bmp_event')} onChange={v => set('bmp_event', v)} className="flex-1 text-left text-[10px]" />
+            </div>
+            <div className="flex items-center px-2 py-1 w-36">
+              <span className="font-bold mr-2 text-[10px]">DATE:</span>
+              <Input value={get('bmp_date')} onChange={v => set('bmp_date', v)} className="flex-1 text-center text-[10px]" />
+            </div>
+          </div>
+          
+          <div className="flex text-[10px]">
+            <div className="flex items-center px-2 py-1 border-r border-black">
+              <span className="font-bold mr-1">MATCH NO:</span>
+              <Input value={get('bmp_match_no')} onChange={v => set('bmp_match_no', v)} className="w-12 text-center text-[10px]" />
+            </div>
+            <div className="flex items-center px-2 py-1 border-r border-black">
+              <span className="font-bold mr-1">PHASE:</span>
+              <Input value={get('bmp_phase')} onChange={v => set('bmp_phase', v)} className="w-16 text-center text-[10px]" />
+            </div>
+            <div className="flex items-center px-2 py-1 border-r border-black">
+              <span className="font-bold mr-1">GENDER:</span>
+              <Input value={get('bmp_gender')} onChange={v => set('bmp_gender', v)} className="w-10 text-center text-[10px]" />
+            </div>
+            <div className="flex items-center px-2 py-1 border-r border-black flex-1">
+              <span className="font-bold mr-1">TEAM A:</span>
+              <Input value={get('bmp_team_a')} onChange={v => set('bmp_team_a', v)} className="flex-1 text-center text-[10px]" />
+            </div>
+            <div className="flex items-center px-2 py-1 flex-1">
+              <span className="font-bold mr-1">TEAM B:</span>
+              <Input value={get('bmp_team_b')} onChange={v => set('bmp_team_b', v)} className="flex-1 text-center text-[10px]" />
+            </div>
+          </div>
+        </div>
+
+        {/* SECTION TITLE */}
+        <div className="bg-gray-100 border-2 border-black px-2 py-1 text-center font-bold text-[10px]">
+          During the match
+        </div>
+
+        {/* BMP TABLE - Takes remaining space */}
+        <div className="border-2 border-t-0 border-black flex-1 flex flex-col" style={{ minHeight: 0 }}>
+          {/* Header - 10 equal columns */}
+          <div className="flex bg-gray-50 border-b-2 border-black text-[8px] font-bold" style={{ flexShrink: 0 }}>
+            <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
+              <div className="text-center leading-tight">Start<br/>time</div>
+            </div>
+            <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
+              Set
+            </div>
+            <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
+              <div className="text-center leading-tight">Score at time<br/>of BMP request</div>
+            </div>
+            <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
+              <div className="text-center leading-tight">Team<br/>serving</div>
+            </div>
+            <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
+              <div className="text-center leading-tight">Request by<br/>(A / B / Ref)</div>
+            </div>
+            <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
+              <div className="text-center leading-tight">BMP request<br/>Outcome</div>
+            </div>
+            <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
+              <div className="text-center leading-tight">Team<br/>serving</div>
+            </div>
+            <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
+              <div className="text-center leading-tight">Score after<br/>decision</div>
+            </div>
+            <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
+              <div className="text-center leading-tight">Time match<br/>resumed</div>
+            </div>
+            <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="py-2">
+              Duration
+            </div>
+          </div>
+          
+          {/* Rows - 16 rows */}
+          <div className="flex-1 flex flex-col" style={{ minHeight: 0, overflow: 'hidden' }}>
+            {Array.from({ length: 16 }).map((_, i) => {
+              const cellStyle = { width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+              const outcomeValue = get(`bmp_${i}_outcome`);
+              const requestBy = get(`bmp_${i}_request`);
+              const isRefRequest = requestBy?.toLowerCase()?.includes('ref');
+              
+              // Outcome selector values
+              const teamOutcomes = ['', 'UNSUC', 'SUC', 'MUNAV'];
+              const refOutcomes = ['', 'IN', 'OUT', 'REF', 'MUNAV'];
+              const outcomes = isRefRequest ? refOutcomes : teamOutcomes;
+              
+              return (
+                <div key={i} className={`flex text-[9px] flex-1 min-h-0 ${i < 15 ? 'border-b border-black' : ''}`}>
+                  <div style={cellStyle} className="border-r border-black">
+                    <Input value={get(`bmp_${i}_start`)} onChange={v => set(`bmp_${i}_start`, v)} className="w-full h-full text-[9px]" />
+                  </div>
+                  <div style={cellStyle} className="border-r border-black">
+                    <Input value={get(`bmp_${i}_set`)} onChange={v => set(`bmp_${i}_set`, v)} className="w-full h-full text-[9px]" />
+                  </div>
+                  <div style={cellStyle} className="border-r border-black">
+                    <Input value={get(`bmp_${i}_score_a`)} onChange={v => set(`bmp_${i}_score_a`, v)} className="w-8 text-[9px] text-center" />
+                    <span className="mx-0.5 text-[9px]">:</span>
+                    <Input value={get(`bmp_${i}_score_b`)} onChange={v => set(`bmp_${i}_score_b`, v)} className="w-8 text-[9px] text-center" />
+                  </div>
+                  <div style={cellStyle} className="border-r border-black">
+                    <Input value={get(`bmp_${i}_serving_before`)} onChange={v => set(`bmp_${i}_serving_before`, v)} className="w-full h-full text-[9px] text-center" />
+                  </div>
+                  <div style={cellStyle} className="border-r border-black">
+                    <Input value={get(`bmp_${i}_request`)} onChange={v => set(`bmp_${i}_request`, v)} className="w-full h-full text-[9px]" />
+                  </div>
+                  <div style={cellStyle} className="border-r border-black px-1">
+                    <div
+                      onClick={() => {
+                        const currentIndex = outcomes.indexOf(outcomeValue || '');
+                        const nextIndex = (currentIndex + 1) % outcomes.length;
+                        set(`bmp_${i}_outcome`, outcomes[nextIndex]);
+                      }}
+                      className="border border-black flex items-center justify-center cursor-pointer bg-white hover:bg-gray-50 select-none text-black font-mono text-[9px] w-full h-5 px-0.5"
+                    >
+                      {outcomeValue || '-'}
+                    </div>
+                  </div>
+                  <div style={cellStyle} className="border-r border-black">
+                    <Input value={get(`bmp_${i}_serving_after`)} onChange={v => set(`bmp_${i}_serving_after`, v)} className="w-full h-full text-[9px] text-center" />
+                  </div>
+                  <div style={cellStyle} className="border-r border-black">
+                    <Input value={get(`bmp_${i}_score2_a`)} onChange={v => set(`bmp_${i}_score2_a`, v)} className="w-8 text-[9px] text-center" />
+                    <span className="mx-0.5 text-[9px]">:</span>
+                    <Input value={get(`bmp_${i}_score2_b`)} onChange={v => set(`bmp_${i}_score2_b`, v)} className="w-8 text-[9px] text-center" />
+                  </div>
+                  <div style={cellStyle} className="border-r border-black">
+                    <Input value={get(`bmp_${i}_resumed`)} onChange={v => set(`bmp_${i}_resumed`, v)} className="w-full h-full text-[9px]" />
+                  </div>
+                  <div style={cellStyle}>
+                    <Input value={get(`bmp_${i}_duration`)} onChange={v => set(`bmp_${i}_duration`, v)} className="w-full h-full text-[9px]" />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* SIGNATURES */}
+        <div className="flex gap-4 mt-2" style={{ flexShrink: 0 }}>
+          <div className="flex-1 border-2 border-black">
+            <div className="bg-gray-100 border-b border-black px-2 py-1 font-bold text-[9px]">Scorer's signature</div>
+            <div className="h-8 p-1">
+              <Input value={get('bmp_scorer_sig')} onChange={v => set('bmp_scorer_sig', v)} className="w-full h-full text-left text-[10px]" />
+            </div>
+          </div>
+          <div className="flex-1 border-2 border-black">
+            <div className="bg-gray-100 border-b border-black px-2 py-1 font-bold text-[9px]">First Referee's signature</div>
+            <div className="h-8 p-1">
+              <Input value={get('bmp_ref_sig')} onChange={v => set('bmp_ref_sig', v)} className="w-full h-full text-left text-[10px]" />
+            </div>
+          </div>
         </div>
       </div>
     </div>

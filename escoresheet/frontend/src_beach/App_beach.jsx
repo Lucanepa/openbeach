@@ -13,6 +13,7 @@ import {
   TEST_LINE_JUDGE_SEED_DATA,
   formatISODateToDisplay
 } from './constants_beach/testSeeds_beach'
+import { getSessionId, getSessionMetadata } from './utils_beach/session_beach'
 
 const TEST_MATCH_SEED_KEY = 'test-match-default'
 const TEST_MATCH_EXTERNAL_ID = 'test-match-default'
@@ -56,6 +57,20 @@ function generateRefereePin() {
 }
 
 function AppBeach() {
+  // Initialize session on app load
+  useEffect(() => {
+    const sessionMeta = getSessionMetadata()
+    if (sessionMeta) {
+      console.log('[Session] Unique session initialized:', {
+        sessionId: sessionMeta.sessionId,
+        created: sessionMeta.created,
+        platform: sessionMeta.platform,
+        userAgent: sessionMeta.userAgent.substring(0, 50) + '...'
+      })
+      console.log('[Session] This browser/device has its own isolated database. Other users will not see your data.')
+    }
+  }, [])
+  
   const [matchId, setMatchId] = useState(null)
   const [showMatchSetup, setShowMatchSetup] = useState(false)
   const [showCoinToss, setShowCoinToss] = useState(false)

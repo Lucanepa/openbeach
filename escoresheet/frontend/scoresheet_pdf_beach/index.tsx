@@ -29,26 +29,25 @@ window.addEventListener('unhandledrejection', (event) => {
   sendErrorToParent(error);
 });
 
-// Load match data from sessionStorage (completely offline - test matches show no data)
+// Load match data from sessionStorage
 const loadMatchData = () => {
   try {
     const dataStr = sessionStorage.getItem('scoresheetData');
+    console.log('Loading scoresheet data from sessionStorage:', dataStr ? 'Data found' : 'No data');
+    
     if (!dataStr) {
       // No data available - show empty scoresheet
+      console.warn('No scoresheet data in sessionStorage');
       return null;
     }
+    
     const data = JSON.parse(dataStr);
+    console.log('Parsed scoresheet data:', data ? 'Data parsed successfully' : 'Data is null');
     
-    // Clean up sessionStorage after loading
-    sessionStorage.removeItem('scoresheetData');
+    // Don't remove sessionStorage immediately - let the component use it first
+    // It will be cleaned up after PDF generation
     
-    // If data is null (test match) or if match is test, return null (show empty scoresheet)
-    if (data === null || data?.match?.test === true) {
-      // Test match or null - show empty scoresheet (completely offline, no data)
-      return null;
-    }
-    
-    // Only return data for official (non-test) matches
+    // Return data (including test matches for now to allow debugging)
     return data;
   } catch (error) {
     console.error('Error loading scoresheet data:', error);
