@@ -43,6 +43,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
   const [setTransitionServiceOrder, setSetTransitionServiceOrder] = useState({ teamA: '1_2', teamB: '2_1' }) // '1_2' | '2_1' for each team
   const [set3CoinTossWinner, setSet3CoinTossWinner] = useState(null) // 'teamA' | 'teamB' | null - only for set 3
   const [postMatchSignature, setPostMatchSignature] = useState(null) // 'team_1-captain' | 'team_2-captain' | null
+  const [matchEndModal, setMatchEndModal] = useState(false) // boolean - show match end modal with signatures and download
+  const [openSignature, setOpenSignature] = useState(null) // 'team_1-captain' | 'team_2-captain' | 'ref1' | 'ref2' | 'scorer' | 'asst-scorer' | null
   const [sanctionConfirm, setSanctionConfirm] = useState(null) // { side: 'left'|'right', type: 'improper_request'|'delay_warning'|'delay_penalty' } | null
   const [sanctionDropdown, setSanctionDropdown] = useState(null) // { team: 'team_1'|'team_2', type: 'player'|'official', playerNumber?: number, position?: string, role?: string, element: HTMLElement, x?: number, y?: number } | null
   const [sanctionConfirmModal, setSanctionConfirmModal] = useState(null) // { team: 'team_1'|'team_2', type: 'player'|'official', playerNumber?: number, position?: string, role?: string, sanctionType: 'warning'|'penalty'|'expulsion'|'disqualification' } | null
@@ -662,23 +664,37 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     const isDecidingSet = set.index === 3
     const pointsToWin = isDecidingSet ? 15 : 21
     
-    // Check if this point would end the set
-    if (team_1Points >= pointsToWin && team_1Points - team_2Points >= 2) {
-      // Calculate current set scores to determine if this is match-ending
-      const allSets = await db.sets.where({ matchId }).toArray()
-      const finishedSets = allSets.filter(s => s.finished)
-      const team_1SetsWon = finishedSets.filter(s => s.team_1Points > s.team_2Points).length
-      const team_2SetsWon = finishedSets.filter(s => s.team_2Points > s.team_1Points).length
-      
-      // Beach volleyball: Best of 3 sets (first to 2 sets wins)
-      const isMatchEnd = (team_1SetsWon + 1) >= 2
-      
-      // Show set end time confirmation modal
-      const defaultTime = new Date().toISOString()
-      setSetEndTimeModal({ setIndex: set.index, winner: 'team_1', team_1Points, team_2Points, defaultTime, isMatchEnd })
-      return true
+    // For set 3: if score reaches 14-14, continue until a team leads by 2 points (no cap at 15)
+    // For sets 1-2: standard 21 points with 2-point lead
+    let setEnded = false
+    
+    if (isDecidingSet) {
+      // Set 3: Check if either team has reached 15 AND leads by 2, OR if score is 14-14 or higher, continue until 2-point lead
+      if (team_1Points >= 15 && team_1Points - team_2Points >= 2) {
+        setEnded = true
+      } else if (team_2Points >= 15 && team_2Points - team_1Points >= 2) {
+        setEnded = true
+      } else if (team_1Points >= 14 && team_2Points >= 14) {
+        // Score is 14-14 or higher, check for 2-point lead
+        if (team_1Points - team_2Points >= 2) {
+          setEnded = true
+        } else if (team_2Points - team_1Points >= 2) {
+          setEnded = true
+        }
+      }
+    } else {
+      // Sets 1-2: Standard 21 points with 2-point lead
+      if (team_1Points >= pointsToWin && team_1Points - team_2Points >= 2) {
+        setEnded = true
+      } else if (team_2Points >= pointsToWin && team_2Points - team_1Points >= 2) {
+        setEnded = true
+      }
     }
-    if (team_2Points >= pointsToWin && team_2Points - team_1Points >= 2) {
+    
+    if (setEnded) {
+      // Determine which team won
+      const team_1Won = team_1Points > team_2Points
+      
       // Calculate current set scores to determine if this is match-ending
       const allSets = await db.sets.where({ matchId }).toArray()
       const finishedSets = allSets.filter(s => s.finished)
@@ -686,11 +702,18 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       const team_2SetsWon = finishedSets.filter(s => s.team_2Points > s.team_1Points).length
       
       // Beach volleyball: Best of 3 sets (first to 2 sets wins)
-      const isMatchEnd = (team_2SetsWon + 1) >= 2
+      const isMatchEnd = (team_1Won ? team_1SetsWon + 1 : team_2SetsWon + 1) >= 2
       
       // Show set end time confirmation modal
       const defaultTime = new Date().toISOString()
-      setSetEndTimeModal({ setIndex: set.index, winner: 'team_2', team_1Points, team_2Points, defaultTime, isMatchEnd })
+      setSetEndTimeModal({ 
+        setIndex: set.index, 
+        winner: team_1Won ? 'team_1' : 'team_2', 
+        team_1Points, 
+        team_2Points, 
+        defaultTime, 
+        isMatchEnd 
+      })
       return true
     }
     return false
@@ -1214,14 +1237,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
             border: '2px solid rgba(59, 130, 246, 0.5)',
             textAlign: 'center'
           }}>
-            <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '4px', fontWeight: 600 }}>
-              Break Between Sets
-            </div>
             <div style={{ fontSize: '36px', fontWeight: 700, color: 'var(--accent)', fontFamily: 'monospace' }}>
               {setTransitionCountdown}"
-            </div>
-            <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '4px' }}>
-              Time remaining before next set
             </div>
           </div>
         )}
@@ -1278,11 +1295,11 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       
       const totalPoints = team_1Points + team_2Points
       
-      // Beach volleyball: Technical TO at 21 points total (not in set 3)
+      // Beach volleyball: Technical TO at 21 points total (NOT in set 3)
       // Check TTO FIRST before court switch, since 21 is also a multiple of 7
-      const isSet3ForTTO = data.set.index === 3
-      if (!isSet3ForTTO) {
-        // Alert at 20th point (one point before TTO)
+      const isSet3 = data.set.index === 3
+      if (!isSet3) {
+        // Alert at 20th point (one point before TTO) - ONLY for sets 1-2
         if (totalPoints === 20) {
           setCourtSwitchAlert({ message: 'One point to TTO' })
           setTimeout(() => setCourtSwitchAlert(null), 3000) // Auto-dismiss after 3 seconds
@@ -1320,22 +1337,33 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       }
       
       // Beach volleyball: Court switch every 7 points (set 1-2) or every 5 points (set 3)
-      // Skip court switch at 21 points if TTO should happen (already handled above)
-      const isSet3ForSwitch = data.set.index === 3
-      const switchInterval = isSet3ForSwitch ? 5 : 7
-      const pointsSinceLastSwitch = totalPoints % switchInterval
+      // Skip court switch at 21 points if TTO should happen (sets 1-2 only)
+      const switchInterval = isSet3 ? 5 : 7
       
-      // Alert at one point before switch (but not at 20 if TTO is coming)
-      if (pointsSinceLastSwitch === (switchInterval - 1) && totalPoints > 0) {
-        // Don't show court switch alert at 20 if TTO is coming at 21
-        if (!(totalPoints === 20 && !isSet3ForTTO)) {
+      if (isSet3) {
+        // Set 3: switches every 5 points (5, 10, 15, 20, etc.)
+        // Alert at one point before switch: 4, 9, 14, 19, 24, etc.
+        const pointsSinceLastSwitchSet3 = totalPoints % 5
+        if (pointsSinceLastSwitchSet3 === 4 && totalPoints > 0) {
           setCourtSwitchAlert({ message: 'One point to switch' })
           setTimeout(() => setCourtSwitchAlert(null), 3000) // Auto-dismiss after 3 seconds
+        }
+      } else {
+        // Sets 1-2: switches every 7 points (7, 14, 21=TTO, 28, etc.)
+        // Alert at one point before switch: 6, 13, 20 (but skip 20 if TTO is coming at 21)
+        const pointsSinceLastSwitchSet12 = totalPoints % 7
+        if (pointsSinceLastSwitchSet12 === 6 && totalPoints > 0) {
+          // Don't show court switch alert at 20 if TTO is coming at 21
+          if (totalPoints !== 20) {
+            setCourtSwitchAlert({ message: 'One point to switch' })
+            setTimeout(() => setCourtSwitchAlert(null), 3000) // Auto-dismiss after 3 seconds
+          }
         }
       }
       
       // Switch at switchInterval point (every multiple of switchInterval)
       // Skip at 21 points if it's a TTO point (sets 1-2)
+      const pointsSinceLastSwitch = totalPoints % switchInterval
       if (pointsSinceLastSwitch === 0 && totalPoints > 0 && totalPoints % switchInterval === 0) {
         // Skip court switch at 21 points for sets 1-2 (TTO takes priority)
         if (totalPoints === 21 && !isSet3ForTTO) {
@@ -1576,11 +1604,16 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       // - Only update match status to 'final' - DO NOT DELETE ANYTHING
       await db.matches.update(matchId, { status: 'final' })
       
+      // Save match end time
+      const matchEndTime = time
+      await db.matches.update(matchId, { matchEndTime: matchEndTime })
       
       // Close the set end time modal
       setSetEndTimeModal(null)
       
-      if (onFinishSet) onFinishSet(data.set)
+      // Show match end modal with signatures and download options
+      setMatchEndModal(true)
+      
       return // Match is over, don't continue to set transition logic
     } else {
       // After set 1, show transition modal to switch sides, service, and service order
@@ -1648,6 +1681,9 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
       // Beach volleyball: Only sets 1, 2, 3 exist (best of 3)
       // If we reach here, something went wrong - match should have ended
       console.warn('Unexpected set index after set 2 handling:', setIndex)
+      // Prevent creating set 4 - match should have ended
+      setSetEndTimeModal(null)
+      return
     }
     
     setSetEndTimeModal(null)
@@ -1658,6 +1694,13 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
     if (!setTransitionModal || !data?.match) return
     
     const { setIndex, isSet3 } = setTransitionModal
+    
+    // Prevent creating set 4 - beach volleyball only has sets 1, 2, 3
+    if (setIndex > 3) {
+      console.warn('Cannot create set 4 - beach volleyball only has sets 1, 2, 3')
+      setSetTransitionModal(null)
+      return
+    }
     const teamAKey = data.match.coinTossTeamA || 'team_1'
     const teamBKey = data.match.coinTossTeamB || 'team_2'
     
@@ -4876,8 +4919,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                                   }}></div>
                                 </div>
                               ) : (
-                                // Other sanctions: separate cards
-                                <div style={{ display: 'flex', gap: '1px' }}>
+                                // Other sanctions: separate cards stacked vertically
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '60px' }}>
                                   {(hasWarning || hasDisqualification) && (
                                     <div className="sanction-card yellow" style={{ width: '8px', height: '11px', boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: '1px' }}></div>
                                   )}
@@ -5271,8 +5314,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                                   }}></div>
                                 </div>
                               ) : (
-                                // Other sanctions: separate cards
-                                <div style={{ display: 'flex', gap: '1px' }}>
+                                // Other sanctions: separate cards stacked vertically
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                   {(hasWarning || hasDisqualification) && (
                                     <div className="sanction-card yellow" style={{ width: '8px', height: '11px', boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: '1px' }}></div>
                                   )}
@@ -10257,6 +10300,157 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
         />
       )}
       
+      {matchEndModal && data?.match && (
+        <MatchEndModal
+          matchId={matchId}
+          data={data}
+          teamAKey={teamAKey}
+          openSignature={openSignature}
+          setOpenSignature={setOpenSignature}
+          onShowScoresheet={async () => {
+            try {
+              const scoresheetData = {
+                match: data.match,
+                team_1Team: data.team_1Team,
+                team_2Team: data.team_2Team,
+                team_1Players: data.team_1Players,
+                team_2Players: data.team_2Players,
+                sets: data.sets,
+                events: data.events,
+                sanctions: []
+              };
+              sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData));
+              window.open('/scoresheet_beach.html', '_blank');
+            } catch (error) {
+              console.error('Error opening scoresheet:', error);
+              alert('Error opening scoresheet: ' + error.message);
+            }
+          }}
+          onDownloadData={async () => {
+            try {
+              const allData = {
+                match: data.match,
+                team_1Team: data.team_1Team,
+                team_2Team: data.team_2Team,
+                team_1Players: data.team_1Players,
+                team_2Players: data.team_2Players,
+                sets: data.sets,
+                events: data.events
+              };
+              const dataStr = JSON.stringify(allData, null, 2);
+              const dataBlob = new Blob([dataStr], { type: 'application/json' });
+              const url = URL.createObjectURL(dataBlob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `match_${matchId}_data.json`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+            } catch (error) {
+              console.error('Error downloading data:', error);
+              alert('Error downloading data: ' + error.message);
+            }
+          }}
+          onConfirmEnd={async () => {
+            // Download screenshots and data in ZIP
+            try {
+              // Dynamic imports
+              const JSZip = (await import('jszip')).default;
+              const html2canvas = (await import('html2canvas')).default;
+              
+              const zip = new JSZip();
+              
+              // Open scoresheet in hidden iframe to capture screenshots
+              const iframe = document.createElement('iframe');
+              iframe.style.position = 'absolute';
+              iframe.style.left = '-9999px';
+              iframe.style.width = '297mm';
+              iframe.style.height = '210mm';
+              document.body.appendChild(iframe);
+              
+              // Load scoresheet data
+              const scoresheetData = {
+                match: data.match,
+                team_1Team: data.team_1Team,
+                team_2Team: data.team_2Team,
+                team_1Players: data.team_1Players,
+                team_2Players: data.team_2Players,
+                sets: data.sets,
+                events: data.events,
+                sanctions: []
+              };
+              sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData));
+              
+              iframe.src = '/scoresheet_beach.html';
+              
+              await new Promise((resolve) => {
+                iframe.onload = async () => {
+                  try {
+                    // Wait for scoresheet to render
+                    await new Promise(r => setTimeout(r, 2000));
+                    
+                    // Capture each page
+                    const pages = ['page-1', 'page-2', 'page-3'];
+                    for (let i = 0; i < pages.length; i++) {
+                      const pageElement = iframe.contentDocument?.getElementById(pages[i]);
+                      if (pageElement) {
+                        const canvas = await html2canvas(pageElement, {
+                          scale: 2,
+                          useCORS: true,
+                          logging: false
+                        });
+                        const imgData = canvas.toDataURL('image/png');
+                        const base64Data = imgData.split(',')[1];
+                        zip.file(`scoresheet_page_${i + 1}.png`, base64Data, { base64: true });
+                      }
+                    }
+                    
+                    // Add data JSON
+                    const allData = {
+                      match: data.match,
+                      team_1Team: data.team_1Team,
+                      team_2Team: data.team_2Team,
+                      team_1Players: data.team_1Players,
+                      team_2Players: data.team_2Players,
+                      sets: data.sets,
+                      events: data.events
+                    };
+                    zip.file('match_data.json', JSON.stringify(allData, null, 2));
+                    
+                    // Generate and download ZIP
+                    const blob = await zip.generateAsync({ type: 'blob' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `match_${matchId}_scoresheet.zip`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    document.body.removeChild(iframe);
+                    resolve();
+                  } catch (error) {
+                    console.error('Error capturing screenshots:', error);
+                    alert('Error capturing screenshots: ' + error.message);
+                    document.body.removeChild(iframe);
+                    resolve();
+                  }
+                };
+              });
+            } catch (error) {
+              console.error('Error creating ZIP:', error);
+              alert('Error creating ZIP file: ' + error.message);
+            }
+          }}
+          onGoHome={() => {
+            setMatchEndModal(false);
+            if (onFinishSet) onFinishSet(data.set);
+          }}
+        />
+      )}
+      
       {sanctionConfirm && (
         <Modal
           title="Confirm Sanction"
@@ -11162,14 +11356,8 @@ export default function Scoreboard({ matchId, onFinishSet, onOpenSetup, onOpenMa
                 border: '2px solid rgba(59, 130, 246, 0.5)',
                 textAlign: 'center'
               }}>
-                <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '8px', fontWeight: 600 }}>
-                  Break Between Sets
-                </div>
                 <div style={{ fontSize: '48px', fontWeight: 700, color: 'var(--accent)', fontFamily: 'monospace' }}>
                   {setTransitionCountdown}"
-                </div>
-                <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '4px' }}>
-                  Time remaining before next set
                 </div>
               </div>
               
@@ -12317,6 +12505,277 @@ function SetEndTimeModal({ setIndex, winner, team_1Points, team_2Points, default
         </div>
       </div>
     </Modal>
+  )
+}
+
+function MatchEndModal({ matchId, data, teamAKey, openSignature, setOpenSignature, onShowScoresheet, onDownloadData, onConfirmEnd, onGoHome }) {
+  const teamBKey = teamAKey === 'team_1' ? 'team_2' : 'team_1'
+  const finishedSets = (data?.sets || []).filter(s => s.finished).sort((a, b) => a.index - b.index)
+  const team_1SetsWon = finishedSets.filter(s => s.team_1Points > s.team_2Points).length
+  const team_2SetsWon = finishedSets.filter(s => s.team_2Points > s.team_1Points).length
+  
+  // Get officials
+  const officials = data?.match?.officials || []
+  const ref1 = officials.find(o => o.role === '1st referee')
+  const ref2 = officials.find(o => o.role === '2nd referee')
+  const scorer = officials.find(o => o.role === 'scorer')
+  const asstScorer = officials.find(o => o.role === 'assistant scorer')
+  
+  // Get captains
+  const team_1Captain = (data?.team_1Players || []).find(p => p.captain)
+  const team_2Captain = (data?.team_2Players || []).find(p => p.captain)
+  
+  const handleSaveSignature = async (role, signatureData) => {
+    const updateData = {}
+    if (role === 'team_1-captain') {
+      updateData.postMatchSignatureTeam_1Captain = signatureData
+    } else if (role === 'team_2-captain') {
+      updateData.postMatchSignatureTeam_2Captain = signatureData
+    } else if (role === 'ref1') {
+      updateData.postMatchSignatureRef1 = signatureData
+    } else if (role === 'ref2') {
+      updateData.postMatchSignatureRef2 = signatureData
+    } else if (role === 'scorer') {
+      updateData.postMatchSignatureScorer = signatureData
+    } else if (role === 'asst-scorer') {
+      updateData.postMatchSignatureAsstScorer = signatureData
+    }
+    await db.matches.update(matchId, updateData)
+    setOpenSignature(null)
+  }
+  
+  const getSignatureData = (role) => {
+    if (role === 'team_1-captain') return data?.match?.postMatchSignatureTeam_1Captain
+    if (role === 'team_2-captain') return data?.match?.postMatchSignatureTeam_2Captain
+    if (role === 'ref1') return data?.match?.postMatchSignatureRef1
+    if (role === 'ref2') return data?.match?.postMatchSignatureRef2
+    if (role === 'scorer') return data?.match?.postMatchSignatureScorer
+    if (role === 'asst-scorer') return data?.match?.postMatchSignatureAsstScorer
+    return null
+  }
+  
+  return (
+    <>
+      <Modal
+        title="Match End"
+        open={true}
+        onClose={() => {}}
+        width={900}
+        hideCloseButton={true}
+      >
+        <div style={{ padding: '24px', maxHeight: '80vh', overflowY: 'auto' }}>
+          {/* Results Table */}
+          <div style={{ marginBottom: '24px' }}>
+            <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 600 }}>Results</h3>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', background: 'var(--bg-secondary)', borderRadius: '8px', overflow: 'hidden' }}>
+              <thead>
+                <tr style={{ background: 'rgba(255,255,255,0.1)' }}>
+                  <th style={{ padding: '8px', textAlign: 'center' }}>Set</th>
+                  <th style={{ padding: '8px', textAlign: 'center' }}>Team {teamAKey === 'team_1' ? 'A' : 'B'}</th>
+                  <th style={{ padding: '8px', textAlign: 'center' }}>Team {teamBKey === 'team_1' ? 'A' : 'B'}</th>
+                  <th style={{ padding: '8px', textAlign: 'center' }}>Winner</th>
+                </tr>
+              </thead>
+              <tbody>
+                {finishedSets.map((set) => {
+                  const teamAPoints = teamAKey === 'team_1' ? set.team_1Points : set.team_2Points
+                  const teamBPoints = teamBKey === 'team_1' ? set.team_1Points : set.team_2Points
+                  const winner = teamAPoints > teamBPoints ? 'A' : 'B'
+                  return (
+                    <tr key={set.index} style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                      <td style={{ padding: '8px', textAlign: 'center' }}>Set {set.index}</td>
+                      <td style={{ padding: '8px', textAlign: 'center' }}>{teamAPoints}</td>
+                      <td style={{ padding: '8px', textAlign: 'center' }}>{teamBPoints}</td>
+                      <td style={{ padding: '8px', textAlign: 'center', fontWeight: 600 }}>Team {winner}</td>
+                    </tr>
+                  )
+                })}
+                <tr style={{ borderTop: '2px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)' }}>
+                  <td style={{ padding: '8px', textAlign: 'center', fontWeight: 600 }}>Total</td>
+                  <td style={{ padding: '8px', textAlign: 'center', fontWeight: 600 }}>{team_1SetsWon}</td>
+                  <td style={{ padding: '8px', textAlign: 'center', fontWeight: 600 }}>{team_2SetsWon}</td>
+                  <td style={{ padding: '8px', textAlign: 'center', fontWeight: 600 }}>
+                    {team_1SetsWon > team_2SetsWon ? 'Team A' : 'Team B'}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          
+          {/* Signatures */}
+          <div style={{ marginBottom: '24px' }}>
+            <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 600 }}>Signatures</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+              {/* Team 1 Captain */}
+              <SignatureBox
+                role="team_1-captain"
+                label={`${data?.team_1Team?.name || 'Team 1'} Captain${team_1Captain ? ` (#${team_1Captain.number})` : ''}`}
+                signatureData={getSignatureData('team_1-captain')}
+                onSign={() => setOpenSignature('team_1-captain')}
+              />
+              
+              {/* Team 2 Captain */}
+              <SignatureBox
+                role="team_2-captain"
+                label={`${data?.team_2Team?.name || 'Team 2'} Captain${team_2Captain ? ` (#${team_2Captain.number})` : ''}`}
+                signatureData={getSignatureData('team_2-captain')}
+                onSign={() => setOpenSignature('team_2-captain')}
+              />
+              
+              {/* 1st Referee */}
+              <SignatureBox
+                role="ref1"
+                label={`1st Referee${ref1 ? ` (${ref1.firstName || ''} ${ref1.lastName || ''})` : ''}`}
+                signatureData={getSignatureData('ref1')}
+                onSign={() => setOpenSignature('ref1')}
+              />
+              
+              {/* 2nd Referee */}
+              <SignatureBox
+                role="ref2"
+                label={`2nd Referee${ref2 ? ` (${ref2.firstName || ''} ${ref2.lastName || ''})` : ''}`}
+                signatureData={getSignatureData('ref2')}
+                onSign={() => setOpenSignature('ref2')}
+              />
+              
+              {/* Scorer */}
+              <SignatureBox
+                role="scorer"
+                label={`Scorer${scorer ? ` (${scorer.firstName || ''} ${scorer.lastName || ''})` : ''}`}
+                signatureData={getSignatureData('scorer')}
+                onSign={() => setOpenSignature('scorer')}
+              />
+              
+              {/* Assistant Scorer */}
+              <SignatureBox
+                role="asst-scorer"
+                label={`Assistant Scorer${asstScorer ? ` (${asstScorer.firstName || ''} ${asstScorer.lastName || ''})` : ''}`}
+                signatureData={getSignatureData('asst-scorer')}
+                onSign={() => setOpenSignature('asst-scorer')}
+              />
+            </div>
+          </div>
+          
+          {/* Action Buttons */}
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button
+              onClick={onShowScoresheet}
+              style={{
+                padding: '12px 24px',
+                fontSize: '14px',
+                fontWeight: 600,
+                background: 'var(--accent)',
+                color: '#000',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer'
+              }}
+            >
+              Scoresheet
+            </button>
+            <button
+              onClick={onDownloadData}
+              style={{
+                padding: '12px 24px',
+                fontSize: '14px',
+                fontWeight: 600,
+                background: 'rgba(255,255,255,0.1)',
+                color: 'var(--text)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '8px',
+                cursor: 'pointer'
+              }}
+            >
+              Download Data
+            </button>
+            <button
+              onClick={onConfirmEnd}
+              style={{
+                padding: '12px 24px',
+                fontSize: '14px',
+                fontWeight: 600,
+                background: 'var(--accent)',
+                color: '#000',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer'
+              }}
+            >
+              Confirm End of Match
+            </button>
+            <button
+              onClick={onGoHome}
+              style={{
+                padding: '12px 24px',
+                fontSize: '14px',
+                fontWeight: 600,
+                background: 'rgba(255,255,255,0.1)',
+                color: 'var(--text)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '8px',
+                cursor: 'pointer'
+              }}
+            >
+              Go Home
+            </button>
+          </div>
+        </div>
+      </Modal>
+      
+      {openSignature && (
+        <SignaturePad
+          title={openSignature === 'team_1-captain' ? `${data?.team_1Team?.name || 'Team 1'} Captain` :
+                 openSignature === 'team_2-captain' ? `${data?.team_2Team?.name || 'Team 2'} Captain` :
+                 openSignature === 'ref1' ? '1st Referee' :
+                 openSignature === 'ref2' ? '2nd Referee' :
+                 openSignature === 'scorer' ? 'Scorer' :
+                 'Assistant Scorer'}
+          onSave={(signatureData) => handleSaveSignature(openSignature, signatureData)}
+          onClose={() => setOpenSignature(null)}
+        />
+      )}
+    </>
+  )
+}
+
+function SignatureBox({ role, label, signatureData, onSign }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)' }}>
+        {label}
+      </div>
+      <div
+        onClick={onSign}
+        style={{
+          border: '2px solid rgba(255,255,255,0.2)',
+          borderRadius: '8px',
+          background: 'var(--bg-secondary)',
+          minHeight: '60px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          position: 'relative',
+          overflow: 'hidden'
+        }}
+      >
+        {signatureData ? (
+          <img
+            src={signatureData}
+            alt="Signature"
+            style={{
+              maxWidth: '100%',
+              maxHeight: '60px',
+              objectFit: 'contain'
+            }}
+          />
+        ) : (
+          <div style={{ color: 'var(--muted)', fontSize: '12px' }}>
+            Tap to sign
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 
