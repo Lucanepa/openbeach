@@ -1,221 +1,1057 @@
-import { useState, useMemo, useEffect } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../db_beach/db_beach'
-import mikasaVolleyball from '../mikasa_BV550C_beach.png'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
+import { useAlert } from '../contexts_beach/AlertContext_beach'
+import i18n from '../i18n'
+import { getMatchData, subscribeToMatchData, listAvailableMatches, getWebSocketStatus, forceReconnect } from '../utils_beach/serverDataSync_beach'
+import { useRealtimeConnection, CONNECTION_TYPES, CONNECTION_STATUS } from '../hooks_beach/useRealtimeConnection_beach'
+import mikasaVolleyball from '../mikasa_v200w.png'
 
-export default function Referee({ matchId, onExit }) {
-  const [refereeView, setRefereeView] = useState('2nd') // '1st' or '2nd'
-  const [activeTimeout, setActiveTimeout] = useState(null) // { team: 'team_1'|'team_2', countdown: number, eventId: number }
-  const [processedTimeouts, setProcessedTimeouts] = useState(new Set()) // Track which timeout events we've already shown
-  
-  
-  // Send heartbeat to indicate referee is connected (only if connection is enabled)
+// Primary ball image (with mikasa as fallback)
+const ballImage = '/ball.png'
+import { ConnectionManager } from '../utils_beach/connectionManager_beach'
+import ConnectionStatus from './ConnectionStatus'
+import Modal from './Modal'
+import WsDebugOverlay from './WsDebugOverlay'
+import { db } from '../db_beach/db_beach'
+import TestModeControls from './TestModeControls'
+import SimpleHeader from './SimpleHeader'
+import DonutCountdown from './DonutCountdown'
+import { supabase } from '../lib_beach/supabaseClient_beach'
+import { useSyncQueue } from '../hooks_beach/useSyncQueue_beach'
+
+// Get current version from package.json (injected by Vite at build time)
+const currentVersion = __APP_VERSION__
+
+// Flag SVG components for language selector
+const FlagGB = () => (
+  <svg width="20" height="14" viewBox="0 0 60 42" style={{ borderRadius: '2px', boxShadow: '0 0 1px rgba(0,0,0,0.3)' }}>
+    <rect width="60" height="42" fill="#012169" />
+    <path d="M0,0 L60,42 M60,0 L0,42" stroke="#fff" strokeWidth="7" />
+    <path d="M0,0 L60,42 M60,0 L0,42" stroke="#C8102E" strokeWidth="4" clipPath="url(#gbClip)" />
+    <path d="M30,0 V42 M0,21 H60" stroke="#fff" strokeWidth="12" />
+    <path d="M30,0 V42 M0,21 H60" stroke="#C8102E" strokeWidth="7" />
+  </svg>
+)
+
+const FlagIT = () => (
+  <svg width="20" height="14" viewBox="0 0 60 42" style={{ borderRadius: '2px', boxShadow: '0 0 1px rgba(0,0,0,0.3)' }}>
+    <rect width="20" height="42" fill="#009246" />
+    <rect x="20" width="20" height="42" fill="#fff" />
+    <rect x="40" width="20" height="42" fill="#CE2B37" />
+  </svg>
+)
+
+const FlagDE = () => (
+  <svg width="20" height="14" viewBox="0 0 60 42" style={{ borderRadius: '2px', boxShadow: '0 0 1px rgba(0,0,0,0.3)' }}>
+    <rect width="60" height="14" fill="#000" />
+    <rect y="14" width="60" height="14" fill="#DD0000" />
+    <rect y="28" width="60" height="14" fill="#FFCE00" />
+  </svg>
+)
+
+const FlagFR = () => (
+  <svg width="20" height="14" viewBox="0 0 60 42" style={{ borderRadius: '2px', boxShadow: '0 0 1px rgba(0,0,0,0.3)' }}>
+    <rect width="20" height="42" fill="#002395" />
+    <rect x="20" width="20" height="42" fill="#fff" />
+    <rect x="40" width="20" height="42" fill="#ED2939" />
+  </svg>
+)
+
+const FlagCH = () => (
+  <svg width="14" height="14" viewBox="0 0 32 32" style={{ borderRadius: '2px', boxShadow: '0 0 1px rgba(0,0,0,0.3)' }}>
+    <rect width="32" height="32" fill="#ff0000" />
+    <rect x="14" y="6" width="4" height="20" fill="#fff" />
+    <rect x="6" y="14" width="20" height="4" fill="#fff" />
+  </svg>
+)
+
+const languages = [
+  { code: 'en', Flag: FlagGB, label: 'EN' },
+  { code: 'it', Flag: FlagIT, label: 'IT' },
+  { code: 'de', Flag: FlagDE, label: 'DE' },
+  { code: 'de-CH', Flag: FlagCH, label: 'DE' },
+  { code: 'fr', Flag: FlagFR, label: 'FR' }
+]
+
+// Hook to compute synced font size for paired texts using off-screen measurement
+function useSyncedFontSize(texts, containerWidth, baseFontSize, minFontSize, isSingleLine = false, maxLines = 3) {
+  const [result, setResult] = useState({ fontSize: baseFontSize, maxLines: 1 })
+  const measureRef = useRef(null)
+
   useEffect(() => {
-    // Check if referee connection is enabled before starting heartbeat
-    const checkAndStartHeartbeat = async () => {
-      const match = await db.matches.get(matchId)
-      if (match?.refereeConnectionEnabled === false) return null
-      
-      const updateHeartbeat = async () => {
-        try {
-          const heartbeatData = refereeView === '1st' 
-            ? { lastReferee1Heartbeat: new Date().toISOString() }
-            : { lastReferee2Heartbeat: new Date().toISOString() }
-          await db.matches.update(matchId, heartbeatData)
-        } catch (error) {
-          console.error('Failed to update referee heartbeat:', error)
+    if (containerWidth <= 0) return
+
+    // Create off-screen measurement element if needed
+    if (!measureRef.current) {
+      measureRef.current = document.createElement('div')
+      measureRef.current.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;top:-9999px;left:-9999px;'
+      document.body.appendChild(measureRef.current)
+    }
+
+    const measureEl = measureRef.current
+    if (!measureEl) return
+
+    if (isSingleLine) {
+      // Single line mode: find largest font that fits all texts
+      const fontSizes = []
+      for (let fs = baseFontSize; fs >= minFontSize; fs -= 2) {
+        fontSizes.push(fs)
+      }
+      if (fontSizes[fontSizes.length - 1] !== minFontSize) {
+        fontSizes.push(minFontSize)
+      }
+
+      for (const fs of fontSizes) {
+        let allFit = true
+        for (const text of texts) {
+          measureEl.style.cssText = `position:absolute;visibility:hidden;white-space:nowrap;font-size:${fs}px;font-weight:700;padding:4px 18px;top:-9999px;left:-9999px;`
+          measureEl.textContent = text
+          if (measureEl.scrollWidth > containerWidth) {
+            allFit = false
+            break
+          }
+        }
+        if (allFit) {
+          setResult({ fontSize: fs, maxLines: 1 })
+          return
         }
       }
-      
-      // Initial heartbeat
-      updateHeartbeat()
-      
-      // Update heartbeat every 5 seconds
-      return setInterval(updateHeartbeat, 5000)
+      // Nothing fits, use minimum (will truncate with ellipsis)
+      setResult({ fontSize: minFontSize, maxLines: 1 })
+    } else {
+      // Multi-line mode: try 1 line -> 2 lines -> 3 lines at each font size
+      const fontSizes = [baseFontSize, Math.round(baseFontSize * 0.75), minFontSize]
+
+      for (const fs of fontSizes) {
+        for (let lines = 1; lines <= maxLines; lines++) {
+          let allFit = true
+          for (const text of texts) {
+            measureEl.style.cssText = `position:absolute;visibility:hidden;font-size:${fs}px;font-weight:700;padding:4px 14px;line-height:1.2;word-break:break-word;width:${containerWidth}px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:${lines};overflow:hidden;top:-9999px;left:-9999px;`
+            measureEl.textContent = text
+            // Check if text overflows the line clamp
+            const maxHeight = lines * fs * 1.2 + 8 // +8 for padding
+            if (measureEl.scrollHeight > maxHeight + 2) {
+              allFit = false
+              break
+            }
+          }
+          if (allFit) {
+            setResult({ fontSize: fs, maxLines: lines })
+            return
+          }
+        }
+      }
+      // Nothing fits, use minimum with max lines
+      setResult({ fontSize: minFontSize, maxLines })
     }
-    
-    let interval = null
-    checkAndStartHeartbeat().then(id => { interval = id })
-    
+  }, [texts.join('|'), containerWidth, baseFontSize, minFontSize, isSingleLine, maxLines])
+
+  // Cleanup measurement element on unmount
+  useEffect(() => {
     return () => {
-      if (interval) clearInterval(interval)
-      // Clear heartbeat on unmount
-      const clearData = refereeView === '1st'
-        ? { lastReferee1Heartbeat: null }
-        : { lastReferee2Heartbeat: null }
-      db.matches.update(matchId, clearData)
-        .catch(err => console.error('Failed to clear heartbeat:', err))
+      if (measureRef.current && measureRef.current.parentNode) {
+        measureRef.current.parentNode.removeChild(measureRef.current)
+        measureRef.current = null
+      }
     }
-  }, [matchId, refereeView])
+  }, [])
 
-  const data = useLiveQuery(async () => {
-    const match = await db.matches.get(matchId)
-    if (!match) return null
+  return result
+}
 
-    const [team_1Team, team_2Team] = await Promise.all([
-      match?.team_1Id ? db.teams.get(match.team_1Id) : null,
-      match?.team_2Id ? db.teams.get(match.team_2Id) : null
-    ])
-
-    const [team_1Players, team_2Players] = await Promise.all([
-      match?.team_1Id
-        ? db.players.where('teamId').equals(match.team_1Id).sortBy('number')
-        : [],
-      match?.team_2Id
-        ? db.players.where('teamId').equals(match.team_2Id).sortBy('number')
-        : []
-    ])
-
-    const sets = await db.sets
-      .where('matchId')
-      .equals(matchId)
-      .sortBy('index')
-
-    const currentSet = sets.find(s => !s.finished) || null
-
-    const events = await db.events
-      .where('matchId')
-      .equals(matchId)
-      .toArray()
-
-    return {
-      match,
-      team_1Team,
-      team_2Team,
-      team_1Players,
-      team_2Players,
-      sets,
-      currentSet,
-      events
+export default function Referee({ matchId, onExit, isMasterMode }) {
+  const { t } = useTranslation()
+  const { showAlert } = useAlert()
+  const { syncStatus, retryErrors } = useSyncQueue()
+  const [refereeView, setRefereeView] = useState('2nd') // '1st' or '2nd'
+  const [attentionModalOpen, setAttentionModalOpen] = useState(false)
+  const lastAttentionTriggerRef = useRef(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [languageMenuOpen, setLanguageMenuOpen] = useState(false)
+  // Score/countdown font from settings
+  const [scoreFont, setScoreFont] = useState(() => {
+    const saved = localStorage.getItem('scoreFont')
+    return saved || 'default'
+  })
+  const getScoreFont = () => {
+    const fonts = {
+      'default': 'inherit',
+      'orbitron': "'Orbitron', monospace",
+      'roboto-mono': "'Roboto Mono', monospace",
+      'jetbrains-mono': "'JetBrains Mono', monospace",
+      'space-mono': "'Space Mono', monospace",
+      'ibm-plex-mono': "'IBM Plex Mono', monospace"
     }
+    return fonts[scoreFont] || 'inherit'
+  }
+  const [viewportWidth, setViewportWidth] = useState(() => typeof window !== 'undefined' ? window.innerWidth : 400)
+  const [viewportHeight, setViewportHeight] = useState(() => typeof window !== 'undefined' ? window.innerHeight : 700)
+
+  // Container width refs for adaptive text sizing
+  const section2AContainerRef = useRef(null)
+  const [section2AWidth, setSection2AWidth] = useState(150)
+
+  // Modal states (from Scoreboard actions)
+  const [timeoutModal, setTimeoutModal] = useState(null) // { team, countdown, started }
+  const [showTimeoutModal, setShowTimeoutModal] = useState(false) // Modal visibility (separate from countdown state)
+  const timeoutActiveRef = useRef(false) // Track if timeout is active (for closure-safe checks)
+
+  // Flashing substitution state (like Scoreboard)
+  const [recentlySubstitutedPlayers, setRecentlySubstitutedPlayers] = useState([]) // [{ team, playerNumber, timestamp }]
+  const recentSubFlashTimeoutRef = useRef(null)
+
+  // Connection type state (auto, supabase, websocket)
+  const [connectionType, setConnectionType] = useState(CONNECTION_TYPES.AUTO)
+
+  // Advanced mode state for reception formations
+  const [advancedMode, setAdvancedMode] = useState({ left: false, right: false }) // Per-side advanced mode
+  const [setterNumber, setSetterNumber] = useState({ left: null, right: null }) // Per-side setter number
+  const [setterSelectionModal, setSetterSelectionModal] = useState(null) // 'left' | 'right' | null
+
+  // Reception mode: 'standard' (grid layout) or 'reception' (formation positions)
+  const [receptionMode, setReceptionMode] = useState({ left: 'standard', right: 'standard' })
+
+  // Custom formation positions (drag and drop adjustments) per set
+  const [customFormations, setCustomFormations] = useState({}) // { [setIndex]: { left: { [position]: { top, left } }, right: { ... } } }
+
+  // Dragging state for player repositioning
+  const [draggingPlayer, setDraggingPlayer] = useState(null) // { side: 'left'|'right', position: 'I'-'VI' }
+  const courtRef = useRef({ left: null, right: null })
+
+  // Timer ref for auto-revert to standard mode
+  const receptionModeTimerRef = useRef({ left: null, right: null })
+
+  // Connection state
+  const [connectionStatuses, setConnectionStatuses] = useState({
+    api: 'unknown',
+    server: 'unknown',
+    websocket: 'unknown',
+    scoreboard: 'unknown',
+    match: 'unknown',
+    db: 'unknown'
+  })
+  const [connectionDebugInfo, setConnectionDebugInfo] = useState({})
+
+  const wakeLockRef = useRef(null) // Wake lock to prevent screen sleep
+  const [wakeLockActive, setWakeLockActive] = useState(false) // Track wake lock status
+  const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { countdown, started }
+  const [showIntervalModal, setShowIntervalModal] = useState(false) // Modal visibility (separate from countdown state)
+  const [lastEvent, setLastEvent] = useState(null) // { type, team, data, timestamp }
+  const intervalDismissedRef = useRef(false) // Track when interval was manually dismissed
+  const setIntervalDuration = useMemo(() => {
+    const saved = localStorage.getItem('setIntervalDuration')
+    return saved ? parseInt(saved, 10) : 180 // default 3 minutes = 180 seconds
+  }, [])
+  const [peekingLineup, setPeekingLineup] = useState({ left: false, right: false }) // Track which team's lineup is being peeked
+
+  // Reset peeking state on any mouseup/touchend (since overlay disappears when peeking)
+  useEffect(() => {
+    const resetPeeking = () => setPeekingLineup({ left: false, right: false })
+    document.addEventListener('mouseup', resetPeeking)
+    document.addEventListener('touchend', resetPeeking)
+    return () => {
+      document.removeEventListener('mouseup', resetPeeking)
+      document.removeEventListener('touchend', resetPeeking)
+    }
+  }, [])
+
+  // Track viewport size for narrow screen blocking
+  useEffect(() => {
+    const handleResize = () => {
+      setViewportWidth(window.innerWidth)
+      setViewportHeight(window.innerHeight)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  // Request wake lock to prevent screen from sleeping
+  useEffect(() => {
+    const enableNativeWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator) {
+          // Release existing lock first
+          if (wakeLockRef.current) {
+            try { await wakeLockRef.current.release() } catch (e) { }
+          }
+          wakeLockRef.current = await navigator.wakeLock.request('screen')
+          console.log('[WakeLock] Screen wake lock acquired (Referee)')
+          setWakeLockActive(true)
+          wakeLockRef.current.addEventListener('release', () => {
+            console.log('[WakeLock] Screen wake lock released (Referee)')
+            // Only set inactive if we're not re-acquiring
+            if (!wakeLockRef.current) {
+              setWakeLockActive(false)
+            }
+          })
+          return true
+        }
+      } catch (err) {
+        console.log('[WakeLock] Native wake lock failed:', err.message)
+      }
+      return false
+    }
+
+    const handleInteraction = async () => {
+      const success = await enableNativeWakeLock()
+      if (success) {
+        console.log('[WakeLock] Enabled on user interaction')
+      }
+    }
+
+    // Try to enable on mount
+    enableNativeWakeLock()
+
+    // Also try on user interaction (required by some browsers)
+    document.addEventListener('click', handleInteraction, { once: true })
+    document.addEventListener('touchstart', handleInteraction, { once: true })
+
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        await enableNativeWakeLock()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      document.removeEventListener('click', handleInteraction)
+      document.removeEventListener('touchstart', handleInteraction)
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => { })
+        wakeLockRef.current = null
+      }
+    }
+  }, [])
+
+  // Match data state
+  const [data, setData] = useState(null)
+
+  // Debounce ref to prevent flickering from rapid updates
+  const lastDataUpdateRef = useRef(0)
+  const pendingDataRef = useRef(null)
+  const debounceTimerRef = useRef(null)
+  const DATA_UPDATE_DEBOUNCE_MS = 150 // Wait 150ms before applying new data
+
+  // Helper function to update match data state (with debounce to reduce flickering)
+  const updateMatchDataState = useCallback((result) => {
+    if (result && result.success) {
+      const sets = (result.sets || []).sort((a, b) => a.index - b.index)
+      const currentSet = sets.find(s => !s.finished) || null
+
+      const newData = {
+        match: result.match,
+        homeTeam: result.homeTeam,
+        awayTeam: result.awayTeam,
+        homePlayers: (result.homePlayers || []).sort((a, b) => (a.number || 0) - (b.number || 0)),
+        awayPlayers: (result.awayPlayers || []).sort((a, b) => (a.number || 0) - (b.number || 0)),
+        sets,
+        currentSet,
+        events: result.events || [],
+        liveState: result.liveState || null
+      }
+
+      const now = Date.now()
+      const timeSinceLastUpdate = now - lastDataUpdateRef.current
+
+      // If it's been long enough since last update, apply immediately
+      if (timeSinceLastUpdate >= DATA_UPDATE_DEBOUNCE_MS) {
+        lastDataUpdateRef.current = now
+        setData(newData)
+      } else {
+        // Otherwise, queue the update and wait for debounce
+        pendingDataRef.current = newData
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current)
+        }
+        debounceTimerRef.current = setTimeout(() => {
+          if (pendingDataRef.current) {
+            lastDataUpdateRef.current = Date.now()
+            setData(pendingDataRef.current)
+            pendingDataRef.current = null
+          }
+        }, DATA_UPDATE_DEBOUNCE_MS - timeSinceLastUpdate)
+      }
+    }
+  }, [])
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+    }
+  }, [])
+
+  // Create mock data for master mode
+  useEffect(() => {
+    if (isMasterMode && !data) {
+      setData({
+        match: {
+          id: -1,
+          status: 'live',
+          homeShortName: 'HOM',
+          awayShortName: 'AWY',
+          coinTossTeamA: 'home',
+          firstServe: 'home'
+        },
+        homeTeam: { name: 'Home Team', color: '#ef4444' },
+        awayTeam: { name: 'Away Team', color: '#3b82f6' },
+        homePlayers: [
+          { number: 1 }, { number: 2 }, { number: 3 },
+          { number: 4 }, { number: 99 }, { number: 6 },
+          { number: 7, libero: 'libero1' }
+        ],
+        awayPlayers: [
+          { number: 11 }, { number: 12 }, { number: 13 },
+          { number: 54 }, { number: 15 }, { number: 16 },
+          { number: 17, libero: 'libero1' }
+        ],
+        sets: [{ index: 1, homePoints: 12, awayPoints: 10, finished: false }],
+        currentSet: { index: 1, homePoints: 12, awayPoints: 10, finished: false },
+        events: [
+          { type: 'lineup', setIndex: 1, payload: { team: 'home', lineup: { I: 1, II: 2, III: 3, IV: 4, V: 99, VI: 6 } } },
+          { type: 'lineup', setIndex: 1, payload: { team: 'away', lineup: { I: 11, II: 12, III: 13, IV: 54, V: 15, VI: 16 } } }
+        ]
+      })
+    }
+  }, [isMasterMode, data])
+
+  // No heartbeat needed - Referee just listens for WebSocket updates from Scoreboard
+
+  // Check connection statuses
+  const checkConnectionStatuses = useCallback(async () => {
+    const statuses = { api: 'unknown', server: 'unknown', websocket: 'unknown', scoreboard: 'unknown', match: 'unknown', db: 'unknown' }
+    const debugInfo = {}
+
+    try {
+      const result = await listAvailableMatches()
+      if (result.success) {
+        statuses.api = 'connected'
+        statuses.server = 'connected'
+      } else {
+        statuses.api = 'disconnected'
+        statuses.server = 'disconnected'
+      }
+    } catch (err) {
+      statuses.api = 'disconnected'
+      statuses.server = 'disconnected'
+    }
+
+    statuses.scoreboard = statuses.server
+
+    // Get WebSocket status
+    if (isMasterMode) {
+      statuses.websocket = 'test_mode'
+    } else if (matchId) {
+      statuses.websocket = getWebSocketStatus(matchId)
+    } else {
+      statuses.websocket = 'disconnected'
+    }
+
+    if (isMasterMode) {
+      statuses.match = 'test_mode'
+      debugInfo.match = { status: 'test_mode', message: 'Running in test mode' }
+    } else if (matchId && data?.match) {
+      statuses.match = data.match.status === 'live' ? 'live' : data.match.status === 'scheduled' ? 'scheduled' : 'final'
+    } else {
+      statuses.match = 'no_match'
+    }
+
+    try {
+      await db.matches.count()
+      statuses.db = 'connected'
+    } catch (err) {
+      statuses.db = 'error'
+    }
+
+    setConnectionStatuses(statuses)
+    setConnectionDebugInfo(debugInfo)
+  }, [matchId, data?.match, isMasterMode])
+
+  useEffect(() => {
+    checkConnectionStatuses()
+    const interval = setInterval(checkConnectionStatuses, 60000) // 60s to reduce console spam
+    return () => clearInterval(interval)
+  }, [checkConnectionStatuses])
+
+  // Track consecutive fetch failures to detect deleted matches
+  const fetchFailureCountRef = useRef(0)
+  const MAX_FETCH_FAILURES = 3 // After 3 consecutive failures, assume match is deleted
+
+  // Force fetch fresh data from server
+  const fetchFreshData = useCallback(async () => {
+    console.log('[Referee] fetchFreshData called', { isMasterMode, matchId })
+    if (isMasterMode) {
+      console.log('[Referee] fetchFreshData: Skipping - in test/master mode (data is local)')
+      return
+    }
+    if (!matchId) {
+      console.log('[Referee] fetchFreshData: Skipping - no matchId')
+      return
+    }
+    try {
+      console.log('[Referee] Fetching fresh data from server...')
+      const result = await getMatchData(matchId)
+      if (result && result.success) {
+        fetchFailureCountRef.current = 0 // Reset on success
+        updateMatchDataState(result)
+        console.log('[Referee] Fresh data received:', {
+          currentSet: result.sets?.find(s => !s.finished)?.index,
+          homePoints: result.sets?.find(s => !s.finished)?.homePoints,
+          awayPoints: result.sets?.find(s => !s.finished)?.awayPoints
+        })
+      } else {
+        // Match not found or fetch failed
+        fetchFailureCountRef.current++
+        console.warn(`[Referee] Fetch failed (${fetchFailureCountRef.current}/${MAX_FETCH_FAILURES})`)
+        if (fetchFailureCountRef.current >= MAX_FETCH_FAILURES) {
+          console.log('[Referee] Match appears to be deleted, navigating to home')
+          if (onExit) onExit()
+        }
+      }
+    } catch (err) {
+      fetchFailureCountRef.current++
+      console.error(`[Referee] Error fetching fresh data (${fetchFailureCountRef.current}/${MAX_FETCH_FAILURES}):`, err)
+      if (fetchFailureCountRef.current >= MAX_FETCH_FAILURES) {
+        console.log('[Referee] Match appears to be deleted, navigating to home')
+        if (onExit) onExit()
+      }
+    }
+  }, [matchId, updateMatchDataState, isMasterMode, onExit])
+
+  // Handle realtime data updates
+  const handleRealtimeData = useCallback((result) => {
+    if (!result || !result.success) return
+
+    const receiveTimestamp = Date.now()
+    console.log(`[Referee] 📥 Received match-data-update at ${new Date(receiveTimestamp).toISOString()}:`, {
+      hasHomeTeam: !!result.homeTeam,
+      hasAwayTeam: !!result.awayTeam,
+      setsCount: result.sets?.length,
+      eventsCount: result.events?.length
+    })
+
+    // Only update if data is complete (has teams and sets)
+    if (result.homeTeam && result.awayTeam && result.sets?.length > 0) {
+      updateMatchDataState(result)
+    } else {
+      console.debug('[Referee] Received partial data (missing teams/sets), skipping UI update')
+    }
+  }, [updateMatchDataState])
+
+  // Handle realtime actions (timeout, substitution, set_end)
+  const handleRealtimeAction = useCallback((action, actionData) => {
+    const receiveTimestamp = Date.now()
+    console.log(`[Referee] 📥 Received action '${action}' at ${new Date(receiveTimestamp).toISOString()}:`, actionData)
+
+    if (action === 'timeout') {
+      console.log('[REF_TO_DEBUG] Received timeout action', {
+        team: actionData.team,
+        countdown: actionData.countdown,
+        startTimestamp: actionData.startTimestamp,
+        receiveTimestamp
+      })
+      timeoutActiveRef.current = true
+      const newTimeoutModal = {
+        team: actionData.team,
+        countdown: actionData.countdown || 30,
+        startTimestamp: actionData.startTimestamp || Date.now(), // Fallback for backward compat
+        initialCountdown: actionData.countdown || 30,
+        started: true
+      }
+      console.log('[REF_TO_DEBUG] Setting timeoutModal state', newTimeoutModal)
+      setTimeoutModal(newTimeoutModal)
+      setShowTimeoutModal(true) // Show the modal overlay
+    } else if (action === 'substitution') {
+      // Add player to recently substituted list for flashing effect (no modal, just flash)
+      setRecentlySubstitutedPlayers(prev => [...prev, { team: actionData.team, playerNumber: actionData.playerIn, timestamp: Date.now() }])
+
+      // Clear the flash after 5 seconds
+      if (recentSubFlashTimeoutRef.current) {
+        clearTimeout(recentSubFlashTimeoutRef.current)
+      }
+      recentSubFlashTimeoutRef.current = setTimeout(() => {
+        setRecentlySubstitutedPlayers([])
+      }, 5000)
+    } else if (action === 'set_end') {
+      console.log('═══════════════════════════════════════════════════════════════')
+      console.log('[Referee] 🏁 SET_END Action Received (WebSocket):')
+      console.log('═══════════════════════════════════════════════════════════════')
+      console.log('[Referee] 📊 Action Data:', {
+        setIndex: actionData.setIndex,
+        winner: actionData.winner,
+        homePoints: actionData.homePoints,
+        awayPoints: actionData.awayPoints,
+        countdown: actionData.countdown,
+        homeSetsWon: actionData.homeSetsWon,
+        awaySetsWon: actionData.awaySetsWon
+      })
+
+      // Check if match is finished (one team won 3 sets) - don't show interval
+      const isMatchFinishedNow = actionData.homeSetsWon >= 3 || actionData.awaySetsWon >= 3
+      if (isMatchFinishedNow) {
+        console.log('[Referee] 🏆 Match is finished! Not showing interval countdown.')
+        // Clear any existing interval state - full-screen match ended view will show
+        setBetweenSetsCountdown(null)
+        setShowIntervalModal(false)
+      } else {
+        setBetweenSetsCountdown({
+          countdown: actionData.countdown || 180,
+          startTimestamp: actionData.startTimestamp || Date.now(), // Fallback for backward compat
+          initialCountdown: actionData.countdown || 180,
+          started: true,
+          setIndex: actionData.setIndex,
+          winner: actionData.winner
+        })
+        setShowIntervalModal(true) // Show the modal overlay
+      }
+    } else if (action === 'end_timeout') {
+      // Scoreboard ended the timeout - clear countdown and modal
+      timeoutActiveRef.current = false
+      setTimeoutModal(null)
+      setShowTimeoutModal(false)
+    } else if (action === 'end_interval') {
+      // Scoreboard ended the set interval - clear countdown and modal
+      intervalDismissedRef.current = true
+      setBetweenSetsCountdown(null)
+      setShowIntervalModal(false)
+    }
+  }, [])
+
+  // Handle match deletion - navigate back to home
+  const handleMatchDeleted = useCallback(() => {
+    console.log('[Referee] Match deleted, navigating to home')
+    if (onExit) {
+      onExit()
+    }
+  }, [onExit])
+
+  // Use realtime connection hook (handles Supabase + WebSocket with fallback)
+  const {
+    status: realtimeStatus,
+    error: realtimeError,
+    lastUpdate: realtimeLastUpdate,
+    forceReconnect: realtimeReconnect
+  } = useRealtimeConnection({
+    matchId,
+    preferredConnection: connectionType,
+    onData: handleRealtimeData,
+    onAction: handleRealtimeAction,
+    onDeleted: handleMatchDeleted,
+    enabled: !isMasterMode && !!matchId
+  })
+
+  // Initial data fetch when connection changes or component mounts
+  useEffect(() => {
+    if (!isMasterMode && matchId && realtimeStatus === CONNECTION_STATUS.CONNECTED) {
+      fetchFreshData()
+    }
+  }, [isMasterMode, matchId, realtimeStatus, fetchFreshData])
+
+  // Refetch data when page becomes visible (handles screen wake from sleep)
+  useEffect(() => {
+    if (isMasterMode || !matchId) return
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[Referee] Page became visible, fetching fresh data...')
+        fetchFreshData()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [matchId, isMasterMode, fetchFreshData])
+
+  // Track last processed event to avoid duplicates from Supabase realtime
+  const lastProcessedEventRef = useRef(null)
+
+  // Store Supabase UUID for realtime subscription (match_live_state.match_id is UUID, not seed_key)
+  const [supabaseMatchUuid, setSupabaseMatchUuid] = useState(null)
+
+  // Look up Supabase UUID from seed_key when matchId changes
+  useEffect(() => {
+    if (!supabase || !matchId) return
+
+    const lookupUuid = async () => {
+      const { data, error } = await supabase
+        .from('matches')
+        .select('id')
+        .eq('external_id', matchId)
+        .maybeSingle()
+
+      if (!error && data?.id) {
+        console.log('[Referee] Found Supabase UUID:', data.id, 'for matchId:', matchId)
+        setSupabaseMatchUuid(data.id)
+      } else {
+        console.warn('[Referee] Could not find Supabase UUID for matchId:', matchId, error)
+      }
+    }
+
+    lookupUuid()
   }, [matchId])
 
-  // Calculate rally status
-  const rallyStatus = useMemo(() => {
-    if (!data?.events || !data?.currentSet || data.events.length === 0) return 'idle'
-    
-    // Get events for current set only and sort by sequence number (most recent first)
-    const currentSetEvents = data.events
-      .filter(e => e.setIndex === data.currentSet.index)
-      .sort((a, b) => {
-        // Sort by sequence number if available, otherwise by timestamp
-        const aSeq = a.seq || 0
-        const bSeq = b.seq || 0
-        if (aSeq !== 0 || bSeq !== 0) {
-          return bSeq - aSeq // Descending by sequence (most recent first)
-        }
-        // Fallback to timestamp for legacy events
-        const aTime = typeof a.ts === 'number' ? a.ts : new Date(a.ts).getTime()
-        const bTime = typeof b.ts === 'number' ? b.ts : new Date(b.ts).getTime()
-        return bTime - aTime
-      })
-    
-    if (currentSetEvents.length === 0) return 'idle'
-    
-    const lastEvent = currentSetEvents[0] // Most recent event is now first
-    
-    // Check if last event is point or replay first (these end the rally)
-    if (lastEvent.type === 'point' || lastEvent.type === 'replay') {
-      return 'idle'
-    }
-    
-    if (lastEvent.type === 'rally_start') {
-      return 'in_play'
-    }
-    
-    // set_start means set is ready but rally hasn't started yet
-    if (lastEvent.type === 'set_start') {
-      return 'idle'
-    }
-    
-    // For lineup events after points, the rally is idle (waiting for next rally_start)
-    return 'idle'
-  }, [data?.events, data?.currentSet])
+  // Supabase realtime subscription for live state updates (backup/alternative to WebSocket)
+  useEffect(() => {
+    if (!supabase || !supabaseMatchUuid || isMasterMode) return
 
-  // Get last action description
-  const lastAction = useMemo(() => {
-    if (!data?.events || !data?.currentSet || data.events.length === 0) return null
-    
-    // Get events for current set only and sort by sequence number (most recent first)
-    const currentSetEvents = data.events
-      .filter(e => e.setIndex === data.currentSet.index)
-      .sort((a, b) => {
-        const aSeq = a.seq || 0
-        const bSeq = b.seq || 0
-        if (aSeq !== 0 || bSeq !== 0) {
-          return bSeq - aSeq
+    console.log('[Referee] Setting up realtime subscription for UUID:', supabaseMatchUuid)
+
+    // Add unique ID to prevent StrictMode double-mount conflicts
+    const channelId = `match_live_state:${supabaseMatchUuid}-${Date.now()}`
+    const channel = supabase
+      .channel(channelId)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'match_live_state',
+          filter: `match_id=eq.${supabaseMatchUuid}`
+        },
+        (payload) => {
+          const state = payload.new
+          if (!state) return
+
+          // Simple deduplication - only skip if exact same updated_at within 50ms
+          const now = Date.now()
+          const lastProcessed = lastProcessedEventRef.current
+          if (lastProcessed && state.updated_at === lastProcessed.updatedAt && (now - lastProcessed.time) < 50) {
+            console.log('[Referee] 📡 Skipping duplicate (same updated_at within 50ms)')
+            return
+          }
+          lastProcessedEventRef.current = { time: now, updatedAt: state.updated_at }
+
+          // Check for scorer attention trigger
+          if (state.scorer_attention_trigger && state.scorer_attention_trigger !== lastAttentionTriggerRef.current) {
+            console.log('[Referee] 🔔 Scorer attention triggered!', state.scorer_attention_trigger)
+            setAttentionModalOpen(true)
+            lastAttentionTriggerRef.current = state.scorer_attention_trigger
+            try {
+              // Try to vibrate if supported
+              if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                navigator.vibrate([200, 100, 200])
+              }
+            } catch (e) { /* ignore */ }
+          }
+
+          console.log(`[Referee] 📡 Supabase realtime: ${state.last_event_type || 'update'}`, {
+            event: state.last_event_type,
+            points: `${state.points_a || 0}-${state.points_b || 0}`,
+            set: state.current_set,
+            lineup_a: !!state.lineup_a,
+            lineup_b: !!state.lineup_b
+          })
+
+          // A/B Model: Convert left/right to home/away using side_a (for modal handling)
+          // side_a = 'left' or 'right' indicates which side Team A is on
+          const localTeamAKey = data?.match?.coinTossTeamA || 'home'
+          const sideA = state.side_a || 'left'
+          const homeTeamOnLeft = (sideA === 'left') === (localTeamAKey === 'home')
+          const getTeamFromSide = (side) => {
+            if (side === 'left') return homeTeamOnLeft ? 'home' : 'away'
+            return homeTeamOnLeft ? 'away' : 'home'
+          }
+
+          // Handle timeout start/stop based on timeout_active flag
+          if (state.timeout_active) {
+            // Timeout is active - show/update modal if not already active or if it's a new timeout
+            const serverStartTs = state.timeout_started_at ? new Date(state.timeout_started_at).getTime() : Date.now()
+
+            // Only update/start if not already tracking THIS timeout (compare start timestamps)
+            if (!timeoutModal || Math.abs(timeoutModal.startTimestamp - serverStartTs) > 2000) {
+              const team = getTeamFromSide(state.last_event_team)
+              timeoutActiveRef.current = true
+              setTimeoutModal({
+                team,
+                countdown: state.last_event_data?.duration || 30,
+                startTimestamp: serverStartTs,
+                initialCountdown: state.last_event_data?.duration || 30,
+                started: true
+              })
+              setShowTimeoutModal(true)
+            }
+          } else if (timeoutActiveRef.current) {
+            // Timeout was active but is now not active - clear modal
+            console.log('[Referee] 📡 Timeout ended via timeout_active=false, clearing modal')
+            timeoutActiveRef.current = false
+            setTimeoutModal(null)
+            setShowTimeoutModal(false)
+          }
+
+          // Handle substitution - flash effect only (no modal)
+          // Note: last_event_team is 'home'/'away', not 'left'/'right', so use directly
+          if (state.last_event_type === 'substitution') {
+            const team = state.last_event_team // Already 'home' or 'away'
+            setRecentlySubstitutedPlayers(prev => [
+              ...prev,
+              { team, playerNumber: state.last_event_data?.playerIn, timestamp: Date.now() }
+            ])
+            if (recentSubFlashTimeoutRef.current) clearTimeout(recentSubFlashTimeoutRef.current)
+            recentSubFlashTimeoutRef.current = setTimeout(() => setRecentlySubstitutedPlayers([]), 5000)
+          }
+
+          // Handle libero entry/exit/exchange
+          // Note: last_event_team is 'home'/'away', not 'left'/'right', so use directly
+          if (['libero_entry', 'libero_exit', 'libero_exchange'].includes(state.last_event_type)) {
+            const team = state.last_event_team // Already 'home' or 'away'
+            const playerNumber = state.last_event_data?.liberoNumber || state.last_event_data?.playerIn
+            if (playerNumber) {
+              setRecentlySubstitutedPlayers(prev => [
+                ...prev,
+                { team, playerNumber, timestamp: Date.now() }
+              ])
+              if (recentSubFlashTimeoutRef.current) clearTimeout(recentSubFlashTimeoutRef.current)
+              recentSubFlashTimeoutRef.current = setTimeout(() => setRecentlySubstitutedPlayers([]), 5000)
+            }
+          }
+
+          // Handle set end (3-minute interval)
+          if (state.last_event_type === 'set_end' || state.set_interval_active) {
+            console.log('═══════════════════════════════════════════════════════════════')
+            console.log('[Referee] 🏁 SET_END Received from Supabase Realtime:')
+            console.log('═══════════════════════════════════════════════════════════════')
+            console.log('[Referee] 📊 Live State Data:', {
+              current_set: state.current_set,
+              sets_won_a: state.sets_won_a,
+              sets_won_b: state.sets_won_b,
+              points_a: state.points_a,
+              points_b: state.points_b,
+              side_a: state.side_a,
+              serving_team: state.serving_team,
+              match_status: state.match_status,
+              set_interval_active: state.set_interval_active,
+              last_event_type: state.last_event_type,
+              last_event_data: state.last_event_data
+            })
+
+            // Check if match is finished (one team won 3 sets) - don't show interval
+            const isMatchFinishedNow = state.sets_won_a >= 3 || state.sets_won_b >= 3
+            if (isMatchFinishedNow) {
+              console.log('[Referee] 🏆 Match is finished! Not showing interval countdown.')
+              // Clear any existing interval state - full-screen match ended view will show
+              setBetweenSetsCountdown(null)
+              setShowIntervalModal(false)
+            } else {
+              const serverStartTs = state.set_interval_started_at ? new Date(state.set_interval_started_at).getTime() : Date.now()
+
+              // Only update if not already tracking this interval
+              if (!betweenSetsCountdown || Math.abs(betweenSetsCountdown.startTimestamp - serverStartTs) > 2000) {
+                setBetweenSetsCountdown({
+                  countdown: 180,
+                  startTimestamp: serverStartTs,
+                  initialCountdown: 180,
+                  started: true,
+                  setIndex: state.last_event_data?.setIndex || state.current_set,
+                  winner: state.last_event_data?.winner
+                })
+                setShowIntervalModal(true)
+              }
+            }
+          }
+
+          // Store last event for footer display (only specific event types)
+          const displayableEvents = ['point', 'timeout', 'substitution', 'libero_entry', 'libero_exit', 'libero_exchange', 'libero_redesignation', 'set_end', 'sanction', 'court_captain_designation']
+          if (state.last_event_type && displayableEvents.includes(state.last_event_type)) {
+            setLastEvent({
+              type: state.last_event_type,
+              team: state.last_event_team,
+              data: state.last_event_data,
+              timestamp: Date.now()
+            })
+          }
+
+          // ALWAYS refetch data on ANY change - handles points, lineups, subs, libero, sanctions, undoes, replays, etc.
+          console.log('[Referee] 📡 Realtime change detected, refetching data...')
+          fetchFreshData()
         }
-        const aTime = typeof a.ts === 'number' ? a.ts : new Date(a.ts).getTime()
-        const bTime = typeof b.ts === 'number' ? b.ts : new Date(b.ts).getTime()
-        return bTime - aTime
-      })
-    
-    if (currentSetEvents.length === 0) return null
-    
-    const event = currentSetEvents[0]
-    if (!event) return null
-    
-    const teamName = event.payload?.team === 'team_1' 
-      ? (data.team_1Team?.name || 'Team 1')
-      : event.payload?.team === 'team_2'
-      ? (data.team_2Team?.name || 'Team 2')
-      : null
-    
-    // Determine team labels (A or B)
-    const teamAKey = data?.match?.coinTossTeamA || 'team_1'
-    const team_1Label = teamAKey === 'team_1' ? 'A' : 'B'
-    const team_2Label = teamAKey === 'team_2' ? 'A' : 'B'
-    
-    // Calculate score at time of event
-    const setIdx = event.setIndex || 1
-    const setEvents = data.events?.filter(e => (e.setIndex || 1) === setIdx) || []
-    const eventIndex = setEvents.findIndex(e => e.id === event.id)
-    
-    let team_1Score = 0
-    let team_2Score = 0
-    for (let i = 0; i <= eventIndex; i++) {
-      const e = setEvents[i]
-      if (e.type === 'point') {
-        if (e.payload?.team === 'team_1') {
-          team_1Score++
-        } else if (e.payload?.team === 'team_2') {
-          team_2Score++
-        }
-      }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
     }
-    
-    let eventDescription = ''
-    if (event.type === 'point') {
-      eventDescription = `${teamName} point (${team_1Label} ${team_1Score}:${team_2Score} ${team_2Label})`
-    } else if (event.type === 'timeout') {
-      eventDescription = `Timeout — ${teamName}`
-    } else if (event.type === 'rally_start') {
-      eventDescription = 'Rally started'
-    } else if (event.type === 'replay') {
-      eventDescription = 'Replay'
-    } else if (event.type === 'sanction') {
-      const sanctionType = event.payload?.type || 'warning'
-      const playerNumber = event.payload?.playerNumber
-      const typeLabel = sanctionType === 'warning' ? 'W' : sanctionType === 'penalty' ? 'P' : sanctionType === 'expulsion' ? 'E' : 'D'
-      if (playerNumber) {
-        eventDescription = `Sanction — ${teamName} #${playerNumber} (${typeLabel})`
+  }, [supabaseMatchUuid, isMasterMode, data?.match?.coinTossTeamA, fetchFreshData])
+
+  // Handle timeout countdown timer
+  useEffect(() => {
+    if (!timeoutModal || !timeoutModal.started) return
+
+    const startTimestamp = timeoutModal.startTimestamp
+    const initialCountdown = timeoutModal.initialCountdown || 30
+
+    if (timeoutModal.countdown <= 0) {
+      // Don't auto-clear here, wait for tick to hit 0 to avoid rapid state flickering
+      // if (timeoutModal.countdown < 0) setTimeoutModal(null)
+      // return
+    }
+
+    // Update every 100ms for smooth visuals
+    const timer = setInterval(() => {
+      const now = Date.now()
+      const elapsed = Math.floor((now - startTimestamp) / 1000)
+      const remaining = Math.max(0, initialCountdown - elapsed)
+
+      if (remaining <= 0) {
+        // If it was already 0 for a bit, clear it
+        setTimeoutModal(prev => {
+          if (prev && prev.countdown === 0 && (Date.now() - (prev.startTimestamp + prev.initialCountdown * 1000)) > 2000) {
+            return null
+          }
+          if (!prev) return null
+          return { ...prev, countdown: 0 }
+        })
       } else {
-        eventDescription = `Sanction — ${teamName} (${typeLabel})`
+        setTimeoutModal(prev => {
+          if (!prev || !prev.started) return null
+          // Only update if the value actually changed to reduce re-renders
+          if (prev.countdown === remaining) return prev
+          return { ...prev, countdown: remaining }
+        })
+      }
+    }, 100)
+
+    return () => clearInterval(timer)
+  }, [timeoutModal?.started, timeoutModal?.startTimestamp, timeoutModal?.initialCountdown])
+
+  // Track last point count to detect when points change (rally ends)
+  const lastPointsRef = useRef({ home: 0, away: 0 })
+
+  // Auto-revert reception mode to standard after rally starts (3 seconds after point)
+  useEffect(() => {
+    if (!data?.currentSet) return
+
+    const currentHomePoints = data.currentSet.homePoints || 0
+    const currentAwayPoints = data.currentSet.awayPoints || 0
+
+    const pointsChanged = currentHomePoints !== lastPointsRef.current.home ||
+      currentAwayPoints !== lastPointsRef.current.away
+
+    // Update last points
+    lastPointsRef.current = { home: currentHomePoints, away: currentAwayPoints }
+
+    // If points changed (rally ended), start 3 second timer to revert to standard mode
+    if (pointsChanged) {
+      // Clear existing timers
+      if (receptionModeTimerRef.current.left) {
+        clearTimeout(receptionModeTimerRef.current.left)
+      }
+      if (receptionModeTimerRef.current.right) {
+        clearTimeout(receptionModeTimerRef.current.right)
       }
 
-    } else {
-      return null
+      // Start new timer for both sides if in reception mode
+      if (receptionMode.left === 'reception') {
+        receptionModeTimerRef.current.left = setTimeout(() => {
+          setReceptionMode(prev => ({ ...prev, left: 'standard' }))
+        }, 3000)
+      }
+      if (receptionMode.right === 'reception') {
+        receptionModeTimerRef.current.right = setTimeout(() => {
+          setReceptionMode(prev => ({ ...prev, right: 'standard' }))
+        }, 3000)
+      }
     }
-    
-    return eventDescription
-  }, [data?.events, data?.currentSet, data?.team_1Team, data?.team_2Team, data?.match])
+
+    return () => {
+      if (receptionModeTimerRef.current.left) {
+        clearTimeout(receptionModeTimerRef.current.left)
+      }
+      if (receptionModeTimerRef.current.right) {
+        clearTimeout(receptionModeTimerRef.current.right)
+      }
+    }
+  }, [data?.currentSet?.homePoints, data?.currentSet?.awayPoints, receptionMode.left, receptionMode.right])
+
+  // Toggle reception mode for a side
+  const toggleReceptionMode = useCallback((side) => {
+    setReceptionMode(prev => ({
+      ...prev,
+      [side]: prev[side] === 'standard' ? 'reception' : 'standard'
+    }))
+  }, [])
+
+  // Handle drag start for player repositioning
+  const handleDragStart = useCallback((e, side, position) => {
+    e.dataTransfer.effectAllowed = 'move'
+    setDraggingPlayer({ side, position })
+  }, [])
+
+  // Handle drag over court
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }, [])
+
+  // Handle drop on court - save custom position
+  const handleDrop = useCallback((e, side) => {
+    e.preventDefault()
+    if (!draggingPlayer || draggingPlayer.side !== side) return
+
+    const courtEl = courtRef.current[side]
+    if (!courtEl) return
+
+    const rect = courtEl.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+
+    // Convert to percentage
+    const leftPercent = (x / rect.width) * 100
+    const topPercent = (y / rect.height) * 100
+
+    // Clamp values to court bounds
+    const clampedLeft = Math.max(5, Math.min(95, leftPercent))
+    const clampedTop = Math.max(5, Math.min(95, topPercent))
+
+    const setIndex = data?.currentSet?.index || 1
+
+    setCustomFormations(prev => ({
+      ...prev,
+      [setIndex]: {
+        ...prev[setIndex],
+        [side]: {
+          ...prev[setIndex]?.[side],
+          [draggingPlayer.position]: { top: clampedTop, left: clampedLeft }
+        }
+      }
+    }))
+
+    setDraggingPlayer(null)
+  }, [draggingPlayer, data?.currentSet?.index])
 
   // Calculate statistics
   const stats = useMemo(() => {
+    // First, try to get stats from liveState (most accurate for Supabase-sourced data)
+    if (data?.liveState) {
+      const liveState = data.liveState
+      const teamAIsHome = data.match?.coinTossTeamA === 'home'
+
+      // Helper to get count from either array (new format) or number (old format)
+      const getCount = (value) => {
+        if (Array.isArray(value)) return value.length
+        if (typeof value === 'number') return value
+        return 0
+      }
+
+      return {
+        home: {
+          timeouts: teamAIsHome ? getCount(liveState.timeouts_a) : getCount(liveState.timeouts_b),
+          substitutions: teamAIsHome ? getCount(liveState.subs_a) : getCount(liveState.subs_b)
+        },
+        away: {
+          timeouts: teamAIsHome ? getCount(liveState.timeouts_b) : getCount(liveState.timeouts_a),
+          substitutions: teamAIsHome ? getCount(liveState.subs_b) : getCount(liveState.subs_a)
+        }
+      }
+    }
+
+    // Fallback: count from events (when data comes from local IndexedDB or WebSocket)
     if (!data || !data.events || !data.currentSet) {
       return {
-        team_1: { timeouts: 0, sanctions: [] },
-        team_2: { timeouts: 0, sanctions: [] }
+        home: { timeouts: 0, substitutions: 0 },
+        away: { timeouts: 0, substitutions: 0 }
       }
     }
 
@@ -223,169 +1059,425 @@ export default function Referee({ matchId, onExit }) {
       e => (e.setIndex || 1) === (data.currentSet?.index || 1)
     )
 
-    const team_1Timeouts = currentSetEvents.filter(
-      e => e.type === 'timeout' && e.payload?.team === 'team_1'
-    ).length
-
-    const team_2Timeouts = currentSetEvents.filter(
-      e => e.type === 'timeout' && e.payload?.team === 'team_2'
-    ).length
-
-    
-
-    // Get sanctions for entire match (sanctions persist across sets)
-    const team_1Sanctions = data.events
-      .filter(e => 
-        e.type === 'sanction' && e.payload?.team === 'team_1'
-      )
-      .map(e => ({
-        type: e.payload?.sanctionType || e.payload?.type || 'unknown',
-        target: e.payload?.playerNumber 
-          ? `#${e.payload.playerNumber}`
-          : e.payload?.role || '',
-        timestamp: e.ts,
-        setIndex: e.setIndex || 1
-      }))
-
-    const team_2Sanctions = data.events
-      .filter(e => 
-        e.type === 'sanction' && e.payload?.team === 'team_2'
-      )
-      .map(e => ({
-        type: e.payload?.sanctionType || e.payload?.type || 'unknown',
-        target: e.payload?.playerNumber 
-          ? `#${e.payload.playerNumber}`
-          : e.payload?.role || '',
-        timestamp: e.ts,
-        setIndex: e.setIndex || 1
-      }))
-
     return {
-      team_1: { timeouts: team_1Timeouts, sanctions: team_1Sanctions },
-      team_2: { timeouts: team_2Timeouts, sanctions: team_2Sanctions }
+      home: {
+        timeouts: currentSetEvents.filter(e => e.type === 'timeout' && e.payload?.team === 'home').length,
+        substitutions: currentSetEvents.filter(e => e.type === 'substitution' && e.payload?.team === 'home').length
+      },
+      away: {
+        timeouts: currentSetEvents.filter(e => e.type === 'timeout' && e.payload?.team === 'away').length,
+        substitutions: currentSetEvents.filter(e => e.type === 'substitution' && e.payload?.team === 'away').length
+      }
     }
   }, [data])
+
+  // Get lineup for current set - returns null for team if no lineup exists
+  // Rich format: lineup positions contain { number, isServing, isLibero, replacedNumber, isSubstituted, substitutedFor, hasSanction, sanctions, isCaptain, isCourtCaptain }
+  // Legacy format: lineup positions just contain player number
   const lineup = useMemo(() => {
     if (!data || !data.events || !data.currentSet) {
-      return { 
-          team_1: { lineup: {}}, 
-          team_2: { lineup: {}}
-      }
+      return { home: null, away: null, isRichFormat: false }
     }
 
+    const currentSetIndex = data.currentSet?.index || 1
     const currentSetEvents = data.events.filter(
-      e => (e.setIndex || 1) === (data.currentSet?.index || 1)
+      e => (e.setIndex || 1) === currentSetIndex
     )
 
-    // Find latest lineup events
-    const team_1LineupEvents = currentSetEvents.filter(
-      e => e.type === 'lineup' && e.payload?.team === 'team_1'
-    )
-    const team_2LineupEvents = currentSetEvents.filter(
-      e => e.type === 'lineup' && e.payload?.team === 'team_2'
-    )
+    const homeLineupEvents = currentSetEvents.filter(e => e.type === 'lineup' && e.payload?.team === 'home')
+    const awayLineupEvents = currentSetEvents.filter(e => e.type === 'lineup' && e.payload?.team === 'away')
 
-    const latestTeam_1Lineup = team_1LineupEvents[team_1LineupEvents.length - 1]
-    const latestTeam_2Lineup = team_2LineupEvents[team_2LineupEvents.length - 1]
+    const latestHomeLineup = homeLineupEvents[homeLineupEvents.length - 1]
+    const latestAwayLineup = awayLineupEvents[awayLineupEvents.length - 1]
+
+    // Check if using rich format (position I has isServing field)
+    const homeLineupData = latestHomeLineup?.payload?.lineup || null
+    const awayLineupData = latestAwayLineup?.payload?.lineup || null
+    const isRichFormat = latestHomeLineup?.payload?.isRichFormat ||
+      latestAwayLineup?.payload?.isRichFormat ||
+      homeLineupData?.I?.isServing !== undefined ||
+      awayLineupData?.I?.isServing !== undefined
+
+    // Check if we're between sets (previous set finished, current set not started)
+    // During set interval, only show lineup if we have lineup events for the NEW set
+    const previousSetIndex = currentSetIndex - 1
+    if (previousSetIndex >= 1) {
+      const previousSet = data.sets?.find(s => s.index === previousSetIndex)
+      const currentSetHasPoints = data.events?.some(e => e.type === 'point' && (e.setIndex || 1) === currentSetIndex)
+
+      // If previous set is finished and current set has no points yet (between sets)
+      // Only show lineups if we have lineup events specifically for the new set
+      if (previousSet?.finished && !currentSetHasPoints) {
+        const hasHomeLineupForNewSet = homeLineupEvents.length > 0
+        const hasAwayLineupForNewSet = awayLineupEvents.length > 0
+
+        // If no lineup events exist for the new set, return null for both
+        if (!hasHomeLineupForNewSet && !hasAwayLineupForNewSet) {
+          return { home: null, away: null, isRichFormat: false, isBetweenSets: true }
+        }
+      }
+    }
 
     return {
-      team_1: {
-        lineup: latestTeam_1Lineup?.payload?.lineup || {}
-      },
-      team_2: {
-        lineup: latestTeam_2Lineup?.payload?.lineup || {}
-      }
+      home: homeLineupData,
+      away: awayLineupData,
+      isRichFormat
     }
   }, [data])
 
-  // Calculate set scores
-  const setScore = useMemo(() => {
-    if (!data) return { team_1: 0, team_2: 0 }
-    
+  // Calculate sets won by each team (from finished sets)
+  const setsWon = useMemo(() => {
+    if (!data) return { home: 0, away: 0 }
+
     const finishedSets = data.sets?.filter(s => s.finished) || []
-    const team_1SetsWon = finishedSets.filter(s => s.team_1Points > s.team_2Points).length
-    const team_2SetsWon = finishedSets.filter(s => s.team_2Points > s.team_1Points).length
-    
-    return { team_1: team_1SetsWon, team_2: team_2SetsWon }
+    return {
+      home: finishedSets.filter(s => s.homePoints > s.awayPoints).length,
+      away: finishedSets.filter(s => s.awayPoints > s.homePoints).length
+    }
   }, [data])
 
-  // Determine who has serve based on events
+  // Determine who has serve
   const getCurrentServe = useMemo(() => {
+    console.log('[Referee] getCurrentServe - data:', {
+      currentSetServingTeam: data?.currentSet?.servingTeam,
+      matchFirstServe: data?.match?.firstServe,
+      setIndex: data?.currentSet?.index
+    })
+    // First priority: use servingTeam from Supabase live state (most accurate)
+    if (data?.currentSet?.servingTeam) {
+      console.log('[Referee] Using currentSet.servingTeam:', data.currentSet.servingTeam)
+      return data.currentSet.servingTeam
+    }
+
     if (!data?.currentSet || !data?.match) {
-      return data?.match?.firstServe || 'team_1'
+      return data?.match?.firstServe || 'home'
     }
-    
+
+    const setIndex = data.currentSet.index
+    const set1FirstServe = data.match.firstServe || 'home'
+    const teamAKey = data.match.coinTossTeamA || 'home'
+    const teamBKey = data.match.coinTossTeamB || 'away'
+
+    // Calculate first serve for current set based on alternation pattern
+    let currentSetFirstServe
+    if (setIndex === 5 && data.match?.set5FirstServe) {
+      currentSetFirstServe = data.match.set5FirstServe === 'A' ? teamAKey : teamBKey
+    } else if (setIndex === 5) {
+      currentSetFirstServe = set1FirstServe
+    } else {
+      // Sets 1-4: odd sets (1, 3) same as Set 1, even sets (2, 4) opposite
+      currentSetFirstServe = setIndex % 2 === 1 ? set1FirstServe : (set1FirstServe === 'home' ? 'away' : 'home')
+    }
+
     if (!data?.events || data.events.length === 0) {
-      // First rally: use firstServe from match
-      return data.match.firstServe || 'team_1'
+      return currentSetFirstServe
     }
-    
-    // Find the last point event in the current set to determine serve
+
     const pointEvents = data.events
       .filter(e => e.type === 'point' && e.setIndex === data.currentSet.index)
       .sort((a, b) => {
         const aTime = typeof a.ts === 'number' ? a.ts : new Date(a.ts).getTime()
         const bTime = typeof b.ts === 'number' ? b.ts : new Date(b.ts).getTime()
-        return bTime - aTime // Most recent first
+        return bTime - aTime
       })
-    
+
     if (pointEvents.length === 0) {
-      // No points yet, use firstServe
-      return data.match.firstServe || 'team_1'
+      return currentSetFirstServe
     }
-    
-    // The team that scored the last point now has serve
-    const lastPoint = pointEvents[0]
-    return lastPoint.payload?.team || data.match.firstServe || 'team_1'
+
+    return pointEvents[0].payload?.team || currentSetFirstServe
   }, [data?.events, data?.currentSet, data?.match])
 
-  // Determine team labels (A or B)
-  const teamAKey = data?.match?.coinTossTeamA || 'team_1'
-  const team_1Label = teamAKey === 'team_1' ? 'A' : 'B'
-  const team_2Label = teamAKey === 'team_2' ? 'A' : 'B'
+  // Determine team labels
+  const teamAKey = data?.match?.coinTossTeamA || 'home'
+  const homeLabel = teamAKey === 'home' ? 'A' : 'B'
+  const awayLabel = teamAKey === 'away' ? 'A' : 'B'
 
-  // Determine which team is on the left based on set index and referee view
-  // In set 1, Team A is always on the left (for 2nd referee view)
-  // In subsequent sets, teams switch sides
-  const leftIsTeam_1For2ndRef = useMemo(() => {
+  // Determine which team is on the left (from referee's perspective)
+  // Uses same alternating pattern as Scoreboard: odd sets = Team A on left, even sets = Team A on right
+  const homeOnLeftFor2ndRef = useMemo(() => {
     if (!data?.currentSet) return true
-    
-    // Set 1: Team A on left
-    if (data.currentSet.index === 1) {
-      return teamAKey === 'team_1'
-    }
-    
-    // Set 2, 3: Teams switch sides (Team A goes right, Team B goes left)
-    return teamAKey !== 'team_1'
-  }, [data?.currentSet, teamAKey])
 
-  // For 1st referee, reverse the sides (they see from opposite end)
-  const leftIsTeam_1 = refereeView === '1st' ? !leftIsTeam_1For2ndRef : leftIsTeam_1For2ndRef
-  
-  const leftTeam = leftIsTeam_1 ? 'team_1' : 'team_2'
-  const rightTeam = leftIsTeam_1 ? 'team_2' : 'team_1'
-  
-  const leftTeamData = leftTeam === 'team_1' ? data?.team_1Team : data?.team_2Team
-  const rightTeamData = rightTeam === 'team_1' ? data?.team_1Team : data?.team_2Team
-  const leftLabel = leftTeam === 'team_1' ? team_1Label : team_2Label
-  const rightLabel = rightTeam === 'team_1' ? team_1Label : team_2Label
-  const leftLineupData = leftTeam === 'team_1' ? lineup.team_1 : lineup.team_2
-  const rightLineupData = rightTeam === 'team_1' ? lineup.team_1 : lineup.team_2
-  const leftLineup = leftLineupData.lineup
-  const rightLineup = rightLineupData.lineup
-  const leftStats = leftTeam === 'team_1' ? stats.team_1 : stats.team_2
-  const rightStats = rightTeam === 'team_1' ? stats.team_1 : stats.team_2
-  const leftScore = leftTeam === 'team_1' ? data?.currentSet?.team_1Points || 0 : data?.currentSet?.team_2Points || 0
-  const rightScore = rightTeam === 'team_1' ? data?.currentSet?.team_1Points || 0 : data?.currentSet?.team_2Points || 0
-  const leftSetScore = leftTeam === 'team_1' ? setScore.team_1 : setScore.team_2
-  const rightSetScore = rightTeam === 'team_1' ? setScore.team_1 : setScore.team_2
+    // PRIORITY 1: Live state from server (Scoreboard source of truth)
+    // side_a indicates which side Team A is on ('left' or 'right')
+    if (data?.liveState?.side_a) {
+      const sideA = data.liveState.side_a
+      return sideA === 'left' ? (teamAKey === 'home') : (teamAKey !== 'home')
+    }
+
+    const setIndex = data.currentSet.index
+    const setLeftTeamOverrides = data?.match?.setLeftTeamOverrides || {}
+    const is5thSet = setIndex === 5
+    const set5CourtSwitched = data?.match?.set5CourtSwitched
+    const set5LeftTeam = data?.match?.set5LeftTeam
+
+    // Determine which side Team A is on this set
+    let sideA
+    if (setLeftTeamOverrides[setIndex] !== undefined) {
+      // Manual override for this set
+      sideA = setLeftTeamOverrides[setIndex] === teamAKey ? 'left' : 'right'
+    } else if (is5thSet && set5CourtSwitched && set5LeftTeam) {
+      // Set 5 special configuration (after 8-point switch)
+      sideA = set5LeftTeam === teamAKey ? 'left' : 'right'
+    } else {
+      // Default alternating pattern: odd sets = Team A on left, even sets = Team A on right
+      sideA = setIndex % 2 === 1 ? 'left' : 'right'
+    }
+
+    // Convert sideA to homeOnLeft:
+    // If sideA='left' (Team A on left), then home is on left only if teamAKey='home'
+    // If sideA='right' (Team A on right), then home is on left only if teamAKey!='home' (i.e., Team B is on left)
+    return sideA === 'left' ? (teamAKey === 'home') : (teamAKey !== 'home')
+  }, [data?.currentSet, data?.match?.setLeftTeamOverrides, data?.match?.set5CourtSwitched, data?.match?.set5LeftTeam, teamAKey, data?.liveState?.side_a])
+
+  const homeTeamOnLeft = refereeView === '1st' ? !homeOnLeftFor2ndRef : homeOnLeftFor2ndRef
+
+  const leftTeam = homeTeamOnLeft ? 'home' : 'away'
+  const rightTeam = homeTeamOnLeft ? 'away' : 'home'
+  const leftTeamData = leftTeam === 'home' ? data?.homeTeam : data?.awayTeam
+  const rightTeamData = rightTeam === 'home' ? data?.homeTeam : data?.awayTeam
+  const leftLabel = leftTeam === 'home' ? homeLabel : awayLabel
+  const rightLabel = rightTeam === 'home' ? homeLabel : awayLabel
   const leftServing = getCurrentServe === leftTeam
   const rightServing = getCurrentServe === rightTeam
-  const leftColor = leftTeamData?.color || (leftTeam === 'team_1' ? '#ef4444' : '#3b82f6')
-  const rightColor = rightTeamData?.color || (rightTeam === 'team_1' ? '#ef4444' : '#3b82f6')
-  
- 
-  
+  const leftColor = leftTeamData?.color || (leftTeam === 'home' ? '#ef4444' : '#3b82f6')
+  const rightColor = rightTeamData?.color || (rightTeam === 'home' ? '#ef4444' : '#3b82f6')
+
+  // Compute team name texts for adaptive sizing
+  const leftShortName = (leftTeam === 'home' ? data?.match?.homeShortName : data?.match?.awayShortName) || leftTeamData?.name || 'Team'
+  const rightShortName = (rightTeam === 'home' ? data?.match?.homeShortName : data?.match?.awayShortName) || rightTeamData?.name || 'Team'
+
+  // Resize observer for adaptive text container widths
+  useEffect(() => {
+    const updateWidths = () => {
+      if (section2AContainerRef.current) {
+        setSection2AWidth(section2AContainerRef.current.clientWidth)
+      }
+    }
+    updateWidths()
+
+    const observer = new ResizeObserver(updateWidths)
+    if (section2AContainerRef.current) observer.observe(section2AContainerRef.current)
+
+    return () => observer.disconnect()
+  }, [])
+
+  // Synced font sizes for paired team names (SECTION 2A)
+  const section2AFontSize = useSyncedFontSize([leftShortName, rightShortName], section2AWidth, 28, 14, true)
+
+  // Get team-level sanctions (formal warning, improper request, delay warning, bench sanctions)
+  // Also returns player-level sanctions (warnings, penalties, expulsions, disqualifications)
+  const getTeamSanctions = useCallback((teamKey) => {
+    if (!data?.events) return {
+      formalWarning: false, improperRequest: false, delayWarning: false, delayPenalty: false,
+      benchSanctions: [], warnings: [], penalties: [], expulsions: [], disqualifications: []
+    }
+
+    const teamSanctions = data.events.filter(e =>
+      e.type === 'sanction' && e.payload?.team === teamKey
+    )
+
+    // Helper to get display identifier (number or function abbreviation)
+    const getIdentifier = (s) => {
+      const playerNum = s.payload?.playerNumber || s.payload?.player
+      const playerType = s.payload?.playerType
+      const role = s.payload?.role || s.payload?.function
+
+      // For bench/official sanctions, show role abbreviation
+      if (playerType === 'bench' || playerType === 'official') {
+        if (role) {
+          // Map common roles to abbreviations (lowercase keys for case-insensitive lookup)
+          const roleMap = {
+            'coach': 'C',
+            'assistant coach 1': 'AC1',
+            'assistant coach 2': 'AC2',
+            'physiotherapist': 'PH',
+            'medic': 'M'
+          }
+          // Fallback: first 2 letters of role if not in map
+          return roleMap[role.toLowerCase()] || role.substring(0, 2).toUpperCase()
+        }
+        return playerNum || 'B' // B for bench if no specific identifier
+      }
+      return playerNum
+    }
+
+    // Warnings (player or bench/official, excluding team/formal warnings and delay warnings)
+    const warnings = teamSanctions.filter(s => {
+      const type = s.payload?.type || s.payload?.sanctionType
+      const playerNum = s.payload?.playerNumber || s.payload?.player
+      const playerType = s.payload?.playerType
+      const isBenchOrOfficial = playerType === 'bench' || playerType === 'official'
+      // For players: require a number. For bench/officials: don't require number
+      const hasValidTarget = isBenchOrOfficial || (playerNum && String(playerNum) !== 'D')
+      return type === 'warning' &&
+        hasValidTarget &&
+        playerType !== 'team' && !s.payload?.isTeamWarning
+    }).map(s => ({
+      id: getIdentifier(s),
+      isBench: s.payload?.playerType === 'bench' || s.payload?.playerType === 'official'
+    }))
+
+    // Penalties (player or bench/official, excluding delay penalties)
+    const penalties = teamSanctions.filter(s => {
+      const type = s.payload?.type || s.payload?.sanctionType
+      const playerNum = s.payload?.playerNumber || s.payload?.player
+      const playerType = s.payload?.playerType
+      const isBenchOrOfficial = playerType === 'bench' || playerType === 'official'
+      // For players: require a number. For bench/officials: don't require number
+      const hasValidTarget = isBenchOrOfficial || (playerNum && String(playerNum) !== 'D')
+      return type === 'penalty' && hasValidTarget
+    }).map(s => ({
+      id: getIdentifier(s),
+      isBench: s.payload?.playerType === 'bench' || s.payload?.playerType === 'official'
+    }))
+
+    // Expulsions (any - player or bench)
+    const expulsions = teamSanctions.filter(s => {
+      const type = s.payload?.type || s.payload?.sanctionType
+      return type === 'expulsion'
+    }).map(s => ({
+      id: getIdentifier(s),
+      isBench: s.payload?.playerType === 'bench' || s.payload?.playerType === 'official'
+    }))
+
+    // Disqualifications (any - player or bench)
+    const disqualifications = teamSanctions.filter(s => {
+      const type = s.payload?.type || s.payload?.sanctionType
+      return type === 'disqualification'
+    }).map(s => ({
+      id: getIdentifier(s),
+      isBench: s.payload?.playerType === 'bench' || s.payload?.playerType === 'official'
+    }))
+
+    return {
+      // Formal warning: ANY warning to ANY team member (player, bench, official) triggers this
+      formalWarning: teamSanctions.some(s => {
+        const type = s.payload?.type || s.payload?.sanctionType
+        return type === 'warning'
+      }),
+      improperRequest: teamSanctions.some(s =>
+        s.payload?.type === 'improper_request' || s.payload?.sanctionType === 'improper_request'
+      ),
+      delayWarning: teamSanctions.some(s =>
+        (s.payload?.type === 'delay_warning' || s.payload?.sanctionType === 'delay_warning') ||
+        ((s.payload?.type === 'warning' || s.payload?.sanctionType === 'warning') &&
+          (String(s.payload?.playerNumber) === 'D' || String(s.payload?.player) === 'D'))
+      ),
+      delayPenalty: teamSanctions.some(s =>
+        (s.payload?.type === 'delay_penalty' || s.payload?.sanctionType === 'delay_penalty') ||
+        ((s.payload?.type === 'penalty' || s.payload?.sanctionType === 'penalty') &&
+          (String(s.payload?.playerNumber) === 'D' || String(s.payload?.player) === 'D'))
+      ),
+      benchSanctions: teamSanctions.filter(s =>
+        s.payload?.playerType === 'bench' || s.payload?.playerType === 'official'
+      ),
+      warnings,
+      penalties,
+      expulsions,
+      disqualifications
+    }
+  }, [data?.events])
+
+  const leftTeamSanctions = getTeamSanctions(leftTeam)
+  const rightTeamSanctions = getTeamSanctions(rightTeam)
+
+  // Get libero on court for a team - returns { position, liberoNumber, liberoType, playerNumber } or null
+  const getLiberoOnCourt = useCallback((teamKey) => {
+    if (!data?.events || !data?.currentSet) return null
+
+    const currentSetEvents = data.events.filter(e => e.setIndex === data.currentSet.index)
+    const lineupEvents = currentSetEvents
+      .filter(e => e.type === 'lineup' && e.payload?.team === teamKey)
+      .sort((a, b) => (a.seq || 0) - (b.seq || 0))
+
+    if (lineupEvents.length === 0) return null
+
+    const latestLineup = lineupEvents[lineupEvents.length - 1]
+    const currentLineup = latestLineup?.payload?.lineup || {}
+    const liberoSub = latestLineup?.payload?.liberoSubstitution
+
+    // Get initial lineup (marked with isInitial: true)
+    const initialLineupEvent = lineupEvents.find(e => e.payload?.isInitial === true)
+    const initialLineup = initialLineupEvent?.payload?.lineup || {}
+
+    const teamPlayers = teamKey === 'home' ? data.homePlayers : data.awayPlayers
+
+    // Check each position to find if a libero is there
+    for (const [position, posData] of Object.entries(currentLineup)) {
+      // Handle both rich format (posData is object with number) and legacy format (posData is number)
+      const playerNum = typeof posData === 'object' && posData?.number !== undefined ? posData.number : posData
+      const player = teamPlayers?.find(p => String(p.number) === String(playerNum))
+      if (player && (player.libero === 'libero1' || player.libero === 'libero2')) {
+        // Found a libero on court - try to find which player they replaced
+        let replacedPlayer = liberoSub?.playerNumber
+
+        if (!replacedPlayer) {
+          // Look through lineup history to find the original player at this position
+          for (let i = lineupEvents.length - 2; i >= 0; i--) {
+            const prevLineup = lineupEvents[i]?.payload?.lineup
+            if (prevLineup && prevLineup[position]) {
+              const prevPosData = prevLineup[position]
+              const prevNum = typeof prevPosData === 'object' && prevPosData?.number !== undefined ? prevPosData.number : prevPosData
+              const prevPlayer = teamPlayers?.find(p => String(p.number) === String(prevNum))
+              if (prevPlayer && prevPlayer.libero !== 'libero1' && prevPlayer.libero !== 'libero2') {
+                replacedPlayer = prevPlayer.number
+                break
+              }
+            }
+          }
+        }
+
+        // Fallback: Check initial lineup for who was at this position
+        if (!replacedPlayer && initialLineup[position]) {
+          const initPosData = initialLineup[position]
+          const initNum = typeof initPosData === 'object' && initPosData?.number !== undefined ? initPosData.number : initPosData
+          const initialPlayer = teamPlayers?.find(p => String(p.number) === String(initNum))
+          if (initialPlayer && initialPlayer.libero !== 'libero1' && initialPlayer.libero !== 'libero2') {
+            replacedPlayer = initialPlayer.number
+          }
+        }
+
+        return {
+          position,
+          liberoNumber: player.number,
+          liberoType: player.libero,
+          playerNumber: replacedPlayer
+        }
+      }
+    }
+
+    return null
+  }, [data?.events, data?.currentSet, data?.homePlayers, data?.awayPlayers])
+
+  // Get substitution info for a player on court - returns { replacedNumber } or null
+  const getSubstitutionInfo = useCallback((teamKey, playerNumber) => {
+    if (!data?.events || !data?.currentSet) return null
+
+    const currentSetSubs = data.events
+      .filter(e => e.type === 'substitution' && e.payload?.team === teamKey && e.setIndex === data.currentSet.index)
+      .sort((a, b) => new Date(b.ts) - new Date(a.ts))
+
+    // Find if this player came in as a substitute
+    const subIn = currentSetSubs.find(s => String(s.payload?.playerIn) === String(playerNumber))
+    if (subIn) {
+      return { replacedNumber: subIn.payload?.playerOut }
+    }
+
+    return null
+  }, [data?.events, data?.currentSet])
+
+  // Get sanctions for a player
+  const getPlayerSanctions = useCallback((teamKey, playerNumber) => {
+    if (!data?.events || !playerNumber) return []
+
+    return data.events.filter(e =>
+      e.type === 'sanction' &&
+      e.payload?.team === teamKey &&
+      (String(e.payload?.player) === String(playerNumber) || String(e.payload?.playerNumber) === String(playerNumber))
+    )
+  }, [data?.events])
+
   // Helper to determine if a color is bright
   const isBrightColor = (color) => {
     if (!color) return false
@@ -397,1102 +1489,2647 @@ export default function Referee({ matchId, onExit }) {
     return brightness > 155
   }
 
-  // Check if scoresheet is connected (updating within last 15 seconds)
-  const isScoresheetConnected = useMemo(() => {
-    if (!data?.match?.updatedAt) return false
-    const lastUpdate = new Date(data.match.updatedAt).getTime()
-    const currentTime = new Date().getTime()
-    return (currentTime - lastUpdate) < 30000 // 30 seconds threshold
-  }, [data?.match?.updatedAt])
+  // Get setter position (P1-P6) based on current lineup
+  const getSetterPosition = useCallback((lineup, setterNum) => {
+    if (!lineup || !setterNum) return null
+    for (const [position, posData] of Object.entries(lineup)) {
+      // Handle both rich format (posData is object with number) and legacy format (posData is number)
+      const playerNum = typeof posData === 'object' && posData?.number !== undefined ? posData.number : posData
+      if (String(playerNum) === String(setterNum)) {
+        // Convert position (I, II, III, IV, V, VI) to P number (1-6)
+        const posMap = { 'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5, 'VI': 6 }
+        return posMap[position] || null
+      }
+    }
+    return null
+  }, [])
 
-  // Reset processed timeouts when set changes
-  useEffect(() => {
-    setProcessedTimeouts(new Set())
-  }, [data?.currentSet?.index])
+  // Reception formation positions based on setter position (P1-P6)
+  // Positions are percentages: { top: %, left: % } from court perspective (net at top)
+  // These are for a SINGLE side court view - approved from visualization
+  const getReceptionFormation = useCallback((setterPos) => {
+    // Standard positions for when no advanced mode
+    const standard = {
+      I: { top: 85, left: 85 },   // Back right
+      II: { top: 15, left: 85 },  // Front right
+      III: { top: 15, left: 50 }, // Front middle
+      IV: { top: 15, left: 15 },  // Front left
+      V: { top: 85, left: 15 },   // Back left
+      VI: { top: 85, left: 50 }   // Back middle
+    }
 
-  // Monitor timeout events and start countdown
-  useEffect(() => {
-    if (!data?.events || !data?.currentSet) return
-    
-    // Find the most recent timeout event in current set
-    const currentSetEvents = data.events.filter(e => 
-      e.type === 'timeout' && 
-      (e.setIndex || 1) === (data.currentSet?.index || 1)
-    )
-    
-    if (currentSetEvents.length === 0) {
-      return
+    if (!setterPos) return standard
+
+    // Reception formations based on setter position (approved from visualization)
+    const formations = {
+      // P1: Setter in position I (back right corner)
+      1: {
+        I: { top: 88, left: 88 },   // Setter: back right corner
+        II: { top: 70, left: 80 },  // Next to setter (top-left of I)
+        III: { top: 28, left: 50 }, // 3m line, middle
+        IV: { top: 28, left: 15 },  // 3m line, left
+        V: { top: 80, left: 15 },   // Bottom left
+        VI: { top: 78, left: 50 }   // Between II and V
+      },
+      // P2: Setter in position II (front right at net)
+      2: {
+        I: { top: 70, left: 85 },   // Back right area
+        II: { top: 12, left: 88 },  // Setter: at net, right
+        III: { top: 28, left: 50 }, // 3m line, middle
+        IV: { top: 70, left: 15 },  // Same line as I and VI
+        V: { top: 88, left: 40 },   // Back, beneath IV and VI
+        VI: { top: 70, left: 50 }   // Same line as IV and I
+      },
+      // P3: Setter in position III (front middle at net)
+      3: {
+        I: { top: 70, left: 82 },   // Back right
+        II: { top: 12, left: 82 },  // Front right at net
+        III: { top: 13, left: 50 }, // Setter: at net, middle
+        IV: { top: 67, left: 15 },  // Dropped back left
+        V: { top: 70, left: 45 },   // Back center-left
+        VI: { top: 88, left: 60 }   // Back, towards end line
+      },
+      // P4: Setter in position IV (front left at net)
+      4: {
+        I: { top: 88, left: 88 },   // Back right corner
+        II: { top: 70, left: 35 },  // Dropped back
+        III: { top: 40, left: 25 }, // Diagonally between IV and II
+        IV: { top: 12, left: 15 },  // Setter: at net, left
+        V: { top: 70, left: 55 },   // Back middle
+        VI: { top: 70, left: 75 }   // Back right area
+      },
+      // P5: Setter in position V (back left, penetrating)
+      5: {
+        I: { top: 75, left: 82 },   // Back right
+        II: { top: 12, left: 85 },  // Front right at net
+        III: { top: 75, left: 35 }, // Dropped back for passing
+        IV: { top: 12, left: 15 },  // Front left at net
+        V: { top: 42, left: 33 },   // Setter: back left, penetrating
+        VI: { top: 75, left: 58 }   // Back middle
+      },
+      // P6: Setter in position VI (back middle, penetrating)
+      6: {
+        I: { top: 78, left: 82 },   // Back right
+        II: { top: 25, left: 82 },  // Towards 3m line
+        III: { top: 12, left: 50 }, // At net, middle
+        IV: { top: 72, left: 18 },  // Dropped back left
+        V: { top: 78, left: 44 },   // Back center-left
+        VI: { top: 42, left: 59 }   // Setter: penetrating from back middle
+      }
     }
-    
-    const latestTimeout = currentSetEvents[currentSetEvents.length - 1]
-    
-    // Check if this timeout was logged recently (within last 35 seconds)
-    const timeoutTime = new Date(latestTimeout.ts).getTime()
-    const now = Date.now()
-    const timeSinceTimeout = (now - timeoutTime) / 1000 // in seconds
-    
-    // Only show countdown if timeout is recent (within 35 seconds)
-    if (timeSinceTimeout > 35) {
-      return
+
+    return formations[setterPos] || standard
+  }, [])
+
+  // Get formation positions with custom overrides
+  const getFormationWithCustom = useCallback((side, setterPos) => {
+    const baseFormation = getReceptionFormation(setterPos)
+    const setIndex = data?.currentSet?.index || 1
+    const customPositions = customFormations[setIndex]?.[side]
+
+    if (!customPositions) return baseFormation
+
+    // Merge custom positions with base formation
+    const merged = { ...baseFormation }
+    for (const [pos, coords] of Object.entries(customPositions)) {
+      if (coords) {
+        merged[pos] = coords
+      }
     }
-    
-    // Check if we've already processed this timeout
-    if (processedTimeouts.has(latestTimeout.id)) {
-      return
-    }
-    
-    // Calculate remaining time based on when timeout was logged
-    const remainingTime = Math.max(0, Math.ceil(30 - timeSinceTimeout))
-    
-    if (remainingTime <= 0) {
-      return
-    }
-    
-    // Mark as processed and start countdown
-    setProcessedTimeouts(prevSet => new Set([...prevSet, latestTimeout.id]))
-    setActiveTimeout({
-      team: latestTimeout.payload?.team,
-      countdown: remainingTime,
-      eventId: latestTimeout.id,
-      startTime: now
-    })
-  }, [data?.events, data?.currentSet, processedTimeouts])
-  
-  // Countdown timer for active timeout
-  useEffect(() => {
-    if (!activeTimeout) return
-    
-    if (activeTimeout.countdown <= 0) {
-      setActiveTimeout(null)
-      return
-    }
-    
-    const timer = setInterval(() => {
-      setActiveTimeout(prev => {
-        if (!prev) return null
-        const newCountdown = prev.countdown - 1
-        if (newCountdown <= 0) {
-          return null
+    return merged
+  }, [getReceptionFormation, customFormations, data?.currentSet?.index])
+
+  // Re-enable wake lock (call this when entering fullscreen or on user interaction)
+  const reEnableWakeLock = useCallback(async () => {
+    // Try native Wake Lock API
+    try {
+      if ('wakeLock' in navigator) {
+        if (wakeLockRef.current) {
+          try { await wakeLockRef.current.release() } catch (e) { }
         }
-        return { ...prev, countdown: newCountdown }
+        wakeLockRef.current = await navigator.wakeLock.request('screen')
+        console.log('[WakeLock] Re-acquired wake lock')
+        setWakeLockActive(true)
+        wakeLockRef.current.addEventListener('release', () => {
+          console.log('[WakeLock] Released')
+        })
+        return true
+      }
+    } catch (err) {
+      console.log('[WakeLock] Failed to re-acquire:', err.message)
+    }
+    return false
+  }, [])
+
+  // Toggle wake lock manually
+  const toggleWakeLock = useCallback(async () => {
+    if (wakeLockActive) {
+      // Disable wake lock
+      if (wakeLockRef.current) {
+        try {
+          await wakeLockRef.current.release()
+          wakeLockRef.current = null
+        } catch (e) { }
+      }
+      setWakeLockActive(false)
+      console.log('[WakeLock] Manually disabled')
+    } else {
+      // Enable wake lock
+      const success = await reEnableWakeLock()
+      if (success) {
+        console.log('[WakeLock] Manually enabled')
+      } else {
+        console.log('[WakeLock] Failed to enable manually - Wake Lock API may not be supported')
+        // Show visual feedback that it's "on" even if API failed
+        setWakeLockActive(true)
+      }
+    }
+  }, [wakeLockActive, reEnableWakeLock])
+
+  // Detect iOS (Fullscreen API doesn't work on iOS Safari/Chrome)
+  const isIOS = useMemo(() => {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  }, [])
+
+  // Fullscreen handlers
+  const toggleFullscreen = useCallback(async () => {
+    // iOS doesn't support Fullscreen API
+    if (isIOS) {
+      if (!isFullscreen) {
+        // Simulate fullscreen with CSS class
+        document.body.classList.add('ios-fullscreen')
+        setIsFullscreen(true)
+        reEnableWakeLock()
+        // Show a helpful tip
+        showAlert('Tip: For true fullscreen on iOS, tap Share → Add to Home Screen, then open from there.', 'info')
+      } else {
+        document.body.classList.remove('ios-fullscreen')
+        setIsFullscreen(false)
+      }
+      return
+    }
+
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen()
+        setIsFullscreen(true)
+        // Re-enable wake lock when entering fullscreen
+        setTimeout(() => reEnableWakeLock(), 500)
+      } else {
+        await document.exitFullscreen()
+        setIsFullscreen(false)
+      }
+    } catch (error) {
+      console.error('Error toggling fullscreen:', error)
+      // Fallback: try simulated fullscreen
+      if (!isFullscreen) {
+        document.body.classList.add('ios-fullscreen')
+        setIsFullscreen(true)
+      }
+    }
+  }, [reEnableWakeLock, isIOS, isFullscreen])
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isFs = !!document.fullscreenElement
+      setIsFullscreen(isFs)
+      // Re-enable wake lock when entering fullscreen
+      if (isFs) {
+        reEnableWakeLock()
+      }
+    }
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  }, [reEnableWakeLock])
+
+  // Periodically re-enable wake lock in fullscreen mode (every 2 minutes)
+  useEffect(() => {
+    if (!isFullscreen) return
+
+    const interval = setInterval(() => {
+      reEnableWakeLock()
+    }, 120000) // Every 2 minutes
+
+    return () => clearInterval(interval)
+  }, [isFullscreen, reEnableWakeLock])
+
+  // Format countdown
+  // Detect if we're between sets (previous set finished but current set not started)
+  const isBetweenSets = useMemo(() => {
+    if (!data?.sets || !data?.set) return false
+
+    const currentSetIndex = data.set.index
+    if (currentSetIndex <= 1) return false
+
+    const previousSet = data.sets.find(s => s.index === currentSetIndex - 1)
+    if (!previousSet || !previousSet.finished) return false
+
+    // Check if current set has started (has points or set_start event)
+    const hasSetStarted = data.events?.some(e =>
+      (e.type === 'point' || e.type === 'set_start') && e.setIndex === currentSetIndex
+    )
+
+    return !hasSetStarted
+  }, [data?.sets, data?.set, data?.events])
+
+  // Check if match has ended (from liveState status or sets won)
+  const isMatchEnded = data?.liveState?.match_status === 'ended' ||
+    (data?.liveState?.sets_won_a >= 3 || data?.liveState?.sets_won_b >= 3) ||
+    (setsWon.home >= 3 || setsWon.away >= 3)
+
+  // Check if we're in set interval (from liveState or local detection)
+  // But NOT if match is already finished
+  const isInSetInterval = !isMatchEnded && (data?.liveState?.set_interval_active || isBetweenSets)
+  // During interval, currentSet is already the NEW set (Scoreboard creates it immediately on set_end)
+  // So we should use currentSet.index directly, not add +1
+  // Also check liveState.current_set which is already set to the next set index
+  const nextSetIndex = isInSetInterval
+    ? (data?.liveState?.current_set || data?.currentSet?.index || 1)
+    : null
+
+  // During set interval or match ended, show cleared values
+  const leftLineup = (isInSetInterval || isMatchEnded) ? null : (leftTeam === 'home' ? lineup.home : lineup.away)
+  const rightLineup = (isInSetInterval || isMatchEnded) ? null : (rightTeam === 'home' ? lineup.home : lineup.away)
+  const leftStats = (isInSetInterval || isMatchEnded)
+    ? { timeouts: 0, substitutions: 0 }
+    : (leftTeam === 'home' ? stats.home : stats.away)
+  const rightStats = (isInSetInterval || isMatchEnded)
+    ? { timeouts: 0, substitutions: 0 }
+    : (rightTeam === 'home' ? stats.home : stats.away)
+
+  // Get the last finished set's final score for display when match ends
+  const lastFinishedSet = useMemo(() => {
+    if (!data?.sets) return null
+    const finishedSets = data.sets.filter(s => s.finished).sort((a, b) => b.index - a.index)
+    return finishedSets[0] || null
+  }, [data?.sets])
+
+  // Current set points - when match ended, show last set's final score
+  const leftPoints = isMatchEnded && lastFinishedSet
+    ? (leftTeam === 'home' ? lastFinishedSet.homePoints : lastFinishedSet.awayPoints)
+    : (leftTeam === 'home' ? data?.currentSet?.homePoints || 0 : data?.currentSet?.awayPoints || 0)
+  const rightPoints = isMatchEnded && lastFinishedSet
+    ? (rightTeam === 'home' ? lastFinishedSet.homePoints : lastFinishedSet.awayPoints)
+    : (rightTeam === 'home' ? data?.currentSet?.homePoints || 0 : data?.currentSet?.awayPoints || 0)
+
+  // Sets won by each side - use liveState if available (from Supabase), otherwise fall back to setsWon
+  const liveStateSetsWonHome = teamAKey === 'home'
+    ? (data?.liveState?.sets_won_a ?? setsWon.home)
+    : (data?.liveState?.sets_won_b ?? setsWon.home)
+  const liveStateSetsWonAway = teamAKey === 'home'
+    ? (data?.liveState?.sets_won_b ?? setsWon.away)
+    : (data?.liveState?.sets_won_a ?? setsWon.away)
+  const leftSetsWon = leftTeam === 'home' ? liveStateSetsWonHome : liveStateSetsWonAway
+  const rightSetsWon = rightTeam === 'home' ? liveStateSetsWonHome : liveStateSetsWonAway
+
+  // During interval, show sets won; during play, show current set points
+  const leftDisplayScore = leftPoints
+  const rightDisplayScore = rightPoints
+  // Display set index - during interval show the NEXT set, but never show more than Set 5
+  const displaySetIndex = Math.min(
+    isInSetInterval ? nextSetIndex : (data?.currentSet?.index || 1),
+    5
+  )
+
+  // Check if this is the first rally of the set (no points scored yet)
+  const isFirstRally = useMemo(() => {
+    if (!data?.events || !data?.set) return true
+    const hasPoints = data.events.some(e => e.type === 'point' && e.setIndex === data.set.index)
+    return !hasPoints
+  }, [data?.events, data?.set])
+
+  // Start between-sets countdown when we detect we're between sets
+  useEffect(() => {
+    // Only start countdown if between sets AND countdown hasn't been started yet (null means never started)
+    // AND it wasn't manually dismissed
+    if (isBetweenSets && betweenSetsCountdown === null && !intervalDismissedRef.current) {
+      setBetweenSetsCountdown({
+        countdown: 180,
+        started: true,
+        startTimestamp: Date.now(),
+        initialCountdown: 180
       })
-    }, 1000)
-    
+      setShowIntervalModal(true)
+    } else if (!isBetweenSets) {
+      // Reset to null only when no longer between sets (new set started)
+      setBetweenSetsCountdown(null)
+      setShowIntervalModal(false) // Hide the modal when set starts
+      intervalDismissedRef.current = false // Reset dismissal flag when set starts
+    }
+  }, [isBetweenSets]) // Remove betweenSetsCountdown from deps to prevent restart loop
+
+  // Handle between-sets countdown timer
+  useEffect(() => {
+    if (!betweenSetsCountdown || !betweenSetsCountdown.started) return
+
+    const startTimestamp = betweenSetsCountdown.startTimestamp || Date.now()
+    const initialCountdown = betweenSetsCountdown.initialCountdown || 180
+
+    // Update every 100ms for smooth visuals
+    const timer = setInterval(() => {
+      const now = Date.now()
+      const elapsed = Math.floor((now - startTimestamp) / 1000)
+      const remaining = Math.max(0, initialCountdown - elapsed)
+
+      if (remaining <= 0) {
+        setBetweenSetsCountdown(prev => {
+          if (prev && prev.countdown === 0 && (Date.now() - (prev.startTimestamp + prev.initialCountdown * 1000)) > 2000) {
+            return prev // Keep it at 0
+          }
+          if (!prev) return null
+          return { ...prev, countdown: 0, started: false }
+        })
+      } else {
+        setBetweenSetsCountdown(prev => {
+          if (!prev || !prev.started) return prev
+          if (prev.countdown === remaining) return prev
+          return { ...prev, countdown: remaining }
+        })
+      }
+    }, 100)
+
     return () => clearInterval(timer)
-  }, [activeTimeout])
+  }, [betweenSetsCountdown?.started, betweenSetsCountdown?.startTimestamp, betweenSetsCountdown?.initialCountdown])
 
-  
+  // Check if match is waiting for coin toss (status is 'setup' or no data yet)
+  // This must be checked BEFORE the !data return to show awaiting screen
+  // A match is awaiting coin toss if: no data, status is 'setup', OR (no firstServe AND no coinTossTeamA AND not master mode AND no currentSet)
+  const coinTossConfirmed = data?.match?.firstServe || data?.match?.coinTossTeamA || data?.match?.coin_toss_confirmed
+  const isAwaitingCoinToss = !data || data?.match?.status === 'setup' || (!coinTossConfirmed && !isMasterMode && !data?.currentSet)
 
-  if (!data) return null
-
-  // Check if referee connection is disabled
-  if (data.match.refereeConnectionEnabled === false) {
+  // Show awaiting coin toss screen when connected but no match data yet
+  if (isAwaitingCoinToss && !isMasterMode && realtimeStatus === CONNECTION_STATUS.CONNECTED) {
     return (
       <div style={{
-        minHeight: '100vh',
+        height: '100dvh', // Use dynamic viewport height (respects iOS browser chrome)
+        maxHeight: '100dvh',
+        width: '100vw',
+        maxWidth: '800px',
+        margin: '0 auto',
         background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
         color: '#fff',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '20px',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+        flexDirection: 'column',
+        overflow: 'hidden'
       }}>
+        {/* Header - same as main view */}
         <div style={{
-          background: 'var(--bg-secondary)',
-          borderRadius: '12px',
-          padding: '40px',
-          maxWidth: '400px',
-          width: '100%',
-          textAlign: 'center'
+          height: '40px',
+          minHeight: '40px',
+          maxHeight: '40px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '0 12px',
+          background: 'rgba(0, 0, 0, 0.3)',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
         }}>
-          <div style={{ fontSize: '48px', marginBottom: '20px' }}>🚫</div>
-          <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '16px' }}>
-            Referee Connection Disabled
-          </h2>
-          <p style={{ fontSize: '14px', color: 'var(--muted)', marginBottom: '24px' }}>
-            The referee connection has been disabled for this match. Please contact the scorekeeper to enable it.
-          </p>
-          <button
-            onClick={onExit}
-            style={{
-              padding: '12px 24px',
-              fontSize: '14px',
-              fontWeight: 600,
-              background: 'var(--accent)',
-              color: '#000',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer'
-            }}
-          >
-            Exit
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={toggleFullscreen}
+              style={{
+                padding: '4px 10px',
+                fontSize: '11px',
+                fontWeight: 600,
+                background: 'rgba(255,255,255,0.1)',
+                color: '#fff',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                height: '25px',
+                alignItems: 'center',
+                justifyContent: 'center',
+                display: 'flex',
+              }}
+            >
+              {isFullscreen ? `⛶ ${t('refereeDashboard.exitFullscreen')}` : '⛶'}
+            </button>
+
+            <button
+              onClick={toggleWakeLock}
+              style={{
+                padding: '2px 8px',
+                fontSize: '9px',
+                fontWeight: 600,
+                background: wakeLockActive ? 'rgba(34, 197, 94, 0.3)' : 'rgba(255,255,255,0.1)',
+                color: wakeLockActive ? '#22c55e' : '#fff',
+                border: wakeLockActive ? '1px solid rgba(34, 197, 94, 0.5)' : '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                height: '25px',
+                alignItems: 'center',
+                justifyContent: 'center',
+                display: 'flex',
+              }}
+              title={wakeLockActive ? t('refereeDashboard.screenWillStayOn') : t('refereeDashboard.screenMayTurnOff')}
+            >
+              {wakeLockActive ? `☀️` : `🌙`}
+            </button>
+
+            <ConnectionStatus
+              connectionStatuses={connectionStatuses}
+              connectionDebugInfo={{
+                ...connectionDebugInfo,
+                match: {
+                  ...connectionDebugInfo?.match,
+                  matchId: matchId,
+                  homeTeam: data?.homeTeam?.name,
+                  awayTeam: data?.awayTeam?.name
+                }
+              }}
+              queueStats={syncStatus}
+              onRetryErrors={retryErrors}
+              position="right"
+              size="small"
+            />
+          </div>
+
+          {/* Center - Refresh Button */}
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <button
+              onClick={fetchFreshData}
+              style={{
+                padding: '6px 16px',
+                fontSize: '12px',
+                fontWeight: 600,
+                height: '25px',
+                alignItems: 'center',
+                justifyContent: 'center',
+                display: 'flex',
+                background: 'rgba(59, 130, 246, 0.2)',
+                color: '#3b82f6',
+                border: '1px solid rgba(59, 130, 246, 0.4)',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+              title={t('refereeDashboard.refresh')}
+            >
+              🔄 {window.innerWidth >= 500 && t('refereeDashboard.refresh')}
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            {/* Language Selector */}
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setLanguageMenuOpen(!languageMenuOpen)
+                }}
+                style={{
+                  padding: '4px 8px',
+                  fontSize: '10px',
+                  height: '25px',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  display: 'flex',
+                  gap: '4px',
+                  fontWeight: 600,
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  color: '#fff',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+                title={t('header.language', 'Language')}
+              >
+                {(() => { const current = languages.find(l => l.code === i18n.language); return current ? <current.Flag /> : <FlagGB /> })()}
+                <span style={{ fontSize: '8px' }}>▼</span>
+              </button>
+
+              {/* Language Dropdown */}
+              {languageMenuOpen && (
+                <>
+                  <div
+                    onClick={() => setLanguageMenuOpen(false)}
+                    style={{
+                      position: 'fixed',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      zIndex: 998
+                    }}
+                  />
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    right: 0,
+                    marginTop: '4px',
+                    background: '#1a1a2e',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    borderRadius: '8px',
+                    overflow: 'hidden',
+                    zIndex: 1000,
+                    minWidth: '100px',
+                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)'
+                  }}>
+                    {languages.map((lang) => (
+                      <button
+                        key={lang.code}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          i18n.changeLanguage(lang.code)
+                          setLanguageMenuOpen(false)
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          width: '100%',
+                          padding: '10px 12px',
+                          fontSize: '12px',
+                          fontWeight: i18n.language === lang.code ? 600 : 400,
+                          background: i18n.language === lang.code ? 'rgba(74, 222, 128, 0.15)' : 'transparent',
+                          color: i18n.language === lang.code ? '#4ade80' : 'rgba(255, 255, 255, 0.8)',
+                          border: 'none',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          transition: 'all 0.15s'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (i18n.language !== lang.code) {
+                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (i18n.language !== lang.code) {
+                            e.currentTarget.style.background = 'transparent'
+                          }
+                        }}
+                      >
+                        <span style={{ display: 'flex', alignItems: 'center' }}><lang.Flag /></span>
+                        <span>{lang.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Version */}
+            <span style={{ fontSize: '8px', color: 'rgba(255, 255, 255, 0.5)' }}>
+              v{currentVersion}
+            </span>
+            {/* Exit Button with Icon */}
+            <button
+              onClick={onExit}
+              style={{
+                padding: '4px 8px',
+                fontSize: '10px',
+                height: '25px',
+                width: '25px',
+                alignItems: 'center',
+                justifyContent: 'center',
+                display: 'flex',
+                fontWeight: 600,
+                background: 'rgba(239, 68, 68, 0.2)',
+                color: '#ef4444',
+                border: '1px solid rgba(239, 68, 68, 0.4)',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                lineHeight: 1
+              }}
+              title="Exit"
+            >
+              ✕
+            </button>
+          </div>
         </div>
+
+        {/* Content */}
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '24px',
+          padding: '20px'
+        }}>
+          {/* Team names if available */}
+          {data?.homeTeam?.name && data?.awayTeam?.name && (
+            <div style={{
+              fontSize: 'clamp(18px, 4vw, 28px)',
+              fontWeight: 700,
+              textAlign: 'center',
+              marginBottom: '16px'
+            }}>
+              {data.homeTeam.name} vs {data.awayTeam.name}
+            </div>
+          )}
+
+          {/* Awaiting Coin Toss Message */}
+          <div style={{
+            fontSize: 'clamp(20px, 5vw, 32px)',
+            fontWeight: 600,
+            color: '#fbbf24',
+            textAlign: 'center',
+            textTransform: 'uppercase',
+            letterSpacing: '2px'
+          }}>
+            {t('refereeDashboard.awaitingCoinToss', 'Awaiting Coin Toss')}
+          </div>
+
+          <div style={{
+            fontSize: 'clamp(14px, 3vw, 18px)',
+            color: 'rgba(255, 255, 255, 0.7)',
+            textAlign: 'center',
+            maxWidth: '400px'
+          }}>
+            {t('refereeDashboard.awaitingCoinTossDesc', 'The match will begin once the coin toss has been confirmed on the scoresheet.')}
+          </div>
+
+          {/* Loading indicator */}
+          <div style={{
+            width: '40px',
+            height: '40px',
+            border: '3px solid rgba(255, 255, 255, 0.2)',
+            borderTopColor: '#fbbf24',
+            borderRadius: '50%',
+            animation: 'awaiting-spin 1s linear infinite'
+          }} />
+        </div>
+
+        <style>{`
+          @keyframes awaiting-spin {
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
       </div>
     )
   }
 
-  const PlayerCircle = ({ number, position, team, isServing }) => {
+  if (!data) return null
+
+  // Player circle component - BIG responsive sizing with all indicators
+  // positionData: for rich format this is { number, isServing, isLibero, replacedNumber, isSubstituted, substitutedFor, hasSanction, sanctions, isCaptain, isCourtCaptain }
+  //               for legacy format this is just a number
+  const PlayerCircle = ({ number: legacyNumber, positionData, position, team, isServing: legacyIsServing }) => {
+    // Support both rich format (positionData) and legacy format (number)
+    // Rich format: positionData is { number, isServing, isLibero, ... }
+    // Legacy format: positionData is just a number (or undefined, using legacyNumber)
+    let isRichFormat = positionData && typeof positionData === 'object' && positionData.number !== undefined
+
+    // Extract number - ensure it's always a primitive, never an object
+    let number = isRichFormat ? positionData.number : (positionData || legacyNumber)
+
+    // Extra safety: if positionData was passed as a number but we're in legacy mode,
+    // but that "number" is actually an object (edge case from malformed data), handle it
+    if (number && typeof number === 'object' && number.number !== undefined) {
+      // The "number" is actually rich format data that wasn't detected
+      isRichFormat = true
+      positionData = number
+      number = number.number
+    }
+
     if (!number) return null
-    
-    // Find player data
-    const teamPlayers = team === 'team_1' ? data.team_1Players : data.team_2Players
+
+    const teamPlayers = team === 'home' ? data.homePlayers : data.awayPlayers
     const player = teamPlayers?.find(p => String(p.number) === String(number))
-    const isCaptain = player?.isCaptain || player?.captain
-    
-    // Get sanctions for this player from events (same logic as scoreboard)
-    const teamKey = team
-    const playerSanctionsCurrentSet = data?.events?.filter(e =>
-      e.type === 'sanction' &&
-      e.payload?.team === teamKey &&
-      e.payload?.playerNumber === number &&
-      e.setIndex === data?.currentSet?.index
-    ) || []
-    
-    // Check disqualification across ALL sets (disqualified players are out for entire match)
-    const playerDisqualifications = data?.events?.filter(e =>
-      e.type === 'sanction' &&
-      e.payload?.team === teamKey &&
-      e.payload?.playerNumber === number &&
-      e.payload?.type === 'disqualification'
-    ) || []
-    
-    const hasWarning = playerSanctionsCurrentSet.some(s => s.payload?.type === 'warning')
-    const hasPenalty = playerSanctionsCurrentSet.some(s => s.payload?.type === 'penalty')
-    const hasExpulsion = playerSanctionsCurrentSet.some(s => s.payload?.type === 'expulsion')
-    const hasDisqualification = playerDisqualifications.length > 0
-    
-    // Beach volleyball: Ball shows for first player when team is serving
-    const shouldShowBall = !position && isServing // No position means first player
-    
+
+    // For rich format, use embedded data; for legacy, compute from player lookup and functions
+    let isLibero, shouldShowBall, liberoReplacedPlayer, isSubstituted, substitutedFor
+    let hasWarning, hasPenalty, hasExpulsion, hasDisqualification
+    let isCaptain, isCourtCaptain
+
+    if (isRichFormat) {
+      // Rich format - all data is embedded in positionData
+      isLibero = positionData.isLibero || false
+      shouldShowBall = position === 'I' && positionData.isServing
+      liberoReplacedPlayer = isLibero ? positionData.replacedNumber : null
+      isSubstituted = positionData.isSubstituted || false
+      substitutedFor = positionData.substitutedFor || null
+      isCaptain = positionData.isCaptain || false
+      isCourtCaptain = positionData.isCourtCaptain || false
+
+      // Sanctions from rich format
+      const sanctions = positionData.sanctions || []
+      hasWarning = sanctions.some(s => s.type === 'warning')
+      hasPenalty = sanctions.some(s => s.type === 'penalty')
+      hasExpulsion = sanctions.some(s => s.type === 'expulsion')
+      hasDisqualification = sanctions.some(s => s.type === 'disqualification')
+    } else {
+      // Legacy format - compute from player data and helper functions
+      isLibero = player?.libero === 'libero1' || player?.libero === 'libero2'
+      shouldShowBall = position === 'I' && legacyIsServing
+
+      // Get libero info - if this is a libero, show which player they replaced
+      const liberoOnCourt = getLiberoOnCourt(team)
+      liberoReplacedPlayer = isLibero && liberoOnCourt?.playerNumber ? liberoOnCourt.playerNumber : null
+
+      // Get substitution info - if this player came in as a substitute
+      const subInfo = !isLibero ? getSubstitutionInfo(team, number) : null
+      isSubstituted = !!subInfo
+      substitutedFor = subInfo?.replacedNumber || null
+
+      // Get sanctions for this player
+      const sanctions = getPlayerSanctions(team, number)
+      hasWarning = sanctions.some(s => s.payload?.type === 'warning')
+      hasPenalty = sanctions.some(s => s.payload?.type === 'penalty')
+      hasExpulsion = sanctions.some(s => s.payload?.type === 'expulsion')
+      hasDisqualification = sanctions.some(s => s.payload?.type === 'disqualification')
+
+      // Check if this player is captain or court captain
+      const teamCaptain = team === 'home' ? data.match?.homeCaptain : data.match?.awayCaptain
+      const teamCourtCaptain = team === 'home' ? data.match?.homeCourtCaptain : data.match?.awayCourtCaptain
+      isCaptain = player?.isCaptain || player?.captain || (teamCaptain && String(teamCaptain) === String(number))
+      isCourtCaptain = !isCaptain && teamCourtCaptain && String(teamCourtCaptain) === String(number)
+    }
+
+    // Check if this player was recently substituted in (for flashing effect)
+    const isRecentlySub = recentlySubstitutedPlayers.some(
+      sub => sub.team === team && String(sub.playerNumber) === String(number)
+    )
+
+    // Determine what to show in top-right badge
+    // Ensure badge values are primitives (not objects)
+    const safeBadgeValue = (val) => {
+      if (val && typeof val === 'object' && val.number !== undefined) return val.number
+      return val
+    }
+    const topRightBadge = safeBadgeValue(liberoReplacedPlayer) || safeBadgeValue(substitutedFor) || null
+    const isLiberoReplacementBadge = !!liberoReplacedPlayer
+
+    // Get libero label for bottom-left
+    const liberoType = player?.libero
+    const isUnable = liberoType === 'unable'
+    const isRedesignated = liberoType === 'redesignated'
+    const liberoCount = teamPlayers?.filter(p => p.libero === 'libero1' || p.libero === 'libero2' || p.libero === 'redesignated').length || 0
+
+    // Determine base label
+    let baseLabel = ''
+    if (isLibero) {
+      if (liberoCount === 1) {
+        baseLabel = 'L'
+      } else if (liberoType === 'libero1') {
+        baseLabel = 'L1'
+      } else if (liberoType === 'libero2') {
+        baseLabel = 'L2'
+      } else if (isRedesignated) {
+        baseLabel = 'L'
+      } else {
+        baseLabel = 'L'
+      }
+    }
+
+    // Create display label with special formatting
+    const displayLiberoLabel = isLibero ? (
+      <span style={{ position: 'relative', display: 'inline-block' }}>
+        {baseLabel}
+        {isRedesignated && R}
+        {isUnable && (
+          <span style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            fontSize: '1.2em',
+            color: '#ef4444',
+            fontWeight: 900
+          }}>✕</span>
+        )}
+      </span>
+    ) : null
+
+    const showCaptainBadge = isCaptain || isCourtCaptain // Liberos can be captains too
+    const isLiberoCaptain = isLibero && isCaptain // Special styling for libero who is also team captain
+    const isLiberoCourtCaptain = isLibero && isCourtCaptain && !isCaptain // Libero designated as game captain
+
     return (
-      <div 
-        className="court-player"
-        style={{
-          position: 'relative',
-          width: 'clamp(28px, 7.8vw, 62px)', // 30% bigger than original clamp(28px, 6vw, 48px)
-          height: 'clamp(18px, 7.8vw, 62px)',
-          fontSize: 'clamp(12px, 3.25vw, 23px)' // 30% bigger than original clamp(12px, 2.5vw, 18px)
-        }}
-      >
+      <div style={{
+        position: 'relative',
+        aspectRatio: '1/1',
+        height: 'auto',
+        padding: '4px',
+        border: isRecentlySub ? '3px solid #f97316' : '1px solid rgba(255, 255, 255, 0.4)',
+        borderRadius: '50%',
+        background: isRecentlySub ? '#fdba74' : isLibero ? '#FFF8E7' : (team === leftTeam ? 'rgba(65, 66, 68, 0.9)' : 'rgba(12, 14, 100, 0.7)'),
+        color: isRecentlySub ? '#000' : isLibero ? '#000' : '#fff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '8vmin',
+        fontWeight: isRecentlySub ? 900 : 700,
+        boxShadow: '0 3px 12px rgba(0, 0, 0, 0.5)',
+        flexShrink: 0,
+        animation: isRecentlySub ? 'recentSubFlash 0.5s ease-in-out infinite' : undefined
+      }}>
+        {/* Serve ball indicator */}
         {shouldShowBall && (
-          <img 
-            src={mikasaVolleyball} 
-            alt="Volleyball" 
+          <img
+            src={ballImage} onError={(e) => e.target.src = mikasaVolleyball}
+            alt="Ball"
             style={{
               position: 'absolute',
-              left: team === leftTeam ? '-30px' : 'auto',
-              right: team === rightTeam ? '-30px' : 'auto',
+              // Position outside player box with vmin gap - responsive to viewport
+              left: team === rightTeam ? 'calc(100% + 1vmin)' : 'auto',
+              right: team === leftTeam ? 'calc(100% + 1vmin)' : 'auto',
               top: '50%',
               transform: 'translateY(-50%)',
-              width: '22px', // 40% smaller than 36px
-              height: '22px',
-              zIndex: 5,
-              filter: 'drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35))'
+              width: '7vmin',
+              aspectRatio: '1/1',
+              filter: 'drop-shadow(0 3px 8px rgba(0, 0, 0, 0.5))'
             }}
           />
         )}
-        {/* Beach volleyball: No position display */}
-        {isCaptain && (
-            <span 
-              className="court-player-captain"
-              style={{
-                width: '12px', // 20% smaller than 18px
-                height: '12px',
-                fontSize: '6px', // 20% smaller than 11px
-                bottom: '-6.4px', // 20% smaller offset
-                left: '-6.4px'
-              }}
-            >
-              C
-            </span>
+
+        {/* Top-left: Position badge */}
+        <span style={{
+          position: 'absolute',
+          top: '-6px',
+          left: '-6px',
+          width: 'clamp(16px, 4vw, 22px)',
+          height: 'clamp(16px, 4vw, 22px)',
+          background: 'rgba(15, 23, 42, 0.95)',
+          border: '2px solid rgba(255, 255, 255, 0.5)',
+          borderRadius: '4px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 'clamp(9px, 2vw, 12px)',
+          fontWeight: 700,
+          color: '#fff'
+        }}>
+          {position}
+        </span>
+
+        {/* Top-right: Replaced player badge (white for libero replacement, yellow for substitution) */}
+        {topRightBadge && (
+          <span style={{
+            position: 'absolute',
+            top: '-6px',
+            right: '-6px',
+            minWidth: 'clamp(16px, 4vw, 22px)',
+            height: 'clamp(16px, 4vw, 22px)',
+            padding: '0 3px',
+            background: isLiberoReplacementBadge ? '#ffffff' : '#fde047',
+            border: isLiberoReplacementBadge ? '2px solid rgba(0, 0, 0, 0.3)' : '2px solid rgba(0, 0, 0, 0.25)',
+            borderRadius: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 'clamp(9px, 2vw, 12px)',
+            fontWeight: 700,
+            color: '#0f172a',
+            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.25)'
+          }}>
+            {topRightBadge}
+          </span>
         )}
-        {number}
-        
-        {/* Sanction cards indicator */}
+
+        {/* Bottom-left: Libero indicator (L, L1, L2) - hide if libero-captain or libero-court-captain (show LC instead) */}
+        {displayLiberoLabel && !isLiberoCaptain && !isLiberoCourtCaptain && (
+          <span style={{
+            position: 'absolute',
+            bottom: '-6px',
+            left: '-6px',
+            minWidth: 'clamp(16px, 4vw, 22px)',
+            height: 'clamp(16px, 4vw, 22px)',
+            padding: '0 3px',
+            background: '#3b82f6',
+            border: '2px solid rgba(255, 255, 255, 0.3)',
+            borderRadius: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 'clamp(9px, 2vw, 12px)',
+            fontWeight: 700,
+            color: '#fff'
+          }}>
+            {displayLiberoLabel}
+          </span>
+        )}
+        {/* Captain badge (C or LC) - show for captains including libero-captains */}
+        {showCaptainBadge && (
+          <span style={{
+            position: 'absolute',
+            bottom: '-6px',
+            // If libero but not libero-captain/court-captain, position next to L badge; otherwise position at left
+            left: (isLibero && !isLiberoCaptain && !isLiberoCourtCaptain) ? 'calc(clamp(16px, 4vw, 22px) + 2px)' : '-6px',
+            minWidth: 'clamp(16px, 4vw, 22px)',
+            height: 'clamp(16px, 4vw, 22px)',
+            padding: '0 3px',
+            // Libero-captain: white bg; Libero-court-captain: blue bg; Regular/Court captain: black bg
+            background: isLiberoCaptain ? '#ffffff' : (isLiberoCourtCaptain ? '#3b82f6' : 'rgba(15, 23, 42, 0.95)'),
+            // Libero-captain: green border; Libero-court-captain: amber border; Regular captain: green border; Court captain: amber border
+            border: isLiberoCaptain ? '2px solid #22c55e' : (isLiberoCourtCaptain ? '2px solid #fbbf24' : (isCaptain ? '2px solid #22c55e' : '2px solid #fbbf24')),
+            borderRadius: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: (isLiberoCaptain || isLiberoCourtCaptain) ? 'clamp(8px, 1.8vw, 11px)' : 'clamp(9px, 2vw, 12px)',
+            fontWeight: 700,
+            // Libero-captain: green on white; Libero-court-captain: amber on blue; Regular captain: green; Court captain: amber
+            color: isLiberoCaptain ? '#22c55e' : (isLiberoCourtCaptain ? '#fbbf24' : (isCaptain ? '#22c55e' : '#fbbf24'))
+          }}>
+            {(isLiberoCaptain || isLiberoCourtCaptain) ? 'LC' : 'C'}
+          </span>
+        )}
+
+        {/* Bottom-right: Sanction indicators - same height as corner badges */}
         {(hasWarning || hasPenalty || hasExpulsion || hasDisqualification) && (
           <div style={{
             position: 'absolute',
-            bottom: '-6.4px', // 20% smaller offset
-            right: '-6.4px',
-            zIndex: 10
+            bottom: '-6px',
+            right: '-6px',
+            display: 'flex',
+            gap: '2px',
+            background: 'rgba(0, 0, 0, 0.6)',
+            padding: '2px 4px',
+            borderRadius: '4px',
+            height: 'clamp(16px, 4vw, 22px)',
+            alignItems: 'center'
           }}>
-            {hasExpulsion ? (
-              // Expulsion: overlapping rotated cards
-              <div style={{ position: 'relative', width: '9.6px', height: '9.6px' }}>
-                <div 
-                  style={{ 
-                    width: '6.4px', // 20% smaller than 8px
-                    height: '8.8px', // 20% smaller than 11px
-                    background: 'linear-gradient(160deg, #fde047, #facc15)',
-                    borderRadius: '1px',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.8)',
-                    position: 'absolute',
-                    left: '0',
-                    top: '0',
-                    transform: 'rotate(-8deg)',
-                    zIndex: 1
-                  }}
-                />
-                <div 
-                  style={{ 
-                    width: '6.4px', // 20% smaller than 8px
-                    height: '8.8px', // 20% smaller than 11px
-                    background: 'linear-gradient(160deg, #ef4444, #b91c1c)',
-                    borderRadius: '1px',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.8)',
-                    position: 'absolute',
-                    right: '0',
-                    top: '0',
-                    transform: 'rotate(8deg)',
-                    zIndex: 2
-                  }}
-                />
-              </div>
-            ) : (
-              // Other sanctions: separate cards
-              <div style={{ display: 'flex', gap: '1.6px' }}>
-                {(hasWarning || hasDisqualification) && (
-                  <div 
-                    style={{ 
-                      width: '6.4px', // 20% smaller than 8px
-                      height: '8.8px', // 20% smaller than 11px
-                      background: 'linear-gradient(160deg, #fde047, #facc15)',
-                      borderRadius: '1px',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.8)'
-                    }}
-                  />
-                )}
-                {(hasPenalty || hasDisqualification) && (
-                  <div 
-                    style={{ 
-                      width: '6.4px', // 20% smaller than 8px
-                      height: '8.8px', // 20% smaller than 11px
-                      background: 'linear-gradient(160deg, #ef4444, #b91c1c)',
-                      borderRadius: '1px',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.8)'
-                    }}
-                  />
-                )}
+            {hasWarning && (
+              <div style={{ width: 'clamp(10px, 2.5vw, 14px)', height: 'clamp(14px, 3.5vw, 20px)', background: '#fde047', borderRadius: '2px' }} />
+            )}
+            {(hasPenalty || hasDisqualification) && (
+              <div style={{ width: 'clamp(10px, 2.5vw, 14px)', height: 'clamp(14px, 3.5vw, 20px)', background: '#ef4444', borderRadius: '2px' }} />
+            )}
+            {hasExpulsion && (
+              <div style={{ display: 'flex', gap: '1px' }}>
+                <div style={{ width: 'clamp(8px, 2vw, 11px)', height: 'clamp(14px, 3.5vw, 20px)', background: '#fde047', borderRadius: '2px' }} />
+                <div style={{ width: 'clamp(8px, 2vw, 11px)', height: 'clamp(14px, 3.5vw, 20px)', background: '#ef4444', borderRadius: '2px' }} />
               </div>
             )}
           </div>
         )}
+
+        {/* Player number */}
+        {number}
       </div>
     )
   }
 
-  const dismissRefereeCall = async () => {
-    try {
-      await db.matches.update(matchId, {
-        refereeCallActive: false
-      })
-    } catch (error) {
-      console.error('Failed to dismiss referee call:', error)
-    }
+  // Check if match is finished - use isMatchEnded which includes liveState check
+  const isMatchFinished = isMatchEnded
+
+  // Match finished info - use liveState sets won for accurate data
+  const matchWinner = isMatchFinished && data
+    ? (liveStateSetsWonHome > liveStateSetsWonAway
+      ? (data.homeTeam?.name || 'Home')
+      : (data.awayTeam?.name || 'Away'))
+    : ''
+
+  const matchResult = isMatchFinished
+    ? `${Math.max(liveStateSetsWonHome, liveStateSetsWonAway)}:${Math.min(liveStateSetsWonHome, liveStateSetsWonAway)}`
+    : ''
+
+  // Show results when match is finished
+  if (isMatchFinished) {
+    return (
+      <div style={{
+        height: '100dvh', // Use dynamic viewport height (respects iOS browser chrome)
+        maxHeight: '100dvh',
+        width: '100vw',
+        maxWidth: '800px',
+        margin: '0 auto',
+        background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+        color: '#fff',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '24px',
+        padding: '20px',
+        overflow: 'hidden'
+      }}>
+        {/* Match Ended Banner */}
+        <div style={{
+          fontSize: '18px',
+          fontWeight: 500,
+          color: 'rgba(255, 255, 255, 0.7)',
+          textTransform: 'uppercase',
+          letterSpacing: '2px'
+        }}>
+          {t('refereeDashboard.matchHasEnded', 'The match has ended')}
+        </div>
+
+        {/* Winner and Result */}
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            fontSize: '32px',
+            fontWeight: 700,
+            marginBottom: '8px'
+          }}>
+            {matchWinner}
+          </div>
+          <div style={{
+            fontSize: '48px',
+            fontWeight: 800,
+            color: 'var(--accent)'
+          }}>
+            {matchResult}
+          </div>
+        </div>
+
+        <button
+          onClick={onExit}
+          style={{
+            padding: '12px 24px',
+            fontSize: '16px',
+            fontWeight: 600,
+            background: 'rgba(255, 255, 255, 0.1)',
+            color: '#fff',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            transition: 'background 0.2s',
+            marginTop: '16px'
+          }}
+        >
+          Exit
+        </button>
+      </div>
+    )
   }
 
   return (
     <div style={{
-      minHeight: '100vh',
-      maxHeight: '100vh',
-      overflow: 'hidden',
+      height: '100dvh', // Use dynamic viewport height (respects iOS browser chrome)
+      maxHeight: '100dvh',
+      width: '100vw',
+      maxWidth: '800px',
+      margin: '0 auto',
       background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
       color: '#fff',
-      padding: '6px',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       display: 'flex',
-      flexDirection: 'column'
+      flexDirection: 'column',
+      overflow: 'hidden'
     }}>
-      {/* Header */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '4px',
-        gap: '6px',
-        flexShrink: 0,
-        flexWrap: 'wrap',
-        minHeight: '28px'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', flex: '1 1 auto', minWidth: 0 }}>
-          <button
-            onClick={onExit}
-            style={{
-              padding: '4px 8px',
-              fontSize: '10px',
-              fontWeight: 600,
-              background: 'rgba(255,255,255,0.1)',
-              color: '#fff',
-              border: '1px solid rgba(255,255,255,0.2)',
-              borderRadius: '4px',
-              cursor: 'pointer'
-            }}
-          >
-            Exit
-          </button>
-          
-          {/* Scoresheet Connection Status */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            padding: '3px 6px',
-            background: 'rgba(255,255,255,0.05)',
-            borderRadius: '4px',
-            fontSize: '9px'
-          }}>
-            <div style={{
-              width: '6px',
-              height: '6px',
-              borderRadius: '50%',
-              background: isScoresheetConnected ? '#22c55e' : '#ef4444',
-              boxShadow: isScoresheetConnected 
-                ? '0 0 6px rgba(34, 197, 94, 0.6)' 
-                : 'none'
-            }} />
-            <span style={{ color: 'var(--muted)' }}>
-              Score
-            </span>
-          </div>
-
-          {/* Rally Status */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            padding: '3px 6px',
-            background: rallyStatus === 'in_play' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255,255,255,0.05)',
-            borderRadius: '4px',
-            fontSize: '9px',
-            border: rallyStatus === 'in_play' ? '1px solid rgba(34, 197, 94, 0.4)' : 'none'
-          }}>
-            <div style={{
-              width: '6px',
-              height: '6px',
-              borderRadius: '50%',
-              background: rallyStatus === 'in_play' ? '#22c55e' : '#6b7280',
-              boxShadow: rallyStatus === 'in_play' 
-                ? '0 0 6px rgba(34, 197, 94, 0.6)' 
-                : 'none'
-            }} />
-            <span style={{ color: rallyStatus === 'in_play' ? '#22c55e' : 'var(--muted)', fontWeight: rallyStatus === 'in_play' ? 600 : 400 }}>
-              {rallyStatus === 'in_play' ? 'Rally' : 'Idle'}
-            </span>
-          </div>
-
-          {/* Last Action */}
-          {lastAction && (
-            <div style={{
-              padding: '3px 6px',
-              background: 'rgba(255,255,255,0.05)',
-              borderRadius: '4px',
-              fontSize: '8px',
-              color: 'var(--muted)',
-              maxWidth: '100px',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              flexShrink: 1
-            }}>
-              {lastAction}
-            </div>
-          )}
-        </div>
-        
-        <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-          <button
-            onClick={() => setRefereeView('1st')}
-            style={{
-              padding: '4px 10px',
-              fontSize: '10px',
-              fontWeight: 600,
-              background: refereeView === '1st' ? 'var(--accent)' : 'rgba(255,255,255,0.1)',
-              color: refereeView === '1st' ? '#000' : '#fff',
-              border: refereeView === '1st' ? 'none' : '1px solid rgba(255,255,255,0.2)',
-              borderRadius: '4px',
-              cursor: 'pointer'
-            }}
-          >
-            1R
-          </button>
-          <button
-            onClick={() => setRefereeView('2nd')}
-            style={{
-              padding: '4px 10px',
-              fontSize: '10px',
-              fontWeight: 600,
-              background: refereeView === '2nd' ? 'var(--accent)' : 'rgba(255,255,255,0.1)',
-              color: refereeView === '2nd' ? '#000' : '#fff',
-              border: refereeView === '2nd' ? 'none' : '1px solid rgba(255,255,255,0.2)',
-              borderRadius: '4px',
-              cursor: 'pointer'
-            }}
-          >
-            2R
-          </button>
-        </div>
-      </div>
-
-      {/* Score Display */}
-      <div style={{
-        background: 'var(--bg-secondary)',
-        borderRadius: '6px',
-        padding: '8px',
-        marginBottom: '4px',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        flexDirection: 'column',
-        gap: '4px',
-        flexShrink: 0
-      }}>
-        {/* Team Names */}
-        <div style={{
-          display: 'flex',
-          width: '100%',
-          justifyContent: 'center',
-          alignItems: 'center',
-          gap: '12px'
-        }}>
-          <div style={{ textAlign: 'center', flex: 1 }}>
-            <span
-              className="team-badge"
-              style={{
-                background: leftColor,
-                color: isBrightColor(leftColor) ? '#000' : '#fff',
-                padding: '4px 10px',
-                borderRadius: '4px',
-                fontSize: '16px',
-                fontWeight: 700,
-                display: 'inline-block',
-                marginBottom: '2px',
-                minWidth: '32px',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)'
-              }}
-            >
-              {leftLabel}
-            </span>
-            <div style={{ fontSize: '11px', color: 'var(--muted)', lineHeight: 1 }}>
-              {leftTeamData?.name || (leftTeam === 'team_1' ? 'Team A' : 'Team B')}
-            </div>
-          </div>
-          
-          <div style={{ fontSize: '18px', color: 'var(--muted)', flexShrink: 0, padding: '0 8px' }}>-</div>
-          
-          <div style={{ textAlign: 'center', flex: 1 }}>
-            <span
-              className="team-badge"
-              style={{
-                background: rightColor,
-                color: isBrightColor(rightColor) ? '#000' : '#fff',
-                padding: '4px 10px',
-                borderRadius: '4px',
-                fontSize: '16px',
-                fontWeight: 700,
-                display: 'inline-block',
-                marginBottom: '2px',
-                minWidth: '32px',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)'
-              }}
-            >
-              {rightLabel}
-            </span>
-            <div style={{ fontSize: '11px', color: 'var(--muted)', lineHeight: 1 }}>
-              {rightTeamData?.name || (rightTeam === 'team_1' ? 'Team A' : 'Team B')}
-            </div>
-          </div>
-        </div>
-
-        {/* Score with Ball */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
-          {leftServing && (
-            <img
-              src={mikasaVolleyball}
-              alt="Serving team"
-              style={{
-                width: '20px',
-                height: '20px',
-                filter: 'drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35))'
-              }}
-            />
-          )}
-          <div style={{
-            fontSize: '36px',
-            fontWeight: 800,
-            color: 'var(--accent)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            lineHeight: 1
-          }}>
-            <span>{leftScore}</span>
-            <span style={{ fontSize: '24px', color: 'var(--muted)' }}>:</span>
-            <span>{rightScore}</span>
-          </div>
-          {rightServing && (
-            <img
-              src={mikasaVolleyball}
-              alt="Serving team"
-              style={{
-                width: '20px',
-                height: '20px',
-                filter: 'drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35))'
-              }}
-            />
-          )}
-        </div>
-        {/* Set Score */}
-        <div style={{
-          fontSize: '11px',
-          fontWeight: 600,
-          color: 'var(--muted)',
-          textAlign: 'center'
-        }}>
-          Sets: {leftSetScore}-{rightSetScore}
-        </div>
-      </div>
-
-      {/* Court */}
-      {(!leftLineup || Object.keys(leftLineup).length === 0) && (!rightLineup || Object.keys(rightLineup).length === 0) ? (
-        <div style={{
-          background: 'var(--bg-secondary)',
-          borderRadius: '8px',
-          padding: '40px',
-          textAlign: 'center',
-          color: 'var(--muted)',
-          fontSize: '14px',
-          marginBottom: '12px'
-        }}>
-          Waiting for lineups to be set...
-        </div>
-      ) : (
-        <div style={{ marginBottom: '4px', flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-          {/* Set Title */}
-          {data?.currentSet && (
-            <div style={{
-              textAlign: 'center',
-              fontSize: '12px',
-              fontWeight: 700,
-              marginBottom: '2px',
-              color: 'var(--text)',
-              flexShrink: 0
-            }}>
-              Set {data.currentSet.index}
-            </div>
-          )}
-          <div className="court" style={{ minHeight: '180px', maxHeight: '220px', flex: '0 0 auto' }}>
-          {/* Beach volleyball: No 3m line */}
-          
-          <div className="court-side court-side-left">
-            <div className="court-team court-team-left">
-              {/* Beach volleyball: Single row with 2 players, no positions */}
-              <div className="court-row" style={{ 
-                display: 'flex', 
-                flexDirection: 'row', 
-                justifyContent: 'space-around',
-                alignItems: 'center',
-                height: '100%',
-                width: '100%'
-              }}>
-                <PlayerCircle number={leftLineup?.['1'] || leftLineup?.['I']} position="" team={leftTeam} isServing={leftServing} />
-                <PlayerCircle number={leftLineup?.['2'] || leftLineup?.['II']} position="" team={leftTeam} isServing={leftServing} />
-              </div>
-            </div>
-          </div>
-          
-          <div className="court-net" />
-          
-          <div className="court-side court-side-right">
-            <div className="court-team court-team-right">
-              {/* Beach volleyball: Single row with 2 players, no positions */}
-              <div className="court-row" style={{ 
-                display: 'flex', 
-                flexDirection: 'row', 
-                justifyContent: 'space-around',
-                alignItems: 'center',
-                height: '100%',
-                width: '100%'
-              }}>
-                <PlayerCircle number={rightLineup?.['1'] || rightLineup?.['I']} position="" team={rightTeam} isServing={rightServing} />
-                <PlayerCircle number={rightLineup?.['2'] || rightLineup?.['II']} position="" team={rightTeam} isServing={rightServing} />
-              </div>
-            </div>
-          </div>
-        </div>
-        </div>
-      )}
-
-      {/* Team Statistics */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
-        gap: '6px',
-        flexShrink: 0
-      }}>
-        {/* Left Team Stats */}
-        <div style={{
-          background: 'var(--bg-secondary)',
-          borderRadius: '6px',
-          padding: '8px'
-        }}>
-          {/* TO and SUB Cards */}
-          <div style={{ display: 'flex', gap: '4px', marginBottom: '6px' }}>
-            <div 
-              onClick={() => activeTimeout && activeTimeout.team === leftTeam && setActiveTimeout(null)}
-              style={{ 
-                flex: 1, 
-                background: activeTimeout && activeTimeout.team === leftTeam 
-                  ? 'rgba(251, 191, 36, 0.15)' 
-                  : 'rgba(255, 255, 255, 0.05)', 
-                borderRadius: '4px', 
-                padding: '6px',
-                textAlign: 'center',
-                border: activeTimeout && activeTimeout.team === leftTeam
-                  ? '2px solid var(--accent)'
-                  : '1px solid rgba(255, 255, 255, 0.1)',
-                cursor: activeTimeout && activeTimeout.team === leftTeam ? 'pointer' : 'default'
-              }}
-            >
-              <div style={{ fontSize: '8px', color: 'var(--muted)', marginBottom: '1px' }}>TO</div>
-              {activeTimeout && activeTimeout.team === leftTeam ? (
-                <div style={{ 
-                  fontSize: '18px', 
-                  fontWeight: 800,
-                  color: 'var(--accent)',
-                  lineHeight: 1
-                }}>
-                  {activeTimeout.countdown}"
-                </div>
-              ) : (
-                <div style={{ 
-                  fontSize: '16px', 
-                  fontWeight: 700,
-                  color: leftStats.timeouts >= 2 ? '#ef4444' : 'inherit'
-                }}>
-                  {leftStats.timeouts}
-                </div>
-              )}
-            </div>
-            <div style={{ 
-              flex: 1, 
-              background: 'rgba(255, 255, 255, 0.05)', 
-              borderRadius: '4px', 
-              padding: '6px',
-              textAlign: 'center',
-              border: '1px solid rgba(255, 255, 255, 0.1)'
-            }}>
-              <div style={{ fontSize: '8px', color: 'var(--muted)', marginBottom: '1px' }}>SUB</div>
-              <div style={{ 
-                fontSize: '16px', 
-                fontWeight: 700,
-                    color: 'inherit'
-                  }}>—</div>
-            </div>
-          </div>
-          
-          {leftStats.sanctions.length > 0 && (
-            <div>
-              <div style={{ fontSize: '9px', color: 'var(--muted)', marginBottom: '3px', fontWeight: 600 }}>
-                Sanctions:
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '3px' }}>
-                {leftStats.sanctions.map((s, i) => (
-                  <div key={i} style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '1px',
-                    padding: '3px',
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    borderRadius: '3px',
-                    border: '1px solid rgba(255, 255, 255, 0.08)'
-                  }}>
-                    {s.type === 'improper_request' ? (
-                      <div style={{
-                        fontSize: '14px',
-                        fontWeight: 700,
-                        color: '#9ca3af',
-                        width: '12px',
-                        height: '14px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>✕</div>
-                    ) : s.type === 'delay_warning' ? (
-                      <div style={{
-                        width: '12px',
-                        height: '14px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        position: 'relative'
-                      }}>
-                        <svg width="11" height="11" viewBox="0 0 14 14" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}>
-                          <circle cx="7" cy="7" r="6" fill="#fbbf24" stroke="#d97706" strokeWidth="1"/>
-                          <line x1="7" y1="7" x2="7" y2="4" stroke="#000" strokeWidth="1.5" strokeLinecap="round"/>
-                          <line x1="7" y1="7" x2="9.5" y2="7" stroke="#000" strokeWidth="1.5" strokeLinecap="round"/>
-                          <circle cx="7" cy="7" r="0.8" fill="#000"/>
-                        </svg>
-                      </div>
-                    ) : s.type === 'delay_penalty' ? (
-                      <div style={{
-                        width: '12px',
-                        height: '14px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        position: 'relative'
-                      }}>
-                        <svg width="11" height="11" viewBox="0 0 14 14" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}>
-                          <circle cx="7" cy="7" r="6" fill="#ef4444" stroke="#b91c1c" strokeWidth="1"/>
-                          <line x1="7" y1="7" x2="7" y2="4" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/>
-                          <line x1="7" y1="7" x2="9.5" y2="7" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/>
-                          <circle cx="7" cy="7" r="0.8" fill="#fff"/>
-                        </svg>
-                      </div>
-                    ) : s.type === 'disqualification' ? (
-                      <div style={{ display: 'flex', gap: '1.5px', alignItems: 'center' }}>
-                        <div style={{ 
-                          width: '8px', 
-                          height: '12px',
-                          flexShrink: 0,
-                          borderRadius: '1.5px',
-                          background: 'linear-gradient(160deg, #fde047, #facc15)'
-                        }}></div>
-                        <div style={{ 
-                          width: '8px', 
-                          height: '12px',
-                          flexShrink: 0,
-                          borderRadius: '1.5px',
-                          background: 'linear-gradient(160deg, #ef4444, #b91c1c)'
-                        }}></div>
-                      </div>
-                    ) : s.type === 'expulsion' ? (
-                      <div style={{ position: 'relative', width: '13px', height: '14px' }}>
-                        <div style={{ 
-                          width: '8px', 
-                          height: '12px',
-                          position: 'absolute',
-                          left: '0',
-                          top: '1px',
-                          transform: 'rotate(-8deg)',
-                          zIndex: 1,
-                          borderRadius: '1.5px',
-                          background: 'linear-gradient(160deg, #fde047, #facc15)'
-                        }}></div>
-                        <div style={{ 
-                          width: '8px', 
-                          height: '12px',
-                          position: 'absolute',
-                          right: '0',
-                          top: '1px',
-                          transform: 'rotate(8deg)',
-                          zIndex: 2,
-                          borderRadius: '1.5px',
-                          background: 'linear-gradient(160deg, #ef4444, #b91c1c)'
-                        }}></div>
-                      </div>
-                    ) : (
-                      <div style={{ 
-                        width: '12px', 
-                        height: '14px',
-                        flexShrink: 0,
-                        borderRadius: '1.5px',
-                        background: s.type === 'warning' 
-                          ? 'linear-gradient(160deg, #fde047, #facc15)'
-                          : 'linear-gradient(160deg, #ef4444, #b91c1c)'
-                      }}></div>
-                    )}
-                    <div style={{ fontSize: '7px', fontWeight: 600, textAlign: 'center', marginTop: '1px' }}>
-                      {s.type === 'improper_request' ? 'IR' :
-                       s.type === 'delay_warning' ? 'DW' :
-                       s.type === 'delay_penalty' ? 'DP' :
-                       s.type === 'warning' ? 'W' :
-                       s.type === 'penalty' ? 'P' :
-                       s.type === 'expulsion' ? 'E' :
-                       s.type === 'disqualification' ? 'D' : s.type}
-                    </div>
-                    <div style={{ fontSize: '8px', fontWeight: 600, color: 'var(--text)' }}>
-                      {s.target || 'Team'}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Right Team Stats */}
-        <div style={{
-          background: 'var(--bg-secondary)',
-          borderRadius: '6px',
-          padding: '8px'
-        }}>
-          {/* TO and SUB Cards */}
-          <div style={{ display: 'flex', gap: '4px', marginBottom: '6px' }}>
-            <div 
-              onClick={() => activeTimeout && activeTimeout.team === rightTeam && setActiveTimeout(null)}
-              style={{ 
-                flex: 1, 
-                background: activeTimeout && activeTimeout.team === rightTeam 
-                  ? 'rgba(251, 191, 36, 0.15)' 
-                  : 'rgba(255, 255, 255, 0.05)', 
-                borderRadius: '4px', 
-                padding: '6px',
-                textAlign: 'center',
-                border: activeTimeout && activeTimeout.team === rightTeam
-                  ? '2px solid var(--accent)'
-                  : '1px solid rgba(255, 255, 255, 0.1)',
-                cursor: activeTimeout && activeTimeout.team === rightTeam ? 'pointer' : 'default'
-              }}
-            >
-              <div style={{ fontSize: '8px', color: 'var(--muted)', marginBottom: '1px' }}>TO</div>
-              {activeTimeout && activeTimeout.team === rightTeam ? (
-                <div style={{ 
-                  fontSize: '18px', 
-                  fontWeight: 800,
-                  color: 'var(--accent)',
-                  lineHeight: 1
-                }}>
-                  {activeTimeout.countdown}"
-                </div>
-              ) : (
-                <div style={{ 
-                  fontSize: '16px', 
-                  fontWeight: 700,
-                  color: rightStats.timeouts >= 2 ? '#ef4444' : 'inherit'
-                }}>
-                  {rightStats.timeouts}
-                </div>
-              )}
-            </div>
-            <div style={{ 
-              flex: 1, 
-              background: 'rgba(255, 255, 255, 0.05)', 
-              borderRadius: '4px', 
-              padding: '6px',
-              textAlign: 'center',
-              border: '1px solid rgba(255, 255, 255, 0.1)'
-            }}>
-              <div style={{ fontSize: '8px', color: 'var(--muted)', marginBottom: '1px' }}>SUB</div>
-              <div style={{ 
-                fontSize: '16px', 
-                fontWeight: 700,
-                    color: 'inherit'
-                  }}>—</div>
-            </div>
-          </div>
-          
-          {rightStats.sanctions.length > 0 && (
-            <div>
-              <div style={{ fontSize: '9px', color: 'var(--muted)', marginBottom: '3px', fontWeight: 600 }}>
-                Sanctions:
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '3px' }}>
-                {rightStats.sanctions.map((s, i) => (
-                  <div key={i} style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '1px',
-                    padding: '3px',
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    borderRadius: '3px',
-                    border: '1px solid rgba(255, 255, 255, 0.08)'
-                  }}>
-                    {s.type === 'improper_request' ? (
-                      <div style={{
-                        fontSize: '14px',
-                        fontWeight: 700,
-                        color: '#9ca3af',
-                        width: '12px',
-                        height: '14px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>✕</div>
-                    ) : s.type === 'delay_warning' ? (
-                      <div style={{
-                        width: '12px',
-                        height: '14px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        position: 'relative'
-                      }}>
-                        <svg width="11" height="11" viewBox="0 0 14 14" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}>
-                          <circle cx="7" cy="7" r="6" fill="#fbbf24" stroke="#d97706" strokeWidth="1"/>
-                          <line x1="7" y1="7" x2="7" y2="4" stroke="#000" strokeWidth="1.5" strokeLinecap="round"/>
-                          <line x1="7" y1="7" x2="9.5" y2="7" stroke="#000" strokeWidth="1.5" strokeLinecap="round"/>
-                          <circle cx="7" cy="7" r="0.8" fill="#000"/>
-                        </svg>
-                      </div>
-                    ) : s.type === 'delay_penalty' ? (
-                      <div style={{
-                        width: '12px',
-                        height: '14px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        position: 'relative'
-                      }}>
-                        <svg width="11" height="11" viewBox="0 0 14 14" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}>
-                          <circle cx="7" cy="7" r="6" fill="#ef4444" stroke="#b91c1c" strokeWidth="1"/>
-                          <line x1="7" y1="7" x2="7" y2="4" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/>
-                          <line x1="7" y1="7" x2="9.5" y2="7" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/>
-                          <circle cx="7" cy="7" r="0.8" fill="#fff"/>
-                        </svg>
-                      </div>
-                    ) : s.type === 'disqualification' ? (
-                      <div style={{ display: 'flex', gap: '1.5px', alignItems: 'center' }}>
-                        <div style={{ 
-                          width: '8px', 
-                          height: '12px',
-                          flexShrink: 0,
-                          borderRadius: '1.5px',
-                          background: 'linear-gradient(160deg, #fde047, #facc15)'
-                        }}></div>
-                        <div style={{ 
-                          width: '8px', 
-                          height: '12px',
-                          flexShrink: 0,
-                          borderRadius: '1.5px',
-                          background: 'linear-gradient(160deg, #ef4444, #b91c1c)'
-                        }}></div>
-                      </div>
-                    ) : s.type === 'expulsion' ? (
-                      <div style={{ position: 'relative', width: '13px', height: '14px' }}>
-                        <div style={{ 
-                          width: '8px', 
-                          height: '12px',
-                          position: 'absolute',
-                          left: '0',
-                          top: '1px',
-                          transform: 'rotate(-8deg)',
-                          zIndex: 1,
-                          borderRadius: '1.5px',
-                          background: 'linear-gradient(160deg, #fde047, #facc15)'
-                        }}></div>
-                        <div style={{ 
-                          width: '8px', 
-                          height: '12px',
-                          position: 'absolute',
-                          right: '0',
-                          top: '1px',
-                          transform: 'rotate(8deg)',
-                          zIndex: 2,
-                          borderRadius: '1.5px',
-                          background: 'linear-gradient(160deg, #ef4444, #b91c1c)'
-                        }}></div>
-                      </div>
-                    ) : (
-                      <div style={{ 
-                        width: '12px', 
-                        height: '14px',
-                        flexShrink: 0,
-                        borderRadius: '1.5px',
-                        background: s.type === 'warning' 
-                          ? 'linear-gradient(160deg, #fde047, #facc15)'
-                          : 'linear-gradient(160deg, #ef4444, #b91c1c)'
-                      }}></div>
-                    )}
-                    <div style={{ fontSize: '7px', fontWeight: 600, textAlign: 'center', marginTop: '1px' }}>
-                      {s.type === 'improper_request' ? 'IR' :
-                       s.type === 'delay_warning' ? 'DW' :
-                       s.type === 'delay_penalty' ? 'DP' :
-                       s.type === 'warning' ? 'W' :
-                       s.type === 'penalty' ? 'P' :
-                       s.type === 'expulsion' ? 'E' :
-                       s.type === 'disqualification' ? 'D' : s.type}
-                    </div>
-                    <div style={{ fontSize: '8px', fontWeight: 600, color: 'var(--text)' }}>
-                      {s.target || 'Team'}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-
-      {/* Referee Call Alert Modal */}
-      {data?.match?.refereeCallActive && (
+      {/* Narrow screen blocking overlay */}
+      {(viewportWidth < 357 || viewportHeight < 650) && (
         <div style={{
           position: 'fixed',
           top: 0,
           left: 0,
           right: 0,
           bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.95)',
+          zIndex: 99999,
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'rgba(0, 0, 0, 0.8)',
-          zIndex: 9999,
-          animation: 'blink 1s infinite'
+          padding: '24px',
+          textAlign: 'center'
         }}>
-          <style>{`
-            @keyframes blink {
-              0%, 50% { opacity: 1; }
-              51%, 100% { opacity: 0.4; }
-            }
-          `}</style>
-          <div style={{
-            background: '#dc2626',
-            borderRadius: '12px',
-            padding: '32px',
-            maxWidth: '400px',
-            width: '90%',
-            textAlign: 'center',
-            border: '4px solid #991b1b',
-            boxShadow: '0 0 40px rgba(220, 38, 38, 0.8)'
+          <div style={{ fontSize: '64px', marginBottom: '24px' }}>📱</div>
+          <h2 style={{
+            fontSize: '24px',
+            fontWeight: 700,
+            color: '#ffffff',
+            marginBottom: '16px'
           }}>
-            <div style={{
-              fontSize: '48px',
-              marginBottom: '16px'
-            }}>
-              ⚠️
-            </div>
-            <h2 style={{
-              fontSize: '24px',
-              fontWeight: 700,
-              marginBottom: '16px',
-              color: '#fff'
-            }}>
-              Scorer Requires Attention
-            </h2>
-            <p style={{
+            {t('common.screenTooSmall', 'Screen Too Small')}
+          </h2>
+          <p style={{
+            fontSize: '16px',
+            color: '#9ca3af',
+            maxWidth: '300px',
+            lineHeight: 1.5,
+            marginBottom: '24px'
+          }}>
+            {t('common.screenTooSmallMessage', 'This app requires a minimum screen width of 357px. Please use a device with a wider screen or rotate your device to landscape mode.')}
+          </p>
+          <button
+            onClick={() => {
+              if (document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen().catch(() => { })
+              }
+            }}
+            style={{
+              padding: '12px 24px',
               fontSize: '16px',
-              marginBottom: '24px',
-              color: 'rgba(255, 255, 255, 0.9)'
+              fontWeight: 600,
+              background: 'var(--accent, #3b82f6)',
+              color: '#000',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            <span>⛶</span>
+            <span>{t('common.tryFullscreen', 'Try Fullscreen')}</span>
+          </button>
+          <p style={{
+            fontSize: '12px',
+            color: '#6b7280',
+            marginTop: '12px'
+          }}>
+            {t('common.fullscreenHint', 'Fullscreen may provide more space by hiding browser UI.')}
+          </p>
+        </div>
+      )}
+
+      {/* Debug overlay - triple-tap to show */}
+      {!isMasterMode && <WsDebugOverlay matchId={matchId} />}
+
+
+
+      {/* Setter Selection Modal for Advanced Mode */}
+      {setterSelectionModal && (
+        <div
+          onClick={() => setSetterSelectionModal(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.9)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            cursor: 'pointer'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+              borderRadius: '24px',
+              padding: '32px',
+              textAlign: 'center',
+              border: '2px solid rgba(139, 92, 246, 0.5)',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+              minWidth: '320px',
+              maxWidth: '90vw',
+              maxHeight: '80vh',
+              overflow: 'auto'
+            }}
+          >
+            <div style={{
+              fontSize: '18px',
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              letterSpacing: '2px',
+              color: '#8b5cf6',
+              marginBottom: '8px'
             }}>
-              The scorer has requested referee assistance
-            </p>
-            <button
-              onClick={dismissRefereeCall}
-              style={{
-                padding: '14px 32px',
-                fontSize: '16px',
-                fontWeight: 600,
-                background: '#fff',
-                color: '#dc2626',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
-              }}
-            >
-              Acknowledged
-            </button>
+              🏐 Select Setter
+            </div>
+            <div style={{
+              fontSize: '14px',
+              color: 'rgba(255, 255, 255, 0.7)',
+              marginBottom: '24px'
+            }}>
+              {setterSelectionModal === 'left' ? leftTeamData?.name : rightTeamData?.name}
+            </div>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '12px',
+              marginBottom: '20px'
+            }}>
+              {(() => {
+                const teamLineup = setterSelectionModal === 'left' ? leftLineup : rightLineup
+                const currentSetter = setterSelectionModal === 'left' ? setterNumber.left : setterNumber.right
+                if (!teamLineup) return <div style={{ gridColumn: '1/-1', color: 'rgba(255,255,255,0.5)' }}>No lineup available</div>
+
+                return Object.entries(teamLineup).map(([position, posData]) => {
+                  // Handle both rich format (posData is object with number) and legacy format (posData is number)
+                  const playerNum = typeof posData === 'object' && posData?.number !== undefined ? posData.number : posData
+                  return (
+                    <button
+                      key={position}
+                      onClick={() => {
+                        const side = setterSelectionModal
+                        setSetterNumber(prev => ({ ...prev, [side]: playerNum }))
+                        setAdvancedMode(prev => ({ ...prev, [side]: true }))
+                        setSetterSelectionModal(null)
+                      }}
+                      style={{
+                        padding: '16px 12px',
+                        fontSize: '20px',
+                        fontWeight: 700,
+                        background: String(playerNum) === String(currentSetter)
+                          ? 'rgba(139, 92, 246, 0.4)'
+                          : 'rgba(255, 255, 255, 0.1)',
+                        color: String(playerNum) === String(currentSetter) ? '#a78bfa' : '#fff',
+                        border: String(playerNum) === String(currentSetter)
+                          ? '2px solid #8b5cf6'
+                          : '1px solid rgba(255, 255, 255, 0.2)',
+                        borderRadius: '12px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '4px',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>{position}</span>
+                      <span>#{playerNum}</span>
+                    </button>
+                  )
+                })
+              })()}
+            </div>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button
+                onClick={() => {
+                  const side = setterSelectionModal
+                  setAdvancedMode(prev => ({ ...prev, [side]: false }))
+                  setSetterNumber(prev => ({ ...prev, [side]: null }))
+                  setSetterSelectionModal(null)
+                }}
+                style={{
+                  padding: '10px 20px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  background: 'rgba(239, 68, 68, 0.2)',
+                  color: '#ef4444',
+                  border: '1px solid rgba(239, 68, 68, 0.4)',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                Exit Advanced
+              </button>
+              <button
+                onClick={() => setSetterSelectionModal(null)}
+                style={{
+                  padding: '10px 20px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  color: '#fff',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
 
+      {/* SECTION 1: Header - 40px */}
+      <SimpleHeader
+        toggleOptions={[
+          { label: `1 ${t('refereeDashboard.refAbbr')}`, active: refereeView === '1st', onClick: () => setRefereeView('1st') },
+          { label: `2 ${t('refereeDashboard.refAbbr')}`, active: refereeView === '2nd', onClick: () => setRefereeView('2nd') }
+        ]}
+        onFullscreen={toggleFullscreen}
+        isFullscreen={isFullscreen}
+        menuItems={[
+          // Screen options
+          { header: t('refereeDashboard.screenOptions') },
+          {
+            icon: wakeLockActive ? '☀️' : '🌙',
+            label: t('refereeDashboard.keepScreenOn'),
+            onClick: toggleWakeLock,
+            toggle: wakeLockActive,
+            keepOpen: true
+          },
+          { divider: true },
+          // Connection (only if not master mode)
+          ...(!isMasterMode ? [
+            { header: t('refereeDashboard.connection.title') },
+            {
+              icon: '🔄',
+              label: t('refereeDashboard.connection.auto'),
+              onClick: () => setConnectionType(CONNECTION_TYPES.AUTO),
+              active: connectionType === CONNECTION_TYPES.AUTO
+            },
+            {
+              icon: '🗄️',
+              label: t('refereeDashboard.connection.dbOnly'),
+              onClick: () => setConnectionType(CONNECTION_TYPES.SUPABASE),
+              active: connectionType === CONNECTION_TYPES.SUPABASE,
+              color: '#22c55e'
+            },
+            {
+              icon: '📡',
+              label: t('refereeDashboard.connection.directOnly'),
+              onClick: () => setConnectionType(CONNECTION_TYPES.WEBSOCKET),
+              active: connectionType === CONNECTION_TYPES.WEBSOCKET,
+              color: '#3b82f6'
+            },
+            { divider: true }
+          ] : []),
+          // Test mode indicator
+          ...(isMasterMode ? [
+            {
+              icon: '⚠️',
+              label: t('refereeDashboard.testMode'),
+              disabled: true,
+              color: '#fbbf24'
+            },
+            { divider: true }
+          ] : []),
+          // Refresh (always visible)
+          {
+            icon: '🔄',
+            label: t('refereeDashboard.refresh'),
+            onClick: fetchFreshData,
+            color: '#3b82f6'
+          },
+          { divider: true },
+          // Exit
+          {
+            icon: '✕',
+            label: t('refereeDashboard.exit'),
+            onClick: onExit,
+            color: '#ef4444'
+          }
+        ]}
+      />
 
-    </div>
+      {/* Main content wrapper - percentage-based heights */}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        minHeight: 0
+      }}>
+
+        {/* SECTION 2A: Set Counter Row - 8% */}
+        <div style={{ flex: '0 0 10%', padding: 'clamp(4px, 1vw, 8px) clamp(8px, 2vw, 16px)', background: 'rgba(0, 0, 0, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', width: '100%', minHeight: 0, overflow: 'hidden' }}>
+          {/* Left: Team Name (centered in its space) + A/B */}
+          <div style={{ flex: '1 1 0', display: 'flex', alignItems: 'center', gap: 'clamp(6px, 1.5vw, 12px)', minWidth: 0 }}>
+            <div ref={section2AContainerRef} style={{ flex: '1 1 0', display: 'flex', justifyContent: 'center', minWidth: 0, overflow: 'hidden' }}>
+              <div style={{
+                fontSize: `${section2AFontSize.fontSize}px`,
+                fontWeight: 700,
+                background: leftColor,
+                color: isBrightColor(leftColor) ? '#000' : '#fff',
+                padding: 'clamp(4px, 1vw, 8px) clamp(10px, 2.5vw, 18px)',
+                borderRadius: '6px',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: '100%'
+              }}>
+                {leftShortName}
+              </div>
+            </div>
+            <div style={{ padding: 'clamp(4px, 1vw, 8px) clamp(10px, 2.5vw, 18px)', background: leftColor, color: isBrightColor(leftColor) ? '#000' : '#fff', borderRadius: '6px', fontSize: 'clamp(18px, 4.5vw, 32px)', fontWeight: 800, flexShrink: 0 }}>{leftLabel}</div>
+          </div>
+
+          {/* Center: Set scores + SET n */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(6px, 1vw, 12px)', flexShrink: 0, marginLeft: '8px', marginRight: '8px' }}>
+            <div style={{
+              padding: 'clamp(4px, 1vw, 8px) clamp(12px, 3vw, 20px)', background: 'rgba(255, 255, 255, 0.15)', borderRadius: '8px',
+              fontSize: 'clamp(12px, 3vw, 36px)', fontWeight: 800
+            }}>
+              {leftSetsWon}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <span style={{ fontSize: '3vmin', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>SET</span>
+              <span style={{ fontSize: '4vmin', fontWeight: 800 }}>{displaySetIndex}</span>
+            </div>
+            <div style={{
+              padding: 'clamp(4px, 1vw, 8px) clamp(12px, 3vw, 20px)', background: 'rgba(255, 255, 255, 0.15)',
+              borderRadius: '8px', fontSize: 'clamp(12px, 3vw, 36px)', fontWeight: 800
+            }}>{rightSetsWon}</div>
+          </div>
+
+          {/* Right: A/B + Team Name (centered in its space) */}
+          <div style={{ flex: '1 1 0', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 'clamp(6px, 1.5vw, 12px)', minWidth: 0 }}>
+            <div style={{ padding: 'clamp(4px, 1vw, 8px) clamp(10px, 2.5vw, 18px)', background: rightColor, color: isBrightColor(rightColor) ? '#000' : '#fff', borderRadius: '6px', fontSize: 'clamp(18px, 4.5vw, 32px)', fontWeight: 800, flexShrink: 0 }}>{rightLabel}</div>
+            <div style={{ flex: '1 1 0', display: 'flex', justifyContent: 'center', minWidth: 0, overflow: 'hidden' }}>
+              <div
+                style={{
+                  fontSize: `${section2AFontSize.fontSize}px`,
+                  fontWeight: 700,
+                  background: rightColor,
+                  color: isBrightColor(rightColor) ? '#000' : '#fff',
+                  padding: 'clamp(4px, 1vw, 8px) clamp(10px, 2.5vw, 18px)',
+                  borderRadius: '6px',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  maxWidth: '100%',
+                  minWidth: 0,
+                }}
+              >
+                <span
+                  style={{
+                    display: 'inline-block',
+                    minWidth: 0,
+                    maxWidth: '100%',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    verticalAlign: 'bottom',
+                    fontSize: 'inherit',
+                    fontWeight: 'inherit',
+                  }}
+                >
+                  {rightShortName}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* SECTION 2B: Score & Serve - 12% */}
+        <div style={{
+          flex: '0 0 15%',
+          padding: '4px 0',
+          background: 'rgba(0, 0, 0, 0.2)',
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '100%',
+          maxWidth: '100%',
+          overflow: 'hidden',
+          minHeight: 0,
+          height: '100%'
+        }}>
+          {/* Score row: SERVE indicator left | Score left | : | Score right | SERVE indicator right */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '100%',
+            maxWidth: '100%'
+          }}>
+            {/* LEFT SERVE indicator - fixed width to keep score centered */}
+            <div style={{
+              flex: '0 0 clamp(60px, 15vw, 120px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              {leftServing && (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '2px'
+                }}>
+                  <span style={{ fontSize: '3vmin', color: 'var(--accent)', fontWeight: 700 }}>SERVE</span>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '1vmin',
+                    background: 'rgba(34, 197, 94, 0.15)',
+                    border: '2px solid var(--accent)',
+                    borderRadius: '8px',
+                    aspectRatio: '1/1',
+                    minWidth: '6vmin'
+                  }}>
+                    <span style={{ fontSize: '7vmin', paddingBottom: '0.5vmin', fontWeight: 700, color: 'var(--accent)', lineHeight: 0.8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {typeof leftLineup?.I === 'object' ? leftLineup?.I?.number : leftLineup?.I || ''}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Score section - takes remaining space */}
+            <div style={{
+              flex: '1 1 auto',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 'clamp(4px, 1vw, 12px)'
+            }}>
+              {/* Left Score */}
+              <span style={{
+                fontFamily: getScoreFont(),
+                fontSize: '15vmin',
+                fontWeight: 600,
+                lineHeight: 1,
+                textAlign: 'right'
+              }}>
+                {leftDisplayScore}
+              </span>
+
+              {/* Colon */}
+              <span style={{
+                fontFamily: getScoreFont(), fontSize: '11vmin', fontWeight: 800, color: 'var(--accent)', lineHeight: 1, marginTop: '-0.5vmin'
+              }}>:</span>
+
+              {/* Right Score */}
+              < span style={{
+                fontFamily: getScoreFont(),
+                fontSize: '15vmin',
+                fontWeight: 600,
+                lineHeight: 1,
+                textAlign: 'left'
+              }}>
+                {rightDisplayScore}
+              </span>
+            </div>
+
+            {/* RIGHT SERVE indicator - fixed width to keep score centered */}
+            <div style={{
+              flex: '0 0 clamp(60px, 15vw, 120px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              {rightServing && (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '2px'
+                }}>
+                  <span style={{ fontSize: '3vmin', color: 'var(--accent)', fontWeight: 700 }}>SERVE</span>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '0.5vmin',
+                    background: 'rgba(34, 197, 94, 0.15)',
+                    border: '2px solid var(--accent)',
+                    borderRadius: '8px',
+                    aspectRatio: '1/1',
+                    minWidth: '6vmin'
+                  }}>
+                    <span style={{ fontSize: '8vmin', fontWeight: 700, color: 'var(--accent)', lineHeight: '1', textAlign: 'center' }}>
+                      {typeof rightLineup?.I === 'object' ? rightLineup?.I?.number : rightLineup?.I || ''}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* SECTION 3: Court Area - 40% (includes advanced mode buttons) */}
+        <div style={{
+          flex: '0 0 40%',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          minHeight: 0
+        }}>
+          {/* Advanced Mode Buttons - Above Court */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '2px 8px',
+            background: 'rgba(0, 0, 0, 0.15)',
+            flex: '0 0 auto'
+          }}>
+            {/* Left team advanced mode button - only show when receiving and 2R view */}
+            <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+              {refereeView === '2nd' && !leftServing && leftLineup && (
+                <button
+                  onClick={() => setSetterSelectionModal('left')}
+                  style={{
+                    padding: '4px 12px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    background: advancedMode.left ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255, 255, 255, 0.1)',
+                    color: advancedMode.left ? '#a78bfa' : 'rgba(255, 255, 255, 0.7)',
+                    border: advancedMode.left ? '1px solid rgba(139, 92, 246, 0.5)' : '1px solid rgba(255, 255, 255, 0.2)',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  {advancedMode.left ? (
+                    <>
+                      <span style={{ color: '#8b5cf6' }}>P{getSetterPosition(leftLineup, setterNumber.left) || '?'}</span>
+                      <span>#{setterNumber.left}</span>
+                    </>
+                  ) : (
+                    '⚙️ Advanced'
+                  )}
+                </button>
+              )}
+            </div>
+            {/* Right team advanced mode button - only show when receiving and 2R view */}
+            <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+              {refereeView === '2nd' && !rightServing && rightLineup && (
+                <button
+                  onClick={() => setSetterSelectionModal('right')}
+                  style={{
+                    padding: '4px 12px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    background: advancedMode.right ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255, 255, 255, 0.1)',
+                    color: advancedMode.right ? '#a78bfa' : 'rgba(255, 255, 255, 0.7)',
+                    border: advancedMode.right ? '1px solid rgba(139, 92, 246, 0.5)' : '1px solid rgba(255, 255, 255, 0.2)',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  {advancedMode.right ? (
+                    <>
+                      <span style={{ color: '#8b5cf6' }}>P{getSetterPosition(rightLineup, setterNumber.right) || '?'}</span>
+                      <span>#{setterNumber.right}</span>
+                    </>
+                  ) : (
+                    '⚙️ Advanced'
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Court visualization - takes remaining space in 40% */}
+          <div style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+            minHeight: 0
+          }}>
+            <div style={{
+              width: '98%',
+              height: '98%',
+              position: 'relative',
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              background: 'linear-gradient(90deg, rgba(234, 179, 8, 0.12), rgba(234, 179, 8, 0.08))',
+              border: '2px solid rgba(255, 255, 255, 0.1)',
+              overflow: 'hidden'
+            }}>
+              {/* Net */}
+              <div style={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                left: '50%',
+                width: '6px',
+                transform: 'translateX(-50%)',
+                background: 'repeating-linear-gradient(to bottom, rgba(248, 250, 252, 0.85), rgba(248, 250, 252, 0.85) 4px, rgba(148, 163, 184, 0.45) 4px, rgba(148, 163, 184, 0.45) 8px)',
+                borderRadius: '3px',
+                boxShadow: '0 0 10px rgba(241, 245, 249, 0.15)',
+                zIndex: 2
+              }} />
+
+              {/* Attack lines */}
+              <div style={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                left: 'calc(50% - 22.667%)',
+                width: '2px',
+                background: 'rgba(255, 255, 255, 0.15)',
+                zIndex: 1
+              }} />
+              <div style={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                left: 'calc(50% + 22.667%)',
+                width: '2px',
+                background: 'rgba(255, 255, 255, 0.15)',
+                zIndex: 1
+              }} />
+
+              {/* Left side */}
+              <div
+                ref={(el) => { courtRef.current.left = el }}
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, 'left')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  position: 'relative',
+                  height: '100%'
+                }}
+              >
+                {/* Circular arrows toggle for reception mode - only show when in advanced mode and receiving */}
+                {advancedMode.left && !leftServing && (
+                  <button
+                    onClick={() => toggleReceptionMode('left')}
+                    style={{
+                      position: 'absolute',
+                      bottom: '8px',
+                      left: '8px',
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      background: receptionMode.left === 'reception' ? 'rgba(139, 92, 246, 0.4)' : 'rgba(255, 255, 255, 0.15)',
+                      border: receptionMode.left === 'reception' ? '2px solid #8b5cf6' : '1px solid rgba(255, 255, 255, 0.3)',
+                      color: receptionMode.left === 'reception' ? '#a78bfa' : 'rgba(255, 255, 255, 0.7)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '16px',
+                      zIndex: 10,
+                      transition: 'all 0.2s'
+                    }}
+                    title={receptionMode.left === 'reception' ? 'Switch to standard view' : 'Switch to reception formation'}
+                  >
+                    🔄
+                  </button>
+                )}
+
+                {/* Standard grid layout when NOT in advanced mode OR when serving OR when in standard mode */}
+                {(!advancedMode.left || leftServing || receptionMode.left === 'standard') ? (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1.5fr 1fr',
+                    gap: 'clamp(4px, 2vw, 12px)',
+                    width: '100%',
+                    height: '100%',
+                    padding: 'clamp(4px, 2vw, 12px)'
+                  }}>
+                    {/* Back row (V, VI, I) - left side of left court */}
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-around',
+                      alignItems: 'center'
+                    }}>
+                      <PlayerCircle positionData={leftLineup?.V} position="V" team={leftTeam} isServing={leftServing} />
+                      <PlayerCircle positionData={leftLineup?.VI} position="VI" team={leftTeam} isServing={leftServing} />
+                      <PlayerCircle positionData={leftLineup?.I} position="I" team={leftTeam} isServing={leftServing} />
+                    </div>
+                    {/* Front row (IV, III, II) - right side of left court (near net) */}
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-around',
+                      alignItems: 'center'
+                    }}>
+                      <PlayerCircle positionData={leftLineup?.IV} position="IV" team={leftTeam} isServing={leftServing} />
+                      <PlayerCircle positionData={leftLineup?.III} position="III" team={leftTeam} isServing={leftServing} />
+                      <PlayerCircle positionData={leftLineup?.II} position="II" team={leftTeam} isServing={leftServing} />
+                    </div>
+                  </div>
+                ) : (
+                  /* Advanced mode + reception - absolute positioning for reception formations */
+                  /* Court perspective: Net is on RIGHT side (towards center), end line on LEFT */
+                  <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                    {(() => {
+                      const setterPos = getSetterPosition(leftLineup, setterNumber.left)
+                      const formation = getFormationWithCustom('left', setterPos)
+                      // For left court: Net is on right
+                      // formation gives top (from net) and left (from left side looking at net from behind)
+                      // For horizontal court with net in middle:
+                      // - top in formation = distance from net = maps to distance from RIGHT edge of left half
+                      // - left in formation = horizontal position = maps directly to vertical position
+                      //   (left side of court = top, right side = bottom)
+                      return ['I', 'II', 'III', 'IV', 'V', 'VI'].map(pos => {
+                        const coords = formation[pos]
+                        // Transform: formation top -> distance from net (right edge)
+                        // formation left -> vertical position (mirrored for left side view)
+                        const rightPercent = coords.top // Distance from net
+                        const topPercent = coords.left // Left side: no inversion (mirrored from right side)
+                        return (
+                          <div
+                            key={pos}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, 'left', pos)}
+                            style={{
+                              position: 'absolute',
+                              right: `${rightPercent}%`,
+                              top: `${topPercent}%`,
+                              transform: 'translate(50%, -50%) scale(0.8)',
+                              zIndex: 3,
+                              cursor: 'grab',
+                              touchAction: 'none'
+                            }}
+                          >
+                            <PlayerCircle positionData={leftLineup?.[pos]} position={pos} team={leftTeam} isServing={leftServing} />
+                          </div>
+                        )
+                      })
+                    })()}
+                  </div>
+                )}
+                {/* Blur overlay when lineup is set but other team hasn't set theirs yet */}
+                {leftLineup && !rightLineup && isFirstRally && !peekingLineup.left && (
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0, 0, 0, 0.75)',
+                    backdropFilter: 'blur(8px)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '12px',
+                    zIndex: 50,
+                    borderRadius: '8px'
+                  }}>
+                    <div style={{
+                      fontSize: 'clamp(14px, 3vw, 20px)',
+                      fontWeight: 700,
+                      color: '#22c55e',
+                      textAlign: 'center'
+                    }}>
+                      {t('refereeDashboard.lineupSet', 'Line-up set')}
+                    </div>
+                    <button
+                      onMouseDown={() => setPeekingLineup(prev => ({ ...prev, left: true }))}
+                      onMouseUp={() => setPeekingLineup(prev => ({ ...prev, left: false }))}
+                      onMouseLeave={() => setPeekingLineup(prev => ({ ...prev, left: false }))}
+                      onTouchStart={() => setPeekingLineup(prev => ({ ...prev, left: true }))}
+                      onTouchEnd={() => setPeekingLineup(prev => ({ ...prev, left: false }))}
+                      style={{
+                        padding: '8px 16px',
+                        fontSize: 'clamp(10px, 2vw, 13px)',
+                        fontWeight: 600,
+                        background: 'rgba(59, 130, 246, 0.3)',
+                        color: '#fff',
+                        border: '1px solid rgba(59, 130, 246, 0.5)',
+                        borderRadius: '6px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {t('refereeDashboard.showLineup', 'Show Line-up')}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Right side */}
+              <div
+                ref={(el) => { courtRef.current.right = el }}
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, 'right')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  position: 'relative',
+                  height: '100%'
+                }}
+              >
+                {/* Circular arrows toggle for reception mode - only show when in advanced mode and receiving */}
+                {advancedMode.right && !rightServing && (
+                  <button
+                    onClick={() => toggleReceptionMode('right')}
+                    style={{
+                      position: 'absolute',
+                      bottom: '8px',
+                      right: '8px',
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      background: receptionMode.right === 'reception' ? 'rgba(139, 92, 246, 0.4)' : 'rgba(255, 255, 255, 0.15)',
+                      border: receptionMode.right === 'reception' ? '2px solid #8b5cf6' : '1px solid rgba(255, 255, 255, 0.3)',
+                      color: receptionMode.right === 'reception' ? '#a78bfa' : 'rgba(255, 255, 255, 0.7)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '16px',
+                      zIndex: 10,
+                      transition: 'all 0.2s'
+                    }}
+                    title={receptionMode.right === 'reception' ? 'Switch to standard view' : 'Switch to reception formation'}
+                  >
+                    🔄
+                  </button>
+                )}
+
+                {/* Standard grid layout when NOT in advanced mode OR when serving OR when in standard mode */}
+                {(!advancedMode.right || rightServing || receptionMode.right === 'standard') ? (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1.5fr',
+                    gap: 'clamp(4px, 2vw, 12px)',
+                    width: '100%',
+                    height: '100%',
+                    padding: 'clamp(4px, 2vw, 12px)'
+                  }}>
+                    {/* Front row (II, III, IV) - left side of right court (near net) */}
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-around',
+                      alignItems: 'center'
+                    }}>
+                      <PlayerCircle positionData={rightLineup?.II} position="II" team={rightTeam} isServing={rightServing} />
+                      <PlayerCircle positionData={rightLineup?.III} position="III" team={rightTeam} isServing={rightServing} />
+                      <PlayerCircle positionData={rightLineup?.IV} position="IV" team={rightTeam} isServing={rightServing} />
+                    </div>
+                    {/* Back row (I, VI, V) - right side of right court */}
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-around',
+                      alignItems: 'center'
+                    }}>
+                      <PlayerCircle positionData={rightLineup?.I} position="I" team={rightTeam} isServing={rightServing} />
+                      <PlayerCircle positionData={rightLineup?.VI} position="VI" team={rightTeam} isServing={rightServing} />
+                      <PlayerCircle positionData={rightLineup?.V} position="V" team={rightTeam} isServing={rightServing} />
+                    </div>
+                  </div>
+                ) : (
+                  /* Advanced mode + reception - absolute positioning for reception formations */
+                  /* Court perspective: Net is on LEFT side (towards center), end line on RIGHT */
+                  <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                    {(() => {
+                      const setterPos = getSetterPosition(rightLineup, setterNumber.right)
+                      const formation = getFormationWithCustom('right', setterPos)
+                      // For right court: Net is on left
+                      // formation gives top (from net) and left (from left side looking at net from behind)
+                      // For horizontal court with net in middle:
+                      // - top in formation = distance from net = maps to distance from LEFT edge of right half
+                      // - left in formation = horizontal position = maps to vertical position
+                      return ['I', 'II', 'III', 'IV', 'V', 'VI'].map(pos => {
+                        const coords = formation[pos]
+                        // Transform: formation top -> distance from net (left edge)
+                        // formation left -> vertical position (need to flip for right side view)
+                        const leftPercent = coords.top // Distance from net
+                        const topPercent = 100 - coords.left // Invert: formation left (0) = bottom, left (100) = top
+                        return (
+                          <div
+                            key={pos}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, 'right', pos)}
+                            style={{
+                              position: 'absolute',
+                              left: `${leftPercent}%`,
+                              top: `${topPercent}%`,
+                              transform: 'translate(-50%, -50%) scale(0.8)',
+                              zIndex: 3,
+                              cursor: 'grab',
+                              touchAction: 'none'
+                            }}
+                          >
+                            <PlayerCircle positionData={rightLineup?.[pos]} position={pos} team={rightTeam} isServing={rightServing} />
+                          </div>
+                        )
+                      })
+                    })()}
+                  </div>
+                )}
+                {/* Blur overlay when lineup is set but other team hasn't set theirs yet */}
+                {rightLineup && !leftLineup && isFirstRally && !peekingLineup.right && (
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0, 0, 0, 0.75)',
+                    backdropFilter: 'blur(8px)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '12px',
+                    zIndex: 50,
+                    borderRadius: '8px'
+                  }}>
+                    <div style={{
+                      fontSize: 'clamp(3vmin, 6vmin, 12vmin)',
+                      fontWeight: 700,
+                      color: '#22c55e',
+                      textAlign: 'center'
+                    }}>
+                      {t('refereeDashboard.lineupSet', 'Line-up set')}
+                    </div>
+                    <button
+                      onMouseDown={() => setPeekingLineup(prev => ({ ...prev, right: true }))}
+                      onMouseUp={() => setPeekingLineup(prev => ({ ...prev, right: false }))}
+                      onMouseLeave={() => setPeekingLineup(prev => ({ ...prev, right: false }))}
+                      onTouchStart={() => setPeekingLineup(prev => ({ ...prev, right: true }))}
+                      onTouchEnd={() => setPeekingLineup(prev => ({ ...prev, right: false }))}
+                      style={{
+                        padding: '8px 16px',
+                        fontSize: 'clamp(10px, 2vw, 13px)',
+                        fontWeight: 600,
+                        background: 'rgba(59, 130, 246, 0.3)',
+                        color: '#fff',
+                        border: '1px solid rgba(59, 130, 246, 0.5)',
+                        borderRadius: '6px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {t('refereeDashboard.showLineup', 'Show Line-up')}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>{/* End SECTION 3: Court Area - 40% */}
+
+        {/* SECTION 4: Combined TO/SUB counters + Sanctions - fills remaining space */}
+        <div style={{
+          flex: '1 1 auto',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          display: 'grid',
+          gridTemplateColumns: 'auto 1fr auto',
+          alignItems: 'center',
+          padding: '6px 12px',
+          background: 'rgba(0, 0, 0, 0.06)',
+          gap: '12px',
+          minHeight: 0,
+          overflow: 'hidden'
+        }}>
+          {/* Left team counters - TO SUB (vertical stacked) */}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '10px',
+            fontSize: 'clamp(16px, 4vmin, 23vmin)',
+            fontWeight: 700
+          }}>
+            {/* TO counter */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+              <span style={{ fontWeight: 600, color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.6em' }}>TO</span>
+              <span style={{
+                background: leftStats.timeouts >= 2 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255, 255, 255, 0.15)',
+                padding: '7px 14px',
+                borderRadius: '6px',
+                border: leftStats.timeouts >= 2 ? '1px solid rgba(239, 68, 68, 0.6)' : '1px solid rgba(255, 255, 255, 0.3)',
+                minWidth: '42px',
+                aspectRatio: '1',
+                textAlign: 'center',
+                color: leftStats.timeouts >= 2 ? '#ef4444' : 'rgba(255, 255, 255, 0.9)'
+              }}>{leftStats.timeouts}</span>
+            </div>
+            {/* SUB counter */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+              <span style={{ fontWeight: 600, color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.6em' }}>SUB</span>
+              <span style={{
+                background: leftStats.substitutions >= 6 ? 'rgba(239, 68, 68, 0.3)' : leftStats.substitutions >= 5 ? 'rgba(234, 179, 8, 0.3)' : 'rgba(255, 255, 255, 0.15)',
+                padding: '7px 14px',
+                aspectRatio: '1',
+                borderRadius: '6px',
+                border: leftStats.substitutions >= 6 ? '1px solid rgba(239, 68, 68, 0.6)' : leftStats.substitutions >= 5 ? '1px solid rgba(234, 179, 8, 0.6)' : '1px solid rgba(255, 255, 255, 0.3)',
+                minWidth: '42px',
+                textAlign: 'center',
+                color: leftStats.substitutions >= 6 ? '#ef4444' : leftStats.substitutions >= 5 ? '#eab308' : 'rgba(255, 255, 255, 0.9)'
+              }}>{leftStats.substitutions}</span>
+            </div>
+          </div>
+
+          {/* Center: Inner container with sanctions + countdown/icon */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr auto 1fr',
+            alignItems: 'flex-start',
+            height: '100%',
+            gap: '8px',
+            paddingTop: '4px'
+          }}>
+            {/* Left team sanctions */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'flex-start',
+              gap: '4px',
+              border: (leftTeamSanctions.formalWarning || leftTeamSanctions.improperRequest || leftTeamSanctions.delayWarning || leftTeamSanctions.delayPenalty || leftTeamSanctions.warnings.length > 0 || leftTeamSanctions.penalties.length > 0 || leftTeamSanctions.expulsions.length > 0 || leftTeamSanctions.disqualifications.length > 0) ? '1px solid rgba(255,255,255,0.15)' : 'none',
+              padding: '4px',
+              height: '100%',
+
+            }}>
+              {/* Sanctions title if any sanctions exist */}
+              {(leftTeamSanctions.formalWarning || leftTeamSanctions.improperRequest || leftTeamSanctions.delayWarning || leftTeamSanctions.delayPenalty || leftTeamSanctions.warnings.length > 0 || leftTeamSanctions.penalties.length > 0 || leftTeamSanctions.expulsions.length > 0 || leftTeamSanctions.disqualifications.length > 0) && (
+                <div style={{ fontSize: '15px', fontWeight: 600, color: 'rgba(255, 255, 255, 1)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sanctions</div>
+              )}
+              {(leftTeamSanctions.formalWarning || leftTeamSanctions.improperRequest || leftTeamSanctions.delayWarning || leftTeamSanctions.delayPenalty || leftTeamSanctions.warnings.length > 0 || leftTeamSanctions.penalties.length > 0 || leftTeamSanctions.expulsions.length > 0 || leftTeamSanctions.disqualifications.length > 0) && (
+                <div style={{ border: '1px solid rgba(255,255,255,0.15)', height: '1px', width: '100%', margin: '4px 0' }}></div>
+              )}
+              {/* Team-level sanctions at top (Formal warning, Improper Request only) */}
+              {(leftTeamSanctions.formalWarning || leftTeamSanctions.improperRequest) && (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '11px',
+                  fontWeight: 600
+                }}>
+                  {leftTeamSanctions.formalWarning && (
+                    <span style={{
+                      background: '#fde047',
+                      color: '#000',
+                      padding: '1px 6px',
+                      borderRadius: '3px'
+                    }}>Formal warning</span>
+                  )}
+                  {leftTeamSanctions.improperRequest && (
+                    <span style={{
+                      background: '#000',
+                      color: '#fff',
+                      padding: '1px 6px',
+                      borderRadius: '3px'
+                    }}>Improper Request</span>
+                  )}
+                </div>
+              )}
+              {(leftTeamSanctions.formalWarning || leftTeamSanctions.improperRequest || leftTeamSanctions.delayWarning || leftTeamSanctions.delayPenalty || leftTeamSanctions.warnings.length > 0 || leftTeamSanctions.penalties.length > 0 || leftTeamSanctions.expulsions.length > 0 || leftTeamSanctions.disqualifications.length > 0) && (
+                <div style={{ border: '1px solid rgba(255,255,255,0.15)', height: '1px', width: '100%', margin: '4px 0' }}></div>
+              )}
+              {/* Personal sanctions in grid: W|P|E|D columns, DW/DP below */}
+              {(leftTeamSanctions.warnings.length > 0 || leftTeamSanctions.penalties.length > 0 || leftTeamSanctions.expulsions.length > 0 || leftTeamSanctions.disqualifications.length > 0 || leftTeamSanctions.delayWarning || leftTeamSanctions.delayPenalty) && (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, minmax(24px, auto))',
+                  gap: '3px',
+                  alignItems: 'start',
+                  justifyContent: 'center'
+                }}>
+                  {/* Column 1: Warnings (W) + Delay Warning */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'center', minWidth: '24px' }}>
+                    {leftTeamSanctions.warnings.map((w, i) => (
+                      <span key={`w${i}`} style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        background: '#fde047',
+                        width: '50px',
+                        textAlign: 'center',
+                        color: '#000',
+                        padding: '1px 4px',
+                        borderRadius: '3px'
+                      }}>W - {w.id}</span>
+                    ))}
+                    {leftTeamSanctions.delayWarning && (
+                      <span style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        width: '50px',
+                        textAlign: 'center',
+                        background: '#fde047',
+                        color: '#000',
+                        padding: '1px 4px',
+                        borderRadius: '3px'
+                      }}>D W</span>
+                    )}
+                  </div>
+                  {/* Column 2: Penalties (P) + Delay Penalty */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'center', minWidth: '24px' }}>
+                    {leftTeamSanctions.penalties.map((p, i) => (
+                      <span key={`p${i}`} style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        background: '#ef4444',
+                        color: '#fff',
+                        width: '50px',
+                        padding: '1px 4px',
+                        textAlign: 'center',
+                        borderRadius: '3px'
+                      }}>P - {p.id}</span>
+                    ))}
+                    {leftTeamSanctions.delayPenalty && (
+                      <span style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        background: '#ef4444',
+                        width: '50px',
+                        color: '#000000ff',
+                        textAlign: 'center',
+                        padding: '1px 4px',
+                        borderRadius: '3px'
+                      }}>D P</span>
+                    )}
+                  </div>
+                  {/* Column 3: Expulsions (E) */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'center', minWidth: '24px' }}>
+                    {leftTeamSanctions.expulsions.map((e, i) => (
+                      <span key={`e${i}`} style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        background: 'linear-gradient(135deg, #ef4444 50%, #fde047 50%)',
+                        color: '#000000ff',
+                        width: '50px',
+                        padding: '1px 4px',
+                        textAlign: 'center',
+                        borderRadius: '3px'
+                      }}>E - {e.id}</span>
+                    ))}
+                  </div>
+                  {/* Column 4: Disqualifications (D) */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'center', minWidth: '24px' }}>
+                    {leftTeamSanctions.disqualifications.map((d, i) => (
+                      <span key={`d${i}`} style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        background: 'linear-gradient(90deg, #ef4444 50%, #fde047 50%)',
+                        color: '#000000ff',
+                        width: '50px',
+                        padding: '1px 4px',
+                        textAlign: 'center',
+                        borderRadius: '3px'
+                      }}>D - {d.id}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Center: Countdown when active, otherwise Favicon */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'column',
+              alignSelf: 'center'
+            }}>
+              {timeoutModal ? (
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '20px', color: 'var(--muted)', fontWeight: 600, marginBottom: '4px' }}>TIMEOUT</div>
+                  <DonutCountdown current={timeoutModal.countdown} total={30} size={130} strokeWidth={6}>
+                    <div style={{ fontSize: 'clamp(24px, 8vw, 40px)', fontFamily: getScoreFont(), fontWeight: 600, color: timeoutModal.countdown <= 10 ? '#ef4444' : 'var(--accent)', lineHeight: 1 }}>
+                      {timeoutModal.countdown}"
+                    </div>
+                  </DonutCountdown>
+                </div>
+              ) : betweenSetsCountdown && betweenSetsCountdown.countdown > 0 ? (
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--muted)', fontWeight: 600, marginBottom: '4px' }}>INTERVAL</div>
+                  <DonutCountdown current={betweenSetsCountdown.countdown} total={setIntervalDuration} size={90} strokeWidth={5}>
+                    <div style={{ fontSize: 'clamp(24px, 6vw, 36px)', fontFamily: getScoreFont(), fontWeight: 800, color: betweenSetsCountdown.countdown <= 30 ? '#ef4444' : '#22c55e', lineHeight: 1 }}>
+                      {Math.floor(betweenSetsCountdown.countdown / 60)}:{String(betweenSetsCountdown.countdown % 60).padStart(2, '0')}
+                    </div>
+                  </DonutCountdown>
+                </div>
+              ) : (
+                <img
+                  src="/openvolley_no_bg.png"
+                  alt="OpenVolley"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    maxWidth: '20vmin',
+                    aspectRatio: '1',
+                    objectFit: 'contain',
+                    opacity: 0.7
+                  }}
+                />
+              )}
+            </div>
+
+            {/* Right team sanctions */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'flex-start',
+              gap: '4px',
+              border: (rightTeamSanctions.formalWarning || rightTeamSanctions.improperRequest || rightTeamSanctions.delayWarning || rightTeamSanctions.delayPenalty || rightTeamSanctions.warnings.length > 0 || rightTeamSanctions.penalties.length > 0 || rightTeamSanctions.expulsions.length > 0 || rightTeamSanctions.disqualifications.length > 0) ? '1px solid rgba(255,255,255,0.15)' : 'none',
+              padding: '4px',
+              height: '100%',
+            }}>
+              {/* Sanctions title if any sanctions exist */}
+              {(rightTeamSanctions.formalWarning || rightTeamSanctions.improperRequest || rightTeamSanctions.delayWarning || rightTeamSanctions.delayPenalty || rightTeamSanctions.warnings.length > 0 || rightTeamSanctions.penalties.length > 0 || rightTeamSanctions.expulsions.length > 0 || rightTeamSanctions.disqualifications.length > 0) && (
+                <div style={{ fontSize: '15px', fontWeight: 600, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sanctions</div>
+              )}
+              {(rightTeamSanctions.formalWarning || rightTeamSanctions.improperRequest || rightTeamSanctions.delayWarning || rightTeamSanctions.delayPenalty || rightTeamSanctions.warnings.length > 0 || rightTeamSanctions.penalties.length > 0 || rightTeamSanctions.expulsions.length > 0 || rightTeamSanctions.disqualifications.length > 0) && (
+                <div style={{ border: '1px solid rgba(255,255,255,0.15)', height: '1px', width: '100%', margin: '4px 0' }}></div>
+              )}
+              {/* Team-level sanctions at top (Formal warning, Improper Request only) */}
+              {(rightTeamSanctions.formalWarning || rightTeamSanctions.improperRequest) && (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '11px',
+                  fontWeight: 600
+                }}>
+                  {rightTeamSanctions.formalWarning && (
+                    <span style={{
+                      background: '#fde047',
+                      color: '#000',
+                      padding: '1px 6px',
+                      borderRadius: '3px'
+                    }}>Formal warning</span>
+                  )}
+                  {rightTeamSanctions.improperRequest && (
+                    <span style={{
+                      background: '#000',
+                      color: '#fff',
+                      padding: '1px 6px',
+                      borderRadius: '3px'
+                    }}>Improper Request</span>
+                  )}
+                </div>
+              )}
+              {(rightTeamSanctions.formalWarning || rightTeamSanctions.improperRequest || rightTeamSanctions.delayWarning || rightTeamSanctions.delayPenalty || rightTeamSanctions.warnings.length > 0 || rightTeamSanctions.penalties.length > 0 || rightTeamSanctions.expulsions.length > 0 || rightTeamSanctions.disqualifications.length > 0) && (
+                <div style={{ border: '1px solid rgba(255,255,255,0.15)', height: '1px', width: '100%', margin: '4px 0' }}></div>
+              )}
+              {/* Personal sanctions in grid: W|P|E|D columns, DW/DP below */}
+              {(rightTeamSanctions.warnings.length > 0 || rightTeamSanctions.penalties.length > 0 || rightTeamSanctions.expulsions.length > 0 || rightTeamSanctions.disqualifications.length > 0 || rightTeamSanctions.delayWarning || rightTeamSanctions.delayPenalty) && (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, minmax(24px, auto))',
+                  gap: '3px',
+                  alignItems: 'start',
+                  justifyContent: 'center'
+                }}>
+                  {/* Column 1: Warnings (W) + Delay Warning */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'center', minWidth: '24px' }}>
+                    {rightTeamSanctions.warnings.map((w, i) => (
+                      <span key={`w${i}`} style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        background: '#fde047',
+                        color: '#000',
+                        padding: '1px 4px',
+                        borderRadius: '3px',
+                        width: '50px',
+                        textAlign: 'center',
+                      }}>W - {w.id}</span>
+                    ))}
+                    {rightTeamSanctions.delayWarning && (
+                      <span style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        width: '50px',
+                        textAlign: 'center',
+                        background: '#fde047',
+                        color: '#000',
+                        padding: '1px 4px',
+                        borderRadius: '3px'
+                      }}>D W</span>
+                    )}
+                  </div>
+                  {/* Column 2: Penalties (P) + Delay Penalty */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'center', minWidth: '24px' }}>
+                    {rightTeamSanctions.penalties.map((p, i) => (
+                      <span key={`p${i}`} style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        background: '#ef4444',
+                        color: '#000000ff',
+                        width: '50px',
+                        textAlign: 'center',
+                        padding: '1px 4px',
+                        borderRadius: '3px'
+                      }}>P - {p.id}</span>
+                    ))}
+                    {rightTeamSanctions.delayPenalty && (
+                      <span style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        background: '#ef4444',
+                        color: '#000000ff',
+                        padding: '1px 4px',
+                        width: '50px',
+                        textAlign: 'center',
+                        borderRadius: '3px'
+                      }}>D P</span>
+                    )}
+                  </div>
+                  {/* Column 3: Expulsions (E) */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'center', minWidth: '24px' }}>
+                    {rightTeamSanctions.expulsions.map((e, i) => (
+                      <span key={`e${i}`} style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        background: 'linear-gradient(135deg, #ef4444 50%, #fde047 50%)',
+                        color: '#000000ff',
+                        padding: '1px 4px',
+                        width: '50px',
+                        textAlign: 'center',
+                        borderRadius: '3px',
+                      }}>E - {e.id}</span>
+                    ))}
+                  </div>
+                  {/* Column 4: Disqualifications (D) */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'center', minWidth: '24px' }}>
+                    {rightTeamSanctions.disqualifications.map((d, i) => (
+                      <span key={`d${i}`} style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        width: '50px',
+                        textAlign: 'center',
+                        background: 'linear-gradient(90deg,#ef4444 50%, #fde047 50%)',
+                        color: '#000000ff',
+                        padding: '1px 4px',
+                        borderRadius: '3px'
+
+                      }}>D - {d.id}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right team counters - TO SUB (vertical stacked) */}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '10px',
+            fontSize: 'clamp(16px, 4vmin, 23vmin)',
+            fontWeight: 700
+          }}>
+            {/* TO counter */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+              <span style={{ fontWeight: 600, color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.6em' }}>TO</span>
+              <span style={{
+                background: rightStats.timeouts >= 2 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255, 255, 255, 0.15)',
+                padding: '7px 14px',
+                borderRadius: '6px',
+                aspectRatio: '1',
+                border: rightStats.timeouts >= 2 ? '1px solid rgba(239, 68, 68, 0.6)' : '1px solid rgba(255, 255, 255, 0.3)',
+                minWidth: '42px',
+                textAlign: 'center',
+                color: rightStats.timeouts >= 2 ? '#ef4444' : 'rgba(255, 255, 255, 0.9)'
+              }}>{rightStats.timeouts}</span>
+            </div>
+            {/* SUB counter */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+              <span style={{ fontWeight: 600, color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.6em' }}>SUB</span>
+              <span style={{
+                background: rightStats.substitutions >= 6 ? 'rgba(239, 68, 68, 0.3)' : rightStats.substitutions >= 5 ? 'rgba(234, 179, 8, 0.3)' : 'rgba(255, 255, 255, 0.15)',
+                padding: '7px 14px',
+                borderRadius: '6px',
+                aspectRatio: '1',
+                border: rightStats.substitutions >= 6 ? '1px solid rgba(239, 68, 68, 0.6)' : rightStats.substitutions >= 5 ? '1px solid rgba(234, 179, 8, 0.6)' : '1px solid rgba(255, 255, 255, 0.3)',
+                minWidth: '42px',
+                textAlign: 'center',
+                color: rightStats.substitutions >= 6 ? '#ef4444' : rightStats.substitutions >= 5 ? '#eab308' : 'rgba(255, 255, 255, 0.9)'
+              }}>{rightStats.substitutions}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* SECTION 5: Footer - Last Action - 40px */}
+        <div style={{
+          flex: '0 0 40px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '0 12px',
+          background: 'rgba(0, 0, 0, 0.3)',
+          borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+          fontSize: 'clamp(11px, 2.5vw, 14px)',
+          color: 'rgba(255, 255, 255, 0.7)',
+          overflow: 'hidden',
+          minHeight: 0
+        }}>
+          <span style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+          }}>
+            <span style={{ opacity: 0.6, fontWeight: 500 }}>{t('refereeDashboard.lastAction')}:</span>
+            {lastEvent ? (
+              <>
+                <span style={{ opacity: 0.5 }}>
+                  {new Date(lastEvent.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+                <span style={{ fontWeight: 600 }}>
+                  {(() => {
+                    // lastEvent.team is 'home' or 'away', need to map to display values
+                    const teamLbl = lastEvent.team === 'home' ? homeLabel : lastEvent.team === 'away' ? awayLabel : ''
+                    const teamShort = lastEvent.team === 'home' ? (data?.match?.homeShortName || data?.homeTeam?.name || 'Home') : lastEvent.team === 'away' ? (data?.match?.awayShortName || data?.awayTeam?.name || 'Away') : ''
+                    const scoreStr = `(${leftDisplayScore}-${rightDisplayScore})`
+                    const teamInfo = teamLbl ? `${teamLbl} ${teamShort} ${scoreStr}` : ''
+
+                    if (lastEvent.type === 'point') return `${t('refereeDashboard.events.point')} ${teamInfo}`
+                    if (lastEvent.type === 'timeout') return `${t('refereeDashboard.events.timeout')} ${teamInfo}`
+                    if (lastEvent.type === 'substitution') return `${t('refereeDashboard.events.substitution')} ${teamInfo}: #${lastEvent.data?.playerOut} → #${lastEvent.data?.playerIn}`
+                    if (lastEvent.type === 'libero_entry') return `${t('refereeDashboard.events.liberoIn')} ${teamInfo}`
+                    if (lastEvent.type === 'libero_exit') return `${t('refereeDashboard.events.liberoOut')} ${teamInfo}`
+                    if (lastEvent.type === 'libero_exchange') return `${t('refereeDashboard.events.liberoExchange')} ${teamInfo}`
+                    if (lastEvent.type === 'libero_redesignation') return `${t('refereeDashboard.events.liberoRedesignation')} ${teamInfo}`
+                    if (lastEvent.type === 'set_end') return t('refereeDashboard.events.setEnd', { set: lastEvent.data?.setIndex || '' })
+                    if (lastEvent.type === 'sanction') {
+                      const sanctionData = lastEvent.data || {}
+                      // Short sanction type labels
+                      const sanctionTypeShort = {
+                        'improper_request': 'IR',
+                        'delay_warning': 'DW',
+                        'delay_penalty': 'DP',
+                        'warning': 'W',
+                        'penalty': 'P',
+                        'expulsion': 'EXP',
+                        'disqualification': 'DQ'
+                      }[sanctionData.type] || sanctionData.type || ''
+
+                      // For delay and IR, no member info needed
+                      const isDelayOrIR = ['delay_warning', 'delay_penalty', 'improper_request'].includes(sanctionData.type)
+
+                      let memberInfo = ''
+                      if (!isDelayOrIR) {
+                        if (sanctionData.playerNumber) {
+                          memberInfo = `#${sanctionData.playerNumber}`
+                        } else if (sanctionData.role) {
+                          // For officials: coach, assistant coach, etc.
+                          memberInfo = sanctionData.role
+                        } else if (sanctionData.playerType) {
+                          memberInfo = sanctionData.playerType
+                        }
+                      }
+
+                      const parts = [sanctionTypeShort, teamInfo, memberInfo].filter(Boolean)
+                      return parts.join(' ')
+                    }
+                    if (lastEvent.type === 'court_captain_designation') {
+                      const playerNumber = lastEvent.data?.playerNumber || '?'
+                      return `${t('refereeDashboard.events.courtCaptainDesignation')} ${teamInfo} #${playerNumber}`
+                    }
+                    return ''
+                  })()}
+                </span>
+              </>
+            ) : (
+              <span style={{ opacity: 0.4 }}>{t('refereeDashboard.events.noAction')}</span>
+            )}
+          </span>
+        </div>
+
+      </div>{/* End main content wrapper */}
+
+      {/* Test Mode Controls - only shown in test mode */}
+      {
+        (matchId === -1 || data?.match?.test === true) && (
+          <TestModeControls
+            matchId={matchId}
+            onRefresh={async () => {
+              console.log('[TestModeControls] onRefresh called', { matchId, isMasterMode })
+              // In test mode, reload from local IndexedDB
+              try {
+                const match = await db.matches.get(matchId)
+                const sets = await db.sets.where('matchId').equals(matchId).sortBy('index')
+                const events = await db.events.where('matchId').equals(matchId).sortBy('seq')
+                const homeTeam = await db.teams.get(match?.homeTeamId)
+                const awayTeam = await db.teams.get(match?.awayTeamId)
+
+                console.log('[TestModeControls] Reloaded from IndexedDB:', {
+                  matchId,
+                  sets: sets.length,
+                  events: events.length,
+                  currentSet: sets.find(s => !s.finished)?.index
+                })
+
+                // Update state with fresh local data
+                setData({
+                  success: true,
+                  match,
+                  homeTeam,
+                  awayTeam,
+                  sets,
+                  events
+                })
+              } catch (err) {
+                console.error('[TestModeControls] Error reloading from IndexedDB:', err)
+              }
+            }}
+          />
+        )
+      }
+      {/* Scorer Attention Modal */}
+      {
+        attentionModalOpen && (
+          <Modal
+            open={true}
+            onClose={() => setAttentionModalOpen(false)}
+            width={400}
+            hideCloseButton={true}
+          >
+            <div style={{ padding: '24px', textAlign: 'center' }}>
+              <div style={{ marginBottom: '16px', fontSize: '48px' }}>🔔</div>
+              <p style={{ marginBottom: '20px', fontSize: '3vmin', fontWeight: 700, color: '#ef4444' }}>
+                Scorer Needs Attention!
+              </p>
+              <button
+                onClick={() => setAttentionModalOpen(false)}
+                style={{
+                  width: '100%',
+                  padding: '16px',
+                  fontSize: '18px',
+                  fontWeight: 700,
+                  background: '#ef4444',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                Acknowledge
+              </button>
+            </div>
+          </Modal>
+        )
+      }
+    </div >
   )
 }
-

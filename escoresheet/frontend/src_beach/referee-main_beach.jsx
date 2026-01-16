@@ -1,11 +1,18 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import RefereeApp from './RefereeApp_beach'
+import RefereeApp from './RefereeApp'
 import './styles_beach.css'
+import './i18n_beach'  // Initialize i18n for localization
+import { AlertProvider } from './contexts_beach/AlertContext_beach'
+import { AuthProvider } from './contexts_beach/AuthContext_beach'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <RefereeApp />
+    <AuthProvider>
+      <AlertProvider>
+        <RefereeApp />
+      </AlertProvider>
+    </AuthProvider>
   </React.StrictMode>,
 )
 

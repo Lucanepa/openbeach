@@ -1,0 +1,1881 @@
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
+import { findMatchByGameNumber, getMatchData, updateMatchData, listAvailableMatches, getWebSocketStatus, listAvailableMatchesSupabase } from './utils_beach/serverDataSync_beach'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { db } from './db_beach/db_beach'
+import { parseRosterPdf } from './utils_beach/parseRosterPdf_beach'
+import Modal from './components_beach/Modal_beach'
+import SimpleHeader from './components_beach/SimpleHeader_beach'
+import UpdateBanner from './components_beach/UpdateBanner_beach'
+import SignaturePad from './components_beach/SignaturePad_beach'
+import { supabase } from './lib_beach/supabaseClient_beach'
+
+// Connection modes
+const CONNECTION_MODES = {
+  AUTO: 'auto',
+  SUPABASE: 'supabase',
+  WEBSOCKET: 'websocket'
+}
+
+// Date conversion helpers
+function formatDateToISO(dateStr) {
+  if (!dateStr) return ''
+  // If already in ISO format (YYYY-MM-DD), return as-is
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr
+  // If in DD/MM/YYYY format, convert to YYYY-MM-DD
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateStr)) {
+    const [day, month, year] = dateStr.split('/')
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+  }
+  // Try to parse as date
+  const date = new Date(dateStr)
+  if (!isNaN(date.getTime())) {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+  return dateStr
+}
+
+function formatDateToDDMMYYYY(dateStr) {
+  if (!dateStr) return ''
+  // If already in DD/MM/YYYY format, return as-is
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateStr)) return dateStr
+  // If in ISO format (YYYY-MM-DD), convert to DD/MM/YYYY
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const [year, month, day] = dateStr.split('-')
+    return `${day}/${month}/${year}`
+  }
+  // Try to parse as date
+  const date = new Date(dateStr)
+  if (!isNaN(date.getTime())) {
+    const day = String(date.getDate()).padStart(2, '0')
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const year = date.getFullYear()
+    return `${day}/${month}/${year}`
+  }
+  return dateStr
+}
+
+export default function UploadRosterApp() {
+  const { t } = useTranslation()
+  const [gameNumber, setGameNumber] = useState('')
+  const [team, setTeam] = useState('home') // 'home' or 'away'
+  const [uploadPin, setUploadPin] = useState('')
+  const [match, setMatch] = useState(null)
+  const [matchId, setMatchId] = useState(null)
+  const [homeTeam, setHomeTeam] = useState(null)
+  const [awayTeam, setAwayTeam] = useState(null)
+  const [validationError, setValidationError] = useState('')
+  const [pdfFile, setPdfFile] = useState(null)
+  const [pdfLoading, setPdfLoading] = useState(false)
+  const [pdfError, setPdfError] = useState('')
+  const [parsedData, setParsedData] = useState(null) // { players: [], bench: [] }
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [matchStatusCheck, setMatchStatusCheck] = useState(null) // 'checking', 'valid', 'invalid', null
+  const [manuallyValidated, setManuallyValidated] = useState(false) // For when no PIN is required
+
+  // Signature states
+  const [coachSignature, setCoachSignature] = useState(null)
+  const [captainSignature, setCaptainSignature] = useState(null)
+  const [openSignature, setOpenSignature] = useState(null) // 'coach' | 'captain' | null
+  const [availableMatches, setAvailableMatches] = useState([])
+  const [loadingMatches, setLoadingMatches] = useState(false)
+  const [selectedMatch, setSelectedMatch] = useState(null)
+  const [connectionStatuses, setConnectionStatuses] = useState({
+    server: 'disconnected',
+    websocket: 'not_applicable',
+    supabase: 'disconnected'
+  })
+  const [connectionDebugInfo, setConnectionDebugInfo] = useState({})
+  const [connectionMode, setConnectionMode] = useState(() => {
+    try {
+      return localStorage.getItem('roster_connection_mode') || CONNECTION_MODES.AUTO
+    } catch { return CONNECTION_MODES.AUTO }
+  })
+  const [activeConnection, setActiveConnection] = useState(null) // 'supabase' | 'websocket'
+  const supabaseChannelRef = useRef(null)
+  const fileInputRef = useRef(null)
+
+  // Wake lock refs and state
+  const wakeLockRef = useRef(null)
+  const noSleepVideoRef = useRef(null)
+  const [wakeLockActive, setWakeLockActive] = useState(false)
+
+  // Test mode state
+  const [testModeClicks, setTestModeClicks] = useState(0)
+  const testModeTimeoutRef = useRef(null)
+
+  // Request wake lock to prevent screen from sleeping
+  useEffect(() => {
+    const enableNoSleep = async () => {
+      try {
+        if ('wakeLock' in navigator) {
+          if (wakeLockRef.current) { try { await wakeLockRef.current.release() } catch (e) {} }
+          wakeLockRef.current = await navigator.wakeLock.request('screen')
+          console.log('[WakeLock] Screen wake lock acquired (UploadRoster)')
+          setWakeLockActive(true)
+          wakeLockRef.current.addEventListener('release', () => {
+            console.log('[WakeLock] Screen wake lock released (UploadRoster)')
+            if (!wakeLockRef.current) {
+              setWakeLockActive(false)
+            }
+          })
+        }
+      } catch (err) { console.log('[WakeLock] Native wake lock failed:', err.message) }
+      try {
+        if (!noSleepVideoRef.current) {
+          const video = document.createElement('video')
+          video.setAttribute('playsinline', '')
+          video.setAttribute('loop', '')
+          video.setAttribute('muted', '')
+          video.style.cssText = 'position:fixed;left:-1px;top:-1px;width:1px;height:1px;opacity:0.01;pointer-events:none;'
+          video.src = 'data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAAAAhmcmVlAAAACG1kYXQAAAAfAgAABQAJJMAAkMAAKQAAH0AAOMAAH0AAOAAAAB9GABtB'
+          document.body.appendChild(video)
+          noSleepVideoRef.current = video
+        }
+        await noSleepVideoRef.current.play()
+        console.log('[NoSleep] Video playing for keep-awake (UploadRoster)')
+      } catch (err) { console.log('[NoSleep] Video fallback failed:', err.message) }
+    }
+    const handleInteraction = async () => { await enableNoSleep() }
+    enableNoSleep()
+    document.addEventListener('click', handleInteraction, { once: true })
+    document.addEventListener('touchstart', handleInteraction, { once: true })
+    const handleVisibilityChange = async () => { if (document.visibilityState === 'visible') await enableNoSleep() }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      document.removeEventListener('click', handleInteraction)
+      document.removeEventListener('touchstart', handleInteraction)
+      if (wakeLockRef.current) { wakeLockRef.current.release().catch(() => {}); wakeLockRef.current = null }
+      if (noSleepVideoRef.current) { noSleepVideoRef.current.pause(); noSleepVideoRef.current.remove(); noSleepVideoRef.current = null }
+    }
+  }, [])
+
+  // Toggle wake lock manually
+  const toggleWakeLock = useCallback(async () => {
+    if (wakeLockActive) {
+      // Disable wake lock
+      if (wakeLockRef.current) {
+        try {
+          await wakeLockRef.current.release()
+          wakeLockRef.current = null
+        } catch (e) {}
+      }
+      if (noSleepVideoRef.current) {
+        noSleepVideoRef.current.pause()
+      }
+      setWakeLockActive(false)
+      console.log('[WakeLock] Manually disabled')
+    } else {
+      // Enable wake lock
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLockRef.current = await navigator.wakeLock.request('screen')
+          setWakeLockActive(true)
+          console.log('[WakeLock] Manually enabled')
+        }
+        if (noSleepVideoRef.current) {
+          await noSleepVideoRef.current.play()
+        }
+      } catch (err) {
+        console.log('[WakeLock] Failed to enable:', err.message)
+        setWakeLockActive(true) // Visual feedback even if API failed
+      }
+    }
+  }, [wakeLockActive])
+
+  // Load available matches on mount and periodically
+  useEffect(() => {
+    const loadMatches = async () => {
+      setLoadingMatches(true)
+      console.log('[Roster DEBUG] ========== LOADING MATCHES ==========')
+      console.log('[Roster DEBUG] Connection mode:', connectionMode)
+      console.log('[Roster DEBUG] Supabase client exists:', !!supabase)
+
+      try {
+        // Try Supabase first if in AUTO or SUPABASE mode
+        const useSupabase = connectionMode === CONNECTION_MODES.SUPABASE ||
+          (connectionMode === CONNECTION_MODES.AUTO && supabase)
+
+        console.log('[Roster DEBUG] Will try Supabase:', useSupabase)
+
+        if (useSupabase && supabase) {
+          console.log('[Roster DEBUG] Attempting Supabase connection...')
+          try {
+            const result = await listAvailableMatchesSupabase()
+            console.log('[Roster DEBUG] Supabase result:', JSON.stringify(result, null, 2))
+
+            if (result.success && result.matches && result.matches.length > 0) {
+              console.log('[Roster DEBUG] Supabase SUCCESS - found', result.matches.length, 'matches')
+              setAvailableMatches(result.matches)
+              setConnectionStatuses(prev => {
+                const newStatus = { ...prev, supabase: 'connected' }
+                console.log('[Roster DEBUG] New connection statuses:', newStatus)
+                return newStatus
+              })
+              setActiveConnection('supabase')
+              setLoadingMatches(false)
+              return
+            } else {
+              console.log('[Roster DEBUG] Supabase returned no matches or failed:', result)
+            }
+          } catch (supabaseErr) {
+            console.error('[Roster DEBUG] Supabase error:', supabaseErr)
+            console.error('[Roster DEBUG] Supabase error details:', supabaseErr.message, supabaseErr.stack)
+          }
+        }
+
+        // Fall back to WebSocket/server
+        console.log('[Roster DEBUG] Falling back to WebSocket/server...')
+        try {
+          const result = await listAvailableMatches()
+          console.log('[Roster DEBUG] WebSocket/server result:', JSON.stringify(result, null, 2))
+
+          if (result.success && result.matches) {
+            console.log('[Roster DEBUG] WebSocket SUCCESS - found', result.matches.length, 'matches')
+            setAvailableMatches(result.matches)
+            setActiveConnection('websocket')
+          } else {
+            console.log('[Roster DEBUG] WebSocket returned no matches or failed')
+          }
+        } catch (wsErr) {
+          console.error('[Roster DEBUG] WebSocket/server error:', wsErr)
+          console.error('[Roster DEBUG] WebSocket error details:', wsErr.message, wsErr.stack)
+        }
+      } catch (err) {
+        console.error('[Roster DEBUG] General error loading matches:', err)
+        console.error('[Roster DEBUG] Error stack:', err.stack)
+      } finally {
+        setLoadingMatches(false)
+        console.log('[Roster DEBUG] ========== DONE LOADING MATCHES ==========')
+      }
+    }
+
+    loadMatches()
+    const interval = setInterval(loadMatches, 30000)
+
+    return () => clearInterval(interval)
+  }, [connectionMode])
+
+  // Check connection status periodically
+  useEffect(() => {
+    // Check if we're on a static deployment (GitHub Pages, Cloudflare Pages, etc.)
+    // Static deployments don't have a backend server - they rely on Supabase only
+    const isStaticDeployment = !import.meta.env.DEV && (
+      window.location.hostname.includes('github.io') ||
+      window.location.hostname.endsWith('.openvolley.app') // All openvolley.app subdomains are static
+    )
+    const hasBackendUrl = !!import.meta.env.VITE_BACKEND_URL
+
+    console.log('[Roster DEBUG] Connection status check setup:')
+    console.log('[Roster DEBUG]   - hostname:', window.location.hostname)
+    console.log('[Roster DEBUG]   - isStaticDeployment:', isStaticDeployment)
+    console.log('[Roster DEBUG]   - hasBackendUrl:', hasBackendUrl)
+    console.log('[Roster DEBUG]   - VITE_BACKEND_URL:', import.meta.env.VITE_BACKEND_URL)
+    console.log('[Roster DEBUG]   - DEV mode:', import.meta.env.DEV)
+    console.log('[Roster DEBUG]   - connectionMode:', connectionMode)
+
+    // For static deployments without a backend URL, server/WS are not available
+    // The Upload Roster app uses Supabase for cloud, but can use WebSocket if backend is configured
+    if (isStaticDeployment && !hasBackendUrl) {
+      console.log('[Roster DEBUG] Static deployment without backend - server/WS not available')
+      setConnectionStatuses(prev => ({
+        ...prev, // Preserve supabase status
+        server: 'not_available',
+        websocket: 'not_available'
+      }))
+      setConnectionDebugInfo({
+        server: {
+          status: 'not_available',
+          message: 'Server/WebSocket requires backend configuration',
+          details: 'This deployment uses Supabase for data sync. Server/WebSocket connections are only available with a configured backend URL or on local network.'
+        }
+      })
+      return // Don't start polling
+    }
+
+    // For static deployments WITH backend URL or local dev, check connection based on mode
+    // In Supabase mode, we don't need server/WS polling - connection is already tracked in loadMatches
+    if (connectionMode === CONNECTION_MODES.SUPABASE) {
+      console.log('[Roster DEBUG] Supabase mode - server/WS not needed')
+      setConnectionStatuses(prev => ({
+        ...prev,
+        server: 'not_applicable',
+        websocket: 'not_applicable'
+      }))
+      return
+    }
+
+    // For AUTO or WEBSOCKET mode, check server status using listAvailableMatches
+    // This is more reliable than getServerStatus() as it tests actual API functionality
+    const checkConnections = async () => {
+      try {
+        console.log('[Roster DEBUG] Checking server status via listAvailableMatches...')
+        const result = await listAvailableMatches()
+        console.log('[Roster DEBUG] listAvailableMatches result:', result?.success)
+
+        const serverConnected = result?.success
+        const wsStatus = matchId ? getWebSocketStatus(matchId) : 'not_applicable'
+        console.log('[Roster DEBUG] WebSocket status for matchId', matchId, ':', wsStatus)
+
+        setConnectionStatuses(prev => {
+          const newStatus = {
+            ...prev, // Preserve supabase status
+            server: serverConnected ? 'connected' : 'disconnected',
+            websocket: wsStatus
+          }
+          console.log('[Roster DEBUG] Updated connection statuses:', newStatus)
+          return newStatus
+        })
+
+        // Build debug info for disconnected services
+        if (!serverConnected) {
+          setConnectionDebugInfo(prev => ({
+            ...prev,
+            server: {
+              status: 'disconnected',
+              message: 'Cannot reach the server API',
+              details: 'Make sure the backend server is running and accessible.'
+            }
+          }))
+        }
+      } catch (err) {
+        console.error('[Roster DEBUG] Error checking connections:', err)
+        setConnectionStatuses(prev => ({
+          ...prev, // Preserve supabase status
+          server: 'disconnected',
+          websocket: 'not_applicable'
+        }))
+        setConnectionDebugInfo(prev => ({
+          ...prev,
+          server: {
+            status: 'error',
+            message: 'Failed to check server status',
+            details: err.message || 'Network error occurred while checking connection.'
+          }
+        }))
+      }
+    }
+
+    checkConnections()
+    const interval = setInterval(checkConnections, 10000) // Check every 10s (reduced from 5s)
+
+    return () => clearInterval(interval)
+  }, [matchId, connectionMode])
+
+  // Handle match selection
+  const handleMatchSelect = async (match) => {
+    console.log('[UploadRoster] Match selected:', match)
+    setSelectedMatch(match)
+    setGameNumber(String(match.gameNumber || match.id))
+
+    // Check match status directly from the match object (already from Supabase)
+    setMatchStatusCheck('checking')
+
+    // Check if match is finished
+    if (match.status === 'final' || match.status === 'finished') {
+      setMatchStatusCheck('invalid')
+      setValidationError('This match has already ended')
+      return
+    }
+
+    // Check if match has started (status is 'live' means it's in progress)
+    if (match.status === 'live') {
+      // For live matches, roster upload is still allowed until coin toss is confirmed
+      // We'll allow it but warn the user
+      console.log('[UploadRoster] Match is live, checking if roster can still be uploaded')
+    }
+
+    // Match is valid for roster upload (status is 'setup' or early 'live')
+    setMatchStatusCheck('valid')
+    setMatch(match)
+    setMatchId(match.id)
+
+    // Use team data from the match object
+    if (match.homeTeamName) {
+      setHomeTeam({ name: match.homeTeamName })
+    }
+    if (match.awayTeamName) {
+      setAwayTeam({ name: match.awayTeamName })
+    }
+    setValidationError('')
+  }
+
+  // Handle back to game selection
+  const handleBackToGames = () => {
+    setSelectedMatch(null)
+    setGameNumber('')
+    setTeam('home')
+    setUploadPin('')
+    setMatch(null)
+    setMatchId(null)
+    setHomeTeam(null)
+    setAwayTeam(null)
+    setValidationError('')
+    setMatchStatusCheck(null)
+    setManuallyValidated(false)
+  }
+
+  // Check if match exists and is in setup (not started or finished)
+  const checkMatchStatus = async (gameNum) => {
+    if (!gameNum || !gameNum.trim()) {
+      setMatchStatusCheck(null)
+      setMatch(null)
+      setMatchId(null)
+      setValidationError('')
+      return
+    }
+
+    setMatchStatusCheck('checking')
+    
+    try {
+      // Find match from server
+      const foundMatch = await findMatchByGameNumber(gameNum.trim())
+      
+      if (!foundMatch) {
+        setMatchStatusCheck('invalid')
+        setMatch(null)
+        setMatchId(null)
+        setValidationError('Match not found with this game number. Make sure the main scoresheet is running.')
+        return
+      }
+
+      // Get full match data to check sets and events
+      const matchData = await getMatchData(foundMatch.id)
+      if (!matchData.success) {
+        setMatchStatusCheck('invalid')
+        setMatch(null)
+        setMatchId(null)
+        setValidationError('Failed to load match data')
+        return
+      }
+
+      const sets = matchData.sets || []
+      const events = matchData.events || []
+      
+      // Check if match is finished
+      const isFinished = foundMatch.status === 'final' || (sets.length > 0 && sets.every(s => s.finished))
+      
+      // Check if match has started (has active sets or events)
+      const hasActiveSet = sets.some(set => {
+        return Boolean(
+          set.finished ||
+          set.startTime ||
+          set.homePoints > 0 ||
+          set.awayPoints > 0
+        )
+      })
+      
+      const hasEventActivity = events.some(event =>
+        ['set_start', 'rally_start', 'point'].includes(event.type)
+      )
+
+      if (isFinished) {
+        setMatchStatusCheck('invalid')
+        setMatch(null)
+        setMatchId(null)
+        setValidationError('This match has already ended')
+        return
+      }
+
+      if (hasActiveSet || hasEventActivity) {
+        setMatchStatusCheck('invalid')
+        setMatch(null)
+        setMatchId(null)
+        setValidationError('This match has already started. Roster cannot be uploaded.')
+        return
+      }
+
+      // Match is valid for roster upload
+      setMatchStatusCheck('valid')
+      setMatch(foundMatch)
+      setMatchId(foundMatch.id)
+      
+      // Set teams from match data
+      if (matchData.homeTeam) setHomeTeam(matchData.homeTeam)
+      if (matchData.awayTeam) setAwayTeam(matchData.awayTeam)
+      
+      setValidationError('')
+    } catch (error) {
+      console.error('Error checking match status:', error)
+      setMatchStatusCheck('invalid')
+      setMatch(null)
+      setMatchId(null)
+      setValidationError('Error checking match status. Make sure the main scoresheet is running.')
+    }
+  }
+
+  // Check match status when game number changes (with debounce)
+  // Skip if we already have a selectedMatch from Supabase - it's already validated
+  useEffect(() => {
+    // If we have a selected match from Supabase, don't run server-based validation
+    if (selectedMatch && activeConnection === 'supabase') {
+      return
+    }
+
+    const timeoutId = setTimeout(() => {
+      if (gameNumber) {
+        checkMatchStatus(gameNumber)
+      } else {
+        setMatchStatusCheck(null)
+        setMatch(null)
+        setMatchId(null)
+        setValidationError('')
+      }
+    }, 500) // 500ms debounce
+
+    return () => clearTimeout(timeoutId)
+  }, [gameNumber, selectedMatch, activeConnection])
+
+  // Auto-validate PIN when it changes
+  useEffect(() => {
+    if (!match) {
+      setValidationError('')
+      return
+    }
+
+    // Handle both camelCase (local) and snake_case (Supabase) field names
+    const correctPin = team === 'home'
+      ? (match.homeTeamUploadPin || match.home_team_upload_pin)
+      : (match.awayTeamUploadPin || match.away_team_upload_pin)
+    const pinIsRequired = correctPin != null && correctPin !== ''
+
+    // If no PIN is required, clear any errors
+    if (!pinIsRequired) {
+      setValidationError('')
+      return
+    }
+
+    // PIN is required - validate it
+    if (uploadPin && uploadPin.length === 6) {
+      if (uploadPin === correctPin) {
+        setValidationError('')
+      } else {
+        setValidationError('Invalid upload PIN')
+      }
+    } else {
+      setValidationError('')
+    }
+  }, [uploadPin, match, team])
+
+  // Load teams when match is found (already loaded in checkMatchStatus)
+
+  // Validate inputs
+  const validateInputs = async () => {
+    setValidationError('')
+    
+    if (!gameNumber.trim()) {
+      setValidationError('Please enter a game number')
+      return false
+    }
+
+    try {
+      const foundMatch = await findMatchByGameNumber(gameNumber.trim())
+      if (!foundMatch) {
+        setValidationError('Match not found with this game number')
+        return false
+      }
+
+      setMatch(foundMatch)
+      setMatchId(foundMatch.id)
+
+      // Handle both camelCase (local) and snake_case (Supabase) field names
+      const correctPin = team === 'home'
+        ? (foundMatch.homeTeamUploadPin || foundMatch.home_team_upload_pin)
+        : (foundMatch.awayTeamUploadPin || foundMatch.away_team_upload_pin)
+      const pinIsRequired = correctPin != null && correctPin !== ''
+
+      if (pinIsRequired) {
+        if (!uploadPin.trim()) {
+          setValidationError('Please enter an upload PIN')
+          return false
+        }
+
+        if (uploadPin.trim() !== correctPin) {
+          setValidationError('Invalid upload PIN')
+          return false
+        }
+      }
+
+      return true
+    } catch (error) {
+      setValidationError('Error validating inputs. Make sure the main scoresheet is running.')
+      return false
+    }
+  }
+
+  // Handle file selection
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0]
+    if (file && file.type === 'application/pdf') {
+      setPdfFile(file)
+      setPdfError('')
+      setParsedData(null)
+    } else {
+      setPdfError('Please select a valid PDF file')
+      setPdfFile(null)
+    }
+  }
+
+  // Handle PDF upload and parse
+  const handleUpload = async () => {
+    if (!pdfFile || !matchId) return
+
+    setPdfLoading(true)
+    setPdfError('')
+    setParsedData(null)
+
+    try {
+      const data = await parseRosterPdf(pdfFile)
+
+      // Prepare roster data
+      const players = data.players.map(p => ({
+        number: p.number || null,
+        firstName: p.firstName || '',
+        lastName: p.lastName || '',
+        dob: p.dob || '',
+        libero: '',
+        isCaptain: false
+      }))
+
+      // Prepare bench officials
+      const bench = []
+      if (data.coach) {
+        bench.push({
+          role: 'Coach',
+          firstName: data.coach.firstName || '',
+          lastName: data.coach.lastName || '',
+          dob: data.coach.dob || ''
+        })
+      }
+      if (data.ac1) {
+        bench.push({
+          role: 'Assistant Coach 1',
+          firstName: data.ac1.firstName || '',
+          lastName: data.ac1.lastName || '',
+          dob: data.ac1.dob || ''
+        })
+      }
+      if (data.ac2) {
+        bench.push({
+          role: 'Assistant Coach 2',
+          firstName: data.ac2.firstName || '',
+          lastName: data.ac2.lastName || '',
+          dob: data.ac2.dob || ''
+        })
+      }
+
+      setParsedData({ players, bench })
+      setPdfFile(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    } catch (err) {
+      console.error('Error parsing PDF:', err)
+      setPdfError(`Failed to parse PDF: ${err.message}`)
+    } finally {
+      setPdfLoading(false)
+    }
+  }
+
+  // Handle player edit
+  const handlePlayerChange = (index, field, value) => {
+    if (!parsedData) return
+    const updatedPlayers = [...parsedData.players]
+    updatedPlayers[index] = { ...updatedPlayers[index], [field]: value }
+    setParsedData({ ...parsedData, players: updatedPlayers })
+  }
+
+  // Handle bench official edit
+  const handleBenchChange = (index, field, value) => {
+    if (!parsedData) return
+    const updatedBench = [...parsedData.bench]
+    updatedBench[index] = { ...updatedBench[index], [field]: value }
+    setParsedData({ ...parsedData, bench: updatedBench })
+  }
+
+  // Add player
+  const handleAddPlayer = () => {
+    if (!parsedData) return
+    const newPlayer = {
+      number: null,
+      firstName: '',
+      lastName: '',
+      dob: '',
+      libero: '',
+      isCaptain: false
+    }
+    setParsedData({ ...parsedData, players: [...parsedData.players, newPlayer] })
+  }
+
+  // Delete player
+  const handleDeletePlayer = (index) => {
+    if (!parsedData) return
+    const updatedPlayers = parsedData.players.filter((_, i) => i !== index)
+    setParsedData({ ...parsedData, players: updatedPlayers })
+  }
+
+  // Add bench official
+  const handleAddBench = () => {
+    if (!parsedData) return
+    const newBench = {
+      role: 'Coach',
+      firstName: '',
+      lastName: '',
+      dob: ''
+    }
+    setParsedData({ ...parsedData, bench: [...parsedData.bench, newBench] })
+  }
+
+  // Delete bench official
+  const handleDeleteBench = (index) => {
+    if (!parsedData) return
+    const updatedBench = parsedData.bench.filter((_, i) => i !== index)
+    setParsedData({ ...parsedData, bench: updatedBench })
+  }
+
+  // Handle confirm
+  const handleConfirm = () => {
+    if (!parsedData || !matchId) return
+    setShowConfirmModal(true)
+  }
+
+  // Handle final confirmation - store in match and clear form
+  const handleFinalConfirm = async () => {
+    if (!parsedData || !matchId || uploading) return
+
+    setUploading(true)
+    try {
+      // Store pending roster in match
+      const pendingField = team === 'home' ? 'pending_home_roster' : 'pending_away_roster'
+      const rosterData = {
+        players: parsedData.players,
+        bench: parsedData.bench,
+        coachSignature: coachSignature || null,
+        captainSignature: captainSignature || null,
+        timestamp: new Date().toISOString()
+      }
+
+      // Try Supabase first if connected
+      if (activeConnection === 'supabase' && supabase && selectedMatch?.external_id) {
+        console.log('[Roster] Writing roster to Supabase for match:', selectedMatch.external_id)
+
+        // JSONB signature keys
+        const coachSigJsonKey = team === 'home' ? 'home_coach' : 'away_coach'
+        const captainSigJsonKey = team === 'home' ? 'home_captain' : 'away_captain'
+
+        const supabaseUpdate = {
+          [pendingField]: rosterData
+        }
+
+        // Build signatures JSONB partial update
+        const signaturesUpdate = {}
+        // Build connections JSONB partial update for pending roster
+        const pendingRosterJsonKey = team === 'home' ? 'pending_home_roster' : 'pending_away_roster'
+
+        // Save signatures to JSONB
+        if (coachSignature) {
+          signaturesUpdate[coachSigJsonKey] = coachSignature
+        }
+        if (captainSignature) {
+          signaturesUpdate[captainSigJsonKey] = captainSignature
+        }
+
+        // Merge with existing signatures and connections JSONB
+        const { data: existingMatch } = await supabase
+          .from('matches')
+          .select('signatures, connections')
+          .eq('external_id', selectedMatch.external_id)
+          .maybeSingle()
+
+        // Update signatures JSONB if we have signature updates
+        if (Object.keys(signaturesUpdate).length > 0) {
+          supabaseUpdate.signatures = {
+            ...(existingMatch?.signatures || {}),
+            ...signaturesUpdate
+          }
+        }
+
+        // Always update connections JSONB with pending roster
+        supabaseUpdate.connections = {
+          ...(existingMatch?.connections || {}),
+          [pendingRosterJsonKey]: rosterData
+        }
+
+        const { error } = await supabase
+          .from('matches')
+          .update(supabaseUpdate)
+          .eq('external_id', selectedMatch.external_id)
+
+        if (error) {
+          console.error('[Roster] Supabase write error:', error)
+          // Fall back to server
+        } else {
+          console.log('[Roster] Successfully wrote roster to Supabase with signatures:', signaturesUpdate)
+        }
+      }
+
+      // Also try to update via server (for local sync and WebSocket updates)
+      // This is optional - if Supabase worked, we still show success
+      try {
+        const serverPendingField = team === 'home' ? 'pendingHomeRoster' : 'pendingAwayRoster'
+        await updateMatchData(matchId, {
+          [serverPendingField]: rosterData
+        })
+        console.log('[Roster] Server update also succeeded')
+      } catch (serverError) {
+        console.warn('[Roster] Server update failed (non-blocking):', serverError)
+        // Don't fail - Supabase already has the data
+      }
+
+      // Close confirm modal and show success modal
+      setShowConfirmModal(false)
+      setShowSuccessModal(true)
+    } catch (error) {
+      console.error('Error saving pending roster:', error)
+      setShowConfirmModal(false)
+      setValidationError('Failed to save roster. Please try again.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  // Handle closing success modal and resetting form
+  const handleSuccessClose = () => {
+    setShowSuccessModal(false)
+
+    // Clear all form data
+    setGameNumber('')
+    setTeam('home')
+    setUploadPin('')
+    setMatch(null)
+    setMatchId(null)
+    setHomeTeam(null)
+    setAwayTeam(null)
+    setValidationError('')
+    setPdfFile(null)
+    setPdfError('')
+    setParsedData(null)
+    setMatchStatusCheck(null)
+    setSelectedMatch(null)
+    setManuallyValidated(false)
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  // Check if PIN is required (only if a PIN is set in the match)
+  // Handle both camelCase (local) and snake_case (Supabase) field names
+  const teamUploadPin = team === 'home'
+    ? (match?.homeTeamUploadPin || match?.home_team_upload_pin)
+    : (match?.awayTeamUploadPin || match?.away_team_upload_pin)
+  const isPinRequired = teamUploadPin != null && teamUploadPin !== ''
+  // When PIN is required, validate with PIN. When no PIN required, require manual validation click.
+  const isValid = match && matchId && (isPinRequired ? (uploadPin && teamUploadPin === uploadPin) : manuallyValidated)
+
+  // Handle connection mode change
+  const handleConnectionModeChange = useCallback((mode) => {
+    setConnectionMode(mode)
+    try {
+      localStorage.setItem('roster_connection_mode', mode)
+    } catch (e) {
+      console.warn('[Roster] Failed to save connection mode:', e)
+    }
+    // Force reconnection by clearing states
+    if (supabaseChannelRef.current) {
+      supabase?.removeChannel(supabaseChannelRef.current)
+      supabaseChannelRef.current = null
+    }
+    setActiveConnection(null)
+  }, [])
+
+  // Handle test mode activation (6 clicks on "No active games found")
+  const handleTestModeClick = useCallback(() => {
+    if (testModeTimeoutRef.current) {
+      clearTimeout(testModeTimeoutRef.current)
+    }
+
+    setTestModeClicks(prev => {
+      const newCount = prev + 1
+      if (newCount >= 6) {
+        // Activate test mode with mock data
+        const testMatch = {
+          id: -1,
+          gameNumber: 999,
+          status: 'setup',
+          homeTeamName: 'Test Home',
+          awayTeamName: 'Test Away',
+          homeTeamUploadPin: '123456',
+          awayTeamUploadPin: '654321'
+        }
+        setSelectedMatch(testMatch)
+        setGameNumber('999')
+        setMatch(testMatch)
+        setMatchId(-1)
+        setHomeTeam({ name: 'Test Home', color: '#ef4444' })
+        setAwayTeam({ name: 'Test Away', color: '#3b82f6' })
+        setMatchStatusCheck('valid')
+        setValidationError('')
+        console.log('[Test Mode] Activated with mock data')
+        return 0
+      }
+      return newCount
+    })
+
+    testModeTimeoutRef.current = setTimeout(() => {
+      setTestModeClicks(0)
+    }, 2000)
+  }, [])
+
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+      color: '#fff',
+      display: 'flex',
+      flexDirection: 'column',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      width: 'auto'
+    }}>
+      <UpdateBanner />
+
+      <SimpleHeader
+        title={t('uploadRoster.title')}
+        subtitle={selectedMatch ? `${t('uploadRoster.game')} ${selectedMatch.gameNumber || selectedMatch.id}` : null}
+        wakeLockActive={wakeLockActive}
+        toggleWakeLock={toggleWakeLock}
+        connectionStatuses={connectionStatuses}
+        connectionDebugInfo={connectionDebugInfo}
+        connectionMode={connectionMode}
+        activeConnection={activeConnection}
+        onConnectionModeChange={handleConnectionModeChange}
+        showConnectionOptions={true}
+        onBack={selectedMatch ? handleBackToGames : null}
+        backLabel={t('uploadRoster.changeGame', 'Change Game')}
+      />
+
+      <div style={{
+        flex: 1,
+        padding: '20px'
+      }}>
+      <div style={{
+        margin: '0 auto',
+        background: 'var(--bg-secondary)',
+        borderRadius: '12px',
+        padding: '40px',
+      width: 'auto'
+      }}>
+        <h1 style={{ fontSize: '28px', fontWeight: 700, marginBottom: '32px', textAlign: 'center' }}>
+          {t('uploadRoster.title')}
+        </h1>
+
+        {/* Game Selection - Step 1 */}
+        {!parsedData && !selectedMatch && (
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+            marginBottom: '32px',
+            alignItems: 'center',
+            maxWidth: '100%',
+            width: 'auto'
+          }}>
+            <p style={{
+              fontSize: '16px',
+              color: 'rgba(255, 255, 255, 0.7)',
+              marginBottom: '16px',
+              textAlign: 'center'
+            }}>
+              {t('uploadRoster.selectGame')}
+            </p>
+
+            {loadingMatches ? (
+              <div style={{
+                padding: '20px',
+                color: 'rgba(255, 255, 255, 0.7)',
+                fontSize: '16px'
+              }}>
+                {t('uploadRoster.loadingGames')}
+              </div>
+            ) : availableMatches.length > 0 ? (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                width: '100%',
+                maxWidth: '500px'
+              }}>
+                {availableMatches.map((match) => (
+                  <button
+                    key={match.id}
+                    onClick={() => handleMatchSelect(match)}
+                    style={{
+                      padding: '16px 20px',
+                      background: 'rgba(255, 255, 255, 0.1)',
+                      border: '2px solid rgba(255, 255, 255, 0.2)',
+                      borderRadius: '12px',
+                      color: '#fff',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      textAlign: 'left'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'
+                    }}
+                  >
+                    <div style={{
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      color: 'var(--accent)',
+                      marginBottom: '4px'
+                    }}>
+                      {t('uploadRoster.game')} {match.gameNumber || match.id}
+                    </div>
+                    <div style={{
+                      fontSize: '16px',
+                      fontWeight: 500
+                    }}>
+                      {match.homeTeamName || t('common.home')} {t('uploadRoster.vs')} {match.awayTeamName || t('common.away')}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div
+                onClick={handleTestModeClick}
+                style={{
+                  padding: '20px',
+                  color: 'rgba(255, 255, 255, 0.5)',
+                  fontSize: '14px',
+                  textAlign: 'center',
+                  cursor: 'default',
+                  userSelect: 'none'
+                }}
+              >
+                {t('uploadRoster.noActiveGames')}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Team and PIN Selection - Step 2 */}
+        {!parsedData && selectedMatch && (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '20px',
+              marginBottom: '32px',
+              alignItems: 'center',
+              maxWidth: '100%',
+              width: 'auto'
+            }}
+          >
+            {/* Match info */}
+            <div style={{
+              padding: '16px 24px',
+              background: 'rgba(255, 255, 255, 0.05)',
+              borderRadius: '8px',
+              textAlign: 'center',
+              marginBottom: '8px'
+            }}>
+              <div style={{ fontSize: '18px', fontWeight: 600 }}>
+                {homeTeam?.name || t('common.home')} {t('uploadRoster.vs')} {awayTeam?.name || t('common.away')}
+              </div>
+            </div>
+
+            {matchStatusCheck === 'checking' && (
+              <p style={{ color: 'var(--accent)', fontSize: '14px', margin: 0, textAlign: 'center' }}>
+                {t('uploadRoster.validating')}
+              </p>
+            )}
+
+            {matchStatusCheck === 'invalid' && validationError && (
+              <p style={{ color: '#ef4444', fontSize: '14px', margin: 0, textAlign: 'center', maxWidth: '300px' }}>
+                {validationError}
+              </p>
+            )}
+
+            {matchStatusCheck === 'valid' && (
+              <>
+                <div style={{ width: 320, maxWidth: '100%' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 600, textAlign: 'center' }}>
+                    {t('uploadRoster.selectTeam')}
+                  </label>
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTeam('home')
+                        setValidationError('')
+                        setUploadPin('')
+                        setManuallyValidated(false)
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: '12px',
+                        fontSize: '16px',
+                        fontWeight: 600,
+                        background: team === 'home' ? 'var(--accent)' : 'rgba(255, 255, 255, 0.1)',
+                        color: team === 'home' ? '#000' : 'var(--text)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        width: 'auto',
+                      }}
+                    >
+                      {t('uploadRoster.home')} {homeTeam?.name && `(${homeTeam.name})`}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTeam('away')
+                        setValidationError('')
+                        setUploadPin('')
+                        setManuallyValidated(false)
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: '12px',
+                        fontSize: '16px',
+                        fontWeight: 600,
+                        background: team === 'away' ? 'var(--accent)' : 'rgba(255, 255, 255, 0.1)',
+                        color: team === 'away' ? '#000' : 'var(--text)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        width: 'auto',
+                      }}
+                    >
+                      {t('uploadRoster.away')} {awayTeam?.name && `(${awayTeam.name})`}
+                    </button>
+                  </div>
+                </div>
+
+                {isPinRequired ? (
+                  <div style={{ width: 320, maxWidth: '100%' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 600, textAlign: 'center' }}>
+                      {t('uploadRoster.uploadPin')}
+                    </label>
+                    <input
+                      type="text"
+                      value={uploadPin}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 6)
+                        setUploadPin(val)
+                      }}
+                      placeholder={t('uploadRoster.enterPin')}
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        fontSize: '18px',
+                        fontFamily: 'monospace',
+                        textAlign: 'center',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        border: isValid
+                          ? '1px solid #10b981'
+                          : validationError && uploadPin.length === 6
+                          ? '1px solid #ef4444'
+                          : '1px solid rgba(255, 255, 255, 0.2)',
+                        borderRadius: '6px',
+                        color: 'var(--text)'
+                      }}
+                      maxLength={6}
+                    />
+                    {isValid && (
+                      <p style={{ color: '#10b981', fontSize: '12px', margin: '4px 0 0 0', textAlign: 'center' }}>
+                        ✓ {t('uploadRoster.validate')}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ width: 320, maxWidth: '100%', textAlign: 'center' }}>
+                    {manuallyValidated ? (
+                      <p style={{ color: '#10b981', fontSize: '14px', margin: 0 }}>
+                        ✓ {t('uploadRoster.validated', 'Validated')}
+                      </p>
+                    ) : (
+                      <>
+                        <p style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '13px', margin: '0 0 12px 0' }}>
+                          {t('uploadRoster.noPinRequired', 'No PIN required')}
+                        </p>
+                        <button
+                          onClick={() => setManuallyValidated(true)}
+                          style={{
+                            padding: '10px 24px',
+                            fontSize: '14px',
+                            fontWeight: 600,
+                            background: '#10b981',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {t('uploadRoster.validate', 'Validate')}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {validationError && uploadPin.length === 6 && isPinRequired && (
+                  <p style={{ color: '#ef4444', fontSize: '14px', margin: 0, textAlign: 'center', width: 320, maxWidth: '100%' }}>
+                    {validationError}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Upload Section */}
+        {isValid && !parsedData && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '32px', alignItems: 'center' }}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf"
+              onChange={handleFileSelect}
+              style={{ display: 'none' }}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={pdfLoading}
+              style={{
+                padding: '12px 24px',
+                fontSize: '16px',
+                fontWeight: 600,
+                background: 'rgba(255, 255, 255, 0.1)',
+                color: 'var(--text)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                borderRadius: '6px',
+                cursor: pdfLoading ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {t('uploadRoster.selectPdfFile')}
+            </button>
+
+            {pdfFile && (
+              <>
+                <div style={{
+                  padding: '12px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  textAlign: 'center'
+                }}>
+                  Selected: {pdfFile.name}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleUpload}
+                  disabled={pdfLoading}
+                  style={{
+                    padding: '12px 24px',
+                    fontSize: '16px',
+                    fontWeight: 600,
+                    background: 'var(--accent)',
+                    color: '#000',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: pdfLoading ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {pdfLoading ? t('uploadRoster.parsing') : t('uploadRoster.confirm')}
+                </button>
+              </>
+            )}
+
+            {pdfLoading && (
+              <p style={{ fontSize: '14px', color: 'var(--accent)', margin: 0, textAlign: 'center' }}>
+                {t('uploadRoster.parsing')}
+              </p>
+            )}
+
+            {pdfError && (
+              <p style={{ fontSize: '14px', color: '#ef4444', margin: 0, textAlign: 'center' }}>
+                {pdfError}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Editable Roster */}
+        {parsedData && (
+          <div style={{ marginBottom: '32px', maxWidth: '60%', margin: '0 auto' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '20px' }}>{t('uploadRoster.parsedPlayers')}</h2>
+
+            {/* Column headers for players */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '60px 1fr 1fr 140px 100px 100px 70px',
+              gap: '12px',
+              alignItems: 'center',
+              padding: '8px 16px',
+              marginBottom: '4px',
+              fontSize: '12px',
+              fontWeight: 600,
+              color: 'rgba(255, 255, 255, 0.6)'
+            }}>
+              <span>{t('rosterSetup.number', '#')}</span>
+              <span>{t('rosterSetup.lastName', 'Last Name')}</span>
+              <span>{t('rosterSetup.firstName', 'First Name')}</span>
+              <span>{t('rosterSetup.dob', 'DOB')}</span>
+              <span>{t('rosterSetup.libero', 'Libero')}</span>
+              <span>{t('rosterSetup.captain', 'Captain')}</span>
+              <span></span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '24px' }}>
+              {parsedData.players.map((player, index) => (
+                <div key={index} style={{
+                  padding: '12px 16px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  borderRadius: '8px',
+                  display: 'grid',
+                  gridTemplateColumns: '60px 1fr 1fr 140px 100px 100px 70px',
+                  gap: '12px',
+                  alignItems: 'center'
+                }}>
+                  <input
+                    type="number"
+                    value={player.number || ''}
+                    onChange={(e) => handlePlayerChange(index, 'number', e.target.value ? Number(e.target.value) : null)}
+                    placeholder="#"
+                    style={{
+                      padding: '8px',
+                      fontSize: '14px',
+                      background: 'rgba(26, 26, 46, 0.95)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      borderRadius: '4px',
+                      color: 'var(--text)',
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      textAlign: 'center'
+                    }}
+                  />
+                  <input
+                    type="text"
+                    value={player.lastName}
+                    onChange={(e) => handlePlayerChange(index, 'lastName', e.target.value)}
+                    placeholder={t('rosterSetup.lastName', 'Last Name')}
+                    style={{
+                      padding: '8px',
+                      fontSize: '14px',
+                      background: 'rgba(26, 26, 46, 0.95)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      borderRadius: '4px',
+                      color: 'var(--text)',
+                      width: '100%',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                  <input
+                    type="text"
+                    value={player.firstName}
+                    onChange={(e) => handlePlayerChange(index, 'firstName', e.target.value)}
+                    placeholder={t('rosterSetup.firstName', 'First Name')}
+                    style={{
+                      padding: '8px',
+                      fontSize: '14px',
+                      background: 'rgba(26, 26, 46, 0.95)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      borderRadius: '4px',
+                      color: 'var(--text)',
+                      width: '100%',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                  <input
+                    type="date"
+                    value={player.dob ? formatDateToISO(player.dob) : ''}
+                    onChange={(e) => handlePlayerChange(index, 'dob', e.target.value ? formatDateToDDMMYYYY(e.target.value) : '')}
+                    style={{
+                      padding: '8px',
+                      fontSize: '14px',
+                      background: 'rgba(26, 26, 46, 0.95)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      borderRadius: '4px',
+                      color: 'var(--text)',
+                      width: '100%',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                  <select
+                    value={player.libero}
+                    onChange={(e) => handlePlayerChange(index, 'libero', e.target.value)}
+                    style={{
+                      padding: '8px',
+                      fontSize: '14px',
+                      background: 'rgba(26, 26, 46, 0.95)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      borderRadius: '4px',
+                      color: 'var(--text)',
+                      width: '100%',
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    <option value=""></option>
+                    <option value="libero1">{t('rosterSetup.libero', 'Libero')} 1</option>
+                    <option value="libero2">{t('rosterSetup.libero', 'Libero')} 2</option>
+                  </select>
+                  <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      checked={player.isCaptain}
+                      onChange={(e) => handlePlayerChange(index, 'isCaptain', e.target.checked)}
+                      style={{ width: '18px', height: '18px' }}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => handleDeletePlayer(index)}
+                    style={{
+                      padding: '6px 10px',
+                      fontSize: '12px',
+                      background: '#ef4444',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      width: '100%',
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    {t('common.delete')}
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={handleAddPlayer}
+              style={{
+                padding: '10px 20px',
+                fontSize: '14px',
+                fontWeight: 600,
+                background: 'rgba(255, 255, 255, 0.1)',
+                color: 'var(--text)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                marginBottom: '24px'
+              }}
+            >
+              {t('roster.addPlayer')}
+            </button>
+
+            <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '20px' }}>{t('uploadRoster.parsedBench')}</h2>
+
+            {/* Column headers for bench officials */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '180px 1fr 1fr 140px 70px',
+              gap: '12px',
+              alignItems: 'center',
+              padding: '8px 16px',
+              marginBottom: '4px',
+              fontSize: '12px',
+              fontWeight: 600,
+              color: 'rgba(255, 255, 255, 0.6)'
+            }}>
+              <span>{t('rosterSetup.role', 'Role')}</span>
+              <span>{t('rosterSetup.lastName', 'Last Name')}</span>
+              <span>{t('rosterSetup.firstName', 'First Name')}</span>
+              <span>{t('rosterSetup.dob', 'DOB')}</span>
+              <span></span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '24px' }}>
+              {parsedData.bench.map((official, index) => (
+                <div key={index} style={{
+                  padding: '12px 16px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  borderRadius: '8px',
+                  display: 'grid',
+                  gridTemplateColumns: '180px 1fr 1fr 140px 70px',
+                  gap: '12px',
+                  alignItems: 'center'
+                }}>
+                  <select
+                    value={official.role}
+                    onChange={(e) => handleBenchChange(index, 'role', e.target.value)}
+                    style={{
+                      padding: '8px',
+                      fontSize: '14px',
+                      background: 'rgba(26, 26, 46, 0.95)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      borderRadius: '4px',
+                      color: 'var(--text)',
+                      width: '100%',
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    <option value="Coach">{t('benchRoles.coach', 'Coach')}</option>
+                    <option value="Assistant Coach 1">{t('benchRoles.assistantCoach1', 'Assistant Coach 1')}</option>
+                    <option value="Assistant Coach 2">{t('benchRoles.assistantCoach2', 'Assistant Coach 2')}</option>
+                    <option value="Physiotherapist">{t('benchRoles.physiotherapist', 'Physiotherapist')}</option>
+                    <option value="Medic">{t('benchRoles.medic', 'Medic')}</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={official.lastName}
+                    onChange={(e) => handleBenchChange(index, 'lastName', e.target.value)}
+                    placeholder={t('rosterSetup.lastName', 'Last Name')}
+                    style={{
+                      padding: '8px',
+                      fontSize: '14px',
+                      background: 'rgba(26, 26, 46, 0.95)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      borderRadius: '4px',
+                      color: 'var(--text)',
+                      width: '100%',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                  <input
+                    type="text"
+                    value={official.firstName}
+                    onChange={(e) => handleBenchChange(index, 'firstName', e.target.value)}
+                    placeholder={t('rosterSetup.firstName', 'First Name')}
+                    style={{
+                      padding: '8px',
+                      fontSize: '14px',
+                      background: 'rgba(26, 26, 46, 0.95)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      borderRadius: '4px',
+                      color: 'var(--text)',
+                      width: '100%',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                  <input
+                    type="date"
+                    value={official.dob ? formatDateToISO(official.dob) : ''}
+                    onChange={(e) => handleBenchChange(index, 'dob', e.target.value ? formatDateToDDMMYYYY(e.target.value) : '')}
+                    style={{
+                      padding: '8px',
+                      fontSize: '14px',
+                      background: 'rgba(26, 26, 46, 0.95)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      borderRadius: '4px',
+                      color: 'var(--text)',
+                      width: '100%',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteBench(index)}
+                    style={{
+                      padding: '6px 10px',
+                      fontSize: '12px',
+                      background: '#ef4444',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      width: '100%',
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    {t('common.delete')}
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={handleAddBench}
+              style={{
+                padding: '10px 20px',
+                fontSize: '14px',
+                fontWeight: 600,
+                background: 'rgba(255, 255, 255, 0.1)',
+                color: 'var(--text)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                marginBottom: '24px'
+              }}
+            >
+              + {t('roster.benchOfficials')}
+            </button>
+
+            {/* Signatures Section */}
+            <div style={{
+              marginTop: '32px',
+              padding: '20px',
+              background: 'rgba(255,255,255,0.05)',
+              borderRadius: '8px',
+              border: '1px solid rgba(255,255,255,0.1)'
+            }}>
+              <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '16px' }}>
+                {t('rosterSetup.signatures', 'Signatures')}
+              </h2>
+              <p style={{ fontSize: '14px', color: 'var(--muted)', marginBottom: '20px' }}>
+                {t('rosterSetup.signaturesDescription', 'Optional: Coach and captain can sign the roster before submitting.')}
+              </p>
+              <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                {/* Coach Signature */}
+                <div style={{ flex: 1, minWidth: '200px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '8px' }}>
+                    {t('rosterSetup.coachSignature', 'Coach Signature')}
+                  </div>
+                  <div
+                    onClick={() => setOpenSignature('coach')}
+                    style={{
+                      width: '100%',
+                      height: '100px',
+                      background: coachSignature ? 'white' : 'rgba(255,255,255,0.05)',
+                      border: coachSignature ? '2px solid #22c55e' : '2px dashed rgba(255,255,255,0.3)',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    {coachSignature ? (
+                      <img src={coachSignature} alt="Coach signature" style={{ maxWidth: '100%', maxHeight: '100%' }} />
+                    ) : (
+                      <span style={{ color: 'var(--muted)', fontSize: '13px' }}>
+                        {t('rosterSetup.tapToSign', 'Tap to sign')}
+                      </span>
+                    )}
+                  </div>
+                  {coachSignature && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setCoachSignature(null); }}
+                      style={{
+                        marginTop: '8px',
+                        padding: '4px 12px',
+                        fontSize: '12px',
+                        background: 'rgba(239, 68, 68, 0.2)',
+                        color: '#ef4444',
+                        border: '1px solid #ef4444',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {t('common.clear', 'Clear')}
+                    </button>
+                  )}
+                </div>
+
+                {/* Captain Signature */}
+                <div style={{ flex: 1, minWidth: '200px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '8px' }}>
+                    {t('rosterSetup.captainSignature', 'Captain Signature')}
+                  </div>
+                  <div
+                    onClick={() => setOpenSignature('captain')}
+                    style={{
+                      width: '100%',
+                      height: '100px',
+                      background: captainSignature ? 'white' : 'rgba(255,255,255,0.05)',
+                      border: captainSignature ? '2px solid #22c55e' : '2px dashed rgba(255,255,255,0.3)',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    {captainSignature ? (
+                      <img src={captainSignature} alt="Captain signature" style={{ maxWidth: '100%', maxHeight: '100%' }} />
+                    ) : (
+                      <span style={{ color: 'var(--muted)', fontSize: '13px' }}>
+                        {t('rosterSetup.tapToSign', 'Tap to sign')}
+                      </span>
+                    )}
+                  </div>
+                  {captainSignature && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setCaptainSignature(null); }}
+                      style={{
+                        marginTop: '8px',
+                        padding: '4px 12px',
+                        fontSize: '12px',
+                        background: 'rgba(239, 68, 68, 0.2)',
+                        color: '#ef4444',
+                        border: '1px solid #ef4444',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {t('common.clear', 'Clear')}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '32px' }}>
+              <button
+                type="button"
+                onClick={handleConfirm}
+                style={{
+                  padding: '14px 32px',
+                  fontSize: '18px',
+                  fontWeight: 700,
+                  background: 'var(--accent)',
+                  color: '#000',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                {t('common.confirm')}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Confirmation Modal */}
+        {showConfirmModal && (
+          <Modal
+            title={uploading ? t('uploadRoster.uploading') : t('uploadRoster.confirmTitle')}
+            open={true}
+            onClose={() => !uploading && setShowConfirmModal(false)}
+            width={400}
+          >
+            <div style={{ padding: '24px' }}>
+              {uploading ? (
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{
+                    width: '48px',
+                    height: '48px',
+                    border: '4px solid rgba(255,255,255,0.2)',
+                    borderTop: '4px solid var(--accent)',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite',
+                    margin: '0 auto 16px'
+                  }} />
+                  <p style={{ fontSize: '16px', color: 'var(--text)' }}>
+                    {t('uploadRoster.uploadingMessage')}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <p style={{ marginBottom: '24px', fontSize: '16px', textAlign: 'center' }}>
+                    {t('uploadRoster.confirmMessage')}
+                  </p>
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                    <button
+                      onClick={() => setShowConfirmModal(false)}
+                      style={{
+                        padding: '12px 32px',
+                        fontSize: '16px',
+                        fontWeight: 600,
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        color: 'var(--text)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        borderRadius: '8px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {t('common.no')}
+                    </button>
+                    <button
+                      onClick={handleFinalConfirm}
+                      style={{
+                        padding: '12px 32px',
+                        fontSize: '16px',
+                        fontWeight: 600,
+                        background: 'var(--accent)',
+                        color: '#000',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {t('common.yes')}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </Modal>
+        )}
+
+        {/* Success Modal */}
+        {showSuccessModal && (
+          <Modal
+            title={t('uploadRoster.uploadSuccess')}
+            open={true}
+            onClose={handleSuccessClose}
+            width={400}
+          >
+            <div style={{ padding: '24px', textAlign: 'center' }}>
+              <div style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '50%',
+                background: 'rgba(34, 197, 94, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 16px',
+                fontSize: '32px'
+              }}>
+                ✓
+              </div>
+              <p style={{ marginBottom: '24px', fontSize: '16px', color: 'var(--text)' }}>
+                {t('uploadRoster.rosterSentToScoresheet')}
+              </p>
+              <button
+                onClick={handleSuccessClose}
+                style={{
+                  padding: '12px 32px',
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  background: 'var(--accent)',
+                  color: '#000',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                {t('common.ok')}
+              </button>
+            </div>
+          </Modal>
+        )}
+
+        {/* Signature Pad */}
+        <SignaturePad
+          open={openSignature !== null}
+          onClose={() => setOpenSignature(null)}
+          onSave={(signature) => {
+            if (openSignature === 'coach') {
+              setCoachSignature(signature)
+            } else if (openSignature === 'captain') {
+              setCaptainSignature(signature)
+            }
+            setOpenSignature(null)
+          }}
+          title={openSignature === 'coach'
+            ? t('rosterSetup.coachSignature', 'Coach Signature')
+            : t('rosterSetup.captainSignature', 'Captain Signature')}
+        />
+      </div>
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,1498 @@
+import { useState, useMemo, useEffect } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { db } from '../db_beach/db_beach'
+import mikasaVolleyball from '../mikasa_BV550C_beach.png'
+
+export default function Referee({ matchId, onExit }) {
+  const [refereeView, setRefereeView] = useState('2nd') // '1st' or '2nd'
+  const [activeTimeout, setActiveTimeout] = useState(null) // { team: 'team_1'|'team_2', countdown: number, eventId: number }
+  const [processedTimeouts, setProcessedTimeouts] = useState(new Set()) // Track which timeout events we've already shown
+  
+  
+  // Send heartbeat to indicate referee is connected (only if connection is enabled)
+  useEffect(() => {
+    // Check if referee connection is enabled before starting heartbeat
+    const checkAndStartHeartbeat = async () => {
+      const match = await db.matches.get(matchId)
+      if (match?.refereeConnectionEnabled === false) return null
+      
+      const updateHeartbeat = async () => {
+        try {
+          const heartbeatData = refereeView === '1st' 
+            ? { lastReferee1Heartbeat: new Date().toISOString() }
+            : { lastReferee2Heartbeat: new Date().toISOString() }
+          await db.matches.update(matchId, heartbeatData)
+        } catch (error) {
+          console.error('Failed to update referee heartbeat:', error)
+        }
+      }
+      
+      // Initial heartbeat
+      updateHeartbeat()
+      
+      // Update heartbeat every 5 seconds
+      return setInterval(updateHeartbeat, 5000)
+    }
+    
+    let interval = null
+    checkAndStartHeartbeat().then(id => { interval = id })
+    
+    return () => {
+      if (interval) clearInterval(interval)
+      // Clear heartbeat on unmount
+      const clearData = refereeView === '1st'
+        ? { lastReferee1Heartbeat: null }
+        : { lastReferee2Heartbeat: null }
+      db.matches.update(matchId, clearData)
+        .catch(err => console.error('Failed to clear heartbeat:', err))
+    }
+  }, [matchId, refereeView])
+
+  const data = useLiveQuery(async () => {
+    const match = await db.matches.get(matchId)
+    if (!match) return null
+
+    const [team_1Team, team_2Team] = await Promise.all([
+      match?.team_1Id ? db.teams.get(match.team_1Id) : null,
+      match?.team_2Id ? db.teams.get(match.team_2Id) : null
+    ])
+
+    const [team_1Players, team_2Players] = await Promise.all([
+      match?.team_1Id
+        ? db.players.where('teamId').equals(match.team_1Id).sortBy('number')
+        : [],
+      match?.team_2Id
+        ? db.players.where('teamId').equals(match.team_2Id).sortBy('number')
+        : []
+    ])
+
+    const sets = await db.sets
+      .where('matchId')
+      .equals(matchId)
+      .sortBy('index')
+
+    const currentSet = sets.find(s => !s.finished) || null
+
+    const events = await db.events
+      .where('matchId')
+      .equals(matchId)
+      .toArray()
+
+    return {
+      match,
+      team_1Team,
+      team_2Team,
+      team_1Players,
+      team_2Players,
+      sets,
+      currentSet,
+      events
+    }
+  }, [matchId])
+
+  // Calculate rally status
+  const rallyStatus = useMemo(() => {
+    if (!data?.events || !data?.currentSet || data.events.length === 0) return 'idle'
+    
+    // Get events for current set only and sort by sequence number (most recent first)
+    const currentSetEvents = data.events
+      .filter(e => e.setIndex === data.currentSet.index)
+      .sort((a, b) => {
+        // Sort by sequence number if available, otherwise by timestamp
+        const aSeq = a.seq || 0
+        const bSeq = b.seq || 0
+        if (aSeq !== 0 || bSeq !== 0) {
+          return bSeq - aSeq // Descending by sequence (most recent first)
+        }
+        // Fallback to timestamp for legacy events
+        const aTime = typeof a.ts === 'number' ? a.ts : new Date(a.ts).getTime()
+        const bTime = typeof b.ts === 'number' ? b.ts : new Date(b.ts).getTime()
+        return bTime - aTime
+      })
+    
+    if (currentSetEvents.length === 0) return 'idle'
+    
+    const lastEvent = currentSetEvents[0] // Most recent event is now first
+    
+    // Check if last event is point or replay first (these end the rally)
+    if (lastEvent.type === 'point' || lastEvent.type === 'replay') {
+      return 'idle'
+    }
+    
+    if (lastEvent.type === 'rally_start') {
+      return 'in_play'
+    }
+    
+    // set_start means set is ready but rally hasn't started yet
+    if (lastEvent.type === 'set_start') {
+      return 'idle'
+    }
+    
+    // For lineup events after points, the rally is idle (waiting for next rally_start)
+    return 'idle'
+  }, [data?.events, data?.currentSet])
+
+  // Get last action description
+  const lastAction = useMemo(() => {
+    if (!data?.events || !data?.currentSet || data.events.length === 0) return null
+    
+    // Get events for current set only and sort by sequence number (most recent first)
+    const currentSetEvents = data.events
+      .filter(e => e.setIndex === data.currentSet.index)
+      .sort((a, b) => {
+        const aSeq = a.seq || 0
+        const bSeq = b.seq || 0
+        if (aSeq !== 0 || bSeq !== 0) {
+          return bSeq - aSeq
+        }
+        const aTime = typeof a.ts === 'number' ? a.ts : new Date(a.ts).getTime()
+        const bTime = typeof b.ts === 'number' ? b.ts : new Date(b.ts).getTime()
+        return bTime - aTime
+      })
+    
+    if (currentSetEvents.length === 0) return null
+    
+    const event = currentSetEvents[0]
+    if (!event) return null
+    
+    const teamName = event.payload?.team === 'team_1' 
+      ? (data.team_1Team?.name || 'Team 1')
+      : event.payload?.team === 'team_2'
+      ? (data.team_2Team?.name || 'Team 2')
+      : null
+    
+    // Determine team labels (A or B)
+    const teamAKey = data?.match?.coinTossTeamA || 'team_1'
+    const team_1Label = teamAKey === 'team_1' ? 'A' : 'B'
+    const team_2Label = teamAKey === 'team_2' ? 'A' : 'B'
+    
+    // Calculate score at time of event
+    const setIdx = event.setIndex || 1
+    const setEvents = data.events?.filter(e => (e.setIndex || 1) === setIdx) || []
+    const eventIndex = setEvents.findIndex(e => e.id === event.id)
+    
+    let team_1Score = 0
+    let team_2Score = 0
+    for (let i = 0; i <= eventIndex; i++) {
+      const e = setEvents[i]
+      if (e.type === 'point') {
+        if (e.payload?.team === 'team_1') {
+          team_1Score++
+        } else if (e.payload?.team === 'team_2') {
+          team_2Score++
+        }
+      }
+    }
+    
+    let eventDescription = ''
+    if (event.type === 'point') {
+      eventDescription = `${teamName} point (${team_1Label} ${team_1Score}:${team_2Score} ${team_2Label})`
+    } else if (event.type === 'timeout') {
+      eventDescription = `Timeout — ${teamName}`
+    } else if (event.type === 'rally_start') {
+      eventDescription = 'Rally started'
+    } else if (event.type === 'replay') {
+      eventDescription = 'Replay'
+    } else if (event.type === 'sanction') {
+      const sanctionType = event.payload?.type || 'warning'
+      const playerNumber = event.payload?.playerNumber
+      const typeLabel = sanctionType === 'warning' ? 'W' : sanctionType === 'penalty' ? 'P' : sanctionType === 'expulsion' ? 'E' : 'D'
+      if (playerNumber) {
+        eventDescription = `Sanction — ${teamName} #${playerNumber} (${typeLabel})`
+      } else {
+        eventDescription = `Sanction — ${teamName} (${typeLabel})`
+      }
+
+    } else {
+      return null
+    }
+    
+    return eventDescription
+  }, [data?.events, data?.currentSet, data?.team_1Team, data?.team_2Team, data?.match])
+
+  // Calculate statistics
+  const stats = useMemo(() => {
+    if (!data || !data.events || !data.currentSet) {
+      return {
+        team_1: { timeouts: 0, sanctions: [] },
+        team_2: { timeouts: 0, sanctions: [] }
+      }
+    }
+
+    const currentSetEvents = data.events.filter(
+      e => (e.setIndex || 1) === (data.currentSet?.index || 1)
+    )
+
+    const team_1Timeouts = currentSetEvents.filter(
+      e => e.type === 'timeout' && e.payload?.team === 'team_1'
+    ).length
+
+    const team_2Timeouts = currentSetEvents.filter(
+      e => e.type === 'timeout' && e.payload?.team === 'team_2'
+    ).length
+
+    
+
+    // Get sanctions for entire match (sanctions persist across sets)
+    const team_1Sanctions = data.events
+      .filter(e => 
+        e.type === 'sanction' && e.payload?.team === 'team_1'
+      )
+      .map(e => ({
+        type: e.payload?.sanctionType || e.payload?.type || 'unknown',
+        target: e.payload?.playerNumber 
+          ? `#${e.payload.playerNumber}`
+          : e.payload?.role || '',
+        timestamp: e.ts,
+        setIndex: e.setIndex || 1
+      }))
+
+    const team_2Sanctions = data.events
+      .filter(e => 
+        e.type === 'sanction' && e.payload?.team === 'team_2'
+      )
+      .map(e => ({
+        type: e.payload?.sanctionType || e.payload?.type || 'unknown',
+        target: e.payload?.playerNumber 
+          ? `#${e.payload.playerNumber}`
+          : e.payload?.role || '',
+        timestamp: e.ts,
+        setIndex: e.setIndex || 1
+      }))
+
+    return {
+      team_1: { timeouts: team_1Timeouts, sanctions: team_1Sanctions },
+      team_2: { timeouts: team_2Timeouts, sanctions: team_2Sanctions }
+    }
+  }, [data])
+  const lineup = useMemo(() => {
+    if (!data || !data.events || !data.currentSet) {
+      return { 
+          team_1: { lineup: {}}, 
+          team_2: { lineup: {}}
+      }
+    }
+
+    const currentSetEvents = data.events.filter(
+      e => (e.setIndex || 1) === (data.currentSet?.index || 1)
+    )
+
+    // Find latest lineup events
+    const team_1LineupEvents = currentSetEvents.filter(
+      e => e.type === 'lineup' && e.payload?.team === 'team_1'
+    )
+    const team_2LineupEvents = currentSetEvents.filter(
+      e => e.type === 'lineup' && e.payload?.team === 'team_2'
+    )
+
+    const latestTeam_1Lineup = team_1LineupEvents[team_1LineupEvents.length - 1]
+    const latestTeam_2Lineup = team_2LineupEvents[team_2LineupEvents.length - 1]
+
+    return {
+      team_1: {
+        lineup: latestTeam_1Lineup?.payload?.lineup || {}
+      },
+      team_2: {
+        lineup: latestTeam_2Lineup?.payload?.lineup || {}
+      }
+    }
+  }, [data])
+
+  // Calculate set scores
+  const setScore = useMemo(() => {
+    if (!data) return { team_1: 0, team_2: 0 }
+    
+    const finishedSets = data.sets?.filter(s => s.finished) || []
+    const team_1SetsWon = finishedSets.filter(s => s.team_1Points > s.team_2Points).length
+    const team_2SetsWon = finishedSets.filter(s => s.team_2Points > s.team_1Points).length
+    
+    return { team_1: team_1SetsWon, team_2: team_2SetsWon }
+  }, [data])
+
+  // Determine who has serve based on events
+  const getCurrentServe = useMemo(() => {
+    if (!data?.currentSet || !data?.match) {
+      return data?.match?.firstServe || 'team_1'
+    }
+    
+    if (!data?.events || data.events.length === 0) {
+      // First rally: use firstServe from match
+      return data.match.firstServe || 'team_1'
+    }
+    
+    // Find the last point event in the current set to determine serve
+    const pointEvents = data.events
+      .filter(e => e.type === 'point' && e.setIndex === data.currentSet.index)
+      .sort((a, b) => {
+        const aTime = typeof a.ts === 'number' ? a.ts : new Date(a.ts).getTime()
+        const bTime = typeof b.ts === 'number' ? b.ts : new Date(b.ts).getTime()
+        return bTime - aTime // Most recent first
+      })
+    
+    if (pointEvents.length === 0) {
+      // No points yet, use firstServe
+      return data.match.firstServe || 'team_1'
+    }
+    
+    // The team that scored the last point now has serve
+    const lastPoint = pointEvents[0]
+    return lastPoint.payload?.team || data.match.firstServe || 'team_1'
+  }, [data?.events, data?.currentSet, data?.match])
+
+  // Determine team labels (A or B)
+  const teamAKey = data?.match?.coinTossTeamA || 'team_1'
+  const team_1Label = teamAKey === 'team_1' ? 'A' : 'B'
+  const team_2Label = teamAKey === 'team_2' ? 'A' : 'B'
+
+  // Determine which team is on the left based on set index and referee view
+  // In set 1, Team A is always on the left (for 2nd referee view)
+  // In subsequent sets, teams switch sides
+  const leftIsTeam_1For2ndRef = useMemo(() => {
+    if (!data?.currentSet) return true
+    
+    // Set 1: Team A on left
+    if (data.currentSet.index === 1) {
+      return teamAKey === 'team_1'
+    }
+    
+    // Set 2, 3: Teams switch sides (Team A goes right, Team B goes left)
+    return teamAKey !== 'team_1'
+  }, [data?.currentSet, teamAKey])
+
+  // For 1st referee, reverse the sides (they see from opposite end)
+  const leftIsTeam_1 = refereeView === '1st' ? !leftIsTeam_1For2ndRef : leftIsTeam_1For2ndRef
+  
+  const leftTeam = leftIsTeam_1 ? 'team_1' : 'team_2'
+  const rightTeam = leftIsTeam_1 ? 'team_2' : 'team_1'
+  
+  const leftTeamData = leftTeam === 'team_1' ? data?.team_1Team : data?.team_2Team
+  const rightTeamData = rightTeam === 'team_1' ? data?.team_1Team : data?.team_2Team
+  const leftLabel = leftTeam === 'team_1' ? team_1Label : team_2Label
+  const rightLabel = rightTeam === 'team_1' ? team_1Label : team_2Label
+  const leftLineupData = leftTeam === 'team_1' ? lineup.team_1 : lineup.team_2
+  const rightLineupData = rightTeam === 'team_1' ? lineup.team_1 : lineup.team_2
+  const leftLineup = leftLineupData.lineup
+  const rightLineup = rightLineupData.lineup
+  const leftStats = leftTeam === 'team_1' ? stats.team_1 : stats.team_2
+  const rightStats = rightTeam === 'team_1' ? stats.team_1 : stats.team_2
+  const leftScore = leftTeam === 'team_1' ? data?.currentSet?.team_1Points || 0 : data?.currentSet?.team_2Points || 0
+  const rightScore = rightTeam === 'team_1' ? data?.currentSet?.team_1Points || 0 : data?.currentSet?.team_2Points || 0
+  const leftSetScore = leftTeam === 'team_1' ? setScore.team_1 : setScore.team_2
+  const rightSetScore = rightTeam === 'team_1' ? setScore.team_1 : setScore.team_2
+  const leftServing = getCurrentServe === leftTeam
+  const rightServing = getCurrentServe === rightTeam
+  const leftColor = leftTeamData?.color || (leftTeam === 'team_1' ? '#ef4444' : '#3b82f6')
+  const rightColor = rightTeamData?.color || (rightTeam === 'team_1' ? '#ef4444' : '#3b82f6')
+  
+ 
+  
+  // Helper to determine if a color is bright
+  const isBrightColor = (color) => {
+    if (!color) return false
+    const hex = color.replace('#', '')
+    const r = parseInt(hex.substr(0, 2), 16)
+    const g = parseInt(hex.substr(2, 2), 16)
+    const b = parseInt(hex.substr(4, 2), 16)
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000
+    return brightness > 155
+  }
+
+  // Check if scoresheet is connected (updating within last 15 seconds)
+  const isScoresheetConnected = useMemo(() => {
+    if (!data?.match?.updatedAt) return false
+    const lastUpdate = new Date(data.match.updatedAt).getTime()
+    const currentTime = new Date().getTime()
+    return (currentTime - lastUpdate) < 30000 // 30 seconds threshold
+  }, [data?.match?.updatedAt])
+
+  // Reset processed timeouts when set changes
+  useEffect(() => {
+    setProcessedTimeouts(new Set())
+  }, [data?.currentSet?.index])
+
+  // Monitor timeout events and start countdown
+  useEffect(() => {
+    if (!data?.events || !data?.currentSet) return
+    
+    // Find the most recent timeout event in current set
+    const currentSetEvents = data.events.filter(e => 
+      e.type === 'timeout' && 
+      (e.setIndex || 1) === (data.currentSet?.index || 1)
+    )
+    
+    if (currentSetEvents.length === 0) {
+      return
+    }
+    
+    const latestTimeout = currentSetEvents[currentSetEvents.length - 1]
+    
+    // Check if this timeout was logged recently (within last 35 seconds)
+    const timeoutTime = new Date(latestTimeout.ts).getTime()
+    const now = Date.now()
+    const timeSinceTimeout = (now - timeoutTime) / 1000 // in seconds
+    
+    // Only show countdown if timeout is recent (within 35 seconds)
+    if (timeSinceTimeout > 35) {
+      return
+    }
+    
+    // Check if we've already processed this timeout
+    if (processedTimeouts.has(latestTimeout.id)) {
+      return
+    }
+    
+    // Calculate remaining time based on when timeout was logged
+    const remainingTime = Math.max(0, Math.ceil(30 - timeSinceTimeout))
+    
+    if (remainingTime <= 0) {
+      return
+    }
+    
+    // Mark as processed and start countdown
+    setProcessedTimeouts(prevSet => new Set([...prevSet, latestTimeout.id]))
+    setActiveTimeout({
+      team: latestTimeout.payload?.team,
+      countdown: remainingTime,
+      eventId: latestTimeout.id,
+      startTime: now
+    })
+  }, [data?.events, data?.currentSet, processedTimeouts])
+  
+  // Countdown timer for active timeout
+  useEffect(() => {
+    if (!activeTimeout) return
+    
+    if (activeTimeout.countdown <= 0) {
+      setActiveTimeout(null)
+      return
+    }
+    
+    const timer = setInterval(() => {
+      setActiveTimeout(prev => {
+        if (!prev) return null
+        const newCountdown = prev.countdown - 1
+        if (newCountdown <= 0) {
+          return null
+        }
+        return { ...prev, countdown: newCountdown }
+      })
+    }, 1000)
+    
+    return () => clearInterval(timer)
+  }, [activeTimeout])
+
+  
+
+  if (!data) return null
+
+  // Check if referee connection is disabled
+  if (data.match.refereeConnectionEnabled === false) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+        color: '#fff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+      }}>
+        <div style={{
+          background: 'var(--bg-secondary)',
+          borderRadius: '12px',
+          padding: '40px',
+          maxWidth: '400px',
+          width: '100%',
+          textAlign: 'center'
+        }}>
+          <div style={{ fontSize: '48px', marginBottom: '20px' }}>🚫</div>
+          <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '16px' }}>
+            Referee Connection Disabled
+          </h2>
+          <p style={{ fontSize: '14px', color: 'var(--muted)', marginBottom: '24px' }}>
+            The referee connection has been disabled for this match. Please contact the scorekeeper to enable it.
+          </p>
+          <button
+            onClick={onExit}
+            style={{
+              padding: '12px 24px',
+              fontSize: '14px',
+              fontWeight: 600,
+              background: 'var(--accent)',
+              color: '#000',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer'
+            }}
+          >
+            Exit
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const PlayerCircle = ({ number, position, team, isServing }) => {
+    if (!number) return null
+    
+    // Find player data
+    const teamPlayers = team === 'team_1' ? data.team_1Players : data.team_2Players
+    const player = teamPlayers?.find(p => String(p.number) === String(number))
+    const isCaptain = player?.isCaptain || player?.captain
+    
+    // Get sanctions for this player from events (same logic as scoreboard)
+    const teamKey = team
+    const playerSanctionsCurrentSet = data?.events?.filter(e =>
+      e.type === 'sanction' &&
+      e.payload?.team === teamKey &&
+      e.payload?.playerNumber === number &&
+      e.setIndex === data?.currentSet?.index
+    ) || []
+    
+    // Check disqualification across ALL sets (disqualified players are out for entire match)
+    const playerDisqualifications = data?.events?.filter(e =>
+      e.type === 'sanction' &&
+      e.payload?.team === teamKey &&
+      e.payload?.playerNumber === number &&
+      e.payload?.type === 'disqualification'
+    ) || []
+    
+    const hasWarning = playerSanctionsCurrentSet.some(s => s.payload?.type === 'warning')
+    const hasPenalty = playerSanctionsCurrentSet.some(s => s.payload?.type === 'penalty')
+    const hasExpulsion = playerSanctionsCurrentSet.some(s => s.payload?.type === 'expulsion')
+    const hasDisqualification = playerDisqualifications.length > 0
+    
+    // Beach volleyball: Ball shows for first player when team is serving
+    const shouldShowBall = !position && isServing // No position means first player
+    
+    return (
+      <div 
+        className="court-player"
+        style={{
+          position: 'relative',
+          width: 'clamp(28px, 7.8vw, 62px)', // 30% bigger than original clamp(28px, 6vw, 48px)
+          height: 'clamp(18px, 7.8vw, 62px)',
+          fontSize: 'clamp(12px, 3.25vw, 23px)' // 30% bigger than original clamp(12px, 2.5vw, 18px)
+        }}
+      >
+        {shouldShowBall && (
+          <img 
+            src={mikasaVolleyball} 
+            alt="Volleyball" 
+            style={{
+              position: 'absolute',
+              left: team === leftTeam ? '-30px' : 'auto',
+              right: team === rightTeam ? '-30px' : 'auto',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              width: '22px', // 40% smaller than 36px
+              height: '22px',
+              zIndex: 5,
+              filter: 'drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35))'
+            }}
+          />
+        )}
+        {/* Beach volleyball: No position display */}
+        {isCaptain && (
+            <span 
+              className="court-player-captain"
+              style={{
+                width: '12px', // 20% smaller than 18px
+                height: '12px',
+                fontSize: '6px', // 20% smaller than 11px
+                bottom: '-6.4px', // 20% smaller offset
+                left: '-6.4px'
+              }}
+            >
+              C
+            </span>
+        )}
+        {number}
+        
+        {/* Sanction cards indicator */}
+        {(hasWarning || hasPenalty || hasExpulsion || hasDisqualification) && (
+          <div style={{
+            position: 'absolute',
+            bottom: '-6.4px', // 20% smaller offset
+            right: '-6.4px',
+            zIndex: 10
+          }}>
+            {hasExpulsion ? (
+              // Expulsion: overlapping rotated cards
+              <div style={{ position: 'relative', width: '9.6px', height: '9.6px' }}>
+                <div 
+                  style={{ 
+                    width: '6.4px', // 20% smaller than 8px
+                    height: '8.8px', // 20% smaller than 11px
+                    background: 'linear-gradient(160deg, #fde047, #facc15)',
+                    borderRadius: '1px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                    position: 'absolute',
+                    left: '0',
+                    top: '0',
+                    transform: 'rotate(-8deg)',
+                    zIndex: 1
+                  }}
+                />
+                <div 
+                  style={{ 
+                    width: '6.4px', // 20% smaller than 8px
+                    height: '8.8px', // 20% smaller than 11px
+                    background: 'linear-gradient(160deg, #ef4444, #b91c1c)',
+                    borderRadius: '1px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                    position: 'absolute',
+                    right: '0',
+                    top: '0',
+                    transform: 'rotate(8deg)',
+                    zIndex: 2
+                  }}
+                />
+              </div>
+            ) : (
+              // Other sanctions: separate cards
+              <div style={{ display: 'flex', gap: '1.6px' }}>
+                {(hasWarning || hasDisqualification) && (
+                  <div 
+                    style={{ 
+                      width: '6.4px', // 20% smaller than 8px
+                      height: '8.8px', // 20% smaller than 11px
+                      background: 'linear-gradient(160deg, #fde047, #facc15)',
+                      borderRadius: '1px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.8)'
+                    }}
+                  />
+                )}
+                {(hasPenalty || hasDisqualification) && (
+                  <div 
+                    style={{ 
+                      width: '6.4px', // 20% smaller than 8px
+                      height: '8.8px', // 20% smaller than 11px
+                      background: 'linear-gradient(160deg, #ef4444, #b91c1c)',
+                      borderRadius: '1px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.8)'
+                    }}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const dismissRefereeCall = async () => {
+    try {
+      await db.matches.update(matchId, {
+        refereeCallActive: false
+      })
+    } catch (error) {
+      console.error('Failed to dismiss referee call:', error)
+    }
+  }
+
+  return (
+    <div style={{
+      minHeight: '100vh',
+      maxHeight: '100vh',
+      overflow: 'hidden',
+      background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+      color: '#fff',
+      padding: '6px',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
+      {/* Header */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '4px',
+        gap: '6px',
+        flexShrink: 0,
+        flexWrap: 'wrap',
+        minHeight: '28px'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', flex: '1 1 auto', minWidth: 0 }}>
+          <button
+            onClick={onExit}
+            style={{
+              padding: '4px 8px',
+              fontSize: '10px',
+              fontWeight: 600,
+              background: 'rgba(255,255,255,0.1)',
+              color: '#fff',
+              border: '1px solid rgba(255,255,255,0.2)',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+          >
+            Exit
+          </button>
+          
+          {/* Scoresheet Connection Status */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '3px 6px',
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: '4px',
+            fontSize: '9px'
+          }}>
+            <div style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              background: isScoresheetConnected ? '#22c55e' : '#ef4444',
+              boxShadow: isScoresheetConnected 
+                ? '0 0 6px rgba(34, 197, 94, 0.6)' 
+                : 'none'
+            }} />
+            <span style={{ color: 'var(--muted)' }}>
+              Score
+            </span>
+          </div>
+
+          {/* Rally Status */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '3px 6px',
+            background: rallyStatus === 'in_play' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255,255,255,0.05)',
+            borderRadius: '4px',
+            fontSize: '9px',
+            border: rallyStatus === 'in_play' ? '1px solid rgba(34, 197, 94, 0.4)' : 'none'
+          }}>
+            <div style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              background: rallyStatus === 'in_play' ? '#22c55e' : '#6b7280',
+              boxShadow: rallyStatus === 'in_play' 
+                ? '0 0 6px rgba(34, 197, 94, 0.6)' 
+                : 'none'
+            }} />
+            <span style={{ color: rallyStatus === 'in_play' ? '#22c55e' : 'var(--muted)', fontWeight: rallyStatus === 'in_play' ? 600 : 400 }}>
+              {rallyStatus === 'in_play' ? 'Rally' : 'Idle'}
+            </span>
+          </div>
+
+          {/* Last Action */}
+          {lastAction && (
+            <div style={{
+              padding: '3px 6px',
+              background: 'rgba(255,255,255,0.05)',
+              borderRadius: '4px',
+              fontSize: '8px',
+              color: 'var(--muted)',
+              maxWidth: '100px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              flexShrink: 1
+            }}>
+              {lastAction}
+            </div>
+          )}
+        </div>
+        
+        <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+          <button
+            onClick={() => setRefereeView('1st')}
+            style={{
+              padding: '4px 10px',
+              fontSize: '10px',
+              fontWeight: 600,
+              background: refereeView === '1st' ? 'var(--accent)' : 'rgba(255,255,255,0.1)',
+              color: refereeView === '1st' ? '#000' : '#fff',
+              border: refereeView === '1st' ? 'none' : '1px solid rgba(255,255,255,0.2)',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+          >
+            1R
+          </button>
+          <button
+            onClick={() => setRefereeView('2nd')}
+            style={{
+              padding: '4px 10px',
+              fontSize: '10px',
+              fontWeight: 600,
+              background: refereeView === '2nd' ? 'var(--accent)' : 'rgba(255,255,255,0.1)',
+              color: refereeView === '2nd' ? '#000' : '#fff',
+              border: refereeView === '2nd' ? 'none' : '1px solid rgba(255,255,255,0.2)',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+          >
+            2R
+          </button>
+        </div>
+      </div>
+
+      {/* Score Display */}
+      <div style={{
+        background: 'var(--bg-secondary)',
+        borderRadius: '6px',
+        padding: '8px',
+        marginBottom: '4px',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        flexDirection: 'column',
+        gap: '4px',
+        flexShrink: 0
+      }}>
+        {/* Team Names */}
+        <div style={{
+          display: 'flex',
+          width: '100%',
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <div style={{ textAlign: 'center', flex: 1 }}>
+            <span
+              className="team-badge"
+              style={{
+                background: leftColor,
+                color: isBrightColor(leftColor) ? '#000' : '#fff',
+                padding: '4px 10px',
+                borderRadius: '4px',
+                fontSize: '16px',
+                fontWeight: 700,
+                display: 'inline-block',
+                marginBottom: '2px',
+                minWidth: '32px',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)'
+              }}
+            >
+              {leftLabel}
+            </span>
+            <div style={{ fontSize: '11px', color: 'var(--muted)', lineHeight: 1 }}>
+              {leftTeamData?.name || (leftTeam === 'team_1' ? 'Team A' : 'Team B')}
+            </div>
+          </div>
+          
+          <div style={{ fontSize: '18px', color: 'var(--muted)', flexShrink: 0, padding: '0 8px' }}>-</div>
+          
+          <div style={{ textAlign: 'center', flex: 1 }}>
+            <span
+              className="team-badge"
+              style={{
+                background: rightColor,
+                color: isBrightColor(rightColor) ? '#000' : '#fff',
+                padding: '4px 10px',
+                borderRadius: '4px',
+                fontSize: '16px',
+                fontWeight: 700,
+                display: 'inline-block',
+                marginBottom: '2px',
+                minWidth: '32px',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)'
+              }}
+            >
+              {rightLabel}
+            </span>
+            <div style={{ fontSize: '11px', color: 'var(--muted)', lineHeight: 1 }}>
+              {rightTeamData?.name || (rightTeam === 'team_1' ? 'Team A' : 'Team B')}
+            </div>
+          </div>
+        </div>
+
+        {/* Score with Ball */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+          {leftServing && (
+            <img
+              src={mikasaVolleyball}
+              alt="Serving team"
+              style={{
+                width: '20px',
+                height: '20px',
+                filter: 'drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35))'
+              }}
+            />
+          )}
+          <div style={{
+            fontSize: '36px',
+            fontWeight: 800,
+            color: 'var(--accent)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            lineHeight: 1
+          }}>
+            <span>{leftScore}</span>
+            <span style={{ fontSize: '24px', color: 'var(--muted)' }}>:</span>
+            <span>{rightScore}</span>
+          </div>
+          {rightServing && (
+            <img
+              src={mikasaVolleyball}
+              alt="Serving team"
+              style={{
+                width: '20px',
+                height: '20px',
+                filter: 'drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35))'
+              }}
+            />
+          )}
+        </div>
+        {/* Set Score */}
+        <div style={{
+          fontSize: '11px',
+          fontWeight: 600,
+          color: 'var(--muted)',
+          textAlign: 'center'
+        }}>
+          Sets: {leftSetScore}-{rightSetScore}
+        </div>
+      </div>
+
+      {/* Court */}
+      {(!leftLineup || Object.keys(leftLineup).length === 0) && (!rightLineup || Object.keys(rightLineup).length === 0) ? (
+        <div style={{
+          background: 'var(--bg-secondary)',
+          borderRadius: '8px',
+          padding: '40px',
+          textAlign: 'center',
+          color: 'var(--muted)',
+          fontSize: '14px',
+          marginBottom: '12px'
+        }}>
+          Waiting for lineups to be set...
+        </div>
+      ) : (
+        <div style={{ marginBottom: '4px', flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          {/* Set Title */}
+          {data?.currentSet && (
+            <div style={{
+              textAlign: 'center',
+              fontSize: '12px',
+              fontWeight: 700,
+              marginBottom: '2px',
+              color: 'var(--text)',
+              flexShrink: 0
+            }}>
+              Set {data.currentSet.index}
+            </div>
+          )}
+          <div className="court" style={{ minHeight: '180px', maxHeight: '220px', flex: '0 0 auto' }}>
+          {/* Beach volleyball: No 3m line */}
+          
+          <div className="court-side court-side-left">
+            <div className="court-team court-team-left">
+              {/* Beach volleyball: Single row with 2 players, no positions */}
+              <div className="court-row" style={{ 
+                display: 'flex', 
+                flexDirection: 'row', 
+                justifyContent: 'space-around',
+                alignItems: 'center',
+                height: '100%',
+                width: '100%'
+              }}>
+                <PlayerCircle number={leftLineup?.['1'] || leftLineup?.['I']} position="" team={leftTeam} isServing={leftServing} />
+                <PlayerCircle number={leftLineup?.['2'] || leftLineup?.['II']} position="" team={leftTeam} isServing={leftServing} />
+              </div>
+            </div>
+          </div>
+          
+          <div className="court-net" />
+          
+          <div className="court-side court-side-right">
+            <div className="court-team court-team-right">
+              {/* Beach volleyball: Single row with 2 players, no positions */}
+              <div className="court-row" style={{ 
+                display: 'flex', 
+                flexDirection: 'row', 
+                justifyContent: 'space-around',
+                alignItems: 'center',
+                height: '100%',
+                width: '100%'
+              }}>
+                <PlayerCircle number={rightLineup?.['1'] || rightLineup?.['I']} position="" team={rightTeam} isServing={rightServing} />
+                <PlayerCircle number={rightLineup?.['2'] || rightLineup?.['II']} position="" team={rightTeam} isServing={rightServing} />
+              </div>
+            </div>
+          </div>
+        </div>
+        </div>
+      )}
+
+      {/* Team Statistics */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '6px',
+        flexShrink: 0
+      }}>
+        {/* Left Team Stats */}
+        <div style={{
+          background: 'var(--bg-secondary)',
+          borderRadius: '6px',
+          padding: '8px'
+        }}>
+          {/* TO and SUB Cards */}
+          <div style={{ display: 'flex', gap: '4px', marginBottom: '6px' }}>
+            <div 
+              onClick={() => activeTimeout && activeTimeout.team === leftTeam && setActiveTimeout(null)}
+              style={{ 
+                flex: 1, 
+                background: activeTimeout && activeTimeout.team === leftTeam 
+                  ? 'rgba(251, 191, 36, 0.15)' 
+                  : 'rgba(255, 255, 255, 0.05)', 
+                borderRadius: '4px', 
+                padding: '6px',
+                textAlign: 'center',
+                border: activeTimeout && activeTimeout.team === leftTeam
+                  ? '2px solid var(--accent)'
+                  : '1px solid rgba(255, 255, 255, 0.1)',
+                cursor: activeTimeout && activeTimeout.team === leftTeam ? 'pointer' : 'default'
+              }}
+            >
+              <div style={{ fontSize: '8px', color: 'var(--muted)', marginBottom: '1px' }}>TO</div>
+              {activeTimeout && activeTimeout.team === leftTeam ? (
+                <div style={{ 
+                  fontSize: '18px', 
+                  fontWeight: 800,
+                  color: 'var(--accent)',
+                  lineHeight: 1
+                }}>
+                  {activeTimeout.countdown}"
+                </div>
+              ) : (
+                <div style={{ 
+                  fontSize: '16px', 
+                  fontWeight: 700,
+                  color: leftStats.timeouts >= 2 ? '#ef4444' : 'inherit'
+                }}>
+                  {leftStats.timeouts}
+                </div>
+              )}
+            </div>
+            <div style={{ 
+              flex: 1, 
+              background: 'rgba(255, 255, 255, 0.05)', 
+              borderRadius: '4px', 
+              padding: '6px',
+              textAlign: 'center',
+              border: '1px solid rgba(255, 255, 255, 0.1)'
+            }}>
+              <div style={{ fontSize: '8px', color: 'var(--muted)', marginBottom: '1px' }}>SUB</div>
+              <div style={{ 
+                fontSize: '16px', 
+                fontWeight: 700,
+                    color: 'inherit'
+                  }}>—</div>
+            </div>
+          </div>
+          
+          {leftStats.sanctions.length > 0 && (
+            <div>
+              <div style={{ fontSize: '9px', color: 'var(--muted)', marginBottom: '3px', fontWeight: 600 }}>
+                Sanctions:
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '3px' }}>
+                {leftStats.sanctions.map((s, i) => (
+                  <div key={i} style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '1px',
+                    padding: '3px',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    borderRadius: '3px',
+                    border: '1px solid rgba(255, 255, 255, 0.08)'
+                  }}>
+                    {s.type === 'improper_request' ? (
+                      <div style={{
+                        fontSize: '14px',
+                        fontWeight: 700,
+                        color: '#9ca3af',
+                        width: '12px',
+                        height: '14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>✕</div>
+                    ) : s.type === 'delay_warning' ? (
+                      <div style={{
+                        width: '12px',
+                        height: '14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        position: 'relative'
+                      }}>
+                        <svg width="11" height="11" viewBox="0 0 14 14" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}>
+                          <circle cx="7" cy="7" r="6" fill="#fbbf24" stroke="#d97706" strokeWidth="1"/>
+                          <line x1="7" y1="7" x2="7" y2="4" stroke="#000" strokeWidth="1.5" strokeLinecap="round"/>
+                          <line x1="7" y1="7" x2="9.5" y2="7" stroke="#000" strokeWidth="1.5" strokeLinecap="round"/>
+                          <circle cx="7" cy="7" r="0.8" fill="#000"/>
+                        </svg>
+                      </div>
+                    ) : s.type === 'delay_penalty' ? (
+                      <div style={{
+                        width: '12px',
+                        height: '14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        position: 'relative'
+                      }}>
+                        <svg width="11" height="11" viewBox="0 0 14 14" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}>
+                          <circle cx="7" cy="7" r="6" fill="#ef4444" stroke="#b91c1c" strokeWidth="1"/>
+                          <line x1="7" y1="7" x2="7" y2="4" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/>
+                          <line x1="7" y1="7" x2="9.5" y2="7" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/>
+                          <circle cx="7" cy="7" r="0.8" fill="#fff"/>
+                        </svg>
+                      </div>
+                    ) : s.type === 'disqualification' ? (
+                      <div style={{ display: 'flex', gap: '1.5px', alignItems: 'center' }}>
+                        <div style={{ 
+                          width: '8px', 
+                          height: '12px',
+                          flexShrink: 0,
+                          borderRadius: '1.5px',
+                          background: 'linear-gradient(160deg, #fde047, #facc15)'
+                        }}></div>
+                        <div style={{ 
+                          width: '8px', 
+                          height: '12px',
+                          flexShrink: 0,
+                          borderRadius: '1.5px',
+                          background: 'linear-gradient(160deg, #ef4444, #b91c1c)'
+                        }}></div>
+                      </div>
+                    ) : s.type === 'expulsion' ? (
+                      <div style={{ position: 'relative', width: '13px', height: '14px' }}>
+                        <div style={{ 
+                          width: '8px', 
+                          height: '12px',
+                          position: 'absolute',
+                          left: '0',
+                          top: '1px',
+                          transform: 'rotate(-8deg)',
+                          zIndex: 1,
+                          borderRadius: '1.5px',
+                          background: 'linear-gradient(160deg, #fde047, #facc15)'
+                        }}></div>
+                        <div style={{ 
+                          width: '8px', 
+                          height: '12px',
+                          position: 'absolute',
+                          right: '0',
+                          top: '1px',
+                          transform: 'rotate(8deg)',
+                          zIndex: 2,
+                          borderRadius: '1.5px',
+                          background: 'linear-gradient(160deg, #ef4444, #b91c1c)'
+                        }}></div>
+                      </div>
+                    ) : (
+                      <div style={{ 
+                        width: '12px', 
+                        height: '14px',
+                        flexShrink: 0,
+                        borderRadius: '1.5px',
+                        background: s.type === 'warning' 
+                          ? 'linear-gradient(160deg, #fde047, #facc15)'
+                          : 'linear-gradient(160deg, #ef4444, #b91c1c)'
+                      }}></div>
+                    )}
+                    <div style={{ fontSize: '7px', fontWeight: 600, textAlign: 'center', marginTop: '1px' }}>
+                      {s.type === 'improper_request' ? 'IR' :
+                       s.type === 'delay_warning' ? 'DW' :
+                       s.type === 'delay_penalty' ? 'DP' :
+                       s.type === 'warning' ? 'W' :
+                       s.type === 'penalty' ? 'P' :
+                       s.type === 'expulsion' ? 'E' :
+                       s.type === 'disqualification' ? 'D' : s.type}
+                    </div>
+                    <div style={{ fontSize: '8px', fontWeight: 600, color: 'var(--text)' }}>
+                      {s.target || 'Team'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right Team Stats */}
+        <div style={{
+          background: 'var(--bg-secondary)',
+          borderRadius: '6px',
+          padding: '8px'
+        }}>
+          {/* TO and SUB Cards */}
+          <div style={{ display: 'flex', gap: '4px', marginBottom: '6px' }}>
+            <div 
+              onClick={() => activeTimeout && activeTimeout.team === rightTeam && setActiveTimeout(null)}
+              style={{ 
+                flex: 1, 
+                background: activeTimeout && activeTimeout.team === rightTeam 
+                  ? 'rgba(251, 191, 36, 0.15)' 
+                  : 'rgba(255, 255, 255, 0.05)', 
+                borderRadius: '4px', 
+                padding: '6px',
+                textAlign: 'center',
+                border: activeTimeout && activeTimeout.team === rightTeam
+                  ? '2px solid var(--accent)'
+                  : '1px solid rgba(255, 255, 255, 0.1)',
+                cursor: activeTimeout && activeTimeout.team === rightTeam ? 'pointer' : 'default'
+              }}
+            >
+              <div style={{ fontSize: '8px', color: 'var(--muted)', marginBottom: '1px' }}>TO</div>
+              {activeTimeout && activeTimeout.team === rightTeam ? (
+                <div style={{ 
+                  fontSize: '18px', 
+                  fontWeight: 800,
+                  color: 'var(--accent)',
+                  lineHeight: 1
+                }}>
+                  {activeTimeout.countdown}"
+                </div>
+              ) : (
+                <div style={{ 
+                  fontSize: '16px', 
+                  fontWeight: 700,
+                  color: rightStats.timeouts >= 2 ? '#ef4444' : 'inherit'
+                }}>
+                  {rightStats.timeouts}
+                </div>
+              )}
+            </div>
+            <div style={{ 
+              flex: 1, 
+              background: 'rgba(255, 255, 255, 0.05)', 
+              borderRadius: '4px', 
+              padding: '6px',
+              textAlign: 'center',
+              border: '1px solid rgba(255, 255, 255, 0.1)'
+            }}>
+              <div style={{ fontSize: '8px', color: 'var(--muted)', marginBottom: '1px' }}>SUB</div>
+              <div style={{ 
+                fontSize: '16px', 
+                fontWeight: 700,
+                    color: 'inherit'
+                  }}>—</div>
+            </div>
+          </div>
+          
+          {rightStats.sanctions.length > 0 && (
+            <div>
+              <div style={{ fontSize: '9px', color: 'var(--muted)', marginBottom: '3px', fontWeight: 600 }}>
+                Sanctions:
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '3px' }}>
+                {rightStats.sanctions.map((s, i) => (
+                  <div key={i} style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '1px',
+                    padding: '3px',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    borderRadius: '3px',
+                    border: '1px solid rgba(255, 255, 255, 0.08)'
+                  }}>
+                    {s.type === 'improper_request' ? (
+                      <div style={{
+                        fontSize: '14px',
+                        fontWeight: 700,
+                        color: '#9ca3af',
+                        width: '12px',
+                        height: '14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>✕</div>
+                    ) : s.type === 'delay_warning' ? (
+                      <div style={{
+                        width: '12px',
+                        height: '14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        position: 'relative'
+                      }}>
+                        <svg width="11" height="11" viewBox="0 0 14 14" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}>
+                          <circle cx="7" cy="7" r="6" fill="#fbbf24" stroke="#d97706" strokeWidth="1"/>
+                          <line x1="7" y1="7" x2="7" y2="4" stroke="#000" strokeWidth="1.5" strokeLinecap="round"/>
+                          <line x1="7" y1="7" x2="9.5" y2="7" stroke="#000" strokeWidth="1.5" strokeLinecap="round"/>
+                          <circle cx="7" cy="7" r="0.8" fill="#000"/>
+                        </svg>
+                      </div>
+                    ) : s.type === 'delay_penalty' ? (
+                      <div style={{
+                        width: '12px',
+                        height: '14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        position: 'relative'
+                      }}>
+                        <svg width="11" height="11" viewBox="0 0 14 14" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}>
+                          <circle cx="7" cy="7" r="6" fill="#ef4444" stroke="#b91c1c" strokeWidth="1"/>
+                          <line x1="7" y1="7" x2="7" y2="4" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/>
+                          <line x1="7" y1="7" x2="9.5" y2="7" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/>
+                          <circle cx="7" cy="7" r="0.8" fill="#fff"/>
+                        </svg>
+                      </div>
+                    ) : s.type === 'disqualification' ? (
+                      <div style={{ display: 'flex', gap: '1.5px', alignItems: 'center' }}>
+                        <div style={{ 
+                          width: '8px', 
+                          height: '12px',
+                          flexShrink: 0,
+                          borderRadius: '1.5px',
+                          background: 'linear-gradient(160deg, #fde047, #facc15)'
+                        }}></div>
+                        <div style={{ 
+                          width: '8px', 
+                          height: '12px',
+                          flexShrink: 0,
+                          borderRadius: '1.5px',
+                          background: 'linear-gradient(160deg, #ef4444, #b91c1c)'
+                        }}></div>
+                      </div>
+                    ) : s.type === 'expulsion' ? (
+                      <div style={{ position: 'relative', width: '13px', height: '14px' }}>
+                        <div style={{ 
+                          width: '8px', 
+                          height: '12px',
+                          position: 'absolute',
+                          left: '0',
+                          top: '1px',
+                          transform: 'rotate(-8deg)',
+                          zIndex: 1,
+                          borderRadius: '1.5px',
+                          background: 'linear-gradient(160deg, #fde047, #facc15)'
+                        }}></div>
+                        <div style={{ 
+                          width: '8px', 
+                          height: '12px',
+                          position: 'absolute',
+                          right: '0',
+                          top: '1px',
+                          transform: 'rotate(8deg)',
+                          zIndex: 2,
+                          borderRadius: '1.5px',
+                          background: 'linear-gradient(160deg, #ef4444, #b91c1c)'
+                        }}></div>
+                      </div>
+                    ) : (
+                      <div style={{ 
+                        width: '12px', 
+                        height: '14px',
+                        flexShrink: 0,
+                        borderRadius: '1.5px',
+                        background: s.type === 'warning' 
+                          ? 'linear-gradient(160deg, #fde047, #facc15)'
+                          : 'linear-gradient(160deg, #ef4444, #b91c1c)'
+                      }}></div>
+                    )}
+                    <div style={{ fontSize: '7px', fontWeight: 600, textAlign: 'center', marginTop: '1px' }}>
+                      {s.type === 'improper_request' ? 'IR' :
+                       s.type === 'delay_warning' ? 'DW' :
+                       s.type === 'delay_penalty' ? 'DP' :
+                       s.type === 'warning' ? 'W' :
+                       s.type === 'penalty' ? 'P' :
+                       s.type === 'expulsion' ? 'E' :
+                       s.type === 'disqualification' ? 'D' : s.type}
+                    </div>
+                    <div style={{ fontSize: '8px', fontWeight: 600, color: 'var(--text)' }}>
+                      {s.target || 'Team'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+
+      {/* Referee Call Alert Modal */}
+      {data?.match?.refereeCallActive && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'rgba(0, 0, 0, 0.8)',
+          zIndex: 9999,
+          animation: 'blink 1s infinite'
+        }}>
+          <style>{`
+            @keyframes blink {
+              0%, 50% { opacity: 1; }
+              51%, 100% { opacity: 0.4; }
+            }
+          `}</style>
+          <div style={{
+            background: '#dc2626',
+            borderRadius: '12px',
+            padding: '32px',
+            maxWidth: '400px',
+            width: '90%',
+            textAlign: 'center',
+            border: '4px solid #991b1b',
+            boxShadow: '0 0 40px rgba(220, 38, 38, 0.8)'
+          }}>
+            <div style={{
+              fontSize: '48px',
+              marginBottom: '16px'
+            }}>
+              ⚠️
+            </div>
+            <h2 style={{
+              fontSize: '24px',
+              fontWeight: 700,
+              marginBottom: '16px',
+              color: '#fff'
+            }}>
+              Scorer Requires Attention
+            </h2>
+            <p style={{
+              fontSize: '16px',
+              marginBottom: '24px',
+              color: 'rgba(255, 255, 255, 0.9)'
+            }}>
+              The scorer has requested referee assistance
+            </p>
+            <button
+              onClick={dismissRefereeCall}
+              style={{
+                padding: '14px 32px',
+                fontSize: '16px',
+                fontWeight: 600,
+                background: '#fff',
+                color: '#dc2626',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
+              }}
+            >
+              Acknowledged
+            </button>
+          </div>
+        </div>
+      )}
+
+
+    </div>
+  )
+}
+

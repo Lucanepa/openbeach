@@ -1,8 +1,11 @@
 import { useRef, useEffect, useState } from 'react'
-import Modal from './Modal_beach'
+import { useTranslation } from 'react-i18next'
+import Modal from './Modal'
 
-export default function SignaturePad({ open, onClose, onSave, title = 'Sign' }) {
+export default function SignaturePad({ open, onClose, onSave, title = 'Sign', existingSignature = null, readOnly = false }) {
+  const { t } = useTranslation()
   const canvasRef = useRef(null)
+  const isDrawingRef = useRef(false)
   const [isDrawing, setIsDrawing] = useState(false)
   const [hasSignature, setHasSignature] = useState(false)
 
@@ -11,8 +14,12 @@ export default function SignaturePad({ open, onClose, onSave, title = 'Sign' }) 
       setHasSignature(false)
       return
     }
+    
+    let cleanup = null
+    let timerId = null
+    
     // Wait for modal to render before sizing canvas
-    const timer = setTimeout(() => {
+    timerId = setTimeout(() => {
       const canvas = canvasRef.current
       if (!canvas) return
       const ctx = canvas.getContext('2d')
@@ -32,13 +39,83 @@ export default function SignaturePad({ open, onClose, onSave, title = 'Sign' }) 
       ctx.lineCap = 'round'
       ctx.lineJoin = 'round'
       
-      // Clear canvas (transparent background)
-      ctx.clearRect(0, 0, rect.width, rect.height)
-      setHasSignature(false)
+      // Load existing signature if provided, otherwise clear canvas
+      if (existingSignature) {
+        const img = new Image()
+        img.onload = () => {
+          // Draw the existing signature to fill the canvas
+          // Note: ctx is already scaled by dpr, so we draw at the display size
+          ctx.drawImage(img, 0, 0, rect.width, rect.height)
+          setHasSignature(true)
+        }
+        img.onerror = () => {
+          // If image fails to load, clear canvas
+          ctx.clearRect(0, 0, rect.width, rect.height)
+          setHasSignature(false)
+        }
+        img.src = existingSignature
+      } else {
+        // Clear canvas (transparent background)
+        ctx.clearRect(0, 0, rect.width, rect.height)
+        setHasSignature(false)
+      }
+      
+      // Add touch event listeners with passive: false to allow preventDefault
+      const getPointForTouch = (e) => {
+        const rect = canvas.getBoundingClientRect()
+        if (e.touches && e.touches.length > 0) {
+          return {
+            x: e.touches[0].clientX - rect.left,
+            y: e.touches[0].clientY - rect.top
+          }
+        }
+        return {
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top
+        }
+      }
+      
+      const touchStartHandler = (e) => {
+        e.preventDefault()
+        isDrawingRef.current = true
+        setIsDrawing(true)
+        const point = getPointForTouch(e)
+        ctx.beginPath()
+        ctx.moveTo(point.x, point.y)
+      }
+      const touchMoveHandler = (e) => {
+        if (!isDrawingRef.current) return
+        e.preventDefault()
+        const point = getPointForTouch(e)
+        ctx.lineTo(point.x, point.y)
+        ctx.stroke()
+        setHasSignature(true)
+      }
+      const touchEndHandler = (e) => {
+        e.preventDefault()
+        isDrawingRef.current = false
+        setIsDrawing(false)
+      }
+      
+      // Only add drawing event listeners if not read-only
+      if (!readOnly) {
+        canvas.addEventListener('touchstart', touchStartHandler, { passive: false })
+        canvas.addEventListener('touchmove', touchMoveHandler, { passive: false })
+        canvas.addEventListener('touchend', touchEndHandler, { passive: false })
+
+        cleanup = () => {
+          canvas.removeEventListener('touchstart', touchStartHandler)
+          canvas.removeEventListener('touchmove', touchMoveHandler)
+          canvas.removeEventListener('touchend', touchEndHandler)
+        }
+      }
     }, 100)
     
-    return () => clearTimeout(timer)
-  }, [open])
+    return () => {
+      if (timerId) clearTimeout(timerId)
+      if (cleanup) cleanup()
+    }
+  }, [open, existingSignature, readOnly])
 
   function getPoint(e) {
     const canvas = canvasRef.current
@@ -57,6 +134,7 @@ export default function SignaturePad({ open, onClose, onSave, title = 'Sign' }) 
 
   function startDrawing(e) {
     e.preventDefault()
+    isDrawingRef.current = true
     setIsDrawing(true)
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
@@ -66,7 +144,7 @@ export default function SignaturePad({ open, onClose, onSave, title = 'Sign' }) 
   }
 
   function draw(e) {
-    if (!isDrawing) return
+    if (!isDrawingRef.current) return
     e.preventDefault()
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
@@ -78,6 +156,7 @@ export default function SignaturePad({ open, onClose, onSave, title = 'Sign' }) 
 
   function stopDrawing(e) {
     e.preventDefault()
+    isDrawingRef.current = false
     setIsDrawing(false)
   }
 
@@ -99,6 +178,11 @@ export default function SignaturePad({ open, onClose, onSave, title = 'Sign' }) 
     onClose()
   }
 
+  function handleCancel() {
+    // Just close without saving - don't clear existing signature
+    onClose()
+  }
+
   return (
     <Modal title={title} open={open} onClose={onClose} width={600}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -111,26 +195,29 @@ export default function SignaturePad({ open, onClose, onSave, title = 'Sign' }) 
         }}>
           <canvas
             ref={canvasRef}
-            style={{ 
-              width: '100%', 
-              height: '200px', 
+            style={{
+              width: '100%',
+              height: '200px',
               display: 'block',
-              cursor: 'crosshair',
+              cursor: readOnly ? 'default' : 'crosshair',
               background: '#ffffff'
             }}
-            onMouseDown={startDrawing}
-            onMouseMove={draw}
-            onMouseUp={stopDrawing}
-            onMouseLeave={stopDrawing}
-            onTouchStart={startDrawing}
-            onTouchMove={draw}
-            onTouchEnd={stopDrawing}
+            onMouseDown={readOnly ? undefined : startDrawing}
+            onMouseMove={readOnly ? undefined : draw}
+            onMouseUp={readOnly ? undefined : stopDrawing}
+            onMouseLeave={readOnly ? undefined : stopDrawing}
           />
         </div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button className="secondary" onClick={clear}>Clear</button>
-          <button className="secondary" onClick={onClose}>Cancel</button>
-          <button onClick={save} disabled={!hasSignature}>Save</button>
+          {readOnly ? (
+            <button onClick={onClose}>{t('signature.close', 'Close')}</button>
+          ) : (
+            <>
+              <button className="secondary" onClick={clear}>{t('signature.clear', 'Clear')}</button>
+              <button className="secondary" onClick={handleCancel}>{t('signature.cancel', 'Cancel')}</button>
+              <button onClick={save} disabled={!hasSignature}>{t('signature.save', 'Save')}</button>
+            </>
+          )}
         </div>
       </div>
     </Modal>

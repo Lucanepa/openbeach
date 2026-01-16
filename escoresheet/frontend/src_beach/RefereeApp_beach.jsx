@@ -1,213 +1,779 @@
-import { useState, useEffect } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from './db_beach/db_beach'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
+import { validatePin, listAvailableMatches, validatePinSupabase, listAvailableMatchesSupabase } from './utils_beach/serverDataSync_beach'
 import Referee from './components_beach/Referee_beach'
-import mikasaVolleyball from './mikasa_BV550C_beach.png'
+import Modal from './components_beach/Modal_beach'
+import UpdateBanner from './components_beach/UpdateBanner_beach'
+import DashboardHeader from './components_beach/DashboardHeader_beach'
+import refereeIcon from './ref.png'
+import { db } from './db_beach/db_beach'
+
+// Master PIN for testing without a match
+const MASTER_PIN = '123456'
 
 export default function RefereeApp() {
+  const { t } = useTranslation()
   const [pinInput, setPinInput] = useState('')
   const [matchId, setMatchId] = useState(null)
   const [error, setError] = useState('')
+  const [match, setMatch] = useState(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [availableMatches, setAvailableMatches] = useState([])
+  const [selectedGameNumber, setSelectedGameNumber] = useState('')
+  const [loadingMatches, setLoadingMatches] = useState(false)
+  const [showGameModal, setShowGameModal] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [serverConnected, setServerConnected] = useState(false)
+  const [isMasterMode, setIsMasterMode] = useState(false)
+  const [wakeLockActive, setWakeLockActive] = useState(false)
+  const [testModeClicks, setTestModeClicks] = useState(0)
+  const wakeLockRef = useRef(null)
+  const testModeTimeoutRef = useRef(null)
 
-  // Get all non-final matches
-  const availableMatches = useLiveQuery(async () => {
-    const matches = await db.matches
-      .filter(m => m.status !== 'final')
-      .toArray()
-    return matches.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+  const [connectionStatuses, setConnectionStatuses] = useState({
+    api: 'unknown',
+    server: 'unknown',
+    websocket: 'unknown',
+    scoreboard: 'unknown',
+    match: 'unknown',
+    db: 'unknown'
+  })
+
+  // Preload assets that are used later (e.g., referee icon)
+  useEffect(() => {
+    const assetsToPreload = [
+      refereeIcon
+    ]
+
+    assetsToPreload.forEach(src => {
+      const img = new Image()
+      img.src = src
+    })
   }, [])
 
-  // Monitor the current match's connection status
-  const currentMatch = useLiveQuery(async () => {
-    if (!matchId) return null
-    return await db.matches.get(matchId)
-  }, [matchId])
-
-  // Disconnect if connection is disabled
-  useEffect(() => {
-    if (currentMatch && currentMatch.refereeConnectionEnabled === false) {
-      setMatchId(null)
-      setPinInput('')
-      setError('Connection has been disabled. Please enable the connection in the scoreboard and reconnect.')
+  // Check connection statuses
+  const checkConnectionStatuses = async () => {
+    const statuses = {
+      api: 'unknown',
+      server: 'unknown',
+      websocket: 'unknown',
+      scoreboard: 'unknown',
+      match: 'unknown',
+      db: 'unknown'
     }
-  }, [currentMatch])
+    const debugInfo = {}
+    
+    // Check API/Server connection
+    try {
+      const result = await listAvailableMatches()
+      if (result.success) {
+        statuses.api = 'connected'
+        statuses.server = 'connected'
+        setServerConnected(true)
+        debugInfo.api = { status: 'connected', message: 'API endpoint responding' }
+        debugInfo.server = { status: 'connected', message: 'Server is reachable' }
+      } else {
+        statuses.api = 'disconnected'
+        statuses.server = 'disconnected'
+        setServerConnected(false)
+        debugInfo.api = { status: 'disconnected', message: `API request failed: ${result.error || 'Unknown error'}` }
+        debugInfo.server = { status: 'disconnected', message: `Server request failed: ${result.error || 'Unknown error'}` }
+      }
+    } catch (err) {
+      statuses.api = 'disconnected'
+      statuses.server = 'disconnected'
+      setServerConnected(false)
+      debugInfo.api = { status: 'disconnected', message: `Network error: ${err.message || 'Failed to connect to API'}` }
+      debugInfo.server = { status: 'disconnected', message: `Network error: ${err.message || 'Failed to connect to server'}` }
+    }
+    
+    // Check WebSocket server availability
+    try {
+      // Check if we have a configured backend URL (Railway/cloud backend)
+      const backendUrl = import.meta.env.VITE_BACKEND_URL
+
+      let wsUrl
+      if (backendUrl) {
+        // Use configured backend (Railway cloud)
+        const url = new URL(backendUrl)
+        const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+        wsUrl = `${protocol}//${url.host}`
+      } else {
+        // Fallback to local WebSocket server or same origin in production
+        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+        const hostname = window.location.hostname
+        // In production (HTTPS), use same origin without port (Cloudflare handles routing)
+        // In development (HTTP), use port 8080
+        if (window.location.protocol === 'https:') {
+          wsUrl = `${protocol}://${hostname}`
+        } else {
+          const wsPort = 8080
+          wsUrl = `${protocol}://${hostname}:${wsPort}`
+        }
+      }
+
+      const wsTest = new WebSocket(wsUrl)
+      let resolved = false
+
+      // Use longer timeout for cloud backends
+      const connectionTimeout = backendUrl ? 10000 : 2000
+
+      await new Promise((resolve) => {
+        const timeout = setTimeout(() => {
+          if (!resolved) {
+            resolved = true
+            try { wsTest.close() } catch (e) {}
+            statuses.websocket = 'disconnected'
+            debugInfo.websocket = { status: 'disconnected', message: `Connection timeout after ${connectionTimeout / 1000}s` }
+            resolve()
+          }
+        }, connectionTimeout)
+
+        wsTest.onopen = () => {
+          if (!resolved) {
+            resolved = true
+            clearTimeout(timeout)
+            try { wsTest.close() } catch (e) {}
+            statuses.websocket = 'connected'
+            debugInfo.websocket = { status: 'connected', message: 'WebSocket server is reachable' }
+            resolve()
+          }
+        }
+
+        wsTest.onerror = () => {
+          if (!resolved) {
+            resolved = true
+            clearTimeout(timeout)
+            try { wsTest.close() } catch (e) {}
+            statuses.websocket = 'disconnected'
+            debugInfo.websocket = { status: 'disconnected', message: `WebSocket connection error` }
+            resolve()
+          }
+        }
+        
+        wsTest.onclose = () => {
+          if (!resolved) {
+            resolved = true
+            clearTimeout(timeout)
+            statuses.websocket = 'disconnected'
+            resolve()
+          }
+        }
+      })
+    } catch (err) {
+      statuses.websocket = 'disconnected'
+      debugInfo.websocket = { status: 'disconnected', message: `Error: ${err.message}` }
+    }
+    
+    statuses.scoreboard = statuses.server
+    debugInfo.scoreboard = debugInfo.server
+    
+    if (matchId && match) {
+      statuses.match = match.status === 'live' ? 'live' : match.status === 'scheduled' ? 'scheduled' : 'final'
+      debugInfo.match = { status: statuses.match, message: `Match status: ${statuses.match}` }
+    } else if (isMasterMode) {
+      statuses.match = 'test_mode'
+      debugInfo.match = { status: 'test_mode', message: 'Running in test mode with master PIN' }
+    } else {
+      statuses.match = 'no_match'
+      debugInfo.match = { status: 'no_match', message: 'No match connected.' }
+    }
+    
+    try {
+      await db.matches.count()
+      statuses.db = 'connected'
+      debugInfo.db = { status: 'connected', message: 'IndexedDB is accessible' }
+    } catch (err) {
+      statuses.db = 'disconnected'
+      debugInfo.db = { status: 'disconnected', message: `IndexedDB error: ${err.message}` }
+    }
+    
+    setConnectionStatuses(statuses)
+  }
+
+  // Load available matches function - called on mount and manually via button
+  // Try Supabase first (cloud-persistent), fall back to WebSocket (local/Railway)
+  const loadMatches = useCallback(async () => {
+    setLoadingMatches(true)
+    try {
+      // Try Supabase first (cloud database)
+      let result = await listAvailableMatchesSupabase()
+      let source = 'supabase'
+
+      // If Supabase fails or returns no matches, try WebSocket server
+      if (!result.success || (result.matches && result.matches.length === 0)) {
+        const wsResult = await listAvailableMatches()
+        if (wsResult.success && wsResult.matches && wsResult.matches.length > 0) {
+          result = wsResult
+          source = 'websocket'
+        }
+      }
+
+      if (result.success && result.matches) {
+        console.log(`[RefereeApp] Available games (${source}):`, result.matches.length, '| Games:', result.matches.map(m => ({
+          gameNumber: m.gameNumber,
+          refereeEnabled: m.refereeConnectionEnabled
+        })))
+        setAvailableMatches(result.matches)
+        setServerConnected(true)
+      } else {
+        setServerConnected(false)
+      }
+    } catch (err) {
+      console.error('[RefereeApp] Failed to load matches:', err)
+      setServerConnected(false)
+    } finally {
+      setLoadingMatches(false)
+    }
+  }, [])
+
+  // Load matches on mount only (no auto-polling - use manual refresh button)
+  useEffect(() => {
+    loadMatches()
+    checkConnectionStatuses()
+  }, [loadMatches])
+  
+  // Fullscreen functionality
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen()
+        setIsFullscreen(true)
+      } else {
+        await document.exitFullscreen()
+        setIsFullscreen(false)
+      }
+    } catch (error) {
+      console.error('Error toggling fullscreen:', error)
+    }
+  }
+  
+  // Listen for fullscreen changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  }, [])
+
+  // Wake lock - request on mount
+  useEffect(() => {
+    const enableWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator) {
+          if (wakeLockRef.current) {
+            try { await wakeLockRef.current.release() } catch (e) {}
+          }
+          wakeLockRef.current = await navigator.wakeLock.request('screen')
+          console.log('[WakeLock] Screen wake lock acquired (RefereeApp)')
+          setWakeLockActive(true)
+          wakeLockRef.current.addEventListener('release', () => {
+            console.log('[WakeLock] Screen wake lock released (RefereeApp)')
+            if (!wakeLockRef.current) {
+              setWakeLockActive(false)
+            }
+          })
+        }
+      } catch (err) {
+        console.log('[WakeLock] Wake lock failed:', err.message)
+      }
+    }
+
+    enableWakeLock()
+
+    // Re-enable on visibility change
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        enableWakeLock()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {})
+        wakeLockRef.current = null
+      }
+    }
+  }, [])
+
+  // Toggle wake lock manually
+  const toggleWakeLock = useCallback(async () => {
+    if (wakeLockActive) {
+      if (wakeLockRef.current) {
+        try {
+          await wakeLockRef.current.release()
+          wakeLockRef.current = null
+        } catch (e) {}
+      }
+      setWakeLockActive(false)
+      console.log('[WakeLock] Manually disabled')
+    } else {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLockRef.current = await navigator.wakeLock.request('screen')
+          setWakeLockActive(true)
+          console.log('[WakeLock] Manually enabled')
+        }
+      } catch (err) {
+        console.log('[WakeLock] Failed to enable:', err.message)
+        setWakeLockActive(true)
+      }
+    }
+  }, [wakeLockActive])
+
+  // Auto-connect on mount if we have stored credentials
+  useEffect(() => {
+    const storedMatchId = localStorage.getItem('refereeMatchId')
+    const storedPin = localStorage.getItem('refereePin')
+    const storedMasterMode = localStorage.getItem('refereeMasterMode')
+    
+    if (storedMasterMode === 'true') {
+      setIsMasterMode(true)
+      setMatchId(-1) // Use -1 as a sentinel for master mode
+    } else if (storedMatchId && storedPin) {
+      validatePin(storedPin, 'referee')
+        .then(result => {
+          if (result.success && result.match && String(result.match.id) === String(storedMatchId)) {
+            setMatchId(Number(storedMatchId))
+            setMatch(result.match)
+            setPinInput(storedPin)
+          } else {
+            localStorage.removeItem('refereeMatchId')
+            localStorage.removeItem('refereePin')
+          }
+        })
+        .catch(() => {
+          localStorage.removeItem('refereeMatchId')
+          localStorage.removeItem('refereePin')
+        })
+    }
+  }, [])
+  
+  const handleSelectGame = (gameNumber) => {
+    setSelectedGameNumber(gameNumber)
+    setShowGameModal(false)
+  }
+
+  // Monitor match connection status
+  useEffect(() => {
+    if (match && match.refereeConnectionEnabled === false) {
+      setMatchId(null)
+      setMatch(null)
+      setPinInput('')
+      setIsMasterMode(false)
+      localStorage.removeItem('refereeMatchId')
+      localStorage.removeItem('refereePin')
+      localStorage.removeItem('refereeMasterMode')
+      setError(t('refereeDashboard.errors.connectionDisabled'))
+    }
+  }, [match, t])
 
   const handlePinSubmit = async (e) => {
     e.preventDefault()
     setError('')
+    setIsLoading(true)
 
     if (!pinInput || pinInput.length !== 6) {
-      setError('Please enter a 6-digit PIN code')
+      setError(t('refereeDashboard.errors.enterPin'))
+      setIsLoading(false)
       return
     }
 
-    // First, check if PIN matches any match (even if disabled)
-    const matchWithPin = availableMatches?.find(m => {
-      const storedPin = m.refereePin
-      if (!storedPin) {
-        return false
-      }
-      const storedPinStr = String(storedPin).trim()
-      const inputPinStr = String(pinInput).trim()
-      return storedPinStr === inputPinStr
-    })
-
-    // If PIN matches but connection is disabled, show specific error
-    if (matchWithPin && matchWithPin.refereeConnectionEnabled === false) {
-      setError('Connection is disabled for this match. Please enable the connection in the scoreboard.')
-      setPinInput('')
+    // Check for master PIN first
+    if (pinInput === MASTER_PIN) {
+      setIsMasterMode(true)
+      setMatchId(-1) // Use -1 as sentinel for master/test mode
+      localStorage.setItem('refereeMasterMode', 'true')
+      setIsLoading(false)
       return
     }
 
-    // Find match with matching PIN and enabled connection
-    const match = availableMatches?.find(m => {
-      // Check if referee connection is enabled for this match
-      if (m.refereeConnectionEnabled === false) {
-        return false
-      }
-      
-      const storedPin = m.refereePin
-      if (!storedPin) {
-        return false
-      }
-      
-      const storedPinStr = String(storedPin).trim()
-      const inputPinStr = String(pinInput).trim()
-      return storedPinStr === inputPinStr
-    })
+    try {
+      // Try Supabase first (cloud database)
+      let result = await validatePinSupabase(pinInput.trim(), 'referee')
+      let source = 'supabase'
 
-    if (match) {
-      setMatchId(match.id)
-    } else {
-      setError('Invalid PIN code. Please check and try again.')
+      // If Supabase fails, try WebSocket server
+      if (!result.success) {
+        const wsResult = await validatePin(pinInput.trim(), 'referee')
+        if (wsResult.success) {
+          result = wsResult
+          source = 'websocket'
+        }
+      }
+
+      if (result.success && result.match) {
+        console.log(`[RefereeApp] PIN validated via ${source}`)
+        setMatchId(result.match.id)
+        setMatch(result.match)
+        localStorage.setItem('refereeMatchId', String(result.match.id))
+        localStorage.setItem('refereePin', pinInput)
+      } else {
+        setError(t('refereeDashboard.errors.invalidPin'))
+        setPinInput('')
+        localStorage.removeItem('refereeMatchId')
+        localStorage.removeItem('refereePin')
+      }
+    } catch (err) {
+      console.error('Error validating PIN:', err)
+      setError(err.message || t('refereeDashboard.errors.invalidPin'))
       setPinInput('')
+    } finally {
+      setIsLoading(false)
     }
   }
 
+  const handleExit = useCallback((reason) => {
+    setMatchId(null)
+    setMatch(null)
+    setPinInput('')
+    setIsMasterMode(false)
+    localStorage.removeItem('refereeMatchId')
+    localStorage.removeItem('refereePin')
+    localStorage.removeItem('refereeMasterMode')
+
+    if (reason === 'heartbeat_failure') {
+      setError(t('refereeDashboard.errors.connectionLost'))
+    } else {
+      setError('')
+    }
+
+    // Refresh the match list when returning to home
+    loadMatches()
+  }, [t, loadMatches])
+
+  // Monitor match status - clear credentials if match becomes final
+  useEffect(() => {
+    if (match && match.status === 'final') {
+      localStorage.removeItem('refereeMatchId')
+      localStorage.removeItem('refereePin')
+      setMatchId(null)
+      setMatch(null)
+      setPinInput('')
+      setError(t('refereeDashboard.errors.matchEnded'))
+    }
+  }, [match, t])
+
+  // Hidden test mode - 6 clicks on "No active game found"
+  const handleTestModeClick = useCallback(() => {
+    if (testModeTimeoutRef.current) {
+      clearTimeout(testModeTimeoutRef.current)
+    }
+
+    setTestModeClicks(prev => {
+      const newCount = prev + 1
+      if (newCount >= 6) {
+        // Trigger test/master mode
+        setIsMasterMode(true)
+        setMatchId(-1)
+        localStorage.setItem('refereeMasterMode', 'true')
+        return 0
+      }
+      return newCount
+    })
+
+    // Reset clicks after 2 seconds of no clicking
+    testModeTimeoutRef.current = setTimeout(() => {
+      setTestModeClicks(0)
+    }, 2000)
+  }, [])
+
+  // Render Referee component if connected (either to match or in master mode)
   if (matchId) {
-    return <Referee matchId={matchId} onExit={() => setMatchId(null)} />
+    return <Referee matchId={matchId} onExit={handleExit} isMasterMode={isMasterMode} />
   }
 
   return (
     <div style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+      height: '100vh',
+      width: '100vw',
+      maxWidth: '100vw',
+      margin: '0 auto',
+      overflow: 'hidden',
+      background: 'linear-gradient(135deg, rgb(82, 82, 113) 0%, rgb(62, 22, 27) 100%)',
       color: '#fff',
       display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '20px',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+      flexDirection: 'column',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      boxSizing: 'border-box'
     }}>
-      <div style={{
-        background: 'var(--bg-secondary)',
-        borderRadius: '12px',
-        padding: '40px',
-        maxWidth: '400px',
-        width: '100%',
-        textAlign: 'center'
-      }}>
-        <img 
-          src={mikasaVolleyball} 
-          alt="Volleyball" 
-          style={{ width: '80px', height: '80px', marginBottom: '20px' }} 
-        />
-        <h1 style={{ 
-          fontSize: '24px', 
-          fontWeight: 700, 
-          marginBottom: '12px' 
-        }}>
-          Referee View
-        </h1>
-        <p style={{ 
-          fontSize: '14px', 
-          color: 'var(--muted)', 
-          marginBottom: '32px' 
-        }}>
-          Enter the 6-digit match PIN to access the referee view
-        </p>
+      <UpdateBanner />
 
-        <form onSubmit={handlePinSubmit} style={{
+      {/* Header */}
+      <DashboardHeader
+        title={t('refereeDashboard.title')}
+        connectionStatuses={connectionStatuses}
+        onLoadGames={() => { loadMatches(); checkConnectionStatuses() }}
+        loadingMatches={loadingMatches}
+        matchCount={availableMatches.length}
+        showFullscreen={true}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={toggleFullscreen}
+        showWakeLock={true}
+        wakeLockActive={wakeLockActive}
+        onToggleWakeLock={toggleWakeLock}
+      />
+
+      {/* Main content */}
+      <div style={{
+        flex: '1 1 auto',
+        display: 'flex',
+        width: 'auto',
+        maxWidth: '100vw',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px',
+        overflowY: 'hidden'
+      }}>
+        <div style={{
+          background: 'var(--bg-secondary)',
+          borderRadius: '12px',
+          padding: '40px',
+          width: 'auto',
+          textAlign: 'center'
+        }}>
+          <img 
+            src={refereeIcon} 
+            alt="Referee Icon" 
+            style={{ width: 'auto', height: 'auto', marginBottom: '20px' }} 
+          />
+          <h1 style={{ fontSize: '32px', fontWeight: 700, marginBottom: '12px' }}>
+            {t('refereeDashboard.dashboardTitle')}
+          </h1>
+
+          {/* Show "no active game" when server is connected but no games available */}
+          {serverConnected && availableMatches.length === 0 && !loadingMatches ? (
+            <div
+              onClick={handleTestModeClick}
+              style={{
+                padding: '24px',
+                width: 'auto',
+                background: 'rgba(255, 255, 255, 0.05)',
+                borderRadius: '12px',
+                textAlign: 'center',
+                cursor: 'default',
+                userSelect: 'none'
+              }}
+            >
+              <div style={{
+                fontSize: '16px',
+                width: 'auto',
+                color: 'var(--muted)',
+                marginBottom: '8px'
+              }}>
+                {t('refereeDashboard.noActiveGame')}
+              </div>
+              
+            </div>
+          ) : (
+          <form onSubmit={handlePinSubmit} style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '16px',
+            width: '100%'
+          }}>
+            {availableMatches.length > 0 && (
+              <div style={{ width: '80%' }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '12px',
+                  color: 'var(--muted)',
+                  marginBottom: '8px',
+                  fontWeight: 600
+                }}>
+                  {t('refereeDashboard.selectGame')} ({t('refereeDashboard.gamesAvailable', { count: availableMatches.length })})
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowGameModal(true)}
+                  disabled={isLoading}
+                  style={{
+                    width: 'auto',
+                    padding: '12px',
+                    fontSize: '16px',
+                    background: 'var(--bg)',
+                    border: '2px solid rgba(255,255,255,0.2)',
+                    borderRadius: '8px',
+                    color: 'var(--text)',
+                    cursor: isLoading ? 'not-allowed' : 'pointer',
+                    fontWeight: 600
+                  }}
+                >
+                  {t('refereeDashboard.selectGame')}
+                </button>
+
+                {selectedGameNumber && (() => {
+                  const selected = availableMatches.find(m => String(m.gameNumber) === String(selectedGameNumber))
+                  if (!selected) return null
+
+                  return (
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'center',
+                      width: '100%',
+                      marginTop: '12px'
+                    }}>
+                      <div style={{
+                        padding: '12px',
+                        width: '300px',
+                        background: 'rgba(13, 16, 14, 0.1)',
+                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                        borderRadius: '8px',
+                        textAlign: 'center'
+                      }}>
+                        <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '6px' }}>
+                          {t('refereeDashboard.gameNumber', { number: selected.gameNumber })}
+                        </div>
+                        <div style={{ fontSize: '14px', marginBottom: '4px' }}>
+                          {selected.homeTeam} <span style={{ color: 'var(--muted)' }}>{t('refereeDashboard.vs')}</span> {selected.awayTeam}
+                        </div>
+                        <div style={{ fontSize: '12px', color: 'var(--muted)' }}>
+                          {selected.dateTime || t('refereeDashboard.tbd')}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })()}
+              </div>
+            )}
+
+            {/* Only show PIN input when offline OR when a game has been selected */}
+            {(!serverConnected || (availableMatches.length > 0 && selectedGameNumber)) && (
+            <div style={{ width: '80%', maxWidth: '280px' }}>
+              <label style={{
+                display: 'block',
+                fontSize: '12px',
+                color: 'var(--muted)',
+                marginBottom: '8px',
+                fontWeight: 600
+              }}>
+                {t('refereeDashboard.connectionPin')}
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={pinInput}
+                onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
+                placeholder="000000"
+                maxLength={6}
+                disabled={isLoading}
+                style={{
+                  width: '100%',
+                  padding: '16px',
+                  fontSize: '24px',
+                  fontWeight: 700,
+                  textAlign: 'center',
+                  letterSpacing: '8px',
+                  background: 'var(--bg)',
+                  border: error ? '2px solid #ef4444' : '2px solid rgba(255,255,255,0.2)',
+                  borderRadius: '8px',
+                  color: 'var(--text)',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+            )}
+
+            {error && (
+              <div style={{
+                width: 'auto',
+                padding: '12px',
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid #ef4444',
+                borderRadius: '6px',
+                color: '#ef4444',
+                fontSize: '14px'
+              }}>
+                {error}
+              </div>
+            )}
+
+            {(!serverConnected || (availableMatches.length > 0 && selectedGameNumber)) && (
+            <button
+              type="submit"
+              disabled={isLoading}
+              style={{
+                width: '50%',
+                maxWidth: '200px',
+                padding: '16px',
+                fontSize: '16px',
+                fontWeight: 600,
+                background: isLoading ? 'rgba(255,255,255,0.3)' : 'var(--accent)',
+                color: isLoading ? '#fff' : '#000',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: isLoading ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {isLoading ? t('refereeDashboard.connecting') : t('refereeDashboard.enter')}
+            </button>
+            )}
+          </form>
+          )}
+        </div>
+      </div>
+      
+      <Modal
+        title={t('refereeDashboard.selectGameTitle')}
+        open={showGameModal}
+        onClose={() => setShowGameModal(false)}
+        width={600}
+      >
+        <div style={{
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'center'
+          gap: '12px',
+          maxHeight: '70vh',
+          overflowY: 'auto'
         }}>
-          <input
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            value={pinInput}
-            onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
-            placeholder="000000"
-            maxLength={6}
-            style={{
-              width: '80%',
-              maxWidth: '280px',
-              padding: '16px',
-              fontSize: '24px',
-              fontWeight: 700,
-              textAlign: 'center',
-              letterSpacing: '8px',
-              background: 'var(--bg)',
-              border: error ? '2px solid #ef4444' : '2px solid rgba(255,255,255,0.2)',
-              borderRadius: '8px',
-              color: 'var(--text)',
-              marginBottom: '16px'
-            }}
-          />
-          
-          {error && (
-            <div style={{
-              width: '100%',
-              padding: '12px',
-              background: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid #ef4444',
-              borderRadius: '6px',
-              color: '#ef4444',
-              fontSize: '14px',
-              marginBottom: '16px',
-              textAlign: 'center'
-            }}>
-              {error}
+          {loadingMatches ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--muted)' }}>
+              {t('refereeDashboard.loadingGames')}
             </div>
+          ) : availableMatches.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--muted)' }}>
+              {t('refereeDashboard.noAvailableGames')}
+            </div>
+          ) : (
+            availableMatches.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => handleSelectGame(m.gameNumber)}
+                style={{
+                  width: '100%',
+                  padding: '16px',
+                  background: selectedGameNumber === String(m.gameNumber) 
+                    ? 'rgba(59, 130, 246, 0.2)' 
+                    : 'rgba(255, 255, 255, 0.05)',
+                  border: selectedGameNumber === String(m.gameNumber)
+                    ? '2px solid rgba(59, 130, 246, 0.5)'
+                    : '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '8px',
+                  color: 'var(--text)',
+                  cursor: 'pointer',
+                  textAlign: 'left'
+                }}
+              >
+                <div style={{ fontSize: '18px', fontWeight: 600, marginBottom: '4px' }}>
+                  {t('refereeDashboard.gameNumber', { number: m.gameNumber })}
+                </div>
+                <div style={{ fontSize: '16px', marginBottom: '4px' }}>
+                  {m.homeTeam} <span style={{ color: 'var(--muted)' }}>{t('refereeDashboard.vs')}</span> {m.awayTeam}
+                </div>
+                <div style={{ fontSize: '14px', color: 'var(--muted)' }}>
+                  {m.dateTime || t('refereeDashboard.tbd')}
+                </div>
+              </button>
+            ))
           )}
-
-          <button
-            type="submit"
-            style={{
-              width: '50%',
-              maxWidth: '200px',
-              padding: '16px',
-              fontSize: '16px',
-              fontWeight: 600,
-              background: 'var(--accent)',
-              color: '#000',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer'
-            }}
-          >
-            Enter
-          </button>
-        </form>
-
-        {availableMatches && availableMatches.length > 0 && (
-          <div style={{ 
-            marginTop: '32px', 
-            paddingTop: '32px', 
-            borderTop: '1px solid rgba(255,255,255,0.1)'
-          }}>
-            <p style={{ 
-              fontSize: '12px', 
-              color: 'var(--muted)', 
-              marginBottom: '12px' 
-            }}>
-              Active Matches: {availableMatches.length}
-            </p>
-          </div>
-        )}
-      </div>
+        </div>
+      </Modal>
     </div>
   )
 }
-

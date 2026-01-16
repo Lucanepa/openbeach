@@ -1,21 +1,55 @@
 import Dexie from 'dexie'
-import { getSessionId } from '../utils_beach/session_beach'
 
-// Get unique session ID for this browser/device
-// This ensures each browser/device gets its own isolated database
-const sessionId = getSessionId()
+/**
+ * ============================================================================
+ * LOCAL DATABASE SCHEMA (Dexie/IndexedDB)
+ * ============================================================================
+ *
+ * This is the offline-first local database. All data is written here first,
+ * then synced to Supabase via the sync_queue mechanism.
+ *
+ * KEY TABLES:
+ * - matches: Local match data (synced to Supabase 'matches' table)
+ * - sets: Set scores and timing (synced to Supabase 'sets' table)
+ * - events: All match events with state snapshots (synced to Supabase 'events' table)
+ * - sync_queue: Pending Supabase writes (processed by useSyncQueue hook)
+ *
+ * SYNC_QUEUE TABLE:
+ * ----------------
+ * Schema: ++id, resource, action, payload, ts, status
+ *
+ * Fields:
+ * - resource: 'match' | 'set' | 'event' - determines Supabase table
+ * - action: 'insert' | 'update' | 'delete' | 'restore' - determines operation
+ * - payload: Data to sync, includes external_id for deduplication
+ * - ts: Timestamp when queued (for ordering)
+ * - status: 'queued' | 'sent' | 'error' - processing state
+ *
+ * Processing order: match → set → event (respects foreign key dependencies)
+ *
+ * EXTERNAL_ID PATTERN:
+ * -------------------
+ * All synced resources use external_id as the stable identifier:
+ * - Match: seed_key (format: match_{timestamp}_{random})
+ * - Set: Local Dexie ID as string
+ * - Event: Local Dexie ID as string
+ *
+ * Why external_id?
+ * - Supabase UUID isn't known until first sync
+ * - game_n (game number) is mutable and can be null
+ * - external_id is immutable → safe for upsert onConflict
+ *
+ * See: useSyncQueue.js for sync processing logic
+ * ============================================================================
+ */
 
-// Create session-specific database name
-// This ensures complete data isolation between different browsers/devices
-const dbName = `escoresheet_beach_${sessionId}`
-
-export const db = new Dexie(dbName)
+export const db = new Dexie('escoresheet')
 
 db.version(1).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,team_1Id,team_2Id,scheduledAt,status,createdAt',
-  sets: '++id,matchId,index,team_1Points,team_2Points,finished',
+  matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt',
+  sets: '++id,matchId,index,homePoints,awayPoints,finished',
   events: '++id,matchId,setIndex,ts,type,payload',
   sync_queue: '++id,resource,action,payload,ts,status' // status: queued|sent|error
 })
@@ -24,15 +58,17 @@ db.version(1).stores({
 db.version(2).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,team_1Id,team_2Id,scheduledAt,status,createdAt',
-  sets: '++id,matchId,index,team_1Points,team_2Points,finished',
+  matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt',
+  sets: '++id,matchId,index,homePoints,awayPoints,finished',
   events: '++id,matchId,setIndex,ts,type,payload',
   sync_queue: '++id,resource,action,payload,ts,status'
 }).upgrade(tx => {
   // Migration: add signature fields to existing matches
   return tx.table('matches').toCollection().modify(match => {
-    if (!match.team_1CaptainSignature) match.team_1CaptainSignature = null
-    if (!match.team_2CaptainSignature) match.team_2CaptainSignature = null
+    if (!match.homeCoachSignature) match.homeCoachSignature = null
+    if (!match.homeCaptainSignature) match.homeCaptainSignature = null
+    if (!match.awayCoachSignature) match.awayCoachSignature = null
+    if (!match.awayCaptainSignature) match.awayCaptainSignature = null
   })
 })
 
@@ -40,8 +76,8 @@ db.version(2).stores({
 db.version(3).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,team_1Id,team_2Id,scheduledAt,status,createdAt',
-  sets: '++id,matchId,index,team_1Points,team_2Points,finished',
+  matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt',
+  sets: '++id,matchId,index,homePoints,awayPoints,finished',
   events: '++id,matchId,setIndex,ts,type,payload',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt' // Single record to store current draft
@@ -51,8 +87,8 @@ db.version(3).stores({
 db.version(4).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,team_1Id,team_2Id,scheduledAt,status,createdAt,externalId',
-  sets: '++id,matchId,index,team_1Points,team_2Points,finished',
+  matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt,externalId',
+  sets: '++id,matchId,index,homePoints,awayPoints,finished',
   events: '++id,matchId,setIndex,ts,type,payload',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt'
@@ -62,8 +98,8 @@ db.version(4).stores({
 db.version(5).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,team_1Id,team_2Id,scheduledAt,status,createdAt,externalId',
-  sets: '++id,matchId,index,team_1Points,team_2Points,finished',
+  matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt,externalId',
+  sets: '++id,matchId,index,homePoints,awayPoints,finished',
   events: '++id,matchId,setIndex,ts,type,payload',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt',
@@ -75,8 +111,8 @@ db.version(5).stores({
 db.version(6).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,team_1Id,team_2Id,scheduledAt,status,createdAt,externalId',
-  sets: '++id,matchId,index,team_1Points,team_2Points,finished,startTime,endTime',
+  matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt,externalId',
+  sets: '++id,matchId,index,homePoints,awayPoints,finished,startTime,endTime',
   events: '++id,matchId,setIndex,ts,type,payload',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt',
@@ -88,8 +124,8 @@ db.version(6).stores({
 db.version(7).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,team_1Id,team_2Id,scheduledAt,status,createdAt,externalId,test',
-  sets: '++id,matchId,index,team_1Points,team_2Points,finished,startTime,endTime',
+  matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt,externalId,test',
+  sets: '++id,matchId,index,homePoints,awayPoints,finished,startTime,endTime',
   events: '++id,matchId,setIndex,ts,type,payload',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt',
@@ -101,8 +137,8 @@ db.version(7).stores({
 db.version(8).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,team_1Id,team_2Id,scheduledAt,status,createdAt,externalId,test',
-  sets: '++id,matchId,index,team_1Points,team_2Points,finished,startTime,endTime',
+  matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt,externalId,test',
+  sets: '++id,matchId,index,homePoints,awayPoints,finished,startTime,endTime',
   events: '++id,matchId,setIndex,ts,type,payload,seq',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt',
@@ -110,12 +146,12 @@ db.version(8).stores({
   scorers: '++id,seedKey,lastName,createdAt'
 })
 
-// Version 9: Add team_1Pin and team_2Pin to matches
+// Version 9: Add homeTeamPin and awayTeamPin to matches
 db.version(9).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,team_1Id,team_2Id,scheduledAt,status,createdAt,externalId,test',
-  sets: '++id,matchId,index,team_1Points,team_2Points,finished,startTime,endTime',
+  matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt,externalId,test',
+  sets: '++id,matchId,index,homePoints,awayPoints,finished,startTime,endTime',
   events: '++id,matchId,setIndex,ts,type,payload,seq',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt',
@@ -124,9 +160,114 @@ db.version(9).stores({
 }).upgrade(tx => {
   // Migration: add team PIN fields to existing matches
   return tx.table('matches').toCollection().modify(match => {
-    if (!match.team_1Pin) match.team_1Pin = null
-    if (!match.team_2Pin) match.team_2Pin = null
+    if (!match.homeTeamPin) match.homeTeamPin = null
+    if (!match.awayTeamPin) match.awayTeamPin = null
   })
+})
+
+// Version 10: Add sessionId and gamePin to matches
+db.version(10).stores({
+  teams: '++id,name,createdAt',
+  players: '++id,teamId,number,name,role,createdAt',
+  matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt,externalId,test',
+  sets: '++id,matchId,index,homePoints,awayPoints,finished,startTime,endTime',
+  events: '++id,matchId,setIndex,ts,type,payload,seq',
+  sync_queue: '++id,resource,action,payload,ts,status',
+  match_setup: '++id,updatedAt',
+  referees: '++id,seedKey,lastName,createdAt',
+  scorers: '++id,seedKey,lastName,createdAt'
+}).upgrade(tx => {
+  // Migration: add sessionId and gamePin fields to existing matches
+  return tx.table('matches').toCollection().modify(match => {
+    if (!match.sessionId) match.sessionId = null
+    if (!match.gamePin) match.gamePin = null
+  })
+})
+
+// Version 11: Add upload pins and pending roster data to matches
+db.version(11).stores({
+  teams: '++id,name,createdAt',
+  players: '++id,teamId,number,name,role,createdAt',
+  matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt,externalId,test',
+  sets: '++id,matchId,index,homePoints,awayPoints,finished,startTime,endTime',
+  events: '++id,matchId,setIndex,ts,type,payload,seq',
+  sync_queue: '++id,resource,action,payload,ts,status',
+  match_setup: '++id,updatedAt',
+  referees: '++id,seedKey,lastName,createdAt',
+  scorers: '++id,seedKey,lastName,createdAt'
+}).upgrade(tx => {
+  // Migration: add upload pin and pending roster fields to existing matches
+  return tx.table('matches').toCollection().modify(match => {
+    if (!match.homeTeamUploadPin) match.homeTeamUploadPin = null
+    if (!match.awayTeamUploadPin) match.awayTeamUploadPin = null
+    if (!match.pendingHomeRoster) match.pendingHomeRoster = null
+    if (!match.pendingAwayRoster) match.pendingAwayRoster = null
+  })
+})
+
+// Version 12: Add post-game captain signatures (separate from pre-game coin toss signatures)
+db.version(12).stores({
+  teams: '++id,name,createdAt',
+  players: '++id,teamId,number,name,role,createdAt',
+  matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt,externalId,test',
+  sets: '++id,matchId,index,homePoints,awayPoints,finished,startTime,endTime',
+  events: '++id,matchId,setIndex,ts,type,payload,seq',
+  sync_queue: '++id,resource,action,payload,ts,status',
+  match_setup: '++id,updatedAt',
+  referees: '++id,seedKey,lastName,createdAt',
+  scorers: '++id,seedKey,lastName,createdAt'
+}).upgrade(tx => {
+  // Migration: add post-game captain signature fields to existing matches
+  return tx.table('matches').toCollection().modify(match => {
+    if (!match.homePostGameCaptainSignature) match.homePostGameCaptainSignature = null
+    if (!match.awayPostGameCaptainSignature) match.awayPostGameCaptainSignature = null
+  })
+})
+
+// Version 13: Add stateSnapshot to events for snapshot-based undo system
+// Each event now stores a full state snapshot AFTER the event is applied
+// This enables trivial undo (just restore previous snapshot) instead of complex per-event logic
+db.version(13).stores({
+  teams: '++id,name,createdAt',
+  players: '++id,teamId,number,name,role,createdAt',
+  matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt,externalId,test',
+  sets: '++id,matchId,index,homePoints,awayPoints,finished,startTime,endTime',
+  events: '++id,matchId,setIndex,ts,type,payload,seq,stateSnapshot',
+  sync_queue: '++id,resource,action,payload,ts,status',
+  match_setup: '++id,updatedAt',
+  referees: '++id,seedKey,lastName,createdAt',
+  scorers: '++id,seedKey,lastName,createdAt'
+})
+
+// Version 14: Add compound indexes on events for performance optimization
+// [matchId+seq] enables fast max seq lookup without full table scan
+// [matchId+setIndex] enables fast set-specific event filtering
+db.version(14).stores({
+  teams: '++id,name,createdAt',
+  players: '++id,teamId,number,name,role,createdAt',
+  matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt,externalId,test',
+  sets: '++id,matchId,index,homePoints,awayPoints,finished,startTime,endTime',
+  events: '++id,matchId,setIndex,ts,type,payload,seq,stateSnapshot,[matchId+seq],[matchId+setIndex]',
+  sync_queue: '++id,resource,action,payload,ts,status',
+  match_setup: '++id,updatedAt',
+  referees: '++id,seedKey,lastName,createdAt',
+  scorers: '++id,seedKey,lastName,createdAt'
+})
+
+// Version 15: Add interaction_logs table for comprehensive logging
+// Stores all user interactions (clicks, inputs, function calls, etc.)
+// Indexed by id (unique log ID), ts (timestamp), and gameNumber for filtering
+db.version(15).stores({
+  teams: '++id,name,createdAt',
+  players: '++id,teamId,number,name,role,createdAt',
+  matches: '++id,homeTeamId,awayTeamId,scheduledAt,status,createdAt,externalId,test',
+  sets: '++id,matchId,index,homePoints,awayPoints,finished,startTime,endTime',
+  events: '++id,matchId,setIndex,ts,type,payload,seq,stateSnapshot,[matchId+seq],[matchId+setIndex]',
+  sync_queue: '++id,resource,action,payload,ts,status',
+  match_setup: '++id,updatedAt',
+  referees: '++id,seedKey,lastName,createdAt',
+  scorers: '++id,seedKey,lastName,createdAt',
+  interaction_logs: 'id,ts,gameNumber,category,sessionId'
 })
 
 
