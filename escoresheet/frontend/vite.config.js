@@ -1,6 +1,16 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { readFileSync } from 'fs'
+import { fileURLToPath } from 'url'
+import { dirname, resolve } from 'path'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+// Read version from package.json
+const packageJson = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'))
+const appVersion = packageJson.version
 
 export default defineConfig({
   // Set base from env for GitHub Pages project site deployments.
@@ -8,6 +18,9 @@ export default defineConfig({
   base: process.env.VITE_BASE_PATH || '/',
   optimizeDeps: {
     include: ['pdfjs-dist']
+  },
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion)
   },
   plugins: [
     react(),
@@ -58,14 +71,17 @@ export default defineConfig({
       }
     })
   ],
-  server: { port: 5173 },
+  server: {
+    port: 6173,
+    https: process.env.VITE_HTTPS === 'true'
+  },
   build: {
     // Use safer build options to avoid eval in production
     minify: 'esbuild',
     target: 'es2015',
     rollupOptions: {
       input: {
-        main: './index_beach.html',
+        main: './index.html',
         referee: './referee_beach.html',
         scoresheet: './scoresheet_beach.html',
       },

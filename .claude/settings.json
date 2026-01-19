@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command \"Get-ChildItem ''c:\\\\Users\\\\lcane\\\\Desktop\\\\openbeach\\\\escoresheet\\\\frontend\\\\src_beach\\\\utils_beach'' -Name\")"
+    ]
+  }
+}

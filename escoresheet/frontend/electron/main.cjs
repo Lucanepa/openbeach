@@ -40,7 +40,7 @@ function createWindow() {
     mainWindow.webContents.openDevTools()
   } else {
     // Production: load from built files
-    const indexPath = path.join(__dirname, '../dist/index_beach.html')
+    const indexPath = path.join(__dirname, '../dist/index.html')
     mainWindow.loadFile(indexPath)
   }
 

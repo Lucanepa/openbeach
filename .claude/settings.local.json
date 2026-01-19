@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(move:*)",
+      "Bash(cmd /c del \"c:\\\\Users\\\\lcane\\\\Desktop\\\\openbeach\\\\escoresheet\\\\frontend\\\\index_beach.html\")",
+      "Bash(findstr:*)",
+      "Bash(del \"\\\\?\\\\c:\\\\Users\\\\lcane\\\\Desktop\\\\openbeach\\\\nul\")",
+      "Bash(cmd.exe /c \"del \\\\?\\\\c:\\\\Users\\\\lcane\\\\Desktop\\\\openbeach\\\\nul\")",
+      "Bash(git -C \"c:\\\\Users\\\\lcane\\\\Desktop\\\\openbeach\" status --short)"
+    ]
+  }
+}

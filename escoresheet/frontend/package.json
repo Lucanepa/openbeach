@@ -7,6 +7,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:https": "set VITE_HTTPS=true && vite",
     "build": "vite build",
     "preview": "vite preview",
     "electron": "electron .",
@@ -17,23 +18,26 @@
     "electron:build:linux": "npm run build && electron-builder --linux"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.90.1",
     "dexie": "^4.0.8",
     "dexie-react-hooks": "^1.1.7",
     "html2canvas": "^1.4.1",
-    "jspdf": "^2.5.1",
+    "i18next": "^25.7.4",
+    "jspdf": "^4.0.0",
     "jszip": "^3.10.1",
     "pdf-lib": "^1.17.1",
-    "pdfjs-dist": "^3.11.174",
+    "pdfjs-dist": "^5.4.530",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-i18next": "^16.5.3"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
     "concurrently": "^8.2.2",
-    "electron": "^28.0.0",
+    "electron": "^40.0.0",
     "electron-builder": "^24.9.1",
-    "vite": "^5.4.11",
-    "vite-plugin-pwa": "^0.17.5",
+    "vite": "^7.3.1",
+    "vite-plugin-pwa": "^1.2.0",
     "wait-on": "^7.2.0"
   },
   "main": "electron/main.cjs",
