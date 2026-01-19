@@ -6,7 +6,9 @@
       "Bash(findstr:*)",
       "Bash(del \"\\\\?\\\\c:\\\\Users\\\\lcane\\\\Desktop\\\\openbeach\\\\nul\")",
       "Bash(cmd.exe /c \"del \\\\?\\\\c:\\\\Users\\\\lcane\\\\Desktop\\\\openbeach\\\\nul\")",
-      "Bash(git -C \"c:\\\\Users\\\\lcane\\\\Desktop\\\\openbeach\" status --short)"
+      "Bash(git -C \"c:\\\\Users\\\\lcane\\\\Desktop\\\\openbeach\" status --short)",
+      "Bash(git -C \"c:\\\\Users\\\\lcane\\\\Desktop\\\\openbeach\" update-index --refresh)",
+      "Bash(git -C \"c:\\\\Users\\\\lcane\\\\Desktop\\\\openbeach\" status)"
     ]
   }
 }
