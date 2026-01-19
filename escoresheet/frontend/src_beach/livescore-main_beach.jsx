@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import LivescoreApp from './LivescoreApp'
+import LivescoreApp from './LivescoreApp_beach'
 import './styles_beach.css'
 import './i18n_beach'  // Initialize i18n for localization
 import { AlertProvider } from './contexts_beach/AlertContext_beach'
