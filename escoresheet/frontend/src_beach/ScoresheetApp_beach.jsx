@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from './lib_beach/supabaseClient_beach'
-import App from '../scoresheet_pdf/App_Scoresheet'
+import App from '../scoresheet_pdf_beach/App'
 
 // Fetch scoresheet data from Supabase storage (only _final files)
 const fetchFromStorage = async (date, game) => {

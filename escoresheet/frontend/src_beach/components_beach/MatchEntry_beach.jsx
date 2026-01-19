@@ -7,7 +7,7 @@ import mikasaVolleyball from '../mikasa_v200w.png'
 
 // Primary ball image (with mikasa as fallback)
 const ballImage = '/ball.png'
-import { Results } from '../../scoresheet_pdf/components_beach/FooterSection'
+import { Results } from '../../scoresheet_pdf_beach/components_beach/FooterSection_beach'
 import TestModeControls from './TestModeControls'
 
 export default function MatchEntry({ matchId, team, onBack, embedded = false }) {
