@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib_beach/supabaseClient_beach'
 
+// Sport type for beach volleyball
+const SPORT_TYPE = 'beach'
+
 /**
  * Hook to manage referee and scorer history for autocomplete
  *
@@ -27,6 +30,7 @@ export function useOfficialHistory() {
       const { data, error: fetchError } = await supabase
         .from('referee_database')
         .select('first_name, last_name, country, dob, created_at')
+        .eq('sport_type', SPORT_TYPE)
         .order('last_name', { ascending: true })
 
       if (fetchError) {
@@ -74,9 +78,10 @@ export function useOfficialHistory() {
           last_name: official.lastName,
           country: official.country || 'CHE',
           dob: official.dob || null,
+          sport_type: SPORT_TYPE,
           created_at: new Date().toISOString()
         }, {
-          onConflict: 'lower(last_name),lower(first_name)',
+          onConflict: 'lower(last_name),lower(first_name),sport_type',
           ignoreDuplicates: true
         })
 

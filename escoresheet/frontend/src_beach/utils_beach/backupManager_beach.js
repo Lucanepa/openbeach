@@ -13,6 +13,9 @@ import { sanitizeSimple } from './stringUtils'
 const BACKUP_DB_NAME = 'escoresheet_backup'
 const BACKUP_DIR_HANDLE_KEY = 'backup_directory_handle'
 
+// Sport type for beach volleyball
+const SPORT_TYPE = 'beach'
+
 // Valid Supabase matches table columns - used to filter restore payloads
 // to prevent sending invalid columns that don't exist in the schema
 const VALID_MATCH_COLUMNS = [
@@ -20,7 +23,7 @@ const VALID_MATCH_COLUMNS = [
   'scheduled_at', 'match_info', 'officials', 'home_team', 'players_home', 'bench_home',
   'away_team', 'players_away', 'bench_away', 'coin_toss', 'results', 'signatures',
   'approval', 'test', 'created_at', 'updated_at', 'manual_changes', 'current_set',
-  'set_results', 'final_score', 'sanctions', 'winner'
+  'set_results', 'final_score', 'sanctions', 'winner', 'sport_type'
 ]
 
 /**
@@ -411,6 +414,7 @@ export async function restoreMatchFromJson(jsonData) {
       // Build match payload for Supabase (convert local field names to Supabase column names)
       const matchPayload = {
         external_id: externalId,
+        sport_type: SPORT_TYPE,
         game_pin: match.gamePin || match.game_pin,
         game_n: match.gameN || match.game_n,
         status: match.status || 'live',
@@ -566,6 +570,7 @@ export async function restoreMatchInPlace(matchId, jsonData) {
       // Build match payload for Supabase
       const matchPayload = {
         external_id: externalId,
+        sport_type: SPORT_TYPE,
         game_pin: match.gamePin || match.game_pin,
         game_n: match.gameN || match.game_n,
         status: match.status || 'live',
@@ -671,11 +676,12 @@ export async function fetchMatchByPin(gamePin, gameN) {
     throw new Error('Supabase not configured')
   }
 
-  // Find match by game_n and game_pin
+  // Find match by game_n and game_pin (filtered by sport_type)
   let query = supabase
     .from('matches')
     .select('*')
     .eq('game_pin', gamePin)
+    .eq('sport_type', SPORT_TYPE)
 
   // If gameN provided, also filter by game_n
   if (gameN) {

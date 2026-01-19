@@ -42,6 +42,9 @@ import {
 } from './constants/testSeeds'
 import { supabase } from './lib_beach/supabaseClient_beach'
 import { checkMatchSession, lockMatchSession, unlockMatchSession, verifyGamePin } from './utils_beach/sessionManager_beach'
+
+// Sport type for beach volleyball
+const SPORT_TYPE = 'beach'
 import { fetchMatchByPin, importMatchFromSupabase, restoreMatchFromJson, selectBackupFile, listCloudBackups, fetchCloudBackup } from './utils_beach/backupManager_beach'
 import UpdateBanner from './components_beach/UpdateBanner_beach'
 
@@ -1692,6 +1695,7 @@ export default function App() {
       .from('matches')
       .select('*')
       .eq('external_id', TEST_MATCH_EXTERNAL_ID)
+      .eq('sport_type', SPORT_TYPE)
       .single()
 
     if (matchError) {

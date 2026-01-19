@@ -23,6 +23,9 @@ import { debugLogger, createStateSnapshot } from '../utils_beach/debugLogger_bea
 import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { supabase } from '../lib_beach/supabaseClient_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
+
+// Sport type for beach volleyball
+const SPORT_TYPE = 'beach'
 import { uploadBackupToCloud, uploadLogsToCloud, triggerContinuousBackup } from '../utils_beach/logger_beach'
 import { splitLocalDateTime, parseLocalDateTimeToISO, roundToMinute } from '../utils_beach/timeUtils_beach'
 import { uploadScoresheetAsync } from '../utils_beach/scoresheetUploader_beach'
@@ -1742,6 +1745,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
           .from('matches')
           .select('id')
           .eq('external_id', seedKey)
+          .eq('sport_type', SPORT_TYPE)
           .maybeSingle()
         if (error || !matchData) return
         supabaseMatchId = matchData.id
@@ -3752,6 +3756,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
           .from('matches')
           .update({ manual_changes: updatedChanges })
           .eq('external_id', data.match.seed_key)
+          .eq('sport_type', SPORT_TYPE)
           .select('id, external_id, manual_changes')
           .then((result) => {
             console.log('[ManualChange] Supabase result:', result)

@@ -2,6 +2,9 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib_beach/supabaseClient_beach'
 
+// Sport type for beach volleyball
+const SPORT_TYPE = 'beach'
+
 /**
  * Reusable RefereeSelector component for selecting referees from history
  * Uses Supabase referee_database table for suggestions
@@ -36,6 +39,7 @@ export default function RefereeSelector({ open, onClose, onSelect, position = {}
       const { data, error } = await supabase
         .from('referee_database')
         .select('first_name, last_name, country, dob, created_at')
+        .eq('sport_type', SPORT_TYPE)
         .order('last_name', { ascending: true })
 
       if (error) {

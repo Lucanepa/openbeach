@@ -53,13 +53,16 @@ const MAX_DEPENDENCY_RETRIES = 10
 // Auto-retry interval for errored jobs (every 30 seconds when online)
 const ERROR_RETRY_INTERVAL = 30000
 
+// Sport type for beach volleyball
+const SPORT_TYPE = 'beach'
+
 // Valid Supabase matches table columns - filters out invalid columns from old backup formats
 const VALID_MATCH_COLUMNS = [
   'external_id', 'game_n', 'game_pin', 'status', 'connections', 'connection_pins',
   'scheduled_at', 'match_info', 'officials', 'home_team', 'players_home', 'bench_home',
   'away_team', 'players_away', 'bench_away', 'coin_toss', 'results', 'signatures',
   'approval', 'test', 'created_at', 'updated_at', 'manual_changes', 'current_set',
-  'set_results', 'final_score', 'sanctions', 'winner'
+  'set_results', 'final_score', 'sanctions', 'winner', 'sport_type'
 ]
 
 // Filter match payload to only include valid Supabase columns
@@ -166,7 +169,7 @@ export function useSyncQueue() {
       if (job.resource === 'match' && job.action === 'insert') {
         // All data is stored as JSONB in the match record - no FK resolution needed
         // Filter to valid columns only - handles old backup formats with invalid fields
-        const matchPayload = filterMatchPayload(job.payload)
+        const matchPayload = filterMatchPayload({ ...job.payload, sport_type: SPORT_TYPE })
 
         console.log('[SyncQueue] Match insert payload:', matchPayload)
         const { error } = await supabase
@@ -196,6 +199,7 @@ export function useSyncQueue() {
             .from('matches')
             .select(columnsToFetch.join(','))
             .eq('external_id', id)
+            .eq('sport_type', SPORT_TYPE)
             .maybeSingle()
 
           if (fetchError) {
@@ -221,6 +225,7 @@ export function useSyncQueue() {
           .from('matches')
           .update(finalUpdateData)
           .eq('external_id', id)
+          .eq('sport_type', SPORT_TYPE)
         if (error) {
           console.error('[SyncQueue] Match update error:', error, job.payload)
           return false
@@ -233,11 +238,12 @@ export function useSyncQueue() {
         const { id } = job.payload
         console.log('[SyncQueue] 🗑️ Starting match delete for external_id:', id)
 
-        // First, look up the match to get its UUID
+        // First, look up the match to get its UUID (filtered by sport_type)
         const { data: matchData, error: lookupError } = await supabase
           .from('matches')
           .select('id')
           .eq('external_id', id)
+          .eq('sport_type', SPORT_TYPE)
           .maybeSingle()
 
         if (lookupError) {
@@ -365,11 +371,12 @@ export function useSyncQueue() {
         console.log('[SyncQueue] Processing restore job for match:', externalId)
 
         try {
-          // Step 1: Look up existing match UUID by external_id (THIS MATCH ONLY)
+          // Step 1: Look up existing match UUID by external_id (THIS MATCH ONLY, filtered by sport_type)
           const { data: existingMatch, error: lookupError } = await supabase
             .from('matches')
             .select('id')
             .eq('external_id', externalId)
+            .eq('sport_type', SPORT_TYPE)
             .maybeSingle()
 
           if (lookupError) {
@@ -399,7 +406,8 @@ export function useSyncQueue() {
 
           // Step 3: UPSERT match (creates or updates BY external_id)
           // Filter to valid columns only - handles old backup formats with invalid fields
-          const filteredMatch = filterMatchPayload(match)
+          // Always include sport_type for beach volleyball
+          const filteredMatch = filterMatchPayload({ ...match, sport_type: SPORT_TYPE })
           const { data: upsertedMatch, error: matchError } = await supabase
             .from('matches')
             .upsert(filteredMatch, { onConflict: 'external_id' })
@@ -477,6 +485,7 @@ export function useSyncQueue() {
             .from('matches')
             .select('id')
             .eq('external_id', setPayload.match_id)
+            .eq('sport_type', SPORT_TYPE)
             .maybeSingle()
 
           if (!matchData) {
@@ -521,6 +530,7 @@ export function useSyncQueue() {
             .from('matches')
             .select('id')
             .eq('external_id', eventPayload.match_id)
+            .eq('sport_type', SPORT_TYPE)
             .maybeSingle()
 
           if (!matchData) {
