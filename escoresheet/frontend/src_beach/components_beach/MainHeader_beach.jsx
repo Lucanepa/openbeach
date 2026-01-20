@@ -339,8 +339,8 @@ export default function MainHeader({
 
         {/* Teams */}
         <div style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.9)', textAlign: 'center', fontWeight: 500 }}>
-          {(matchData.homeTeam?.name && matchData.awayTeam?.name)
-            ? `${matchData.homeTeam.name} - ${matchData.awayTeam.name}`
+          {(matchData.team1?.name && matchData.team2?.name)
+            ? `${matchData.team1.name} - ${matchData.team2.name}`
             : t('header.notSet')}
         </div>
 

@@ -1,9 +1,7 @@
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../contexts_beach/AuthContext_beach'
 
 export default function SignUpModal({ open, onClose, onSwitchToLogin }) {
-  const { t } = useTranslation()
   const { signUp } = useAuth()
 
   const [email, setEmail] = useState('')
@@ -25,12 +23,12 @@ export default function SignUpModal({ open, onClose, onSwitchToLogin }) {
     setError('')
 
     if (password !== confirmPassword) {
-      setError(t('auth.passwordsDoNotMatch', 'Passwords do not match'))
+      setError('Passwords do not match')
       return
     }
 
     if (password.length < 6) {
-      setError(t('auth.passwordTooShort', 'Password must be at least 6 characters'))
+      setError('Password must be at least 6 characters')
       return
     }
 
@@ -131,7 +129,7 @@ export default function SignUpModal({ open, onClose, onSwitchToLogin }) {
         {/* Header */}
         <div style={headerStyle}>
           <h2 style={{ margin: 0, color: '#fff', fontSize: 20, fontWeight: 600 }}>
-            {t('auth.createAccount', 'Create Account')}
+            Create Account
           </h2>
           <button
             onClick={onClose}
@@ -168,15 +166,15 @@ export default function SignUpModal({ open, onClose, onSwitchToLogin }) {
           {success ? (
             <div style={{ textAlign: 'center', color: '#22c55e', padding: '20px 0' }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>✓</div>
-              <p style={{ marginBottom: 8 }}>{t('auth.accountCreated', 'Account created successfully!')}</p>
+              <p style={{ marginBottom: 8 }}>Account created successfully!</p>
               <p style={{ color: '#9ca3af', fontSize: 14 }}>
-                {t('auth.checkEmail', 'Check your email to confirm your account')}
+                Check your email to confirm your account
               </p>
               <button
                 onClick={onSwitchToLogin}
                 style={{ ...buttonStyle, marginTop: 16 }}
               >
-                {t('auth.signIn', 'Sign In')}
+                Sign In
               </button>
             </div>
           ) : (
@@ -186,7 +184,7 @@ export default function SignUpModal({ open, onClose, onSwitchToLogin }) {
                 <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
                   <div style={{ flex: 1 }}>
                     <label style={{ color: '#9ca3af', fontSize: 13, marginBottom: 4, display: 'block' }}>
-                      {t('auth.firstName', 'First name')}
+                      First name
                     </label>
                     <input
                       type="text"
@@ -197,7 +195,7 @@ export default function SignUpModal({ open, onClose, onSwitchToLogin }) {
                   </div>
                   <div style={{ flex: 1 }}>
                     <label style={{ color: '#9ca3af', fontSize: 13, marginBottom: 4, display: 'block' }}>
-                      {t('auth.lastName', 'Last name')}
+                      Last name
                     </label>
                     <input
                       type="text"
@@ -212,7 +210,7 @@ export default function SignUpModal({ open, onClose, onSwitchToLogin }) {
                 <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
                   <div style={{ flex: 1 }}>
                     <label style={{ color: '#9ca3af', fontSize: 13, marginBottom: 4, display: 'block' }}>
-                      {t('auth.country', 'Country')}
+                      Country
                     </label>
                     <input
                       type="text"
@@ -225,7 +223,7 @@ export default function SignUpModal({ open, onClose, onSwitchToLogin }) {
                   </div>
                   <div style={{ flex: 1 }}>
                     <label style={{ color: '#9ca3af', fontSize: 13, marginBottom: 4, display: 'block' }}>
-                      {t('auth.dob', 'Date of birth')}
+                      Date of birth
                     </label>
                     <input
                       type="date"
@@ -239,7 +237,7 @@ export default function SignUpModal({ open, onClose, onSwitchToLogin }) {
                 {/* Role selection */}
                 <div style={{ marginBottom: 16 }}>
                   <label style={{ color: '#9ca3af', fontSize: 13, marginBottom: 6, display: 'block' }}>
-                    {t('auth.roles', 'I am a:')}
+                    I am a:
                   </label>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button
@@ -247,14 +245,14 @@ export default function SignUpModal({ open, onClose, onSwitchToLogin }) {
                       onClick={() => toggleRole('scorer')}
                       style={roleButtonStyle(roles.includes('scorer'))}
                     >
-                      {t('auth.roleScorer', 'Scorer')}
+                      Scorer
                     </button>
                     <button
                       type="button"
                       onClick={() => toggleRole('referee')}
                       style={roleButtonStyle(roles.includes('referee'))}
                     >
-                      {t('auth.roleReferee', 'Referee')}
+                      Referee
                     </button>
                   </div>
                 </div>
@@ -262,7 +260,7 @@ export default function SignUpModal({ open, onClose, onSwitchToLogin }) {
                 {/* Email */}
                 <div style={{ marginBottom: 12 }}>
                   <label style={{ color: '#9ca3af', fontSize: 13, marginBottom: 4, display: 'block' }}>
-                    {t('auth.email', 'Email')} *
+                    Email *
                   </label>
                   <input
                     type="email"
@@ -276,7 +274,7 @@ export default function SignUpModal({ open, onClose, onSwitchToLogin }) {
                 {/* Password */}
                 <div style={{ marginBottom: 12 }}>
                   <label style={{ color: '#9ca3af', fontSize: 13, marginBottom: 4, display: 'block' }}>
-                    {t('auth.password', 'Password')} *
+                    Password *
                   </label>
                   <input
                     type="password"
@@ -290,7 +288,7 @@ export default function SignUpModal({ open, onClose, onSwitchToLogin }) {
                 {/* Confirm password */}
                 <div style={{ marginBottom: 16 }}>
                   <label style={{ color: '#9ca3af', fontSize: 13, marginBottom: 4, display: 'block' }}>
-                    {t('auth.confirmPassword', 'Confirm password')} *
+                    Confirm password *
                   </label>
                   <input
                     type="password"
@@ -302,7 +300,7 @@ export default function SignUpModal({ open, onClose, onSwitchToLogin }) {
                 </div>
 
                 <button type="submit" style={buttonStyle} disabled={loading}>
-                  {loading ? t('auth.creatingAccount', 'Creating account...') : t('auth.createAccount', 'Create Account')}
+                  {loading ? 'Creating account...' : 'Create Account'}
                 </button>
               </form>
 
@@ -312,7 +310,7 @@ export default function SignUpModal({ open, onClose, onSwitchToLogin }) {
                 color: '#9ca3af',
                 fontSize: 14
               }}>
-                {t('auth.haveAccount', 'Already have an account?')}{' '}
+                Already have an account?{' '}
                 <button
                   onClick={onSwitchToLogin}
                   style={{
@@ -324,7 +322,7 @@ export default function SignUpModal({ open, onClose, onSwitchToLogin }) {
                     textDecoration: 'underline'
                   }}
                 >
-                  {t('auth.signIn', 'Sign In')}
+                  Sign In
                 </button>
               </div>
             </>

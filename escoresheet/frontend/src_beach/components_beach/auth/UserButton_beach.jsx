@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../contexts_beach/AuthContext_beach'
 import LoginModal from './LoginModal'
 import SignUpModal from './SignUpModal'
@@ -7,7 +6,6 @@ import ProfileModal from './ProfileModal'
 import MatchHistory from './MatchHistory'
 
 export default function UserButton({ style = {}, fullWidth = false }) {
-  const { t } = useTranslation()
   const { user, profile, loading, signOut } = useAuth()
 
   const [showLogin, setShowLogin] = useState(false)
@@ -73,7 +71,7 @@ export default function UserButton({ style = {}, fullWidth = false }) {
           onClick={() => setShowLogin(true)}
           style={buttonStyle}
         >
-          {t('auth.login', 'Login')}
+          Login
           <span style={circleStyle}>
             <svg
               width={fullWidth ? "12" : "9"}
@@ -114,7 +112,7 @@ export default function UserButton({ style = {}, fullWidth = false }) {
   // Logged in - show avatar with dropdown
   const userName = profile?.first_name || profile?.last_name
     ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
-    : user?.email?.split('@')[0] || t('auth.user', 'User')
+    : user?.email?.split('@')[0] || 'User'
 
   const loggedInButtonStyle = fullWidth ? {
     width: 'auto',
@@ -249,7 +247,7 @@ export default function UserButton({ style = {}, fullWidth = false }) {
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                   <circle cx="12" cy="7" r="4" />
                 </svg>
-                {t('auth.profile', 'Profile')}
+                Profile
               </button>
 
               <button
@@ -277,7 +275,7 @@ export default function UserButton({ style = {}, fullWidth = false }) {
                   <line x1="8" y1="2" x2="8" y2="6" />
                   <line x1="3" y1="10" x2="21" y2="10" />
                 </svg>
-                {t('home.myMatches', 'My Matches')}
+                My Matches
               </button>
 
               <button
@@ -302,7 +300,7 @@ export default function UserButton({ style = {}, fullWidth = false }) {
                   <polyline points="16 17 21 12 16 7" />
                   <line x1="21" y1="12" x2="9" y2="12" />
                 </svg>
-                {t('auth.signOut', 'Sign Out')}
+                Sign Out
               </button>
             </div>
           </>

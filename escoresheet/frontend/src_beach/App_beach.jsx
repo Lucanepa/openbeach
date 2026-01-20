@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from './db_beach/db_beach'
 import MatchSetup from './components_beach/MatchSetup_beach'
@@ -18,27 +17,23 @@ import ConnectionSetupModal from './components_beach/options/ConnectionSetupModa
 import { useSyncQueue } from './hooks_beach/useSyncQueue_beach'
 import useAutoBackup from './hooks_beach/useAutoBackup_beach'
 import { useDashboardServer } from './hooks_beach/useDashboardServer_beach'
-import mikasaVolleyball from './mikasa_v200w.png'
+// Beach volleyball ball image
+const ballImage = '/beachball.png'
 
-// Primary ball image (with mikasa as fallback)
-const ballImage = '/ball.png'
-
-// Logo for dark background (HomePage)
-const openvolleyLogo = '/openvolley_dark_bg.png'
+// Logo for HomePage
+const openbeachLogo = '/openbeach_no_bg.png'
 import {
   TEST_REFEREE_SEED_DATA,
   TEST_SCORER_SEED_DATA,
   TEST_TEAM_SEED_DATA,
   TEST_MATCH_SEED_KEY,
   TEST_MATCH_EXTERNAL_ID,
-  TEST_HOME_TEAM_EXTERNAL_ID,
-  TEST_AWAY_TEAM_EXTERNAL_ID,
+  TEST_TEAM_1_EXTERNAL_ID,
+  TEST_TEAM_2_EXTERNAL_ID,
   TEST_MATCH_DEFAULTS,
-  TEST_HOME_BENCH,
-  TEST_AWAY_BENCH,
   getNextTestMatchStartTime,
-  getTestHomeTeamShortName,
-  getTestAwayTeamShortName
+  getTestTeam1ShortName,
+  getTestTeam2ShortName
 } from './constants/testSeeds'
 import { supabase } from './lib_beach/supabaseClient_beach'
 import { checkMatchSession, lockMatchSession, unlockMatchSession, verifyGamePin } from './utils_beach/sessionManager_beach'
@@ -66,7 +61,6 @@ function generateRefereePin() {
 }
 
 export default function App() {
-  const { t } = useTranslation()
   const [matchId, setMatchId] = useState(null)
   const [showMatchSetup, setShowMatchSetup] = useState(false)
   const [showCoinToss, setShowCoinToss] = useState(false)
@@ -153,14 +147,6 @@ export default function App() {
     const saved = localStorage.getItem('manageCaptainOnCourt')
     return saved === 'true' // default false
   })
-  const [liberoExitConfirmation, setLiberoExitConfirmation] = useState(() => {
-    const saved = localStorage.getItem('liberoExitConfirmation')
-    return saved !== 'false' // default true
-  })
-  const [liberoEntrySuggestion, setLiberoEntrySuggestion] = useState(() => {
-    const saved = localStorage.getItem('liberoEntrySuggestion')
-    return saved !== 'false' // default true
-  })
   const [setIntervalDuration, setSetIntervalDuration] = useState(() => {
     const saved = localStorage.getItem('setIntervalDuration')
     return saved ? parseInt(saved, 10) : 180 // default 3 minutes = 180 seconds
@@ -240,12 +226,11 @@ export default function App() {
     }
   }, [wakeLockActive, reEnableWakeLock])
 
-  // Preload assets that are used later (e.g., coin toss volleyball image, logo)
+  // Preload assets that are used later (e.g., coin toss ball image, logo)
   useEffect(() => {
     const assetsToPreload = [
       ballImage,
-      mikasaVolleyball,
-      openvolleyLogo
+      openbeachLogo
     ]
 
     assetsToPreload.forEach(src => {
@@ -742,10 +727,10 @@ export default function App() {
 
     // For test matches that have been restarted (no signatures, only initial set, no events), don't show status
     if (currentMatch.test === true) {
-      const hasSignatures = currentMatch.homeCoachSignature ||
-        currentMatch.homeCaptainSignature ||
-        currentMatch.awayCoachSignature ||
-        currentMatch.awayCaptainSignature
+      const hasSignatures = currentMatch.team1CoachSignature ||
+        currentMatch.team1CaptainSignature ||
+        currentMatch.team2CoachSignature ||
+        currentMatch.team2CaptainSignature
 
       if (!hasSignatures) {
         const sets = await db.sets.where('matchId').equals(currentMatch.id).toArray()
@@ -757,32 +742,32 @@ export default function App() {
       }
     }
 
-    const homeTeamPromise = currentMatch.homeTeamId ? db.teams.get(currentMatch.homeTeamId) : Promise.resolve(null)
-    const awayTeamPromise = currentMatch.awayTeamId ? db.teams.get(currentMatch.awayTeamId) : Promise.resolve(null)
+    const team1Promise = currentMatch.team1Id ? db.teams.get(currentMatch.team1Id) : Promise.resolve(null)
+    const team2Promise = currentMatch.team2Id ? db.teams.get(currentMatch.team2Id) : Promise.resolve(null)
 
     const setsPromise = db.sets.where('matchId').equals(currentMatch.id).toArray()
     const eventsPromise = db.events.where('matchId').equals(currentMatch.id).toArray()
-    const homePlayersPromise = currentMatch.homeTeamId
-      ? db.players.where('teamId').equals(currentMatch.homeTeamId).count()
+    const team1PlayersPromise = currentMatch.team1Id
+      ? db.players.where('teamId').equals(currentMatch.team1Id).count()
       : Promise.resolve(0)
-    const awayPlayersPromise = currentMatch.awayTeamId
-      ? db.players.where('teamId').equals(currentMatch.awayTeamId).count()
+    const team2PlayersPromise = currentMatch.team2Id
+      ? db.players.where('teamId').equals(currentMatch.team2Id).count()
       : Promise.resolve(0)
 
-    const [homeTeam, awayTeam, sets, events, homePlayers, awayPlayers] = await Promise.all([
-      homeTeamPromise,
-      awayTeamPromise,
+    const [team1, team2, sets, events, team1Players, team2Players] = await Promise.all([
+      team1Promise,
+      team2Promise,
       setsPromise,
       eventsPromise,
-      homePlayersPromise,
-      awayPlayersPromise
+      team1PlayersPromise,
+      team2PlayersPromise
     ])
 
     const signaturesComplete = Boolean(
-      currentMatch.homeCoachSignature &&
-      currentMatch.homeCaptainSignature &&
-      currentMatch.awayCoachSignature &&
-      currentMatch.awayCaptainSignature
+      currentMatch.team1CoachSignature &&
+      currentMatch.team1CaptainSignature &&
+      currentMatch.team2CoachSignature &&
+      currentMatch.team2CaptainSignature
     )
 
     const infoConfigured = Boolean(
@@ -792,15 +777,15 @@ export default function App() {
       (currentMatch.league && String(currentMatch.league).trim() !== '')
     )
 
-    const rostersReady = homePlayers === 2 && awayPlayers === 2
+    const rostersReady = team1Players === 2 && team2Players === 2
     const matchReadyForPlay = infoConfigured && signaturesComplete && rostersReady
 
     const hasActiveSet = sets.some(set => {
       return Boolean(
         set.finished ||
         set.startTime ||
-        set.homePoints > 0 ||
-        set.awayPoints > 0
+        set.team1Points > 0 ||
+        set.team2Points > 0
       )
     })
 
@@ -813,7 +798,7 @@ export default function App() {
       status = 'Match ended'
     } else if ((currentMatch.status === 'live' || hasActiveSet || hasEventActivity) && matchReadyForPlay) {
       status = 'Match recording'
-    } else if (homePlayers > 0 || awayPlayers > 0 || currentMatch.homeCoachSignature || currentMatch.awayCoachSignature) {
+    } else if (team1Players > 0 || team2Players > 0 || currentMatch.team1CoachSignature || currentMatch.team2CoachSignature) {
       if (signaturesComplete) {
         status = 'Coin toss'
       } else {
@@ -823,8 +808,8 @@ export default function App() {
 
     return {
       match: currentMatch,
-      homeTeam,
-      awayTeam,
+      team1,
+      team2,
       status
     }
   }, [currentMatch])
@@ -833,12 +818,12 @@ export default function App() {
   const matchInfoData = useLiveQuery(async () => {
     // For active match
     if (matchId && currentMatch) {
-      const homeTeamPromise = currentMatch.homeTeamId ? db.teams.get(currentMatch.homeTeamId) : Promise.resolve(null)
-      const awayTeamPromise = currentMatch.awayTeamId ? db.teams.get(currentMatch.awayTeamId) : Promise.resolve(null)
-      const [homeTeam, awayTeam] = await Promise.all([homeTeamPromise, awayTeamPromise])
+      const team1Promise = currentMatch.team1Id ? db.teams.get(currentMatch.team1Id) : Promise.resolve(null)
+      const team2Promise = currentMatch.team2Id ? db.teams.get(currentMatch.team2Id) : Promise.resolve(null)
+      const [team1, team2] = await Promise.all([team1Promise, team2Promise])
       return {
-        homeTeam,
-        awayTeam,
+        team1,
+        team2,
         match: currentMatch
       }
     }
@@ -847,12 +832,12 @@ export default function App() {
     if (!matchId) {
       const matchToUse = currentOfficialMatch || currentTestMatch
       if (matchToUse) {
-        const homeTeamPromise = matchToUse.homeTeamId ? db.teams.get(matchToUse.homeTeamId) : Promise.resolve(null)
-        const awayTeamPromise = matchToUse.awayTeamId ? db.teams.get(matchToUse.awayTeamId) : Promise.resolve(null)
-        const [homeTeam, awayTeam] = await Promise.all([homeTeamPromise, awayTeamPromise])
+        const team1Promise = matchToUse.team1Id ? db.teams.get(matchToUse.team1Id) : Promise.resolve(null)
+        const team2Promise = matchToUse.team2Id ? db.teams.get(matchToUse.team2Id) : Promise.resolve(null)
+        const [team1, team2] = await Promise.all([team1Promise, team2Promise])
         return {
-          homeTeam,
-          awayTeam,
+          team1,
+          team2,
           match: matchToUse
         }
       }
@@ -865,7 +850,7 @@ export default function App() {
 
   // Preload ball and logo images when app loads
   useEffect(() => {
-    const imagesToPreload = [ballImage, mikasaVolleyball, openvolleyLogo]
+    const imagesToPreload = [ballImage, openbeachLogo]
 
     imagesToPreload.forEach(src => {
       // Preload the image
@@ -972,11 +957,11 @@ export default function App() {
     if (!currentMatch) return
 
     // Check if there are pending rosters
-    const hasPendingHomeRoster = currentMatch.pendingHomeRoster !== null && currentMatch.pendingHomeRoster !== undefined
-    const hasPendingAwayRoster = currentMatch.pendingAwayRoster !== null && currentMatch.pendingAwayRoster !== undefined
+    const hasPendingTeam1Roster = currentMatch.pendingTeam1Roster !== null && currentMatch.pendingTeam1Roster !== undefined
+    const hasPendingTeam2Roster = currentMatch.pendingTeam2Roster !== null && currentMatch.pendingTeam2Roster !== undefined
 
     // If there are pending rosters and we're not already in match setup, open it
-    if ((hasPendingHomeRoster || hasPendingAwayRoster) && !showMatchSetup) {
+    if ((hasPendingTeam1Roster || hasPendingTeam2Roster) && !showMatchSetup) {
       setMatchId(currentMatch.id)
       setShowMatchSetup(true)
     }
@@ -985,7 +970,7 @@ export default function App() {
   // Update document title based on match type
   useEffect(() => {
     if (!currentMatch) {
-      document.title = 'Openvolley eScoresheet'
+      document.title = 'openBeach eScoresheet'
       return
     }
 
@@ -993,11 +978,11 @@ export default function App() {
 
     if (isTestMatch) {
       // Test matches don't have a game number - just show base title
-      document.title = 'Openvolley eScoresheet'
+      document.title = 'openBeach eScoresheet'
     } else {
       // Official match - show game number only
       const gameNumber = currentMatch.externalId || 'Official Match'
-      document.title = `Openvolley eScoresheet - ${gameNumber}`
+      document.title = `openBeach eScoresheet - ${gameNumber}`
     }
   }, [currentMatch])
 
@@ -1224,13 +1209,13 @@ export default function App() {
 
       try {
         // Load full match data
-        const [homeTeam, awayTeam, sets, events, homePlayers, awayPlayers] = await Promise.all([
-          currentMatchData.homeTeamId ? db.teams.get(currentMatchData.homeTeamId) : null,
-          currentMatchData.awayTeamId ? db.teams.get(currentMatchData.awayTeamId) : null,
+        const [team1, team2, sets, events, team1Players, team2Players] = await Promise.all([
+          currentMatchData.team1Id ? db.teams.get(currentMatchData.team1Id) : null,
+          currentMatchData.team2Id ? db.teams.get(currentMatchData.team2Id) : null,
           db.sets.where('matchId').equals(currentActiveMatchId).sortBy('index'),
           db.events.where('matchId').equals(currentActiveMatchId).toArray(),
-          currentMatchData.homeTeamId ? db.players.where('teamId').equals(currentMatchData.homeTeamId).sortBy('number') : [],
-          currentMatchData.awayTeamId ? db.players.where('teamId').equals(currentMatchData.awayTeamId).sortBy('number') : []
+          currentMatchData.team1Id ? db.players.where('teamId').equals(currentMatchData.team1Id).sortBy('number') : [],
+          currentMatchData.team2Id ? db.players.where('teamId').equals(currentMatchData.team2Id).sortBy('number') : []
         ])
 
         // Prepare full match object - scoreboard is source of truth, always overwrite
@@ -1239,11 +1224,11 @@ export default function App() {
           id: currentMatchData.id,
           // Ensure all fields are included for complete overwrite
           refereePin: currentMatchData.refereePin,
-          homeTeamPin: currentMatchData.homeTeamPin,
-          awayTeamPin: currentMatchData.awayTeamPin,
+          team1Pin: currentMatchData.team1Pin,
+          team2Pin: currentMatchData.team2Pin,
           refereeConnectionEnabled: currentMatchData.refereeConnectionEnabled,
-          homeTeamConnectionEnabled: currentMatchData.homeTeamConnectionEnabled,
-          awayTeamConnectionEnabled: currentMatchData.awayTeamConnectionEnabled,
+          team1ConnectionEnabled: currentMatchData.team1ConnectionEnabled,
+          team2ConnectionEnabled: currentMatchData.team2ConnectionEnabled,
           status: currentMatchData.status,
           gameNumber: currentMatchData.gameNumber,
           game_n: currentMatchData.game_n,
@@ -1256,10 +1241,10 @@ export default function App() {
           type: 'sync-match-data',
           matchId: currentActiveMatchId,
           match: fullMatch,
-          homeTeam,
-          awayTeam,
-          homePlayers,
-          awayPlayers,
+          team1,
+          team2,
+          team1Players,
+          team2Players,
           sets,
           events
         }
@@ -1289,23 +1274,23 @@ export default function App() {
         if (pinType === 'referee') {
           matchPin = currentMatchData.refereePin
           connectionEnabled = currentMatchData.refereeConnectionEnabled === true
-        } else if (pinType === 'homeTeam') {
-          matchPin = currentMatchData.homeTeamPin
-          connectionEnabled = currentMatchData.homeTeamConnectionEnabled === true
-        } else if (pinType === 'awayTeam') {
-          matchPin = currentMatchData.awayTeamPin
-          connectionEnabled = currentMatchData.awayTeamConnectionEnabled === true
+        } else if (pinType === 'team1') {
+          matchPin = currentMatchData.team1Pin
+          connectionEnabled = currentMatchData.team1ConnectionEnabled === true
+        } else if (pinType === 'team2') {
+          matchPin = currentMatchData.team2Pin
+          connectionEnabled = currentMatchData.team2ConnectionEnabled === true
         }
 
         if (matchPin && String(matchPin).trim() === pinStr && connectionEnabled && currentMatchData.status !== 'final') {
           // Load full data for response
-          const [homeTeam, awayTeam, sets, events, homePlayers, awayPlayers] = await Promise.all([
-            currentMatchData.homeTeamId ? db.teams.get(currentMatchData.homeTeamId) : null,
-            currentMatchData.awayTeamId ? db.teams.get(currentMatchData.awayTeamId) : null,
+          const [team1, team2, sets, events, team1Players, team2Players] = await Promise.all([
+            currentMatchData.team1Id ? db.teams.get(currentMatchData.team1Id) : null,
+            currentMatchData.team2Id ? db.teams.get(currentMatchData.team2Id) : null,
             db.sets.where('matchId').equals(currentActiveMatchId).sortBy('index'),
             db.events.where('matchId').equals(currentActiveMatchId).toArray(),
-            currentMatchData.homeTeamId ? db.players.where('teamId').equals(currentMatchData.homeTeamId).sortBy('number') : [],
-            currentMatchData.awayTeamId ? db.players.where('teamId').equals(currentMatchData.awayTeamId).sortBy('number') : []
+            currentMatchData.team1Id ? db.players.where('teamId').equals(currentMatchData.team1Id).sortBy('number') : [],
+            currentMatchData.team2Id ? db.players.where('teamId').equals(currentMatchData.team2Id).sortBy('number') : []
           ])
 
           ws.send(JSON.stringify({
@@ -1315,10 +1300,10 @@ export default function App() {
             match: currentMatchData,
             fullData: {
               match: currentMatchData,
-              homeTeam,
-              awayTeam,
-              homePlayers,
-              awayPlayers,
+              team1,
+              team2,
+              team1Players,
+              team2Players,
               sets,
               events
             }
@@ -1356,13 +1341,13 @@ export default function App() {
           return
         }
 
-        const [homeTeam, awayTeam, sets, events, homePlayers, awayPlayers] = await Promise.all([
-          currentMatchData.homeTeamId ? db.teams.get(currentMatchData.homeTeamId) : null,
-          currentMatchData.awayTeamId ? db.teams.get(currentMatchData.awayTeamId) : null,
+        const [team1, team2, sets, events, team1Players, team2Players] = await Promise.all([
+          currentMatchData.team1Id ? db.teams.get(currentMatchData.team1Id) : null,
+          currentMatchData.team2Id ? db.teams.get(currentMatchData.team2Id) : null,
           db.sets.where('matchId').equals(currentActiveMatchId).sortBy('index'),
           db.events.where('matchId').equals(currentActiveMatchId).toArray(),
-          currentMatchData.homeTeamId ? db.players.where('teamId').equals(currentMatchData.homeTeamId).sortBy('number') : [],
-          currentMatchData.awayTeamId ? db.players.where('teamId').equals(currentMatchData.awayTeamId).sortBy('number') : []
+          currentMatchData.team1Id ? db.players.where('teamId').equals(currentMatchData.team1Id).sortBy('number') : [],
+          currentMatchData.team2Id ? db.players.where('teamId').equals(currentMatchData.team2Id).sortBy('number') : []
         ])
 
         ws.send(JSON.stringify({
@@ -1372,10 +1357,10 @@ export default function App() {
           success: true,
           matchData: {
             match: currentMatchData,
-            homeTeam,
-            awayTeam,
-            homePlayers,
-            awayPlayers,
+            team1,
+            team2,
+            team1Players,
+            team2Players,
             sets,
             events
           }
@@ -1482,11 +1467,11 @@ export default function App() {
     // Calculate current set scores
     const sets = await db.sets.where({ matchId: cur.matchId }).toArray()
     const finishedSets = sets.filter(s => s.finished)
-    const homeSetsWon = finishedSets.filter(s => s.homePoints > s.awayPoints).length
-    const awaySetsWon = finishedSets.filter(s => s.awayPoints > s.homePoints).length
+    const team1SetsWon = finishedSets.filter(s => s.team1Points > s.team2Points).length
+    const team2SetsWon = finishedSets.filter(s => s.team2Points > s.team1Points).length
 
     // Check if either team has won 2 sets (match win)
-    const isMatchEnd = homeSetsWon >= 2 || awaySetsWon >= 2
+    const isMatchEnd = team1SetsWon >= 2 || team2SetsWon >= 2
 
     if (isMatchEnd) {
       // IMPORTANT: When match ends, preserve ALL data in database:
@@ -1512,11 +1497,11 @@ export default function App() {
         // Build set results array
         const setResults = finishedSets
           .sort((a, b) => a.index - b.index)
-          .map(s => ({ set: s.index, home: s.homePoints, away: s.awayPoints }))
+          .map(s => ({ set: s.index, team1: s.team1Points, team2: s.team2Points }))
 
         // Determine winner
-        const winner = homeSetsWon > awaySetsWon ? 'home' : 'away'
-        const finalScore = `${homeSetsWon}-${awaySetsWon}`
+        const winner = team1SetsWon > team2SetsWon ? 'team1' : 'team2'
+        const finalScore = `${team1SetsWon}-${team2SetsWon}`
 
         await db.sync_queue.add({
           resource: 'match',
@@ -1553,7 +1538,7 @@ export default function App() {
     }
 
     // Continue to next set (legacy logic - shouldn't reach here with new logic)
-    const setId = await db.sets.add({ matchId: cur.matchId, index: cur.index + 1, homePoints: 0, awayPoints: 0, finished: false })
+    const setId = await db.sets.add({ matchId: cur.matchId, index: cur.index + 1, team1Points: 0, team2Points: 0, finished: false })
 
     // Only sync official matches with seed_key
     if (!isTestMatch && matchRecord?.seed_key) {
@@ -1564,8 +1549,8 @@ export default function App() {
           external_id: String(setId),
           match_id: matchRecord.seed_key, // Use seed_key (external_id) for Supabase lookup
           index: cur.index + 1,
-          home_points: 0,
-          away_points: 0,
+          team1_points: 0,
+          team2_points: 0,
           finished: false,
           start_time: new Date().toISOString()
         },
@@ -1617,8 +1602,8 @@ export default function App() {
       const testTeams = await db.teams
         .filter(
           t =>
-            t.externalId === TEST_HOME_TEAM_EXTERNAL_ID ||
-            t.externalId === TEST_AWAY_TEAM_EXTERNAL_ID ||
+            t.externalId === TEST_TEAM_1_EXTERNAL_ID ||
+            t.externalId === TEST_TEAM_2_EXTERNAL_ID ||
             (t.seedKey && t.seedKey.startsWith('test-'))
         )
         .toArray()
@@ -1706,26 +1691,26 @@ export default function App() {
     }
 
 
-    const [homeTeamRes, awayTeamRes] = await Promise.all([
-      supabase.from('teams').select('*').eq('id', matchData.home_team_id).single(),
-      supabase.from('teams').select('*').eq('id', matchData.away_team_id).single()
+    const [team1Res, team2Res] = await Promise.all([
+      supabase.from('teams').select('*').eq('id', matchData.team1_id).single(),
+      supabase.from('teams').select('*').eq('id', matchData.team2_id).single()
     ])
 
-    if (homeTeamRes.error) {
-      throw new Error(homeTeamRes.error.message)
+    if (team1Res.error) {
+      throw new Error(team1Res.error.message)
     }
-    if (awayTeamRes.error) {
-      throw new Error(awayTeamRes.error.message)
+    if (team2Res.error) {
+      throw new Error(team2Res.error.message)
     }
 
-    const homeTeamData = homeTeamRes.data
-    const awayTeamData = awayTeamRes.data
+    const team1Data = team1Res.data
+    const team2Data = team2Res.data
 
 
     const { data: playersData, error: playersError } = await supabase
       .from('players')
       .select('*')
-      .in('team_id', [matchData.home_team_id, matchData.away_team_id])
+      .in('team_id', [matchData.team1_id, matchData.team2_id])
 
     if (playersError) {
       throw new Error(playersError.message)
@@ -1753,57 +1738,24 @@ export default function App() {
 
     await clearLocalTestData()
 
-    const normalizeBenchMember = member => ({
-      role: member?.role || '',
-      firstName: member?.firstName || member?.first_name || '',
-      lastName: member?.lastName || member?.last_name || '',
-      dob: member?.dob || member?.date_of_birth || member?.dateOfBirth || ''
+    const team1Id = await db.teams.add({
+      name: team1Data?.name || 'Team 1',
+      shortName: team1Data?.short_name || getTestTeam1ShortName(),
+      color: team1Data?.color || '#3b82f6',
+      seedKey: team1Data?.seed_key || TEST_TEAM_1_EXTERNAL_ID,
+      externalId: team1Data?.external_id || TEST_TEAM_1_EXTERNAL_ID,
+      test: true,
+      createdAt: team1Data?.created_at || new Date().toISOString()
     })
 
-    const homeBenchRaw = Array.isArray(homeTeamData?.bench_staff)
-      ? homeTeamData.bench_staff
-      : Array.isArray(matchData.bench_home)
-        ? matchData.bench_home
-        : TEST_HOME_BENCH
-
-    const awayBenchRaw = Array.isArray(awayTeamData?.bench_staff)
-      ? awayTeamData.bench_staff
-      : Array.isArray(matchData.bench_away)
-        ? matchData.bench_away
-        : TEST_AWAY_BENCH
-
-    const homeBench = (() => {
-      const normalized = homeBenchRaw.map(normalizeBenchMember)
-      const hasNamedMember = normalized.some(member => member.firstName || member.lastName)
-      return hasNamedMember ? normalized : TEST_HOME_BENCH.map(normalizeBenchMember)
-    })()
-
-    const awayBench = (() => {
-      const normalized = awayBenchRaw.map(normalizeBenchMember)
-      const hasNamedMember = normalized.some(member => member.firstName || member.lastName)
-      return hasNamedMember ? normalized : TEST_AWAY_BENCH.map(normalizeBenchMember)
-    })()
-
-    const homeTeamId = await db.teams.add({
-      name: homeTeamData?.name || 'Home',
-      shortName: homeTeamData?.short_name || getTestHomeTeamShortName(),
-      color: homeTeamData?.color || '#3b82f6',
-      seedKey: homeTeamData?.seed_key || TEST_HOME_TEAM_EXTERNAL_ID,
-      externalId: homeTeamData?.external_id || TEST_HOME_TEAM_EXTERNAL_ID,
-      benchStaff: homeBench,
+    const team2Id = await db.teams.add({
+      name: team2Data?.name || 'Team 2',
+      shortName: team2Data?.short_name || getTestTeam2ShortName(),
+      color: team2Data?.color || '#ef4444',
+      seedKey: team2Data?.seed_key || TEST_TEAM_2_EXTERNAL_ID,
+      externalId: team2Data?.external_id || TEST_TEAM_2_EXTERNAL_ID,
       test: true,
-      createdAt: homeTeamData?.created_at || new Date().toISOString()
-    })
-
-    const awayTeamId = await db.teams.add({
-      name: awayTeamData?.name || 'Away',
-      shortName: awayTeamData?.short_name || getTestAwayTeamShortName(),
-      color: awayTeamData?.color || '#ef4444',
-      seedKey: awayTeamData?.seed_key || TEST_AWAY_TEAM_EXTERNAL_ID,
-      externalId: awayTeamData?.external_id || TEST_AWAY_TEAM_EXTERNAL_ID,
-      benchStaff: awayBench,
-      test: true,
-      createdAt: awayTeamData?.created_at || new Date().toISOString()
+      createdAt: team2Data?.created_at || new Date().toISOString()
     })
 
     const normalizePlayer = (player, teamId) => ({
@@ -1813,7 +1765,6 @@ export default function App() {
       lastName: player.last_name || '',
       firstName: player.first_name || '',
       dob: player.dob || '',
-      libero: player.libero || '',
       isCaptain: player.is_captain || false,
       functions: Array.isArray(player.functions) && player.functions.length > 0 ? player.functions : ['player'],
       test: player.test ?? true,
@@ -1830,21 +1781,20 @@ export default function App() {
         first_name: player.firstName,
         last_name: player.lastName,
         dob: player.dob,
-        libero: player.libero || '',
         is_captain: player.isCaptain || false,
-        functions: player.functions || (player.libero ? ['player'] : ['player'])
+        functions: player.functions || ['player']
       }))
     }
 
-    let homePlayersData = (playersData || []).filter(p => p.team_id === matchData.home_team_id)
-    if (!homePlayersData.length) {
-      homePlayersData = buildFallbackPlayers('test-team-alpha')
-      console.warn('[TestMatch] Supabase returned no home players, using fallback seed roster')
+    let team1PlayersData = (playersData || []).filter(p => p.team_id === matchData.team1_id)
+    if (!team1PlayersData.length) {
+      team1PlayersData = buildFallbackPlayers('test-team-alpha')
+      console.warn('[TestMatch] Supabase returned no team 1 players, using fallback seed roster')
     }
 
-    let awayPlayersData = (playersData || []).filter(p => p.team_id === matchData.away_team_id)
-    if (!awayPlayersData.length) {
-      awayPlayersData = buildFallbackPlayers('test-team-bravo')
+    let team2PlayersData = (playersData || []).filter(p => p.team_id === matchData.team2_id)
+    if (!team2PlayersData.length) {
+      team2PlayersData = buildFallbackPlayers('test-team-bravo')
       console.warn('[TestMatch] Supabase returned no away players, using fallback seed roster')
     }
 
@@ -1935,11 +1885,11 @@ export default function App() {
 
     const officials = await resolvedOfficials()
 
-    if (homePlayersData.length) {
-      await db.players.bulkAdd(homePlayersData.map(p => normalizePlayer(p, homeTeamId)))
+    if (team1PlayersData.length) {
+      await db.players.bulkAdd(team1PlayersData.map(p => normalizePlayer(p, team1Id)))
     }
-    if (awayPlayersData.length) {
-      await db.players.bulkAdd(awayPlayersData.map(p => normalizePlayer(p, awayTeamId)))
+    if (team2PlayersData.length) {
+      await db.players.bulkAdd(team2PlayersData.map(p => normalizePlayer(p, team2Id)))
     }
 
     // Extract JSONB data with fallback to legacy columns
@@ -1959,14 +1909,10 @@ export default function App() {
       gameNumber: matchData.game_number || TEST_MATCH_DEFAULTS.gameNumber,
       // Connection PINs: prefer JSONB, fallback to legacy
       refereePin: connectionPins.referee || matchData.referee_pin || generateRefereePin(),
-      homeTeamPin: connectionPins.bench_home || matchData.bench_home_pin || null,
-      awayTeamPin: connectionPins.bench_away || matchData.bench_away_pin || null,
-      homeTeamUploadPin: connectionPins.upload_home || matchData.home_team_upload_pin || null,
-      awayTeamUploadPin: connectionPins.upload_away || matchData.away_team_upload_pin || null,
-      homeTeamId,
-      awayTeamId,
-      bench_home: homeBench,
-      bench_away: awayBench,
+      team1UploadPin: connectionPins.upload_home || matchData.home_team_upload_pin || null,
+      team2UploadPin: connectionPins.upload_away || matchData.away_team_upload_pin || null,
+      team1Id,
+      team2Id,
       officials,
       test: matchData.test ?? true,
       createdAt: matchData.created_at || new Date().toISOString(),
@@ -1975,10 +1921,10 @@ export default function App() {
       seedKey: TEST_MATCH_SEED_KEY,
       supabaseId: matchData.id,
       // Signatures: prefer JSONB, fallback to legacy
-      homeCoachSignature: signatures.home_coach || matchData.home_coach_signature || null,
-      homeCaptainSignature: signatures.home_captain || matchData.home_captain_signature || null,
-      awayCoachSignature: signatures.away_coach || matchData.away_coach_signature || null,
-      awayCaptainSignature: signatures.away_captain || matchData.away_captain_signature || null,
+      team1CoachSignature: signatures.home_coach || matchData.home_coach_signature || null,
+      team1CaptainSignature: signatures.home_captain || matchData.home_captain_signature || null,
+      team2CoachSignature: signatures.away_coach || matchData.away_coach_signature || null,
+      team2CaptainSignature: signatures.away_captain || matchData.away_captain_signature || null,
       // Coin toss: prefer JSONB, fallback to legacy
       coinTossTeamA: coinToss.team_a || matchData.coin_toss_team_a || null,
       coinTossTeamB: coinToss.team_b || matchData.coin_toss_team_b || null,
@@ -1986,17 +1932,15 @@ export default function App() {
       coinTossServeB: matchData.coin_toss_serve_b ?? null,
       coinTossConfirmed: coinToss.confirmed !== undefined ? coinToss.confirmed : (matchData.coin_toss_confirmed ?? false),
       // Connection enables: prefer JSONB, fallback to legacy
-      refereeConnectionEnabled: connections.referee_enabled !== undefined ? connections.referee_enabled : matchData.referee_connection_enabled,
-      homeTeamConnectionEnabled: connections.home_bench_enabled !== undefined ? connections.home_bench_enabled : matchData.home_team_connection_enabled,
-      awayTeamConnectionEnabled: connections.away_bench_enabled !== undefined ? connections.away_bench_enabled : matchData.away_team_connection_enabled
+      refereeConnectionEnabled: connections.referee_enabled !== undefined ? connections.referee_enabled : matchData.referee_connection_enabled
     })
 
     if (Array.isArray(setsData) && setsData.length > 0) {
       await db.sets.bulkAdd(setsData.map(set => ({
         matchId: matchDexieId,
         index: set.index ?? set.set_index ?? 1,
-        homePoints: set.home_points ?? 0,
-        awayPoints: set.away_points ?? 0,
+        team1Points: set.team1_points ?? 0,
+        team2Points: set.team2_points ?? 0,
         finished: set.finished ?? false,
         startTime: set.start_time || null,
         endTime: set.end_time || null,
@@ -2008,8 +1952,8 @@ export default function App() {
       await db.sets.add({
         matchId: matchDexieId,
         index: 1,
-        homePoints: 0,
-        awayPoints: 0,
+        team1Points: 0,
+        team2Points: 0,
         finished: false
       })
     }
@@ -2056,39 +2000,14 @@ export default function App() {
     return `${day}/${month}/${year}`
   }
 
-  function generateRandomPlayers(teamId, config = {}) {
-    // Config options: { totalPlayers: 12, liberoCount: 1 } or { totalPlayers: 11, liberoCount: 1 }
-    // Valid combinations: 11+1, 12+0, 11+2, 12+2
-    // At least 6 non-libero players required
-    const { totalPlayers = 12, liberoCount = 1 } = config
-    const nonLiberoCount = totalPlayers - liberoCount
+  function generateRandomPlayers(teamId) {
+    // Beach volleyball: 2 players per team
+    const numbers = [1, 2]
 
-    if (nonLiberoCount < 6) {
-      throw new Error('At least 6 non-libero players required')
-    }
-
-    const numbers = Array.from({ length: totalPlayers }, (_, i) => i + 1)
-    const shuffled = numbers.sort(() => Math.random() - 0.5)
-
-    let captainAssigned = false
-
-    return shuffled.slice(0, totalPlayers).map((number, idx) => {
+    return numbers.map((number, idx) => {
       const firstName = firstNames[Math.floor(Math.random() * firstNames.length)]
       const lastName = lastNames[Math.floor(Math.random() * lastNames.length)]
       const dob = randomDate('1990-01-01', '2005-12-31')
-
-      // Assign libero roles
-      let libero = ''
-      if (idx < liberoCount) {
-        libero = idx === 0 ? 'libero1' : 'libero2'
-      }
-
-      // Assign captain to first non-libero player
-      let isCaptain = false
-      if (!captainAssigned && libero === '') {
-        isCaptain = true
-        captainAssigned = true
-      }
 
       return {
         teamId,
@@ -2097,8 +2016,7 @@ export default function App() {
         lastName,
         firstName,
         dob,
-        libero,
-        isCaptain,
+        isCaptain: idx === 0, // First player is captain
         role: null,
         createdAt: new Date().toISOString()
       }
@@ -2109,11 +2027,11 @@ export default function App() {
     const matchToDelete = currentOfficialMatch || currentMatch
     if (!matchToDelete) return
 
-    const [homeTeam, awayTeam] = await Promise.all([
-      matchToDelete.homeTeamId ? db.teams.get(matchToDelete.homeTeamId) : null,
-      matchToDelete.awayTeamId ? db.teams.get(matchToDelete.awayTeamId) : null
+    const [team1, team2] = await Promise.all([
+      matchToDelete.team1Id ? db.teams.get(matchToDelete.team1Id) : null,
+      matchToDelete.team2Id ? db.teams.get(matchToDelete.team2Id) : null
     ])
-    const matchName = `${homeTeam?.name || 'Home'} vs ${awayTeam?.name || 'Away'}`
+    const matchName = `${team1?.name || 'Home'} vs ${team2?.name || 'Away'}`
 
     setDeletePinInput('')
     setDeletePinError('')
@@ -2170,23 +2088,23 @@ export default function App() {
       const match = await db.matches.get(matchIdToDelete)
 
       // Delete players
-      if (match?.homeTeamId) {
-        const homePlayersCount = await db.players.where('teamId').equals(match.homeTeamId).count()
-        console.log('[Delete Match] Deleting', homePlayersCount, 'home players')
-        await db.players.where('teamId').equals(match.homeTeamId).delete()
+      if (match?.team1Id) {
+        const team1PlayersCount = await db.players.where('teamId').equals(match.team1Id).count()
+        console.log('[Delete Match] Deleting', team1PlayersCount, 'home players')
+        await db.players.where('teamId').equals(match.team1Id).delete()
       }
-      if (match?.awayTeamId) {
-        const awayPlayersCount = await db.players.where('teamId').equals(match.awayTeamId).count()
-        console.log('[Delete Match] Deleting', awayPlayersCount, 'away players')
-        await db.players.where('teamId').equals(match.awayTeamId).delete()
+      if (match?.team2Id) {
+        const team2PlayersCount = await db.players.where('teamId').equals(match.team2Id).count()
+        console.log('[Delete Match] Deleting', team2PlayersCount, 'away players')
+        await db.players.where('teamId').equals(match.team2Id).delete()
       }
 
       // Delete teams
-      if (match?.homeTeamId) {
-        await db.teams.delete(match.homeTeamId)
+      if (match?.team1Id) {
+        await db.teams.delete(match.team1Id)
       }
-      if (match?.awayTeamId) {
-        await db.teams.delete(match.awayTeamId)
+      if (match?.team2Id) {
+        await db.teams.delete(match.team2Id)
       }
 
       // Delete all sync queue items (since we can't filter by matchId easily)
@@ -2261,7 +2179,7 @@ export default function App() {
         // This is a real confirmed match - warn the user
         setNewMatchModal({
           type: 'official',
-          message: t('home.modals.existingMatchWarning')
+          message: 'There is an existing match. Do you want to delete it and create a new official match?'
         })
         return
       } else {
@@ -2302,19 +2220,19 @@ export default function App() {
         await db.events.where('matchId').equals(currentMatch.id).delete()
 
         // Delete players
-        if (currentMatch.homeTeamId) {
-          await db.players.where('teamId').equals(currentMatch.homeTeamId).delete()
+        if (currentMatch.team1Id) {
+          await db.players.where('teamId').equals(currentMatch.team1Id).delete()
         }
-        if (currentMatch.awayTeamId) {
-          await db.players.where('teamId').equals(currentMatch.awayTeamId).delete()
+        if (currentMatch.team2Id) {
+          await db.players.where('teamId').equals(currentMatch.team2Id).delete()
         }
 
         // Delete teams
-        if (currentMatch.homeTeamId) {
-          await db.teams.delete(currentMatch.homeTeamId)
+        if (currentMatch.team1Id) {
+          await db.teams.delete(currentMatch.team1Id)
         }
-        if (currentMatch.awayTeamId) {
-          await db.teams.delete(currentMatch.awayTeamId)
+        if (currentMatch.team2Id) {
+          await db.teams.delete(currentMatch.team2Id)
         }
 
         // Delete all sync queue items
@@ -2390,7 +2308,6 @@ export default function App() {
             lastName: player.lastName,
             firstName: player.firstName,
             dob: player.dob,
-            libero: player.libero || '',
             isCaptain: player.isCaptain,
             role: null,
             test: true,
@@ -2425,7 +2342,6 @@ export default function App() {
               lastName: player.lastName,
               firstName: player.firstName,
               dob: player.dob,
-              libero: player.libero || '',
               isCaptain: player.isCaptain,
               role: null,
               test: true,
@@ -2550,7 +2466,7 @@ export default function App() {
       return
     }
 
-    const [homeTeam, awayTeam] = seededTeams
+    const [team1, team2] = seededTeams
     const scheduledAt = getNextTestMatchStartTime()
     const timestamp = new Date().toISOString()
 
@@ -2613,23 +2529,19 @@ export default function App() {
 
       const baseMatchData = {
         status: 'scheduled',
-        homeTeamId: homeTeam.id,
-        awayTeamId: awayTeam.id,
-        homeShortName: homeTeam.shortName,
-        awayShortName: awayTeam.shortName,
+        team1Id: team1.id,
+        team2Id: team2.id,
+        homeShortName: team1.shortName,
+        awayShortName: team2.shortName,
         hall: TEST_MATCH_DEFAULTS.hall,
         city: TEST_MATCH_DEFAULTS.city,
         league: TEST_MATCH_DEFAULTS.league,
         gameNumber: TEST_MATCH_DEFAULTS.gameNumber,
         scheduledAt,
         refereePin: generateRefereePin(),
-        bench_home: TEST_HOME_BENCH,
-        bench_away: TEST_AWAY_BENCH,
         officials,
-        homeCoachSignature: null,
-        homeCaptainSignature: null,
-        awayCoachSignature: null,
-        awayCaptainSignature: null,
+        team1CaptainSignature: null,
+        team2CaptainSignature: null,
         coinTossConfirmed: false,
         test: true,
         seedKey: TEST_MATCH_SEED_KEY,
@@ -2676,7 +2588,7 @@ export default function App() {
     const officialMatchRecording = matchStatus?.status === 'Match recording' && currentOfficialMatch
     if (officialMatchRecording) {
       setConfirmModal({
-        message: t('home.modals.testMatchOverwriteWarning'),
+        message: 'An official match is still recording. Starting a new test match will wipe the previous test session. Continue?',
         onConfirm: async () => {
           setConfirmModal(null)
           setTestMatchLoading(true)
@@ -2685,7 +2597,7 @@ export default function App() {
             await createTestMatchData()
           } catch (error) {
             console.error('Failed to prepare test match:', error)
-            setAlertModal(t('home.modals.unableToPrepareTestMatch', { error: error.message || error }))
+            setAlertModal(`Unable to prepare the test match: ${error.message || error}`)
           } finally {
             setTestMatchLoading(false)
           }
@@ -2707,7 +2619,7 @@ export default function App() {
       await createTestMatchData()
     } catch (error) {
       console.error('Failed to prepare test match:', error)
-      setAlertModal(t('home.modals.unableToPrepareTestMatch', { error: error.message || error }))
+      setAlertModal(`Unable to prepare the test match: ${error.message || error}`)
     } finally {
       setTestMatchLoading(false)
     }
@@ -2733,10 +2645,10 @@ export default function App() {
       // PIN check removed - no longer required
 
       // Check match state to determine where to continue
-      const isMatchSetupComplete = existing.homeCoachSignature &&
-        existing.homeCaptainSignature &&
-        existing.awayCoachSignature &&
-        existing.awayCaptainSignature
+      const isMatchSetupComplete = existing.team1CoachSignature &&
+        existing.team1CaptainSignature &&
+        existing.team2CoachSignature &&
+        existing.team2CaptainSignature
 
       setMatchId(existing.id)
 
@@ -2746,9 +2658,9 @@ export default function App() {
         // Check if match is finished (one team has won 3 sets) - go to MatchEnd
         const sets = await db.sets.where('matchId').equals(existing.id).toArray()
         const finishedSets = sets.filter(s => s.finished)
-        const homeSetsWon = finishedSets.filter(s => s.homePoints > s.awayPoints).length
-        const awaySetsWon = finishedSets.filter(s => s.awayPoints > s.homePoints).length
-        const isMatchFinished = homeSetsWon >= 3 || awaySetsWon >= 3
+        const team1SetsWon = finishedSets.filter(s => s.team1Points > s.team2Points).length
+        const team2SetsWon = finishedSets.filter(s => s.team2Points > s.team1Points).length
+        const isMatchFinished = team1SetsWon >= 3 || team2SetsWon >= 3
 
         setShowMatchSetup(false)
         setShowCoinToss(false)
@@ -2774,7 +2686,7 @@ export default function App() {
         setShowCoinToss(false)
       }
     } else {
-      setAlertModal(t('home.modals.noTestMatchFound'))
+      setAlertModal('No test match found. Please create a new test match first.')
     }
   }
 
@@ -2785,7 +2697,7 @@ export default function App() {
     setTestMatchLoading(true)
 
     setConfirmModal({
-      message: t('home.modals.deleteTestMatchConfirm'),
+      message: 'This will delete the test match and all its data. Continue?',
       onConfirm: async () => {
         setConfirmModal(null)
         try {
@@ -2793,7 +2705,7 @@ export default function App() {
           const matches = await db.matches.orderBy('createdAt').reverse().toArray()
           const testMatch = matches.find(m => m.test === true && m.status !== 'final')
           if (!testMatch) {
-            setAlertModal(t('home.modals.noTestMatchFound'))
+            setAlertModal('No test match found. Please create a new test match first.')
             setTestMatchLoading(false)
             return
           }
@@ -2807,10 +2719,10 @@ export default function App() {
           setShowCoinToss(false)
           setShowManualAdjustments(false)
 
-          setAlertModal(t('home.modals.testMatchDeleted'))
+          setAlertModal('Test match deleted successfully.')
         } catch (error) {
           console.error('Failed to delete test match:', error)
-          setAlertModal(t('home.modals.unableToDeleteTestMatch', { error: error.message || error }))
+          setAlertModal(`Unable to delete test match: ${error.message || error}`)
         } finally {
           setTestMatchLoading(false)
         }
@@ -2869,7 +2781,7 @@ export default function App() {
 
       // Reject test matches for other cases
       if (match.test === true) {
-        setAlertModal(t('home.modals.isTestMatchWarning'))
+        setAlertModal('This is a test match. Use "Continue test match" instead.')
         return
       }
 
@@ -2879,9 +2791,9 @@ export default function App() {
         // Check if match is finished (one team has won 3 sets) - go to MatchEnd
         const sets = await db.sets.where('matchId').equals(targetMatchId).toArray()
         const finishedSets = sets.filter(s => s.finished)
-        const homeSetsWon = finishedSets.filter(s => s.homePoints > s.awayPoints).length
-        const awaySetsWon = finishedSets.filter(s => s.awayPoints > s.homePoints).length
-        const isMatchFinished = homeSetsWon >= 3 || awaySetsWon >= 3
+        const team1SetsWon = finishedSets.filter(s => s.team1Points > s.team2Points).length
+        const team2SetsWon = finishedSets.filter(s => s.team2Points > s.team1Points).length
+        const isMatchFinished = team1SetsWon >= 3 || team2SetsWon >= 3
 
         setMatchId(targetMatchId)
         setShowMatchSetup(false)
@@ -2901,7 +2813,7 @@ export default function App() {
       }
     } catch (error) {
       console.error('Error continuing match:', error)
-      setAlertModal(t('home.modals.errorOpeningMatch'))
+      setAlertModal('Error opening match. Please try again.')
     }
   }
 
@@ -3025,8 +2937,7 @@ export default function App() {
               connectionUrl: dashboardServerData.connectionUrl,
               wsConnectionUrl: dashboardServerData.wsConnectionUrl,
               serverRunning: dashboardServerData.serverRunning,
-              refereeCount: dashboardServerData.refereeCount,
-              benchCount: dashboardServerData.benchCount
+              refereeCount: dashboardServerData.refereeCount
             } : null}
             collapsible={!!(matchId && !showCoinToss && !showMatchSetup && !showMatchEnd)}
             onTriggerAlarm={async () => {
@@ -3158,7 +3069,7 @@ export default function App() {
                 <>
                   <UpdateBanner showClearDataOption={true} />
                   <HomePage
-                    favicon={openvolleyLogo}
+                    favicon={openbeachLogo}
                     newMatchMenuOpen={newMatchMenuOpen}
                     setNewMatchMenuOpen={setNewMatchMenuOpen}
                     createNewOfficialMatch={createNewOfficialMatch}
@@ -3253,7 +3164,7 @@ export default function App() {
                         cursor: 'pointer'
                       }}
                     >
-                      {t('deleteMatch.delete')}
+                      Delete
                     </button>
                     <button
                       onClick={cancelDeleteMatch}
@@ -3268,7 +3179,7 @@ export default function App() {
                         cursor: 'pointer'
                       }}
                     >
-                      {t('deleteMatch.cancel')}
+                      Cancel
                     </button>
                   </div>
                 </div>
@@ -3278,7 +3189,7 @@ export default function App() {
             {/* Restore Match Modal */}
             {restoreMatchModal && (
               <Modal
-                title={t('settings.backup.restoreMatch')}
+                title="Restore Match"
                 open={true}
                 onClose={() => {
                   setRestoreMatchModal(false)
@@ -3297,15 +3208,15 @@ export default function App() {
                   {!offlineMode && (
                     <div style={{ marginBottom: '24px' }}>
                       <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px', color: 'var(--text)' }}>
-                        {t('settings.backup.restoreFromCloudBackup')}
+                        Restore from Cloud Backup
                       </h3>
                       <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', marginBottom: '12px' }}>
-                        {t('settings.backup.restoreFromCloudDesc')}
+                        Enter the match number and PIN to search for cloud backups.
                       </p>
                       <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
                         <div style={{ flex: 1 }}>
                           <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: 'rgba(255,255,255,0.7)' }}>
-                            {t('settings.backup.gameN')}:
+                            Match #:
                           </label>
                           <input
                             type="text"
@@ -3334,7 +3245,7 @@ export default function App() {
                         </div>
                         <div style={{ flex: 1.5 }}>
                           <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: 'rgba(255,255,255,0.7)' }}>
-                            {t('settings.backup.gamePin')}:
+                            Game PIN:
                           </label>
                           <input
                             type="text"
@@ -3399,7 +3310,7 @@ export default function App() {
                           cursor: cloudBackupLoading || cloudBackupPin.length !== 6 ? 'not-allowed' : 'pointer'
                         }}
                       >
-                        {cloudBackupLoading ? t('common.loading') : t('settings.backup.searchCloudBackups')}
+                        {cloudBackupLoading ? 'Loading...' : 'Search Cloud Backups'}
                       </button>
                       {cloudBackupError && (
                         <p style={{ color: '#ef4444', fontSize: '13px', marginTop: '8px', marginBottom: '0' }}>{cloudBackupError}</p>
@@ -3448,14 +3359,14 @@ export default function App() {
                     marginBottom: '24px'
                   }}>
                     <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.2)' }} />
-                    <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)' }}>{t('settings.backup.or')}</span>
+                    <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)' }}>or</span>
                     <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.2)' }} />
                   </div>
 
                   {/* Offline/File restore */}
                   <div>
                     <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px', color: 'var(--text)' }}>
-                      {t('settings.backup.restoreFromLocal')}
+                      Restore from Local File
                     </h3>
                     <button
                       onClick={async () => {
@@ -3470,7 +3381,7 @@ export default function App() {
                           // Show preview instead of immediately restoring
                           setRestorePreviewData({ data: jsonData, source: 'local' })
                         } catch (err) {
-                          setRestoreError(err.message || t('home.modals.failedToRestoreFromFile'))
+                          setRestoreError(err.message || 'Failed to restore from file')
                         } finally {
                           setRestoreLoading(false)
                         }
@@ -3488,7 +3399,7 @@ export default function App() {
                         cursor: restoreLoading ? 'not-allowed' : 'pointer'
                       }}
                     >
-                      {restoreLoading ? t('common.loading') : t('settings.backup.selectBackupFile')}
+                      {restoreLoading ? 'Loading...' : 'Select Backup File'}
                     </button>
                   </div>
                 </div>
@@ -3498,7 +3409,7 @@ export default function App() {
             {/* Restore Preview Modal */}
             {restorePreviewData && (
               <Modal
-                title={t('settings.backup.restorePreview')}
+                title="Restore Preview"
                 open={true}
                 onClose={() => setRestorePreviewData(null)}
                 width={700}
@@ -3509,12 +3420,12 @@ export default function App() {
                     const d = restorePreviewData.data
                     const isDbFormat = d.match?.home_team || d.liveState
 
-                    const homeTeamName = isDbFormat
-                      ? (d.match?.home_team?.name || d.match?.homeTeamName || 'Home')
-                      : (d.homeTeam?.name || d.match?.homeTeamName || 'Home')
-                    const awayTeamName = isDbFormat
-                      ? (d.match?.away_team?.name || d.match?.awayTeamName || 'Away')
-                      : (d.awayTeam?.name || d.match?.awayTeamName || 'Away')
+                    const team1Name = isDbFormat
+                      ? (d.match?.home_team?.name || d.match?.team1Name || 'Home')
+                      : (d.team1?.name || d.match?.team1Name || 'Home')
+                    const team2Name = isDbFormat
+                      ? (d.match?.away_team?.name || d.match?.team2Name || 'Away')
+                      : (d.team2?.name || d.match?.team2Name || 'Away')
 
                     const events = d.events || []
                     const sets = d.sets || []
@@ -3522,25 +3433,20 @@ export default function App() {
                     // Get latest set
                     const latestSet = [...sets].sort((a, b) => (b.index || 0) - (a.index || 0))[0]
                     const currentSetIndex = latestSet?.index || d.liveState?.current_set || 1
-                    const homePoints = latestSet?.homePoints ?? latestSet?.home_points ?? d.liveState?.points_a ?? 0
-                    const awayPoints = latestSet?.awayPoints ?? latestSet?.away_points ?? d.liveState?.points_b ?? 0
+                    const team1Points = latestSet?.team1Points ?? latestSet?.team1_points ?? d.liveState?.points_a ?? 0
+                    const team2Points = latestSet?.team2Points ?? latestSet?.team2_points ?? d.liveState?.points_b ?? 0
 
                     // Get lineups (from events or liveState)
                     const lineupEvents = events.filter(e => e.type === 'lineup')
-                    const homeLineup = lineupEvents.find(e => e.payload?.team === 'home')?.payload?.lineup ||
+                    const team1Lineup = lineupEvents.find(e => e.payload?.team === 'team1')?.payload?.lineup ||
                       (isDbFormat ? d.liveState?.lineup_a : null)
-                    const awayLineup = lineupEvents.find(e => e.payload?.team === 'away')?.payload?.lineup ||
+                    const team2Lineup = lineupEvents.find(e => e.payload?.team === 'team2')?.payload?.lineup ||
                       (isDbFormat ? d.liveState?.lineup_b : null)
 
                     // Get timeouts for current set
                     const timeoutEvents = events.filter(e => e.type === 'timeout' && e.setIndex === currentSetIndex)
-                    const homeTimeouts = timeoutEvents.filter(e => e.payload?.team === 'home').length
-                    const awayTimeouts = timeoutEvents.filter(e => e.payload?.team === 'away').length
-
-                    // Get substitutions for current set
-                    const subEvents = events.filter(e => e.type === 'substitution' && e.setIndex === currentSetIndex)
-                    const homeSubs = subEvents.filter(e => e.payload?.team === 'home')
-                    const awaySubs = subEvents.filter(e => e.payload?.team === 'away')
+                    const team1Timeouts = timeoutEvents.filter(e => e.payload?.team === 'team1').length
+                    const team2Timeouts = timeoutEvents.filter(e => e.payload?.team === 'team2').length
 
                     // Get sanctions
                     const sanctionEvents = events.filter(e => e.type === 'sanction')
@@ -3548,23 +3454,22 @@ export default function App() {
                     // Get serving team
                     const pointEvents = events.filter(e => e.type === 'point').sort((a, b) => (b.seq || 0) - (a.seq || 0))
                     const lastPoint = pointEvents[0]
-                    const servingTeam = lastPoint?.payload?.scoringTeam || d.liveState?.serving_team || 'home'
+                    const servingTeam = lastPoint?.payload?.scoringTeam || d.liveState?.serving_team || 'team1'
 
-                    // Helper to render lineup
+                    // Helper to render lineup (beach volleyball: 2 players)
                     const renderLineup = (lineup, teamName) => {
                       if (!lineup) return <span style={{ color: 'rgba(255,255,255,0.4)' }}>No lineup data</span>
-                      const positions = ['I', 'II', 'III', 'IV', 'V', 'VI']
+                      const positions = ['I', 'II']
                       return (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '4px' }}>
                           {positions.map(pos => {
                             const posData = lineup[pos]
                             const num = typeof posData === 'object' ? posData?.number : posData
                             const isServing = typeof posData === 'object' && posData?.isServing
-                            const isLibero = typeof posData === 'object' && posData?.isLibero
                             return (
                               <div key={pos} style={{
                                 padding: '6px 8px',
-                                background: isServing ? 'rgba(34, 197, 94, 0.2)' : isLibero ? 'rgba(249, 115, 22, 0.2)' : 'rgba(255,255,255,0.05)',
+                                background: isServing ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255,255,255,0.05)',
                                 borderRadius: '4px',
                                 textAlign: 'center',
                                 fontSize: '13px'
@@ -3597,8 +3502,8 @@ export default function App() {
                             fontSize: '12px',
                             fontWeight: 600
                           }}>
-                            {restorePreviewData.source === 'database' ? t('settings.backup.fromDatabase', 'From Database') :
-                              restorePreviewData.source === 'cloud' ? t('settings.backup.restoreFromCloudBackup') : t('settings.backup.fromLocalFile')}
+                            {restorePreviewData.source === 'database' ? 'From Database' :
+                              restorePreviewData.source === 'cloud' ? 'Restore from Cloud Backup' : 'From Local File'}
                           </span>
                           {restorePreviewData.backupName && (
                             <span style={{
@@ -3624,15 +3529,15 @@ export default function App() {
                           marginBottom: '16px'
                         }}>
                           <div style={{ textAlign: 'center', flex: 1 }}>
-                            <div style={{ fontSize: '18px', fontWeight: 700 }}>{homeTeamName}</div>
+                            <div style={{ fontSize: '18px', fontWeight: 700 }}>{team1Name}</div>
                             <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>Home</div>
                           </div>
                           <div style={{ textAlign: 'center', padding: '0 16px' }}>
-                            <div style={{ fontSize: '24px', fontWeight: 700 }}>{homePoints} - {awayPoints}</div>
+                            <div style={{ fontSize: '24px', fontWeight: 700 }}>{team1Points} - {team2Points}</div>
                             <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>Set {currentSetIndex}</div>
                           </div>
                           <div style={{ textAlign: 'center', flex: 1 }}>
-                            <div style={{ fontSize: '18px', fontWeight: 700 }}>{awayTeamName}</div>
+                            <div style={{ fontSize: '18px', fontWeight: 700 }}>{team2Name}</div>
                             <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>Away</div>
                           </div>
                         </div>
@@ -3644,7 +3549,7 @@ export default function App() {
                           fontSize: '14px'
                         }}>
                           <span style={{ color: '#22c55e' }}>● </span>
-                          Serving: <strong>{servingTeam === 'home' ? homeTeamName : awayTeamName}</strong>
+                          Serving: <strong>{servingTeam === 'team1' ? team1Name : team2Name}</strong>
                         </div>
 
                         {/* Lineups */}
@@ -3656,15 +3561,15 @@ export default function App() {
                         }}>
                           <div>
                             <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: 'var(--text)' }}>
-                              {homeTeamName} Lineup
+                              {team1Name} Lineup
                             </h4>
-                            {renderLineup(homeLineup)}
+                            {renderLineup(team1Lineup)}
                           </div>
                           <div>
                             <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: 'var(--text)' }}>
-                              {awayTeamName} Lineup
+                              {team2Name} Lineup
                             </h4>
-                            {renderLineup(awayLineup)}
+                            {renderLineup(team2Lineup)}
                           </div>
                         </div>
 
@@ -3695,63 +3600,6 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* Substitutions */}
-                        {(homeSubs.length > 0 || awaySubs.length > 0) && (
-                          <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: '1fr 1fr',
-                            gap: '16px',
-                            marginBottom: '16px'
-                          }}>
-                            <div>
-                              <h4 style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'rgba(255,255,255,0.7)' }}>
-                                Substitutions ({homeSubs.length})
-                              </h4>
-                              {homeSubs.length === 0 ? (
-                                <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)' }}>None</span>
-                              ) : (
-                                homeSubs.map((sub, i) => (
-                                  <div key={i} style={{
-                                    fontSize: '12px',
-                                    padding: '4px 8px',
-                                    background: 'rgba(255,255,255,0.05)',
-                                    borderRadius: '4px',
-                                    marginBottom: '4px'
-                                  }}>
-                                    #{sub.payload?.playerIn} ← #{sub.payload?.playerOut}
-                                    <span style={{ color: 'rgba(255,255,255,0.4)', marginLeft: '8px' }}>
-                                      @{sub.payload?.homeScore || 0}-{sub.payload?.awayScore || 0}
-                                    </span>
-                                  </div>
-                                ))
-                              )}
-                            </div>
-                            <div>
-                              <h4 style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'rgba(255,255,255,0.7)' }}>
-                                Substitutions ({awaySubs.length})
-                              </h4>
-                              {awaySubs.length === 0 ? (
-                                <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)' }}>None</span>
-                              ) : (
-                                awaySubs.map((sub, i) => (
-                                  <div key={i} style={{
-                                    fontSize: '12px',
-                                    padding: '4px 8px',
-                                    background: 'rgba(255,255,255,0.05)',
-                                    borderRadius: '4px',
-                                    marginBottom: '4px'
-                                  }}>
-                                    #{sub.payload?.playerIn} ← #{sub.payload?.playerOut}
-                                    <span style={{ color: 'rgba(255,255,255,0.4)', marginLeft: '8px' }}>
-                                      @{sub.payload?.homeScore || 0}-{sub.payload?.awayScore || 0}
-                                    </span>
-                                  </div>
-                                ))
-                              )}
-                            </div>
-                          </div>
-                        )}
-
                         {/* Sanctions */}
                         {sanctionEvents.length > 0 && (
                           <div style={{ marginBottom: '16px' }}>
@@ -3767,7 +3615,7 @@ export default function App() {
                                   borderRadius: '4px',
                                   fontSize: '12px'
                                 }}>
-                                  {s.payload?.team === 'home' ? homeTeamName : awayTeamName}{s.payload?.playerNumber ? ` #${s.payload.playerNumber}` : ''} - {s.payload?.type || 'sanction'}
+                                  {s.payload?.team === 'team1' ? team1Name : team2Name}{s.payload?.playerNumber ? ` #${s.payload.playerNumber}` : ''} - {s.payload?.type || 'sanction'}
                                 </div>
                               ))}
                             </div>
@@ -3790,7 +3638,7 @@ export default function App() {
                                 }}>
                                   <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>Set {s.index}</div>
                                   <div style={{ fontSize: '14px', fontWeight: 600 }}>
-                                    {s.homePoints ?? s.home_points ?? 0} - {s.awayPoints ?? s.away_points ?? 0}
+                                    {s.team1Points ?? s.team1_points ?? 0} - {s.team2Points ?? s.team2_points ?? 0}
                                   </div>
                                 </div>
                               ))}
@@ -3835,9 +3683,9 @@ export default function App() {
                                 const hasEvents = cloudData.events && cloudData.events.length > 0
                                 const hasSets = cloudData.sets && cloudData.sets.length > 0
                                 const finishedSets = (cloudData.sets || []).filter(s => s.finished)
-                                const homeSetsWon = finishedSets.filter(s => (s.homePoints ?? s.home_points ?? 0) > (s.awayPoints ?? s.away_points ?? 0)).length
-                                const awaySetsWon = finishedSets.filter(s => (s.awayPoints ?? s.away_points ?? 0) > (s.homePoints ?? s.home_points ?? 0)).length
-                                const isMatchFinished = homeSetsWon >= 3 || awaySetsWon >= 3
+                                const team1SetsWon = finishedSets.filter(s => (s.team1Points ?? s.team1_points ?? 0) > (s.team2Points ?? s.team2_points ?? 0)).length
+                                const team2SetsWon = finishedSets.filter(s => (s.team2Points ?? s.team2_points ?? 0) > (s.team1Points ?? s.team1_points ?? 0)).length
+                                const isMatchFinished = team1SetsWon >= 3 || team2SetsWon >= 3
 
                                 // Priority: finished match → MatchEnd, live with activity → Scoreboard, else → Setup
                                 if (isMatchFinished) {
@@ -3971,7 +3819,7 @@ export default function App() {
             {/* Alert Modal */}
             {alertModal && (
               <Modal
-                title={t('alert.info', 'Alert')}
+                title="Alert"
                 open={true}
                 onClose={() => setAlertModal(null)}
                 width={400}
@@ -3995,7 +3843,7 @@ export default function App() {
                         cursor: 'pointer'
                       }}
                     >
-                      {t('common.ok', 'OK')}
+                      OK
                     </button>
                   </div>
                 </div>
@@ -4005,7 +3853,7 @@ export default function App() {
             {/* Confirm Modal */}
             {confirmModal && (
               <Modal
-                title={t('common.confirm', 'Confirm')}
+                title="Confirm"
                 open={true}
                 onClose={confirmModal.onCancel}
                 width={400}
@@ -4029,7 +3877,7 @@ export default function App() {
                         cursor: 'pointer'
                       }}
                     >
-                      {t('common.yes', 'Yes')}
+                      Yes
                     </button>
                     <button
                       onClick={confirmModal.onCancel}
@@ -4044,7 +3892,7 @@ export default function App() {
                         cursor: 'pointer'
                       }}
                     >
-                      {t('common.cancel', 'Cancel')}
+                      Cancel
                     </button>
                   </div>
                 </div>
@@ -4067,10 +3915,6 @@ export default function App() {
                 setAccidentalPointAwardDuration,
                 manageCaptainOnCourt,
                 setManageCaptainOnCourt,
-                liberoExitConfirmation,
-                setLiberoExitConfirmation,
-                liberoEntrySuggestion,
-                setLiberoEntrySuggestion,
                 setIntervalDuration,
                 setSetIntervalDuration,
                 keybindingsEnabled,
@@ -4101,7 +3945,6 @@ export default function App() {
                 refereePin: currentMatch?.refereePin,
                 dashboardCount: dashboardServerData.dashboardCount,
                 refereeCount: dashboardServerData.refereeCount,
-                benchCount: dashboardServerData.benchCount,
                 connectedDashboards: dashboardServerData.connectedDashboards
               }}
             />
@@ -4118,8 +3961,8 @@ export default function App() {
               onClose={() => setConnectionSetupModal(false)}
               matchId={matchId}
               refereePin={currentMatch?.refereePin}
-              homeTeamPin={currentMatch?.homeTeamPin}
-              awayTeamPin={currentMatch?.awayTeamPin}
+              team1Pin={currentMatch?.team1Pin}
+              team2Pin={currentMatch?.team2Pin}
               gameNumber={currentMatch?.gameNumber}
             />
 

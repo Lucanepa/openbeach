@@ -321,7 +321,7 @@
       "invalidDate": "Data non valida",
       "invalidHour": "Ora non valida: {{hour}}",
       "invalidMinutes": "Minuti non validi: {{minutes}}",
-      "minPlayers": "Necessita di almeno 6 giocatori con numeri (esclusi i liberi). Attualmente: {{count}}",
+      "minPlayers": "Sono richiesti esattamente 2 giocatori con numeri. Attualmente: {{count}}",
       "noCaptain": "Nessun capitano selezionato",
       "noCoach": "Nessun allenatore immesso",
       "duplicateNumbers": "Numeri maglia duplicati: {{numbers}}",
@@ -357,9 +357,8 @@
       "benchOfficialsCount": "+ {{count}} ufficiale di panchina",
       "benchOfficialsCountPlural": "+ {{count}} ufficiali di panchina",
       "reviewImportedData": "Verifica i dati importati:",
-      "reviewAddBenchOfficials": "Aggiungi eventuali ufficiali di panchina mancanti (Medico, Fisio, ecc.)",
       "reviewVerifyDob": "Verifica che le date di nascita siano corrette",
-      "reviewSetCaptainLibero": "Imposta le designazioni capitano e libero"
+      "reviewSetCaptain": "Imposta la designazione capitano"
     },
     "coinToss": "Sorteggio",
     "chooseTeamColor": "Scegli colore squadra {{team}}",
@@ -770,7 +769,7 @@
     "allowPopups": "Consenti i popup per visualizzare l'eScoresheet"
   },
   "home": {
-    "title": "Openvolley eScoresheet",
+    "title": "openBeach eScoresheet",
     "newMatch": "Nuova partita",
     "officialMatch": "Partita ufficiale",
     "testMatch": "Partita test",
@@ -869,7 +868,7 @@
     "livescoreDesc": "Display pubblico",
     "uploadRoster": "Carica rosa",
     "uploadRosterDesc": "Importa rose squadre da PDF/CSV",
-    "environmentTip": "Per configurazione rete locale, usa l'indirizzo IP del tuo dispositivo invece di app.openvolley.app",
+    "environmentTip": "Per configurazione rete locale, usa l'indirizzo IP del tuo dispositivo invece di beach.openvolley.app",
     "backup": "Backup",
     "autoBackup": "Backup automatico",
     "autoBackupFolderInfo": "Salva automaticamente i dati della partita nella cartella selezionata ad ogni modifica",
@@ -1163,6 +1162,7 @@
     "rosterSentMessage": "La lista è stata inviata al segnapunti. Il segnapunti esaminerà e accetterà o rifiuterà la lista.",
     "signatures": "Firme",
     "signaturesDescription": "Facoltativo: L'allenatore e il capitano possono firmare la lista prima di inviarla.",
+    "signaturesAtCoinToss": "La firma del capitano verrà raccolta al sorteggio.",
     "coachSignature": "Firma dell'allenatore",
     "captainSignature": "Firma del capitano",
     "tapToSign": "Toccare per firmare"
@@ -1326,31 +1326,6 @@
     "shareWithRemote": "Condividi con dispositivi remoti",
     "refereeUrl": "URL Arbitro",
     "gamePin": "PIN Partita"
-  },
-  "loadOfficialMatch": {
-    "title": "Carica Partita dal Calendario",
-    "button": "Carica Partita dal Calendario",
-    "federation": "Federazione",
-    "selectFederation": "Seleziona...",
-    "gender": "Sesso",
-    "selectGender": "Seleziona...",
-    "league": "Lega",
-    "selectLeague": "Seleziona...",
-    "gameN": "Partita #",
-    "date": "Data",
-    "time": "Ora",
-    "homeVsAway": "Casa vs Ospiti",
-    "noUpcomingMatches": "Nessuna partita in programma trovata",
-    "fetchError": "Impossibile caricare le partite. Verifica la connessione.",
-    "backendNotAvailable": "Server backend non disponibile",
-    "reminderAlert": "Imposta il gruppo di lega se presente, i colori e i nomi brevi delle squadre",
-    "loading": "Caricamento partite...",
-    "selectFilters": "Seleziona sesso e lega per vedere le partite",
-    "searchPlaceholder": "Cerca...",
-    "today": "Oggi",
-    "tomorrow": "Domani",
-    "clearFilter": "Cancella filtro",
-    "noMatchesForFilter": "Nessuna partita trovata per questo filtro"
   },
   "livescore": {
     "title": "Punteggio Live",
@@ -1593,7 +1568,7 @@
       "dashboards": "Dashboard"
     },
     "quickstart": {
-      "intro": "Benvenuti su OpenVolley eScoresheet! Questa guida vi aiuterà a capire come utilizzare l'applicazione per segnare le partite di pallavolo in modo professionale.",
+      "intro": "Benvenuti su openBeach eScoresheet! Questa guida vi aiuterà a capire come utilizzare l'applicazione per segnare le partite di pallavolo in modo professionale.",
       "flowTitle": "Flusso delle partite",
       "tip": "Per i test/esercizi, creare una \"Partita di prova\", che ha requisiti più semplici. Per le partite ufficiali, utilizzare \"Partita ufficiale\", che richiede l'inserimento completo dei dati."
     },
@@ -1646,7 +1621,7 @@
       "playerStep4": "Contrassegnare come Libero 1 o Libero 2, se applicabile",
       "playerStep5": "Designare il capitano della squadra",
       "pdfTip": "È possibile importare i roster da file PDF utilizzando il pulsante \"Importa PDF\". In questo modo i dati dei giocatori vengono analizzati automaticamente dai fogli dei turni ufficiali.",
-      "minPlayers": "Ogni squadra deve avere almeno 6 giocatori (senza contare i liberi) per poter procedere.",
+      "minPlayers": "Ogni squadra deve avere esattamente 2 giocatori per procedere.",
       "signatures": "Firme",
       "signaturesDesc": "Per le partite ufficiali, raccogliere le firme di:",
       "sig1": "Allenatore (entrambe le squadre)",
@@ -1964,7 +1939,7 @@
       "exportJson": "Esportazione JSON",
       "uploadCloud": "Caricare su Cloud"
     },
-    "footer": "OpenVolley eScoresheet"
+    "footer": "openBeach eScoresheet"
   },
   "manualAdjustmentsEditor": {
     "title": "Modifiche Manuali",

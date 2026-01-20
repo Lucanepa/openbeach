@@ -1,17 +1,13 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useTranslation } from 'react-i18next'
 import { getMatchData, updateMatchData } from '../utils_beach/serverDataSync_beach'
 import { useRealtimeConnection } from '../hooks_beach/useRealtimeConnection_beach'
 import { db } from '../db_beach/db_beach'
-import mikasaVolleyball from '../mikasa_v200w.png'
-
-// Primary ball image (with mikasa as fallback)
-const ballImage = '/ball.png'
+// Beach volleyball ball image
+const ballImage = '/beachball.png'
 import { Results } from '../../scoresheet_pdf_beach/components_beach/FooterSection_beach'
-import TestModeControls from './TestModeControls'
+import TestModeControls from './TestModeControls_beach'
 
 export default function MatchEntry({ matchId, team, onBack, embedded = false }) {
-  const { t } = useTranslation()
   const [now, setNow] = useState(new Date())
 
   useEffect(() => {
@@ -26,16 +22,16 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
     const checkAndStartHeartbeat = async () => {
       const match = await db.matches.get(matchId)
       if (!match) return null
-      const connectionEnabled = team === 'home'
-        ? match.homeTeamConnectionEnabled === true
-        : match.awayTeamConnectionEnabled === true
+      const connectionEnabled = team === 'team1'
+        ? match.team1ConnectionEnabled === true
+        : match.team2ConnectionEnabled === true
       if (connectionEnabled === false) return null
       
       const updateHeartbeat = async () => {
         try {
-          const heartbeatField = team === 'home' 
-            ? 'lastHomeTeamHeartbeat' 
-            : 'lastAwayTeamHeartbeat'
+          const heartbeatField = team === 'team1'
+            ? 'lastTeam1Heartbeat'
+            : 'lastTeam2Heartbeat'
           await db.matches.update(matchId, {
             [heartbeatField]: new Date().toISOString()
           })
@@ -59,9 +55,9 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
       // Clear heartbeat on unmount (skip in test mode)
       // Use local DB instead of server API since this runs in bench context
       if (matchId !== -1) {
-        const heartbeatField = team === 'home'
-          ? 'lastHomeTeamHeartbeat'
-          : 'lastAwayTeamHeartbeat'
+        const heartbeatField = team === 'team1'
+          ? 'lastTeam1Heartbeat'
+          : 'lastTeam2Heartbeat'
         db.matches.update(matchId, { [heartbeatField]: null })
           .catch(() => {}) // Silently fail - not critical
       }
@@ -85,13 +81,13 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
 
     setData({
       match: result.match,
-      homeTeam: result.homeTeam,
-      awayTeam: result.awayTeam,
+      team1: result.team1,
+      team2: result.team2,
       set: currentSet,
       allSets,
       events,
-      homePlayers: (result.homePlayers || []).sort((a, b) => (a.number || 0) - (b.number || 0)),
-      awayPlayers: (result.awayPlayers || []).sort((a, b) => (a.number || 0) - (b.number || 0))
+      team1Players: (result.team1Players || []).sort((a, b) => (a.number || 0) - (b.number || 0)),
+      team2Players: (result.team2Players || []).sort((a, b) => (a.number || 0) - (b.number || 0))
     })
   }, [])
 
@@ -125,16 +121,16 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
           id: -1,
           gameNumber: 999,
           status: 'live',
-          firstServe: 'home',
-          coinTossTeamA: 'home',
-          coinTossTeamB: 'away'
+          firstServe: 'team1',
+          coinTossTeamA: 'team1',
+          coinTossTeamB: 'team2'
         },
-        homeTeam: { name: 'Test Home', color: '#ef4444' },
-        awayTeam: { name: 'Test Away', color: '#3b82f6' },
-        set: { index: 1, homePoints: 12, awayPoints: 10, finished: false },
-        allSets: [{ index: 1, homePoints: 12, awayPoints: 10, finished: false }],
+        team1: { name: 'Test Home', color: '#ef4444' },
+        team2: { name: 'Test Away', color: '#3b82f6' },
+        set: { index: 1, team1Points: 12, team2Points: 10, finished: false },
+        allSets: [{ index: 1, team1Points: 12, team2Points: 10, finished: false }],
         events: [],
-        homePlayers: [
+        team1Players: [
           { id: 1, number: 1, firstName: 'Test', lastName: 'Player 1' },
           { id: 2, number: 5, firstName: 'Test', lastName: 'Player 2' },
           { id: 3, number: 7, firstName: 'Test', lastName: 'Player 3' },
@@ -142,7 +138,7 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
           { id: 5, number: 12, firstName: 'Test', lastName: 'Player 5' },
           { id: 6, number: 15, firstName: 'Test', lastName: 'Player 6' }
         ],
-        awayPlayers: [
+        team2Players: [
           { id: 7, number: 2, firstName: 'Test', lastName: 'Away 1' },
           { id: 8, number: 4, firstName: 'Test', lastName: 'Away 2' },
           { id: 9, number: 8, firstName: 'Test', lastName: 'Away 3' },
@@ -172,8 +168,8 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
     if (!data?.set || !data?.match) return 'left'
     
     // Get Team A and Team B from coin toss
-    const teamAKey = data.match.coinTossTeamA || 'home'
-    const teamBKey = data.match.coinTossTeamB || 'away'
+    const teamAKey = data.match.coinTossTeamA || 'team1'
+    const teamBKey = data.match.coinTossTeamB || 'team2'
     
     // Set 1: Team A on left
     if (data.set.index === 1) {
@@ -213,34 +209,34 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
   // Get team info
   const teamInfo = useMemo(() => {
     if (!data) return null
-    const isHome = team === 'home'
+    const isTeam1 = team === 'team1'
     return {
-      name: isHome ? data.homeTeam?.name : data.awayTeam?.name,
-      color: isHome ? data.homeTeam?.color : data.awayTeam?.color,
-      players: isHome ? data.homePlayers : data.awayPlayers,
-      bench: isHome ? (data.match?.bench_home || []) : (data.match?.bench_away || [])
+      name: isTeam1 ? data.team1?.name : data.team2?.name,
+      color: isTeam1 ? data.team1?.color : data.team2?.color,
+      players: isTeam1 ? data.team1Players : data.team2Players,
+      bench: isTeam1 ? (data.match?.bench_home || []) : (data.match?.bench_away || [])
     }
   }, [data, team])
 
   // Get opponent team info
   const opponentInfo = useMemo(() => {
     if (!data) return null
-    const isHome = team === 'home'
+    const isTeam1 = team === 'team1'
     return {
-      name: isHome ? data.awayTeam?.name : data.homeTeam?.name,
-      color: isHome ? data.awayTeam?.color : data.homeTeam?.color,
-      players: isHome ? data.awayPlayers : data.homePlayers,
-      bench: isHome ? (data.match?.bench_away || []) : (data.match?.bench_home || [])
+      name: isTeam1 ? data.team2?.name : data.team1?.name,
+      color: isTeam1 ? data.team2?.color : data.team1?.color,
+      players: isTeam1 ? data.team2Players : data.team1Players,
+      bench: isTeam1 ? (data.match?.bench_away || []) : (data.match?.bench_home || [])
     }
   }, [data, team])
 
   // Get current set points
   const points = useMemo(() => {
     if (!data?.set) return { team: 0, opponent: 0 }
-    if (team === 'home') {
-      return { team: data.set.homePoints, opponent: data.set.awayPoints }
+    if (team === 'team1') {
+      return { team: data.set.team1Points, opponent: data.set.team2Points }
     } else {
-      return { team: data.set.awayPoints, opponent: data.set.homePoints }
+      return { team: data.set.team2Points, opponent: data.set.team1Points }
     }
   }, [data?.set, team])
 
@@ -251,12 +247,12 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
     let opponentWins = 0
     for (const set of data.allSets) {
       if (set.finished) {
-        if (team === 'home') {
-          if (set.homePoints > set.awayPoints) teamWins++
-          else if (set.awayPoints > set.homePoints) opponentWins++
+        if (team === 'team1') {
+          if (set.team1Points > set.team2Points) teamWins++
+          else if (set.team2Points > set.team1Points) opponentWins++
         } else {
-          if (set.awayPoints > set.homePoints) teamWins++
-          else if (set.homePoints > set.awayPoints) opponentWins++
+          if (set.team2Points > set.team1Points) teamWins++
+          else if (set.team1Points > set.team2Points) opponentWins++
         }
       }
     }
@@ -273,8 +269,8 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
     if (!data) return []
 
     const { match, allSets, events } = data
-    const localTeamAKey = match?.coinTossTeamA || 'home'
-    const localTeamBKey = localTeamAKey === 'home' ? 'away' : 'home'
+    const localTeamAKey = match?.coinTossTeamA || 'team1'
+    const localTeamBKey = localTeamAKey === 'team1' ? 'team2' : 'team1'
 
     const results = []
     for (let setNum = 1; setNum <= 5; setNum++) {
@@ -284,10 +280,10 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
       const isSetFinished = setInfo?.finished === true
 
       const teamAPoints = isSetFinished
-        ? (localTeamAKey === 'home' ? (setInfo?.homePoints || 0) : (setInfo?.awayPoints || 0))
+        ? (localTeamAKey === 'team1' ? (setInfo?.team1Points || 0) : (setInfo?.team2Points || 0))
         : null
       const teamBPoints = isSetFinished
-        ? (localTeamBKey === 'home' ? (setInfo?.homePoints || 0) : (setInfo?.awayPoints || 0))
+        ? (localTeamBKey === 'team1' ? (setInfo?.team1Points || 0) : (setInfo?.team2Points || 0))
         : null
 
       const teamATimeouts = isSetFinished
@@ -459,28 +455,13 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
 
       const player = teamInfo?.players?.find(p => String(p.number) === String(playerNum))
 
-      // Check for libero substitution - first from rich format, then from liberoSubstitution payload
-      let substitutedPlayerNumber = null
-      if (posData && typeof posData === 'object' && posData.isLibero && posData.replacedNumber) {
-        // Rich format has replacedNumber directly
-        substitutedPlayerNumber = posData.replacedNumber
-      } else {
-        // Legacy format - check liberoSubstitution in payload
-        const liberoSub = latestLineupEvent?.payload?.liberoSubstitution
-        substitutedPlayerNumber = liberoSub &&
-          String(liberoSub.liberoNumber) === String(playerNum) &&
-          liberoSub.position === pos
-          ? liberoSub.playerNumber
-          : null
-      }
-
       return {
         number: playerNum,
         position: pos,
         isCaptain: player?.isCaptain || false,
-        isLibero: player?.libero === 'libero1' || player?.libero === 'libero2',
-        liberoType: player?.libero,
-        substitutedPlayerNumber: substitutedPlayerNumber
+        isLibero: false, // Beach volleyball doesn't use liberos
+        liberoType: null,
+        substitutedPlayerNumber: null
       }
     })
     
@@ -566,61 +547,8 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
     return benchPlayers
   }, [teamInfo, data?.events, data?.set, team, getPlayerSanctions])
 
-  // Get liberos (not currently on court)
-  const benchLiberos = useMemo(() => {
-    if (!teamInfo?.players || !data?.events || !data?.set) return []
-
-    // Get players currently on court
-    const lineupEvents = data.events
-      .filter(e => e.type === 'lineup' && e.setIndex === data.set.index && e.payload?.team === team)
-      .sort((a, b) => new Date(b.ts) - new Date(a.ts))
-
-    const playersOnCourtSet = new Set()
-    if (lineupEvents.length > 0) {
-      const latestLineup = lineupEvents[0].payload?.lineup
-      if (latestLineup && typeof latestLineup === 'object') {
-        Object.values(latestLineup).forEach(posData => {
-          // Handle both rich format (object with number) and legacy format (just number)
-          const num = posData && typeof posData === 'object' && posData.number !== undefined
-            ? posData.number
-            : posData
-          if (num) playersOnCourtSet.add(Number(num))
-        })
-      }
-    }
-
-    // Get liberos not on court
-    const liberos = teamInfo.players
-      .filter(p => {
-        const playerNumber = Number(p.number)
-        if (Number.isNaN(playerNumber)) return false
-        if (!p.libero || p.libero === '') return false
-        if (playersOnCourtSet.has(playerNumber)) return false
-        return true
-      })
-      .map(p => {
-        const sanctions = getPlayerSanctions(p.number)
-        return {
-          number: p.number,
-          firstName: p.firstName || '',
-          lastName: p.lastName || p.name || '',
-          dob: p.dob || '',
-          libero: p.libero,
-          isCaptain: p.isCaptain || p.captain || false,
-          sanctions,
-          type: 'libero'
-        }
-      })
-      .sort((a, b) => {
-        // Sort by libero type first (L1 before L2), then by number
-        if (a.libero !== b.libero) {
-          return (a.libero === 'libero1' ? 0 : 1) - (b.libero === 'libero1' ? 0 : 1)
-        }
-        return (a.number || 0) - (b.number || 0)
-      })
-    
-    return liberos
-  }, [teamInfo, data?.events, data?.set, team, getPlayerSanctions])
+  // Beach volleyball doesn't use liberos
+  const benchLiberos = []
 
   // Get bench officials
   const benchOfficials = useMemo(() => {
@@ -725,7 +653,7 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
           justifyContent: 'center',
           padding: '20px'
         }}>
-          <div>{t('matchEntry.loading', 'Loading...')}</div>
+          <div>Loading...</div>
         </div>
       )
     }
@@ -776,12 +704,12 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
 
   // Show results when match is finished
   if (isMatchFinished) {
-    const teamAShortName = data?.match?.coinTossTeamA === 'home'
-      ? (data?.match?.homeShortName || data?.homeTeam?.shortName || data?.homeTeam?.name || 'Home')
-      : (data?.match?.awayShortName || data?.awayTeam?.shortName || data?.awayTeam?.name || 'Away')
-    const teamBShortName = data?.match?.coinTossTeamA === 'home'
-      ? (data?.match?.awayShortName || data?.awayTeam?.shortName || data?.awayTeam?.name || 'Away')
-      : (data?.match?.homeShortName || data?.homeTeam?.shortName || data?.homeTeam?.name || 'Home')
+    const teamAShortName = data?.match?.coinTossTeamA === 'team1'
+      ? (data?.match?.team1ShortName || data?.team1?.shortName || data?.team1?.name || 'Team 1')
+      : (data?.match?.team2ShortName || data?.team2?.shortName || data?.team2?.name || 'Team 2')
+    const teamBShortName = data?.match?.coinTossTeamA === 'team1'
+      ? (data?.match?.team2ShortName || data?.team2?.shortName || data?.team2?.name || 'Team 2')
+      : (data?.match?.team1ShortName || data?.team1?.shortName || data?.team1?.name || 'Team 1')
 
     return (
       <div style={{
@@ -805,7 +733,7 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
           textTransform: 'uppercase',
           letterSpacing: '2px'
         }}>
-          {t('matchEntry.matchHasEnded', 'The match has ended')}
+          The match has ended
         </div>
 
         {/* Winner and Result */}
@@ -859,7 +787,7 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
               marginTop: '16px'
             }}
           >
-            {t('matchEntry.back', 'Back')}
+            Back
           </button>
         )}
       </div>
@@ -900,7 +828,7 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
               cursor: 'pointer'
             }}
           >
-            {t('matchEntry.backArrow', '← Back')}
+            ← Back
           </button>
           <h1 style={{ fontSize: '18px', fontWeight: 700, margin: 0 }}>
             {teamInfo.name}
@@ -933,7 +861,7 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
             border: timeoutsUsed >= 2 ? '2px solid #ef4444' : '1px solid rgba(255,255,255,0.1)',
             minWidth: '50px'
           }}>
-            <div style={{ fontSize: '10px', color: 'var(--muted)', marginBottom: '2px' }}>{t('matchEntry.to', 'TO')}</div>
+            <div style={{ fontSize: '10px', color: 'var(--muted)', marginBottom: '2px' }}>TO</div>
             <div style={{
               fontSize: '28px',
               fontWeight: 800,
@@ -954,7 +882,7 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
             border: substitutionsUsed >= 6 ? '2px solid #ef4444' : substitutionsUsed >= 5 ? '2px solid #eab308' : '1px solid rgba(255,255,255,0.1)',
             minWidth: '50px'
           }}>
-            <div style={{ fontSize: '10px', color: 'var(--muted)', marginBottom: '2px' }}>{t('matchEntry.sub', 'SUB')}</div>
+            <div style={{ fontSize: '10px', color: 'var(--muted)', marginBottom: '2px' }}>SUB</div>
             <div style={{
               fontSize: '28px',
               fontWeight: 800,
@@ -1032,9 +960,9 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
           overflow: 'auto',
           minWidth: '100px'
         }}>
-          <div style={{ fontSize: '9px', color: 'var(--muted)', fontWeight: 600 }}>{t('matchEntry.sanctions', 'SANCTIONS')}</div>
+          <div style={{ fontSize: '9px', color: 'var(--muted)', fontWeight: 600 }}>SANCTIONS</div>
           {allSanctionsForDisplay.length === 0 ? (
-            <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '10px' }}>{t('matchEntry.none', 'None')}</div>
+            <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '10px' }}>None</div>
           ) : (
             allSanctionsForDisplay.slice(0, 3).map((s, idx) => (
               <div key={idx} style={{
@@ -1056,7 +984,7 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
             ))
           )}
           {allSanctionsForDisplay.length > 3 && (
-            <div style={{ fontSize: '9px', color: 'var(--muted)' }}>{t('matchEntry.moreCount', '+{{count}} more', { count: allSanctionsForDisplay.length - 3 })}</div>
+            <div style={{ fontSize: '9px', color: 'var(--muted)' }}>{`+${allSanctionsForDisplay.length - 3} more`}</div>
           )}
         </div>
       </div>
@@ -1105,24 +1033,19 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
                     const hasExpulsion = sanctions.some(s => s.payload?.type === 'expulsion')
                     const hasDisqualification = sanctions.some(s => s.payload?.type === 'disqualification')
                     const shouldShowBall = showBall && player.position === 'I'
-                    const teamPlayers = teamInfo?.players || []
-                    const liberoCount = teamPlayers.filter(p => p.libero === 'libero1' || p.libero === 'libero2').length || 0
-                    const liberoLabel = liberoCount === 1 ? 'L' : (player.liberoType === 'libero1' ? 'L1' : 'L2')
 
                     return (
                       <div
                         key={`front-${player.position}-${idx}`}
                         className="court-player"
                         style={{
-                          background: player.isLibero ? '#FFF8E7' : undefined,
-                          color: player.isLibero ? '#000' : undefined,
                           position: 'relative',
                           aspectRatio: '1 / 1',
                           fontSize: 'clamp(25px, 10vw, 40px)'
                         }}
                       >
                         {shouldShowBall && (
-                          <img src={ballImage} onError={(e) => e.target.src = mikasaVolleyball} alt="Serve" style={{
+                          <img src={ballImage} alt="Serve" style={{
                             position: 'absolute',
                             left: teamSide === 'left' ? '-28px' : 'auto',
                             right: teamSide === 'left' ? 'auto' : '-28px',
@@ -1134,27 +1057,9 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
                             filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
                           }} />
                         )}
-                        {player.substitutedPlayerNumber && (
-                          <span style={{
-                            position: 'absolute', top: '-6px', right: '-6px',
-                            width: '16px', height: '16px', background: '#FFF8E7',
-                            border: '2px solid rgba(0,0,0,0.2)', borderRadius: '3px',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '9px', fontWeight: 700, color: '#000', zIndex: 6
-                          }}>{player.substitutedPlayerNumber}</span>
-                        )}
                         <span className="court-player-position">{player.position}</span>
                         {player.isCaptain && (
-                          <span className="court-player-captain" style={player.isLibero ? { background: '#fff', color: '#10b981', borderColor: '#10b981' } : {}}>C</span>
-                        )}
-                        {player.isLibero && !player.isCaptain && (
-                          <span style={{
-                            position: 'absolute', bottom: '-6px', left: '-6px',
-                            width: '18px', height: '14px', background: '#3b82f6',
-                            border: '2px solid rgba(255,255,255,0.4)', borderRadius: '3px',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '8px', fontWeight: 700, color: '#fff', zIndex: 5
-                          }}>{liberoLabel}</span>
+                          <span className="court-player-captain">C</span>
                         )}
                         {player.number || '—'}
                         {sanctions.length > 0 && (
@@ -1186,17 +1091,12 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
                     const hasExpulsion = sanctions.some(s => s.payload?.type === 'expulsion')
                     const hasDisqualification = sanctions.some(s => s.payload?.type === 'disqualification')
                     const shouldShowBall = showBall && player.position === 'I'
-                    const teamPlayers = teamInfo?.players || []
-                    const liberoCount = teamPlayers.filter(p => p.libero === 'libero1' || p.libero === 'libero2').length || 0
-                    const liberoLabel = liberoCount === 1 ? 'L' : (player.liberoType === 'libero1' ? 'L1' : 'L2')
 
                     return (
                       <div
                         key={`back-${player.position}-${idx}`}
                         className="court-player"
                         style={{
-                          background: player.isLibero ? '#FFF8E7' : undefined,
-                          color: player.isLibero ? '#000' : undefined,
                           position: 'relative',
                           width: 'clamp(44px, 10vw, 72px)',
                           height: 'clamp(44px, 10vw, 72px)',
@@ -1204,7 +1104,7 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
                         }}
                       >
                         {shouldShowBall && (
-                          <img src={ballImage} onError={(e) => e.target.src = mikasaVolleyball} alt="Serve" style={{
+                          <img src={ballImage} alt="Serve" style={{
                             position: 'absolute',
                             left: teamSide === 'left' ? '-28px' : 'auto',
                             right: teamSide === 'left' ? 'auto' : '-28px',
@@ -1216,27 +1116,9 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
                             filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
                           }} />
                         )}
-                        {player.substitutedPlayerNumber && (
-                          <span style={{
-                            position: 'absolute', top: '-6px', right: '-6px',
-                            width: '16px', height: '16px', background: '#FFF8E7',
-                            border: '2px solid rgba(0,0,0,0.2)', borderRadius: '3px',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '9px', fontWeight: 700, color: '#000', zIndex: 6
-                          }}>{player.substitutedPlayerNumber}</span>
-                        )}
                         <span className="court-player-position">{player.position}</span>
                         {player.isCaptain && (
-                          <span className="court-player-captain" style={player.isLibero ? { background: '#fff', color: '#10b981', borderColor: '#10b981' } : {}}>C</span>
-                        )}
-                        {player.isLibero && !player.isCaptain && (
-                          <span style={{
-                            position: 'absolute', bottom: '-6px', left: '-6px',
-                            width: '18px', height: '14px', background: '#3b82f6',
-                            border: '2px solid rgba(255,255,255,0.4)', borderRadius: '3px',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '8px', fontWeight: 700, color: '#fff', zIndex: 5
-                          }}>{liberoLabel}</span>
+                          <span className="court-player-captain">C</span>
                         )}
                         {player.number || '—'}
                         {sanctions.length > 0 && (
@@ -1299,52 +1181,8 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
           </div>
         ))}
 
-        {/* Separator if both players and liberos exist */}
-        {benchPlayersWithSanctions.length > 0 && benchLiberos.length > 0 && (
-          <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.2)' }}></div>
-        )}
-
-        {/* Liberos */}
-        {benchLiberos.map((libero, idx) => {
-          const liberoCount = teamInfo?.players?.filter(p => p.libero === 'libero1' || p.libero === 'libero2').length || 0
-          const liberoLabel = liberoCount === 1 ? 'L' : (libero.libero === 'libero1' ? 'L1' : 'L2')
-          return (
-            <div key={`lib-${idx}`} style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 8px',
-              background: 'rgba(59, 130, 246, 0.15)',
-              border: '1px solid rgba(59, 130, 246, 0.3)',
-              borderRadius: '4px',
-              fontSize: '13px'
-            }}>
-              <span style={{
-                background: '#3b82f6',
-                color: '#fff',
-                padding: '1px 4px',
-                borderRadius: '2px',
-                fontSize: '9px',
-                fontWeight: 700
-              }}>{liberoLabel}</span>
-              <span style={{ fontWeight: 700 }}>#{libero.number}</span>
-              {libero.isCaptain && (
-                <span style={{
-                  background: '#fff',
-                  color: '#10b981',
-                  border: '1px solid #10b981',
-                  borderRadius: '2px',
-                  padding: '0 3px',
-                  fontSize: '9px',
-                  fontWeight: 700
-                }}>C</span>
-              )}
-            </div>
-          )
-        })}
-
-        {/* Separator if liberos/players and officials exist */}
-        {(benchPlayersWithSanctions.length > 0 || benchLiberos.length > 0) && benchOfficials.length > 0 && (
+        {/* Separator if players and officials exist */}
+        {benchPlayersWithSanctions.length > 0 && benchOfficials.length > 0 && (
           <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.2)' }}></div>
         )}
 
@@ -1389,9 +1227,9 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
         })}
 
         {/* Empty state */}
-        {benchPlayersWithSanctions.length === 0 && benchLiberos.length === 0 && benchOfficials.length === 0 && (
+        {benchPlayersWithSanctions.length === 0 && benchOfficials.length === 0 && (
           <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '12px' }}>
-            {t('matchEntry.noBenchData', 'No bench data')}
+            No bench data
           </div>
         )}
       </div>

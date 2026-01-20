@@ -3,5 +3,11 @@
     "allow": [
       "Bash(powershell -Command \"Get-ChildItem ''c:\\\\Users\\\\lcane\\\\Desktop\\\\openbeach\\\\escoresheet\\\\frontend\\\\src_beach\\\\utils_beach'' -Name\")"
     ]
+  },
+  "enabledPlugins": {
+    "frontend-design@claude-plugins-official": true,
+    "context7@claude-plugins-official": true,
+    "github@claude-plugins-official": true,
+    "supabase@claude-plugins-official": true
   }
 }

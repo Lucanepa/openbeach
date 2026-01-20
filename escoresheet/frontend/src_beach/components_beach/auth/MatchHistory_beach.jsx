@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../contexts_beach/AuthContext_beach'
 import { supabase } from '../../lib_beach/supabaseClient_beach'
 
 export default function MatchHistory({ open, onClose, onSelectMatch }) {
-  const { t } = useTranslation()
   const { user } = useAuth()
 
   const [matches, setMatches] = useState([])
@@ -89,9 +87,9 @@ export default function MatchHistory({ open, onClose, onSelectMatch }) {
   }
 
   const getTeamName = (team) => {
-    if (!team) return t('matchHistory.unknown', 'Unknown')
+    if (!team) return 'Unknown'
     if (typeof team === 'string') return team
-    return team.name || team.teamName || t('matchHistory.unknown', 'Unknown')
+    return team.name || team.teamName || 'Unknown'
   }
 
   const getStatusColor = (status) => {
@@ -138,7 +136,7 @@ export default function MatchHistory({ open, onClose, onSelectMatch }) {
         {/* Header */}
         <div style={headerStyle}>
           <h2 style={{ margin: 0, color: '#fff', fontSize: 20, fontWeight: 600 }}>
-            {t('matchHistory.title', 'My Matches')}
+            My Matches
           </h2>
           <button
             onClick={onClose}
@@ -174,14 +172,14 @@ export default function MatchHistory({ open, onClose, onSelectMatch }) {
 
           {loading ? (
             <div style={{ textAlign: 'center', color: '#9ca3af', padding: 40 }}>
-              {t('common.loading', 'Loading...')}
+              Loading...
             </div>
           ) : matches.length === 0 ? (
             <div style={{ textAlign: 'center', color: '#9ca3af', padding: 40 }}>
               <div style={{ fontSize: 48, marginBottom: 12, opacity: 0.5 }}>📋</div>
-              <p>{t('matchHistory.noMatches', 'No matches yet')}</p>
+              <p>No matches yet</p>
               <p style={{ fontSize: 13, marginTop: 8 }}>
-                {t('matchHistory.noMatchesHint', 'Matches you score will appear here')}
+                Matches you score will appear here
               </p>
             </div>
           ) : (
@@ -217,7 +215,7 @@ export default function MatchHistory({ open, onClose, onSelectMatch }) {
                         {getTeamName(match.team_a)}
                       </div>
                       <div style={{ color: '#9ca3af', fontSize: 13 }}>
-                        {t('matchHistory.vs', 'vs')}
+                        vs
                       </div>
                       <div style={{ color: '#e5e7eb', fontWeight: 500 }}>
                         {getTeamName(match.team_b)}
@@ -292,7 +290,7 @@ export default function MatchHistory({ open, onClose, onSelectMatch }) {
               cursor: 'pointer'
             }}
           >
-            {t('common.close', 'Close')}
+            Close
           </button>
         </div>
       </div>

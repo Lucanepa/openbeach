@@ -55,7 +55,7 @@ export default function TestModeControls({ matchId, onRefresh }) {
   }
 
   // Random team selector
-  const randomTeam = () => Math.random() > 0.5 ? 'home' : 'away'
+  const randomTeam = () => Math.random() > 0.5 ? 'team1' : 'team2'
 
   // Action handlers
   const handleAddPoint = async () => {
@@ -74,7 +74,7 @@ export default function TestModeControls({ matchId, onRefresh }) {
       await addEvent('point', { team }, currentSet.index)
 
       // Update set score
-      const field = team === 'home' ? 'homePoints' : 'awayPoints'
+      const field = team === 'team1' ? 'team1Points' : 'team2Points'
       const currentPoints = currentSet[field] || 0
       await db.sets.update(currentSet.id, { [field]: currentPoints + 1 })
       console.log('[TestModeControls] Set updated, new points:', currentPoints + 1)
@@ -139,7 +139,7 @@ export default function TestModeControls({ matchId, onRefresh }) {
       const { match } = await getMatchState()
 
       // Toggle left/right team positions
-      const newLeftTeam = match.leftTeam === 'home' ? 'away' : 'home'
+      const newLeftTeam = match.leftTeam === 'team1' ? 'team2' : 'team1'
       await db.matches.update(matchId, { leftTeam: newLeftTeam })
 
       setLastAction(`Side: ${newLeftTeam} now left`)
@@ -159,12 +159,12 @@ export default function TestModeControls({ matchId, onRefresh }) {
 
       // Find current serve from lineup events
       const lineupEvents = currentSetEvents.filter(e => e.type === 'lineup')
-      const lastHomeLineup = lineupEvents.filter(e => e.payload?.team === 'home').pop()
-      const lastAwayLineup = lineupEvents.filter(e => e.payload?.team === 'away').pop()
+      const lastHomeLineup = lineupEvents.filter(e => e.payload?.team === 'team1').pop()
+      const lastAwayLineup = lineupEvents.filter(e => e.payload?.team === 'team2').pop()
 
       // Rotate serve between teams
-      const currentServe = currentSet.firstServe || 'home'
-      const newServe = currentServe === 'home' ? 'away' : 'home'
+      const currentServe = currentSet.firstServe || 'team1'
+      const newServe = currentServe === 'team1' ? 'team2' : 'team1'
 
       await db.sets.update(currentSet.id, { firstServe: newServe })
 
@@ -247,8 +247,8 @@ export default function TestModeControls({ matchId, onRefresh }) {
       const loserPoints = Math.floor(Math.random() * 23) + 1 // 1-23
 
       await db.sets.update(currentSet.id, {
-        homePoints: winner === 'home' ? winnerPoints : loserPoints,
-        awayPoints: winner === 'away' ? winnerPoints : loserPoints,
+        team1Points: winner === 'team1' ? winnerPoints : loserPoints,
+        team2Points: winner === 'team2' ? winnerPoints : loserPoints,
         finished: true,
         endTime: new Date().toISOString()
       })
@@ -256,22 +256,22 @@ export default function TestModeControls({ matchId, onRefresh }) {
       await addEvent('set_end', {
         team: winner,
         setIndex: currentSet.index,
-        homePoints: winner === 'home' ? winnerPoints : loserPoints,
-        awayPoints: winner === 'away' ? winnerPoints : loserPoints
+        team1Points: winner === 'team1' ? winnerPoints : loserPoints,
+        team2Points: winner === 'team2' ? winnerPoints : loserPoints
       }, currentSet.index)
 
       // Create next set if not match end
       const { sets } = await getMatchState()
-      const homeSetsWon = sets.filter(s => s.finished && s.homePoints > s.awayPoints).length
-      const awaySetsWon = sets.filter(s => s.finished && s.awayPoints > s.homePoints).length
+      const team1SetsWon = sets.filter(s => s.finished && s.team1Points > s.team2Points).length
+      const team2SetsWon = sets.filter(s => s.finished && s.team2Points > s.team1Points).length
 
-      if (homeSetsWon < 3 && awaySetsWon < 3) {
+      if (team1SetsWon < 3 && team2SetsWon < 3) {
         const nextSetIndex = (currentSet.index || 0) + 1
         await db.sets.add({
           matchId,
           index: nextSetIndex,
-          homePoints: 0,
-          awayPoints: 0,
+          team1Points: 0,
+          team2Points: 0,
           finished: false,
           startTime: new Date().toISOString()
         })
@@ -292,8 +292,8 @@ export default function TestModeControls({ matchId, onRefresh }) {
       if (currentSet && !currentSet.finished) {
         const winner = randomTeam()
         await db.sets.update(currentSet.id, {
-          homePoints: winner === 'home' ? 25 : 20,
-          awayPoints: winner === 'away' ? 25 : 20,
+          team1Points: winner === 'team1' ? 25 : 20,
+          team2Points: winner === 'team2' ? 25 : 20,
           finished: true,
           endTime: new Date().toISOString()
         })
@@ -301,37 +301,37 @@ export default function TestModeControls({ matchId, onRefresh }) {
 
       // Count current wins
       const updatedSets = await db.sets.where('matchId').equals(matchId).toArray()
-      let homeSetsWon = updatedSets.filter(s => s.finished && s.homePoints > s.awayPoints).length
-      let awaySetsWon = updatedSets.filter(s => s.finished && s.awayPoints > s.homePoints).length
+      let team1SetsWon = updatedSets.filter(s => s.finished && s.team1Points > s.team2Points).length
+      let team2SetsWon = updatedSets.filter(s => s.finished && s.team2Points > s.team1Points).length
 
       // Add sets until one team wins 3
-      const matchWinner = Math.random() > 0.5 ? 'home' : 'away'
+      const matchWinner = Math.random() > 0.5 ? 'team1' : 'team2'
       let setIndex = updatedSets.length
 
-      while (homeSetsWon < 3 && awaySetsWon < 3) {
+      while (team1SetsWon < 3 && team2SetsWon < 3) {
         setIndex++
-        const setWinner = matchWinner === 'home'
-          ? (homeSetsWon < 3 ? 'home' : 'away')
-          : (awaySetsWon < 3 ? 'away' : 'home')
+        const setWinner = matchWinner === 'team1'
+          ? (team1SetsWon < 3 ? 'team1' : 'team2')
+          : (team2SetsWon < 3 ? 'team2' : 'team1')
 
         await db.sets.add({
           matchId,
           index: setIndex,
-          homePoints: setWinner === 'home' ? 25 : Math.floor(Math.random() * 23),
-          awayPoints: setWinner === 'away' ? 25 : Math.floor(Math.random() * 23),
+          team1Points: setWinner === 'team1' ? 25 : Math.floor(Math.random() * 23),
+          team2Points: setWinner === 'team2' ? 25 : Math.floor(Math.random() * 23),
           finished: true,
           startTime: new Date().toISOString(),
           endTime: new Date().toISOString()
         })
 
-        if (setWinner === 'home') homeSetsWon++
-        else awaySetsWon++
+        if (setWinner === 'team1') team1SetsWon++
+        else team2SetsWon++
       }
 
       // Update match status
       await db.matches.update(matchId, { status: 'final' })
 
-      setLastAction(`Match end: ${matchWinner} wins ${homeSetsWon}-${awaySetsWon}`)
+      setLastAction(`Match end: ${matchWinner} wins ${team1SetsWon}-${team2SetsWon}`)
       onRefresh?.()
     } catch (err) {
       setLastAction(`Error: ${err.message}`)

@@ -124,7 +124,7 @@ export const debugLogger = new DebugLogger()
 export function createStateSnapshot(data) {
   if (!data) return null
 
-  const { match, sets, currentSet, homeTeam, awayTeam, events } = data
+  const { match, sets, currentSet, team1, team2, events } = data
 
   return {
     // Match info

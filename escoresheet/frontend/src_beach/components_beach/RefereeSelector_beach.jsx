@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib_beach/supabaseClient_beach'
 
 // Sport type for beach volleyball
@@ -14,7 +13,6 @@ const SPORT_TYPE = 'beach'
  * @param {Object} position - Position config for dropdown placement
  */
 export default function RefereeSelector({ open, onClose, onSelect, position = {} }) {
-  const { t } = useTranslation()
   const [searchQuery, setSearchQuery] = useState('')
   const [referees, setReferees] = useState([])
   const [loading, setLoading] = useState(false)
@@ -155,7 +153,7 @@ export default function RefereeSelector({ open, onClose, onSelect, position = {}
           {/* Search Input */}
           <input
             type="text"
-            placeholder={t('refereeSelector.searchReferees')}
+            placeholder="Search referees..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
@@ -182,15 +180,15 @@ export default function RefereeSelector({ open, onClose, onSelect, position = {}
           }}>
             {!isOnline ? (
               <div style={{ padding: '12px', textAlign: 'center', color: 'rgba(255, 255, 255, 0.6)' }}>
-                {t('refereeSelector.connectToInternet')}
+                Connect to internet to load referee history
               </div>
             ) : loading ? (
               <div style={{ padding: '12px', textAlign: 'center', color: 'rgba(255, 255, 255, 0.6)' }}>
-                {t('common.loading')}
+                Loading...
               </div>
             ) : filteredReferees.length === 0 ? (
               <div style={{ padding: '12px', textAlign: 'center', color: 'rgba(255, 255, 255, 0.6)' }}>
-                {searchQuery ? t('refereeSelector.noRefereesFound') : t('refereeSelector.noRefereeHistory')}
+                {searchQuery ? 'No referees found' : 'No referee history available'}
               </div>
             ) : (
               filteredReferees.map((referee) => (

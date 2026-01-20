@@ -79,15 +79,15 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
   const [editedMatch, setEditedMatch] = useState(null)
 
   // Editable state - Teams
-  const [editedHomeTeam, setEditedHomeTeam] = useState(null)
-  const [editedAwayTeam, setEditedAwayTeam] = useState(null)
+  const [editedTeam1, setEditedTeam1] = useState(null)
+  const [editedTeam2, setEditedTeam2] = useState(null)
 
   // Editable state - Bench officials (separate from team for proper loading)
-  const [editedHomeBench, setEditedHomeBench] = useState([])
-  const [editedAwayBench, setEditedAwayBench] = useState([])
+  const [editedTeam1Bench, setEditedTeam1Bench] = useState([])
+  const [editedTeam2Bench, setEditedTeam2Bench] = useState([])
 
   // Add sanction modal state
-  const [showAddSanction, setShowAddSanction] = useState(null) // { team: 'home'|'away', playerNumber?: number, playerType: 'player'|'coach'|'bench_official' }
+  const [showAddSanction, setShowAddSanction] = useState(null) // { team: 'team1'|'team2', playerNumber?: number, playerType: 'player'|'coach'|'bench_official' }
   const [newSanctionData, setNewSanctionData] = useState({ type: 'warning', setIndex: 1, scoreA: 0, scoreB: 0 })
 
   // Edit sanction modal state
@@ -95,16 +95,16 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
 
   // Timeout modal state
   const [showAddTimeout, setShowAddTimeout] = useState(false)
-  const [newTimeoutData, setNewTimeoutData] = useState({ team: 'home', setIndex: 1, scoreA: 0, scoreB: 0 })
+  const [newTimeoutData, setNewTimeoutData] = useState({ team: 'team1', setIndex: 1, scoreA: 0, scoreB: 0 })
 
   // Substitution modal state
   const [showAddSub, setShowAddSub] = useState(false)
   const [editingSub, setEditingSub] = useState(null)
-  const [newSubData, setNewSubData] = useState({ team: 'home', setIndex: 1, playerOut: '', playerIn: '', scoreA: 0, scoreB: 0 })
+  const [newSubData, setNewSubData] = useState({ team: 'team1', setIndex: 1, playerOut: '', playerIn: '', scoreA: 0, scoreB: 0 })
 
   // Editable state - Players
-  const [editedHomePlayers, setEditedHomePlayers] = useState([])
-  const [editedAwayPlayers, setEditedAwayPlayers] = useState([])
+  const [editedTeam1Players, setEditedTeam1Players] = useState([])
+  const [editedTeam2Players, setEditedTeam2Players] = useState([])
 
   // Editable state - Events (filtered by type)
   const [allEvents, setAllEvents] = useState([])
@@ -127,22 +127,22 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
     const match = await db.matches.get(matchId)
     if (!match) return null
 
-    const [homeTeam, awayTeam] = await Promise.all([
-      match?.homeTeamId ? db.teams.get(match.homeTeamId) : null,
-      match?.awayTeamId ? db.teams.get(match.awayTeamId) : null
+    const [team1, team2] = await Promise.all([
+      match?.team1Id ? db.teams.get(match.team1Id) : null,
+      match?.team2Id ? db.teams.get(match.team2Id) : null
     ])
 
     const sets = await db.sets.where('matchId').equals(matchId).sortBy('index')
 
-    const [homePlayers, awayPlayers] = await Promise.all([
-      match?.homeTeamId ? db.players.where('teamId').equals(match.homeTeamId).sortBy('number') : [],
-      match?.awayTeamId ? db.players.where('teamId').equals(match.awayTeamId).sortBy('number') : []
+    const [team1Players, team2Players] = await Promise.all([
+      match?.team1Id ? db.players.where('teamId').equals(match.team1Id).sortBy('number') : [],
+      match?.team2Id ? db.players.where('teamId').equals(match.team2Id).sortBy('number') : []
     ])
 
     const events = await db.events.where('matchId').equals(matchId).toArray()
     const sortedEvents = events.sort((a, b) => (a.seq || 0) - (b.seq || 0))
 
-    return { match, homeTeam, awayTeam, sets, homePlayers, awayPlayers, events: sortedEvents }
+    return { match, team1, team2, sets, team1Players, team2Players, events: sortedEvents }
   }, [matchId])
 
   // Initialize editable state from data
@@ -150,17 +150,17 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
     if (data) {
       setEditedSets(data.sets.map(s => ({ ...s })))
       setEditedMatch({ ...data.match })
-      setEditedHomeTeam(data.homeTeam ? { ...data.homeTeam } : null)
-      setEditedAwayTeam(data.awayTeam ? { ...data.awayTeam } : null)
-      setEditedHomePlayers(data.homePlayers.map(p => ({ ...p })))
-      setEditedAwayPlayers(data.awayPlayers.map(p => ({ ...p })))
+      setEditedTeam1(data.team1 ? { ...data.team1 } : null)
+      setEditedTeam2(data.team2 ? { ...data.team2 } : null)
+      setEditedTeam1Players(data.team1Players.map(p => ({ ...p })))
+      setEditedTeam2Players(data.team2Players.map(p => ({ ...p })))
       setAllEvents(data.events.map(e => ({ ...e })))
 
-      // Initialize bench officials - check match.bench_home/bench_away first, then team.benchOfficials
-      const homeBenchData = data.match?.bench_home?.length ? data.match.bench_home : data.homeTeam?.benchOfficials || []
-      const awayBenchData = data.match?.bench_away?.length ? data.match.bench_away : data.awayTeam?.benchOfficials || []
-      setEditedHomeBench(homeBenchData.map(b => ({ ...b })))
-      setEditedAwayBench(awayBenchData.map(b => ({ ...b })))
+      // Initialize bench officials - check match.bench_team1/bench_team2 first, then team.benchOfficials
+      const team1BenchData = data.match?.bench_team1?.length ? data.match.bench_team1 : data.team1?.benchOfficials || []
+      const team2BenchData = data.match?.bench_team2?.length ? data.match.bench_team2 : data.team2?.benchOfficials || []
+      setEditedTeam1Bench(team1BenchData.map(b => ({ ...b })))
+      setEditedTeam2Bench(team2BenchData.map(b => ({ ...b })))
 
       // Initialize officials from match data - handle both array and object formats
       const officialsData = data.match?.officials
@@ -231,9 +231,9 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
   }, [recordChange])
 
   // ==================== TEAM FUNCTIONS ====================
-  const updateTeam = useCallback((field, value, isHome) => {
-    const setter = isHome ? setEditedHomeTeam : setEditedAwayTeam
-    const teamLabel = isHome ? 'Home' : 'Away'
+  const updateTeam = useCallback((field, value, isTeam1) => {
+    const setter = isTeam1 ? setEditedTeam1 : setEditedTeam2
+    const teamLabel = isTeam1 ? 'Home' : 'Away'
     setter(prev => {
       if (!prev) return prev
       const oldValue = prev[field]
@@ -249,27 +249,27 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
     recordChange('match', 'teamDesignation', 'original', 'swapped', 'Swapped team A/B designation')
 
     // Swap teams
-    const tempTeam = editedHomeTeam
-    setEditedHomeTeam(editedAwayTeam)
-    setEditedAwayTeam(tempTeam)
+    const tempTeam = editedTeam1
+    setEditedTeam1(editedTeam2)
+    setEditedTeam2(tempTeam)
 
     // Swap players
-    const tempPlayers = editedHomePlayers
-    setEditedHomePlayers(editedAwayPlayers)
-    setEditedAwayPlayers(tempPlayers)
+    const tempPlayers = editedTeam1Players
+    setEditedTeam1Players(editedTeam2Players)
+    setEditedTeam2Players(tempPlayers)
 
     // Swap bench officials
-    const tempBench = editedHomeBench
-    setEditedHomeBench(editedAwayBench)
-    setEditedAwayBench(tempBench)
+    const tempBench = editedTeam1Bench
+    setEditedTeam1Bench(editedTeam2Bench)
+    setEditedTeam2Bench(tempBench)
 
     // Swap team IDs in match
     setEditedMatch(prev => {
       if (!prev) return prev
       return {
         ...prev,
-        homeTeamId: prev.awayTeamId,
-        awayTeamId: prev.homeTeamId,
+        team1Id: prev.team2Id,
+        team2Id: prev.team1Id,
         coinTossTeamA: prev.coinTossTeamB,
         coinTossTeamB: prev.coinTossTeamA
       }
@@ -278,14 +278,14 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
     // Swap scores in sets
     setEditedSets(prev => prev.map(set => ({
       ...set,
-      homePoints: set.awayPoints,
-      awayPoints: set.homePoints
+      team1Points: set.team2Points,
+      team2Points: set.team1Points
     })))
-  }, [recordChange, editedHomeTeam, editedAwayTeam, editedHomePlayers, editedAwayPlayers, editedHomeBench, editedAwayBench])
+  }, [recordChange, editedTeam1, editedTeam2, editedTeam1Players, editedTeam2Players, editedTeam1Bench, editedTeam2Bench])
 
   // ==================== PLAYER FUNCTIONS ====================
-  const updatePlayer = useCallback((playerId, field, value, isHome) => {
-    const setter = isHome ? setEditedHomePlayers : setEditedAwayPlayers
+  const updatePlayer = useCallback((playerId, field, value, isTeam1) => {
+    const setter = isTeam1 ? setEditedTeam1Players : setEditedTeam2Players
     setter(prev => prev.map(p => {
       if (p.id === playerId) {
         const oldValue = p[field]
@@ -298,10 +298,10 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
     }))
   }, [recordChange])
 
-  const addPlayer = useCallback((isHome) => {
-    const setter = isHome ? setEditedHomePlayers : setEditedAwayPlayers
-    const team = isHome ? editedHomeTeam : editedAwayTeam
-    const teamLabel = isHome ? 'Home' : 'Away'
+  const addPlayer = useCallback((isTeam1) => {
+    const setter = isTeam1 ? setEditedTeam1Players : setEditedTeam2Players
+    const team = isTeam1 ? editedTeam1 : editedTeam2
+    const teamLabel = isTeam1 ? 'Home' : 'Away'
     const newPlayer = {
       id: `new_${Date.now()}`,
       teamId: team?.id,
@@ -313,11 +313,11 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
     }
     recordChange('player', 'add', null, newPlayer, `Added new player to ${teamLabel} team`)
     setter(prev => [...prev, newPlayer])
-  }, [editedHomeTeam, editedAwayTeam, recordChange])
+  }, [editedTeam1, editedTeam2, recordChange])
 
-  const removePlayer = useCallback((playerId, isHome) => {
-    const setter = isHome ? setEditedHomePlayers : setEditedAwayPlayers
-    const players = isHome ? editedHomePlayers : editedAwayPlayers
+  const removePlayer = useCallback((playerId, isTeam1) => {
+    const setter = isTeam1 ? setEditedTeam1Players : setEditedTeam2Players
+    const players = isTeam1 ? editedTeam1Players : editedTeam2Players
     const player = players.find(p => p.id === playerId)
     if (player) {
       recordChange('player', 'remove', player, null, `Removed player #${player.number} ${player.name}`)
@@ -326,12 +326,12 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
       }
       setter(prev => prev.filter(p => p.id !== playerId))
     }
-  }, [editedHomePlayers, editedAwayPlayers, recordChange])
+  }, [editedTeam1Players, editedTeam2Players, recordChange])
 
   // ==================== BENCH OFFICIAL FUNCTIONS ====================
-  const updateBenchOfficial = useCallback((index, field, value, isHome) => {
-    const setter = isHome ? setEditedHomeBench : setEditedAwayBench
-    const teamLabel = isHome ? 'Home' : 'Away'
+  const updateBenchOfficial = useCallback((index, field, value, isTeam1) => {
+    const setter = isTeam1 ? setEditedTeam1Bench : setEditedTeam2Bench
+    const teamLabel = isTeam1 ? 'Home' : 'Away'
     setter(prev => {
       const staff = [...prev]
       if (staff[index]) {
@@ -345,18 +345,18 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
     })
   }, [recordChange])
 
-  const addBenchOfficial = useCallback((isHome) => {
-    const setter = isHome ? setEditedHomeBench : setEditedAwayBench
-    const teamLabel = isHome ? 'Home' : 'Away'
+  const addBenchOfficial = useCallback((isTeam1) => {
+    const setter = isTeam1 ? setEditedTeam1Bench : setEditedTeam2Bench
+    const teamLabel = isTeam1 ? 'Home' : 'Away'
     const newOfficial = { firstName: '', lastName: '', role: 'coach', dob: '' }
     recordChange('benchOfficial', 'add', null, newOfficial, `Added bench official to ${teamLabel} team`)
     setter(prev => [...prev, newOfficial])
   }, [recordChange])
 
-  const removeBenchOfficial = useCallback((index, isHome) => {
-    const setter = isHome ? setEditedHomeBench : setEditedAwayBench
-    const bench = isHome ? editedHomeBench : editedAwayBench
-    const teamLabel = isHome ? 'Home' : 'Away'
+  const removeBenchOfficial = useCallback((index, isTeam1) => {
+    const setter = isTeam1 ? setEditedTeam1Bench : setEditedTeam2Bench
+    const bench = isTeam1 ? editedTeam1Bench : editedTeam2Bench
+    const teamLabel = isTeam1 ? 'Home' : 'Away'
     const official = bench[index]
     if (official) {
       const name = `${official.firstName || ''} ${official.lastName || ''}`.trim() || official.role
@@ -367,7 +367,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
         return staff
       })
     }
-  }, [editedHomeBench, editedAwayBench, recordChange])
+  }, [editedTeam1Bench, editedTeam2Bench, recordChange])
 
   // ==================== EVENT FUNCTIONS ====================
   const deleteEvent = useCallback((eventId) => {
@@ -461,7 +461,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
     const { team, setIndex, scoreA, scoreB } = newTimeoutData
     addTimeout(team, setIndex, scoreA, scoreB)
     setShowAddTimeout(false)
-    setNewTimeoutData({ team: 'home', setIndex: 1, scoreA: 0, scoreB: 0 })
+    setNewTimeoutData({ team: 'team1', setIndex: 1, scoreA: 0, scoreB: 0 })
   }, [newTimeoutData, addTimeout])
 
   // Handle adding substitution from modal
@@ -470,7 +470,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
     if (!playerOut || !playerIn) return
     addSubstitution(team, setIndex, parseInt(playerOut, 10), parseInt(playerIn, 10), scoreA, scoreB)
     setShowAddSub(false)
-    setNewSubData({ team: 'home', setIndex: 1, playerOut: '', playerIn: '', scoreA: 0, scoreB: 0 })
+    setNewSubData({ team: 'team1', setIndex: 1, playerOut: '', playerIn: '', scoreA: 0, scoreB: 0 })
   }, [newSubData, addSubstitution])
 
   // Handle editing substitution
@@ -524,27 +524,27 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
       // Update sets in IndexedDB
       for (const set of editedSets) {
         await db.sets.update(set.id, {
-          homePoints: set.homePoints,
-          awayPoints: set.awayPoints,
+          team1Points: set.team1Points,
+          team2Points: set.team2Points,
           finished: set.finished
         })
       }
 
       // Update teams in IndexedDB (including bench officials)
-      if (editedHomeTeam?.id) {
-        await db.teams.update(editedHomeTeam.id, {
-          name: editedHomeTeam.name,
-          shortName: editedHomeTeam.shortName,
-          color: editedHomeTeam.color,
-          benchOfficials: editedHomeBench
+      if (editedTeam1?.id) {
+        await db.teams.update(editedTeam1.id, {
+          name: editedTeam1.name,
+          shortName: editedTeam1.shortName,
+          color: editedTeam1.color,
+          benchOfficials: editedTeam1Bench
         })
       }
-      if (editedAwayTeam?.id) {
-        await db.teams.update(editedAwayTeam.id, {
-          name: editedAwayTeam.name,
-          shortName: editedAwayTeam.shortName,
-          color: editedAwayTeam.color,
-          benchOfficials: editedAwayBench
+      if (editedTeam2?.id) {
+        await db.teams.update(editedTeam2.id, {
+          name: editedTeam2.name,
+          shortName: editedTeam2.shortName,
+          color: editedTeam2.color,
+          benchOfficials: editedTeam2Bench
         })
       }
 
@@ -563,14 +563,14 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
           coinTossTeamA: editedMatch.coinTossTeamA,
           coinTossTeamB: editedMatch.coinTossTeamB,
           officials: editedOfficials,
-          bench_home: editedHomeBench,
-          bench_away: editedAwayBench,
+          bench_team1: editedTeam1Bench,
+          bench_team2: editedTeam2Bench,
           manualChanges: [...existingChanges, ...changes]
         })
       }
 
       // Update existing players in IndexedDB
-      for (const player of [...editedHomePlayers, ...editedAwayPlayers]) {
+      for (const player of [...editedTeam1Players, ...editedTeam2Players]) {
         if (!String(player.id).startsWith('new_')) {
           await db.players.update(player.id, {
             name: player.name,
@@ -582,7 +582,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
       }
 
       // Add new players
-      for (const player of [...editedHomePlayers, ...editedAwayPlayers]) {
+      for (const player of [...editedTeam1Players, ...editedTeam2Players]) {
         if (player.isNew) {
           await db.players.add({
             teamId: player.teamId,
@@ -653,13 +653,13 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
       // Build set results for Supabase
       const setResults = editedSets.map(s => ({
         index: s.index,
-        home_points: s.homePoints,
-        away_points: s.awayPoints,
+        team1_points: s.team1Points,
+        team2_points: s.team2Points,
         finished: s.finished
       }))
 
       // Build players arrays for Supabase
-      const playersHome = editedHomePlayers.map(p => ({
+      const playersTeam1 = editedTeam1Players.map(p => ({
         number: p.number,
         first_name: p.firstName || p.name?.split(' ')[0] || '',
         last_name: p.lastName || p.name?.split(' ').slice(1).join(' ') || '',
@@ -667,7 +667,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
         is_captain: p.isCaptain || false
       }))
 
-      const playersAway = editedAwayPlayers.map(p => ({
+      const playersTeam2 = editedTeam2Players.map(p => ({
         number: p.number,
         first_name: p.firstName || p.name?.split(' ')[0] || '',
         last_name: p.lastName || p.name?.split(' ').slice(1).join(' ') || '',
@@ -676,16 +676,16 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
       }))
 
       // Build teams for Supabase
-      const homeTeamData = editedHomeTeam ? {
-        name: editedHomeTeam.name,
-        short_name: editedHomeTeam.shortName,
-        color: editedHomeTeam.color
+      const team1Data = editedTeam1 ? {
+        name: editedTeam1.name,
+        short_name: editedTeam1.shortName,
+        color: editedTeam1.color
       } : null
 
-      const awayTeamData = editedAwayTeam ? {
-        name: editedAwayTeam.name,
-        short_name: editedAwayTeam.shortName,
-        color: editedAwayTeam.color
+      const team2Data = editedTeam2 ? {
+        name: editedTeam2.name,
+        short_name: editedTeam2.shortName,
+        color: editedTeam2.color
       } : null
 
       // Update match in Supabase
@@ -699,10 +699,10 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
             championship_type: editedMatch.championshipType || ''
           },
           set_results: setResults,
-          players_home: playersHome,
-          players_away: playersAway,
-          home_team: homeTeamData,
-          away_team: awayTeamData,
+          players_team1: playersTeam1,
+          players_team2: playersTeam2,
+          team1_data: team1Data,
+          team2_data: team2Data,
           officials: editedOfficials,
           manual_changes: [...(editedMatch.manualChanges || []), ...changes]
         })
@@ -905,24 +905,24 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                   <div style={{ fontWeight: 600 }}>Set {set.index}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ color: 'rgba(255,255,255,0.6)', minWidth: '80px' }}>
-                      {editedHomeTeam?.name || 'Home'}:
+                      {editedTeam1?.name || 'Home'}:
                     </span>
                     <input
                       type="number"
-                      value={set.homePoints}
-                      onChange={(e) => updateSetScore(set.id, 'homePoints', e.target.value)}
+                      value={set.team1Points}
+                      onChange={(e) => updateSetScore(set.id, 'team1Points', e.target.value)}
                       style={{ ...inputStyle, width: '80px', textAlign: 'center', fontWeight: 600 }}
                     />
                   </div>
                   <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)' }}>vs</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ color: 'rgba(255,255,255,0.6)', minWidth: '80px' }}>
-                      {editedAwayTeam?.name || 'Away'}:
+                      {editedTeam2?.name || 'Away'}:
                     </span>
                     <input
                       type="number"
-                      value={set.awayPoints}
-                      onChange={(e) => updateSetScore(set.id, 'awayPoints', e.target.value)}
+                      value={set.team2Points}
+                      onChange={(e) => updateSetScore(set.id, 'team2Points', e.target.value)}
                       style={{ ...inputStyle, width: '80px', textAlign: 'center', fontWeight: 600 }}
                     />
                   </div>
@@ -961,7 +961,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                 {/* Team Info */}
                 <div style={cardStyle}>
                   <h2 style={{ fontSize: '16px', marginBottom: '16px', color: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: editedHomeTeam?.color || '#888', display: 'inline-block' }} />
+                    <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: editedTeam1?.color || '#888', display: 'inline-block' }} />
                     {t('manualAdjustmentsEditor.teamAHome', 'Team A (Home)')}
                   </h2>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -969,7 +969,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                       <label style={labelStyle}>{t('manualAdjustmentsEditor.name', 'Name')}</label>
                       <input
                         type="text"
-                        value={editedHomeTeam?.name || ''}
+                        value={editedTeam1?.name || ''}
                         onChange={(e) => updateTeam('name', e.target.value, true)}
                         style={{ ...inputStyle, width: '100%' }}
                       />
@@ -979,7 +979,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                       <input
                         type="text"
                         maxLength={8}
-                        value={editedHomeTeam?.shortName || ''}
+                        value={editedTeam1?.shortName || ''}
                         onChange={(e) => updateTeam('shortName', e.target.value.toUpperCase(), true)}
                         style={{ ...inputStyle, width: '100%' }}
                       />
@@ -987,7 +987,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                     <div>
                       <label style={labelStyle}>{t('manualAdjustmentsEditor.color', 'Color')}</label>
                       <select
-                        value={editedHomeTeam?.color || '#3b82f6'}
+                        value={editedTeam1?.color || '#3b82f6'}
                         onChange={(e) => updateTeam('color', e.target.value, true)}
                         style={{ ...inputStyle, width: '100%', background: '#1a1a2e' }}
                       >
@@ -998,7 +998,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                         ))}
                       </select>
                       <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ width: '20px', height: '20px', borderRadius: '4px', background: editedHomeTeam?.color || '#3b82f6', border: '1px solid rgba(255,255,255,0.3)' }} />
+                        <span style={{ width: '20px', height: '20px', borderRadius: '4px', background: editedTeam1?.color || '#3b82f6', border: '1px solid rgba(255,255,255,0.3)' }} />
                         <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>{t('manualAdjustmentsEditor.selected', 'Selected')}</span>
                       </div>
                     </div>
@@ -1016,8 +1016,8 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                     <button onClick={() => addPlayer(true)} style={buttonStyle}>{t('manualAdjustmentsEditor.addPlayer', '+ Add Player')}</button>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
-                    {editedHomePlayers.map(player => {
-                      const playerSanctions = getPlayerSanctions(player.number, 'home')
+                    {editedTeam1Players.map(player => {
+                      const playerSanctions = getPlayerSanctions(player.number, 'team1')
                       return (
                         <div key={player.id} style={{ padding: '10px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px' }}>
                           <div style={{ display: 'grid', gridTemplateColumns: '45px 1fr 1fr 90px', gap: '6px', alignItems: 'center' }}>
@@ -1071,7 +1071,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                               </span>
                             ))}
                             <button
-                              onClick={() => setShowAddSanction({ team: 'home', playerNumber: player.number, playerType: 'player' })}
+                              onClick={() => setShowAddSanction({ team: 'team1', playerNumber: player.number, playerType: 'player' })}
                               style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '4px', cursor: 'pointer' }}
                             >
                               {t('manualAdjustmentsEditor.sanction', '+ Sanction')}
@@ -1086,14 +1086,14 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                 {/* Bench Officials */}
                 <div style={cardStyle}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <h3 style={{ fontSize: '14px', color: 'rgba(255,255,255,0.8)' }}>{t('manualAdjustmentsEditor.benchOfficials', 'Bench Officials')} ({editedHomeBench.length})</h3>
+                    <h3 style={{ fontSize: '14px', color: 'rgba(255,255,255,0.8)' }}>{t('manualAdjustmentsEditor.benchOfficials', 'Bench Officials')} ({editedTeam1Bench.length})</h3>
                     <button onClick={() => addBenchOfficial(true)} style={buttonStyle}>{t('manualAdjustmentsEditor.add', '+ Add')}</button>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {editedHomeBench.map((staff, idx) => {
+                    {editedTeam1Bench.map((staff, idx) => {
                       // Get sanctions for this bench official
                       const officialSanctions = sanctionEvents.filter(e =>
-                        e.payload?.team === 'home' &&
+                        e.payload?.team === 'team1' &&
                         e.payload?.playerType === 'bench_official' &&
                         e.payload?.role === staff.role
                       )
@@ -1142,7 +1142,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                               </span>
                             ))}
                             <button
-                              onClick={() => setShowAddSanction({ team: 'home', playerType: 'bench_official', role: staff.role })}
+                              onClick={() => setShowAddSanction({ team: 'team1', playerType: 'bench_official', role: staff.role })}
                               style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '4px', cursor: 'pointer' }}
                             >
                               {t('manualAdjustmentsEditor.sanction', '+ Sanction')}
@@ -1160,7 +1160,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                 {/* Team Info */}
                 <div style={cardStyle}>
                   <h2 style={{ fontSize: '16px', marginBottom: '16px', color: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: editedAwayTeam?.color || '#888', display: 'inline-block' }} />
+                    <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: editedTeam2?.color || '#888', display: 'inline-block' }} />
                     {t('manualAdjustmentsEditor.teamBAway', 'Team B (Away)')}
                   </h2>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -1168,7 +1168,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                       <label style={labelStyle}>{t('manualAdjustmentsEditor.name', 'Name')}</label>
                       <input
                         type="text"
-                        value={editedAwayTeam?.name || ''}
+                        value={editedTeam2?.name || ''}
                         onChange={(e) => updateTeam('name', e.target.value, false)}
                         style={{ ...inputStyle, width: '100%' }}
                       />
@@ -1178,7 +1178,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                       <input
                         type="text"
                         maxLength={8}
-                        value={editedAwayTeam?.shortName || ''}
+                        value={editedTeam2?.shortName || ''}
                         onChange={(e) => updateTeam('shortName', e.target.value.toUpperCase(), false)}
                         style={{ ...inputStyle, width: '100%' }}
                       />
@@ -1186,7 +1186,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                     <div>
                       <label style={labelStyle}>{t('manualAdjustmentsEditor.color', 'Color')}</label>
                       <select
-                        value={editedAwayTeam?.color || '#ef4444'}
+                        value={editedTeam2?.color || '#ef4444'}
                         onChange={(e) => updateTeam('color', e.target.value, false)}
                         style={{ ...inputStyle, width: '100%', background: '#1a1a2e' }}
                       >
@@ -1197,7 +1197,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                         ))}
                       </select>
                       <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ width: '20px', height: '20px', borderRadius: '4px', background: editedAwayTeam?.color || '#ef4444', border: '1px solid rgba(255,255,255,0.3)' }} />
+                        <span style={{ width: '20px', height: '20px', borderRadius: '4px', background: editedTeam2?.color || '#ef4444', border: '1px solid rgba(255,255,255,0.3)' }} />
                         <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>{t('manualAdjustmentsEditor.selected', 'Selected')}</span>
                       </div>
                     </div>
@@ -1211,8 +1211,8 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                     <button onClick={() => addPlayer(false)} style={buttonStyle}>{t('manualAdjustmentsEditor.addPlayer', '+ Add Player')}</button>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
-                    {editedAwayPlayers.map(player => {
-                      const playerSanctions = getPlayerSanctions(player.number, 'away')
+                    {editedTeam2Players.map(player => {
+                      const playerSanctions = getPlayerSanctions(player.number, 'team2')
                       return (
                         <div key={player.id} style={{ padding: '10px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px' }}>
                           <div style={{ display: 'grid', gridTemplateColumns: '45px 1fr 1fr 90px', gap: '6px', alignItems: 'center' }}>
@@ -1266,7 +1266,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                               </span>
                             ))}
                             <button
-                              onClick={() => setShowAddSanction({ team: 'away', playerNumber: player.number, playerType: 'player' })}
+                              onClick={() => setShowAddSanction({ team: 'team2', playerNumber: player.number, playerType: 'player' })}
                               style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '4px', cursor: 'pointer' }}
                             >
                               {t('manualAdjustmentsEditor.sanction', '+ Sanction')}
@@ -1281,14 +1281,14 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                 {/* Bench Officials */}
                 <div style={cardStyle}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <h3 style={{ fontSize: '14px', color: 'rgba(255,255,255,0.8)' }}>{t('manualAdjustmentsEditor.benchOfficials', 'Bench Officials')} ({editedAwayBench.length})</h3>
+                    <h3 style={{ fontSize: '14px', color: 'rgba(255,255,255,0.8)' }}>{t('manualAdjustmentsEditor.benchOfficials', 'Bench Officials')} ({editedTeam2Bench.length})</h3>
                     <button onClick={() => addBenchOfficial(false)} style={buttonStyle}>{t('manualAdjustmentsEditor.add', '+ Add')}</button>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {editedAwayBench.map((staff, idx) => {
+                    {editedTeam2Bench.map((staff, idx) => {
                       // Get sanctions for this bench official
                       const officialSanctions = sanctionEvents.filter(e =>
-                        e.payload?.team === 'away' &&
+                        e.payload?.team === 'team2' &&
                         e.payload?.playerType === 'bench_official' &&
                         e.payload?.role === staff.role
                       )
@@ -1337,7 +1337,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                               </span>
                             ))}
                             <button
-                              onClick={() => setShowAddSanction({ team: 'away', playerType: 'bench_official', role: staff.role })}
+                              onClick={() => setShowAddSanction({ team: 'team2', playerType: 'bench_official', role: staff.role })}
                               style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '4px', cursor: 'pointer' }}
                             >
                               {t('manualAdjustmentsEditor.sanction', '+ Sanction')}
@@ -1365,7 +1365,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                 {timeoutEvents.map(event => (
                   <div key={event.id} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 100px 40px', gap: '8px', alignItems: 'center', padding: '8px', background: 'rgba(251, 191, 36, 0.1)', borderRadius: '4px' }}>
                     <span style={{ fontSize: '13px' }}>Set {event.setIndex}</span>
-                    <span style={{ fontSize: '13px', fontWeight: 500 }}>{event.payload?.team === 'home' ? editedHomeTeam?.name || 'Home' : editedAwayTeam?.name || 'Away'}</span>
+                    <span style={{ fontSize: '13px', fontWeight: 500 }}>{event.payload?.team === 'team1' ? editedTeam1?.name || 'Home' : editedTeam2?.name || 'Away'}</span>
                     <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>
                       {event.stateSnapshot?.pointsA ?? event.stateSnapshot?.scoreA ?? 0}-{event.stateSnapshot?.pointsB ?? event.stateSnapshot?.scoreB ?? 0}
                     </span>
@@ -1393,7 +1393,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                     onClick={() => setEditingSub({ ...event, playerOut: event.payload?.playerOut, playerIn: event.payload?.playerIn, scoreA: event.stateSnapshot?.pointsA ?? event.stateSnapshot?.scoreA ?? 0, scoreB: event.stateSnapshot?.pointsB ?? event.stateSnapshot?.scoreB ?? 0 })}
                   >
                     <span style={{ fontSize: '13px' }}>Set {event.setIndex}</span>
-                    <span style={{ fontSize: '13px', fontWeight: 500 }}>{event.payload?.team === 'home' ? editedHomeTeam?.name || 'Home' : editedAwayTeam?.name || 'Away'}</span>
+                    <span style={{ fontSize: '13px', fontWeight: 500 }}>{event.payload?.team === 'team1' ? editedTeam1?.name || 'Home' : editedTeam2?.name || 'Away'}</span>
                     <span style={{ fontSize: '13px' }}>
                       #{event.payload?.playerOut} → #{event.payload?.playerIn}
                     </span>
@@ -1425,7 +1425,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                     onClick={() => setEditingSanction({ ...event, type: event.payload?.sanctionType || event.payload?.type, scoreA: event.stateSnapshot?.pointsA ?? event.stateSnapshot?.scoreA ?? 0, scoreB: event.stateSnapshot?.pointsB ?? event.stateSnapshot?.scoreB ?? 0 })}
                   >
                     <span style={{ fontSize: '13px' }}>Set {event.setIndex}</span>
-                    <span style={{ fontSize: '13px', fontWeight: 500 }}>{event.payload?.team === 'home' ? editedHomeTeam?.name || 'Home' : editedAwayTeam?.name || 'Away'}</span>
+                    <span style={{ fontSize: '13px', fontWeight: 500 }}>{event.payload?.team === 'team1' ? editedTeam1?.name || 'Home' : editedTeam2?.name || 'Away'}</span>
                     <span style={{ fontSize: '13px', textTransform: 'capitalize', color: '#ef4444' }}>
                       {event.payload?.sanctionType || event.payload?.type}
                     </span>
@@ -1712,7 +1712,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
             </h3>
             <div style={{ marginBottom: '16px' }}>
               <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', marginBottom: '4px' }}>
-                {t('manualAdjustmentsEditor.target', 'Target')}: {showAddSanction.team === 'home' ? editedHomeTeam?.name : editedAwayTeam?.name}
+                {t('manualAdjustmentsEditor.target', 'Target')}: {showAddSanction.team === 'team1' ? editedTeam1?.name : editedTeam2?.name}
                 {showAddSanction.playerType === 'player' && ` - ${t('manualAdjustmentsEditor.player', 'Player')} #${showAddSanction.playerNumber}`}
                 {showAddSanction.playerType === 'bench_official' && ` - ${showAddSanction.role}`}
               </div>
@@ -1942,8 +1942,8 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                   onChange={(e) => setNewTimeoutData(prev => ({ ...prev, team: e.target.value }))}
                   style={{ ...inputStyle, width: '100%' }}
                 >
-                  <option value="home">{editedHomeTeam?.name || 'Home'}</option>
-                  <option value="away">{editedAwayTeam?.name || 'Away'}</option>
+                  <option value="team1">{editedTeam1?.name || 'Team 1'}</option>
+                  <option value="team2">{editedTeam2?.name || 'Team 2'}</option>
                 </select>
               </div>
               <div>
@@ -1985,7 +1985,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
               <button
                 onClick={() => {
                   setShowAddTimeout(false)
-                  setNewTimeoutData({ team: 'home', setIndex: 1, scoreA: 0, scoreB: 0 })
+                  setNewTimeoutData({ team: 'team1', setIndex: 1, scoreA: 0, scoreB: 0 })
                 }}
                 style={{
                   padding: '10px 20px',
@@ -2050,8 +2050,8 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                   onChange={(e) => setNewSubData(prev => ({ ...prev, team: e.target.value, playerOut: '', playerIn: '' }))}
                   style={{ ...inputStyle, width: '100%' }}
                 >
-                  <option value="home">{editedHomeTeam?.name || 'Home'}</option>
-                  <option value="away">{editedAwayTeam?.name || 'Away'}</option>
+                  <option value="team1">{editedTeam1?.name || 'Team 1'}</option>
+                  <option value="team2">{editedTeam2?.name || 'Team 2'}</option>
                 </select>
               </div>
               <div>
@@ -2074,7 +2074,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                   style={{ ...inputStyle, width: '100%' }}
                 >
                   <option value="">Select player...</option>
-                  {(newSubData.team === 'home' ? editedHomePlayers : editedAwayPlayers).map(p => (
+                  {(newSubData.team === 'team1' ? editedTeam1Players : editedTeam2Players).map(p => (
                     <option key={p.id} value={p.number}>#{p.number} - {p.firstName} {p.lastName}</option>
                   ))}
                 </select>
@@ -2087,7 +2087,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                   style={{ ...inputStyle, width: '100%' }}
                 >
                   <option value="">Select player...</option>
-                  {(newSubData.team === 'home' ? editedHomePlayers : editedAwayPlayers).map(p => (
+                  {(newSubData.team === 'team1' ? editedTeam1Players : editedTeam2Players).map(p => (
                     <option key={p.id} value={p.number}>#{p.number} - {p.firstName} {p.lastName}</option>
                   ))}
                 </select>
@@ -2119,7 +2119,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
               <button
                 onClick={() => {
                   setShowAddSub(false)
-                  setNewSubData({ team: 'home', setIndex: 1, playerOut: '', playerIn: '', scoreA: 0, scoreB: 0 })
+                  setNewSubData({ team: 'team1', setIndex: 1, playerOut: '', playerIn: '', scoreA: 0, scoreB: 0 })
                 }}
                 style={{
                   padding: '10px 20px',
@@ -2184,7 +2184,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
               <div>
                 <label style={labelStyle}>{t('manualAdjustmentsEditor.team', 'Team')}</label>
                 <div style={{ ...inputStyle, padding: '8px 12px', background: 'rgba(255,255,255,0.05)' }}>
-                  {editingSub.payload?.team === 'home' ? editedHomeTeam?.name : editedAwayTeam?.name}
+                  {editingSub.payload?.team === 'team1' ? editedTeam1?.name : editedTeam2?.name}
                 </div>
               </div>
               <div>
@@ -2207,7 +2207,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                   style={{ ...inputStyle, width: '100%' }}
                 >
                   <option value="">Select player...</option>
-                  {(editingSub.payload?.team === 'home' ? editedHomePlayers : editedAwayPlayers).map(p => (
+                  {(editingSub.payload?.team === 'team1' ? editedTeam1Players : editedTeam2Players).map(p => (
                     <option key={p.id} value={p.number}>#{p.number} - {p.firstName} {p.lastName}</option>
                   ))}
                 </select>
@@ -2220,7 +2220,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                   style={{ ...inputStyle, width: '100%' }}
                 >
                   <option value="">Select player...</option>
-                  {(editingSub.payload?.team === 'home' ? editedHomePlayers : editedAwayPlayers).map(p => (
+                  {(editingSub.payload?.team === 'team1' ? editedTeam1Players : editedTeam2Players).map(p => (
                     <option key={p.id} value={p.number}>#{p.number} - {p.firstName} {p.lastName}</option>
                   ))}
                 </select>

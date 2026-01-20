@@ -1,16 +1,13 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useTranslation } from 'react-i18next'
 import { useAlert } from '../contexts_beach/AlertContext_beach'
 import { db } from '../db_beach/db_beach'
 import { supabase } from '../lib_beach/supabaseClient_beach'
 import SignaturePad from './SignaturePad'
 import Modal from './Modal'
 import MenuList from './MenuList'
-import mikasaVolleyball from '../mikasa_v200w.png'
-
-// Primary ball image (with mikasa as fallback)
-const ballImage = '/ball.png'
+// Beach volleyball ball image
+const ballImage = '/beachball.png'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { uploadBackupToCloud, uploadLogsToCloud } from '../utils_beach/logger_beach'
 import { uploadScoresheetAsync } from '../utils_beach/scoresheetUploader_beach'
@@ -40,15 +37,6 @@ function useCompactMode() {
 
   return isCompact
 }
-
-// Bench roles constant
-const BENCH_ROLES = [
-  { value: 'Coach', label: 'C', fullLabel: 'Coach' },
-  { value: 'Assistant Coach 1', label: 'AC1', fullLabel: 'Assistant Coach 1' },
-  { value: 'Assistant Coach 2', label: 'AC2', fullLabel: 'Assistant Coach 2' },
-  { value: 'Physiotherapist', label: 'P', fullLabel: 'Physiotherapist' },
-  { value: 'Medic', label: 'M', fullLabel: 'Medic' }
-]
 
 // Helper function to determine if a color is bright/light
 function isBrightColor(color) {
@@ -95,25 +83,7 @@ function normalizeDob(dob) {
   return dob
 }
 
-const getRoleOrder = (role) => {
-  const roleMap = {
-    'Coach': 0,
-    'Assistant Coach 1': 1,
-    'Assistant Coach 2': 2,
-    'Physiotherapist': 3,
-    'Medic': 4
-  }
-  return roleMap[role] ?? 999
-}
-
-const sortBenchByHierarchy = (bench) => {
-  return [...bench].sort((a, b) => getRoleOrder(a.role) - getRoleOrder(b.role))
-}
-
-const initBench = role => ({ role, firstName: '', lastName: '', dob: '' })
-
 export default function CoinToss({ matchId, onConfirm, onBack }) {
-  const { t } = useTranslation()
   const { showAlert } = useAlert()
 
   // Check if compact mode
@@ -153,43 +123,40 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
   }
 
   // Team info state (loaded from DB)
-  const [home, setHome] = useState(t('common.home'))
-  const [away, setAway] = useState(t('common.away'))
-  const [homeShortName, setHomeShortName] = useState('')
-  const [awayShortName, setAwayShortName] = useState('')
+  const [team1Name, setTeam1Name] = useState('Team 1')
+  const [team2Name, setTeam2Name] = useState('Team 2')
+  const [team1ShortName, setTeam1ShortName] = useState('')
+  const [team2ShortName, setTeam2ShortName] = useState('')
 
   // Rosters
-  const [homeRoster, setHomeRoster] = useState([])
-  const [awayRoster, setAwayRoster] = useState([])
+  const [team1Roster, setTeam1Roster] = useState([])
+  const [team2Roster, setTeam2Roster] = useState([])
 
   // Add player form state
-  const [homeNum, setHomeNum] = useState('')
-  const [homeFirst, setHomeFirst] = useState('')
-  const [homeLast, setHomeLast] = useState('')
-  const [homeDob, setHomeDob] = useState('')
-  const [homeLibero, setHomeLibero] = useState('')
-  const [homeCaptain, setHomeCaptain] = useState(false)
-  const [awayNum, setAwayNum] = useState('')
-  const [awayFirst, setAwayFirst] = useState('')
-  const [awayLast, setAwayLast] = useState('')
-  const [awayDob, setAwayDob] = useState('')
-  const [awayLibero, setAwayLibero] = useState('')
-  const [awayCaptain, setAwayCaptain] = useState(false)
-
-  // Bench
-  const [benchHome, setBenchHome] = useState([initBench('Coach')])
-  const [benchAway, setBenchAway] = useState([initBench('Coach')])
+  const [team1Num, setTeam1Num] = useState('')
+  const [team1First, setTeam1First] = useState('')
+  const [team1Last, setTeam1Last] = useState('')
+  const [team1Dob, setTeam1Dob] = useState('')
+  const [team1Captain, setTeam1CaptainBool] = useState(false)
+  const [team2Num, setTeam2Num] = useState('')
+  const [team2First, setTeam2First] = useState('')
+  const [team2Last, setTeam2Last] = useState('')
+  const [team2Dob, setTeam2Dob] = useState('')
+  const [team2Captain, setTeam2CaptainBool] = useState(false)
 
   // Coin toss state
-  const [teamA, setTeamA] = useState('home')
-  const [teamB, setTeamB] = useState('away')
+  const [teamA, setTeamA] = useState('team1')
+  const [teamB, setTeamB] = useState('team2')
   const [serveA, setServeA] = useState(true)
   const [serveB, setServeB] = useState(false)
 
+  // First serve player within each team (beach volleyball)
+  const [team1FirstServe, setTeam1FirstServe] = useState(null) // player number
+  const [team2FirstServe, setTeam2FirstServe] = useState(null) // player number
+
   // UI state
   const [rosterModal, setRosterModal] = useState(null) // 'teamA' | 'teamB' | null
-  const [signatureMenuA, setSignatureMenuA] = useState(false)
-  const [signatureMenuB, setSignatureMenuB] = useState(false)
+  const [orderSignatureModal, setOrderSignatureModal] = useState(null) // 'teamA' | 'teamB' | null
   const [addPlayerModal, setAddPlayerModal] = useState(null)
   const [deletePlayerModal, setDeletePlayerModal] = useState(null)
   const [noticeModal, setNoticeModal] = useState(null)
@@ -198,23 +165,22 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
   const [birthdateConfirmModal, setBirthdateConfirmModal] = useState(null) // { suspiciousDates: [], onConfirm: fn }
   const [rosterModalSignature, setRosterModalSignature] = useState(null) // 'coach' | 'captain' | null - for signing within roster modal
 
-  // Track original roster/bench data when modal opens for change detection
-  const originalRosterDataRef = useRef(null) // { roster: [], bench: [] }
+  // Track original roster data when modal opens for change detection
+  const originalRosterDataRef = useRef(null) // { roster: [] }
 
   // Signatures
-  const [homeCoachSignature, setHomeCoachSignature] = useState(null)
-  const [homeCaptainSignature, setHomeCaptainSignature] = useState(null)
-  const [awayCoachSignature, setAwayCoachSignature] = useState(null)
-  const [awayCaptainSignature, setAwayCaptainSignature] = useState(null)
+  const [team1CoachSignature, setTeam1CoachSignature] = useState(null)
+  const [team1CaptainSignature, setTeam1CaptainSignature] = useState(null)
+  const [team2CoachSignature, setTeam2CoachSignature] = useState(null)
+  const [team2CaptainSignature, setTeam2CaptainSignature] = useState(null)
   const [savedSignatures, setSavedSignatures] = useState({
-    homeCoach: null, homeCaptain: null, awayCoach: null, awayCaptain: null
+    team1Coach: null, team1Captain: null, team2Coach: null, team2Captain: null
   })
 
-  // Helper function to compare roster/bench for changes
-  const hasRosterChanges = (originalRoster, currentRoster, originalBench, currentBench) => {
-    if (!originalRoster || !originalBench) return false
+  // Helper function to compare roster for changes
+  const hasRosterChanges = (originalRoster, currentRoster) => {
+    if (!originalRoster) return false
     if (originalRoster.length !== currentRoster.length) return true
-    if (originalBench.length !== currentBench.length) return true
 
     // Compare each player
     for (let i = 0; i < originalRoster.length; i++) {
@@ -222,17 +188,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
       const curr = currentRoster[i]
       if (orig.number !== curr.number || orig.firstName !== curr.firstName ||
         orig.lastName !== curr.lastName || orig.dob !== curr.dob ||
-        orig.libero !== curr.libero || orig.isCaptain !== curr.isCaptain) {
-        return true
-      }
-    }
-
-    // Compare each bench official
-    for (let i = 0; i < originalBench.length; i++) {
-      const orig = originalBench[i]
-      const curr = currentBench[i]
-      if (orig.role !== curr.role || orig.firstName !== curr.firstName ||
-        orig.lastName !== curr.lastName || orig.dob !== curr.dob) {
+        orig.isCaptain !== curr.isCaptain) {
         return true
       }
     }
@@ -241,10 +197,10 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
   }
 
   // Sync roster changes to database
-  const syncRosterToDatabase = async (teamType, roster, bench) => {
+  const syncRosterToDatabase = async (teamType, roster) => {
     if (!match) return
 
-    const teamId = teamType === 'home' ? match.homeTeamId : match.awayTeamId
+    const teamId = teamType === 'team1' ? match.team1Id : match.team2Id
     if (!teamId) return
 
     try {
@@ -265,7 +221,6 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               firstName: player.firstName,
               lastName: player.lastName,
               dob: player.dob,
-              libero: player.libero,
               isCaptain: player.isCaptain
             })
           } else {
@@ -275,7 +230,6 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               firstName: player.firstName,
               lastName: player.lastName,
               dob: player.dob,
-              libero: player.libero || '',
               isCaptain: player.isCaptain || false
             })
           }
@@ -291,10 +245,6 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
             await db.players.delete(ep.id)
           }
         }
-
-        // Update bench in match
-        const benchField = teamType === 'home' ? 'bench_home' : 'bench_away'
-        await db.matches.update(match.id, { [benchField]: bench })
       })
 
       console.log(`[CoinToss] Roster synced for ${teamType} team (local)`)
@@ -302,13 +252,12 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
       // Also sync to Supabase if match has seed_key
       if (supabase && match.seed_key) {
         try {
-          const isHome = teamType === 'home'
-          const teamKey = isHome ? 'home_team' : 'away_team'
-          const playersKey = isHome ? 'players_home' : 'players_away'
-          const benchKey = isHome ? 'bench_home' : 'bench_away'
-          const teamName = isHome ? home : away
-          const shortName = isHome ? homeShortName : awayShortName
-          const color = isHome ? homeColor : awayColor
+          const isTeam1 = teamType === 'team1'
+          const teamKey = isTeam1 ? 'team1' : 'team2'
+          const playersKey = isTeam1 ? 'players_team1' : 'players_team2'
+          const teamName = isTeam1 ? team1Name : team2Name
+          const shortName = isTeam1 ? team1ShortName : team2ShortName
+          const color = isTeam1 ? team1Color : team2Color
 
           // Update matches table
           const { data: supabaseMatch } = await supabase
@@ -324,10 +273,8 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                 first_name: p.firstName || '',
                 last_name: p.lastName || '',
                 dob: p.dob || null,
-                is_captain: !!p.isCaptain,
-                libero: p.libero || null
-              })),
-              [benchKey]: bench || []
+                is_captain: !!p.isCaptain
+              }))
             })
             .eq('external_id', match.seed_key)
             .select('id')
@@ -337,10 +284,10 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
 
           // Also update match_live_state if it exists (just team info, not deprecated columns)
           if (supabaseMatch?.id) {
-            const coinTossTeamA = match.coinTossTeamA || 'home'
-            const homeIsTeamA = coinTossTeamA === 'home'
+            const coinTossTeamA = match.coinTossTeamA || 'team1'
+            const team1IsTeamA = coinTossTeamA === 'team1'
             // Determine if this team is Team A or Team B
-            const isTeamA = (isHome && homeIsTeamA) || (!isHome && !homeIsTeamA)
+            const isTeamA = (isTeam1 && team1IsTeamA) || (!isTeam1 && !team1IsTeamA)
             const colorLiveKey = isTeamA ? 'team_a_color' : 'team_b_color'
             const shortLiveKey = isTeamA ? 'team_a_short' : 'team_b_short'
             const nameLiveKey = isTeamA ? 'team_a_name' : 'team_b_name'
@@ -378,8 +325,8 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
   }, [matchId])
 
   // Colors are derived from match - no local state (can't change in CoinToss)
-  const homeColor = match?.homeColor || '#ef4444'
-  const awayColor = match?.awayColor || '#3b82f6'
+  const team1Color = match?.team1Color || '#ef4444'
+  const team2Color = match?.team2Color || '#3b82f6'
 
   // Check if coin toss was previously confirmed
   // Use the dedicated coinTossConfirmed field instead of signature comparison
@@ -395,69 +342,50 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
     async function loadData() {
       try {
         // Load teams
-        const [homeTeam, awayTeam] = await Promise.all([
-          match.homeTeamId ? db.teams.get(match.homeTeamId) : null,
-          match.awayTeamId ? db.teams.get(match.awayTeamId) : null
+        const [team1Data, team2Data] = await Promise.all([
+          match.team1Id ? db.teams.get(match.team1Id) : null,
+          match.team2Id ? db.teams.get(match.team2Id) : null
         ])
 
-        if (homeTeam) {
-          setHome(homeTeam.name || 'Home')
+        if (team1Data) {
+          setTeam1Name(team1Data.name || 'Team 1')
           // Use team shortName, or match-level shortName as fallback
-          setHomeShortName(homeTeam.shortName || match.homeShortName || '')
-        } else if (match.homeShortName) {
-          setHomeShortName(match.homeShortName)
+          setTeam1ShortName(team1Data.shortName || match.team1ShortName || '')
+        } else if (match.team1ShortName) {
+          setTeam1ShortName(match.team1ShortName)
         }
-        if (awayTeam) {
-          setAway(awayTeam.name || 'Away')
+        if (team2Data) {
+          setTeam2Name(team2Data.name || 'Team 2')
           // Use team shortName, or match-level shortName as fallback
-          setAwayShortName(awayTeam.shortName || match.awayShortName || '')
-        } else if (match.awayShortName) {
-          setAwayShortName(match.awayShortName)
+          setTeam2ShortName(team2Data.shortName || match.team2ShortName || '')
+        } else if (match.team2ShortName) {
+          setTeam2ShortName(match.team2ShortName)
         }
 
         // Load rosters
-        const [homePlayers, awayPlayers] = await Promise.all([
-          match.homeTeamId ? db.players.where('teamId').equals(match.homeTeamId).toArray() : [],
-          match.awayTeamId ? db.players.where('teamId').equals(match.awayTeamId).toArray() : []
+        const [team1Players, team2Players] = await Promise.all([
+          match.team1Id ? db.players.where('teamId').equals(match.team1Id).toArray() : [],
+          match.team2Id ? db.players.where('teamId').equals(match.team2Id).toArray() : []
         ])
 
-        if (homePlayers.length) {
-          setHomeRoster(homePlayers.map(p => ({
+        if (team1Players.length) {
+          setTeam1Roster(team1Players.map(p => ({
             number: p.number,
             lastName: p.lastName || (p.name ? p.name.split(' ')[0] : ''),
             firstName: p.firstName || (p.name ? p.name.split(' ').slice(1).join(' ') : ''),
             dob: normalizeDob(p.dob) || '',
-            libero: p.libero || '',
             isCaptain: p.isCaptain || false
           })).sort((a, b) => (a.number || 999) - (b.number || 999)))
         }
 
-        if (awayPlayers.length) {
-          setAwayRoster(awayPlayers.map(p => ({
+        if (team2Players.length) {
+          setTeam2Roster(team2Players.map(p => ({
             number: p.number,
             lastName: p.lastName || (p.name ? p.name.split(' ')[0] : ''),
             firstName: p.firstName || (p.name ? p.name.split(' ').slice(1).join(' ') : ''),
             dob: normalizeDob(p.dob) || '',
-            libero: p.libero || '',
             isCaptain: p.isCaptain || false
           })).sort((a, b) => (a.number || 999) - (b.number || 999)))
-        }
-
-        // Load bench officials - check match object first, then team
-        const homeBenchData = match.bench_home?.length ? match.bench_home : homeTeam?.benchOfficials
-        const awayBenchData = match.bench_away?.length ? match.bench_away : awayTeam?.benchOfficials
-
-        if (homeBenchData?.length) {
-          setBenchHome(homeBenchData.map(b => ({
-            ...b,
-            dob: normalizeDob(b.dob) || ''
-          })))
-        }
-        if (awayBenchData?.length) {
-          setBenchAway(awayBenchData.map(b => ({
-            ...b,
-            dob: normalizeDob(b.dob) || ''
-          })))
         }
 
         // Load coin toss data if previously saved
@@ -469,21 +397,21 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         }
 
         // Load signatures
-        if (match.homeCoachSignature) {
-          setHomeCoachSignature(match.homeCoachSignature)
-          setSavedSignatures(prev => ({ ...prev, homeCoach: match.homeCoachSignature }))
+        if (match.team1CoachSignature) {
+          setTeam1CoachSignature(match.team1CoachSignature)
+          setSavedSignatures(prev => ({ ...prev, team1Coach: match.team1CoachSignature }))
         }
-        if (match.homeCaptainSignature) {
-          setHomeCaptainSignature(match.homeCaptainSignature)
-          setSavedSignatures(prev => ({ ...prev, homeCaptain: match.homeCaptainSignature }))
+        if (match.team1CaptainSignature) {
+          setTeam1CaptainSignature(match.team1CaptainSignature)
+          setSavedSignatures(prev => ({ ...prev, team1Captain: match.team1CaptainSignature }))
         }
-        if (match.awayCoachSignature) {
-          setAwayCoachSignature(match.awayCoachSignature)
-          setSavedSignatures(prev => ({ ...prev, awayCoach: match.awayCoachSignature }))
+        if (match.team2CoachSignature) {
+          setTeam2CoachSignature(match.team2CoachSignature)
+          setSavedSignatures(prev => ({ ...prev, team2Coach: match.team2CoachSignature }))
         }
-        if (match.awayCaptainSignature) {
-          setAwayCaptainSignature(match.awayCaptainSignature)
-          setSavedSignatures(prev => ({ ...prev, awayCaptain: match.awayCaptainSignature }))
+        if (match.team2CaptainSignature) {
+          setTeam2CaptainSignature(match.team2CaptainSignature)
+          setSavedSignatures(prev => ({ ...prev, team2Captain: match.team2CaptainSignature }))
         }
       } catch (error) {
         console.error('Error loading coin toss data:', error)
@@ -505,14 +433,14 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
   }
 
   function handleSignatureSave(signatureImage) {
-    if (openSignature === 'home-coach') {
-      setHomeCoachSignature(signatureImage)
-    } else if (openSignature === 'home-captain') {
-      setHomeCaptainSignature(signatureImage)
-    } else if (openSignature === 'away-coach') {
-      setAwayCoachSignature(signatureImage)
-    } else if (openSignature === 'away-captain') {
-      setAwayCaptainSignature(signatureImage)
+    if (openSignature === 'team1-coach') {
+      setTeam1CoachSignature(signatureImage)
+    } else if (openSignature === 'team1-captain') {
+      setTeam1CaptainSignature(signatureImage)
+    } else if (openSignature === 'team2-coach') {
+      setTeam2CoachSignature(signatureImage)
+    } else if (openSignature === 'team2-captain') {
+      setTeam2CaptainSignature(signatureImage)
     }
     setOpenSignature(null)
   }
@@ -545,10 +473,10 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
 
       // Only save signatures for official matches
       if (!match?.test) {
-        updateData.homeCoachSignature = homeCoachSignature
-        updateData.homeCaptainSignature = homeCaptainSignature
-        updateData.awayCoachSignature = awayCoachSignature
-        updateData.awayCaptainSignature = awayCaptainSignature
+        updateData.team1CoachSignature = team1CoachSignature
+        updateData.team1CaptainSignature = team1CaptainSignature
+        updateData.team2CoachSignature = team2CoachSignature
+        updateData.team2CaptainSignature = team2CaptainSignature
       }
 
       await db.matches.update(matchId, updateData)
@@ -627,35 +555,21 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               confirmed: true,
               first_serve: firstServeTeam
             },
-            home_team: { name: home, short_name: homeShortName || generateShortName(home), color: homeColor },
-            away_team: { name: away, short_name: awayShortName || generateShortName(away), color: awayColor },
-            players_home: homeRoster.map(p => ({
+            team1: { name: team1Name, short_name: team1ShortName || generateShortName(team1Name), color: team1Color },
+            team2: { name: team2Name, short_name: team2ShortName || generateShortName(team2Name), color: team2Color },
+            players_team1: team1Roster.map(p => ({
               number: p.number,
               first_name: p.firstName,
               last_name: p.lastName,
               dob: p.dob || null,
-              libero: p.libero || '',
               is_captain: !!p.isCaptain
             })),
-            players_away: awayRoster.map(p => ({
+            players_team2: team2Roster.map(p => ({
               number: p.number,
               first_name: p.firstName,
               last_name: p.lastName,
               dob: p.dob || null,
-              libero: p.libero || '',
               is_captain: !!p.isCaptain
-            })),
-            bench_home: benchHome.map(b => ({
-              role: b.role,
-              first_name: b.firstName || '',
-              last_name: b.lastName || '',
-              dob: b.dob || null
-            })),
-            bench_away: benchAway.map(b => ({
-              role: b.role,
-              first_name: b.firstName || '',
-              last_name: b.lastName || '',
-              dob: b.dob || null
             })),
             officials: updatedMatch.officials || []
           },
@@ -664,11 +578,11 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         })
       }
 
-      // Update players for home team
-      if (matchData.homeTeamId && homeRoster.length) {
-        const existingPlayers = await db.players.where('teamId').equals(matchData.homeTeamId).toArray()
+      // Update players for team 1
+      if (matchData.team1Id && team1Roster.length) {
+        const existingPlayers = await db.players.where('teamId').equals(matchData.team1Id).toArray()
 
-        for (const p of homeRoster) {
+        for (const p of team1Roster) {
           const existingPlayer = existingPlayers.find(ep => ep.number === p.number)
           if (existingPlayer) {
             await db.players.update(existingPlayer.id, {
@@ -676,18 +590,16 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               lastName: p.lastName,
               firstName: p.firstName,
               dob: p.dob || null,
-              libero: p.libero || '',
               isCaptain: !!p.isCaptain
             })
           } else {
             await db.players.add({
-              teamId: matchData.homeTeamId,
+              teamId: matchData.team1Id,
               number: p.number,
               name: `${p.lastName} ${p.firstName}`,
               lastName: p.lastName,
               firstName: p.firstName,
               dob: p.dob || null,
-              libero: p.libero || '',
               isCaptain: !!p.isCaptain,
               role: null,
               createdAt: new Date().toISOString()
@@ -696,22 +608,19 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         }
 
         // Delete removed players
-        const rosterNumbers = new Set(homeRoster.map(p => p.number))
+        const rosterNumbers = new Set(team1Roster.map(p => p.number))
         for (const ep of existingPlayers) {
           if (!rosterNumbers.has(ep.number)) {
             await db.players.delete(ep.id)
           }
         }
-
-        // Save bench officials
-        await db.teams.update(matchData.homeTeamId, { benchOfficials: benchHome })
       }
 
-      // Update players for away team
-      if (matchData.awayTeamId && awayRoster.length) {
-        const existingPlayers = await db.players.where('teamId').equals(matchData.awayTeamId).toArray()
+      // Update players for team 2
+      if (matchData.team2Id && team2Roster.length) {
+        const existingPlayers = await db.players.where('teamId').equals(matchData.team2Id).toArray()
 
-        for (const p of awayRoster) {
+        for (const p of team2Roster) {
           const existingPlayer = existingPlayers.find(ep => ep.number === p.number)
           if (existingPlayer) {
             await db.players.update(existingPlayer.id, {
@@ -719,18 +628,16 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               lastName: p.lastName,
               firstName: p.firstName,
               dob: p.dob || null,
-              libero: p.libero || '',
               isCaptain: !!p.isCaptain
             })
           } else {
             await db.players.add({
-              teamId: matchData.awayTeamId,
+              teamId: matchData.team2Id,
               number: p.number,
               name: `${p.lastName} ${p.firstName}`,
               lastName: p.lastName,
               firstName: p.firstName,
               dob: p.dob || null,
-              libero: p.libero || '',
               isCaptain: !!p.isCaptain,
               role: null,
               createdAt: new Date().toISOString()
@@ -739,20 +646,17 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         }
 
         // Delete removed players
-        const rosterNumbers = new Set(awayRoster.map(p => p.number))
+        const rosterNumbers = new Set(team2Roster.map(p => p.number))
         for (const ep of existingPlayers) {
           if (!rosterNumbers.has(ep.number)) {
             await db.players.delete(ep.id)
           }
         }
-
-        // Save bench officials
-        await db.teams.update(matchData.awayTeamId, { benchOfficials: benchAway })
       }
     })
 
     // Create first set
-    const firstSetId = await db.sets.add({ matchId, index: 1, homePoints: 0, awayPoints: 0, finished: false })
+    const firstSetId = await db.sets.add({ matchId, index: 1, team1Points: 0, team2Points: 0, finished: false })
 
     const isTest = match?.test || false
 
@@ -795,21 +699,21 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           // Connections JSONB - include both referee and bench settings
           connections: {
             referee_enabled: match?.refereeConnectionEnabled === true,
-            home_bench_enabled: match?.homeTeamConnectionEnabled === true,
-            away_bench_enabled: match?.awayTeamConnectionEnabled === true
+            home_bench_enabled: match?.team1DataConnectionEnabled === true,
+            away_bench_enabled: match?.team2DataConnectionEnabled === true
           },
           // Connection PINs JSONB - include both referee and bench PINs
           connection_pins: {
             referee: match?.refereePin || '',
-            bench_home: match?.homeTeamPin || '',
-            bench_away: match?.awayTeamPin || ''
+            bench_home: match?.team1DataPin || '',
+            bench_away: match?.team2DataPin || ''
           },
           // Signatures JSONB
           signatures: !match?.test ? {
-            home_coach: homeCoachSignature || '',
-            home_captain: homeCaptainSignature || '',
-            away_coach: awayCoachSignature || '',
-            away_captain: awayCaptainSignature || ''
+            home_coach: team1CoachSignature || '',
+            home_captain: team1CaptainSignature || '',
+            away_coach: team2CoachSignature || '',
+            away_captain: team2CaptainSignature || ''
           } : {}
         },
         ts: new Date().toISOString(),
@@ -830,12 +734,12 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
 
         if (!lookupError && supabaseMatch?.id) {
           // Team A = coin toss winner, Team B = other team
-          const teamAName = teamA === 'home' ? home : away
-          const teamBName = teamA === 'home' ? away : home
-          const teamAShort = teamA === 'home' ? homeShortName : awayShortName
-          const teamBShort = teamA === 'home' ? awayShortName : homeShortName
-          const teamAColor = teamA === 'home' ? homeColor : awayColor
-          const teamBColor = teamA === 'home' ? awayColor : homeColor
+          const teamAName = teamA === 'team1' ? team1Name : team2Name
+          const teamBName = teamA === 'team1' ? team2Name : team1Name
+          const teamAShort = teamA === 'team1' ? team1ShortName : team2ShortName
+          const teamBShort = teamA === 'team1' ? team2ShortName : team1ShortName
+          const teamAColor = teamA === 'team1' ? team1Color : team2Color
+          const teamBColor = teamA === 'team1' ? team2Color : team1Color
 
           const { error: insertError } = await supabase
             .from('match_live_state')
@@ -891,14 +795,14 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
 
     // Update saved signatures
     setSavedSignatures({
-      homeCoach: homeCoachSignature,
-      homeCaptain: homeCaptainSignature,
-      awayCoach: awayCoachSignature,
-      awayCaptain: awayCaptainSignature
+      team1Coach: team1CoachSignature,
+      team1Captain: team1CaptainSignature,
+      team2Coach: team2CoachSignature,
+      team2Captain: team2CaptainSignature
     })
 
     // Show initialization modal and wait for sync
-    setInitModal({ status: 'syncing', message: t('coinToss.syncingMatch', 'Syncing match data...') })
+    setInitModal({ status: 'syncing', message: 'Syncing match data...' })
 
     // Wait for sync queue to process (poll for completion)
     const maxAttempts = 30 // 15 seconds max
@@ -923,7 +827,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
     let verificationSkipped = false
 
     if (!match?.test && supabase) {
-      setInitModal({ status: 'verifying', message: t('coinToss.verifyingStatus', 'Verifying match status...') })
+      setInitModal({ status: 'verifying', message: 'Verifying match status...' })
 
       try {
         // Get the match's external_id (seed_key) to look up in Supabase
@@ -946,7 +850,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
             console.error('[CoinToss] Match status not live in Supabase:', supabaseMatch?.status)
             setInitModal({
               status: 'error',
-              message: t('coinToss.statusNotLive', 'Match status is not "live" in database. Current status: {{status}}', { status: supabaseMatch?.status || 'unknown' })
+              message: `Match status is not "live" in database. Current status: ${supabaseMatch?.status || 'unknown'}`
             })
             return
           } else {
@@ -975,16 +879,16 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
     const allEvents = await db.events.where('matchId').equals(matchId).sortBy('seq')
     uploadScoresheetAsync({
       match: updatedMatchForScoresheet,
-      homeTeam: { name: home, shortName: homeShortName },
-      awayTeam: { name: away, shortName: awayShortName },
-      homePlayers: homeRoster,
-      awayPlayers: awayRoster,
+      team1Data: { name: team1Name, shortName: team1ShortName },
+      team2Data: { name: team2Name, shortName: team2ShortName },
+      team1Players: team1Roster,
+      team2Players: team2Roster,
       sets: allSets,
       events: allEvents
     })
 
     // Success!
-    setInitModal({ status: 'success', message: t('coinToss.matchInitialized', 'Match initialized!') })
+    setInitModal({ status: 'success', message: 'Match initialized!' })
 
     // Short delay to show success message
     await new Promise(resolve => setTimeout(resolve, 1000))
@@ -1002,12 +906,12 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
     if (!match?.test) {
       const validationErrors = []
 
-      // 1. Check team names are set (not default "Home"/"Away" or empty)
-      if (!home || home === 'Home' || home.trim() === '') {
-        validationErrors.push('Home team name is not set')
+      // 1. Check team names are set (not default "Team 1"/"Team 2" or empty)
+      if (!team1Name || team1Name === 'Team 1' || team1Name.trim() === '') {
+        validationErrors.push('Team 1 name is not set')
       }
-      if (!away || away === 'Away' || away.trim() === '') {
-        validationErrors.push('Away team name is not set')
+      if (!team2Name || team2Name === 'Team 2' || team2Name.trim() === '') {
+        validationErrors.push('Team 2 name is not set')
       }
 
       // 2. Check at least 1 referee and 1 scorer with names
@@ -1034,87 +938,75 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         validationErrors.push('Match date/time is not set')
       }
 
-      // 4. Check at least 6 non-libero players per team with numbers
-      const homeNonLiberoWithNumbers = homeRoster.filter(p => !p.libero && p.number != null && p.number !== '')
-      const awayNonLiberoWithNumbers = awayRoster.filter(p => !p.libero && p.number != null && p.number !== '')
-      if (homeNonLiberoWithNumbers.length < 6) {
-        validationErrors.push(`Home team needs at least 6 players with numbers (not liberos). Currently: ${homeNonLiberoWithNumbers.length}`)
+      // 4. Check exactly 2 players per team with numbers (beach volleyball)
+      const team1PlayersWithNumbers = team1Roster.filter(p => p.number != null && p.number !== '')
+      const team2PlayersWithNumbers = team2Roster.filter(p => p.number != null && p.number !== '')
+      if (team1PlayersWithNumbers.length !== 2) {
+        validationErrors.push(`Team 1 needs exactly 2 players with numbers. Currently: ${team1PlayersWithNumbers.length}`)
       }
-      if (awayNonLiberoWithNumbers.length < 6) {
-        validationErrors.push(`Away team needs at least 6 players with numbers (not liberos). Currently: ${awayNonLiberoWithNumbers.length}`)
-      }
-
-      // 5. Check at least 1 coach per team
-      const homeCoach = benchHome.find(b => b.role === 'Coach' && (b.lastName || b.firstName))
-      const awayCoach = benchAway.find(b => b.role === 'Coach' && (b.lastName || b.firstName))
-      if (!homeCoach) {
-        validationErrors.push('Home team coach is not set')
-      }
-      if (!awayCoach) {
-        validationErrors.push('Away team coach is not set')
+      if (team2PlayersWithNumbers.length !== 2) {
+        validationErrors.push(`Team 2 needs exactly 2 players with numbers. Currently: ${team2PlayersWithNumbers.length}`)
       }
 
-      // 6. Check captain is set for each team
-      const homeCaptainPlayer = homeRoster.find(p => p.isCaptain)
-      const awayCaptainPlayer = awayRoster.find(p => p.isCaptain)
-      if (!homeCaptainPlayer) {
-        validationErrors.push('Home team captain is not set')
+      // 5. Check captain is set for each team
+      const team1CaptainPlayer = team1Roster.find(p => p.isCaptain)
+      const team2CaptainPlayer = team2Roster.find(p => p.isCaptain)
+      if (!team1CaptainPlayer) {
+        validationErrors.push('Team 1 captain is not set')
       }
-      if (!awayCaptainPlayer) {
-        validationErrors.push('Away team captain is not set')
+      if (!team2CaptainPlayer) {
+        validationErrors.push('Team 2 captain is not set')
       }
 
       // 7. Check for duplicate jersey numbers
-      const homeNumbers = homeRoster.filter(p => p.number != null && p.number !== '').map(p => p.number)
-      const homeDuplicateNumbers = homeNumbers.filter((num, idx) => homeNumbers.indexOf(num) !== idx)
-      if (homeDuplicateNumbers.length > 0) {
-        validationErrors.push(`Home team has duplicate jersey numbers: ${[...new Set(homeDuplicateNumbers)].join(', ')}`)
+      const team1Numbers = team1Roster.filter(p => p.number != null && p.number !== '').map(p => p.number)
+      const team1DuplicateNumbers = team1Numbers.filter((num, idx) => team1Numbers.indexOf(num) !== idx)
+      if (team1DuplicateNumbers.length > 0) {
+        validationErrors.push(`Team 1 has duplicate jersey numbers: ${[...new Set(team1DuplicateNumbers)].join(', ')}`)
       }
-      const awayNumbers = awayRoster.filter(p => p.number != null && p.number !== '').map(p => p.number)
-      const awayDuplicateNumbers = awayNumbers.filter((num, idx) => awayNumbers.indexOf(num) !== idx)
-      if (awayDuplicateNumbers.length > 0) {
-        validationErrors.push(`Away team has duplicate jersey numbers: ${[...new Set(awayDuplicateNumbers)].join(', ')}`)
+      const team2Numbers = team2Roster.filter(p => p.number != null && p.number !== '').map(p => p.number)
+      const team2DuplicateNumbers = team2Numbers.filter((num, idx) => team2Numbers.indexOf(num) !== idx)
+      if (team2DuplicateNumbers.length > 0) {
+        validationErrors.push(`Team 2 has duplicate jersey numbers: ${[...new Set(team2DuplicateNumbers)].join(', ')}`)
       }
 
       // 8. Check for duplicate players (same last name and first name)
-      const homePlayerNames = homeRoster.map(p => `${(p.lastName || '').toLowerCase()} ${(p.firstName || '').toLowerCase()}`.trim())
-      const homeDuplicatePlayers = homePlayerNames.filter((name, idx) => name && homePlayerNames.indexOf(name) !== idx)
-      if (homeDuplicatePlayers.length > 0) {
-        validationErrors.push(`Home team has duplicate players: ${[...new Set(homeDuplicatePlayers)].join(', ')}`)
+      const team1PlayerNames = team1Roster.map(p => `${(p.lastName || '').toLowerCase()} ${(p.firstName || '').toLowerCase()}`.trim())
+      const team1DuplicatePlayers = team1PlayerNames.filter((name, idx) => name && team1PlayerNames.indexOf(name) !== idx)
+      if (team1DuplicatePlayers.length > 0) {
+        validationErrors.push(`Team 1 has duplicate players: ${[...new Set(team1DuplicatePlayers)].join(', ')}`)
       }
-      const awayPlayerNames = awayRoster.map(p => `${(p.lastName || '').toLowerCase()} ${(p.firstName || '').toLowerCase()}`.trim())
-      const awayDuplicatePlayers = awayPlayerNames.filter((name, idx) => name && awayPlayerNames.indexOf(name) !== idx)
-      if (awayDuplicatePlayers.length > 0) {
-        validationErrors.push(`Away team has duplicate players: ${[...new Set(awayDuplicatePlayers)].join(', ')}`)
+      const team2PlayerNames = team2Roster.map(p => `${(p.lastName || '').toLowerCase()} ${(p.firstName || '').toLowerCase()}`.trim())
+      const team2DuplicatePlayers = team2PlayerNames.filter((name, idx) => name && team2PlayerNames.indexOf(name) !== idx)
+      if (team2DuplicatePlayers.length > 0) {
+        validationErrors.push(`Team 2 has duplicate players: ${[...new Set(team2DuplicatePlayers)].join(', ')}`)
       }
 
-      // 9. Check no birthdate is exactly 01.01.1900 (placeholder/error date)
-      const allRosterPlayers = [...homeRoster, ...awayRoster]
-      const allBenchOfficials = [...benchHome, ...benchAway]
+      // 8. Check no birthdate is exactly 01.01.1900 (placeholder/error date)
+      const allRosterPlayers = [...team1Roster, ...team2Roster]
       const playersWithBadDate = allRosterPlayers.filter(p => p.dob === '01.01.1900' || p.dob === '01/01/1900')
-      const benchWithBadDate = allBenchOfficials.filter(b => b.dob === '01.01.1900' || b.dob === '01/01/1900')
-      if (playersWithBadDate.length > 0 || benchWithBadDate.length > 0) {
-        validationErrors.push('Some players or officials have invalid birthdate (01.01.1900). Please correct these dates.')
+      if (playersWithBadDate.length > 0) {
+        validationErrors.push('Some players have invalid birthdate (01.01.1900). Please correct these dates.')
       }
 
-      // 10. Check for invalid player numbers (must be 1-99)
-      const homeInvalidNumbers = homeRoster.filter(p => p.number != null && (p.number < 1 || p.number > 99))
-      const awayInvalidNumbers = awayRoster.filter(p => p.number != null && (p.number < 1 || p.number > 99))
-      if (homeInvalidNumbers.length > 0) {
-        validationErrors.push(`Home team has invalid jersey numbers (must be 1-99): ${homeInvalidNumbers.map(p => p.number).join(', ')}`)
+      // 9. Check for invalid player numbers (must be 1-99)
+      const team1InvalidNumbers = team1Roster.filter(p => p.number != null && (p.number < 1 || p.number > 99))
+      const team2InvalidNumbers = team2Roster.filter(p => p.number != null && (p.number < 1 || p.number > 99))
+      if (team1InvalidNumbers.length > 0) {
+        validationErrors.push(`Team 1 has invalid jersey numbers (must be 1-99): ${team1InvalidNumbers.map(p => p.number).join(', ')}`)
       }
-      if (awayInvalidNumbers.length > 0) {
-        validationErrors.push(`Away team has invalid jersey numbers (must be 1-99): ${awayInvalidNumbers.map(p => p.number).join(', ')}`)
+      if (team2InvalidNumbers.length > 0) {
+        validationErrors.push(`Team 2 has invalid jersey numbers (must be 1-99): ${team2InvalidNumbers.map(p => p.number).join(', ')}`)
       }
 
-      // 11. Check for players without numbers
-      const homeNoNumbers = homeRoster.filter(p => p.number == null || p.number === '')
-      const awayNoNumbers = awayRoster.filter(p => p.number == null || p.number === '')
-      if (homeNoNumbers.length > 0) {
-        validationErrors.push(`Home team has ${homeNoNumbers.length} player(s) without jersey numbers`)
+      // 10. Check for players without numbers
+      const team1NoNumbers = team1Roster.filter(p => p.number == null || p.number === '')
+      const team2NoNumbers = team2Roster.filter(p => p.number == null || p.number === '')
+      if (team1NoNumbers.length > 0) {
+        validationErrors.push(`Team 1 has ${team1NoNumbers.length} player(s) without jersey numbers`)
       }
-      if (awayNoNumbers.length > 0) {
-        validationErrors.push(`Away team has ${awayNoNumbers.length} player(s) without jersey numbers`)
+      if (team2NoNumbers.length > 0) {
+        validationErrors.push(`Team 2 has ${team2NoNumbers.length} player(s) without jersey numbers`)
       }
 
       // Show validation errors if any
@@ -1125,16 +1017,11 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
       }
       console.log('[CoinToss] All validations passed')
 
-      // 12. Check for dates that might be import errors (01.01.yyyy for any year) - ask for confirmation
+      // 11. Check for dates that might be import errors (01.01.yyyy for any year) - ask for confirmation
       const suspiciousDates = []
       allRosterPlayers.forEach(p => {
         if (p.dob && (p.dob.startsWith('01.01.') || p.dob.startsWith('01/01/'))) {
           suspiciousDates.push(`${p.lastName || ''} ${p.firstName || ''}: ${p.dob}`)
-        }
-      })
-      allBenchOfficials.forEach(b => {
-        if (b.dob && (b.dob.startsWith('01.01.') || b.dob.startsWith('01/01/'))) {
-          suspiciousDates.push(`${b.lastName || ''} ${b.firstName || ''} (${b.role}): ${b.dob}`)
         }
       })
       if (suspiciousDates.length > 0) {
@@ -1150,9 +1037,9 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         return
       }
 
-      // Check signatures for official matches
-      if (!homeCoachSignature || !homeCaptainSignature || !awayCoachSignature || !awayCaptainSignature) {
-        setNoticeModal({ message: t('coinToss.validation.completeSignatures') })
+      // Check signatures for official matches (beach volleyball: captain only, no coach)
+      if (!team1CaptainSignature || !team2CaptainSignature) {
+        setNoticeModal({ message: 'Please complete all required signatures before confirming the coin toss.' })
         return
       }
     }
@@ -1182,35 +1069,21 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
             id: matchData.seed_key, // Use seed_key (external_id) for Supabase lookup
             status: matchData.status || null,
             // JSONB columns only
-            home_team: { name: home, short_name: homeShortName || generateShortName(home), color: homeColor },
-            away_team: { name: away, short_name: awayShortName || generateShortName(away), color: awayColor },
-            players_home: homeRoster.map(p => ({
+            team1: { name: team1Name, short_name: team1ShortName || generateShortName(team1Name), color: team1Color },
+            team2: { name: team2Name, short_name: team2ShortName || generateShortName(team2Name), color: team2Color },
+            players_team1: team1Roster.map(p => ({
               number: p.number,
               first_name: p.firstName,
               last_name: p.lastName,
               dob: p.dob || null,
-              libero: p.libero || '',
               is_captain: !!p.isCaptain
             })),
-            players_away: awayRoster.map(p => ({
+            players_team2: team2Roster.map(p => ({
               number: p.number,
               first_name: p.firstName,
               last_name: p.lastName,
               dob: p.dob || null,
-              libero: p.libero || '',
               is_captain: !!p.isCaptain
-            })),
-            bench_home: benchHome.map(b => ({
-              role: b.role,
-              first_name: b.firstName || '',
-              last_name: b.lastName || '',
-              dob: b.dob || null
-            })),
-            bench_away: benchAway.map(b => ({
-              role: b.role,
-              first_name: b.firstName || '',
-              last_name: b.lastName || '',
-              dob: b.dob || null
             })),
             officials: matchData.officials || []
           },
@@ -1223,22 +1096,20 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
   }
 
   // Computed values
-  const teamAInfo = teamA === 'home'
-    ? { name: home, shortName: homeShortName, color: homeColor, roster: homeRoster, bench: benchHome }
-    : { name: away, shortName: awayShortName, color: awayColor, roster: awayRoster, bench: benchAway }
-  const teamBInfo = teamB === 'home'
-    ? { name: home, shortName: homeShortName, color: homeColor, roster: homeRoster, bench: benchHome }
-    : { name: away, shortName: awayShortName, color: awayColor, roster: awayRoster, bench: benchAway }
+  const teamAInfo = teamA === 'team1'
+    ? { name: team1Name, shortName: team1ShortName, color: team1Color, roster: team1Roster }
+    : { name: team2Name, shortName: team2ShortName, color: team2Color, roster: team2Roster }
+  const teamBInfo = teamB === 'team1'
+    ? { name: team1Name, shortName: team1ShortName, color: team1Color, roster: team1Roster }
+    : { name: team2Name, shortName: team2ShortName, color: team2Color, roster: team2Roster }
 
   // Get display name - use short name if name is too long
   const getDisplayName = (name) => {
     return name
   }
 
-  const teamACoachSig = teamA === 'home' ? homeCoachSignature : awayCoachSignature
-  const teamACaptainSig = teamA === 'home' ? homeCaptainSignature : awayCaptainSignature
-  const teamBCoachSig = teamB === 'home' ? homeCoachSignature : awayCoachSignature
-  const teamBCaptainSig = teamB === 'home' ? homeCaptainSignature : awayCaptainSignature
+  const teamACaptainSig = teamA === 'team1' ? team1CaptainSignature : team2CaptainSignature
+  const teamBCaptainSig = teamB === 'team1' ? team1CaptainSignature : team2CaptainSignature
 
   const sortRosterEntries = roster =>
     (roster || [])
@@ -1257,8 +1128,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
       alignItems: 'center', justifyContent: 'center', flexShrink: 0
     }}>
       <img
-        src={ballImage} onError={(e) => e.target.src = mikasaVolleyball}
-        alt="Volleyball"
+        src={ballImage}        alt="Volleyball"
         style={{ maxWidth: '100%', maxHeight: '100%' }}
       />
     </div>
@@ -1271,7 +1141,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
   )
 
   if (!match) {
-    return <div className="setup"><p>{t('common.loading')}</p></div>
+    return <div className="setup"><p>Loading...</p></div>
   }
 
   return (
@@ -1284,15 +1154,15 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
       boxSizing: 'border-box'
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isCompact ? 16 : 24 }}>
-        <button className="secondary" onClick={onBack}>← {t('common.back')}</button>
-        <h1 style={{ margin: 0, fontSize: '50px', fontWeight: 700, textAlign: 'center' }}>{t('coinToss.title')}</h1>
+        <button className="secondary" onClick={onBack}>← Back</button>
+        <h1 style={{ margin: 0, fontSize: '50px', fontWeight: 700, textAlign: 'center' }}>Coin Toss</h1>
         <div style={{ width: '80px' }}></div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)', gap: sizes.gap, marginBottom: sizes.marginBottom, alignItems: 'start' }}>
         {/* Team A */}
         <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-          <h1 style={{ margin: 2, fontSize: sizes.headerFont, fontWeight: 700, textAlign: 'center' }}>{t('coinToss.teamA')}</h1>
+          <h1 style={{ margin: 2, fontSize: sizes.headerFont, fontWeight: 700, textAlign: 'center' }}>Team A</h1>
           <div style={{ marginBottom: isCompact ? 12 : 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: isCompact ? '40px' : '80px', width: '100%' }}>
             <div
               style={{
@@ -1313,52 +1183,15 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
             {serveA ? volleyballImage : volleyballPlaceholder}
           </div>
 
-          {/* Team A Roster Button */}
-          <div style={{ marginBottom: isCompact ? 12 : 16, display: 'flex', justifyContent: 'center' }}>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => setRosterModal('teamA')}
-              style={{ padding: sizes.rosterButtonPadding, fontSize: sizes.rosterButtonFont }}
-            >
-              {t('coinToss.showRoster')} ({teamAInfo.roster.length})
-            </button>
-          </div>
-
-          {/* Team A Signatures */}
+          {/* Team A Order & Signature Button */}
           <div style={{ marginTop: isCompact ? 16 : 20, display: 'flex', justifyContent: 'center' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', width: '100%' }}>
-              <button
-                onClick={() => { setSignatureMenuA(!signatureMenuA); setSignatureMenuB(false) }}
-                className={`sign ${teamACoachSig && teamACaptainSig ? 'signed' : ''}`}
-                style={{ fontSize: sizes.signButtonFont, padding: sizes.signButtonPadding, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              >
-                {t('coinToss.signA')} {teamACoachSig && teamACaptainSig ? '✓' : `(${(teamACoachSig ? 1 : 0) + (teamACaptainSig ? 1 : 0)}/2)`}
-              </button>
-              {signatureMenuA && (
-                <div style={{
-                  marginTop: '8px',
-                  background: 'var(--card)', border: '1px solid rgba(255,255,255,0.2)',
-                  borderRadius: '8px', padding: isCompact ? '8px' : '12px',
-                  display: 'flex', flexDirection: 'column', gap: isCompact ? '6px' : '10px'
-                }}>
-                  <button
-                    onClick={() => { setOpenSignature(teamA === 'home' ? 'home-coach' : 'away-coach'); setSignatureMenuA(false) }}
-                    className={`sign ${teamACoachSig ? 'signed' : ''}`}
-                    style={{ fontSize: isCompact ? '11px' : '14px', padding: isCompact ? '6px 10px' : '10px 16px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    {t('coinToss.coach')} {teamACoachSig ? '✓' : ''}
-                  </button>
-                  <button
-                    onClick={() => { setOpenSignature(teamA === 'home' ? 'home-captain' : 'away-captain'); setSignatureMenuA(false) }}
-                    className={`sign ${teamACaptainSig ? 'signed' : ''}`}
-                    style={{ fontSize: isCompact ? '11px' : '14px', padding: isCompact ? '6px 10px' : '10px 16px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    {t('coinToss.captain')} {teamACaptainSig ? '✓' : ''}
-                  </button>
-                </div>
-              )}
-            </div>
+            <button
+              onClick={() => setOrderSignatureModal('teamA')}
+              className={`sign ${teamACaptainSig ? 'signed' : ''}`}
+              style={{ fontSize: sizes.signButtonFont, padding: sizes.signButtonPadding, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              Order & Signature {teamACaptainSig ? '✓' : ''}
+            </button>
           </div>
         </div>
 
@@ -1366,19 +1199,19 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: isCompact ? 12 : 35, alignItems: 'center', alignSelf: 'stretch', padding: '0 4px' }}>
           <div style={{ height: isCompact ? '40px' : '56px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: isCompact ? '24px' : '52px' }}>
             <button className="secondary" onClick={switchTeams} style={{ padding: sizes.switchButtonPadding, fontSize: '20px', fontWeight: 700, whiteSpace: 'nowrap' }}>
-              ⇄ {t('coinToss.switchTeams')}
+              ⇄ Switch Teams
             </button>
           </div>
           <div style={{ height: sizes.volleyballSize, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <button className="secondary" onClick={switchServe} style={{ padding: sizes.switchButtonPadding, fontSize: '20px', fontWeight: 700, whiteSpace: 'nowrap' }}>
-              ⇄ {t('coinToss.switchServe')}
+              ⇄ Switch Serve
             </button>
           </div>
         </div>
 
         {/* Team B */}
         <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-          <h1 style={{ margin: 2, fontSize: sizes.headerFont, fontWeight: 700, textAlign: 'center' }}>{t('coinToss.teamB')}</h1>
+          <h1 style={{ margin: 2, fontSize: sizes.headerFont, fontWeight: 700, textAlign: 'center' }}>Team B</h1>
           <div style={{ marginBottom: isCompact ? 12 : 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: isCompact ? '40px' : '80px', width: '100%' }}>
             <div
               style={{
@@ -1399,61 +1232,96 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
             {serveB ? volleyballImage : volleyballPlaceholder}
           </div>
 
-          {/* Team B Roster Button */}
-          <div style={{ marginBottom: isCompact ? 12 : 16, display: 'flex', justifyContent: 'center' }}>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => setRosterModal('teamB')}
-              style={{ padding: sizes.rosterButtonPadding, fontSize: sizes.rosterButtonFont }}
-            >
-              {t('coinToss.showRoster')} ({teamBInfo.roster.length})
-            </button>
-          </div>
-
-          {/* Team B Signatures */}
+          {/* Team B Order & Signature Button */}
           <div style={{ marginTop: isCompact ? 16 : 20, display: 'flex', justifyContent: 'center' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', width: '100%' }}>
-              <button
-                onClick={() => { setSignatureMenuB(!signatureMenuB); setSignatureMenuA(false) }}
-                className={`sign ${teamBCoachSig && teamBCaptainSig ? 'signed' : ''}`}
-                style={{ fontSize: sizes.signButtonFont, padding: sizes.signButtonPadding, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              >
-                {t('coinToss.signB')} {teamBCoachSig && teamBCaptainSig ? '✓' : `(${(teamBCoachSig ? 1 : 0) + (teamBCaptainSig ? 1 : 0)}/2)`}
-              </button>
-              {signatureMenuB && (
-                <div style={{
-                  marginTop: '8px',
-                  background: 'var(--card)', border: '1px solid rgba(255,255,255,0.2)',
-                  borderRadius: '8px', padding: isCompact ? '8px' : '12px',
-                  display: 'flex', flexDirection: 'column', gap: isCompact ? '6px' : '10px'
-                }}>
-                  <button
-                    onClick={() => { setOpenSignature(teamB === 'home' ? 'home-coach' : 'away-coach'); setSignatureMenuB(false) }}
-                    className={`sign ${teamBCoachSig ? 'signed' : ''}`}
-                    style={{ fontSize: isCompact ? '11px' : '14px', padding: isCompact ? '6px 10px' : '10px 16px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    {t('coinToss.coach')} {teamBCoachSig ? '✓' : ''}
-                  </button>
-                  <button
-                    onClick={() => { setOpenSignature(teamB === 'home' ? 'home-captain' : 'away-captain'); setSignatureMenuB(false) }}
-                    className={`sign ${teamBCaptainSig ? 'signed' : ''}`}
-                    style={{ fontSize: isCompact ? '11px' : '14px', padding: isCompact ? '6px 10px' : '10px 16px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    {t('coinToss.captain')} {teamBCaptainSig ? '✓' : ''}
-                  </button>
-                </div>
-              )}
-            </div>
+            <button
+              onClick={() => setOrderSignatureModal('teamB')}
+              className={`sign ${teamBCaptainSig ? 'signed' : ''}`}
+              style={{ fontSize: sizes.signButtonFont, padding: sizes.signButtonPadding, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              Order & Signature {teamBCaptainSig ? '✓' : ''}
+            </button>
           </div>
         </div>
       </div>
+
+      {/* Service Order Display */}
+      {(() => {
+        // Determine which team serves first and their players
+        const servingTeam = serveA ? teamA : teamB
+        const receivingTeam = serveA ? teamB : teamA
+        const servingRoster = servingTeam === 'team1' ? team1Roster : team2Roster
+        const receivingRoster = receivingTeam === 'team1' ? team1Roster : team2Roster
+        const servingFirstServe = servingTeam === 'team1' ? team1FirstServe : team2FirstServe
+        const receivingFirstServe = receivingTeam === 'team1' ? team1FirstServe : team2FirstServe
+        const servingTeamLabel = serveA ? 'A' : 'B'
+        const receivingTeamLabel = serveA ? 'B' : 'A'
+
+        // Get first serve and second serve players for each team
+        const servingFirstPlayer = servingRoster.find(p => p.number === servingFirstServe) || servingRoster[0]
+        const servingSecondPlayer = servingRoster.find(p => p.number !== servingFirstServe) || servingRoster[1]
+        const receivingFirstPlayer = receivingRoster.find(p => p.number === receivingFirstServe) || receivingRoster[0]
+        const receivingSecondPlayer = receivingRoster.find(p => p.number !== receivingFirstServe) || receivingRoster[1]
+
+        // Format player display: A - 2 (circled if captain) - LastName, F.
+        const formatPlayer = (teamLabel, player) => {
+          if (!player) return `${teamLabel} - ?`
+          const num = player.number || '?'
+          const lastName = player.lastName || ''
+          const firstInitial = player.firstName ? `${player.firstName.charAt(0)}.` : ''
+          const nameStr = lastName ? `${lastName}${firstInitial ? ', ' + firstInitial : ''}` : ''
+          return { teamLabel, num, isCaptain: player.isCaptain, nameStr }
+        }
+
+        const renderServiceLine = (roman, teamLabel, player) => {
+          const data = formatPlayer(teamLabel, player)
+          return (
+            <>
+              <span style={{ fontWeight: 700, color: 'var(--accent)' }}>{roman}:</span>
+              <span style={{ textAlign: 'center' }}>{data.teamLabel}</span>
+              <span style={{ display: 'flex', justifyContent: 'center' }}>
+                <span style={data.isCaptain ? {
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '22px',
+                  height: '22px',
+                  borderRadius: '50%',
+                  border: '2px solid var(--accent)',
+                  fontWeight: 700
+                } : {}}>{data.num}</span>
+              </span>
+              <span>{data.nameStr}</span>
+            </>
+          )
+        }
+
+        return (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: sizes.marginBottom }}>
+            <div style={{
+              padding: '16px 24px',
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              borderRadius: '12px',
+              width: 'auto'
+            }}>
+              <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: 700, textAlign: 'center' }}>Service Order</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'auto auto auto auto', gap: '8px 16px', fontSize: '14px', alignItems: 'center' }}>
+                {renderServiceLine('I', servingTeamLabel, servingFirstPlayer)}
+                {renderServiceLine('II', receivingTeamLabel, receivingFirstPlayer)}
+                {renderServiceLine('III', servingTeamLabel, servingSecondPlayer)}
+                {renderServiceLine('IV', receivingTeamLabel, receivingSecondPlayer)}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Confirm Button */}
 
       <div style={{ display: 'flex', justifyContent: 'center', margin: '1px 0' }}>
         <MenuList
-          buttonLabel={isCompact ? "📄" : `📄 ${t('header.scoresheet')}`}
+          buttonLabel={isCompact ? "📄" : "📄 Scoresheet"}
           buttonClassName="secondary"
           buttonStyle={{
             background: '#22c55e',
@@ -1467,42 +1335,64 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           items={[
             {
               key: 'scoresheet-preview',
-              label: `🔍 ${t('header.preview')}`,
+              label: '🔍 Preview',
               onClick: async () => {
                 try {
                   if (!match) {
-                    showAlert(t('coinToss.noMatchData'), 'error')
+                    showAlert('No match data available', 'error')
                     return
                   }
 
                   // Fetch teams and players for scoresheet
-                  const [homeTeam, awayTeam, homePlayers, awayPlayers] = await Promise.all([
-                    match.homeTeamId ? db.teams.get(match.homeTeamId) : null,
-                    match.awayTeamId ? db.teams.get(match.awayTeamId) : null,
-                    match.homeTeamId ? db.players.where('teamId').equals(match.homeTeamId).toArray() : [],
-                    match.awayTeamId ? db.players.where('teamId').equals(match.awayTeamId).toArray() : []
+                  const [team1DataRaw, team2DataRaw, team1PlayersRaw, team2PlayersRaw] = await Promise.all([
+                    match.team1Id ? db.teams.get(match.team1Id) : null,
+                    match.team2Id ? db.teams.get(match.team2Id) : null,
+                    match.team1Id ? db.players.where('teamId').equals(match.team1Id).toArray() : [],
+                    match.team2Id ? db.players.where('teamId').equals(match.team2Id).toArray() : []
                   ])
 
+                  // Add country and name to team objects (from match or local state)
+                  const team1Data = team1DataRaw ? {
+                    ...team1DataRaw,
+                    name: team1Name || team1DataRaw.name,
+                    country: match.team1Country || ''
+                  } : { name: team1Name, country: match.team1Country || '' }
+
+                  const team2Data = team2DataRaw ? {
+                    ...team2DataRaw,
+                    name: team2Name || team2DataRaw.name,
+                    country: match.team2Country || ''
+                  } : { name: team2Name, country: match.team2Country || '' }
+
+                  // Use roster from state (includes latest edits) or fallback to DB
+                  const team1PlayersData = team1Roster.length > 0 ? team1Roster : team1PlayersRaw || []
+                  const team2PlayersData = team2Roster.length > 0 ? team2Roster : team2PlayersRaw || []
+
                   const scoresheetData = {
-                    match,
-                    homeTeam,
-                    awayTeam,
-                    homePlayers: homePlayers || [],
-                    awayPlayers: awayPlayers || [],
+                    match: {
+                      ...match,
+                      // Add underscore versions for scoresheet compatibility
+                      team_1Country: match.team1Country || '',
+                      team_2Country: match.team2Country || ''
+                    },
+                    team_1Team: team1Data,
+                    team_2Team: team2Data,
+                    team_1Players: team1PlayersData,
+                    team_2Players: team2PlayersData,
                     sets: [],
                     events: [],
                     sanctions: []
                   }
 
                   sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
-                  const scoresheetWindow = window.open('/scoresheet', '_blank', 'width=1200,height=900')
+                  const scoresheetWindow = window.open('/scoresheet_beach.html', '_blank', 'width=1200,height=900')
 
                   if (!scoresheetWindow) {
-                    showAlert(t('coinToss.allowPopups'), 'warning')
+                    showAlert('Please allow popups to view scoresheet', 'warning')
                   }
                 } catch (error) {
                   console.error('Error opening scoresheet:', error)
-                  showAlert(t('coinToss.failedToOpenScoresheet', { error: error.message || 'Unknown error' }), 'error')
+                  showAlert(`Failed to open scoresheet: ${error.message || 'Unknown error'}`, 'error')
                 }
               }
             }
@@ -1512,11 +1402,11 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
       <div style={{ display: 'flex', justifyContent: 'center', marginTop: sizes.marginBottom }}>
         {isCoinTossConfirmed ? (
           <button onClick={handleReturnToMatch} style={{ padding: sizes.confirmButtonPadding, fontSize: sizes.confirmButtonFont }}>
-            {t('coinToss.returnToMatch')}
+            Return to Match
           </button>
         ) : (
           <button onClick={confirmCoinToss} style={{ padding: sizes.confirmButtonPadding, fontSize: sizes.confirmButtonFont }}>
-            {t('coinToss.confirmResult')}
+            Confirm Result
           </button>
         )}
       </div>
@@ -1526,39 +1416,33 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         const isTeamA = rosterModal === 'teamA'
         const currentTeam = isTeamA ? teamA : teamB
         const teamInfo = isTeamA ? teamAInfo : teamBInfo
-        const roster = currentTeam === 'home' ? homeRoster : awayRoster
-        const setRoster = currentTeam === 'home' ? setHomeRoster : setAwayRoster
-        const bench = currentTeam === 'home' ? benchHome : benchAway
-        const setBench = currentTeam === 'home' ? setBenchHome : setBenchAway
-        const sortedBench = sortBenchByHierarchy(bench)
+        const roster = currentTeam === 'team1' ? team1Roster : team2Roster
+        const setRoster = currentTeam === 'team1' ? setTeam1Roster : setTeam2Roster
         const rosterEntries = sortRosterEntries(roster)
 
         // Store original data on first render of modal
         if (!originalRosterDataRef.current) {
           originalRosterDataRef.current = {
-            roster: JSON.parse(JSON.stringify(roster)),
-            bench: JSON.parse(JSON.stringify(bench))
+            roster: JSON.parse(JSON.stringify(roster))
           }
         }
 
         // Check if there are changes
         const hasChanges = hasRosterChanges(
           originalRosterDataRef.current?.roster,
-          roster,
-          originalRosterDataRef.current?.bench,
-          bench
+          roster
         )
 
         // Get signature state for this team
-        const coachSig = currentTeam === 'home' ? homeCoachSignature : awayCoachSignature
-        const captainSig = currentTeam === 'home' ? homeCaptainSignature : awayCaptainSignature
-        const setCoachSig = currentTeam === 'home' ? setHomeCoachSignature : setAwayCoachSignature
-        const setCaptainSig = currentTeam === 'home' ? setHomeCaptainSignature : setAwayCaptainSignature
+        const coachSig = currentTeam === 'team1' ? team1CoachSignature : team2CoachSignature
+        const captainSig = currentTeam === 'team1' ? team1CaptainSignature : team2CaptainSignature
+        const setCoachSig = currentTeam === 'team1' ? setTeam1CoachSignature : setTeam2CoachSignature
+        const setCaptainSig = currentTeam === 'team1' ? setTeam1CaptainSignature : setTeam2CaptainSignature
 
         // Handle close/modify
         const handleCloseOrModify = async () => {
           if (hasChanges) {
-            await syncRosterToDatabase(currentTeam, roster, bench)
+            await syncRosterToDatabase(currentTeam, roster)
           }
           originalRosterDataRef.current = null
           setRosterModalSignature(null)
@@ -1567,7 +1451,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
 
         return (
           <Modal
-            title={t('roster.titleWithTeam', { team: teamInfo.name })}
+            title={`Roster - ${teamInfo.name}`}
             open={true}
             onClose={handleCloseOrModify}
             width={800}
@@ -1577,23 +1461,23 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               {/* Players Section */}
               <div style={{ marginBottom: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600 }}>{t('roster.playersCount', { count: roster.length })}</h4>
+                  <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600 }}>Players ({roster.length})</h4>
                   <button
                     type="button"
                     className="secondary"
                     onClick={() => setAddPlayerModal(rosterModal)}
                     style={{ padding: '4px 8px', fontSize: '12px' }}
                   >
-                    {t('roster.addPlayer')}
+                    Add Player
                   </button>
                 </div>
                 <table className="roster-table" style={{ width: '100%' }}>
                   <thead>
                     <tr>
-                      <th>{t('roster.number')}</th>
-                      <th>{t('roster.name')}</th>
-                      <th style={{ width: '90px' }}>{t('roster.dob')}</th>
-                      <th>{t('roster.role')}</th>
+                      <th>#</th>
+                      <th>Name</th>
+                      <th style={{ width: '90px' }}>DOB</th>
+                      <th>Captain</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -1606,38 +1490,31 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                       return (
                         <tr key={`roster-${originalIdx}`}>
                           <td style={{ verticalAlign: 'middle', padding: '6px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              <input
-                                type="number"
-                                inputMode="numeric"
-                                min="1" max="99"
-                                value={p.number ?? ''}
-                                onChange={e => {
-                                  const val = e.target.value ? Number(e.target.value) : null
-                                  if (val !== null && (val < 1 || val > 99)) return
-                                  const updated = [...roster]
-                                  updated[originalIdx] = { ...updated[originalIdx], number: val }
-                                  setRoster(updated)
-                                }}
-                                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
-                                title={isDuplicate ? t('roster.duplicateNumber') : ''}
-                                style={{
-                                  width: p.isCaptain ? '24px' : '28px',
-                                  height: p.isCaptain ? '24px' : 'auto',
-                                  padding: '0', margin: '0',
-                                  background: isDuplicate ? 'rgba(239, 68, 68, 0.2)' : 'transparent',
-                                  border: isDuplicate ? '2px solid #ef4444' : (p.isCaptain ? '2px solid var(--accent)' : 'none'),
-                                  borderRadius: p.isCaptain ? '50%' : (isDuplicate ? '4px' : '0'),
-                                  color: isDuplicate ? '#ef4444' : 'var(--text)',
-                                  textAlign: 'center', fontSize: '12px'
-                                }}
-                              />
-                              {p.libero && (
-                                <span style={{ color: 'var(--accent)', fontSize: '10px', fontWeight: 700 }}>
-                                  {p.libero === 'libero1' ? 'L1' : 'L2'}
-                                </span>
-                              )}
-                            </div>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min="1" max="99"
+                              value={p.number ?? ''}
+                              onChange={e => {
+                                const val = e.target.value ? Number(e.target.value) : null
+                                if (val !== null && (val < 1 || val > 99)) return
+                                const updated = [...roster]
+                                updated[originalIdx] = { ...updated[originalIdx], number: val }
+                                setRoster(updated)
+                              }}
+                              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
+                              title={isDuplicate ? 'Duplicate jersey number' : ''}
+                              style={{
+                                width: p.isCaptain ? '24px' : '28px',
+                                height: p.isCaptain ? '24px' : 'auto',
+                                padding: '0', margin: '0',
+                                background: isDuplicate ? 'rgba(239, 68, 68, 0.2)' : 'transparent',
+                                border: isDuplicate ? '2px solid #ef4444' : (p.isCaptain ? '2px solid var(--accent)' : 'none'),
+                                borderRadius: p.isCaptain ? '50%' : (isDuplicate ? '4px' : '0'),
+                                color: isDuplicate ? '#ef4444' : 'var(--text)',
+                                textAlign: 'center', fontSize: '12px'
+                              }}
+                            />
                           </td>
                           <td style={{ verticalAlign: 'middle', padding: '6px' }}>
                             <input
@@ -1671,51 +1548,22 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                             />
                           </td>
                           <td style={{ verticalAlign: 'middle', padding: '6px' }}>
-                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                              <select
-                                value={p.libero || ''}
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '2px', cursor: 'pointer', justifyContent: 'center' }}>
+                              <input
+                                type="radio"
+                                name={`${currentTeam}-captain-modal`}
+                                checked={p.isCaptain || false}
                                 onChange={e => {
-                                  const updated = [...roster]
-                                  const oldValue = updated[originalIdx].libero
-                                  updated[originalIdx] = { ...updated[originalIdx], libero: e.target.value }
-                                  if (e.target.value === 'libero2') {
-                                    const hasL1 = updated.some((player, idx) => idx !== originalIdx && player.libero === 'libero1')
-                                    if (!hasL1) updated[originalIdx] = { ...updated[originalIdx], libero: 'libero1' }
-                                  }
-                                  if (oldValue === 'libero1' && !e.target.value) {
-                                    const l2Idx = updated.findIndex((player, idx) => idx !== originalIdx && player.libero === 'libero2')
-                                    if (l2Idx !== -1) updated[l2Idx] = { ...updated[l2Idx], libero: 'libero1' }
-                                  }
+                                  const updated = roster.map((player, idx) => ({
+                                    ...player,
+                                    isCaptain: idx === originalIdx ? e.target.checked : false
+                                  }))
                                   setRoster(updated)
                                 }}
-                                style={{ padding: '0', background: 'transparent', border: 'none', color: 'var(--text)', fontSize: '12px' }}
-                                className="coin-toss-select"
-                              >
-                                <option value="" style={{ background: 'var(--bg)', color: 'var(--text)' }}></option>
-                                {!roster.some((player, idx) => idx !== originalIdx && player.libero === 'libero1') && (
-                                  <option value="libero1" style={{ background: 'var(--bg)', color: 'var(--text)' }}>L1</option>
-                                )}
-                                {!roster.some((player, idx) => idx !== originalIdx && player.libero === 'libero2') && (
-                                  <option value="libero2" style={{ background: 'var(--bg)', color: 'var(--text)' }}>L2</option>
-                                )}
-                              </select>
-                              <label style={{ display: 'flex', alignItems: 'center', gap: '2px', cursor: 'pointer' }}>
-                                <input
-                                  type="radio"
-                                  name={`${currentTeam}-captain-modal`}
-                                  checked={p.isCaptain || false}
-                                  onChange={e => {
-                                    const updated = roster.map((player, idx) => ({
-                                      ...player,
-                                      isCaptain: idx === originalIdx ? e.target.checked : false
-                                    }))
-                                    setRoster(updated)
-                                  }}
-                                  style={{ width: '12px', height: '12px', margin: 0, accentColor: 'var(--accent)' }}
-                                />
-                                <span style={{ fontSize: '10px', fontWeight: 600 }}>C</span>
-                              </label>
-                            </div>
+                                style={{ width: '12px', height: '12px', margin: 0, accentColor: 'var(--accent)' }}
+                              />
+                              <span style={{ fontSize: '10px', fontWeight: 600 }}>C</span>
+                            </label>
                           </td>
                           <td style={{ verticalAlign: 'middle', padding: '4px' }}>
                             <button
@@ -1734,100 +1582,9 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                 </table>
               </div>
 
-              {/* Bench Officials Section */}
-              <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600 }}>{t('roster.benchOfficialsCount', { count: bench.length })}</h4>
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => setBench([...bench, initBench('Coach')])}
-                    style={{ padding: '4px 8px', fontSize: '12px' }}
-                  >
-                    {t('roster.addBench')}
-                  </button>
-                </div>
-                <table className="roster-table" style={{ width: '100%' }}>
-                  <thead>
-                    <tr>
-                      <th>{t('roster.role')}</th>
-                      <th>{t('roster.name')}</th>
-                      <th style={{ width: '90px' }}>{t('roster.dob')}</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedBench.map((official) => {
-                      const originalIdx = bench.findIndex(b => b === official)
-                      return (
-                        <tr key={`bench-${originalIdx}`}>
-                          <td style={{ verticalAlign: 'middle', padding: '6px' }}>
-                            <select
-                              value={official.role || ''}
-                              onChange={e => {
-                                const updated = [...bench]
-                                updated[originalIdx] = { ...updated[originalIdx], role: e.target.value }
-                                setBench(updated)
-                              }}
-                              className="coin-toss-select"
-                              style={{ padding: '0', background: 'transparent', border: 'none', color: 'var(--text)', fontSize: '12px', width: '100%' }}
-                            >
-                              {BENCH_ROLES.map(role => (
-                                <option key={role.value} value={role.value} style={{ background: 'var(--bg)', color: 'var(--text)' }}>
-                                  {role.label} - {role.fullLabel}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-                          <td style={{ verticalAlign: 'middle', padding: '6px' }}>
-                            <input
-                              type="text"
-                              value={`${official.lastName || ''} ${official.firstName || ''}`.trim() || ''}
-                              onChange={e => {
-                                const parts = e.target.value.split(' ').filter(p => p)
-                                const lastName = parts.length > 0 ? parts[0] : ''
-                                const firstName = parts.length > 1 ? parts.slice(1).join(' ') : ''
-                                const updated = [...bench]
-                                updated[originalIdx] = { ...updated[originalIdx], lastName, firstName }
-                                setBench(updated)
-                              }}
-                              style={{ width: '100%', padding: '0', background: 'transparent', border: 'none', color: 'var(--text)', fontSize: '12px' }}
-                            />
-                          </td>
-                          <td style={{ verticalAlign: 'middle', padding: '6px', width: '90px' }}>
-                            <input
-                              type="date"
-                              value={official.dob ? formatDateToISO(official.dob) : ''}
-                              onChange={e => {
-                                const value = e.target.value ? formatDateToDDMMYYYY(e.target.value) : ''
-                                const updated = [...bench]
-                                updated[originalIdx] = { ...updated[originalIdx], dob: value }
-                                setBench(updated)
-                              }}
-                              className="coin-toss-date-input"
-                              style={{ width: '100%', padding: '0', background: 'transparent', border: 'none', color: 'var(--text)', fontSize: '12px' }}
-                            />
-                          </td>
-                          <td style={{ verticalAlign: 'middle', padding: '4px' }}>
-                            <button
-                              type="button"
-                              className="secondary"
-                              onClick={() => setBench(bench.filter((_, i) => i !== originalIdx))}
-                              style={{ padding: '2px', fontSize: '10px', minWidth: 'auto', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                            >
-                              🗑️
-                            </button>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
               {/* Signatures Section */}
               <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 16, marginTop: 16 }}>
-                <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600 }}>{t('roster.signatures')}</h4>
+                <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600 }}>Signatures</h4>
                 <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                   <button
                     type="button"
@@ -1835,7 +1592,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                     onClick={() => setRosterModalSignature('coach')}
                     style={{ padding: '8px 16px', fontSize: '13px', flex: 1, minWidth: '120px' }}
                   >
-                    {t('coinToss.coach')} {coachSig ? '✓' : ''}
+                    Coach {coachSig ? '✓' : ''}
                   </button>
                   <button
                     type="button"
@@ -1843,7 +1600,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                     onClick={() => setRosterModalSignature('captain')}
                     style={{ padding: '8px 16px', fontSize: '13px', flex: 1, minWidth: '120px' }}
                   >
-                    {t('coinToss.captain')} {captainSig ? '✓' : ''}
+                    Captain {captainSig ? '✓' : ''}
                   </button>
                 </div>
               </div>
@@ -1859,7 +1616,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                     border: '1px solid rgba(255,255,255,0.1)', maxWidth: '90vw'
                   }}>
                     <h3 style={{ margin: '0 0 12px 0' }}>
-                      {t('roster.signatureTitle', { role: t(rosterModalSignature === 'coach' ? 'coinToss.coach' : 'coinToss.captain'), team: teamInfo.name })}
+                      {`${rosterModalSignature === 'coach' ? 'Coach' : 'Captain'} Signature - ${teamInfo.name}`}
                     </h3>
                     <SignaturePad
                       onSave={(sig) => {
@@ -1871,7 +1628,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                         setRosterModalSignature(null)
                       }}
                       onCancel={() => setRosterModalSignature(null)}
-                      title={t('roster.signatureTitle', { role: t(rosterModalSignature === 'coach' ? 'coinToss.coach' : 'coinToss.captain'), team: '' }).replace(' - ', '')}
+                      title={`${rosterModalSignature === 'coach' ? 'Coach' : 'Captain'} Signature`}
                     />
                   </div>
                 </div>
@@ -1888,7 +1645,6 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                     // Revert to original data
                     if (originalRosterDataRef.current) {
                       setRoster(JSON.parse(JSON.stringify(originalRosterDataRef.current.roster)))
-                      setBench(JSON.parse(JSON.stringify(originalRosterDataRef.current.bench)))
                     }
                     originalRosterDataRef.current = null
                     setRosterModalSignature(null)
@@ -1896,7 +1652,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                   }}
                   style={{ padding: '8px 20px', fontSize: '14px' }}
                 >
-                  {t('common.cancel')}
+                  Cancel
                 </button>
               )}
               <button
@@ -1905,7 +1661,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                 onClick={handleCloseOrModify}
                 style={{ padding: '8px 20px', fontSize: '14px' }}
               >
-                {hasChanges ? t('roster.modify') : t('common.close')}
+                {hasChanges ? 'Modify' : 'Close'}
               </button>
             </div>
           </Modal>
@@ -1916,121 +1672,355 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
       {addPlayerModal && (() => {
         const isTeamA = addPlayerModal === 'teamA'
         const currentTeam = isTeamA ? teamA : teamB
-        const roster = currentTeam === 'home' ? homeRoster : awayRoster
-        const num = currentTeam === 'home' ? homeNum : awayNum
-        const first = currentTeam === 'home' ? homeFirst : awayFirst
-        const last = currentTeam === 'home' ? homeLast : awayLast
-        const dob = currentTeam === 'home' ? homeDob : awayDob
-        const libero = currentTeam === 'home' ? homeLibero : awayLibero
-        const captain = currentTeam === 'home' ? homeCaptain : awayCaptain
+        const num = currentTeam === 'team1' ? team1Num : team2Num
+        const first = currentTeam === 'team1' ? team1First : team2First
+        const last = currentTeam === 'team1' ? team1Last : team2Last
+        const dob = currentTeam === 'team1' ? team1Dob : team2Dob
+        const captain = currentTeam === 'team1' ? team1Captain : team2Captain
 
         return (
           <Modal
-            title={t('roster.addPlayerTitle', { team: t(isTeamA ? 'coinToss.teamA' : 'coinToss.teamB') })}
+            title={`Add Player - ${isTeamA ? 'Team A' : 'Team B'}`}
             open={true}
             onClose={() => setAddPlayerModal(null)}
             width={500}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
-                <label style={{ display: 'block', marginBottom: 4 }}>{t('roster.numberLabel')}</label>
+                <label style={{ display: 'block', marginBottom: 4 }}>Jersey Number</label>
                 <input
                   type="number"
                   inputMode="numeric"
                   value={num}
-                  onChange={e => currentTeam === 'home' ? setHomeNum(e.target.value) : setAwayNum(e.target.value)}
+                  onChange={e => currentTeam === 'team1' ? setTeam1Num(e.target.value) : setTeam2Num(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
                   style={{ width: '100%', padding: '8px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', color: 'var(--text)' }}
                 />
               </div>
               <div>
-                <label style={{ display: 'block', marginBottom: 4 }}>{t('roster.lastName')}</label>
+                <label style={{ display: 'block', marginBottom: 4 }}>Last Name</label>
                 <input
                   type="text"
                   className="capitalize"
                   value={last}
-                  onChange={e => currentTeam === 'home' ? setHomeLast(e.target.value) : setAwayLast(e.target.value)}
+                  onChange={e => currentTeam === 'team1' ? setTeam1Last(e.target.value) : setTeam2Last(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
                   style={{ width: '100%', padding: '8px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', color: 'var(--text)' }}
                 />
               </div>
               <div>
-                <label style={{ display: 'block', marginBottom: 4 }}>{t('roster.firstName')}</label>
+                <label style={{ display: 'block', marginBottom: 4 }}>First Name</label>
                 <input
                   type="text"
                   className="capitalize"
                   value={first}
-                  onChange={e => currentTeam === 'home' ? setHomeFirst(e.target.value) : setAwayFirst(e.target.value)}
+                  onChange={e => currentTeam === 'team1' ? setTeam1First(e.target.value) : setTeam2First(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
                   style={{ width: '100%', padding: '8px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', color: 'var(--text)' }}
                 />
               </div>
               <div>
-                <label style={{ display: 'block', marginBottom: 4 }}>{t('roster.dateOfBirth')}</label>
+                <label style={{ display: 'block', marginBottom: 4 }}>Date of Birth</label>
                 <input
                   type="date"
                   value={dob ? formatDateToISO(dob) : ''}
                   onChange={e => {
                     const value = e.target.value ? formatDateToDDMMYYYY(e.target.value) : ''
-                    currentTeam === 'home' ? setHomeDob(value) : setAwayDob(value)
+                    currentTeam === 'team1' ? setTeam1Dob(value) : setTeam2Dob(value)
                   }}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
                   style={{ width: '100%', padding: '8px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', color: 'var(--text)' }}
                 />
-              </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: 4 }}>{t('roster.libero')}</label>
-                <select
-                  value={libero}
-                  onChange={e => {
-                    let newValue = e.target.value
-                    if (newValue === 'libero2') {
-                      const hasL1 = roster.some(p => p.libero === 'libero1')
-                      if (!hasL1) newValue = 'libero1'
-                    }
-                    currentTeam === 'home' ? setHomeLibero(newValue) : setAwayLibero(newValue)
-                  }}
-                  style={{ width: '100%', padding: '8px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', color: 'var(--text)' }}
-                >
-                  <option value="">{t('roster.none')}</option>
-                  {!roster.some(p => p.libero === 'libero1') && <option value="libero1">{t('roster.liberoFull1')}</option>}
-                  {!roster.some(p => p.libero === 'libero2') && <option value="libero2">{t('roster.liberoFull2')}</option>}
-                </select>
               </div>
               <div>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                   <input
                     type="checkbox"
                     checked={captain}
-                    onChange={e => currentTeam === 'home' ? setHomeCaptain(e.target.checked) : setAwayCaptain(e.target.checked)}
+                    onChange={e => currentTeam === 'team1' ? setTeam1CaptainBool(e.target.checked) : setTeam2CaptainBool(e.target.checked)}
                   />
-                  <span>{t('coinToss.captain')}</span>
+                  <span>Captain</span>
                 </label>
               </div>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
-                <button className="secondary" onClick={() => setAddPlayerModal(null)}>{t('common.cancel')}</button>
+                <button className="secondary" onClick={() => setAddPlayerModal(null)}>Cancel</button>
                 <button onClick={() => {
                   if (!last || !first) {
-                    showAlert(t('roster.enterNames'), 'warning')
+                    showAlert('Please enter both first and last name', 'warning')
                     return
                   }
-                  const newPlayer = { number: num ? Number(num) : null, lastName: last, firstName: first, dob, libero, isCaptain: captain }
+                  const newPlayer = { number: num ? Number(num) : null, lastName: last, firstName: first, dob, isCaptain: captain }
 
-                  if (currentTeam === 'home') {
-                    setHomeRoster(list => {
+                  if (currentTeam === 'team1') {
+                    setTeam1Roster(list => {
                       const cleared = captain ? list.map(p => ({ ...p, isCaptain: false })) : [...list]
                       return [...cleared, newPlayer].sort((a, b) => (a.number ?? 999) - (b.number ?? 999))
                     })
-                    setHomeNum(''); setHomeFirst(''); setHomeLast(''); setHomeDob(''); setHomeLibero(''); setHomeCaptain(false)
+                    setTeam1Num(''); setTeam1First(''); setTeam1Last(''); setTeam1Dob(''); setTeam1CaptainBool(false)
                   } else {
-                    setAwayRoster(list => {
+                    setTeam2Roster(list => {
                       const cleared = captain ? list.map(p => ({ ...p, isCaptain: false })) : [...list]
                       return [...cleared, newPlayer].sort((a, b) => (a.number ?? 999) - (b.number ?? 999))
                     })
-                    setAwayNum(''); setAwayFirst(''); setAwayLast(''); setAwayDob(''); setAwayLibero(''); setAwayCaptain(false)
+                    setTeam2Num(''); setTeam2First(''); setTeam2Last(''); setTeam2Dob(''); setTeam2CaptainBool(false)
                   }
                   setAddPlayerModal(null)
-                }}>{t('roster.addPlayerButton')}</button>
+                }}>Add Player</button>
+              </div>
+            </div>
+          </Modal>
+        )
+      })()}
+
+      {/* Order & Signature Modal */}
+      {orderSignatureModal && (() => {
+        const isTeamA = orderSignatureModal === 'teamA'
+        const currentTeam = isTeamA ? teamA : teamB
+        const teamInfo = isTeamA ? teamAInfo : teamBInfo
+        const roster = currentTeam === 'team1' ? team1Roster : team2Roster
+        const setRoster = currentTeam === 'team1' ? setTeam1Roster : setTeam2Roster
+        const firstServe = currentTeam === 'team1' ? team1FirstServe : team2FirstServe
+        const setFirstServe = currentTeam === 'team1' ? setTeam1FirstServe : setTeam2FirstServe
+        const captainSig = currentTeam === 'team1' ? team1CaptainSignature : team2CaptainSignature
+        const setCaptainSig = currentTeam === 'team1' ? setTeam1CaptainSignature : setTeam2CaptainSignature
+        const teamLabel = isTeamA ? 'A' : 'B'
+
+        // Get captain
+        const captain = roster.find(p => p.isCaptain)
+
+        // Handle player field update
+        const handlePlayerUpdate = (index, field, value) => {
+          setRoster(prev => {
+            const updated = [...prev]
+            updated[index] = { ...updated[index], [field]: value }
+            return updated
+          })
+        }
+
+        // Handle number toggle (swap numbers between players)
+        const handleNumberToggle = (index, newNumber) => {
+          setRoster(prev => {
+            const updated = [...prev]
+            const otherIndex = index === 0 ? 1 : 0
+            const otherNumber = newNumber === 1 ? 2 : 1
+            updated[index] = { ...updated[index], number: newNumber }
+            if (updated[otherIndex]) {
+              updated[otherIndex] = { ...updated[otherIndex], number: otherNumber }
+            }
+            return updated
+          })
+        }
+
+        // Handle captain toggle
+        const handleCaptainToggle = (index) => {
+          setRoster(prev => prev.map((p, i) => ({
+            ...p,
+            isCaptain: i === index
+          })))
+          // Clear signature when captain changes
+          setCaptainSig(null)
+        }
+
+        // Handle first serve toggle
+        const handleFirstServeToggle = (playerNumber) => {
+          setFirstServe(playerNumber)
+        }
+
+        // Handle signature
+        const handleOpenSignature = () => {
+          setOpenSignature(currentTeam === 'team1' ? 'team1-captain' : 'team2-captain')
+        }
+
+        return (
+          <Modal
+            title={`Order & Signature - Team ${teamLabel}`}
+            open={true}
+            onClose={() => setOrderSignatureModal(null)}
+            width={550}
+          >
+            <div style={{ padding: '16px' }}>
+              {/* Team Name */}
+              <div style={{
+                marginBottom: '20px',
+                padding: '12px',
+                background: teamInfo.color,
+                color: isBrightColor(teamInfo.color) ? '#000' : '#fff',
+                borderRadius: '8px',
+                textAlign: 'center',
+                fontWeight: 700,
+                fontSize: '16px'
+              }}>
+                {teamInfo.name}
+              </div>
+
+              {/* Players */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '20px' }}>
+                {roster.map((p, index) => {
+                  const isFirstServe = firstServe === p.number || (!firstServe && index === 0)
+                  return (
+                    <div key={index} style={{
+                      padding: '16px',
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: p.isCaptain ? '2px solid #22c55e' : '1px solid rgba(255, 255, 255, 0.2)',
+                      borderRadius: '12px'
+                    }}>
+                      {/* Row 1: Number toggle + Names */}
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '12px' }}>
+                        {/* Number toggle */}
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          {[1, 2].map(num => (
+                            <button
+                              key={num}
+                              onClick={() => handleNumberToggle(index, num)}
+                              style={{
+                                width: '36px',
+                                height: '36px',
+                                fontSize: '16px',
+                                fontWeight: 700,
+                                background: p.number === num ? 'var(--accent)' : 'rgba(255, 255, 255, 0.1)',
+                                color: p.number === num ? '#000' : 'var(--text)',
+                                border: 'none',
+                                borderRadius: '8px',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              {num}
+                            </button>
+                          ))}
+                        </div>
+                        {/* Last Name */}
+                        <input
+                          type="text"
+                          placeholder="Last Name"
+                          value={p.lastName || ''}
+                          onChange={e => handlePlayerUpdate(index, 'lastName', e.target.value)}
+                          style={{
+                            flex: 1,
+                            padding: '8px 12px',
+                            fontSize: '14px',
+                            background: 'rgba(255, 255, 255, 0.1)',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: '6px',
+                            color: 'var(--text)',
+                            textTransform: 'capitalize'
+                          }}
+                        />
+                        {/* First Name */}
+                        <input
+                          type="text"
+                          placeholder="First Name"
+                          value={p.firstName || ''}
+                          onChange={e => handlePlayerUpdate(index, 'firstName', e.target.value)}
+                          style={{
+                            flex: 1,
+                            padding: '8px 12px',
+                            fontSize: '14px',
+                            background: 'rgba(255, 255, 255, 0.1)',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: '6px',
+                            color: 'var(--text)',
+                            textTransform: 'capitalize'
+                          }}
+                        />
+                      </div>
+                      {/* Row 2: Captain + First Serve toggles */}
+                      <div style={{ display: 'flex', gap: '12px' }}>
+                        <button
+                          onClick={() => handleCaptainToggle(index)}
+                          style={{
+                            flex: 1,
+                            padding: '10px',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            background: p.isCaptain ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255, 255, 255, 0.1)',
+                            border: p.isCaptain ? '2px solid #22c55e' : '1px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: '8px',
+                            color: p.isCaptain ? '#22c55e' : 'var(--text)',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {p.isCaptain ? '© Captain ✓' : '© Captain'}
+                        </button>
+                        <button
+                          onClick={() => handleFirstServeToggle(p.number)}
+                          style={{
+                            flex: 1,
+                            padding: '10px',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            background: isFirstServe ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255, 255, 255, 0.1)',
+                            border: isFirstServe ? '2px solid #3b82f6' : '1px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: '8px',
+                            color: isFirstServe ? '#3b82f6' : 'var(--text)',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {isFirstServe ? '🏐 First Serve ✓' : '🏐 First Serve'}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Captain Signature */}
+              <div style={{ marginBottom: '16px' }}>
+                <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600, color: 'var(--muted)' }}>Captain Signature</h4>
+                {captain ? (
+                  <button
+                    onClick={handleOpenSignature}
+                    className={`sign ${captainSig ? 'signed' : ''}`}
+                    style={{
+                      width: '100%',
+                      padding: '16px',
+                      fontSize: '16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    {captainSig ? (
+                      <>
+                        <span>Signed by #{captain.number}</span>
+                        <span style={{ color: '#22c55e' }}>✓</span>
+                      </>
+                    ) : (
+                      <>Sign (Captain #{captain.number})</>
+                    )}
+                  </button>
+                ) : (
+                  <div style={{
+                    padding: '16px',
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    borderRadius: '8px',
+                    textAlign: 'center',
+                    color: '#ef4444',
+                    fontSize: '14px'
+                  }}>
+                    Please select a captain first
+                  </div>
+                )}
+              </div>
+
+              {/* Close Button */}
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
+                <button
+                  onClick={() => setOrderSignatureModal(null)}
+                  style={{
+                    padding: '12px 32px',
+                    fontSize: '16px',
+                    fontWeight: 600,
+                    background: 'var(--accent)',
+                    color: '#000',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Done
+                </button>
               </div>
             </div>
           </Modal>
@@ -2041,7 +2031,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
       {deletePlayerModal && (() => {
         const isTeamA = deletePlayerModal.team === 'teamA'
         const currentTeam = isTeamA ? teamA : teamB
-        const roster = currentTeam === 'home' ? homeRoster : awayRoster
+        const roster = currentTeam === 'team1' ? team1Roster : team2Roster
         const player = roster[deletePlayerModal.index]
         const playerName = player ? `${player.lastName || ''} ${player.firstName || ''}`.trim() || `Player #${player.number || '?'}` : 'Player'
 
@@ -2059,10 +2049,10 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 <button className="secondary" onClick={() => setDeletePlayerModal(null)}>Cancel</button>
                 <button onClick={() => {
-                  if (currentTeam === 'home') {
-                    setHomeRoster(list => list.filter((_, idx) => idx !== deletePlayerModal.index))
+                  if (currentTeam === 'team1') {
+                    setTeam1Roster(list => list.filter((_, idx) => idx !== deletePlayerModal.index))
                   } else {
-                    setAwayRoster(list => list.filter((_, idx) => idx !== deletePlayerModal.index))
+                    setTeam2Roster(list => list.filter((_, idx) => idx !== deletePlayerModal.index))
                   }
                   setDeletePlayerModal(null)
                 }}>Delete</button>
@@ -2104,9 +2094,9 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
       {/* Initialization Modal */}
       {initModal && (
         <Modal
-          title={initModal.status === 'success' ? t('coinToss.initialized', 'Match Initialized') :
-            initModal.status === 'error' ? t('coinToss.initError', 'Initialization Error') :
-              t('coinToss.initializing', 'Initializing Match')}
+          title={initModal.status === 'success' ? 'Match Initialized' :
+            initModal.status === 'error' ? 'Initialization Error' :
+              'Initializing Match'}
           open={true}
           onClose={initModal.status === 'error' ? () => setInitModal(null) : undefined}
           width={450}
@@ -2176,7 +2166,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                     border: '1px solid #ef4444', borderRadius: '8px', cursor: 'pointer'
                   }}
                 >
-                  {t('common.back', 'Back')}
+                  Back
                 </button>
               </div>
             )}
@@ -2251,21 +2241,21 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         open={openSignature !== null}
         onClose={() => setOpenSignature(null)}
         onSave={handleSignatureSave}
-        title={openSignature === 'home-coach' ? 'Home Coach Signature' :
-          openSignature === 'home-captain' ? 'Home Captain Signature' :
-            openSignature === 'away-coach' ? 'Away Coach Signature' :
-              openSignature === 'away-captain' ? 'Away Captain Signature' : 'Sign'}
+        title={openSignature === 'team1-coach' ? 'Team 1 Coach Signature' :
+          openSignature === 'team1-captain' ? 'Team 1 Captain Signature' :
+            openSignature === 'team2-coach' ? 'Team 2 Coach Signature' :
+              openSignature === 'team2-captain' ? 'Team 2 Captain Signature' : 'Sign'}
         existingSignature={
-          openSignature === 'home-coach' ? homeCoachSignature :
-            openSignature === 'home-captain' ? homeCaptainSignature :
-              openSignature === 'away-coach' ? awayCoachSignature :
-                openSignature === 'away-captain' ? awayCaptainSignature : null
+          openSignature === 'team1-coach' ? team1CoachSignature :
+            openSignature === 'team1-captain' ? team1CaptainSignature :
+              openSignature === 'team2-coach' ? team2CoachSignature :
+                openSignature === 'team2-captain' ? team2CaptainSignature : null
         }
         readOnly={
-          (openSignature === 'home-coach' && !!homeCoachSignature) ||
-          (openSignature === 'home-captain' && !!homeCaptainSignature) ||
-          (openSignature === 'away-coach' && !!awayCoachSignature) ||
-          (openSignature === 'away-captain' && !!awayCaptainSignature)
+          (openSignature === 'team1-coach' && !!team1CoachSignature) ||
+          (openSignature === 'team1-captain' && !!team1CaptainSignature) ||
+          (openSignature === 'team2-coach' && !!team2CoachSignature) ||
+          (openSignature === 'team2-captain' && !!team2CaptainSignature)
         }
       />
     </div>

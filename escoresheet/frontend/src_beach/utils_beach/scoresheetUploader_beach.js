@@ -7,10 +7,10 @@ import { supabase } from '../lib_beach/supabaseClient_beach'
  *
  * @param {Object} options
  * @param {Object} options.match - Match data
- * @param {Object} options.homeTeam - Home team data
- * @param {Object} options.awayTeam - Away team data
- * @param {Array} options.homePlayers - Home players
- * @param {Array} options.awayPlayers - Away players
+ * @param {Object} options.team1 - Team 1 data
+ * @param {Object} options.team2 - Team 2 data
+ * @param {Array} options.team1Players - Team 1 players
+ * @param {Array} options.team2Players - Team 2 players
  * @param {Array} options.sets - Sets data
  * @param {Array} options.events - Events data
  * @param {boolean} options.final - If true, uploads as game{n}_final.json (approved match)
@@ -18,10 +18,10 @@ import { supabase } from '../lib_beach/supabaseClient_beach'
  */
 export async function uploadScoresheet({
   match,
-  homeTeam,
-  awayTeam,
-  homePlayers,
-  awayPlayers,
+  team1,
+  team2,
+  team1Players,
+  team2Players,
   sets,
   events,
   final = false
@@ -42,10 +42,10 @@ export async function uploadScoresheet({
     // Prepare scoresheet data as JSON
     const scoresheetData = {
       match,
-      homeTeam,
-      awayTeam,
-      homePlayers,
-      awayPlayers,
+      team1,
+      team2,
+      team1Players,
+      team2Players,
       sets,
       events,
       uploadedAt: new Date().toISOString()

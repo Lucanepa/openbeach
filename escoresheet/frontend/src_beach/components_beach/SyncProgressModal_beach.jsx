@@ -1,5 +1,4 @@
 import { useEffect, useState, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
 
 /**
  * SyncProgressModal - Full-screen overlay showing sync progress steps
@@ -22,7 +21,6 @@ export default function SyncProgressModal({
   hasError = false,
   hasWarning = false
 }) {
-  const { t } = useTranslation()
   // Track if we've already triggered auto-proceed to avoid double-calls
   const hasAutoProceeded = useRef(false)
 
@@ -101,10 +99,7 @@ export default function SyncProgressModal({
   }
 
   const getStepLabel = (step) => {
-    // Try to get translation, fallback to label
-    const translationKey = `scoreboard.sync.${step.label}`
-    const translated = t(translationKey)
-    return translated !== translationKey ? translated : step.label
+    return step.label
   }
 
   return (
@@ -147,7 +142,7 @@ export default function SyncProgressModal({
           color: '#fff',
           fontSize: 18
         }}>
-          {t('scoreboard.sync.syncing', 'Syncing...')}
+          Syncing...
         </h3>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -188,7 +183,7 @@ export default function SyncProgressModal({
             fontSize: 14,
             textAlign: 'center'
           }}>
-            {t('scoreboard.sync.offlineWarning', 'Offline. Data saved locally.')}
+            Offline. Data saved locally.
           </div>
         )}
 
@@ -224,7 +219,7 @@ export default function SyncProgressModal({
                 cursor: 'pointer'
               }}
             >
-              {t('scoreboard.sync.proceedAnyway', 'Proceed Anyway')}
+              Proceed Anyway
             </button>
           </div>
         )}

@@ -1,9 +1,8 @@
 import { useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
 import { formatTimeLocal } from '../utils_beach/timeUtils_beach'
 
-function formatDateTime(iso, t) {
-  if (!iso) return t('gameList.dateTbc', 'Date TBC')
+function formatDateTime(iso) {
+  if (!iso) return 'Date TBC'
   try {
     const date = new Date(iso)
     // Format date in local timezone
@@ -21,7 +20,6 @@ function formatDateTime(iso, t) {
 }
 
 export default function GameList({ matches, loading, onSelectMatch, onDeleteMatchData, onLoadTestData }) {
-  const { t } = useTranslation()
   const grouped = useMemo(() => {
     if (!matches || !matches.length) return []
     return matches.reduce((acc, match) => {
@@ -35,7 +33,7 @@ export default function GameList({ matches, loading, onSelectMatch, onDeleteMatc
   if (loading) {
     return (
       <div className="game-list">
-        <p>{t('gameList.loadingGames', 'Loading games...')}</p>
+        <p>Loading games...</p>
       </div>
     )
   }
@@ -43,7 +41,7 @@ export default function GameList({ matches, loading, onSelectMatch, onDeleteMatc
   if (!matches || matches.length === 0) {
     return (
       <div className="game-list">
-        <p>{t('gameList.noGamesAvailable', 'No games available.')}</p>
+        <p>No games available.</p>
       </div>
     )
   }
@@ -52,8 +50,8 @@ export default function GameList({ matches, loading, onSelectMatch, onDeleteMatc
     <div className="game-list">
       <div className="game-list-header">
         <div>
-          <h2>{t('gameList.upcomingMatches', 'Upcoming matches')}</h2>
-          <p className="text-sm">{t('gameList.selectGameToStart', 'Select a game to start recording.')}</p>
+          <h2>Upcoming matches</h2>
+          <p className="text-sm">Select a game to start recording.</p>
         </div>
       </div>
 
@@ -65,7 +63,7 @@ export default function GameList({ matches, loading, onSelectMatch, onDeleteMatc
           </header>
           <div className="game-grid">
             {leagueMatches.map(match => {
-              const dateTime = formatDateTime(match.scheduledAt, t)
+              const dateTime = formatDateTime(match.scheduledAt)
               const [datePart, timePart] = dateTime.split(',')
               return (
                 <div key={match.id} className="game-card">
@@ -76,31 +74,31 @@ export default function GameList({ matches, loading, onSelectMatch, onDeleteMatc
                     </div>
                     <div className="game-card-teams">
                       <div className="game-card-team">{match.homeName}</div>
-                      <div className="game-card-vs">{t('common.vs', 'vs')}</div>
+                      <div className="game-card-vs">vs</div>
                       <div className="game-card-team">{match.awayName}</div>
                     </div>
                     {match.hall && (
                       <div className="game-card-location">
-                        {match.hall} — {match.city || t('common.tbc', 'TBC')}
+                        {match.hall} — {match.city || 'TBC'}
                       </div>
                     )}
                     <div className="game-card-status">
-                      <span className="game-card-status-label">{t('gameList.status', 'Status:')}</span>
-                      <span className="game-card-status-value">{match.status || t('common.noData', 'No data')}</span>
+                      <span className="game-card-status-label">Status:</span>
+                      <span className="game-card-status-value">{match.status || 'No data'}</span>
                     </div>
                   </div>
                   <div className="game-card-actions">
                     <button onClick={() => onSelectMatch(match.id)}>
-                      {t('gameList.openMatch', 'Open match')}
+                      Open match
                     </button>
                     {onDeleteMatchData && (
                       <button className="secondary" onClick={() => onDeleteMatchData(match.id)}>
-                        {t('gameList.deleteMatchData', 'Delete match data')}
+                        Delete match data
                       </button>
                     )}
                     {onLoadTestData && (
                       <button className="secondary" onClick={() => onLoadTestData(match.id)}>
-                        {t('gameList.loadTestData', 'Load test data')}
+                        Load test data
                       </button>
                     )}
                   </div>

@@ -321,7 +321,7 @@
       "invalidDate": "Date invalide",
       "invalidHour": "Heure invalide : {{hour}}",
       "invalidMinutes": "Minutes invalides : {{minutes}}",
-      "minPlayers": "Need at least 6 players with numbers (not liberos). Currently: {{count}}",
+      "minPlayers": "Exactement 2 joueurs avec des numéros sont requis. Actuellement: {{count}}",
       "noCaptain": "No captain selected",
       "noCoach": "No coach set",
       "duplicateNumbers": "Duplicate jersey numbers: {{numbers}}",
@@ -357,9 +357,8 @@
       "benchOfficialsCount": "+ {{count}} officiel de banc",
       "benchOfficialsCountPlural": "+ {{count}} officiels de banc",
       "reviewImportedData": "Veuillez vérifier les données importées :",
-      "reviewAddBenchOfficials": "Ajouter les officiels de banc manquants (Médecin, Kiné, etc.)",
       "reviewVerifyDob": "Vérifier que les dates de naissance sont correctes",
-      "reviewSetCaptainLibero": "Définir les désignations capitaine et libéro"
+      "reviewSetCaptain": "Définir la désignation du capitaine"
     },
     "coinToss": "Tirage au sort",
     "chooseTeamColor": "Choisir la couleur de l'équipe {{team}}",
@@ -770,7 +769,7 @@
     "allowPopups": "Veuillez autoriser les popups pour afficher la eScoresheet"
   },
   "home": {
-    "title": "Openvolley e-Feuille",
+    "title": "openBeach eScoresheet",
     "newMatch": "Nouveau match",
     "officialMatch": "Match officiel",
     "testMatch": "Match amical",
@@ -1163,6 +1162,7 @@
     "rosterSentMessage": "La liste a été envoyée à la feuille de match. Le marqueur examinera et acceptera ou rejettera la liste.",
     "signatures": "Signatures",
     "signaturesDescription": "Facultatif : L'entraîneur et le capitaine peuvent signer la liste avant de la soumettre.",
+    "signaturesAtCoinToss": "La signature du capitaine sera recueillie au tirage au sort.",
     "coachSignature": "Signature de l'entraîneur",
     "captainSignature": "Signature du capitaine",
     "tapToSign": "Tapez pour signer"
@@ -1326,31 +1326,6 @@
     "shareWithRemote": "Partager avec appareils distants",
     "refereeUrl": "URL Arbitre",
     "gamePin": "PIN du match"
-  },
-  "loadOfficialMatch": {
-    "title": "Charger Match depuis le calendrier",
-    "button": "Charger Match depuis le calendrier",
-    "federation": "Fédération",
-    "selectFederation": "Sélectionner...",
-    "gender": "Genre",
-    "selectGender": "Sélectionner...",
-    "league": "Ligue",
-    "selectLeague": "Sélectionner...",
-    "gameN": "Match #",
-    "date": "Date",
-    "time": "Heure",
-    "homeVsAway": "Domicile vs Extérieur",
-    "noUpcomingMatches": "Aucun match à venir trouvé",
-    "fetchError": "Échec du chargement des matchs. Vérifiez votre connexion.",
-    "backendNotAvailable": "Serveur backend non disponible",
-    "reminderAlert": "Définir le groupe de ligue si présent, les couleurs et les noms courts des équipes",
-    "loading": "Chargement des matchs...",
-    "selectFilters": "Sélectionnez genre et ligue pour voir les matchs",
-    "searchPlaceholder": "Rechercher...",
-    "today": "Aujourd'hui",
-    "tomorrow": "Demain",
-    "clearFilter": "Effacer filtre",
-    "noMatchesForFilter": "Aucun match trouvé pour ce filtre"
   },
   "livescore": {
     "title": "Score en direct",
@@ -1593,7 +1568,7 @@
       "dashboards": "Tableaux de bord"
     },
     "quickstart": {
-      "intro": "Bienvenue sur OpenVolley eScoresheet ! Ce guide vous aidera à comprendre comment utiliser l'application pour noter les matchs de volley-ball de manière professionnelle.",
+      "intro": "Bienvenue sur openBeach eScoresheet ! Ce guide vous aidera à comprendre comment utiliser l'application pour noter les matchs de volley-ball de manière professionnelle.",
       "flowTitle": "Flux de correspondance",
       "tip": "Pour les tests/entraînements, créez un \"Test Match\" dont les exigences sont plus simples. Pour les matchs officiels, utilisez le \"Match officiel\" qui nécessite une saisie complète des données."
     },
@@ -1646,7 +1621,7 @@
       "playerStep4": "Marquer comme Libero 1 ou Libero 2 le cas échéant",
       "playerStep5": "Désigner le capitaine de l'équipe",
       "pdfTip": "Vous pouvez importer des listes à partir de fichiers PDF en utilisant le bouton \"Importer PDF\". Ce bouton analyse automatiquement les données des joueurs à partir des listes officielles.",
-      "minPlayers": "Chaque équipe doit avoir au moins 6 joueurs (sans compter les libéros) pour continuer.",
+      "minPlayers": "Chaque équipe doit avoir exactement 2 joueurs pour continuer.",
       "signatures": "Signatures",
       "signaturesDesc": "Pour les matches officiels, recueillez les signatures des personnes suivantes",
       "sig1": "Entraîneur (les deux équipes)",
@@ -1964,7 +1939,7 @@
       "exportJson": "Exporter JSON",
       "uploadCloud": "Télécharger dans le nuage"
     },
-    "footer": "OpenVolley eScoresheet - Score de volleyball professionnel"
+    "footer": "openBeach eScoresheet - Score de volleyball professionnel"
   },
   "manualAdjustmentsEditor": {
     "title": "Ajustements Manuels",

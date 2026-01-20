@@ -270,4 +270,63 @@ db.version(15).stores({
   interaction_logs: 'id,ts,gameNumber,category,sessionId'
 })
 
+// Version 16: Rename home/away to team1/team2 throughout
+// This is a terminology change - beach volleyball uses Team 1/Team 2 not Home/Away
+db.version(16).stores({
+  teams: '++id,name,createdAt',
+  players: '++id,teamId,number,name,role,createdAt',
+  matches: '++id,team1Id,team2Id,scheduledAt,status,createdAt,externalId,test',
+  sets: '++id,matchId,index,team1Points,team2Points,finished,startTime,endTime',
+  events: '++id,matchId,setIndex,ts,type,payload,seq,stateSnapshot,[matchId+seq],[matchId+setIndex]',
+  sync_queue: '++id,resource,action,payload,ts,status',
+  match_setup: '++id,updatedAt',
+  referees: '++id,seedKey,lastName,createdAt',
+  scorers: '++id,seedKey,lastName,createdAt',
+  interaction_logs: 'id,ts,gameNumber,category,sessionId'
+}).upgrade(tx => {
+  // Migrate matches: homeTeamId → team1Id, awayTeamId → team2Id
+  tx.table('matches').toCollection().modify(match => {
+    match.team1Id = match.homeTeamId
+    match.team2Id = match.awayTeamId
+    delete match.homeTeamId
+    delete match.awayTeamId
+    // Rename signature fields
+    match.team1CaptainSignature = match.homeCaptainSignature
+    match.team2CaptainSignature = match.awayCaptainSignature
+    match.team1CoachSignature = match.homeCoachSignature
+    match.team2CoachSignature = match.awayCoachSignature
+    delete match.homeCaptainSignature
+    delete match.awayCaptainSignature
+    delete match.homeCoachSignature
+    delete match.awayCoachSignature
+    // Rename PIN fields
+    match.team1Pin = match.homeTeamPin
+    match.team2Pin = match.awayTeamPin
+    delete match.homeTeamPin
+    delete match.awayTeamPin
+    // Rename upload PIN fields
+    match.team1UploadPin = match.homeTeamUploadPin
+    match.team2UploadPin = match.awayTeamUploadPin
+    delete match.homeTeamUploadPin
+    delete match.awayTeamUploadPin
+    // Rename pending roster fields
+    match.pendingTeam1Roster = match.pendingHomeRoster
+    match.pendingTeam2Roster = match.pendingAwayRoster
+    delete match.pendingHomeRoster
+    delete match.pendingAwayRoster
+    // Rename post-game signature fields
+    match.team1PostGameCaptainSignature = match.homePostGameCaptainSignature
+    match.team2PostGameCaptainSignature = match.awayPostGameCaptainSignature
+    delete match.homePostGameCaptainSignature
+    delete match.awayPostGameCaptainSignature
+  })
+  // Migrate sets: homePoints → team1Points, awayPoints → team2Points
+  tx.table('sets').toCollection().modify(set => {
+    set.team1Points = set.homePoints
+    set.team2Points = set.awayPoints
+    delete set.homePoints
+    delete set.awayPoints
+  })
+})
+
 

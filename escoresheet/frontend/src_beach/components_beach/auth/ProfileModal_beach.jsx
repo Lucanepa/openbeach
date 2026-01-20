@@ -1,9 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../contexts_beach/AuthContext_beach'
 
 export default function ProfileModal({ open, onClose }) {
-  const { t } = useTranslation()
   const { user, profile, updateProfile, updateEmail, deleteAccount } = useAuth()
 
   const [firstName, setFirstName] = useState('')
@@ -66,7 +64,7 @@ export default function ProfileModal({ open, onClose }) {
 
   const handleEmailChange = async () => {
     if (!newEmail || newEmail === user?.email) {
-      setEmailError(t('auth.enterNewEmail', 'Please enter a new email address'))
+      setEmailError('Please enter a new email address')
       return
     }
 
@@ -86,7 +84,7 @@ export default function ProfileModal({ open, onClose }) {
 
   const handleDeleteAccount = async () => {
     if (deleteEmailInput !== user?.email) {
-      setDeleteError(t('auth.emailDoesNotMatch', 'Email does not match'))
+      setDeleteError('Email does not match')
       return
     }
 
@@ -196,7 +194,7 @@ export default function ProfileModal({ open, onClose }) {
         {/* Header */}
         <div style={headerStyle}>
           <h2 style={{ margin: 0, color: '#fff', fontSize: 20, fontWeight: 600 }}>
-            {t('auth.profile', 'Profile')}
+            Profile
           </h2>
           <button
             onClick={onClose}
@@ -240,14 +238,14 @@ export default function ProfileModal({ open, onClose }) {
               marginBottom: 16,
               fontSize: 14
             }}>
-              {t('auth.profileUpdated', 'Profile updated successfully')}
+              Profile updated successfully
             </div>
           )}
 
           {/* Email */}
           <div style={{ marginBottom: 16 }}>
             <label style={{ color: '#9ca3af', fontSize: 13, marginBottom: 4, display: 'block' }}>
-              {t('auth.email', 'Email')}
+              Email
             </label>
 
             {emailSuccess && (
@@ -260,7 +258,7 @@ export default function ProfileModal({ open, onClose }) {
                 marginBottom: 8,
                 fontSize: 13
               }}>
-                {t('auth.emailChangeConfirmation', 'Check your new email to confirm the change')}
+                Check your new email to confirm the change
               </div>
             )}
 
@@ -284,7 +282,7 @@ export default function ProfileModal({ open, onClose }) {
                   type="email"
                   value={newEmail}
                   onChange={e => setNewEmail(e.target.value)}
-                  placeholder={t('auth.newEmail', 'New email address')}
+                  placeholder="New email address"
                   style={{ ...inputStyle, flex: 1 }}
                   autoFocus
                 />
@@ -303,7 +301,7 @@ export default function ProfileModal({ open, onClose }) {
                     whiteSpace: 'nowrap'
                   }}
                 >
-                  {emailLoading ? '...' : t('auth.save', 'Save')}
+                  {emailLoading ? '...' : 'Save'}
                 </button>
                 <button
                   onClick={() => {
@@ -322,7 +320,7 @@ export default function ProfileModal({ open, onClose }) {
                     fontSize: 14
                   }}
                 >
-                  {t('common.cancel', 'Cancel')}
+                  Cancel
                 </button>
               </div>
             ) : (
@@ -348,7 +346,7 @@ export default function ProfileModal({ open, onClose }) {
                     fontSize: 14
                   }}
                 >
-                  {t('auth.change', 'Change')}
+                  Change
                 </button>
               </div>
             )}
@@ -358,7 +356,7 @@ export default function ProfileModal({ open, onClose }) {
           {profile?.roles && profile.roles.length > 0 && (
             <div style={{ marginBottom: 16 }}>
               <label style={{ color: '#9ca3af', fontSize: 13, marginBottom: 4, display: 'block' }}>
-                {t('auth.roles', 'Roles')}
+                Roles
               </label>
               <div style={{ display: 'flex', gap: 6 }}>
                 {profile.roles.map(role => (
@@ -385,7 +383,7 @@ export default function ProfileModal({ open, onClose }) {
             <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
               <div style={{ flex: 1 }}>
                 <label style={{ color: '#9ca3af', fontSize: 13, marginBottom: 4, display: 'block' }}>
-                  {t('auth.firstName', 'First name')}
+                  First name
                 </label>
                 <input
                   type="text"
@@ -396,7 +394,7 @@ export default function ProfileModal({ open, onClose }) {
               </div>
               <div style={{ flex: 1 }}>
                 <label style={{ color: '#9ca3af', fontSize: 13, marginBottom: 4, display: 'block' }}>
-                  {t('auth.lastName', 'Last name')}
+                  Last name
                 </label>
                 <input
                   type="text"
@@ -411,7 +409,7 @@ export default function ProfileModal({ open, onClose }) {
             <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
               <div style={{ flex: 1 }}>
                 <label style={{ color: '#9ca3af', fontSize: 13, marginBottom: 4, display: 'block' }}>
-                  {t('auth.country', 'Country')}
+                  Country
                 </label>
                 <input
                   type="text"
@@ -424,7 +422,7 @@ export default function ProfileModal({ open, onClose }) {
               </div>
               <div style={{ flex: 1 }}>
                 <label style={{ color: '#9ca3af', fontSize: 13, marginBottom: 4, display: 'block' }}>
-                  {t('auth.dob', 'Date of birth')}
+                  Date of birth
                 </label>
                 <input
                   type="date"
@@ -446,10 +444,10 @@ export default function ProfileModal({ open, onClose }) {
               disabled={!hasChanges || loading}
             >
               {loading
-                ? t('auth.saving', 'Saving...')
+                ? 'Saving...'
                 : success
-                  ? t('auth.infoSaved', 'Info saved')
-                  : t('auth.saveProfile', 'Save Profile')}
+                  ? 'Info saved'
+                  : 'Save Profile'}
             </button>
           </form>
 
@@ -463,10 +461,10 @@ export default function ProfileModal({ open, onClose }) {
             borderRadius: 8
           }}>
             <div style={{ color: '#ef4444', fontWeight: 600, marginBottom: 8 }}>
-              {t('auth.dangerZone', 'Danger Zone')}
+              Danger Zone
             </div>
             <p style={{ color: '#fca5a5', fontSize: 13, marginBottom: 12 }}>
-              {t('auth.deleteAccountWarning', 'Deleting your account is permanent and cannot be undone.')}
+              Deleting your account is permanent and cannot be undone.
             </p>
             <button
               onClick={() => setShowDeleteConfirm(true)}
@@ -481,7 +479,7 @@ export default function ProfileModal({ open, onClose }) {
                 fontSize: 14
               }}
             >
-              {t('auth.deleteAccount', 'Delete Account')}
+              Delete Account
             </button>
           </div>
         </div>
@@ -518,18 +516,18 @@ export default function ProfileModal({ open, onClose }) {
               borderBottom: '1px solid rgba(239, 68, 68, 0.3)'
             }}>
               <h3 style={{ margin: 0, color: '#ef4444', fontSize: 18, fontWeight: 600 }}>
-                {t('auth.confirmDeleteAccount', 'Confirm Account Deletion')}
+                Confirm Account Deletion
               </h3>
             </div>
 
             {/* Body */}
             <div style={{ padding: 20 }}>
               <p style={{ color: '#fca5a5', fontSize: 14, marginBottom: 16 }}>
-                {t('auth.deleteAccountConfirmMessage', 'This action is permanent. All your data will be deleted.')}
+                This action is permanent. All your data will be deleted.
               </p>
 
               <p style={{ color: '#9ca3af', fontSize: 13, marginBottom: 8 }}>
-                {t('auth.typeEmailToConfirm', 'Type your email to confirm:')}
+                Type your email to confirm:
               </p>
               <p style={{ color: '#6b7280', fontSize: 12, marginBottom: 8, fontFamily: 'monospace' }}>
                 {user?.email}
@@ -583,7 +581,7 @@ export default function ProfileModal({ open, onClose }) {
                     fontSize: 14
                   }}
                 >
-                  {t('common.cancel', 'Cancel')}
+                  Cancel
                 </button>
                 <button
                   onClick={handleDeleteAccount}
@@ -602,8 +600,8 @@ export default function ProfileModal({ open, onClose }) {
                   }}
                 >
                   {deleteLoading
-                    ? t('auth.deleting', 'Deleting...')
-                    : t('auth.deleteAccountConfirm', 'Delete My Account')}
+                    ? 'Deleting...'
+                    : 'Delete My Account'}
                 </button>
               </div>
             </div>

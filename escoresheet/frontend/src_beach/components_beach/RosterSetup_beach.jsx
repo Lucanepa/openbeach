@@ -30,8 +30,8 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
   const [match, setMatch] = useState(matchData)
 
   // Get pending roster from match data
-  const pendingRosterField = team === 'home' ? 'pendingHomeRoster' : 'pendingAwayRoster'
-  const pendingRosterFieldSnake = team === 'home' ? 'pending_home_roster' : 'pending_away_roster'
+  const pendingRosterField = team === 'team1' ? 'pendingTeam1Roster' : 'pendingTeam2Roster'
+  const pendingRosterFieldSnake = team === 'team1' ? 'pending_team1_roster' : 'pending_team2_roster'
   const [teamId, setTeamId] = useState(null)
 
   // Helper to update state from match data result
@@ -40,12 +40,12 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
 
     setMatch(result.match)
 
-    const loadedTeamId = team === 'home' ? result.match.homeTeamId : result.match.awayTeamId
+    const loadedTeamId = team === 'team1' ? result.match.team1Id : result.match.team2Id
     setTeamId(loadedTeamId)
 
-    const teamPlayers = team === 'home'
-      ? (result.homePlayers || [])
-      : (result.awayPlayers || [])
+    const teamPlayers = team === 'team1'
+      ? (result.team1Players || [])
+      : (result.team2Players || [])
 
     setPlayers(teamPlayers
       .sort((a, b) => (a.number || 0) - (b.number || 0))
@@ -55,11 +55,10 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
         firstName: p.firstName || '',
         lastName: p.lastName || p.name || '',
         dob: p.dob || '',
-        libero: p.libero || '',
         isCaptain: p.isCaptain || false
       })))
 
-    const benchKey = team === 'home' ? 'bench_home' : 'bench_away'
+    const benchKey = team === 'team1' ? 'bench_team1' : 'bench_team2'
     if (result.match[benchKey]) {
       setBenchOfficials(result.match[benchKey].map(b => ({
         role: b.role || '',
@@ -102,12 +101,8 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
       })
       setTeamId(-1) // Mock team ID for test mode
       setPlayers([
-        { id: 1, number: 1, firstName: 'Test', lastName: 'Player 1', dob: '', libero: '', isCaptain: true },
-        { id: 2, number: 5, firstName: 'Test', lastName: 'Player 2', dob: '', libero: '', isCaptain: false },
-        { id: 3, number: 7, firstName: 'Test', lastName: 'Player 3', dob: '', libero: '', isCaptain: false },
-        { id: 4, number: 10, firstName: 'Test', lastName: 'Player 4', dob: '', libero: '', isCaptain: false },
-        { id: 5, number: 12, firstName: 'Test', lastName: 'Player 5', dob: '', libero: 'libero1', isCaptain: false },
-        { id: 6, number: 15, firstName: 'Test', lastName: 'Player 6', dob: '', libero: '', isCaptain: false }
+        { id: 1, number: 1, firstName: 'Test', lastName: 'Player 1', dob: '', isCaptain: true },
+        { id: 2, number: 2, firstName: 'Test', lastName: 'Player 2', dob: '', isCaptain: false }
       ])
       setBenchOfficials([
         { role: 'Coach', firstName: 'Test', lastName: 'Coach', dob: '' },
@@ -202,7 +197,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
         firstName: p.firstName || '',
         lastName: p.lastName || '',
         dob: p.dob || '',
-        libero: p.libero || '',
         isCaptain: p.isCaptain || false
       })))
       setBenchOfficials(importedBench.map(b => ({
@@ -234,7 +228,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
               lastName: p.lastName || '',
               firstName: p.firstName || '',
               dob: p.dob || null,
-              libero: p.libero || '',
               isCaptain: !!p.isCaptain,
               role: null,
               createdAt: new Date().toISOString()
@@ -243,9 +236,9 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
         }
 
         // Update match with bench officials, signatures, and clear pending roster
-        const benchKey = team === 'home' ? 'bench_home' : 'bench_away'
-        const coachSigKey = team === 'home' ? 'homeCoachSignature' : 'awayCoachSignature'
-        const captainSigKey = team === 'home' ? 'homeCaptainSignature' : 'awayCaptainSignature'
+        const benchKey = team === 'team1' ? 'bench_team1' : 'bench_team2'
+        const coachSigKey = team === 'team1' ? 'team1CoachSignature' : 'team2CoachSignature'
+        const captainSigKey = team === 'team1' ? 'team1CaptainSignature' : 'team2CaptainSignature'
 
         const matchUpdate = {
           [benchKey]: importedBench,
@@ -267,8 +260,8 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
       // Clear pending roster and save signatures in Supabase if connected
       if (useSupabaseConnection && supabase && matchData?.external_id) {
         // JSONB signature keys
-        const coachSigJsonKey = team === 'home' ? 'home_coach' : 'away_coach'
-        const captainSigJsonKey = team === 'home' ? 'home_captain' : 'away_captain'
+        const coachSigJsonKey = team === 'team1' ? 'team1_coach' : 'team2_coach'
+        const captainSigJsonKey = team === 'team1' ? 'team1_captain' : 'team2_captain'
 
         const supabaseUpdate = {
           [pendingRosterFieldSnake]: null
@@ -355,7 +348,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
       firstName: '',
       lastName: '',
       dob: '',
-      libero: '',
       isCaptain: false
     }])
   }
@@ -417,7 +409,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
         firstName: parsedPlayer.firstName || '',
         lastName: parsedPlayer.lastName || '',
         dob: parsedPlayer.dob || '',
-        libero: '',
         isCaptain: false
       }))
       
@@ -471,7 +462,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
             lastName: p.lastName,
             name: `${p.lastName} ${p.firstName}`,
             dob: p.dob || null,
-            libero: p.libero || '',
             isCaptain: !!p.isCaptain,
             role: null,
             createdAt: new Date().toISOString()
@@ -479,7 +469,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
         )
         
         // Overwrite bench officials in database with imported data
-        const benchKey = team === 'home' ? 'bench_home' : 'bench_away'
+        const benchKey = team === 'team1' ? 'bench_team1' : 'bench_team2'
         await db.matches.update(matchId, {
           [benchKey]: importedBenchOfficials
         })
@@ -555,7 +545,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
               lastName: player.lastName,
               name: `${player.lastName} ${player.firstName}`,
               dob: player.dob || null,
-              libero: player.libero || '',
               isCaptain: !!player.isCaptain
             })
           } else {
@@ -567,7 +556,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
               lastName: player.lastName,
               name: `${player.lastName} ${player.firstName}`,
               dob: player.dob || null,
-              libero: player.libero || '',
               isCaptain: !!player.isCaptain,
               role: null,
               createdAt: new Date().toISOString()
@@ -594,7 +582,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
             lastName: p.lastName,
             name: `${p.lastName} ${p.firstName}`,
             dob: p.dob || null,
-            libero: p.libero || '',
             isCaptain: !!p.isCaptain,
             role: null,
             createdAt: new Date().toISOString()
@@ -603,7 +590,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
       }
 
       // Save bench officials - always overwrite completely
-      const benchKey = team === 'home' ? 'bench_home' : 'bench_away'
+      const benchKey = team === 'team1' ? 'bench_team1' : 'bench_team2'
       await db.matches.update(matchId, {
         [benchKey]: benchOfficials.map(o => ({
           role: o.role,
@@ -623,7 +610,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
             firstName: p.firstName,
             lastName: p.lastName,
             dob: p.dob || '',
-            libero: p.libero || '',
             isCaptain: !!p.isCaptain
           })),
           bench: benchOfficials.map(o => ({
@@ -639,8 +625,8 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
 
         // Build update object with pending roster and signatures
         // JSONB signature keys
-        const coachSigJsonKey = team === 'home' ? 'home_coach' : 'away_coach'
-        const captainSigJsonKey = team === 'home' ? 'home_captain' : 'away_captain'
+        const coachSigJsonKey = team === 'team1' ? 'team1_coach' : 'team2_coach'
+        const captainSigJsonKey = team === 'team1' ? 'team1_captain' : 'team2_captain'
 
         const supabaseUpdate = {
           [pendingRosterFieldSnake]: pendingRosterData
@@ -649,7 +635,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
         // Build signatures JSONB partial update
         const signaturesUpdate = {}
         // Build connections JSONB partial update for pending roster
-        const pendingRosterJsonKey = team === 'home' ? 'pending_home_roster' : 'pending_away_roster'
+        const pendingRosterJsonKey = team === 'team1' ? 'pending_team1_roster' : 'pending_team2_roster'
 
         // Save signatures to JSONB
         if (coachSignature) {
@@ -727,7 +713,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
           marginBottom: '30px'
         }}>
           <h1 style={{ fontSize: '28px', fontWeight: 700, margin: 0 }}>
-            {t('rosterSetup.title')} — {team === 'home' ? (match?.homeTeamName || t('common.home')) : (match?.awayTeamName || t('common.away'))}
+            {t('rosterSetup.title')} — {team === 'team1' ? (match?.team1Name || t('common.home')) : (match?.team2Name || t('common.away'))}
           </h1>
           <button
             onClick={onBack}
@@ -980,7 +966,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
                   <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.firstName')}</th>
                   <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.lastName')}</th>
                   <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.dob')}</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.libero')}</th>
                   <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.captain')}</th>
                   <th style={{ padding: '12px', textAlign: 'center', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.actions')}</th>
                 </tr>
@@ -1057,41 +1042,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
                           color: 'var(--text)'
                         }}
                       />
-                    </td>
-                    <td style={{ padding: '12px' }}>
-                      <select
-                        value={player.libero || ''}
-                        onChange={(e) => {
-                          const newValue = e.target.value
-                          // If L2 is selected but no L1 exists, automatically change L2 to L1
-                          if (newValue === 'libero2') {
-                            const hasL1 = players.some((p, idx) => idx !== index && p.libero === 'libero1')
-                            if (!hasL1) {
-                              handleUpdatePlayer(index, 'libero', 'libero1')
-                              return
-                            }
-                          }
-                          handleUpdatePlayer(index, 'libero', newValue)
-                        }}
-                        style={{
-                          width: '100px',
-                          padding: '6px',
-                          fontSize: '14px',
-                          background: '#000000',
-                          border: '1px solid rgba(255,255,255,0.2)',
-                          borderRadius: '4px',
-                          color: 'var(--text)',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        <option value="" style={{ background: '#000000', color: 'var(--text)' }}>None</option>
-                        {!players.some((p, idx) => idx !== index && p.libero === 'libero1') && (
-                          <option value="libero1" style={{ background: '#000000', color: 'var(--text)' }}>L1</option>
-                        )}
-                        {!players.some((p, idx) => idx !== index && p.libero === 'libero2') && (
-                          <option value="libero2" style={{ background: '#000000', color: 'var(--text)' }}>L2</option>
-                        )}
-                      </select>
                     </td>
                     <td style={{ padding: '12px' }}>
                       <input
@@ -1465,7 +1415,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
                       <th style={{ padding: '8px', textAlign: 'left' }}>#</th>
                       <th style={{ padding: '8px', textAlign: 'left' }}>{t('rosterSetup.lastName')}</th>
                       <th style={{ padding: '8px', textAlign: 'left' }}>{t('rosterSetup.firstName')}</th>
-                      <th style={{ padding: '8px', textAlign: 'center' }}>{t('rosterSetup.libero')}</th>
                       <th style={{ padding: '8px', textAlign: 'center' }}>{t('rosterSetup.captain')}</th>
                     </tr>
                   </thead>
@@ -1475,7 +1424,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
                         <td style={{ padding: '6px 8px' }}>{p.number}</td>
                         <td style={{ padding: '6px 8px' }}>{p.lastName || ''}</td>
                         <td style={{ padding: '6px 8px' }}>{p.firstName || ''}</td>
-                        <td style={{ padding: '6px 8px', textAlign: 'center' }}>{p.libero ? 'L' : ''}</td>
                         <td style={{ padding: '6px 8px', textAlign: 'center' }}>{p.isCaptain ? 'C' : ''}</td>
                       </tr>
                     ))}

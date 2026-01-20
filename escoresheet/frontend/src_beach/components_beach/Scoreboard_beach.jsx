@@ -13,9 +13,8 @@ import ConnectionSetupModal from './options/ConnectionSetupModal'
 import { useSyncQueue } from '../hooks_beach/useSyncQueue_beach'
 import { useSequentialSync } from '../hooks_beach/useSequentialSync_beach'
 import SyncProgressModal from './SyncProgressModal'
-import SignaturePad from './SignaturePad'
 import LongPressProgressIndicator from './LongPressProgressIndicator'
-import mikasaVolleyball from '../mikasa_v200w.png'
+
 
 // Primary ball image (with mikasa as fallback)
 const ballImage = '/ball.png'
@@ -117,14 +116,20 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     serve: 'A', // Default to Team A serving
     sideA: 'left' // Default to Team A on left (standard rotation)
   })
-  const [liberoExitConfirmation, setLiberoExitConfirmation] = useState(() => {
-    const saved = localStorage.getItem('liberoExitConfirmation')
-    return saved !== 'false' // default true
-  })
-  const [liberoEntrySuggestion, setLiberoEntrySuggestion] = useState(() => {
-    const saved = localStorage.getItem('liberoEntrySuggestion')
-    return saved !== 'false' // default true
-  })
+
+  const [substitutionDropdown, setSubstitutionDropdown] = useState(null)
+  const [substitutionConfirm, setSubstitutionConfirm] = useState(null)
+  const [injuryDropdown, setInjuryDropdown] = useState(null)
+
+  // Stub state for libero modals (beach volleyball doesn't use liberos)
+  const [liberoDropdown, setLiberoDropdown] = useState(null)
+  const [liberoInDropdown, setLiberoInDropdown] = useState(null)
+  const [liberoConfirm, setLiberoConfirm] = useState(null)
+  const [liberoRotationModal, setLiberoRotationModal] = useState(null)
+  const [liberoReentryModal, setLiberoReentryModal] = useState(null)
+  const [liberoExitConfirmation, setLiberoExitConfirmation] = useState(null)
+  const [liberoEntrySuggestion, setLiberoEntrySuggestion] = useState(null)
+
   const [setIntervalDuration, setSetIntervalDuration] = useState(() => {
     const saved = localStorage.getItem('setIntervalDuration')
     return saved ? parseInt(saved, 10) : 180 // default 3 minutes = 180 seconds
@@ -149,8 +154,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   // Main layout collapsible sections (collapsed by default on tablet)
   const [leftMainBenchExpanded, setLeftMainBenchExpanded] = useState(false)
   const [rightMainBenchExpanded, setRightMainBenchExpanded] = useState(false)
-  const [leftMainLiberosExpanded, setLeftMainLiberosExpanded] = useState(false)
-  const [rightMainLiberosExpanded, setRightMainLiberosExpanded] = useState(false)
   const [leftMainOfficialsExpanded, setLeftMainOfficialsExpanded] = useState(false)
   const [rightMainOfficialsExpanded, setRightMainOfficialsExpanded] = useState(false)
   const [rallyStatusExpanded, setRallyStatusExpanded] = useState(false) // Toggle rally status/last action size
@@ -173,8 +176,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     pointRight: 'l',
     timeoutLeft: 'q',
     timeoutRight: 'p',
-    exchangeLiberoLeft: 'x',
-    exchangeLiberoRight: 'n',
+
     undo: 'Backspace',
     confirm: 'Enter',
     cancel: 'Escape',
@@ -229,21 +231,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   }, [])
 
   const [scoresheetErrorModal, setScoresheetErrorModal] = useState(null) // { error: string, details?: string } | null
-  const [exceptionalSubstitutionModal, setExceptionalSubstitutionModal] = useState(null) // { team: 'home'|'away', position: string, playerOut: number, reason: 'expulsion'|'disqualification'|'injury' } | null
-  const [substitutionDropdown, setSubstitutionDropdown] = useState(null) // { team: 'home'|'away', position: 'I'|'II'|'III'|'IV'|'V'|'VI', playerNumber: number, element: HTMLElement, isInjury?: boolean } | null
-  const [substitutionConfirm, setSubstitutionConfirm] = useState(null) // { team: 'home'|'away', position: 'I'|'II'|'III'|'IV'|'V'|'VI', playerOut: number, playerIn: number, isInjury?: boolean, isExceptional?: boolean, isExpelled?: boolean, isDisqualified?: boolean } | null
-  const [liberoDropdown, setLiberoDropdown] = useState(null) // { team: 'home'|'away', position: 'I'|'V'|'VI', playerNumber: number, element: HTMLElement } | null
-  const [liberoConfirm, setLiberoConfirm] = useState(null) // { team: 'home'|'away', position: 'I'|'V'|'VI', playerOut: number, liberoIn: string } | null
-  const [liberoInDropdown, setLiberoInDropdown] = useState(null) // { team: 'home'|'away', side: 'left'|'right', element: HTMLElement, x?: number, y?: number } | null
+
+
   const [undoConfirm, setUndoConfirm] = useState(null) // { event: Event, description: string } | null
-  const [liberoReminder, setLiberoReminder] = useState(null) // { teams: ['home'|'away'] } | null - Show reminder at start of set
-  const [liberoRotationModal, setLiberoRotationModal] = useState(null) // { team: 'home'|'away', position: 'IV', liberoNumber: number, playerNumber: number } | null
-  const [exchangeLiberoDropdown, setExchangeLiberoDropdown] = useState(null) // { team: 'home'|'away', position: 'I'|'V'|'VI', liberoNumber: number, element: HTMLElement } | null
-  const [liberoReentryModal, setLiberoReentryModal] = useState(null) // { team: 'home'|'away', position: 'I', playerNumber: number, liberoNumber: number, liberoType: string, availableLiberos: [{number, type, label}], selectedLiberoIndex: number } | null
-  const [liberoSuggestionDismissedForExit, setLiberoSuggestionDismissedForExit] = useState({ home: null, away: null }) // Track which libero_exit event (by timestamp) was dismissed to avoid repeated suggestions
-  const [liberoRedesignationModal, setLiberoRedesignationModal] = useState(null) // { team: 'home'|'away', unableLiberoNumber: number, unableLiberoType: string, reason: 'declared'|'injury'|'expulsion'|'disqualification' } | null
-  const [liberoUnableModal, setLiberoUnableModal] = useState(null) // { team: 'home'|'away', liberoNumber: number, liberoType: string, reason?: 'declared'|'injury' } | null
-  const [liberoBenchActionMenu, setLiberoBenchActionMenu] = useState(null) // { team: 'home'|'away', liberoNumber: number, liberoType: string, element: HTMLElement, x: number, y: number } | null
+
   const [captainOnCourtModal, setCaptainOnCourtModal] = useState(null) // { team: 'home'|'away' } | null
   const [reopenSetConfirm, setReopenSetConfirm] = useState(null) // { setId: number, setIndex: number } | null
   const [setStartTimeModal, setSetStartTimeModal] = useState(null) // { setIndex: number, defaultTime: string } | null
@@ -255,25 +246,15 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   const [set5SetupConfirmed, setSet5SetupConfirmed] = useState(false) // Track if Set 5 coin toss setup is confirmed (inline UI)
   const [postMatchSignature, setPostMatchSignature] = useState(null) // 'home-captain' | 'away-captain' | null
   const [sanctionConfirm, setSanctionConfirm] = useState(null) // { side: 'left'|'right', type: 'improper_request'|'delay_warning'|'delay_penalty' } | null
-  const [sanctionDropdown, setSanctionDropdown] = useState(null) // { team: 'home'|'away', type: 'player'|'bench'|'libero'|'official', playerNumber?: number, position?: string, role?: string, element: HTMLElement, x?: number, y?: number } | null
-  const [sanctionConfirmModal, setSanctionConfirmModal] = useState(null) // { team: 'home'|'away', type: 'player'|'bench'|'libero'|'official', playerNumber?: number, position?: string, role?: string, sanctionType: 'warning'|'penalty'|'expulsion'|'disqualification' } | null
-  const [sanctionSubstitutionModal, setSanctionSubstitutionModal] = useState(null) // { team, expelledPlayer, liberoOnCourt?, availableSubs, reason: 'expulsion'|'disqualification', isExceptional: boolean, position?: string } | null
-  const [injuryDropdown, setInjuryDropdown] = useState(null) // { team: 'home'|'away', position: 'I'|'II'|'III'|'IV'|'V'|'VI', playerNumber: number, element: HTMLElement, x?: number, y?: number } | null
-  const [playerActionMenu, setPlayerActionMenu] = useState(null) // { team: 'home'|'away', position: 'I'|'II'|'III'|'IV'|'V'|'VI', playerNumber: number, element: HTMLElement, x?: number, y?: number, canSubstitute: boolean, canEnterLibero: boolean } | null
-  const [benchPlayerActionMenu, setBenchPlayerActionMenu] = useState(null) // { team: 'home'|'away', playerNumber: number, element: HTMLElement, x?: number, y?: number, canSubstitute: boolean, courtPlayerToSwapWith?: { number: number, position: string } } | null
-  const [benchSubExpanded, setBenchSubExpanded] = useState(false) // Track if substitution list is expanded in bench player menu
-  const [courtSubExpanded, setCourtSubExpanded] = useState(false) // Track if substitution list is expanded in court player menu
-  const [courtSanctionExpanded, setCourtSanctionExpanded] = useState(false) // Track if sanction list is expanded in court player menu
-  const [courtLiberoExpanded, setCourtLiberoExpanded] = useState(false) // Track if libero list is expanded in court player menu
-  const [courtLiberoUnableExpanded, setCourtLiberoUnableExpanded] = useState(false) // Track if "Unable to play" submenu is expanded
-  const [benchSanctionExpanded, setBenchSanctionExpanded] = useState(false) // Track if sanction list is expanded in bench player menu
-  const [liberoBenchReplaceExpanded, setLiberoBenchReplaceExpanded] = useState(false) // Track if replace list is expanded in libero bench menu
-  const [liberoBenchUnableExpanded, setLiberoBenchUnableExpanded] = useState(false) // Track if "Unable to play" submenu is expanded in libero bench menu
-  const [leftLiberoDropdownOpen, setLeftLiberoDropdownOpen] = useState(false) // Narrow mode dropdown for left team libero buttons
-  const [rightLiberoDropdownOpen, setRightLiberoDropdownOpen] = useState(false) // Narrow mode dropdown for right team libero buttons
+  const [sanctionDropdown, setSanctionDropdown] = useState(null) // { team: 'home'|'away', type: 'player'|'bench'|'official', playerNumber?: number, position?: string, role?: string, element: HTMLElement, x?: number, y?: number } | null
+  const [sanctionConfirmModal, setSanctionConfirmModal] = useState(null) // { team: 'home'|'away', type: 'player'|'bench'|'official', playerNumber?: number, position?: string, role?: string, sanctionType: 'warning'|'penalty'|'expulsion'|'disqualification' } | null
+
+
+  const [playerActionMenu, setPlayerActionMenu] = useState(null) // { team: 'home'|'away', position: 'I'|'II', playerNumber: number, element: HTMLElement, x?: number, y?: number } | null
+
   const [leftDelaysDropdownOpen, setLeftDelaysDropdownOpen] = useState(false) // Narrow mode dropdown for left team delays/sanctions buttons
   const [rightDelaysDropdownOpen, setRightDelaysDropdownOpen] = useState(false) // Narrow mode dropdown for right team delays/sanctions buttons
-  const [toSubDetailsModal, setToSubDetailsModal] = useState(null) // { type: 'timeout'|'substitution', side: 'left'|'right' } | null
+  const [toSubDetailsModal, setToSubDetailsModal] = useState(null) // { type: 'timeout', side: 'left'|'right' } | null
   const [showHelpModal, setShowHelpModal] = useState(false)
   const [selectedHelpTopic, setSelectedHelpTopic] = useState(null)
   const [replayRallyConfirm, setReplayRallyConfirm] = useState(null) // { event: Event, description: string, selectedOption: 'swap'|'replay' } | null
@@ -281,8 +262,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   const [stopMatchTeamSelect, setStopMatchTeamSelect] = useState(null) // { pendingAction: 'forfeit' } | null - Team selection for forfeit
   const [stopMatchConfirm, setStopMatchConfirm] = useState(null) // { type: 'forfeit'|'impossibility', team?: 'home'|'away' } | null - Confirmation modal
   const [stopMatchRemarksStep, setStopMatchRemarksStep] = useState(null) // { type: 'forfeit'|'impossibility', team?: 'home'|'away' } | null - After remarks
-  const [recentlySubstitutedPlayers, setRecentlySubstitutedPlayers] = useState([]) // [{ team, playerNumber, timestamp }] - for flashing effect
-  const recentSubFlashTimeoutRef = useRef(null) // Timeout ref for clearing flash
+
   const leftCourtPositionVRef = useRef(null) // Ref for position V on left court (for modal positioning)
   const rightCourtPositionIIRef = useRef(null) // Ref for position II on right court (for modal positioning)
 
@@ -290,7 +270,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   const [headerCollapsed, setHeaderCollapsed] = useState(false)
   const [showNamesOnCourt, setShowNamesOnCourtState] = useState(() => {
     const saved = localStorage.getItem('showNamesOnCourt')
-    return saved === 'true' // default false
+    return saved !== 'false' // default true for beach volleyball
   })
   const setShowNamesOnCourt = (val) => {
     setShowNamesOnCourtState(val)
@@ -769,10 +749,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       awayRotation: data.set?.awayRotation,
       homeOnCourt: data.set?.homeOnCourt,
       awayOnCourt: data.set?.awayOnCourt,
-      homeLiberoIn: data.set?.homeLiberoIn,
-      awayLiberoIn: data.set?.awayLiberoIn,
-      homeLiberoFor: data.set?.homeLiberoFor,
-      awayLiberoFor: data.set?.awayLiberoFor,
+
       homeTimeouts: data.set?.homeTimeouts,
       awayTimeouts: data.set?.awayTimeouts,
       rallyInProgress: data.set?.rallyInProgress,
@@ -906,48 +883,11 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
 
         // Get the most recent event with lineup data
         const lastEvent = eventsWithLineup[eventsWithLineup.length - 1]
-        // Prefer newLineup (from libero/rotation events) over lineup
+        // Prefer newLineup over lineup
         return lastEvent.payload?.newLineup || lastEvent.payload?.lineup || null
       }
 
-      const getLiberoSubForTeam = (teamKey) => {
-        // Check lineup events for liberoSubstitution
-        const lineupEvents = allEvents
-          .filter(e => e.type === 'lineup' && e.payload?.team === teamKey && e.setIndex === currentSet.index)
-          .sort((a, b) => (a.seq || 0) - (b.seq || 0))
 
-        // Check libero entry/exit events
-        const liberoEvents = allEvents
-          .filter(e => (e.type === 'LIBERO_ENTRY' || e.type === 'LIBERO_EXIT') &&
-            e.payload?.team === teamKey && e.setIndex === currentSet.index)
-          .sort((a, b) => (a.seq || 0) - (b.seq || 0))
-
-        const lastLineupEvent = lineupEvents.length > 0 ? lineupEvents[lineupEvents.length - 1] : null
-        const lastLiberoEvent = liberoEvents.length > 0 ? liberoEvents[liberoEvents.length - 1] : null
-
-        // If the most recent event is a libero entry, return that info
-        if (lastLiberoEvent) {
-          const isLiberoOnCourt = lastLiberoEvent.type === 'LIBERO_ENTRY'
-          if (isLiberoOnCourt) {
-            // Build liberoSubstitution object from LIBERO_ENTRY event
-            return {
-              liberoNumber: lastLiberoEvent.payload?.liberoIn,
-              playerNumber: lastLiberoEvent.payload?.playerOut,
-              position: lastLiberoEvent.payload?.position,
-              liberoType: lastLiberoEvent.payload?.liberoType
-            }
-          } else {
-            // LIBERO_EXIT - no libero currently on court
-            return null
-          }
-        }
-
-        // Fall back to lineup event's liberoSubstitution if no libero events
-        if (lastLineupEvent) {
-          return lastLineupEvent.payload?.liberoSubstitution || null
-        }
-        return null
-      }
 
       const getInitialLineupForTeam = (teamKey) => {
         const initialLineup = allEvents.find(e =>
@@ -963,8 +903,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       const rawLineupB = getLineupForTeam(teamBKey)
       const initialLineupA = getInitialLineupForTeam(teamAKey)
       const initialLineupB = getInitialLineupForTeam(teamBKey)
-      const liberoSubA = getLiberoSubForTeam(teamAKey)
-      const liberoSubB = getLiberoSubForTeam(teamBKey)
+
 
       // Captain info
       const getCaptainInfo = (playersDb) => {
@@ -1037,7 +976,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       const matchTeamSanctionsB = getMatchTeamSanctionsForTeam(teamBKey)
 
       // Build rich lineup
-      const buildRichLineup = (rawLineup, initialLineup, playersDb, subsDetails, sanctions, isServingTeam, captainNum, courtCaptainNum, liberoSubstitution) => {
+      const buildRichLineup = (rawLineup, initialLineup, playersDb, sanctions, isServingTeam, captainNum, courtCaptainNum) => {
         if (!rawLineup) return null
 
         const backRowPositions = ['I', 'V', 'VI']
@@ -1053,17 +992,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
           const playerNumStr = String(playerNum)
           const player = playersDb.find(p => String(p.number) === playerNumStr)
           const isBackRow = backRowPositions.includes(position)
-          const isLibero = player && (player.libero === 'libero1' || player.libero === 'libero2' || player.libero === 'redesignated')
 
-          let replacedNumber = null
-          if (isLibero && liberoSubstitution && String(liberoSubstitution.liberoNumber) === playerNumStr) {
-            replacedNumber = liberoSubstitution.playerNumber
-          }
 
           const isInInitialLineup = initialLineup && Object.values(initialLineup).some(num => String(num) === playerNumStr)
-          const subEvent = subsDetails.find(s => String(s.playerIn) === playerNumStr)
-          const isSubstituted = !!subEvent && !isInInitialLineup
-          const substitutedFor = isSubstituted ? Number(subEvent.playerOut) : null
+
 
           const playerSanctions = sanctions.filter(s => String(s.player) === playerNumStr)
           const hasSanction = playerSanctions.length > 0
@@ -1074,7 +1006,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
 
           const positionData = {
             number: Number(playerNum),
-            isSubstituted,
             hasSanction,
             isCaptain,
             isCourtCaptain
@@ -1084,16 +1015,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
             positionData.isServing = isServingTeam
           }
 
-          if (isBackRow) {
-            positionData.isLibero = isLibero
-            if (isLibero) {
-              positionData.replacedNumber = replacedNumber
-            }
-          }
 
-          if (isSubstituted) {
-            positionData.substitutedFor = substitutedFor
-          }
 
           if (hasSanction) {
             positionData.sanctions = playerSanctions.map(s => ({ type: s.type, ts: s.ts }))
@@ -1105,8 +1027,8 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         return Object.keys(richLineup).length > 0 ? richLineup : null
       }
 
-      const lineupA = buildRichLineup(rawLineupA, initialLineupA, teamAPlayersDb, subsA, sanctionsA, servingTeam === teamAKey, captainA, courtCaptainA, liberoSubA)
-      const lineupB = buildRichLineup(rawLineupB, initialLineupB, teamBPlayersDb, subsB, sanctionsB, servingTeam === teamBKey, captainB, courtCaptainB, liberoSubB)
+      const lineupA = buildRichLineup(rawLineupA, initialLineupA, teamAPlayersDb, sanctionsA, servingTeam === teamAKey, captainA, courtCaptainA)
+      const lineupB = buildRichLineup(rawLineupB, initialLineupB, teamBPlayersDb, sanctionsB, servingTeam === teamBKey, captainB, courtCaptainB)
 
       // Check rally status
       const lastRallyStart = currentSetEvents.filter(e => e.type === 'rally_start').sort((a, b) => (b.seq || 0) - (a.seq || 0))[0]
@@ -1365,8 +1287,8 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         if (!freshMatch) return
 
         const [freshHomeTeam, freshAwayTeam, freshSets, freshEvents, freshHomePlayers, freshAwayPlayers] = await Promise.all([
-          db.teams.get(freshMatch?.homeTeamId),
-          db.teams.get(freshMatch?.awayTeamId),
+          freshMatch?.homeTeamId ? db.teams.get(freshMatch.homeTeamId) : null,
+          freshMatch?.awayTeamId ? db.teams.get(freshMatch.awayTeamId) : null,
           db.sets.where('matchId').equals(matchId).toArray(),
           db.events.where('matchId').equals(matchId).toArray(),
           freshMatch?.homeTeamId ? db.players.where('teamId').equals(freshMatch.homeTeamId).toArray() : [],
@@ -1435,8 +1357,8 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         if (matchPin && String(matchPin).trim() === pinStr && connectionEnabled && freshMatch.status !== 'final') {
           // Fetch all related data fresh from IndexedDB
           const [freshHomeTeam, freshAwayTeam, freshSets, freshEvents, freshHomePlayers, freshAwayPlayers] = await Promise.all([
-            db.teams.get(freshMatch?.homeTeamId),
-            db.teams.get(freshMatch?.awayTeamId),
+            freshMatch?.homeTeamId ? db.teams.get(freshMatch.homeTeamId) : null,
+            freshMatch?.awayTeamId ? db.teams.get(freshMatch.awayTeamId) : null,
             db.sets.where('matchId').equals(matchId).toArray(),
             db.events.where('matchId').equals(matchId).toArray(),
             freshMatch?.homeTeamId ? db.players.where('teamId').equals(freshMatch.homeTeamId).toArray() : [],
@@ -1532,8 +1454,8 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         }
 
         const [freshHomeTeam, freshAwayTeam, freshSets, freshEvents, freshHomePlayers, freshAwayPlayers] = await Promise.all([
-          db.teams.get(freshMatch?.homeTeamId),
-          db.teams.get(freshMatch?.awayTeamId),
+          freshMatch?.homeTeamId ? db.teams.get(freshMatch.homeTeamId) : null,
+          freshMatch?.awayTeamId ? db.teams.get(freshMatch.awayTeamId) : null,
           db.sets.where('matchId').equals(matchId).toArray(),
           db.events.where('matchId').equals(matchId).toArray(),
           freshMatch?.homeTeamId ? db.players.where('teamId').equals(freshMatch.homeTeamId).toArray() : [],
@@ -2670,7 +2592,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     }
 
     // Check if last event is a sub-event following a point (decimal seq like 5.1 or 5.2)
-    // This covers rotation lineups, libero_exit, etc. that happen automatically after a point
+    // This covers rotation lineups, etc. that happen automatically after a point
     const lastSeq = lastEvent.seq || 0
     const isSubEvent = lastSeq !== Math.floor(lastSeq)
     if (isSubEvent) {
@@ -2873,9 +2795,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       return {
         lineupEvents: [],
         currentLineup: null,
-        playersOnCourt: [],
-        positionLiberoMap: {},
-        playerLiberoMap: {}
+        playersOnCourt: []
       }
     }
 
@@ -2902,9 +2822,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       return {
         lineupEvents,
         currentLineup: null,
-        playersOnCourt: [],
-        positionLiberoMap: {},
-        playerLiberoMap: {}
+        playersOnCourt: []
       }
     }
 
@@ -2955,52 +2873,12 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       .filter(num => !Number.isNaN(num) && num !== 0)
 
 
-    const positionLiberoMap = {}
-    const playerLiberoMap = {}
 
-    const findLatestLiberoSubstitution = (liberoNumber) => {
-      // Find the most recent libero substitution for this libero, regardless of position
-      // This is important because positions change during rotation, but the libero number stays the same
-      for (let i = lineupEvents.length - 1; i >= 0; i--) {
-        const maybeSub = lineupEvents[i]?.payload?.liberoSubstitution
-        if (
-          maybeSub &&
-          String(maybeSub.liberoNumber) === String(liberoNumber)
-        ) {
-          return maybeSub
-        }
-      }
-      return null
-    }
-
-    for (const [position, playerNumber] of Object.entries(cleanedCurrentLineup)) {
-      const player = teamPlayers.find(p => String(p.number) === String(playerNumber))
-      if (player?.libero && player.libero !== '') {
-        // Find the libero substitution by libero number (not position, since position changes during rotation)
-        const subInfo = findLatestLiberoSubstitution(playerNumber)
-        const originalPlayerNumber = subInfo?.playerNumber ?? null
-
-        positionLiberoMap[position] = {
-          liberoNumber: Number(playerNumber),
-          liberoType: player.libero,
-          playerNumber: originalPlayerNumber
-        }
-
-        if (originalPlayerNumber !== null && originalPlayerNumber !== undefined) {
-          playerLiberoMap[String(originalPlayerNumber)] = {
-            liberoNumber: Number(playerNumber),
-            liberoType: player.libero
-          }
-        }
-      }
-    }
 
     return {
       lineupEvents,
       currentLineup: cleanedCurrentLineup, // Return cleaned lineup
-      playersOnCourt,
-      positionLiberoMap,
-      playerLiberoMap
+      playersOnCourt
     }
   }, [data?.events, data?.set, data?.homePlayers, data?.awayPlayers])
 
@@ -3093,132 +2971,44 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   }, [checkAndRequestCaptainOnCourt])
 
   const buildOnCourt = useCallback((players, isLeft, teamKey) => {
-    const { currentLineup, positionLiberoMap } = getTeamLineupState(teamKey)
+    // Beach volleyball: Only 2 players per team, positions I and II
+    const beachPositions = ['I', 'II']
 
-    // Check if there's an INITIAL lineup set for this team in the current set
-    const hasInitialLineup = data?.events?.some(e =>
-      e.type === 'lineup' &&
-      e.payload?.team === teamKey &&
-      e.setIndex === data?.set?.index &&
-      e.payload?.isInitial === true
-    )
+    // For beach volleyball, simply return the 2 players sorted by number
+    // Position I = first server, Position II = other player
+    const sortedPlayers = [...(players || [])].sort((a, b) => (a.number || 0) - (b.number || 0)).slice(0, 2)
 
-    // Fixed positions:
-    // Left team: Front row (0,1,2): IV, III, II | Back row (3,4,5): V, VI, I
-    // Right team: Front row (0,1,2): II, III, IV | Back row (3,4,5): I, VI, V (I is top right)
-    const leftPositions = ['IV', 'III', 'II', 'V', 'VI', 'I']
-    const rightPositions = ['II', 'III', 'IV', 'I', 'VI', 'V']
-    const fixedPositions = isLeft ? leftPositions : rightPositions
+    // Get first serve player from coin toss to determine who is position I
+    const firstServeField = teamKey === 'home' ? 'team1FirstServe' : 'team2FirstServe'
+    const firstServeNumber = data?.match?.[firstServeField]
 
-    // If initial lineup hasn't been set for this set, show empty placeholders
-    // This ensures all players are on the bench (available for sanctions)
-    if (!hasInitialLineup) {
-      return Array(6).fill(null).map((_, idx) => {
-        return {
-          id: `placeholder-${idx}`,
-          number: '',
-          isPlaceholder: true,
-          position: fixedPositions[idx],
-          isCaptain: false
-        }
-      })
-    }
-
-    // Use the current lineup (could be initial, rotation, or substitution)
-    const savedLineup = currentLineup
-
-    // If lineup is saved, use it to map players to fixed positions
-    if (savedLineup) {
-      // Ensure savedLineup only has valid positions (defensive check)
-      const validPositions = ['I', 'II', 'III', 'IV', 'V', 'VI']
-      const cleanedLineup = {}
-      for (const pos of validPositions) {
-        // Only include positions that have a valid player number (not undefined, null, or empty string)
-        const playerNumber = savedLineup[pos]
-        if (playerNumber !== undefined && playerNumber !== null && playerNumber !== '') {
-          cleanedLineup[pos] = playerNumber
-        }
-      }
-      // Ensure we only return exactly 6 players, using only the fixed positions
-      const result = fixedPositions.slice(0, 6).map((pos, idx) => {
-        const playerNumber = cleanedLineup[pos]
-        // Handle both undefined/null and empty string cases, but preserve 0 as valid
-        const hasPlayerNumber = playerNumber !== undefined && playerNumber !== null && playerNumber !== ''
-        // Convert both to strings for comparison to handle number/string mismatches
-        const player = hasPlayerNumber ? players?.find(p => String(p.number) === String(playerNumber)) : null
-        const isLibero = player?.libero && player.libero !== ''
-        const liberoSub = positionLiberoMap[pos]
-
-        // Check if this player is the court captain (only when team captain is NOT on court)
-        const courtCaptainField = teamKey === 'home' ? 'homeCourtCaptain' : 'awayCourtCaptain'
-        const courtCaptainNum = data?.match?.[courtCaptainField]
-        const teamCaptain = players?.find(p => p.isCaptain || p.captain)
-        const captainOnCourt = teamCaptain && currentLineup && Object.values(currentLineup).some(num => String(num) === String(teamCaptain.number))
-        const isCourtCaptain = !captainOnCourt && hasPlayerNumber && courtCaptainNum && String(courtCaptainNum) === String(playerNumber)
-
-        const playerData = {
-          id: player?.id ?? `placeholder-${idx}`,
-          number: hasPlayerNumber ? String(playerNumber) : '',
-          name: player?.name || '',
-          firstName: player?.firstName || '',
-          lastName: player?.lastName || '',
-          isPlaceholder: !hasPlayerNumber,
-          position: pos, // Fixed position on court
-          isCaptain: player?.isCaptain || false,
-          isCourtCaptain: isCourtCaptain,
-          isLibero: isLibero || !!liberoSub,
-          substitutedPlayerNumber: liberoSub?.playerNumber || null,
-          liberoType: liberoSub?.liberoType || (isLibero ? player.libero : null)
-        }
-        return playerData
-      })
-
-      // Safety check: ensure we return exactly 6 players
-      if (result.length !== 6) {
-        // Pad or trim to exactly 6
-        while (result.length < 6) {
-          const idx = result.length
-          result.push({
-            id: `placeholder-${idx}`,
-            number: '',
-            isPlaceholder: true,
-            position: fixedPositions[idx] || '',
-            isCaptain: false
-          })
-        }
-        return result.slice(0, 6)
+    // Build the 2-player court
+    return beachPositions.map((pos, idx) => {
+      let player = null
+      if (pos === 'I' && firstServeNumber) {
+        // Position I is the first server
+        player = sortedPlayers.find(p => String(p.number) === String(firstServeNumber))
+      } else if (pos === 'II' && firstServeNumber) {
+        // Position II is the other player
+        player = sortedPlayers.find(p => String(p.number) !== String(firstServeNumber))
+      } else {
+        // Fallback: assign by array index
+        player = sortedPlayers[idx]
       }
 
-      return result
-    }
-
-    // Fallback: use default player list
-    const trimmed = (players || []).slice(0, 6)
-    const placeholders = Array.from({ length: 6 - trimmed.length }, (_, idx) => ({
-      placeholder: true,
-      number: `–`
-    }))
-    const allPlayers = [...trimmed, ...placeholders]
-
-    return allPlayers.map((player, idx) => {
-      const assignedPos = fixedPositions[idx]
       return {
-        id: player.id ?? `placeholder-${idx}`,
-        number:
-          player.number !== undefined && player.number !== null
-            ? player.number
-            : player.placeholder
-              ? '–'
-              : '',
-        name: player.name || '',
-        firstName: player.firstName || '',
-        lastName: player.lastName || '',
-        isPlaceholder: !!player.placeholder,
-        position: assignedPos,
-        isCaptain: player.isCaptain || false
+        id: player?.id ?? `placeholder-${idx}`,
+        number: player?.number !== undefined && player?.number !== null ? String(player.number) : '',
+        name: player?.name || '',
+        firstName: player?.firstName || '',
+        lastName: player?.lastName || '',
+        isPlaceholder: !player,
+        position: pos,
+        isCaptain: player?.isCaptain || false,
+        isCourtCaptain: false
       }
     })
-  }, [rallyStatus, isFirstRally, getTeamLineupState, data?.events, data?.set, data?.match?.homeCourtCaptain, data?.match?.awayCourtCaptain])
+  }, [data?.homePlayers, data?.awayPlayers, data?.match])
 
   const getCurrentLineup = useCallback(
     teamKey => {
@@ -3247,19 +3037,52 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     [data?.events, data?.set]
   )
 
+  // Helper to build beach volleyball team display name from player last names
+  const buildBeachTeamName = useCallback((players, teamName, country) => {
+    // For beach volleyball, build name from player last names if available
+    if (players && players.length >= 1) {
+      const sortedPlayers = [...players].sort((a, b) => (a.number || 0) - (b.number || 0))
+      const lastNames = sortedPlayers
+        .slice(0, 2)
+        .map(p => {
+          // Try lastName first, then extract from name, then use first name
+          if (p.lastName) return p.lastName
+          if (p.name && p.name.includes(' ')) return p.name.split(' ').pop()
+          if (p.name) return p.name
+          if (p.firstName) return p.firstName
+          // Last resort: use player number
+          if (p.number !== undefined && p.number !== null) return `#${p.number}`
+          return null
+        })
+        .filter(n => n)
+      if (lastNames.length >= 1) {
+        const baseName = lastNames.join('/')
+        return country ? `${baseName} (${country})` : baseName
+      }
+    }
+    // Fallback to team name (accept any team name, even generic ones)
+    if (teamName) {
+      return country ? `${teamName} (${country})` : teamName
+    }
+    // Final fallback with just country
+    return country ? `Team (${country})` : null
+  }, [])
+
   const leftTeam = useMemo(() => {
     if (!data) return { name: 'Team A', color: '#ef4444', players: [] }
     const players = leftIsHome ? data.homePlayers : data.awayPlayers
     const team = leftIsHome ? data.homeTeam : data.awayTeam
     const teamKey = leftIsHome ? 'home' : 'away'
     const isTeamA = teamKey === teamAKey
+    const country = leftIsHome ? data.match?.team1Country : data.match?.team2Country
+    const beachName = buildBeachTeamName(players, team?.name, country)
     return {
-      name: team?.name || (leftIsHome ? 'Home' : 'Away'),
+      name: beachName || team?.name || (leftIsHome ? 'Home' : 'Away'),
       color: team?.color || (leftIsHome ? '#ef4444' : '#3b82f6'),
       playersOnCourt: buildOnCourt(players, true, teamKey),
       isTeamA
     }
-  }, [buildOnCourt, data, leftIsHome, teamAKey])
+  }, [buildOnCourt, buildBeachTeamName, data, leftIsHome, teamAKey])
 
   const rightTeam = useMemo(() => {
     if (!data) return { name: 'Team B', color: '#3b82f6', players: [] }
@@ -3267,13 +3090,15 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     const team = leftIsHome ? data.awayTeam : data.homeTeam
     const teamKey = leftIsHome ? 'away' : 'home'
     const isTeamA = teamKey === teamAKey
+    const country = leftIsHome ? data.match?.team2Country : data.match?.team1Country
+    const beachName = buildBeachTeamName(players, team?.name, country)
     return {
-      name: team?.name || (leftIsHome ? 'Away' : 'Home'),
+      name: beachName || team?.name || (leftIsHome ? 'Away' : 'Home'),
       color: team?.color || (leftIsHome ? '#3b82f6' : '#ef4444'),
       playersOnCourt: buildOnCourt(players, false, teamKey),
       isTeamA
     }
-  }, [buildOnCourt, data, leftIsHome, teamAKey])
+  }, [buildOnCourt, buildBeachTeamName, data, leftIsHome, teamAKey])
 
   // Check if lineups are set for each team in the current set
   const leftTeamLineupSet = useMemo(() => {
@@ -3301,157 +3126,51 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   // Track which lineups we've already validated (to prevent infinite modal loops)
   const validatedLineupRef = useRef({ home: null, away: null })
 
-  // Validate lineup - check if any player in lineup has become a libero
-  // If so, invalidate the lineup and reopen lineup modal (only once per issue)
-  useEffect(() => {
-    if (!data?.events || !data?.set || !data?.homePlayers || !data?.awayPlayers) return
-    if (lineupModal) return // Don't interfere if modal already open
-
-    const validateTeamLineup = (teamKey) => {
-      const players = teamKey === 'home' ? data.homePlayers : data.awayPlayers
-      const liberoNumbers = new Set(
-        players.filter(p => p.libero && p.libero !== '').map(p => Number(p.number))
-      )
-
-      // Find the most recent initial lineup event for this team in current set
-      const initialLineups = data.events
-        .filter(e =>
-          e.type === 'lineup' &&
-          e.payload?.team === teamKey &&
-          e.setIndex === data.set.index &&
-          e.payload?.isInitial
-        )
-        .sort((a, b) => new Date(b.ts) - new Date(a.ts)) // Most recent first
-
-      const initialLineup = initialLineups[0]
-      if (!initialLineup || !initialLineup.payload?.lineup) return null
-
-      // Check if any player in lineup is now a libero
-      const lineup = initialLineup.payload.lineup
-      const invalidPlayers = []
-      for (const [position, playerNumber] of Object.entries(lineup)) {
-        if (liberoNumbers.has(Number(playerNumber))) {
-          invalidPlayers.push({ position, playerNumber })
-        }
-      }
-
-      if (invalidPlayers.length > 0) {
-        // Create a key for this specific issue
-        const issueKey = `${data.set.index}-${invalidPlayers.map(p => p.playerNumber).sort().join(',')}`
-
-        // Only show modal if we haven't already shown it for this exact issue
-        if (validatedLineupRef.current[teamKey] !== issueKey) {
-          validatedLineupRef.current[teamKey] = issueKey
-          return teamKey
-        }
-      } else {
-        // Lineup is valid, clear the validation flag
-        validatedLineupRef.current[teamKey] = null
-      }
-      return null
-    }
-
-    const leftTeamKey = leftIsHome ? 'home' : 'away'
-    const rightTeamKey = leftIsHome ? 'away' : 'home'
-
-    // Check if left team lineup has invalid players
-    const invalidLeftTeam = leftTeamLineupSet ? validateTeamLineup(leftTeamKey) : null
-    const invalidRightTeam = rightTeamLineupSet ? validateTeamLineup(rightTeamKey) : null
-
-    if (invalidLeftTeam) {
-      setLineupModal({ team: invalidLeftTeam, mode: 'initial', reason: 'Player in lineup is now a libero - please update lineup' })
-    } else if (invalidRightTeam) {
-      setLineupModal({ team: invalidRightTeam, mode: 'initial', reason: 'Player in lineup is now a libero - please update lineup' })
-    }
-  }, [data?.events, data?.set, data?.homePlayers, data?.awayPlayers, leftIsHome, leftTeamLineupSet, rightTeamLineupSet, lineupModal])
-
-  // Get bench players, liberos, and bench officials for each team
+  // Get bench players and bench officials for each team (beach volleyball: no liberos)
   const leftTeamBench = useMemo(() => {
-    if (!data) return { benchPlayers: [], liberos: [], benchOfficials: [] }
+    if (!data) return { benchPlayers: [], benchOfficials: [] }
     const teamKey = leftIsHome ? 'home' : 'away'
     const players = leftIsHome ? data.homePlayers : data.awayPlayers
     const benchOfficials = leftIsHome ? (data.match?.bench_home || []) : (data.match?.bench_away || [])
 
-    const { playersOnCourt, playerLiberoMap } = getTeamLineupState(teamKey)
+    const { playersOnCourt } = getTeamLineupState(teamKey)
     const playersOnCourtSet = new Set(playersOnCourt.map(num => Number(num)))
-
 
     const benchPlayers = players
       .filter(p => {
         const playerNumber = Number(p.number)
-        if (Number.isNaN(playerNumber) || playersOnCourtSet.has(playerNumber) || (p.libero && p.libero !== '')) {
+        if (Number.isNaN(playerNumber) || playersOnCourtSet.has(playerNumber)) {
           return false
         }
-
-        // Keep expelled/disqualified/exceptionally substituted players on bench (they'll show with X)
-        // They should be visible but not selectable for substitutions/lineups
-
         return true
       })
-      .map(p => {
-        const playerNumber = Number(p.number)
-        const substitutedInfo = playerLiberoMap[String(playerNumber)] || null
-        return {
-          ...p,
-          substitutedByLibero: substitutedInfo
-        }
-      })
-
-    const liberos = players
-      .filter(p => {
-        const playerNumber = Number(p.number)
-        return p.libero && p.libero !== '' && !playersOnCourtSet.has(playerNumber)
-      })
-      .sort((a, b) => (Number(a.number) || 0) - (Number(b.number) || 0))
 
     return {
       benchPlayers,
-      liberos,
       benchOfficials
     }
   }, [data, leftIsHome, getTeamLineupState, teamAKey, data?.events])
 
   const rightTeamBench = useMemo(() => {
-    if (!data) return { benchPlayers: [], liberos: [], benchOfficials: [] }
+    if (!data) return { benchPlayers: [], benchOfficials: [] }
     const teamKey = leftIsHome ? 'away' : 'home'
     const players = leftIsHome ? data.awayPlayers : data.homePlayers
     const benchOfficials = leftIsHome ? (data.match?.bench_away || []) : (data.match?.bench_home || [])
 
-    const { playersOnCourt, playerLiberoMap } = getTeamLineupState(teamKey)
+    const { playersOnCourt } = getTeamLineupState(teamKey)
     const playersOnCourtSet = new Set(playersOnCourt.map(num => Number(num)))
-
 
     const benchPlayers = players
       .filter(p => {
         const playerNumber = Number(p.number)
-        if (Number.isNaN(playerNumber) || playersOnCourtSet.has(playerNumber) || (p.libero && p.libero !== '')) {
+        if (Number.isNaN(playerNumber) || playersOnCourtSet.has(playerNumber)) {
           return false
         }
-
-        // Keep expelled/disqualified/exceptionally substituted players on bench (they'll show with X)
-        // They should be visible but not selectable for substitutions/lineups
-
         return true
       })
-      .map(p => {
-        const playerNumber = Number(p.number)
-        const substitutedInfo = playerLiberoMap[String(playerNumber)] || null
-        return {
-          ...p,
-          substitutedByLibero: substitutedInfo
-        }
-      })
-
-    const liberos = players
-      .filter(p => {
-        const playerNumber = Number(p.number)
-        return p.libero && p.libero !== '' && !playersOnCourtSet.has(playerNumber)
-      })
-      .sort((a, b) => (Number(a.number) || 0) - (Number(b.number) || 0))
 
     return {
       benchPlayers,
-      liberos,
       benchOfficials
     }
   }, [data, leftIsHome, getTeamLineupState, teamAKey, data?.events])
@@ -3898,7 +3617,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
 
             const lastLineupEvent = lineupEvents[lineupEvents.length - 1]
             const rawLineup = lastLineupEvent.payload?.lineup || {}
-            const liberoSubstitution = lastLineupEvent.payload?.liberoSubstitution
 
             // Get initial lineup (first lineup event)
             const initialLineup = lineupEvents[0]?.payload?.lineup || {}
@@ -3932,16 +3650,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
               // Add serving info for position I
               if (position === 'I' && isServingTeam) {
                 positionData.isServing = true
-              }
-
-              // Add libero info
-              if (player?.libero && player.libero !== '') {
-                positionData.isLibero = true
-                positionData.liberoType = player.libero
-                // Find who the libero replaced
-                if (liberoSubstitution && String(liberoSubstitution.liberoNumber) === playerNumStr) {
-                  positionData.replacedNumber = liberoSubstitution.playerNumber
-                }
               }
 
               // Add substitution info
@@ -4058,7 +3766,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         console.log(`[PERF] After syncToReferee: +${(performance.now() - _t0).toFixed(0)}ms`)
 
         // Sync live state to Supabase for key events
-        const keyEvents = ['point', 'timeout', 'substitution', 'set_start', 'set_end', 'lineup', 'sanction', 'libero_entry', 'libero_exit', 'libero_exchange', 'court_captain_designation']
+        const keyEvents = ['point', 'timeout', 'substitution', 'set_start', 'set_end', 'lineup', 'sanction', 'court_captain_designation']
         if (keyEvents.includes(type)) {
           const eventTeam = payload?.team || null
           let eventData = null
@@ -4069,10 +3777,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
           } else if (type === 'set_end') {
             // Note: logEvent('set_end', { team: winner, ... }) uses 'team' for the winner
             eventData = { setIndex: payload?.setIndex || data.set.index, winner: payload?.team }
-          } else if (type === 'libero_entry' || type === 'libero_exit') {
-            eventData = { liberoNumber: payload?.liberoNumber, playerNumber: payload?.playerNumber }
-          } else if (type === 'libero_exchange') {
-            eventData = { liberoIn: payload?.liberoIn, liberoOut: payload?.liberoOut }
           } else if (type === 'court_captain_designation') {
             eventData = { playerNumber: payload?.playerNumber }
           } else if (type === 'sanction') {
@@ -4085,7 +3789,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
           }
           // For events that change the lineup, don't use cached snapshot - it was captured BEFORE the event
           // was added to the database. Let syncLiveStateToSupabase fetch a fresh one.
-          const lineupChangingEvents = ['libero_entry', 'libero_exit', 'libero_exchange', 'substitution', 'lineup']
+          const lineupChangingEvents = ['substitution', 'lineup']
           const useSnapshot = lineupChangingEvents.includes(type) ? null : stateSnapshot
           syncLiveStateToSupabase(type, eventTeam, eventData, useSnapshot)
           console.log(`[PERF] After syncLiveStateToSupabase: +${(performance.now() - _t0).toFixed(0)}ms`)
@@ -4125,13 +3829,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
 
     // Check if this point would end the set
     if (homePoints >= pointsToWin && homePoints - awayPoints >= 2) {
-      // Close all libero modals
-      setLiberoRotationModal(null)
-      setLiberoReentryModal(null)
-      setLiberoConfirm(null)
-      setLiberoDropdown(null)
-      setExchangeLiberoDropdown(null)
-
       // Calculate current set scores to determine if this is match-ending
       const allSets = await db.sets.where({ matchId }).toArray()
       const finishedSets = allSets.filter(s => s.finished)
@@ -4147,13 +3844,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       return true
     }
     if (awayPoints >= pointsToWin && awayPoints - homePoints >= 2) {
-      // Close all libero modals
-      setLiberoRotationModal(null)
-      setLiberoReentryModal(null)
-      setLiberoConfirm(null)
-      setLiberoDropdown(null)
-      setExchangeLiberoDropdown(null)
-
       // Calculate current set scores to determine if this is match-ending
       const allSets = await db.sets.where({ matchId }).toArray()
       const finishedSets = allSets.filter(s => s.finished)
@@ -4444,237 +4134,17 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
           .sort((a, b) => new Date(b.ts) - new Date(a.ts)) // Most recent first
 
         let currentLineup = null
-        let liberoSubstitution = null
 
         if (teamLineupEvents.length > 0) {
           // Use the most recent lineup
           const lastLineupEvent = teamLineupEvents[0]
           currentLineup = lastLineupEvent.payload?.lineup
-          liberoSubstitution = lastLineupEvent?.payload?.liberoSubstitution
         }
 
         if (currentLineup) {
-
           // Rotate the lineup
           const rotatedLineup = rotateLineup(currentLineup)
           if (rotatedLineup) {
-            // Rotate the libero substitution position if it exists
-            let rotatedLiberoSubstitution = null
-            if (liberoSubstitution) {
-              // Map old position to new position after rotation
-              const positionMap = {
-                'I': 'VI',
-                'II': 'I',
-                'III': 'II',
-                'IV': 'III',
-                'V': 'IV',
-                'VI': 'V'
-              }
-              const newPosition = positionMap[liberoSubstitution.position]
-              if (newPosition) {
-                rotatedLiberoSubstitution = {
-                  ...liberoSubstitution,
-                  position: newPosition
-                }
-              }
-            }
-
-            // Check if any libero is in front-row positions (II, III, IV) - remove them immediately
-            const teamPlayers = teamKey === 'home' ? data.homePlayers : data.awayPlayers
-            const frontRowPositions = ['II', 'III', 'IV']
-            let liberoInFrontRow = null
-
-            for (const [pos, num] of Object.entries(rotatedLineup)) {
-              if (frontRowPositions.includes(pos)) {
-                const player = teamPlayers?.find(p => String(p.number) === String(num))
-                if (player?.libero && player.libero !== '') {
-                  liberoInFrontRow = [pos, num]
-                  break
-                }
-              }
-            }
-
-            // If libero is in front row, automatically remove them
-            let liberoExitedInfo = null
-            if (liberoInFrontRow) {
-              const [position, liberoNumber] = liberoInFrontRow
-
-              // Find the original player that should be in this position
-              // Query database directly for lineup events (data.events might be stale)
-              const allLineupEventsForLibero = await db.events
-                .where('matchId')
-                .equals(matchId)
-                .toArray()
-              const allLineupEventsFiltered = allLineupEventsForLibero
-                .filter(e =>
-                  e.type === 'lineup' &&
-                  e.payload?.team === teamKey &&
-                  e.setIndex === setIndex
-                )
-                .sort((a, b) => new Date(b.ts) - new Date(a.ts)) // Most recent first
-
-              let originalPlayerNumber = null
-
-              console.log('[Rotation] Libero in front row detected:', {
-                position,
-                liberoNumber,
-                rotatedLiberoSubstitution,
-                rotatedLineup
-              })
-
-              // First, try to use the rotated libero substitution if the libero matches
-              // The position in rotatedLiberoSubstitution is the NEW position after rotation
-              // But we need to check if this libero is the one in the front row position
-              if (rotatedLiberoSubstitution &&
-                String(rotatedLiberoSubstitution.liberoNumber) === String(liberoNumber)) {
-                // Check if this is the same libero (regardless of position match, since position was rotated)
-                originalPlayerNumber = rotatedLiberoSubstitution.playerNumber
-                console.log('[Rotation] Found original player from rotatedLiberoSubstitution:', originalPlayerNumber)
-              } else {
-                // If rotatedLiberoSubstitution doesn't match, search for the original libero substitution
-                // We need to find the libero substitution BEFORE rotation to get the original player
-                for (const event of allLineupEventsFiltered) {
-                  if (event.payload?.liberoSubstitution &&
-                    String(event.payload.liberoSubstitution.liberoNumber) === String(liberoNumber)) {
-                    // Found the libero substitution - use the original player
-                    originalPlayerNumber = event.payload.liberoSubstitution.playerNumber
-                    break
-                  }
-                }
-
-                // If still not found, we need to find who was in the PRE-ROTATION position
-                // The current position is AFTER rotation, so we need to reverse the rotation
-                // to find who was there before rotation
-                if (!originalPlayerNumber) {
-                  // Reverse rotation map: if libero is now in position X after rotation,
-                  // they were in position Y before rotation, where Y rotates to X
-                  // Rotation: II→I, III→II, IV→III, V→IV, VI→V, I→VI
-                  // Reverse: I→II, II→III, III→IV, IV→V, V→VI, VI→I
-                  const reversePositionMap = {
-                    'I': 'II',
-                    'II': 'III',
-                    'III': 'IV',
-                    'IV': 'V',
-                    'V': 'VI',
-                    'VI': 'I'
-                  }
-                  const preRotationPosition = reversePositionMap[position]
-
-                  // Now find who was in the pre-rotation position before the libero entered
-                  for (const event of allLineupEventsFiltered) {
-                    const lineup = event.payload?.lineup
-                    if (lineup && lineup[preRotationPosition]) {
-                      const playerNum = lineup[preRotationPosition]
-                      const player = teamPlayers?.find(p => String(p.number) === String(playerNum))
-                      // If this position had a non-libero player, and it's not the libero, use it
-                      if (player && (!player.libero || player.libero === '') &&
-                        String(playerNum) !== String(liberoNumber)) {
-                        // But check if this player is already in the rotated lineup
-                        let playerAlreadyInRotatedLineup = false
-                        for (const [pos, num] of Object.entries(rotatedLineup)) {
-                          if (String(num) === String(playerNum)) {
-                            playerAlreadyInRotatedLineup = true
-                            break
-                          }
-                        }
-                        if (!playerAlreadyInRotatedLineup) {
-                          originalPlayerNumber = Number(playerNum)
-                          break
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-
-              // If we found the original player, restore them
-              if (originalPlayerNumber) {
-                // Check if the original player is already in the rotated lineup in another position
-                // If so, we should NOT restore them (they're already on court in their rotated position)
-                let originalPlayerAlreadyOnCourt = false
-                for (const [pos, playerNum] of Object.entries(rotatedLineup)) {
-                  if (pos !== position && String(playerNum) === String(originalPlayerNumber)) {
-                    // The original player is already in another position after rotation
-                    // This means they rotated to a different position, so we should NOT restore them here
-                    originalPlayerAlreadyOnCourt = true
-                    break
-                  }
-                }
-
-                if (originalPlayerAlreadyOnCourt) {
-                  // The original player is already on court in another position
-                  // This indicates a bug in libero tracking - the recorded "original player" is wrong
-                  // BUG: This should NEVER happen - the player replaced by libero should be on bench
-                  console.error('[Rotation] BUG: Original player', originalPlayerNumber,
-                    'found in rotatedLineup at another position. This is a libero tracking bug!',
-                    { rotatedLineup, liberoNumber, position, liberoSubstitution })
-                  // NEVER leave position empty - restore the original player anyway
-                  // The duplicate will need to be fixed manually
-                  rotatedLineup[position] = String(originalPlayerNumber)
-                  rotatedLiberoSubstitution = null
-                } else {
-                  // Original player is not on court, safe to restore them
-                  rotatedLineup[position] = String(originalPlayerNumber)
-                  rotatedLiberoSubstitution = null // Clear libero substitution since libero is out
-                }
-
-                // Store info about the libero that was removed
-                const liberoPlayer = teamPlayers?.find(p => String(p.number) === String(liberoNumber))
-                liberoExitedInfo = {
-                  liberoNumber: Number(liberoNumber),
-                  liberoType: liberoPlayer?.libero,
-                  originalPlayerNumber: originalPlayerNumber
-                }
-
-                // Calculate if this point finishes the set
-                const isSet5 = setIndex === 5
-                const winningScore = isSet5 ? 15 : 25
-                // We must use the NEW scores that were just calculated above
-                // homePoints/awayPoints variables hold the updated score
-                const currentDiff = Math.abs(homePoints - awayPoints)
-                const leaderPoints = Math.max(homePoints, awayPoints)
-                const isSetFinished = leaderPoints >= winningScore && currentDiff >= 2
-
-                // Show modal that libero must go out (if option enabled) AND set is not finished
-                if (liberoExitConfirmation && !isSetFinished) {
-                  setLiberoRotationModal({
-                    team: teamKey,
-                    position: position,
-                    liberoNumber: Number(liberoNumber),
-                    playerNumber: originalPlayerNumber,
-                    liberoType: liberoPlayer?.libero
-                  })
-                }
-
-                // Log libero exit (after point, so use point relative time + 2ms)
-                // Use decimal ID based on the point's action ID (e.g., if point is 1, libero_exit is 1.2)
-                await logEvent('libero_exit', {
-                  team: teamKey,
-                  position: position,
-                  liberoOut: liberoNumber,
-                  playerIn: originalPlayerNumber,
-                  liberoType: liberoPlayer?.libero,
-                  reason: 'rotation_to_front_row'
-                }, { parentSeq: pointSeq })
-
-                // Check if the libero leaving is the court captain
-                const captainOnCourtField = teamKey === 'home' ? 'homeCourtCaptain' : 'awayCourtCaptain'
-                const currentCourtCaptain = data?.match?.[captainOnCourtField]
-                if (String(currentCourtCaptain) === String(liberoNumber)) {
-                  setTimeout(() => {
-                    checkAndRequestCaptainOnCourtRef.current?.(teamKey)
-                  }, 300)
-                }
-              } else {
-                // Fallback: if we can't find the original player, keep libero there
-                // NEVER leave position empty - libero in front row is wrong but 5 players is worse
-                console.warn('[Rotation] Cannot find original player for libero at position', position,
-                  '. Keeping libero in front row. Libero:', liberoNumber)
-                // Don't set to empty - keep libero there (will need manual fix)
-                rotatedLiberoSubstitution = null
-              }
-            }
-
             // Ensure rotated lineup only has exactly 6 positions (defensive check)
             const validPositions = ['I', 'II', 'III', 'IV', 'V', 'VI']
             const cleanedRotatedLineup = {}
@@ -4688,7 +4158,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
             const missingPositions = validPositions.filter(pos => !cleanedRotatedLineup[pos])
             if (missingPositions.length > 0) {
               console.error('[Rotation] CRITICAL BUG: Missing players at positions:', missingPositions,
-                { rotatedLineup, cleanedRotatedLineup, currentLineup, liberoSubstitution })
+                { rotatedLineup, cleanedRotatedLineup, currentLineup })
               // Try to recover from current lineup (pre-rotation)
               for (const pos of missingPositions) {
                 if (currentLineup[pos]) {
@@ -4698,8 +4168,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
               }
             }
 
-            // Save the rotated lineup as a new lineup event (but don't log it - it's automatic rotation)
-            // Use decimal ID based on the point's action ID (e.g., if point is 1, rotation is 1.1)
+            // Save the rotated lineup as a new lineup event
             const rotationSeq = await getNextSubSeq(pointSeq)
             const rotationStateBefore = getStateSnapshot()
             const rotationEventId = await db.events.add({
@@ -4708,11 +4177,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
               type: 'lineup',
               payload: {
                 team: teamKey,
-                lineup: cleanedRotatedLineup,
-                liberoSubstitution: rotatedLiberoSubstitution // Include rotated libero substitution if it exists
+                lineup: cleanedRotatedLineup
               },
               ts: new Date().toISOString(),
-              seq: rotationSeq, // Decimal ID for ordering (e.g., 1.1)
+              seq: rotationSeq,
               stateBefore: rotationStateBefore
             })
 
@@ -4720,90 +4188,12 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
             debugLogger.log('ROTATION', {
               team: teamKey,
               newLineup: cleanedRotatedLineup,
-              liberoSubstitution: rotatedLiberoSubstitution,
               rotationSeq
             }, getStateSnapshot())
 
-            // Don't add to sync_queue for rotation lineups
-            // But sync to referee so they see the updated lineup after rotation
+            // Sync to referee and Supabase
             syncToReferee()
-            // Also sync to Supabase so live state has the rotated lineup
             syncLiveStateToSupabase('rotation', teamKey, { lineup: cleanedRotatedLineup })
-          }
-        }
-      }
-
-      // After point is logged, the scoring team (teamKey) now has serve
-      // So the OTHER team is receiving - check if they had a libero exit
-      // Note: We use teamKey directly instead of getCurrentServe() because the event
-      // might not be in data.events yet (async update), but we know teamKey has serve
-      const otherTeamKey = teamKey === 'home' ? 'away' : 'home'
-
-      // Check if the other team had a libero exit recently
-      const otherTeamLiberoExits = data.events.filter(e =>
-        e.type === 'libero_exit' &&
-        e.payload?.team === otherTeamKey &&
-        e.setIndex === data.set.index &&
-        e.payload?.reason === 'rotation_to_front_row'
-      ).sort((a, b) => new Date(b.ts) - new Date(a.ts))
-
-      if (otherTeamLiberoExits.length > 0) {
-        const lastLiberoExit = otherTeamLiberoExits[0]
-        const liberoNumber = lastLiberoExit.payload?.liberoOut
-        const liberoType = lastLiberoExit.payload?.liberoType
-
-        // Check if libero is not currently on court
-        const liberoOnCourt = getLiberoOnCourt(otherTeamKey)
-        if (!liberoOnCourt && liberoNumber && liberoType) {
-          // Get the other team's current lineup
-          const otherTeamLineupEvents = data.events.filter(e =>
-            e.type === 'lineup' &&
-            e.payload?.team === otherTeamKey &&
-            e.setIndex === data.set.index
-          ).sort((a, b) => new Date(b.ts) - new Date(a.ts))
-
-          if (otherTeamLineupEvents.length > 0) {
-            const otherTeamLineup = otherTeamLineupEvents[0].payload?.lineup
-            const playerInI = otherTeamLineup?.['I']
-
-            if (playerInI && playerInI !== '') {
-              // Get all liberos for this team
-              const teamPlayers = otherTeamKey === 'home' ? data.homePlayers : data.awayPlayers
-              const teamLiberos = teamPlayers?.filter(p => p.libero && p.libero !== '' && !isLiberoUnable(otherTeamKey, p.number)) || []
-
-              // Build available liberos list
-              const availableLiberos = teamLiberos.map(libero => ({
-                number: libero.number,
-                type: libero.libero,
-                label: libero.libero === 'libero1' ? 'L1' : libero.libero === 'redesignated' ? 'LR' : 'L2'
-              }))
-
-              // Find which libero was last on court (default selection)
-              const defaultLiberoIndex = availableLiberos.findIndex(l => String(l.number) === String(liberoNumber) && l.type === liberoType)
-
-              // Ask if they want to put a libero back in at position I (if option enabled)
-              // But don't show if set is ending (set end modal should show first/only)
-              const is5thSetLibero = data.set.index === 5
-              const pointsToWinLibero = is5thSetLibero ? 15 : 25
-              // The ">= 2" check handles deuce scenarios (e.g., 25-24 doesn't end, 26-24 does)
-              const willSetEnd = (homePoints >= pointsToWinLibero && homePoints - awayPoints >= 2) ||
-                (awayPoints >= pointsToWinLibero && awayPoints - homePoints >= 2)
-
-              // Check if this specific libero exit was already dismissed (don't repeat suggestion)
-              const dismissedForThisExit = liberoSuggestionDismissedForExit[otherTeamKey] === lastLiberoExit.ts
-
-              if (liberoEntrySuggestion && !willSetEnd && !dismissedForThisExit) {
-                setLiberoReentryModal({
-                  team: otherTeamKey,
-                  position: 'I',
-                  playerNumber: Number(playerInI),
-                  liberoNumber: Number(liberoNumber),
-                  liberoType: liberoType,
-                  availableLiberos: availableLiberos,
-                  selectedLiberoIndex: defaultLiberoIndex >= 0 ? defaultLiberoIndex : 0
-                })
-              }
-            }
           }
         }
       }
@@ -4849,36 +4239,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
 
     // If this is the first rally, show set start time confirmation
     if (isFirstRally) {
-      // Check if liberos exist and haven't been entered
-      const homeLiberos = data?.homePlayers?.filter(p => p.libero && p.libero !== '') || []
-      const awayLiberos = data?.awayPlayers?.filter(p => p.libero && p.libero !== '') || []
-
-      // Check if any libero has been entered in the current set for each team
-      const homeLiberoEvents = data?.events?.filter(e =>
-        (e.type === 'libero_entry' || e.type === 'libero_exit') &&
-        e.payload?.team === 'home' &&
-        e.setIndex === data?.set?.index
-      ) || []
-
-      const awayLiberoEvents = data?.events?.filter(e =>
-        (e.type === 'libero_entry' || e.type === 'libero_exit') &&
-        e.payload?.team === 'away' &&
-        e.setIndex === data?.set?.index
-      ) || []
-
-      const teamsNeedingReminder = []
-      if (homeLiberos.length > 0 && homeLiberoEvents.length === 0) {
-        teamsNeedingReminder.push('home')
-      }
-      if (awayLiberos.length > 0 && awayLiberoEvents.length === 0) {
-        teamsNeedingReminder.push('away')
-      }
-
-      if (teamsNeedingReminder.length > 0) {
-        setLiberoReminder({ teams: teamsNeedingReminder })
-        return
-      }
-
       // Show set start time confirmation
       // For set 1, use scheduled time, for set 2+, use 3 minutes after previous set end
       let defaultTime = roundToMinute(new Date().toISOString())
@@ -4904,7 +4264,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       return
     }
 
-    setLiberoReminder(null)
     await logEvent('rally_start')
     // Track when rally started (for accidental point award check)
     rallyStartTimeRef.current = Date.now()
@@ -5893,64 +5252,21 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       const toTeam = event.payload?.toTeam === 'home' ? (data?.homeTeam?.name || 'Home') : (data?.awayTeam?.name || 'Away')
       eventDescription = `Decision change — Point swapped from ${fromTeam} to ${toTeam}`
     } else if (event.type === 'lineup') {
-      // Only show initial lineups, not rotation lineups or libero substitution lineups
+      // Only show initial lineups, not rotation lineups
       const isInitial = event.payload?.isInitial === true
       const hasSubstitution = event.payload?.fromSubstitution === true
-      const hasLiberoSub = event.payload?.liberoSubstitution !== null && event.payload?.liberoSubstitution !== undefined
 
       // Skip rotation lineups (they're part of the point)
-      if (!isInitial && !hasSubstitution && !hasLiberoSub) {
+      if (!isInitial && !hasSubstitution) {
         return null
       }
 
       // Only show initial lineups as "Line-up setup"
       if (isInitial) {
         eventDescription = `${t('scoreboard.lineupSetup', 'Line-up setup')} — ${teamName}`
-      } else if (hasLiberoSub) {
-        // Show libero-related lineup changes with the new lineup
-        const lineup = event.payload?.lineup || {}
-        const positions = ['I', 'II', 'III', 'IV', 'V', 'VI']
-        const lineupStr = positions.map(pos => lineup[pos] || '?').join('-')
-        eventDescription = `Lineup changed — ${teamName} (${lineupStr})`
       } else {
         return null // Skip rotation lineups (they're part of the point)
       }
-    } else if (event.type === 'libero_entry') {
-      const liberoNumber = event.payload?.liberoIn || '?'
-      const playerOut = event.payload?.playerOut || '?'
-      const liberoType = event.payload?.liberoType === 'libero1' ? 'L1' : event.payload?.liberoType === 'redesignated' ? 'LR' : 'L2'
-      eventDescription = `Libero entry — ${teamName} (${liberoType} ${liberoNumber} in for ${playerOut})`
-    } else if (event.type === 'libero_exit') {
-      const liberoNumber = event.payload?.liberoOut || '?'
-      const playerIn = event.payload?.playerIn || '?'
-      const liberoType = event.payload?.liberoType === 'libero1' ? 'L1' : event.payload?.liberoType === 'redesignated' ? 'LR' : 'L2'
-      eventDescription = `Libero exit — ${teamName} (${liberoType} ${liberoNumber} out, ${playerIn} in)`
-    } else if (event.type === 'libero_exchange') {
-      const liberoOut = event.payload?.liberoOut || '?'
-      const liberoIn = event.payload?.liberoIn || '?'
-      const liberoOutType = event.payload?.liberoOutType === 'libero1' ? 'L1' : event.payload?.liberoOutType === 'redesignated' ? 'LR' : 'L2'
-      const liberoInType = event.payload?.liberoInType === 'libero1' ? 'L1' : event.payload?.liberoInType === 'redesignated' ? 'LR' : 'L2'
-      eventDescription = `Libero exchange — ${teamName} (${liberoOutType} ${liberoOut} ↔ ${liberoInType} ${liberoIn})`
-    } else if (event.type === 'libero_unable') {
-      const liberoNumber = event.payload?.liberoNumber || '?'
-      const liberoType = event.payload?.liberoType === 'libero1' ? 'L1' : event.payload?.liberoType === 'redesignated' ? 'LR' : 'L2'
-      const reason = event.payload?.reason || 'declared'
-      if (reason === 'declared') {
-        eventDescription = `Libero declared unable — ${teamName} (${liberoType} ${liberoNumber})`
-      } else if (reason === 'injury') {
-        eventDescription = `Libero became unable — ${teamName} (${liberoType} ${liberoNumber} - injury)`
-      } else if (reason === 'expulsion') {
-        eventDescription = `Libero became unable — ${teamName} (${liberoType} ${liberoNumber} - expelled)`
-      } else if (reason === 'disqualification') {
-        eventDescription = `Libero became unable — ${teamName} (${liberoType} ${liberoNumber} - disqualified)`
-      } else {
-        eventDescription = `Libero became unable — ${teamName} (${liberoType} ${liberoNumber})`
-      }
-    } else if (event.type === 'libero_redesignation') {
-      const unableLiberoNumber = event.payload?.unableLiberoNumber || '?'
-      const newLiberoNumber = event.payload?.newLiberoNumber || '?'
-      const unableType = event.payload?.unableLiberoType === 'libero1' ? 'L1' : event.payload?.unableLiberoType === 'libero2' ? 'L2' : 'L'
-      eventDescription = `Libero redesignation — ${teamName} (${unableType} ${unableLiberoNumber} → R ${newLiberoNumber})`
     } else if (event.type === 'set_end') {
       const winnerLabel = event.payload?.teamLabel || '?'
       const setIndex = event.payload?.setIndex || event.setIndex || '?'
@@ -7113,38 +6429,8 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       ? (leftIsHome ? leftTeamBench.benchPlayers : rightTeamBench.benchPlayers)
       : (leftIsHome ? rightTeamBench.benchPlayers : leftTeamBench.benchPlayers)
 
-    // Filter out liberos
-    let available = benchPlayers.filter(p => !p.libero || p.libero === '')
-
-    // Filter out players currently replaced by a libero (cannot be substituted while libero is in for them)
-    const liberoEntries = data.events?.filter(e =>
-      e.type === 'libero_entry' &&
-      e.payload?.team === teamKey &&
-      e.setIndex === data.set.index
-    ) || []
-
-    const liberoExits = data.events?.filter(e =>
-      e.type === 'libero_exit' &&
-      e.payload?.team === teamKey &&
-      e.setIndex === data.set.index
-    ) || []
-
-    // Find players currently replaced by libero (libero entered for them, libero hasn't exited yet)
-    const playersReplacedByLibero = new Set()
-    liberoEntries.forEach(entry => {
-      const playerOut = entry.payload?.playerOut
-      // Check if libero has exited since this entry
-      const liberoHasExited = liberoExits.some(exit =>
-        exit.payload?.playerIn === playerOut &&
-        (exit.seq || 0) > (entry.seq || 0)
-      )
-      if (!liberoHasExited && playerOut) {
-        playersReplacedByLibero.add(Number(playerOut))
-      }
-    })
-
-    // Filter out players currently replaced by libero
-    available = available.filter(p => !playersReplacedByLibero.has(Number(p.number)))
+    // Beach volleyball: no liberos, bench players are directly available
+    let available = benchPlayers
 
     // Get substitution history
     const substitutions = getSubstitutionHistory(teamKey)
@@ -7276,39 +6562,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     return available.sort((a, b) => (a.number || 0) - (b.number || 0))
   }, [data, leftIsHome, leftTeamBench, rightTeamBench, getSubstitutionHistory, data?.events, canPlayerReEnter])
 
-  // Get available players for exceptional substitution
-  // Excludes: liberos, expelled/disqualified players, and the player being replaced
-  const getAvailableExceptionalSubstitutes = useCallback((teamKey, playerOutNumber) => {
-    if (!data) return []
-
-    const benchPlayers = teamKey === 'home'
-      ? (leftIsHome ? leftTeamBench.benchPlayers : rightTeamBench.benchPlayers)
-      : (leftIsHome ? rightTeamBench.benchPlayers : leftTeamBench.benchPlayers)
-
-    // Get all liberos (both L1 and L2)
-    const teamPlayers = teamKey === 'home' ? data?.homePlayers : data?.awayPlayers
-    const liberos = teamPlayers?.filter(p => p.libero && p.libero !== '') || []
-    const liberoNumbers = new Set(liberos.map(p => Number(p.number)))
-
-    // Filter available players
-    const available = benchPlayers.filter(p => {
-      const playerNum = Number(p.number)
-
-      // Exclude liberos
-      if (liberoNumbers.has(playerNum)) return false
-
-      // Exclude the player being replaced
-      if (String(playerNum) === String(playerOutNumber)) return false
-
-      // Exclude players who cannot re-enter (expelled/disqualified/exceptionally substituted)
-      if (!canPlayerReEnter(teamKey, playerNum, data.set.index)) return false
-
-      return true
-    })
-
-    return available.sort((a, b) => (a.number || 0) - (b.number || 0))
-  }, [data, leftIsHome, leftTeamBench, rightTeamBench, canPlayerReEnter])
-
   // Check if a bench player can come back (was substituted out, has point change, hasn't come back yet)
   const canPlayerComeBack = useCallback((teamKey, playerNumber) => {
     if (!data?.events || !data?.set) return false
@@ -7393,189 +6646,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     return hasBeenSubstitutedOut
   }, [data?.events, data?.set, getSubstitutionHistory])
 
-  // Check if a libero is unable to play (injured, expelled, disqualified, or declared unable)
-  // MUST be defined before handlers that use it in dependency arrays
-  const isLiberoUnable = useCallback((teamKey, liberoNumber) => {
-    // Check if player is marked as 'unable' in database (from libero redesignation)
-    const teamPlayers = teamKey === 'home' ? data?.homePlayers : data?.awayPlayers
-    const player = teamPlayers?.find(p => Number(p.number) === Number(liberoNumber))
-    if (player?.libero === 'unable') return true
-
-    if (!data?.events) return false
-
-    // Check for expulsion or disqualification
-    const sanctions = data.events.filter(e =>
-      e.type === 'sanction' &&
-      e.payload?.team === teamKey &&
-      e.payload?.playerNumber === liberoNumber &&
-      (e.payload?.type === 'expulsion' || e.payload?.type === 'disqualification')
-    )
-    if (sanctions.length > 0) return true
-
-    // Check for libero_unable event (declared by coach)
-    const unableEvents = data.events.filter(e =>
-      e.type === 'libero_unable' &&
-      e.payload?.team === teamKey &&
-      e.payload?.liberoNumber === liberoNumber
-    )
-    if (unableEvents.length > 0) return true
-
-    // Check if libero was injured (substituted due to injury)
-    const injurySubs = data.events.filter(e =>
-      e.type === 'substitution' &&
-      e.payload?.team === teamKey &&
-      e.payload?.playerOut === liberoNumber &&
-      e.payload?.isInjury === true
-    )
-    if (injurySubs.length > 0) return true
-
-    return false
-  }, [data?.events, data?.homePlayers, data?.awayPlayers])
-
-  // Get libero currently on court for a team
-  const getLiberoOnCourt = useCallback((teamKey) => {
-    const { currentLineup, positionLiberoMap } = getTeamLineupState(teamKey)
-    if (!currentLineup || !positionLiberoMap) return null
-
-    for (const [position, info] of Object.entries(positionLiberoMap)) {
-      if (!info) continue
-      const numberOnCourt = currentLineup[position]
-      if (String(numberOnCourt) === String(info.liberoNumber)) {
-        return {
-          position,
-          liberoNumber: info.liberoNumber,
-          liberoType: info.liberoType,
-          playerNumber: info.playerNumber
-        }
-      }
-    }
-
-    return null
-  }, [getTeamLineupState])
-
-  // Debug helper - expose libero status to console
-  useEffect(() => {
-    window.debugLiberoStatus = () => {
-      const result = { home: { liberos: [], redesignation: {} }, away: { liberos: [], redesignation: {} } }
-      for (const teamKey of ['home', 'away']) {
-        const teamPlayers = teamKey === 'home' ? data?.homePlayers : data?.awayPlayers
-        const liberos = teamPlayers?.filter(p => p.libero && p.libero !== '') || []
-        const liberoOnCourt = getLiberoOnCourt(teamKey)
-
-        for (const lib of liberos) {
-          const unable = isLiberoUnable(teamKey, lib.number)
-          result[teamKey].liberos.push({
-            number: lib.number,
-            type: lib.libero,
-            unable,
-            onCourt: liberoOnCourt?.liberoNumber === lib.number ? liberoOnCourt.position : null,
-            replacedPlayer: liberoOnCourt?.liberoNumber === lib.number ? liberoOnCourt.playerNumber : null
-          })
-        }
-
-        // Check redesignation conditions
-        const allLiberos = liberos
-        const activeLiberos = allLiberos.filter(p => !isLiberoUnable(teamKey, p.number))
-        const originalLiberoCount = allLiberos.filter(p => p.libero === 'libero1' || p.libero === 'libero2').length
-        const unableLiberos = allLiberos.filter(p => isLiberoUnable(teamKey, p.number))
-        const alreadyRedesignated = data?.events?.some(e =>
-          e.type === 'libero_redesignation' && e.payload?.team === teamKey
-        )
-
-        result[teamKey].redesignation = {
-          originalLiberoCount,
-          activeLiberos: activeLiberos.map(l => l.number),
-          unableLiberos: unableLiberos.map(l => l.number),
-          alreadyRedesignated,
-          shouldShowRedesignation: activeLiberos.length === 0 && unableLiberos.length > 0 && !alreadyRedesignated
-        }
-      }
-
-      console.log('=== HOME TEAM LIBEROS ===')
-      console.table(result.home.liberos)
-      console.log('Redesignation:', result.home.redesignation)
-
-      console.log('=== AWAY TEAM LIBEROS ===')
-      console.table(result.away.liberos)
-      console.log('Redesignation:', result.away.redesignation)
-
-      console.log('=== MODAL STATE ===')
-      console.log('liberoRedesignationModal:', liberoRedesignationModal)
-      console.log('liberoUnableModal:', liberoUnableModal)
-
-      return result
-    }
-    console.log('[DEBUG] Run window.debugLiberoStatus() to check libero status')
-  }, [data?.homePlayers, data?.awayPlayers, data?.events, isLiberoUnable, getLiberoOnCourt, liberoRedesignationModal, liberoUnableModal])
-
-  // Check if there has been a point since last libero exchange
-  const hasPointSinceLastLiberoExchange = useCallback((teamKey) => {
-    if (!data?.events || !data?.set) return false
-
-    // Find last libero entry, exit, or exchange event
-    const liberoEvents = data.events.filter(e =>
-      (e.type === 'libero_entry' || e.type === 'libero_exit' || e.type === 'libero_exchange') &&
-      e.payload?.team === teamKey &&
-      e.setIndex === data.set.index
-    ).sort((a, b) => new Date(b.ts) - new Date(a.ts))
-
-    if (liberoEvents.length === 0) return true // No libero exchange yet, allow
-
-    const lastLiberoEvent = liberoEvents[0]
-    const lastLiberoEventIndex = data.events.findIndex(e => e.id === lastLiberoEvent.id)
-
-    // Special case: Allow immediate libero entry in specific scenarios:
-    // 1. After libero BECOMES unable (injury/expulsion/disqualification) - immediate entry
-    // 2. After redesignation due to becoming unable - immediate entry for FIRST entry only
-    // 3. After redesignation due to being declared unable - must wait for point
-    const specialEvents = data.events.filter(e =>
-      e.setIndex === data.set.index &&
-      e.payload?.team === teamKey &&
-      (
-        // Allow immediate entry after libero BECOMES unable (not declared)
-        (e.type === 'libero_unable' &&
-          (e.payload?.reason === 'expulsion' ||
-            e.payload?.reason === 'disqualification' ||
-            e.payload?.reason === 'injury')) ||
-        // Allow immediate entry after redesignation ONLY if due to becoming unable
-        (e.type === 'libero_redesignation' &&
-          e.payload?.reason !== 'declared' &&
-          e.payload?.reason !== undefined)
-      )
-    ).sort((a, b) => new Date(b.ts) - new Date(a.ts))
-
-    if (specialEvents.length > 0) {
-      const lastSpecialEvent = specialEvents[0]
-
-      if (new Date(lastSpecialEvent.ts) > new Date(lastLiberoEvent.ts)) {
-        // If this is a redesignation, only allow immediate entry for FIRST entry
-        if (lastSpecialEvent.type === 'libero_redesignation') {
-          const entriesSinceRedesignation = data.events.filter(e =>
-            e.setIndex === data.set.index &&
-            e.type === 'libero_entry' &&
-            e.payload?.team === teamKey &&
-            new Date(e.ts) > new Date(lastSpecialEvent.ts)
-          )
-
-          // If redesignated libero already entered, require point for subsequent entries
-          if (entriesSinceRedesignation.length === 0) {
-            return true  // First entry after redesignation, allow immediate
-          }
-          // Fall through to normal point check
-        } else {
-          // libero_unable event (injury/expulsion/disqualification), allow immediate entry
-          return true
-        }
-      }
-    }
-
-    // Check if there's been a point since then
-    const eventsAfter = data.events.slice(lastLiberoEventIndex + 1).filter(e =>
-      e.setIndex === data.set.index && e.type === 'point'
-    )
-
-    return eventsAfter.length > 0
-  }, [data?.events, data?.set])
 
   // ========== Court Player Name Handlers ==========
 
@@ -7595,56 +6665,30 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   const draggedPlayer = null
   const touchDragState = { isDragging: false }
   const validDropTargets = []
-  const handleBenchDragStart = () => {}
-  const handleBenchDragEnd = () => {}
-  const handleCourtDragStart = () => {}
-  const handleCourtDragEnd = () => {}
-  const handleCourtDragOver = () => {}
-  const handleCourtDragLeave = () => {}
-  const handleCourtDrop = () => {}
-  const handleBenchDropOver = () => {}
-  const handleBenchDropLeave = () => {}
-  const handleBenchDrop = () => {}
-  const handleTouchDragStart = () => {}
-  const handleTouchMove = () => {}
-  const handleTouchEnd = () => {}
-  const handleTouchCancel = () => {}
+  const handleBenchDragStart = () => { }
+  const handleBenchDragEnd = () => { }
+  const handleCourtDragStart = () => { }
+  const handleCourtDragEnd = () => { }
+  const handleCourtDragOver = () => { }
+  const handleCourtDragLeave = () => { }
+  const handleCourtDrop = () => { }
+  const handleBenchDropOver = () => { }
+  const handleBenchDropLeave = () => { }
+  const handleBenchDrop = () => { }
+  const handleTouchDragStart = () => { }
+  const handleTouchMove = () => { }
+  const handleTouchEnd = () => { }
+  const handleTouchCancel = () => { }
 
-  // Handle player click for substitution/libero/sanction/injury (only when rally is not in play and lineup is set)
+  // Handle player click for sanction/injury (only when rally is not in play and lineup is set)
+  // Beach volleyball: no substitutions
   const handlePlayerClick = useCallback((teamKey, position, playerNumber, event) => {
     // Only allow when rally is not in play and lineup is set
     if (rallyStatus !== 'idle') return
     if (isRallyReplayed) return // Don't allow actions when rally is replayed
     if (!leftTeamLineupSet && teamKey === (leftIsHome ? 'home' : 'away')) return
     if (!rightTeamLineupSet && teamKey === (leftIsHome ? 'away' : 'home')) return
-    if (!playerNumber || playerNumber === '') return // Can't substitute placeholder
-
-    // Check if this player is a libero - liberos cannot be substituted
-    const teamPlayers = teamKey === 'home' ? data?.homePlayers : data?.awayPlayers
-    const clickedPlayer = teamPlayers?.find(p => String(p.number) === String(playerNumber))
-    const isLibero = clickedPlayer?.libero && clickedPlayer.libero !== ''
-
-    // Check if position is back row (I, V, VI) for libero
-    const isBackRow = position === 'I' || position === 'V' || position === 'VI'
-
-    // Check if this position is serving
-    const currentServe = getCurrentServe()
-    const teamServes = currentServe === teamKey
-    const isServing = teamServes && position === 'I'
-
-    // Get team players to check for liberos
-    const liberos = teamPlayers?.filter(p => p.libero && p.libero !== '') || []
-
-    // Check if a libero is already on court
-    const liberoOnCourt = getLiberoOnCourt(teamKey)
-    const canEnterLibero = !isLibero && liberos.length > 0 && (liberoOnCourt === null || liberoOnCourt === undefined)
-
-    // Check if there has been a point since last libero exchange
-    const hasPointSinceLibero = hasPointSinceLastLiberoExchange(teamKey)
-
-    // Check substitution limit (6 per set)
-    const teamSubstitutions = substitutionsUsed?.[teamKey] || 0
-    const canSubstitute = !isLibero && !isRallyReplayed && teamSubstitutions < 6 && canPlayerBeSubstituted(teamKey, playerNumber)
+    if (!playerNumber || playerNumber === '') return // Can't act on placeholder
 
     // Get the clicked element position (the circle)
     const element = event.currentTarget
@@ -7670,10 +6714,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       return
     }
 
-    // Check if clicked player is a libero currently on court
-    const isLiberoOnCourt = isLibero && liberoOnCourt && String(liberoOnCourt.liberoNumber) === String(playerNumber)
-
-    // Show action menu with buttons
+    // Show action menu with buttons (beach volleyball: no substitutions)
     setPlayerActionMenu({
       team: teamKey,
       position,
@@ -7682,12 +6723,9 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       x: centerX + offset,
       y: centerY,
       side: isRightTeam ? 'right' : 'left',
-      canSubstitute,
-      canEnterLibero: isBackRow && !isServing && canEnterLibero && hasPointSinceLibero,
-      isLiberoOnCourt,
-      liberoOnCourt: isLiberoOnCourt ? liberoOnCourt : null
+      canSubstitute: false
     })
-  }, [rallyStatus, isRallyReplayed, leftTeamLineupSet, rightTeamLineupSet, leftIsHome, playerActionMenu, substitutionsUsed, canPlayerBeSubstituted, getCurrentServe, getLiberoOnCourt, hasPointSinceLastLiberoExchange, data?.homePlayers, data?.awayPlayers])
+  }, [playerActionMenu, leftIsHome])
 
   // Show substitution confirmation
   const showSubstitutionConfirm = useCallback((substituteNumber) => {
@@ -7721,100 +6759,20 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       isDisqualified: isDisqualified
     })
     setSubstitutionDropdown(null)
-    setLiberoDropdown(null) // Close libero dropdown when selecting substitution
   }, [substitutionDropdown, isSubstitutionLegal, data?.events])
 
-  // Get available players for libero re-designation (not on court, not already libero, not re-designated)
-  const getAvailablePlayersForRedesignation = useCallback((teamKey, unableLiberoNumber) => {
-    if (!data) return []
-
-    const teamPlayers = teamKey === 'home' ? data?.homePlayers : data?.awayPlayers
-    const { playersOnCourt } = getTeamLineupState(teamKey)
-    const playersOnCourtSet = new Set(playersOnCourt.map(num => Number(num)))
-
-    // Get all re-designation events to find already re-designated players
-    const redesignationEvents = data?.events?.filter(e =>
-      e.type === 'libero_redesignation' &&
-      e.payload?.team === teamKey
-    ) || []
-    const redesignatedPlayerNumbers = new Set(
-      redesignationEvents.map(e => e.payload?.newLiberoNumber).filter(n => n !== undefined && n !== null)
-    )
-
-    // Filter: not on court, not already a libero, not already re-designated, not the unable libero
-    return teamPlayers.filter(p => {
-      const playerNumber = Number(p.number)
-      if (Number.isNaN(playerNumber)) return false
-      if (playersOnCourtSet.has(playerNumber)) return false // On court
-      if (p.libero && p.libero !== '') return false // Already a libero
-      if (redesignatedPlayerNumbers.has(playerNumber)) return false // Already re-designated
-      if (playerNumber === unableLiberoNumber) return false // The unable libero
-      return true
-    })
-  }, [data, getTeamLineupState])
-
-  // Check if libero re-designation is needed and trigger modal
-  // Called after a libero is marked as unable - we know they're unable so skip that check
-  const checkLiberoRedesignation = useCallback((teamKey, liberoNumber, liberoType, reason = 'declared') => {
-    if (!data?.set) return
-
-    // Check if already re-designated
-    const alreadyRedesignated = data?.events?.some(e =>
-      e.type === 'libero_redesignation' &&
-      e.payload?.team === teamKey &&
-      e.payload?.unableLiberoNumber === liberoNumber
-    )
-    if (alreadyRedesignated) return
-
-    // Check team libero rules
-    const teamPlayers = teamKey === 'home' ? data?.homePlayers : data?.awayPlayers
-    // Get all liberos (including 'unable' ones for counting original liberos)
-    const allLiberos = teamPlayers.filter(p => p.libero && p.libero !== '')
-    // Get active liberos - use isLiberoUnable() to check both database field AND events
-    const activeLiberos = allLiberos.filter(p => !isLiberoUnable(teamKey, p.number))
-    // Count original liberos (libero1 or libero2 - not redesignated)
-    const originalLiberoCount = allLiberos.filter(p => p.libero === 'libero1' || p.libero === 'libero2').length
-    const unableLiberos = allLiberos.filter(p => isLiberoUnable(teamKey, p.number))
-
-    // If team started with 2 liberos, and still has at least 1 active libero that isn't the one becoming unable
-    // then no redesignation needed
-    if (originalLiberoCount === 2) {
-      const otherActiveLiberos = activeLiberos.filter(p => Number(p.number) !== Number(liberoNumber))
-      if (otherActiveLiberos.length > 0) {
-        // Still have at least one other active libero, no redesignation needed
-        return
-      }
-    }
-
-    // If team started with 1 libero (or all other liberos are unable), allow redesignation
-    // Also allow if no active liberos remain after this one becomes unable
-
-    // Get available players
-    const availablePlayers = getAvailablePlayersForRedesignation(teamKey, liberoNumber)
-    if (availablePlayers.length === 0) {
-      showAlert('No available players for libero re-designation. All players are either on court or already liberos.', 'warning')
-      return
-    }
-
-    // Show re-designation modal
-    setLiberoRedesignationModal({
-      team: teamKey,
-      unableLiberoNumber: liberoNumber,
-      unableLiberoType: liberoType,
-      reason: reason
-    })
-  }, [data?.set, data?.events, data?.homePlayers, data?.awayPlayers, isLiberoUnable, getAvailablePlayersForRedesignation])
 
   // Handle forfait - award all remaining points and sets to opponent
-  const handleForfait = useCallback(async (teamKey, reason) => {
-    cLogger.logHandler('handleForfait', { teamKey, reason })
+  // scope: 'set' (only current set) or 'match' (all remaining sets)
+  const handleForfait = useCallback(async (teamKey, reason, scope = 'match') => {
+    cLogger.logHandler('handleForfait', { teamKey, reason, scope })
     if (!data?.set || !data?.match) return
 
     const opponentKey = teamKey === 'home' ? 'away' : 'home'
     const allSets = await db.sets.where({ matchId }).sortBy('index')
     const currentSetIndex = data.set.index
     const is5thSet = currentSetIndex === 5
-    const pointsToWin = is5thSet ? 15 : 25
+    const pointsToWin = is5thSet ? 15 : 21 // Beach volleyball is 21 points for regular sets
 
     // Award current set to opponent
     const currentSet = allSets.find(s => s.index === currentSetIndex)
@@ -7823,10 +6781,8 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       const currentOpponentPoints = currentSet[opponentKey === 'home' ? 'homePoints' : 'awayPoints'] || 0
 
       // Calculate target points - must have 2-point lead if in deuce
-      // If forfeiting team has >= pointsToWin - 1, we need forfeiting team's score + 2
       let opponentPoints = pointsToWin
       if (teamPoints >= pointsToWin - 1) {
-        // Deuce scenario: winner needs forfeiting team's score + 2 to ensure 2-point lead
         opponentPoints = teamPoints + 2
       }
 
@@ -7853,34 +6809,37 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         setIndex: currentSetIndex,
         homePoints: opponentKey === 'home' ? opponentPoints : teamPoints,
         awayPoints: opponentKey === 'away' ? opponentPoints : teamPoints,
-        reason: 'forfait'
+        reason: reason || 'forfait'
       })
     }
 
-    // Award all remaining sets to opponent
-    const remainingSets = allSets.filter(s => s.index > currentSetIndex && !s.finished)
-    for (const set of remainingSets) {
-      const setPointsToWin = set.index === 5 ? 15 : 25
-      await db.sets.update(set.id, {
-        finished: true,
-        [opponentKey === 'home' ? 'homePoints' : 'awayPoints']: setPointsToWin,
-        [teamKey === 'home' ? 'homePoints' : 'awayPoints']: 0
-      })
+    // Award all remaining sets to opponent ONLY if scope is 'match'
+    if (scope === 'match') {
+      const remainingSets = allSets.filter(s => s.index > currentSetIndex && !s.finished)
+      for (const set of remainingSets) {
+        const setPointsToWin = set.index === 5 ? 15 : 21
+        await db.sets.update(set.id, {
+          finished: true,
+          [opponentKey === 'home' ? 'homePoints' : 'awayPoints']: setPointsToWin,
+          [teamKey === 'home' ? 'homePoints' : 'awayPoints']: 0
+        })
 
-      await logEvent('set_end', {
-        team: opponentKey,
-        setIndex: set.index,
-        homePoints: opponentKey === 'home' ? setPointsToWin : 0,
-        awayPoints: opponentKey === 'away' ? setPointsToWin : 0,
-        reason: 'forfait'
-      })
+        await logEvent('set_end', {
+          team: opponentKey,
+          setIndex: set.index,
+          homePoints: opponentKey === 'home' ? setPointsToWin : 0,
+          awayPoints: opponentKey === 'away' ? setPointsToWin : 0,
+          reason: reason || 'forfait'
+        })
+      }
     }
 
     // Log forfait event
     await logEvent('forfait', {
       team: teamKey,
       reason: reason,
-      setIndex: currentSetIndex
+      setIndex: currentSetIndex,
+      scope: scope
     })
   }, [data?.set, data?.match, matchId, logEvent])
 
@@ -7980,61 +6939,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     setStopMatchConfirm(null)
     setStopMatchRemarksStep(null)
   }, [stopMatchRemarksStep, handleManualForfeit, handleImpossibilityToResume])
-
-  // Handle exceptional substitution choice
-  const handleExceptionalSubstitutionChoice = useCallback(async (choice) => {
-    if (!exceptionalSubstitutionModal) return
-
-    const { team, position, playerOut, reason } = exceptionalSubstitutionModal
-
-    if (choice === 'exceptional') {
-      // Show substitution dropdown with exceptional substitutes
-      const exceptionalSubstitutes = getAvailableExceptionalSubstitutes(team, playerOut)
-      if (exceptionalSubstitutes.length > 0) {
-        // Find the court player element
-        const courtPlayers = document.querySelectorAll('.court-player')
-        let playerElement = null
-        for (const el of courtPlayers) {
-          const pos = el.querySelector('.court-player-position')?.textContent
-          const num = el.textContent?.match(/\d+/)?.[0]
-          if (pos === position && num === String(playerOut)) {
-            playerElement = el
-            break
-          }
-        }
-
-        if (playerElement) {
-          const rect = playerElement.getBoundingClientRect()
-          setSubstitutionDropdown({
-            team,
-            position,
-            playerNumber: playerOut,
-            element: playerElement,
-            x: rect.left + rect.width / 2,
-            y: rect.bottom + 8,
-            isExceptional: true,
-            reason: reason
-          })
-        } else {
-          setSubstitutionDropdown({
-            team,
-            position,
-            playerNumber: playerOut,
-            element: null,
-            x: window.innerWidth / 2,
-            y: window.innerHeight / 2,
-            isExceptional: true,
-            reason: reason
-          })
-        }
-      }
-      setExceptionalSubstitutionModal(null)
-    } else if (choice === 'forfait') {
-      // Handle forfait
-      await handleForfait(team, reason)
-      setExceptionalSubstitutionModal(null)
-    }
-  }, [exceptionalSubstitutionModal, getAvailableExceptionalSubstitutes, handleForfait])
 
   // Confirm substitution
   const confirmSubstitution = useCallback(async () => {
@@ -8165,7 +7069,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       }
 
       setSubstitutionConfirm(null)
-      setLiberoDropdown(null) // Close libero dropdown when confirming substitution
 
       // Add player to recently substituted list for flashing effect
       setRecentlySubstitutedPlayers(prev => [...prev, { team, playerNumber: playerIn, timestamp: Date.now() }])
@@ -8244,7 +7147,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       // MUTEX: Always release the lock, even if an error occurred
       eventInProgressRef.current = false
     }
-  }, [substitutionConfirm, data?.set, data?.events, data?.match, data?.homePlayers, data?.awayPlayers, data?.homeTeam, data?.awayTeam, matchId, logEvent, teamAKey, checkLiberoRedesignation, sendActionToReferee])
+  }, [substitutionConfirm, data?.set, data?.events, data?.match, data?.homePlayers, data?.awayPlayers, data?.homeTeam, data?.awayTeam, matchId, logEvent, teamAKey, sendActionToReferee])
 
   // Common modal position - all modals use the same position
   // For left side teams, menu opens to the right
@@ -8292,23 +7195,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     setPlayerActionMenu(null)
   }, [playerActionMenu, getCommonModalPosition, canPlayerBeSubstituted])
 
-  // Open libero modal from action menu
-  const openLiberoFromMenu = useCallback(() => {
-    if (!playerActionMenu) return
-    const { team, position, playerNumber, element, side } = playerActionMenu
-    const pos = getCommonModalPosition(element, playerActionMenu.x, playerActionMenu.y, side)
-    setLiberoDropdown({
-      team,
-      position,
-      playerNumber,
-      element,
-      x: pos.x,
-      y: pos.y,
-      side: pos.side
-    })
-    setPlayerActionMenu(null)
-  }, [playerActionMenu, getCommonModalPosition])
-
   // Open sanction modal from action menu
   const openSanctionFromMenu = useCallback(() => {
     if (!playerActionMenu) return
@@ -8327,102 +7213,62 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     setPlayerActionMenu(null)
   }, [playerActionMenu, getCommonModalPosition])
 
-  // Open injury - same logic as expulsion/disqualification
-  const openInjuryFromMenu = useCallback(async () => {
+  // Open medical dropdown from player action menu
+  const openMedicalFromMenu = useCallback(() => {
     if (!playerActionMenu || !data?.set) return
-    const { team, position, playerNumber, element, side } = playerActionMenu
+    const { team, playerNumber, element, x, y, side } = playerActionMenu
 
-    // First, check if a legal substitution is possible (not exceptional)
-    const legalSubstitutes = getAvailableSubstitutes(team, playerNumber, false)
-    if (legalSubstitutes.length > 0) {
-      // Legal substitution is possible - show substitution dropdown
-      const pos = getCommonModalPosition(element, playerActionMenu.x, playerActionMenu.y, side)
-      setSubstitutionDropdown({
-        team,
-        position,
-        playerNumber,
-        element,
-        x: pos.x,
-        y: pos.y,
-        side: pos.side,
-        isInjury: true
-      })
-      setPlayerActionMenu(null)
-    } else {
-      // No legal substitution possible - check for exceptional substitution
-      const exceptionalSubstitutes = getAvailableExceptionalSubstitutes(team, playerNumber)
-      if (exceptionalSubstitutes.length > 0) {
-        // Show modal to choose between exceptional substitution or forfait
-        setPlayerActionMenu(null)
-        setExceptionalSubstitutionModal({
-          team,
-          position,
-          playerOut: playerNumber,
-          reason: 'injury'
-        })
-      } else {
-        // No exceptional substitution possible - automatic forfait
-        setPlayerActionMenu(null)
-        await handleForfait(team, 'injury')
-      }
-    }
-  }, [playerActionMenu, data?.set, getAvailableSubstitutes, getAvailableExceptionalSubstitutes, handleForfait, getCommonModalPosition])
+    // Open the medical dropdown with options
+    setInjuryDropdown({
+      team,
+      playerNumber,
+      element,
+      x,
+      y,
+      side
+    })
+    setPlayerActionMenu(null)
+  }, [playerActionMenu, data?.set])
+
+  // Handle Medical Timeout - 5 minute recovery time
+  const handleMedicalTimeout = useCallback(async () => {
+    cLogger.logHandler('handleMedicalTimeout', { team: injuryDropdown?.team, player: injuryDropdown?.playerNumber })
+    if (!injuryDropdown || !data?.set) return
+
+    const { team, playerNumber } = injuryDropdown
+
+    // Log medical timeout event
+    await logEvent('medical_timeout', {
+      team,
+      playerNumber,
+      duration: 300 // 5 minutes in seconds
+    })
+
+    setInjuryDropdown(null)
+  }, [injuryDropdown, data?.set, logEvent])
+
+  // Handle Player Unable to Play (Recovery Interruption) - leads to forfeit in beach volleyball
+  const handlePlayerUnableToPlay = useCallback(async () => {
+    cLogger.logHandler('handlePlayerUnableToPlay', { team: injuryDropdown?.team, player: injuryDropdown?.playerNumber })
+    if (!injuryDropdown || !data?.set) return
+
+    const { team } = injuryDropdown
+
+    setInjuryDropdown(null)
+    // Beach volleyball: player unable to play with only 2 players means forfeit
+    await handleForfait(team, 'player_unable', 'match')
+  }, [injuryDropdown, data?.set, handleForfait])
 
   const cancelSubstitution = useCallback(() => {
     setSubstitutionDropdown(null)
-    setLiberoDropdown(null) // Close both together
   }, [])
 
   const cancelSubstitutionConfirm = useCallback(() => {
     setSubstitutionConfirm(null)
-    setLiberoDropdown(null) // Close libero dropdown when canceling substitution
   }, [])
 
-  // Handle injury - same logic as expulsion/disqualification
-  const handleInjury = useCallback(async () => {
-    cLogger.logHandler('handleInjury', { team: injuryDropdown?.team, player: injuryDropdown?.playerNumber })
-    if (!injuryDropdown || !data?.set) return
-
-    const { team, position, playerNumber } = injuryDropdown
-
-    // First, check if a legal substitution is possible (not exceptional)
-    const legalSubstitutes = getAvailableSubstitutes(team, playerNumber, false)
-    if (legalSubstitutes.length > 0) {
-      // Legal substitution is possible - show substitution dropdown
-      setInjuryDropdown(null)
-      const rect = injuryDropdown.element?.getBoundingClientRect?.()
-      if (rect) {
-        setSubstitutionDropdown({
-          team,
-          position,
-          playerNumber,
-          element: injuryDropdown.element,
-          x: rect.right - 8,
-          y: rect.bottom + 8
-        })
-      }
-    } else {
-      // No legal substitution possible - check for exceptional substitution
-      const exceptionalSubstitutes = getAvailableExceptionalSubstitutes(team, playerNumber)
-      if (exceptionalSubstitutes.length > 0) {
-        // Show modal to choose between exceptional substitution or forfait
-        setInjuryDropdown(null)
-        setExceptionalSubstitutionModal({
-          team,
-          position,
-          playerOut: playerNumber,
-          reason: 'injury'
-        })
-      } else {
-        // No exceptional substitution possible - automatic forfait
-        setInjuryDropdown(null)
-        await handleForfait(team, 'injury')
-      }
-    }
-  }, [injuryDropdown, data?.set, getAvailableSubstitutes, getAvailableExceptionalSubstitutes, handleForfait])
-
-  // Cancel injury dropdown
-  const cancelInjury = useCallback(() => {
+  // Cancel medical dropdown
+  const cancelMedical = useCallback(() => {
     setInjuryDropdown(null)
   }, [])
 
@@ -8570,1574 +7416,66 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       }
     }
 
-    // If expulsion or disqualification for a court player, need to handle substitution
-    if ((sanctionType === 'expulsion' || sanctionType === 'disqualification') && type === 'player' && playerNumber && position) {
-      // Log the sanction event first
-      await logEvent('sanction', {
-        team,
-        type: sanctionType,
-        playerType: type,
-        playerNumber,
-        position,
-        role
-      })
+    if (sanctionType === 'expulsion') {
+      // Expulsion: Incomplete set
+      await handleForfait(team, 'expulsion', 'set')
+      setSanctionConfirmModal(null)
+      return
+    } else if (sanctionType === 'disqualification') {
+      // Disqualification: Incomplete match
+      await handleForfait(team, 'disqualification', 'match')
+      setSanctionConfirmModal(null)
+      return
+    }
 
-      // Check if this is a libero on court - if so, handle specially
-      const teamPlayers = team === 'home' ? data?.homePlayers : data?.awayPlayers
-      const player = teamPlayers?.find(p => String(p.number) === String(playerNumber))
-      const isLiberoOnCourt = player && player.libero
+    // Regular sanction (warning or penalty)
+    await logEvent('sanction', {
+      team,
+      type: sanctionType,
+      playerType: type,
+      playerNumber,
+      position,
+      role
+    })
 
-      if (isLiberoOnCourt) {
-        // Libero on court expelled/disqualified - return replaced player to court
-        await logEvent('libero_unable', {
-          team,
-          liberoNumber: playerNumber,
-          liberoType: player.libero,
-          reason: sanctionType === 'expulsion' ? 'expulsion' : 'disqualification'
-        })
+    // If penalty, award point to the other team (but only if lineups are set)
+    if (sanctionType === 'penalty') {
+      // Check if both lineups are set before awarding point
+      const homeTeamKey = leftIsHome ? 'home' : 'away'
+      const awayTeamKey = leftIsHome ? 'away' : 'home'
 
-        // Get current lineup and find the original player who was replaced by libero
-        const lineupEvents = (data.events || [])
-          .filter(e => e.type === 'lineup' && e.payload?.team === team && e.setIndex === data.set.index)
-          .sort((a, b) => (a.seq || 0) - (b.seq || 0))
+      const homeLineupSet = data.events?.some(e =>
+        e.type === 'lineup' &&
+        e.payload?.team === homeTeamKey &&
+        e.setIndex === data.set.index &&
+        e.payload?.isInitial
+      )
+      const awayLineupSet = data.events?.some(e =>
+        e.type === 'lineup' &&
+        e.payload?.team === awayTeamKey &&
+        e.setIndex === data.set.index &&
+        e.payload?.isInitial
+      )
 
-        if (lineupEvents.length > 0) {
-          const currentLineup = { ...lineupEvents[lineupEvents.length - 1].payload?.lineup }
-
-          // Get the original player who was replaced by libero
-          const liberoEntryEvents = (data.events || [])
-            .filter(e => e.type === 'libero_entry' && e.payload?.team === team && e.setIndex === data.set.index)
-            .sort((a, b) => (b.seq || 0) - (a.seq || 0))
-
-          const lastEntry = liberoEntryEvents.find(e => e.payload?.position === position)
-          const originalPlayerNumber = lastEntry?.payload?.playerNumber
-
-          if (originalPlayerNumber) {
-            // Put original player back in
-            currentLineup[position] = String(originalPlayerNumber)
-
-            // Log the libero exit FIRST to get the main sequence number
-            const libExitSeq = await logEvent('libero_exit', {
-              team,
-              position,
-              liberoOut: playerNumber,
-              playerIn: originalPlayerNumber,
-              liberoType: player.libero,
-              reason: sanctionType === 'expulsion' ? 'expulsion' : 'disqualification'
-            })
-
-            // Update lineup as a SUB-EVENT (decimal sequence) so undo deletes both together
-            const lineupSubEventSeq = libExitSeq + 0.1
-            await db.events.add({
-              matchId,
-              setIndex: data.set.index,
-              type: 'lineup',
-              payload: {
-                team,
-                lineup: currentLineup,
-                fromSubstitution: true,
-                liberoSubstitution: null
-              },
-              ts: new Date().toISOString(),
-              seq: lineupSubEventSeq
-            })
-          }
-        }
-
-        // Close modal
-        setSanctionConfirmModal(null)
-
-        // Check if redesignation is needed and prompt user
-        // Use isLiberoUnable to properly check events, not just database field
-        const activeLiberos = teamPlayers?.filter(p =>
-          p.libero && p.libero !== '' && !isLiberoUnable(team, p.number) && Number(p.number) !== Number(playerNumber)
-        ) || []
-        if (activeLiberos.length === 0) {
-          setTimeout(() => {
-            setLiberoUnableModal({
-              team,
-              liberoNumber: playerNumber,
-              liberoType: player.libero,
-              step: 'redesignate'
-            })
-          }, 100)
-        }
-
-        return // Exit early, don't do the regular substitution flow
-      }
-
-      // Regular player (not libero) on court - continue with normal flow
-
-      // Close the confirmation modal
       setSanctionConfirmModal(null)
 
-      // Check if the player being expelled/disqualified is the captain or court captain
-      const sanctionedPlayer = teamPlayers?.find(p => String(p.number) === String(playerNumber))
-      const isSanctionedCaptain = sanctionedPlayer && (sanctionedPlayer.isCaptain || sanctionedPlayer.captain)
-      const captainOnCourtField = team === 'home' ? 'homeCourtCaptain' : 'awayCourtCaptain'
-      const currentCourtCaptain = data?.match?.[captainOnCourtField]
-      const isSanctionedCourtCaptain = String(currentCourtCaptain) === String(playerNumber)
-
-      // First, check if a legal substitution is possible (not exceptional)
-      const legalSubstitutes = getAvailableSubstitutes(team, playerNumber, false)
-      if (legalSubstitutes.length === 1) {
-        // Only one legal substitute - auto-select and show confirmation modal
-        setSubstitutionConfirm({
-          team,
-          position,
-          playerOut: playerNumber,
-          playerIn: legalSubstitutes[0].number,
-          isExpelled: sanctionType === 'expulsion',
-          isDisqualified: sanctionType === 'disqualification'
-        })
-      } else if (legalSubstitutes.length > 1) {
-        // Multiple legal substitutes - show substitution dropdown
-        const courtPlayers = document.querySelectorAll('.court-player')
-        let playerElement = null
-        for (const el of courtPlayers) {
-          const pos = el.querySelector('.court-player-position')?.textContent
-          const num = el.textContent?.match(/\d+/)?.[0]
-          if (pos === position && num === String(playerNumber)) {
-            playerElement = el
-            break
-          }
-        }
-
-        if (playerElement) {
-          const rect = playerElement.getBoundingClientRect()
-          setSubstitutionDropdown({
-            team,
-            position,
-            playerNumber,
-            element: playerElement,
-            x: rect.left + rect.width / 2,
-            y: rect.bottom + 8,
-            isExpelled: sanctionType === 'expulsion',
-            isDisqualified: sanctionType === 'disqualification'
-          })
-        } else {
-          setSubstitutionDropdown({
-            team,
-            position,
-            playerNumber,
-            element: null,
-            x: window.innerWidth / 2,
-            y: window.innerHeight / 2,
-            isExpelled: sanctionType === 'expulsion',
-            isDisqualified: sanctionType === 'disqualification'
-          })
-        }
+      if (homeLineupSet && awayLineupSet) {
+        // Both lineups are set - award point immediately
+        const otherTeam = team === 'home' ? 'away' : 'home'
+        const otherSide = mapTeamKeyToSide(otherTeam)
+        await handlePoint(otherSide)
       } else {
-        // No legal substitution possible - check for exceptional substitution
-        const exceptionalSubstitutes = getAvailableExceptionalSubstitutes(team, playerNumber)
-        if (exceptionalSubstitutes.length > 0) {
-          // Show modal to choose between exceptional substitution or forfait
-          setExceptionalSubstitutionModal({
-            team,
-            position,
-            playerOut: playerNumber,
-            reason: sanctionType === 'expulsion' ? 'expulsion' : 'disqualification'
-          })
-        } else {
-          // No exceptional substitution possible - automatic forfait
-          await handleForfait(team, sanctionType === 'expulsion' ? 'expulsion' : 'disqualification')
-        }
-      }
-
-      // Check if captain is on court after substitution (if substitution happened) or forfait
-      if (isSanctionedCaptain || isSanctionedCourtCaptain) {
-        setTimeout(() => {
-          checkAndRequestCaptainOnCourtRef.current?.(team)
-        }, 300)
-      }
-    } else if (sanctionType === 'expulsion' || sanctionType === 'disqualification') {
-      // Check if this bench player is currently being replaced by a libero on court
-      // Per FIVB Casebook: libero stays on court, substitute the bench player
-      const liberoOnCourt = getLiberoOnCourt(team)
-      if (type === 'bench' && liberoOnCourt && String(liberoOnCourt.playerNumber) === String(playerNumber)) {
-        // This bench player is the one replaced by the libero
-        // Log the sanction first
-        await logEvent('sanction', {
-          team,
-          type: sanctionType,
-          playerType: type,
-          playerNumber,
-          position,
-          role
-        })
-
-        // Get legal substitutes for this player (based on their original position before libero replaced them)
-        const legalSubs = getAvailableSubstitutes(team, playerNumber, false)
-
-        if (legalSubs.length === 1) {
-          // Auto-confirm with the single legal substitute
-          setSanctionSubstitutionModal({
-            team,
-            expelledPlayer: playerNumber,
-            liberoOnCourt,
-            availableSubs: legalSubs,
-            reason: sanctionType,
-            isExceptional: false,
-            position: liberoOnCourt.position
-          })
-        } else if (legalSubs.length > 1) {
-          // Show modal to select from legal substitutes
-          setSanctionSubstitutionModal({
-            team,
-            expelledPlayer: playerNumber,
-            liberoOnCourt,
-            availableSubs: legalSubs,
-            reason: sanctionType,
-            isExceptional: false,
-            position: liberoOnCourt.position
-          })
-        } else {
-          // No legal substitutes - check for exceptional substitutes
-          const exceptionalSubs = getAvailableExceptionalSubstitutes(team, playerNumber)
-          if (exceptionalSubs.length === 1) {
-            // Auto-confirm with single exceptional substitute
-            setSanctionSubstitutionModal({
-              team,
-              expelledPlayer: playerNumber,
-              liberoOnCourt,
-              availableSubs: exceptionalSubs,
-              reason: sanctionType,
-              isExceptional: true,
-              position: liberoOnCourt.position
-            })
-          } else if (exceptionalSubs.length > 1) {
-            // Show modal for exceptional substitute selection
-            setSanctionSubstitutionModal({
-              team,
-              expelledPlayer: playerNumber,
-              liberoOnCourt,
-              availableSubs: exceptionalSubs,
-              reason: sanctionType,
-              isExceptional: true,
-              position: liberoOnCourt.position
-            })
-          } else {
-            // No substitutes at all - forfeit
-            await handleForfait(team, sanctionType === 'expulsion' ? 'expulsion' : 'disqualification')
-          }
-        }
-
-        setSanctionConfirmModal(null)
-        return
-      }
-
-      // Expulsion/disqualification for bench players or officials - just log the sanction
-      await logEvent('sanction', {
-        team,
-        type: sanctionType,
-        playerType: type,
-        playerNumber,
-        position,
-        role
-      })
-
-      setSanctionConfirmModal(null)
-
-      // Check if this is a libero - if so, log libero_unable and prompt for re-designation
-      if (type === 'libero' && playerNumber) {
-        const teamPlayers = team === 'home' ? data?.homePlayers : data?.awayPlayers
-        const liberoPlayer = teamPlayers?.find(p => String(p.number) === String(playerNumber))
-        if (liberoPlayer && liberoPlayer.libero) {
-          // Log libero_unable event with reason based on sanction type
-          await logEvent('libero_unable', {
-            team,
-            liberoNumber: playerNumber,
-            liberoType: liberoPlayer.libero,
-            reason: sanctionType === 'expulsion' ? 'expulsion' : 'disqualification'
-          })
-          // Check if redesignation is needed and prompt user
-          // Use isLiberoUnable to properly check events, not just database field
-          const activeLiberos = teamPlayers?.filter(p =>
-            p.libero && p.libero !== '' && !isLiberoUnable(team, p.number) && Number(p.number) !== Number(playerNumber)
-          ) || []
-          if (activeLiberos.length === 0) {
-            setTimeout(() => {
-              setLiberoUnableModal({
-                team,
-                liberoNumber: playerNumber,
-                liberoType: liberoPlayer.libero,
-                step: 'redesignate'
-              })
-            }, 100)
-          }
-        }
+        // Lineups not set - show message
+        showAlert('Penalty recorded. Point will be awarded after both teams set their lineups.', 'info')
       }
     } else {
-      // Regular sanction (warning or penalty)
-      await logEvent('sanction', {
-        team,
-        type: sanctionType,
-        playerType: type,
-        playerNumber,
-        position,
-        role
-      })
-
-      // If penalty, award point to the other team (but only if lineups are set)
-      if (sanctionType === 'penalty') {
-        // Check if both lineups are set before awarding point
-        const homeTeamKey = leftIsHome ? 'home' : 'away'
-        const awayTeamKey = leftIsHome ? 'away' : 'home'
-
-        const homeLineupSet = data.events?.some(e =>
-          e.type === 'lineup' &&
-          e.payload?.team === homeTeamKey &&
-          e.setIndex === data.set.index &&
-          e.payload?.isInitial
-        )
-        const awayLineupSet = data.events?.some(e =>
-          e.type === 'lineup' &&
-          e.payload?.team === awayTeamKey &&
-          e.setIndex === data.set.index &&
-          e.payload?.isInitial
-        )
-
-        setSanctionConfirmModal(null)
-
-        if (homeLineupSet && awayLineupSet) {
-          // Both lineups are set - award point immediately
-          const otherTeam = team === 'home' ? 'away' : 'home'
-          const otherSide = mapTeamKeyToSide(otherTeam)
-          await handlePoint(otherSide)
-        } else {
-          // Lineups not set - show message
-          showAlert('Penalty recorded. Point will be awarded after both teams set their lineups.', 'info')
-        }
-      } else {
-        setSanctionConfirmModal(null)
-      }
+      setSanctionConfirmModal(null)
     }
-  }, [sanctionConfirmModal, data?.set, data?.events, data?.homePlayers, data?.awayPlayers, logEvent, getAvailableSubstitutes, getAvailableExceptionalSubstitutes, mapTeamKeyToSide, handlePoint, leftIsHome, getPlayerSanctionLevel, playerHasSanctionType, teamHasFormalWarning, checkLiberoRedesignation, handleForfait, getLiberoOnCourt])
-
-  // Handle sanction substitution when bench player (libero replacement) is expelled/disqualified
-  // Per FIVB Casebook: libero stays on court, the expelled bench player is replaced by a substitute
-  const handleSanctionSubstitution = useCallback(async (substituteNumber) => {
-    if (!sanctionSubstitutionModal) return
-
-    const { team, expelledPlayer, liberoOnCourt, reason, isExceptional, position } = sanctionSubstitutionModal
-
-    // Log substitution event - this is recorded on scoresheet
-    // The position is where the libero currently is (the expelled player's original position)
-    const parentSeq = await logEvent('substitution', {
-      team,
-      position: position || liberoOnCourt?.position,
-      playerOut: expelledPlayer,
-      playerIn: substituteNumber,
-      isExpelled: reason === 'expulsion',
-      isDisqualified: reason === 'disqualification',
-      isExceptional,
-      isLiberoReplacementSub: true  // Flag to indicate this special case - libero stays on court
-    })
-
-    // Update the lineup's liberoSubstitution to point to new replacement player
-    // This ensures when the libero exits, the new substitute comes to court instead of expelled player
-    const currentSetIndex = data?.set?.index
-    const lineupEvents = data?.events
-      ?.filter(e => e.type === 'lineup' && e.payload?.team === team && e.setIndex === currentSetIndex)
-      .sort((a, b) => (a.seq || 0) - (b.seq || 0))
-
-    if (lineupEvents?.length > 0 && liberoOnCourt) {
-      const lastLineup = lineupEvents[lineupEvents.length - 1]
-      const currentLineup = { ...lastLineup.payload.lineup }
-
-      // Update liberoSubstitution to point to new player
-      const updatedLiberoSub = lastLineup.payload.liberoSubstitution ? {
-        ...lastLineup.payload.liberoSubstitution,
-        playerNumber: substituteNumber  // New replacement player
-      } : {
-        position: liberoOnCourt.position,
-        liberoNumber: liberoOnCourt.liberoNumber,
-        liberoType: liberoOnCourt.liberoType,
-        playerNumber: substituteNumber
-      }
-
-      await logEvent('lineup', {
-        team,
-        lineup: currentLineup,
-        liberoSubstitution: updatedLiberoSub
-      }, { parentSeq })
-    }
-
-    // Add remarks if exceptional substitution
-    if (isExceptional) {
-      const remarkKey = `exceptionalSubstitution${team === 'home' ? 'Home' : 'Away'}`
-      const existingRemarks = data?.match?.[remarkKey] || ''
-      const newRemark = `Exp Sub: #${expelledPlayer}→#${substituteNumber} (${reason === 'expulsion' ? 'EXP' : 'DQ'}, libero on court)`
-      await db.matches.update(matchId, {
-        [remarkKey]: existingRemarks ? `${existingRemarks}; ${newRemark}` : newRemark
-      })
-    }
-
-    setSanctionSubstitutionModal(null)
-  }, [sanctionSubstitutionModal, data?.set, data?.events, data?.match, logEvent, matchId])
-
-  // Execute libero substitution directly (no confirmation modal needed)
-  const showLiberoConfirm = useCallback(async (liberoType) => {
-    if (!liberoDropdown || !liberoType || !data?.set) return
-
-    // MUTEX: Acquire lock before creating any events to prevent race conditions
-    const maxWaitTime = 5000
-    const startWait = Date.now()
-    while (eventInProgressRef.current && (Date.now() - startWait) < maxWaitTime) {
-      await new Promise(resolve => setTimeout(resolve, 10))
-    }
-    eventInProgressRef.current = true
-
-    try {
-      const team = liberoDropdown.team
-      const position = liberoDropdown.position
-      const playerOut = liberoDropdown.playerNumber
-
-      // Validate that liberos can only enter back-row positions (I, V, VI)
-      const isBackRow = position === 'I' || position === 'V' || position === 'VI'
-      if (!isBackRow) {
-        showAlert('Liberos can only enter back-row positions (I, V, VI)', 'warning')
-        setLiberoDropdown(null)
-        return
-      }
-
-      // Get libero player number
-      const teamPlayers = team === 'home' ? data?.homePlayers : data?.awayPlayers
-      const liberoPlayer = teamPlayers?.find(p => p.libero === liberoType)
-      if (!liberoPlayer) {
-        setLiberoDropdown(null)
-        return
-      }
-
-      // Check if libero is unable to play
-      if (isLiberoUnable(team, liberoPlayer.number)) {
-        showAlert('This libero is unable to play (injured, expelled, disqualified, or declared unable)', 'warning')
-        setLiberoDropdown(null)
-        return
-      }
-
-      // Get current lineup for this team in the current set
-      const lineupEvents = data.events?.filter(e =>
-        e.type === 'lineup' &&
-        e.payload?.team === team &&
-        e.setIndex === data.set.index
-      ) || []
-      const lineupEvent = lineupEvents.length > 0 ? lineupEvents[lineupEvents.length - 1] : null
-      const currentLineup = lineupEvent?.payload?.lineup || {}
-
-      // Create new lineup with libero entry
-      const validPositions = ['I', 'II', 'III', 'IV', 'V', 'VI']
-      const cleanedCurrentLineup = {}
-      for (const pos of validPositions) {
-        if (currentLineup[pos] !== undefined) {
-          cleanedCurrentLineup[pos] = currentLineup[pos]
-        }
-      }
-
-      const newLineup = { ...cleanedCurrentLineup }
-      newLineup[position] = String(liberoPlayer.number)
-
-      const finalLineup = {}
-      for (const pos of validPositions) {
-        if (newLineup[pos] !== undefined) {
-          finalLineup[pos] = newLineup[pos]
-        }
-      }
-
-      // Log the libero entry event FIRST (main event) - skipMutex: we already hold it
-      await logEvent('libero_entry', {
-        team,
-        position,
-        playerOut,
-        liberoIn: liberoPlayer.number,
-        liberoType: liberoType
-      }, { skipMutex: true })
-
-      // Save the updated lineup as a SUB-EVENT (seq N.1) so it's deleted together with libero_entry on undo
-      const allEvents = await db.events.where({ matchId }).toArray()
-      const maxSeq = allEvents.length > 0 ? Math.max(...allEvents.map(e => e.seq || 0)) : 0
-      const subEventSeq = Math.floor(maxSeq) + 0.1 // Sub-event of the libero_entry
-
-      await db.events.add({
-        matchId,
-        setIndex: data.set.index,
-        type: 'lineup',
-        payload: {
-          team,
-          lineup: finalLineup,
-          liberoSubstitution: {
-            position,
-            liberoNumber: liberoPlayer.number,
-            playerNumber: playerOut,
-            liberoType: liberoType
-          }
-        },
-        ts: new Date().toISOString(),
-        seq: subEventSeq
-      })
-
-      // Check if captain is on court after libero entry
-      const leavingPlayer = teamPlayers?.find(p => String(p.number) === String(playerOut))
-      const isLeavingCaptain = leavingPlayer && (leavingPlayer.isCaptain || leavingPlayer.captain)
-      const captainOnCourtField = team === 'home' ? 'homeCourtCaptain' : 'awayCourtCaptain'
-      const currentCourtCaptain = data?.match?.[captainOnCourtField]
-      const isLeavingCourtCaptain = String(currentCourtCaptain) === String(playerOut)
-
-      if (isLeavingCaptain || isLeavingCourtCaptain) {
-        setTimeout(() => {
-          checkAndRequestCaptainOnCourtRef.current?.(team)
-        }, 300)
-      }
-
-      setLiberoDropdown(null)
-      setSubstitutionDropdown(null)
-    } finally {
-      // MUTEX: Always release the lock, even if an error occurred
-      eventInProgressRef.current = false
-    }
-  }, [liberoDropdown, data?.set, data?.events, data?.homePlayers, data?.awayPlayers, data?.match, matchId, logEvent, getNextSeq, isLiberoUnable])
-
-  // Handle libero in player selection - directly execute substitution
-  const handleLiberoInPlayerSelect = useCallback(async (position, playerNumber) => {
-    if (!liberoInDropdown || !data?.set) return
-
-    // MUTEX: Acquire lock before creating any events to prevent race conditions
-    const maxWaitTime = 5000
-    const startWait = Date.now()
-    while (eventInProgressRef.current && (Date.now() - startWait) < maxWaitTime) {
-      await new Promise(resolve => setTimeout(resolve, 10))
-    }
-    eventInProgressRef.current = true
-
-    try {
-      const { team } = liberoInDropdown
-
-      // Get available liberos
-      const teamPlayers = team === 'home' ? data?.homePlayers : data?.awayPlayers
-      const liberos = teamPlayers?.filter(p => p.libero && p.libero !== '') || []
-      const availableLiberos = liberos.filter(libero => !isLiberoUnable(team, libero.number))
-
-      if (availableLiberos.length === 0) {
-        showAlert('No available liberos', 'warning')
-        setLiberoInDropdown(null)
-        return
-      }
-
-      // If only one libero, use it; otherwise use the first available
-      const liberoToUse = availableLiberos[0]
-
-      // Liberos can only enter back row positions (I, V, VI)
-      const liberoEntryPosition = 'I'
-
-      // Get current lineup for this team in the current set
-      const lineupEvents = data.events?.filter(e =>
-        e.type === 'lineup' &&
-        e.payload?.team === team &&
-        e.setIndex === data.set.index
-      ) || []
-      const lineupEvent = lineupEvents.length > 0 ? lineupEvents[lineupEvents.length - 1] : null
-      const currentLineup = lineupEvent?.payload?.lineup || {}
-
-      // Create new lineup with libero entry
-      const validPositions = ['I', 'II', 'III', 'IV', 'V', 'VI']
-      const cleanedCurrentLineup = {}
-      for (const pos of validPositions) {
-        if (currentLineup[pos] !== undefined) {
-          cleanedCurrentLineup[pos] = currentLineup[pos]
-        }
-      }
-
-      const newLineup = { ...cleanedCurrentLineup }
-      newLineup[liberoEntryPosition] = String(liberoToUse.number)
-
-      const finalLineup = {}
-      for (const pos of validPositions) {
-        if (newLineup[pos] !== undefined) {
-          finalLineup[pos] = newLineup[pos]
-        }
-      }
-
-      // Log the libero entry event FIRST (main event) - skipMutex: we already hold it
-      await logEvent('libero_entry', {
-        team,
-        position: liberoEntryPosition,
-        playerOut: playerNumber,
-        liberoIn: liberoToUse.number,
-        liberoType: liberoToUse.libero
-      }, { skipMutex: true })
-
-      // Save the updated lineup as a SUB-EVENT (seq N.1) so it's deleted together with libero_entry on undo
-      const allEventsForSeq = await db.events.where({ matchId }).toArray()
-      const maxSeqForLibero = allEventsForSeq.length > 0 ? Math.max(...allEventsForSeq.map(e => e.seq || 0)) : 0
-      const subEventSeqLibero = Math.floor(maxSeqForLibero) + 0.1
-
-      await db.events.add({
-        matchId,
-        setIndex: data.set.index,
-        type: 'lineup',
-        payload: {
-          team,
-          lineup: finalLineup,
-          liberoSubstitution: {
-            position: liberoEntryPosition,
-            liberoNumber: liberoToUse.number,
-            playerNumber,
-            liberoType: liberoToUse.libero
-          }
-        },
-        ts: new Date().toISOString(),
-        seq: subEventSeqLibero
-      })
-
-      // Check if captain is on court after libero entry
-      const leavingPlayer = teamPlayers?.find(p => String(p.number) === String(playerNumber))
-      const isLeavingCaptain = leavingPlayer && (leavingPlayer.isCaptain || leavingPlayer.captain)
-      const captainOnCourtField = team === 'home' ? 'homeCourtCaptain' : 'awayCourtCaptain'
-      const currentCourtCaptain = data?.match?.[captainOnCourtField]
-      const isLeavingCourtCaptain = String(currentCourtCaptain) === String(playerNumber)
-
-      if (isLeavingCaptain || isLeavingCourtCaptain) {
-        setTimeout(() => {
-          checkAndRequestCaptainOnCourtRef.current?.(team)
-        }, 300)
-      }
-
-      setLiberoInDropdown(null)
-    } finally {
-      // MUTEX: Always release the lock, even if an error occurred
-      eventInProgressRef.current = false
-    }
-  }, [liberoInDropdown, data?.set, data?.events, data?.homePlayers, data?.awayPlayers, data?.match, matchId, logEvent, getNextSeq, isLiberoUnable])
-
-  // Confirm libero entry
-  const confirmLibero = useCallback(async () => {
-    if (!liberoConfirm || !data?.set) return
-
-    // MUTEX: Acquire lock before creating any events to prevent race conditions
-    const maxWaitTime = 5000
-    const startWait = Date.now()
-    while (eventInProgressRef.current && (Date.now() - startWait) < maxWaitTime) {
-      await new Promise(resolve => setTimeout(resolve, 10))
-    }
-    eventInProgressRef.current = true
-
-    try {
-      const { team, position, playerOut, liberoIn, isExit, replacedPlayer } = liberoConfirm
-
-      // Handle libero EXIT (libero out, original player returns)
-      if (isExit) {
-        // Check if there has been a point since last libero exchange
-        if (!hasPointSinceLastLiberoExchange(team)) {
-          showAlert('A point must be awarded before removing the libero', 'warning')
-          setLiberoConfirm(null)
-          return
-        }
-
-        // Get current lineup
-        const lineupEvents = data.events?.filter(e =>
-          e.type === 'lineup' &&
-          e.payload?.team === team &&
-          e.setIndex === data.set.index
-        ) || []
-        const currentLineup = lineupEvents[lineupEvents.length - 1]?.payload?.lineup || {}
-
-        // Validate that libero is actually on court at the specified position
-        const playerAtPosition = currentLineup[position]
-        if (String(playerAtPosition) !== String(playerOut)) {
-          console.error('[Libero Exit] VALIDATION FAILED: libero', playerOut,
-            'is not at position', position, '- found', playerAtPosition, 'instead')
-          showAlert(`Libero #${playerOut} is not at position ${position}. Cannot proceed with libero exit.`, 'error')
-          setLiberoConfirm(null)
-          return
-        }
-
-        // Get the libero type
-        const teamPlayers = team === 'home' ? data?.homePlayers : data?.awayPlayers
-        const liberoPlayer = teamPlayers?.find(p => String(p.number) === String(playerOut))
-        const liberoType = liberoPlayer?.libero || 'libero1'
-
-        // Use the replacedPlayer from liberoConfirm
-        const originalPlayerNumber = replacedPlayer
-
-        if (!originalPlayerNumber) {
-          showAlert('Original player not found for this libero. Please update lineup manually.', 'error')
-          setLiberoConfirm(null)
-          return
-        }
-
-        // First, clean currentLineup to ensure only valid positions
-        const validPositions = ['I', 'II', 'III', 'IV', 'V', 'VI']
-        const cleanedCurrentLineup = {}
-        for (const pos of validPositions) {
-          if (currentLineup[pos] !== undefined) {
-            cleanedCurrentLineup[pos] = currentLineup[pos]
-          }
-        }
-
-        // Restore the original player
-        const newLineup = { ...cleanedCurrentLineup }
-
-        // Check if the original player is already on court in another position
-        // If so, remove them from that position first to avoid duplicates
-        for (const [pos, playerNum] of Object.entries(newLineup)) {
-          if (String(playerNum) === String(originalPlayerNumber) && pos !== position) {
-            // The original player is already in another position - remove them from there
-            delete newLineup[pos]
-            break
-          }
-        }
-
-        // Now set the original player in the libero's position
-        newLineup[position] = String(originalPlayerNumber)
-
-        // Ensure we only have exactly 6 positions (defensive check)
-        const finalLineup = {}
-        for (const pos of validPositions) {
-          if (newLineup[pos] !== undefined) {
-            finalLineup[pos] = newLineup[pos]
-          }
-        }
-
-        // Log the libero exit event FIRST (main event) - skipMutex: we already hold it
-        await logEvent('libero_exit', {
-          team,
-          position,
-          liberoOut: playerOut,
-          playerIn: originalPlayerNumber,
-          liberoType
-        }, { skipMutex: true })
-
-        // Save the updated lineup as a SUB-EVENT (seq N.1) so it's deleted together with libero_exit on undo
-        const allEvents = await db.events.where({ matchId }).toArray()
-        const maxSeq = allEvents.length > 0 ? Math.max(...allEvents.map(e => e.seq || 0)) : 0
-        const subEventSeq = Math.floor(maxSeq) + 0.1 // Sub-event of the libero_exit
-
-        await db.events.add({
-          matchId,
-          setIndex: data.set.index,
-          type: 'lineup',
-          payload: {
-            team,
-            lineup: finalLineup,
-            fromSubstitution: true, // Mark as substitution so it's not treated as rotation lineup
-            liberoSubstitution: null // Explicitly clear libero substitution
-          },
-          ts: new Date().toISOString(),
-          seq: subEventSeq
-        })
-
-        // Check if the libero leaving is the court captain OR if the returning player is the team captain
-        const returningPlayer = teamPlayers?.find(p => String(p.number) === String(originalPlayerNumber))
-        const isReturningCaptain = returningPlayer && (returningPlayer.isCaptain || returningPlayer.captain)
-        const captainOnCourtField = team === 'home' ? 'homeCourtCaptain' : 'awayCourtCaptain'
-        const currentCourtCaptain = data?.match?.[captainOnCourtField]
-        const isLiberoCourtCaptain = String(currentCourtCaptain) === String(playerOut)
-
-        // Trigger captain check if:
-        // - Libero leaving is the court captain
-        // - Team captain is returning to court (need to clear game captain badge)
-        if (isLiberoCourtCaptain || isReturningCaptain) {
-          setTimeout(() => {
-            checkAndRequestCaptainOnCourtRef.current?.(team)
-          }, 300)
-        }
-
-        setLiberoConfirm(null)
-        setLiberoDropdown(null)
-        return
-      }
-
-      // Handle libero ENTRY (original code below)
-      // Validate that liberos can only enter back-row positions (I, V, VI)
-      const isBackRow = position === 'I' || position === 'V' || position === 'VI'
-      if (!isBackRow) {
-        showAlert('Liberos can only enter back-row positions (I, V, VI)', 'warning')
-        setLiberoConfirm(null)
-        setLiberoDropdown(null)
-        return
-      }
-
-      // Get current lineup for this team in the current set
-      const lineupEvents = data.events?.filter(e =>
-        e.type === 'lineup' &&
-        e.payload?.team === team &&
-        e.setIndex === data.set.index
-      ) || []
-      const lineupEvent = lineupEvents.length > 0 ? lineupEvents[lineupEvents.length - 1] : null
-      const currentLineup = lineupEvent?.payload?.lineup || {}
-
-      // Get libero player number
-      const teamPlayers = team === 'home' ? data?.homePlayers : data?.awayPlayers
-      const liberoPlayer = teamPlayers?.find(p => p.libero === liberoIn)
-      if (!liberoPlayer) {
-        return
-      }
-
-      // Check if libero is unable to play
-      if (isLiberoUnable(team, liberoPlayer.number)) {
-        showAlert('This libero is unable to play (injured, expelled, disqualified, or declared unable)', 'warning')
-        setLiberoConfirm(null)
-        setLiberoDropdown(null)
-        return
-      }
-
-      // VALIDATION: Ensure playerOut is actually at the specified position
-      const playerAtPosition = currentLineup[position]
-      if (String(playerAtPosition) !== String(playerOut)) {
-        console.error('[Libero Entry] VALIDATION FAILED: playerOut', playerOut,
-          'is not at position', position, '- found', playerAtPosition, 'instead')
-        showAlert(`Player #${playerOut} is not at position ${position}. Cannot proceed with libero entry.`, 'error')
-        setLiberoConfirm(null)
-        setLiberoDropdown(null)
-        return
-      }
-
-      // VALIDATION: Ensure playerOut is not already a libero
-      const playerOutInfo = teamPlayers?.find(p => String(p.number) === String(playerOut))
-      if (playerOutInfo?.libero && playerOutInfo.libero !== '') {
-        console.error('[Libero Entry] VALIDATION FAILED: playerOut', playerOut, 'is a libero')
-        showAlert(`Player #${playerOut} is a libero. Liberos cannot be replaced by other liberos.`, 'warning')
-        setLiberoConfirm(null)
-        setLiberoDropdown(null)
-        return
-      }
-
-      // VALIDATION: Check if there's already a libero substitution for this team
-      // and if so, ensure we're not creating conflicting tracking
-      const existingLiberoSub = lineupEvent?.payload?.liberoSubstitution
-      if (existingLiberoSub) {
-        // There's already a libero on court - this libero entry should be a libero exchange
-        // or the existing libero should have exited first
-        console.warn('[Libero Entry] Another libero is already on court:',
-          existingLiberoSub, '- this may cause tracking issues')
-      }
-
-      console.log('[Libero Entry] Validation passed:', {
-        position,
-        playerOut,
-        liberoIn: liberoPlayer.number,
-        currentLineup,
-        existingLiberoSub
-      })
-
-      // Create new lineup with libero entry
-      // First, clean currentLineup to ensure only valid positions
-      const validPositions = ['I', 'II', 'III', 'IV', 'V', 'VI']
-      const cleanedCurrentLineup = {}
-      for (const pos of validPositions) {
-        if (currentLineup[pos] !== undefined) {
-          cleanedCurrentLineup[pos] = currentLineup[pos]
-        }
-      }
-
-      const newLineup = { ...cleanedCurrentLineup }
-      newLineup[position] = String(liberoPlayer.number)
-
-      // Ensure we only have exactly 6 positions (defensive check)
-      const finalLineup = {}
-      for (const pos of validPositions) {
-        if (newLineup[pos] !== undefined) {
-          finalLineup[pos] = newLineup[pos]
-        }
-      }
-
-      // Log the libero entry event FIRST (main event) - skipMutex: we already hold it
-      await logEvent('libero_entry', {
-        team,
-        position,
-        playerOut,
-        liberoIn: liberoPlayer.number,
-        liberoType: liberoIn
-      }, { skipMutex: true })
-
-      // Save the updated lineup as a SUB-EVENT (seq N.1) so it's deleted together with libero_entry on undo
-      const allEventsEntry = await db.events.where({ matchId }).toArray()
-      const maxSeqEntry = allEventsEntry.length > 0 ? Math.max(...allEventsEntry.map(e => e.seq || 0)) : 0
-      const subEventSeqEntry = Math.floor(maxSeqEntry) + 0.1
-
-      await db.events.add({
-        matchId,
-        setIndex: data.set.index,
-        type: 'lineup',
-        payload: {
-          team,
-          lineup: finalLineup,
-          liberoSubstitution: {
-            position,
-            liberoNumber: liberoPlayer.number,
-            playerNumber: playerOut,
-            liberoType: liberoIn
-          }
-        },
-        ts: new Date().toISOString(),
-        seq: subEventSeqEntry
-      })
-
-      // Debug log: libero entry
-      debugLogger.log('LIBERO_ENTRY', {
-        team,
-        position,
-        playerOut,
-        liberoIn: liberoPlayer.number,
-        liberoType: liberoIn,
-        newLineup: finalLineup
-      }, getStateSnapshot())
-
-      setLiberoConfirm(null)
-
-      // Check if captain is on court after libero entry
-      // The playerOut is leaving, check if they're captain
-      // Reuse teamPlayers variable already declared above
-      const leavingPlayer = teamPlayers?.find(p => String(p.number) === String(playerOut))
-      const isLeavingCaptain = leavingPlayer && (leavingPlayer.isCaptain || leavingPlayer.captain)
-      const captainOnCourtField = team === 'home' ? 'homeCourtCaptain' : 'awayCourtCaptain'
-      const currentCourtCaptain = data?.match?.[captainOnCourtField]
-      const isLeavingCourtCaptain = String(currentCourtCaptain) === String(playerOut)
-
-      if (isLeavingCaptain || isLeavingCourtCaptain) {
-        setTimeout(() => {
-          checkAndRequestCaptainOnCourtRef.current?.(team)
-        }, 300)
-      }
-      setSubstitutionDropdown(null) // Close substitution dropdown if open
-      setLiberoDropdown(null) // Close libero dropdown if open
-    } finally {
-      // MUTEX: Always release the lock, even if an error occurred
-      eventInProgressRef.current = false
-    }
-  }, [liberoConfirm, data?.set, data?.events, data?.homePlayers, data?.awayPlayers, matchId, logEvent, getNextSeq, isLiberoUnable])
-
-  const cancelLibero = useCallback(() => {
-    setLiberoDropdown(null)
-    setSubstitutionDropdown(null) // Close both together
-  }, [])
-
-  const cancelLiberoConfirm = useCallback(() => {
-    setLiberoConfirm(null)
-    setSubstitutionDropdown(null) // Close substitution dropdown if open
-    setLiberoDropdown(null) // Close libero dropdown if open
-  }, [])
-
-  // Handle libero reentry (when opposite player is in position I and not serving)
-  const confirmLiberoReentry = useCallback(async () => {
-    if (!liberoReentryModal || !data?.set) return
-
-    // MUTEX: Acquire lock before creating any events to prevent race conditions
-    const maxWaitTime = 5000
-    const startWait = Date.now()
-    while (eventInProgressRef.current && (Date.now() - startWait) < maxWaitTime) {
-      await new Promise(resolve => setTimeout(resolve, 10))
-    }
-    eventInProgressRef.current = true
-
-    try {
-      // Use the selected libero from availableLiberos if present, otherwise use the original values
-      const { team, position, playerNumber, availableLiberos, selectedLiberoIndex } = liberoReentryModal
-      const selectedLibero = availableLiberos && availableLiberos[selectedLiberoIndex]
-      const liberoNumber = selectedLibero ? selectedLibero.number : liberoReentryModal.liberoNumber
-      const liberoType = selectedLibero ? selectedLibero.type : liberoReentryModal.liberoType
-
-      // Check if libero is unable to play
-      if (isLiberoUnable(team, liberoNumber)) {
-        showAlert('This libero is unable to play (injured, expelled, disqualified, or declared unable)', 'warning')
-        setLiberoReentryModal(null)
-        return
-      }
-
-      const playerOut = playerNumber // For consistency with other libero entry logic
-
-      // Get current lineup for this team in the current set
-      const lineupEvents = data.events?.filter(e =>
-        e.type === 'lineup' &&
-        e.payload?.team === team &&
-        e.setIndex === data.set.index
-      ) || []
-      const lineupEvent = lineupEvents.length > 0 ? lineupEvents[lineupEvents.length - 1] : null
-      const currentLineup = lineupEvent?.payload?.lineup || {}
-
-      // Create new lineup with libero re-entry
-      // First, clean currentLineup to ensure only valid positions
-      const validPositions = ['I', 'II', 'III', 'IV', 'V', 'VI']
-      const cleanedCurrentLineup = {}
-      for (const pos of validPositions) {
-        if (currentLineup[pos] !== undefined) {
-          cleanedCurrentLineup[pos] = currentLineup[pos]
-        }
-      }
-
-      const newLineup = { ...cleanedCurrentLineup }
-      newLineup[position] = String(liberoNumber)
-
-      // Ensure we only have exactly 6 positions (defensive check)
-      const finalLineup = {}
-      for (const pos of validPositions) {
-        if (newLineup[pos] !== undefined) {
-          finalLineup[pos] = newLineup[pos]
-        }
-      }
-
-      // Log the libero entry event FIRST (main event) - skipMutex: we already hold it
-      await logEvent('libero_entry', {
-        team,
-        position,
-        playerOut,
-        liberoIn: liberoNumber,
-        liberoType: liberoType
-      }, { skipMutex: true })
-
-      // Save the updated lineup as a SUB-EVENT (seq N.1) so it's deleted together with libero_entry on undo
-      const allEvents = await db.events.where({ matchId }).toArray()
-      const maxSeq = allEvents.length > 0 ? Math.max(...allEvents.map(e => e.seq || 0)) : 0
-      const subEventSeq = Math.floor(maxSeq) + 0.1 // Sub-event of the libero_entry
-
-      await db.events.add({
-        matchId,
-        setIndex: data.set.index,
-        type: 'lineup',
-        payload: {
-          team,
-          lineup: finalLineup,
-          liberoSubstitution: {
-            position,
-            liberoNumber: liberoNumber,
-            playerNumber: playerOut,
-            liberoType: liberoType
-          }
-        },
-        ts: new Date().toISOString(),
-        seq: subEventSeq
-      })
-
-      // Debug log: libero reentry
-      debugLogger.log('LIBERO_REENTRY', {
-        team,
-        position,
-        playerOut,
-        liberoIn: liberoNumber,
-        liberoType,
-        newLineup: finalLineup
-      }, getStateSnapshot())
-
-      // Clear dismissed state since libero is entering - allow suggestion again if they exit
-      setLiberoSuggestionDismissedForExit(prev => ({
-        ...prev,
-        [team]: null
-      }))
-
-      setLiberoReentryModal(null)
-
-      // Check if captain is on court after libero reentry (playerOut is leaving)
-      const teamPlayers = team === 'home' ? data?.homePlayers : data?.awayPlayers
-      const leavingPlayer = teamPlayers?.find(p => String(p.number) === String(playerOut))
-      const isLeavingCaptain = leavingPlayer && (leavingPlayer.isCaptain || leavingPlayer.captain)
-      const captainOnCourtField = team === 'home' ? 'homeCourtCaptain' : 'awayCourtCaptain'
-      const currentCourtCaptain = data?.match?.[captainOnCourtField]
-      const isLeavingCourtCaptain = String(currentCourtCaptain) === String(playerOut)
-
-      if (isLeavingCaptain || isLeavingCourtCaptain) {
-        setTimeout(() => {
-          checkAndRequestCaptainOnCourtRef.current?.(team)
-        }, 300)
-      }
-    } finally {
-      // MUTEX: Always release the lock, even if an error occurred
-      eventInProgressRef.current = false
-    }
-  }, [liberoReentryModal, data?.set, data?.events, data?.homePlayers, data?.awayPlayers, data?.match, matchId, logEvent, isLiberoUnable])
-
-  const cancelLiberoReentry = useCallback(() => {
-    // Track that we dismissed the suggestion for this specific libero exit
-    // so we don't show it again until a new libero exit happens
-    if (liberoReentryModal) {
-      const team = liberoReentryModal.team
-      const exitEvent = data.events.filter(e =>
-        e.type === 'libero_exit' &&
-        e.payload?.team === team &&
-        e.setIndex === data.set.index &&
-        e.payload?.reason === 'rotation_to_front_row'
-      ).sort((a, b) => new Date(b.ts) - new Date(a.ts))[0]
-
-      if (exitEvent) {
-        setLiberoSuggestionDismissedForExit(prev => ({
-          ...prev,
-          [team]: exitEvent.ts
-        }))
-      }
-    }
-    setLiberoReentryModal(null)
-  }, [liberoReentryModal, data?.events, data?.set?.index])
-
-  // Handle libero out
-  const handleLiberoOut = useCallback(async (side) => {
-    if (rallyStatus !== 'idle') return
-
-    // MUTEX: Acquire lock before creating any events to prevent race conditions
-    const maxWaitTime = 5000
-    const startWait = Date.now()
-    while (eventInProgressRef.current && (Date.now() - startWait) < maxWaitTime) {
-      await new Promise(resolve => setTimeout(resolve, 10))
-    }
-    eventInProgressRef.current = true
-
-    try {
-      const teamKey = mapSideToTeamKey(side)
-      const liberoOnCourt = getLiberoOnCourt(teamKey)
-
-      if (!liberoOnCourt) {
-        showAlert('No libero is currently on court', 'warning')
-        return
-      }
-
-      // Check if there has been a point since last libero exchange
-      if (!hasPointSinceLastLiberoExchange(teamKey)) {
-        showAlert('A point must be awarded before removing the libero', 'warning')
-        return
-      }
-
-      // Get current lineup
-      const lineupEvents = data.events.filter(e =>
-        e.type === 'lineup' &&
-        e.payload?.team === teamKey &&
-        e.setIndex === data.set.index
-      )
-      const currentLineup = lineupEvents[lineupEvents.length - 1]?.payload?.lineup || {}
-
-      // Determine the original player that should replace the libero
-      let originalPlayerNumber = liberoOnCourt.playerNumber
-      if (!originalPlayerNumber && lineupEvents.length > 0) {
-        // Look through previous lineup events to find the most recent non-libero player at this position
-        const sortedLineupEvents = [...lineupEvents].sort((a, b) => new Date(b.ts) - new Date(a.ts)) // Most recent first
-        const teamPlayers = teamKey === 'home' ? data.homePlayers : data.awayPlayers
-        for (const event of sortedLineupEvents) {
-          const lineup = event.payload?.lineup
-          if (!lineup) continue
-          const playerNumberAtPosition = lineup[liberoOnCourt.position]
-          if (!playerNumberAtPosition) continue
-          if (String(playerNumberAtPosition) !== String(liberoOnCourt.liberoNumber)) {
-            originalPlayerNumber = Number(playerNumberAtPosition)
-            break
-          }
-          // If this event has libero substitution info, use the stored original player
-          if (event.payload?.liberoSubstitution &&
-            String(event.payload.liberoSubstitution.liberoNumber) === String(liberoOnCourt.liberoNumber) &&
-            event.payload.liberoSubstitution.position === liberoOnCourt.position) {
-            originalPlayerNumber = event.payload.liberoSubstitution.playerNumber
-            break
-          }
-        }
-      }
-
-      if (!originalPlayerNumber) {
-        showAlert('Original player not found for this libero. Please update lineup manually.', 'error')
-        return
-      }
-
-      // First, clean currentLineup to ensure only valid positions
-      const validPositions = ['I', 'II', 'III', 'IV', 'V', 'VI']
-      const cleanedCurrentLineup = {}
-      for (const pos of validPositions) {
-        if (currentLineup[pos] !== undefined) {
-          cleanedCurrentLineup[pos] = currentLineup[pos]
-        }
-      }
-
-      // Restore the original player
-      const newLineup = { ...cleanedCurrentLineup }
-
-      // Check if the original player is already on court in another position
-      // If so, remove them from that position first to avoid duplicates
-      for (const [pos, playerNum] of Object.entries(newLineup)) {
-        if (String(playerNum) === String(originalPlayerNumber) && pos !== liberoOnCourt.position) {
-          // The original player is already in another position - remove them from there
-          // This can happen if the team rotated while the libero was in
-          delete newLineup[pos]
-          break
-        }
-      }
-
-      // Now set the original player in the libero's position
-      newLineup[liberoOnCourt.position] = String(originalPlayerNumber)
-
-      // Ensure we only have exactly 6 positions (defensive check)
-      const finalLineup = {}
-      for (const pos of validPositions) {
-        if (newLineup[pos] !== undefined) {
-          finalLineup[pos] = newLineup[pos]
-        }
-      }
-
-      // Log the libero exit event FIRST (main event) - skipMutex: we already hold it
-      await logEvent('libero_exit', {
-        team: teamKey,
-        position: liberoOnCourt.position,
-        liberoOut: liberoOnCourt.liberoNumber,
-        playerIn: originalPlayerNumber,
-        liberoType: liberoOnCourt.liberoType
-      }, { skipMutex: true })
-
-      // Save the updated lineup as a SUB-EVENT (seq N.1) so it's deleted together with libero_exit on undo
-      const allEvents = await db.events.where({ matchId }).toArray()
-      const maxSeq = allEvents.length > 0 ? Math.max(...allEvents.map(e => e.seq || 0)) : 0
-      const subEventSeq = Math.floor(maxSeq) + 0.1 // Sub-event of the libero_exit
-
-      await db.events.add({
-        matchId,
-        setIndex: data.set.index,
-        type: 'lineup',
-        payload: {
-          team: teamKey,
-          lineup: finalLineup,
-          fromSubstitution: true, // Mark as substitution so it's not treated as rotation lineup
-          liberoSubstitution: null // Explicitly clear libero substitution
-        },
-        ts: new Date().toISOString(),
-        seq: subEventSeq
-      })
-
-      // Check if the libero leaving is the court captain OR if the returning player is the team captain
-      const teamPlayers = teamKey === 'home' ? data?.homePlayers : data?.awayPlayers
-      const returningPlayer = teamPlayers?.find(p => String(p.number) === String(originalPlayerNumber))
-      const isReturningCaptain = returningPlayer && (returningPlayer.isCaptain || returningPlayer.captain)
-      const captainOnCourtField = teamKey === 'home' ? 'homeCourtCaptain' : 'awayCourtCaptain'
-      const currentCourtCaptain = data?.match?.[captainOnCourtField]
-      const isLiberoCourtCaptain = String(currentCourtCaptain) === String(liberoOnCourt.liberoNumber)
-
-      // Trigger captain check if:
-      // - Libero leaving is the court captain
-      // - Team captain is returning to court (need to clear game captain badge)
-      if (isLiberoCourtCaptain || isReturningCaptain) {
-        setTimeout(() => {
-          checkAndRequestCaptainOnCourtRef.current?.(teamKey)
-        }, 300)
-      }
-    } finally {
-      // MUTEX: Always release the lock, even if an error occurred
-      eventInProgressRef.current = false
-    }
-  }, [rallyStatus, mapSideToTeamKey, getLiberoOnCourt, hasPointSinceLastLiberoExchange, data?.events, data?.set, data?.match, matchId, logEvent, data?.homePlayers, data?.awayPlayers])
-
-  // Handle libero re-designation
-  const confirmLiberoRedesignation = useCallback(async (newLiberoNumber) => {
-    if (!liberoRedesignationModal || !data?.set) return
-
-    const { team, unableLiberoNumber, unableLiberoType, reason = 'declared' } = liberoRedesignationModal
-
-    // Log the libero_unable event if not already logged (with reason='declared' if not specified)
-    const hasUnableEvent = data?.events?.some(e =>
-      e.type === 'libero_unable' &&
-      e.payload?.team === team &&
-      e.payload?.liberoNumber === unableLiberoNumber
-    )
-
-    if (!hasUnableEvent) {
-      await logEvent('libero_unable', {
-        team,
-        liberoNumber: unableLiberoNumber,
-        liberoType: unableLiberoType,
-        reason: 'declared' // Default to declared if not specified
-      })
-    }
-
-    // Log the re-designation event
-    await logEvent('libero_redesignation', {
-      team,
-      unableLiberoNumber,
-      unableLiberoType,
-      newLiberoNumber,
-      reason
-    })
-
-    // Update the player records: remove libero status from old player, add to new player
-    const teamPlayers = team === 'home' ? data?.homePlayers : data?.awayPlayers
-    const teamId = team === 'home' ? data?.match?.homeTeamId : data?.match?.awayTeamId
-
-    if (teamId) {
-      // Find the old libero and new player
-      const oldLiberoPlayer = teamPlayers?.find(p => Number(p.number) === Number(unableLiberoNumber))
-      const newLiberoPlayer = teamPlayers?.find(p => Number(p.number) === Number(newLiberoNumber))
-
-      // Update old libero - mark as unable (out for rest of game)
-      if (oldLiberoPlayer?.id) {
-        await db.players.update(oldLiberoPlayer.id, { libero: 'unable' })
-      }
-
-      // Update new player - mark as redesignated libero (only one allowed per team)
-      if (newLiberoPlayer?.id) {
-        await db.players.update(newLiberoPlayer.id, { libero: 'redesignated' })
-      }
-    }
-
-    // Record in remarks
-    const teamLabel = team === teamAKey ? 'A' : 'B'
-    const setIndex = data.set.index
-
-    // Get current score: left = team involved, right = other team
-    const teamPoints = team === 'home' ? data.set.homePoints : data.set.awayPoints
-    const otherPoints = team === 'home' ? data.set.awayPoints : data.set.homePoints
-    const scoreStr = `${teamPoints}:${otherPoints}`
-
-    // Get actual time of day (HHhMMm format, no seconds) - use UTC for consistency
-    const currentTime = new Date()
-    const hours = String(currentTime.getUTCHours()).padStart(2, '0')
-    const minutes = String(currentTime.getUTCMinutes()).padStart(2, '0')
-    const timeStr = `${hours}h${minutes}m`
-
-    const remark = `Set ${setIndex}, Team ${teamLabel}, Time ${timeStr}, Score ${scoreStr}, Player #${newLiberoNumber} re-designated as Libero (replacing ${unableLiberoNumber})`
-    const currentRemarks = data?.match?.remarks || ''
-    const newRemarks = currentRemarks ? `${currentRemarks}\n${remark}` : remark
-    await db.matches.update(matchId, { remarks: newRemarks })
-
-    setLiberoRedesignationModal(null)
-  }, [liberoRedesignationModal, data?.set, data?.events, data?.match, data?.homePlayers, data?.awayPlayers, logEvent, teamAKey, matchId])
-
-  // Confirm marking libero as unable
-  const confirmLiberoUnable = useCallback(async () => {
-    if (!liberoUnableModal || !data?.set) return
-
-    const { team, liberoNumber, liberoType, reason = 'declared', isOnCourt } = liberoUnableModal
-
-    try {
-      // If libero is on court, force them out first
-      if (isOnCourt) {
-        const liberoOnCourt = getLiberoOnCourt(team)
-        if (liberoOnCourt) {
-          // Get current lineup
-          const lineupEvents = (data.events || [])
-            .filter(e => e.type === 'lineup' && e.payload?.team === team && e.setIndex === data.set.index)
-            .sort((a, b) => (a.seq || 0) - (b.seq || 0))
-
-          if (lineupEvents.length > 0) {
-            const currentLineup = { ...lineupEvents[lineupEvents.length - 1].payload?.lineup }
-            const position = liberoOnCourt.position
-            const originalPlayerNumber = liberoOnCourt.playerNumber
-
-            if (originalPlayerNumber) {
-              // Put original player back in
-              currentLineup[position] = String(originalPlayerNumber)
-
-              // Log the libero exit FIRST to get the main sequence number
-              const libExitSeq = await logEvent('libero_exit', {
-                team,
-                position,
-                liberoOut: liberoNumber,
-                playerIn: originalPlayerNumber,
-                liberoType,
-                reason: 'unable'
-              })
-
-              // Update lineup as a SUB-EVENT (decimal sequence) so undo deletes both together
-              const lineupSubEventSeq = libExitSeq + 0.1
-              await db.events.add({
-                matchId,
-                setIndex: data.set.index,
-                type: 'lineup',
-                payload: {
-                  team,
-                  lineup: currentLineup,
-                  fromSubstitution: true,
-                  liberoSubstitution: null
-                },
-                ts: new Date().toISOString(),
-                seq: lineupSubEventSeq
-              })
-            }
-          }
-        }
-      }
-
-      // Mark libero as unable (declared by coach or injury)
-      await logEvent('libero_unable', {
-        team,
-        liberoNumber,
-        liberoType,
-        reason
-      })
-
-      // Add automatic remark for libero unable
-      if (data?.set) {
-        const setIndex = data.set.index
-        const teamLabel = team === teamAKey ? 'A' : 'B'
-
-        // Current time (HHhMMm format) - use UTC for consistency
-        const now = new Date()
-        const timeStr = `${String(now.getUTCHours()).padStart(2, '0')}h${String(now.getUTCMinutes()).padStart(2, '0')}m`
-
-        // Get current score - always put the interested team's score first
-        const teamScore = team === 'home' ? data.set.homePoints : data.set.awayPoints
-        const opponentScore = team === 'home' ? data.set.awayPoints : data.set.homePoints
-        const scoreStr = `${teamScore}:${opponentScore}`
-
-        const reasonText = reason === 'injury' ? 'becomes unable to play (injury)' : 'declared unable to play'
-        const remark = `Set ${setIndex}, Team ${teamLabel}, Time ${timeStr}, Score ${scoreStr}, Libero #${liberoNumber} ${reasonText}`
-
-        const currentRemarks = data?.match?.remarks || ''
-        const newRemarks = currentRemarks ? `${currentRemarks}\n${remark}` : remark
-        await db.matches.update(matchId, { remarks: newRemarks })
-      }
-
-      // Check if redesignation is needed - if so, show prompt in same modal
-      const teamPlayers = team === 'home' ? data?.homePlayers : data?.awayPlayers
-      const activeLiberos = teamPlayers?.filter(p =>
-        p.libero && p.libero !== 'unable' && p.number !== liberoNumber
-      ) || []
-
-      if (activeLiberos.length === 0) {
-        // Show redesignation prompt in same modal
-        setLiberoUnableModal({
-          ...liberoUnableModal,
-          step: 'redesignate'
-        })
-      } else {
-        setLiberoUnableModal(null)
-      }
-    } catch (error) {
-      // Silently handle error
-    }
-  }, [liberoUnableModal, data?.set, data?.events, data?.match?.remarks, logEvent, checkLiberoRedesignation, getLiberoOnCourt, teamAKey, teamBKey, matchId])
-
-  // Handle libero in button click
-  const handleLiberoIn = useCallback((side, event) => {
-    if (rallyStatus !== 'idle') return
-
-    const teamKey = mapSideToTeamKey(side)
-    const teamPlayers = teamKey === 'home' ? data?.homePlayers : data?.awayPlayers
-    const liberos = teamPlayers?.filter(p => p.libero && p.libero !== '') || []
-
-    // Check if a libero is already on court
-    const liberoOnCourt = getLiberoOnCourt(teamKey)
-    if (liberoOnCourt) {
-      showAlert('A libero is already on court', 'warning')
-      return
-    }
-
-    // Check if team has any liberos
-    if (liberos.length === 0) {
-      showAlert('No liberos available', 'warning')
-      return
-    }
-
-    // Check if any libero is available (not unable)
-    const availableLiberos = liberos.filter(libero => !isLiberoUnable(teamKey, libero.number))
-    if (availableLiberos.length === 0) {
-      showAlert('No available liberos (all are unable to play)', 'warning')
-      return
-    }
-
-    // Get button position for dropdown
-    const rect = event.currentTarget.getBoundingClientRect()
-    setLiberoInDropdown({
-      team: teamKey,
-      side: side,
-      element: event.currentTarget,
-      x: rect.left + rect.width / 2,
-      y: rect.bottom + 8
-    })
-  }, [rallyStatus, data?.homePlayers, data?.awayPlayers, getLiberoOnCourt, isLiberoUnable, mapSideToTeamKey, getCurrentServe, getTeamLineupState])
-
-  // Handle exchange libero (L1 <-> L2)
-  const handleExchangeLibero = useCallback(async (side) => {
-    if (rallyStatus !== 'idle') return
-
-    // MUTEX: Acquire lock before creating any events to prevent race conditions
-    const maxWaitTime = 5000
-    const startWait = Date.now()
-    while (eventInProgressRef.current && (Date.now() - startWait) < maxWaitTime) {
-      await new Promise(resolve => setTimeout(resolve, 10))
-    }
-    eventInProgressRef.current = true
-
-    try {
-      const teamKey = mapSideToTeamKey(side)
-      const liberoOnCourt = getLiberoOnCourt(teamKey)
-
-      if (!liberoOnCourt) {
-        showAlert('No libero is currently on court', 'warning')
-        return
-      }
-
-      // Check if there has been a point since last libero exchange
-      if (!hasPointSinceLastLiberoExchange(teamKey)) {
-        showAlert('A point must be awarded before exchanging liberos', 'warning')
-        return
-      }
-
-      // Get the other libero
-      const teamPlayers = teamKey === 'home' ? data.homePlayers : data.awayPlayers
-      const otherLibero = teamPlayers?.find(p =>
-        p.libero &&
-        p.libero !== '' &&
-        p.libero !== 'unable' &&
-        String(p.number) !== String(liberoOnCourt.liberoNumber) &&
-        // Find the other active libero (L1, L2, or redesignated) that's not the one currently on court
-        (p.libero === 'libero1' || p.libero === 'libero2' || p.libero === 'redesignated')
-      )
-
-      if (!otherLibero) {
-        showAlert('Other libero not found', 'warning')
-        return
-      }
-
-      // Check if either libero is unable to play
-      if (isLiberoUnable(teamKey, liberoOnCourt.liberoNumber)) {
-        showAlert('The libero currently on court is unable to play (injured, expelled, disqualified, or declared unable)', 'warning')
-        return
-      }
-
-      if (isLiberoUnable(teamKey, otherLibero.number)) {
-        showAlert('The other libero is unable to play (injured, expelled, disqualified, or declared unable)', 'warning')
-        return
-      }
-
-      // Get current lineup
-      const lineupEvents = data.events.filter(e =>
-        e.type === 'lineup' &&
-        e.payload?.team === teamKey &&
-        e.setIndex === data.set.index
-      )
-      const currentLineup = lineupEvents[lineupEvents.length - 1].payload?.lineup
-
-      // Replace current libero with other libero
-      const newLineup = { ...currentLineup }
-      newLineup[liberoOnCourt.position] = String(otherLibero.number)
-
-      // Log the libero exchange event FIRST (main event) - skipMutex: we already hold it
-      await logEvent('libero_exchange', {
-        team: teamKey,
-        position: liberoOnCourt.position,
-        liberoOut: liberoOnCourt.liberoNumber,
-        liberoIn: otherLibero.number,
-        liberoOutType: liberoOnCourt.liberoType,
-        liberoInType: otherLibero.libero,
-        playerNumber: liberoOnCourt.playerNumber
-      }, { skipMutex: true })
-
-      // Save the updated lineup as a SUB-EVENT (seq N.1) so it's deleted together with libero_exchange on undo
-      const allEvents = await db.events.where({ matchId }).toArray()
-      const maxSeq = allEvents.length > 0 ? Math.max(...allEvents.map(e => e.seq || 0)) : 0
-      const subEventSeq = Math.floor(maxSeq) + 0.1 // Sub-event of the libero_exchange
-
-      await db.events.add({
-        matchId,
-        setIndex: data.set.index,
-        type: 'lineup',
-        payload: {
-          team: teamKey,
-          lineup: newLineup,
-          liberoSubstitution: {
-            position: liberoOnCourt.position,
-            liberoNumber: otherLibero.number,
-            playerNumber: liberoOnCourt.playerNumber,
-            liberoType: otherLibero.libero
-          }
-        },
-        ts: new Date().toISOString(),
-        seq: subEventSeq
-      })
-    } finally {
-      // MUTEX: Always release the lock, even if an error occurred
-      eventInProgressRef.current = false
-    }
-  }, [rallyStatus, mapSideToTeamKey, getLiberoOnCourt, hasPointSinceLastLiberoExchange, data?.events, data?.set, data?.homePlayers, data?.awayPlayers, matchId, logEvent, isLiberoUnable])
+  }, [sanctionConfirmModal, data?.set, data?.events, data?.homePlayers, data?.awayPlayers, logEvent, mapTeamKeyToSide, handlePoint, leftIsHome, getPlayerSanctionLevel, playerHasSanctionType, teamHasFormalWarning, handleForfait])
+
+  // Beach volleyball doesn't use liberos - stub functions
+  const handleExchangeLibero = useCallback(() => {}, [])
+  const confirmLibero = useCallback(async () => {}, [])
 
   // Keyboard shortcuts handler
   useEffect(() => {
@@ -10157,7 +7495,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       // These modals need a decision - don't allow Escape to close them
       const hasDecisionModal = substitutionConfirm || liberoConfirm || sanctionConfirmModal ||
         accidentalRallyConfirmModal || accidentalPointConfirmModal || undoConfirm ||
-        replayRallyConfirm || liberoRotationModal || liberoReentryModal || sanctionSubstitutionModal
+        replayRallyConfirm || liberoRotationModal || liberoReentryModal
 
       // Confirm key (Enter)
       if (key === keyBindings.confirm) {
@@ -10206,21 +7544,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         if (playerActionMenu) {
           e.preventDefault()
           setPlayerActionMenu(null)
-          return
-        }
-        if (benchPlayerActionMenu) {
-          e.preventDefault()
-          setBenchPlayerActionMenu(null)
-          return
-        }
-        if (liberoDropdown) {
-          e.preventDefault()
-          setLiberoDropdown(null)
-          return
-        }
-        if (liberoInDropdown) {
-          e.preventDefault()
-          setLiberoInDropdown(null)
           return
         }
         if (sanctionDropdown) {
@@ -10289,7 +7612,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   }, [
     keybindingsEnabled, keyBindings, editingKey, showOptionsInMenu, keybindingsModalOpen,
     rallyStatus, handleStartRally, handlePoint, handleTimeout, handleExchangeLibero, handleUndo,
-    playerActionMenu, benchPlayerActionMenu, liberoDropdown, liberoInDropdown, sanctionDropdown,
+    playerActionMenu, liberoDropdown, liberoInDropdown, sanctionDropdown,
     timeoutModal, lineupModal, menuModal,
     substitutionConfirm, liberoConfirm, sanctionConfirmModal, accidentalRallyConfirmModal,
     accidentalPointConfirmModal, undoConfirm, replayRallyConfirm, liberoRotationModal, liberoReentryModal,
@@ -11385,19 +8708,27 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                       return
                     }
 
+                    // Add country data to team objects
+                    const team1WithCountry = data?.homeTeam ? { ...data.homeTeam, country: match?.team1Country || '' } : { name: '', country: match?.team1Country || '' }
+                    const team2WithCountry = data?.awayTeam ? { ...data.awayTeam, country: match?.team2Country || '' } : { name: '', country: match?.team2Country || '' }
+
                     const scoresheetData = {
-                      match,
-                      homeTeam: data?.homeTeam,
-                      awayTeam: data?.awayTeam,
-                      homePlayers: data?.homePlayers || [],
-                      awayPlayers: data?.awayPlayers || [],
+                      match: {
+                        ...match,
+                        team_1Country: match?.team1Country || '',
+                        team_2Country: match?.team2Country || ''
+                      },
+                      team_1Team: team1WithCountry,
+                      team_2Team: team2WithCountry,
+                      team_1Players: data?.homePlayers || [],
+                      team_2Players: data?.awayPlayers || [],
                       sets: data?.sets || [],
                       events: data?.events || [],
                       sanctions: []
                     }
 
                     sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
-                    const scoresheetWindow = window.open('/scoresheet', '_blank', 'width=1200,height=900')
+                    const scoresheetWindow = window.open('/scoresheet_beach.html', '_blank', 'width=1200,height=900')
 
                     if (!scoresheetWindow) {
                       showAlert(t('header.allowPopups'), 'warning')
@@ -11432,19 +8763,27 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                       return
                     }
 
+                    // Add country data to team objects
+                    const team1WithCountry = data?.homeTeam ? { ...data.homeTeam, country: match?.team1Country || '' } : { name: '', country: match?.team1Country || '' }
+                    const team2WithCountry = data?.awayTeam ? { ...data.awayTeam, country: match?.team2Country || '' } : { name: '', country: match?.team2Country || '' }
+
                     const scoresheetData = {
-                      match,
-                      homeTeam: data?.homeTeam,
-                      awayTeam: data?.awayTeam,
-                      homePlayers: data?.homePlayers || [],
-                      awayPlayers: data?.awayPlayers || [],
+                      match: {
+                        ...match,
+                        team_1Country: match?.team1Country || '',
+                        team_2Country: match?.team2Country || ''
+                      },
+                      team_1Team: team1WithCountry,
+                      team_2Team: team2WithCountry,
+                      team_1Players: data?.homePlayers || [],
+                      team_2Players: data?.awayPlayers || [],
                       sets: data?.sets || [],
                       events: data?.events || [],
                       sanctions: []
                     }
 
                     sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
-                    const scoresheetWindow = window.open('/scoresheet?action=print', '_blank', 'width=1200,height=900')
+                    const scoresheetWindow = window.open('/scoresheet_beach.html?action=print', '_blank', 'width=1200,height=900')
 
                     if (!scoresheetWindow) {
                       showAlert(t('header.allowPopups'), 'warning')
@@ -11479,19 +8818,27 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                       return
                     }
 
+                    // Add country data to team objects
+                    const team1WithCountry = data?.homeTeam ? { ...data.homeTeam, country: match?.team1Country || '' } : { name: '', country: match?.team1Country || '' }
+                    const team2WithCountry = data?.awayTeam ? { ...data.awayTeam, country: match?.team2Country || '' } : { name: '', country: match?.team2Country || '' }
+
                     const scoresheetData = {
-                      match,
-                      homeTeam: data?.homeTeam,
-                      awayTeam: data?.awayTeam,
-                      homePlayers: data?.homePlayers || [],
-                      awayPlayers: data?.awayPlayers || [],
+                      match: {
+                        ...match,
+                        team_1Country: match?.team1Country || '',
+                        team_2Country: match?.team2Country || ''
+                      },
+                      team_1Team: team1WithCountry,
+                      team_2Team: team2WithCountry,
+                      team_1Players: data?.homePlayers || [],
+                      team_2Players: data?.awayPlayers || [],
                       sets: data?.sets || [],
                       events: data?.events || [],
                       sanctions: []
                     }
 
                     sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
-                    const scoresheetWindow = window.open('/scoresheet?action=save', '_blank', 'width=1200,height=900')
+                    const scoresheetWindow = window.open('/scoresheet_beach.html?action=save', '_blank', 'width=1200,height=900')
 
                     if (!scoresheetWindow) {
                       showAlert(t('header.allowPopups'), 'warning')
@@ -11707,18 +9054,15 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
           title={t('scoreboard.rosters')}
           open={showRosters}
           onClose={() => setShowRosters(false)}
-          width={1200}
+          width="100vw"
+          height="calc(100vh - 40px)"
         >
           {(() => {
             // Separate players and liberos
-            const homePlayers = (data.homePlayers || []).filter(p => !p.libero).sort((a, b) => (a.number || 0) - (b.number || 0))
-            const homeLiberos = (data.homePlayers || [])
-              .filter(p => p.libero)
-              .sort((a, b) => (Number(a.number) || 0) - (Number(b.number) || 0))
-            const awayPlayers = (data.awayPlayers || []).filter(p => !p.libero).sort((a, b) => (a.number || 0) - (b.number || 0))
-            const awayLiberos = (data.awayPlayers || [])
-              .filter(p => p.libero)
-              .sort((a, b) => (Number(a.number) || 0) - (Number(b.number) || 0))
+            const homePlayers = (data.homePlayers || []).filter(p => !p.libero)
+            const homeLiberos = (data.homePlayers || []).filter(p => p.libero)
+            const awayPlayers = (data.awayPlayers || []).filter(p => !p.libero)
+            const awayLiberos = (data.awayPlayers || []).filter(p => p.libero)
 
             // Pad arrays to same length for alignment
             const maxPlayers = Math.max(homePlayers.length, awayPlayers.length)
@@ -12163,18 +9507,26 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                 onClick={async () => {
                   const match = data?.match
                   if (!match) return
+                  // Add country data to team objects
+                  const team1WithCountry = data?.homeTeam ? { ...data.homeTeam, country: match?.team1Country || '' } : { name: '', country: match?.team1Country || '' }
+                  const team2WithCountry = data?.awayTeam ? { ...data.awayTeam, country: match?.team2Country || '' } : { name: '', country: match?.team2Country || '' }
+
                   const scoresheetData = {
-                    match,
-                    homeTeam: data?.homeTeam,
-                    awayTeam: data?.awayTeam,
-                    homePlayers: data?.homePlayers || [],
-                    awayPlayers: data?.awayPlayers || [],
+                    match: {
+                      ...match,
+                      team_1Country: match?.team1Country || '',
+                      team_2Country: match?.team2Country || ''
+                    },
+                    team_1Team: team1WithCountry,
+                    team_2Team: team2WithCountry,
+                    team_1Players: data?.homePlayers || [],
+                    team_2Players: data?.awayPlayers || [],
                     sets: data?.sets || [],
                     events: data?.events || [],
                     sanctions: []
                   }
                   sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
-                  window.open('/scoresheet', '_blank', 'width=1200,height=900')
+                  window.open('/scoresheet_beach.html', '_blank', 'width=1200,height=900')
                 }}
                 style={{
                   padding: '8px 12px',
@@ -12235,17 +9587,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                     <div style={{ fontWeight: 600 }}>{t('scoreboard.labels.to')}</div>
                     <div style={{ fontSize: '17px', fontWeight: 700 }}>{leftTimeouts}</div>
                   </div>
-                  <div style={{
-                    flex: 1,
-                    background: 'rgba(255,255,255,0.1)',
-                    padding: '6px',
-                    borderRadius: '4px',
-                    textAlign: 'center',
-                    fontSize: '12px'
-                  }}>
-                    <div style={{ fontWeight: 600 }}>{t('scoreboard.labels.sub')}</div>
-                    <div style={{ fontSize: '17px', fontWeight: 700 }}>{leftSubstitutions}</div>
-                  </div>
+
                 </div>
 
                 {/* Team Sanctions Button */}
@@ -12349,80 +9691,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                 )}
 
                 {/* Show Bench Button */}
-                <button
-                  onClick={() => setLeftTeamBenchExpanded(!leftTeamBenchExpanded)}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    background: leftTeamBenchExpanded ? 'rgba(59, 130, 246, 0.3)' : 'rgba(255,255,255,0.1)',
-                    color: 'var(--text)',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    borderRadius: '6px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {t('scoreboard.roster.showBench')} {leftTeamBenchExpanded ? '▲' : '▼'}
-                </button>
 
-                {leftTeamBenchExpanded && (
-                  <div style={{
-                    background: 'rgba(15, 23, 42, 0.6)',
-                    borderRadius: '6px',
-                    padding: '8px',
-                    marginTop: '4px',
-                    fontSize: '11px'
-                  }}>
-                    <div style={{ fontWeight: 600, marginBottom: '4px' }}>{t('scoreboard.roster.benchPlayers')}:</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                      {leftBenchPlayers.filter(p => p.role !== 'libero').map(p => (
-                        <span
-                          key={p.id}
-                          onClick={() => {
-                            // Open bench player action menu
-                            setBenchPlayerActionMenu({
-                              team: leftIsHome ? 'home' : 'away',
-                              playerNumber: p.number,
-                              element: null,
-                              x: window.innerWidth / 2,
-                              y: window.innerHeight / 2,
-                              side: 'left'
-                            })
-                          }}
-                          style={{
-                            padding: '4px 8px',
-                            background: 'rgba(255,255,255,0.1)',
-                            borderRadius: '4px',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          #{p.number}
-                        </span>
-                      ))}
-                    </div>
-                    {leftBenchPlayers.filter(p => p.role === 'libero').length > 0 && (
-                      <>
-                        <div style={{ fontWeight: 600, marginTop: '8px', marginBottom: '4px', color: '#22c55e' }}>{t('scoreboard.roster.liberoLabel')}:</div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                          {leftBenchPlayers.filter(p => p.role === 'libero').map(p => (
-                            <span
-                              key={p.id}
-                              style={{
-                                padding: '4px 8px',
-                                background: 'rgba(34, 197, 94, 0.3)',
-                                borderRadius: '4px',
-                                color: '#22c55e'
-                              }}
-                            >
-                              #{p.number}
-                            </span>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
               </div>
 
               {/* Center Column */}
@@ -12921,17 +10190,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                     <div style={{ fontWeight: 600 }}>{t('scoreboard.labels.to')}</div>
                     <div style={{ fontSize: '17px', fontWeight: 700 }}>{rightTimeouts}</div>
                   </div>
-                  <div style={{
-                    flex: 1,
-                    background: 'rgba(255,255,255,0.1)',
-                    padding: '6px',
-                    borderRadius: '4px',
-                    textAlign: 'center',
-                    fontSize: '12px'
-                  }}>
-                    <div style={{ fontWeight: 600 }}>{t('scoreboard.labels.sub')}</div>
-                    <div style={{ fontSize: '17px', fontWeight: 700 }}>{rightSubstitutions}</div>
-                  </div>
+
                 </div>
 
                 {/* Team Sanctions Button */}
@@ -13034,87 +10293,14 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                   </button>
                 )}
 
-                {/* Show Bench Button */}
-                <button
-                  onClick={() => setRightTeamBenchExpanded(!rightTeamBenchExpanded)}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    background: rightTeamBenchExpanded ? 'rgba(59, 130, 246, 0.3)' : 'rgba(255,255,255,0.1)',
-                    color: 'var(--text)',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    borderRadius: '6px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {t('scoreboard.roster.showBench')} {rightTeamBenchExpanded ? '▲' : '▼'}
-                </button>
 
-                {rightTeamBenchExpanded && (
-                  <div style={{
-                    background: 'rgba(15, 23, 42, 0.6)',
-                    borderRadius: '6px',
-                    padding: '8px',
-                    marginTop: '4px',
-                    fontSize: '11px'
-                  }}>
-                    <div style={{ fontWeight: 600, marginBottom: '4px' }}>{t('scoreboard.roster.benchPlayers')}:</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                      {rightBenchPlayers.filter(p => p.role !== 'libero').map(p => (
-                        <span
-                          key={p.id}
-                          onClick={() => {
-                            setBenchPlayerActionMenu({
-                              team: leftIsHome ? 'away' : 'home',
-                              playerNumber: p.number,
-                              element: null,
-                              x: window.innerWidth / 2,
-                              y: window.innerHeight / 2,
-                              side: 'right'
-                            })
-                          }}
-                          style={{
-                            padding: '4px 8px',
-                            background: 'rgba(255,255,255,0.1)',
-                            borderRadius: '4px',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          #{p.number}
-                        </span>
-                      ))}
-                    </div>
-                    {rightBenchPlayers.filter(p => p.role === 'libero').length > 0 && (
-                      <>
-                        <div style={{ fontWeight: 600, marginTop: '8px', marginBottom: '4px', color: '#22c55e' }}>{t('scoreboard.roster.liberoLabel')}:</div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                          {rightBenchPlayers.filter(p => p.role === 'libero').map(p => (
-                            <span
-                              key={p.id}
-                              style={{
-                                padding: '4px 8px',
-                                background: 'rgba(34, 197, 94, 0.3)',
-                                borderRadius: '4px',
-                                color: '#22c55e'
-                              }}
-                            >
-                              #{p.number}
-                            </span>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
           </div>
         )
       })() : (
         <div className="match-content" style={activeDisplayMode === 'tablet' ? { transform: 'scale(0.85)', transformOrigin: 'top center', height: 'calc(100vh - 40px)', maxHeight: '100vh', overflow: 'hidden' } : {}}>
-          <ScoreboardTeamColumn side="left">
+          <div style={{ display: 'none' }}>
             <div className="team-info" style={{ overflow: 'hidden' }}>
               <div
                 style={{
@@ -13186,91 +10372,9 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                   color: getTimeoutsUsed('left') >= 2 ? '#ef4444' : (!(rallyStatus === 'in_play' || isRallyReplayed) ? '#22c55e' : 'inherit')
                 }}>{getTimeoutsUsed('left')}</div>
               </div>
-              <div
-                onClick={() => {
-                  const subs = getSubstitutionDetails('left')
-                  if (subs.length > 0) {
-                    setToSubDetailsModal({ type: 'substitution', side: 'left' })
-                  }
-                }}
-                className="to-sub-counter"
-                style={{
-                  flex: 1,
-                  background: getSubstitutionsUsed('left') >= 6
-                    ? 'rgba(239, 68, 68, 0.2)'
-                    : getSubstitutionsUsed('left') >= 5
-                      ? 'rgba(234, 179, 8, 0.2)'
-                      : 'rgba(255, 255, 255, 0.05)',
-                  borderRadius: (isCompactMode || isShortHeight) ? '4px' : '8px',
-                  padding: (isCompactMode || isShortHeight) ? '4px' : '12px',
-                  textAlign: 'center',
-                  border: getSubstitutionsUsed('left') >= 6
-                    ? '1px solid rgba(239, 68, 68, 0.4)'
-                    : getSubstitutionsUsed('left') >= 5
-                      ? '1px solid rgba(234, 179, 8, 0.4)'
-                      : '1px solid rgba(255, 255, 255, 0.1)',
-                  cursor: getSubstitutionDetails('left').length > 0 ? 'pointer' : 'default'
-                }}
-              >
-                <div className="to-sub-label" style={{ fontSize: (isCompactMode || isShortHeight) ? '8px' : '11px', color: 'var(--muted)', marginBottom: (isCompactMode || isShortHeight) ? '1px' : '4px' }}>{t('scoreboard.labels.sub')}</div>
-                <div className="to-sub-value" style={{
-                  fontSize: (isCompactMode || isShortHeight) ? '14px' : '24px',
-                  fontWeight: 700,
-                  color: getSubstitutionsUsed('left') >= 6 ? '#ef4444' : getSubstitutionsUsed('left') >= 5 ? '#eab308' : 'inherit'
-                }}>{getSubstitutionsUsed('left')}</div>
-              </div>
+
             </div>
-            {(() => {
-              const teamKey = leftIsHome ? 'home' : 'away'
-              const teamPlayers = leftIsHome ? data?.homePlayers : data?.awayPlayers
-              // Get ALL liberos from player list (including on court), excluding already-unable ones
-              const liberos = teamPlayers?.filter(p => p.libero && p.libero !== '' && p.libero !== 'unable') || []
-              const activeLiberos = liberos.filter(p => !isLiberoUnable(teamKey, p.number))
-              const unableLiberos = liberos.filter(p => isLiberoUnable(teamKey, p.number))
 
-              // Check if already redesignated
-              const alreadyRedesignated = data?.events?.some(e =>
-                e.type === 'libero_redesignation' &&
-                e.payload?.team === teamKey
-              )
-
-              // Show redesignation when ALL liberos are unable (whether 1 or 2)
-              const needsRedesignation = liberos.length > 0 && activeLiberos.length === 0 && !alreadyRedesignated
-
-              if (needsRedesignation) {
-                const lastUnable = unableLiberos[unableLiberos.length - 1]
-                return (
-                  <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', width: '100%' }}>
-                    <button
-                      onClick={() => {
-                        setLiberoRedesignationModal({
-                          team: teamKey,
-                          unableLiberoNumber: lastUnable.number,
-                          unableLiberoType: lastUnable.libero
-                        })
-                      }}
-                      disabled={rallyStatus === 'in_play' || isRallyReplayed}
-                      style={{
-                        flex: 1,
-                        fontSize: '10px',
-                        padding: '8px 4px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        background: 'rgba(239, 68, 68, 0.2)',
-                        borderColor: 'rgba(239, 68, 68, 0.4)',
-                        color: '#f87171'
-                      }}
-                    >
-                      Redesignate Libero
-                    </button>
-                  </div>
-                )
-              }
-
-              // Libero out/exchange controls moved to player action menu when clicking libero on court
-              return null
-            })()}
 
             {/* Sanctions: Improper Request, Delay Warning, Delay Penalty */}
             {isNarrowMode ? (
@@ -13511,13 +10615,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           }
                         }
                         // For neverPlayed case, courtPlayerToSwapWith stays null - we'll show expandable list
-                        const isDragging = draggedPlayer?.team === teamKey && draggedPlayer?.playerNumber === player.number && draggedPlayer?.type === 'bench'
-                        const isDropTargetForCourt = dropTargetBench?.team === teamKey && dropTargetBench?.playerNumber === player.number && !dropTargetBench?.isLibero
-
-                        // Check if this player is a valid drop target during touch drag
-                        const isTouchDropTarget = touchDragState.isDragging && validDropTargets.some(t =>
-                          t.type === 'bench' && t.team === teamKey && String(t.playerNumber) === String(player.number) && !t.isLibero
-                        )
 
                         return (
                           <div
@@ -13538,7 +10635,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                             onClick={(e) => {
                               if (rallyStatus === 'idle' && !touchDragState.isDragging) {
                                 const rect = e.currentTarget.getBoundingClientRect()
-                                setBenchPlayerActionMenu({
+                                setPlayerActionMenu({
                                   team: teamKey,
                                   playerNumber: player.number,
                                   element: e.currentTarget,
@@ -13554,24 +10651,19 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                             style={{
                               padding: '5px 10px',
                               touchAction: (canSubBenchPlayer || isSubstitutedByLibero) ? 'none' : undefined,
-                              background: isTouchDropTarget
-                                ? 'rgba(74, 222, 128, 0.4)'  // Green for valid touch drop target
-                                : isDropTargetForCourt
-                                  ? 'rgba(239, 68, 68, 0.4)'  // Red highlight for court player drop
-                                  : isSubstitutedByLibero
-                                    ? '#ffffff'  // White for libero-replaced
-                                    : (wasSubstitutedOut && !showX && !hasComeBack)
-                                      ? '#0f172a'  // Black bg for substituted-out (only if can still sub back)
-                                      : (hasComeBack || showX ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)'),
+                              background: isSubstitutedByLibero
+                                ? '#ffffff'  // White for libero-replaced
+                                : (wasSubstitutedOut && !showX && !hasComeBack)
+                                  ? '#0f172a'  // Black bg for substituted-out (only if can still sub back)
+                                  : (hasComeBack || showX ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)'),
                               borderRadius: '4px',
                               fontSize: '14px',
                               display: 'flex',
                               alignItems: 'center',
                               gap: '4px',
                               position: 'relative',
-                              border: isDropTargetForCourt ? '2px solid #ef4444' : (wasSubstitutedOut && !isSubstitutedByLibero && !showX && !hasComeBack ? '2px solid #fde047' : undefined),
-                              boxShadow: isDropTargetForCourt ? '0 0 8px rgba(239, 68, 68, 0.5)' : undefined,
-                              opacity: isDragging ? 0.5 : (hasComeBack || showX) ? 0.4 : 1,
+                              border: wasSubstitutedOut && !isSubstitutedByLibero && !showX && !hasComeBack ? '2px solid #fde047' : undefined,
+                              opacity: (hasComeBack || showX) ? 0.4 : 1,
                               color: isSubstitutedByLibero ? '#000' : (wasSubstitutedOut && !showX && !hasComeBack ? '#fde047' : undefined),
                               cursor: rallyStatus === 'idle' && canSubBenchPlayer ? 'grab' : (rallyStatus === 'idle' ? 'pointer' : 'default')
                             }}
@@ -13718,239 +10810,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           </div>
                         )
                       })}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Liberos */}
-              {leftTeamBench.liberos.length > 0 && (
-                <div style={{ marginBottom: isCompactMode ? '8px' : '16px' }}>
-                  <h4
-                    onClick={() => isCompactMode && setLeftMainLiberosExpanded(!leftMainLiberosExpanded)}
-                    style={{
-                      margin: '0 0 8px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      color: 'var(--muted)',
-                      cursor: isCompactMode ? 'pointer' : 'default',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between'
-                    }}
-                  >
-                    <span>{t('scoreboard.roster.liberos')}</span>
-                    {isCompactMode && <span style={{ fontSize: '10px' }}>{leftMainLiberosExpanded ? '▲' : '▼'}</span>}
-                  </h4>
-                  {(!isCompactMode || leftMainLiberosExpanded) && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                      {leftTeamBench.liberos.map(player => {
-                        const teamKey = leftIsHome ? 'home' : 'away'
-                        const isUnable = isLiberoUnable(teamKey, player.number)
-                        const liberoOnCourt = getLiberoOnCourt(teamKey)
-                        const canDragLibero = rallyStatus === 'idle' && !isUnable && !liberoOnCourt && hasPointSinceLastLiberoExchange(teamKey)
-                        const isDraggingLibero = draggedPlayer?.team === teamKey && draggedPlayer?.playerNumber === player.number && draggedPlayer?.type === 'bench'
-                        // Can receive court player drop (libero exit/exchange if libero on court, OR libero entry if no libero on court)
-                        // The handler will validate whether it's a valid operation
-                        const canReceiveLiberoFromCourt = rallyStatus === 'idle' && !isUnable
-                        const isLiberoDropTarget = dropTargetBench?.team === teamKey && dropTargetBench?.playerNumber === player.number && dropTargetBench?.isLibero
-
-                        // Get sanctions for this libero (LEFT TEAM)
-                        const sanctions = getPlayerSanctions(teamKey, player.number)
-                        const hasWarning = sanctions.some(s => s.payload?.type === 'warning')
-                        const hasPenalty = sanctions.some(s => s.payload?.type === 'penalty')
-                        const hasExpulsion = sanctions.some(s => s.payload?.type === 'expulsion')
-                        const hasDisqualification = sanctions.some(s => s.payload?.type === 'disqualification')
-
-                        // Check if this libero is a valid drop target during touch drag
-                        const isTouchDropTargetLibero = touchDragState.isDragging && validDropTargets.some(t =>
-                          t.type === 'bench' && t.team === teamKey && String(t.playerNumber) === String(player.number) && t.isLibero
-                        )
-
-                        return (
-                          <div
-                            key={`${teamKey}-bench-libero-${player.id || player.number}`}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px'
-                            }}
-                          >
-                            <div
-                              data-bench-player={player.number}
-                              data-team={teamKey}
-                              data-is-libero="true"
-                              draggable={canDragLibero}
-                              onDragStart={(e) => canDragLibero && handleBenchDragStart(e, teamKey, player.number, true)}
-                              onDragEnd={handleBenchDragEnd}
-                              onDragOver={(e) => canReceiveLiberoFromCourt && handleBenchDropOver(e, teamKey, player.number, true)}
-                              onDragLeave={handleBenchDropLeave}
-                              onDrop={(e) => canReceiveLiberoFromCourt && handleBenchDrop(e, teamKey, player.number, true)}
-                              onTouchStart={(e) => canDragLibero && handleTouchDragStart(e, { team: teamKey, playerNumber: player.number, type: 'bench', isLibero: true })}
-                              onTouchMove={handleTouchMove}
-                              onTouchEnd={handleTouchEnd}
-                              onTouchCancel={handleTouchCancel}
-                              onClick={(e) => {
-                                if (rallyStatus === 'idle' && !isUnable && !touchDragState.isDragging) {
-                                  // Open action menu for libero on bench
-                                  const rect = e.currentTarget.getBoundingClientRect()
-                                  setLiberoBenchActionMenu({
-                                    team: teamKey,
-                                    liberoNumber: player.number,
-                                    liberoType: player.libero,
-                                    element: e.currentTarget,
-                                    x: rect.left + rect.width / 2,
-                                    y: rect.top + rect.height / 2,
-                                    side: 'left'
-                                  })
-                                }
-                              }}
-                              style={{
-                                padding: '5px 10px',
-                                touchAction: canDragLibero ? 'none' : undefined,
-                                background: isTouchDropTargetLibero
-                                  ? 'rgba(74, 222, 128, 0.4)'  // Green for valid touch drop target
-                                  : isLiberoDropTarget ? 'rgba(59, 130, 246, 0.5)' : isUnable ? 'rgba(239, 68, 68, 0.2)' : 'rgba(59, 130, 246, 0.2)',
-                                borderRadius: '4px',
-                                fontSize: '14px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                border: isLiberoDropTarget ? '2px solid #3b82f6' : `1px solid ${isUnable ? 'rgba(239, 68, 68, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`,
-                                boxShadow: isLiberoDropTarget ? '0 0 8px rgba(59, 130, 246, 0.5)' : undefined,
-                                cursor: canDragLibero ? 'grab' : (rallyStatus === 'idle' && !isUnable) ? 'pointer' : 'default',
-                                opacity: isDraggingLibero ? 0.5 : isUnable ? 0.6 : 1
-                              }}
-                            >
-                              <span style={{ fontWeight: 600 }}>{player.number}</span>
-                              <span style={{ color: isUnable ? '#f87171' : '#60a5fa', fontSize: '12px', fontWeight: 700 }}>
-                                {player.libero === 'libero1' ? 'L1' : player.libero === 'redesignated' ? 'LR' : 'L2'}
-                              </span>
-                              {/* Captain badge for libero-captain on bench (left team) */}
-                              {(player.isCaptain || player.captain) && (
-                                <span style={{
-                                  background: '#fff',
-                                  color: '#10b981',
-                                  border: '1px solid #10b981',
-                                  borderRadius: '3px',
-                                  padding: '0 3px',
-                                  fontSize: '10px',
-                                  fontWeight: 700
-                                }}>C</span>
-                              )}
-                              {sanctions.length > 0 && (
-                                <span style={{ display: 'flex', gap: '1px', alignItems: 'center' }}>
-                                  {hasExpulsion ? (
-                                    <div style={{ position: 'relative', width: '9px', height: '9px' }}>
-                                      <div className="sanction-card yellow" style={{
-                                        width: '5px',
-                                        height: '7px',
-                                        position: 'absolute',
-                                        left: '0',
-                                        top: '1px',
-                                        transform: 'rotate(-8deg)',
-                                        zIndex: 1,
-                                        borderRadius: '1px'
-                                      }}></div>
-                                      <div className="sanction-card red" style={{
-                                        width: '5px',
-                                        height: '7px',
-                                        position: 'absolute',
-                                        right: '0',
-                                        top: '1px',
-                                        transform: 'rotate(8deg)',
-                                        zIndex: 2,
-                                        borderRadius: '1px'
-                                      }}></div>
-                                    </div>
-                                  ) : (
-                                    <>
-                                      {(hasWarning || hasDisqualification) && (
-                                        <div className="sanction-card yellow" style={{ width: '6px', height: '8px', borderRadius: '1px' }}></div>
-                                      )}
-                                      {(hasPenalty || hasDisqualification) && (
-                                        <div className="sanction-card red" style={{ width: '6px', height: '8px', borderRadius: '1px' }}></div>
-                                      )}
-                                    </>
-                                  )}
-                                </span>
-                              )}
-                            </div>
-                            {/* Exchange Libero button - show when another libero is on court */}
-                            {liberoOnCourt &&
-                              liberoOnCourt.liberoNumber !== player.number &&
-                              hasPointSinceLastLiberoExchange(teamKey) &&
-                              !isUnable && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleExchangeLibero('left')
-                                  }}
-                                  style={{
-                                    padding: '4px 8px',
-                                    background: '#fff',
-                                    color: '#000',
-                                    border: '1px solid #ccc',
-                                    borderRadius: '4px',
-                                    fontSize: '11px',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '4px'
-                                  }}
-                                  title="Exchange liberos (swap L1 ↔ L2)"
-                                >
-                                  <span style={{ fontSize: '12px' }}>⇄</span>
-                                  Exch.
-                                </button>
-                              )}
-                          </div>
-                        )
-                      })}
-                      {/* Redesignate Libero button - shows when all liberos are unable */}
-                      {(() => {
-                        const teamKey = leftIsHome ? 'home' : 'away'
-                        // Get ALL liberos from player list, not just bench (bench excludes liberos on court)
-                        const teamPlayers = leftIsHome ? data?.homePlayers : data?.awayPlayers
-                        const allLiberos = (teamPlayers || []).filter(p => p.libero && p.libero !== '' && p.libero !== 'unable')
-                        const activeLiberos = allLiberos.filter(p => !isLiberoUnable(teamKey, p.number))
-                        const unableLiberos = allLiberos.filter(p => isLiberoUnable(teamKey, p.number))
-                        const alreadyRedesignated = data?.events?.some(e =>
-                          e.type === 'libero_redesignation' && e.payload?.team === teamKey
-                        )
-                        const shouldShow = activeLiberos.length === 0 && unableLiberos.length > 0 && !alreadyRedesignated && rallyStatus === 'idle'
-
-                        if (!shouldShow) return null
-
-                        return (
-                          <button
-                            onClick={() => {
-                              const lastUnable = unableLiberos[unableLiberos.length - 1]
-                              setLiberoRedesignationModal({
-                                team: teamKey,
-                                unableLiberoNumber: lastUnable.number,
-                                unableLiberoType: lastUnable.libero
-                              })
-                            }}
-                            style={{
-                              padding: '6px 12px',
-                              background: '#f97316',
-                              color: '#000',
-                              border: 'none',
-                              borderRadius: '4px',
-                              fontSize: '11px',
-                              fontWeight: 600,
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px'
-                            }}
-                          >
-                            <span>🔄</span> Redesignate Libero
-                          </button>
-                        )
-                      })()}
                     </div>
                   )}
                 </div>
@@ -14110,11 +10969,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px', tableLayout: 'fixed' }}>
                           <thead>
                             <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
-                              <th style={{ padding: '2px 1px', textAlign: 'center', fontWeight: 600, fontSize: '9px', width: '20%' }}>Set</th>
-                              <th style={{ padding: '2px 1px', textAlign: 'center', fontWeight: 600, fontSize: '9px', width: '20%' }}>P</th>
-                              <th style={{ padding: '2px 1px', textAlign: 'center', fontWeight: 600, fontSize: '9px', width: '20%' }}>W</th>
-                              <th style={{ padding: '2px 1px', textAlign: 'center', fontWeight: 600, fontSize: '9px', width: '20%' }}>S</th>
-                              <th style={{ padding: '2px 1px', textAlign: 'center', fontWeight: 600, fontSize: '9px', width: '20%' }}>T</th>
+                              <th style={{ padding: '2px 1px', textAlign: 'center', fontWeight: 600, fontSize: '9px', width: '25%' }}>Set</th>
+                              <th style={{ padding: '2px 1px', textAlign: 'center', fontWeight: 600, fontSize: '9px', width: '25%' }}>P</th>
+                              <th style={{ padding: '2px 1px', textAlign: 'center', fontWeight: 600, fontSize: '9px', width: '25%' }}>W</th>
+                              <th style={{ padding: '2px 1px', textAlign: 'center', fontWeight: 600, fontSize: '9px', width: '25%' }}>T</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -14122,9 +10980,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               const leftPoints = currentLeftTeamKey === 'home' ? set.homePoints : set.awayPoints
                               const rightPoints = currentLeftTeamKey === 'home' ? set.awayPoints : set.homePoints
                               const won = leftPoints > rightPoints ? 1 : 0
-                              const substitutions = (data?.events || []).filter(e =>
-                                e.type === 'substitution' && e.setIndex === set.index && e.payload?.team === currentLeftTeamKey
-                              ).length
                               const timeouts = (data?.events || []).filter(e =>
                                 e.type === 'timeout' && e.setIndex === set.index && e.payload?.team === currentLeftTeamKey
                               ).length
@@ -14137,7 +10992,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                   <td style={{ padding: '2px 1px', textAlign: 'center' }}>{set.index}</td>
                                   <td style={{ padding: '2px 1px', textAlign: 'center' }}>{leftPoints}</td>
                                   <td style={{ padding: '2px 1px', textAlign: 'center' }}>{won}</td>
-                                  <td style={{ padding: '2px 1px', textAlign: 'center' }}>{substitutions}</td>
                                   <td style={{ padding: '2px 1px', textAlign: 'center' }}>{timeouts}</td>
                                 </tr>
                               )
@@ -14151,9 +11005,9 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
               )}
             </div>
 
-          </ScoreboardTeamColumn>
+          </div>
 
-          <ScoreboardCourtColumn>
+          <div style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column' }}>
             {/* Layered layout: Score centered absolutely, serve indicators in flex layer */}
             <div style={{
               position: 'relative',
@@ -14406,92 +11260,87 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                   ) : <div style={{ width: '80px' }} />}
                 </div>
 
-                <div className="court" style={{ marginTop: isCompactMode ? '4px' : '2px', marginBottom: isCompactMode ? '2px' : '1px' }}>
-                  <div className="court-attack-line court-attack-left" />
-                  <div className="court-attack-line court-attack-right" />
-                  {rallyStatus === 'idle' && isFirstRally && (
-                    <>
-                      {!leftTeamLineupSet && (
-                        <button
-                          className="lineup-button lineup-button-left"
-                          onClick={() => setLineupModal({ team: leftIsHome ? 'home' : 'away', mode: 'initial' })}
-                          style={{
-                            position: 'absolute',
-                            left: '25%',
-                            top: '50%',
-                            transform: 'translate(-50%, -50%)',
-                            zIndex: 100,
-                            width: '40%',
-                            height: '80%',
-                            padding: '0',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '4px',
-                            fontSize: 'clamp(20px, 4vw, 32px)',
-                            fontWeight: 700,
-                            background: 'var(--accent)',
-                            color: '#000',
-                            border: 'none',
-                            borderRadius: '12px',
-                            cursor: 'pointer',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                            animation: 'lineupFlash 1.5s ease-in-out infinite'
-                          }}
-                        >
-                          <span>{t('scoreboard.lineup', 'Line-up')}</span>
-                          <span style={{ fontSize: 'clamp(12px, 2.5vw, 18px)', fontWeight: 600 }}>{teamALabel} - {teamAShortName}</span>
-                        </button>
-                      )}
-                      {!rightTeamLineupSet && (
-                        <button
-                          className="lineup-button lineup-button-right"
-                          onClick={() => setLineupModal({ team: leftIsHome ? 'away' : 'home', mode: 'initial' })}
-                          style={{
-                            position: 'absolute',
-                            left: '75%',
-                            top: '50%',
-                            transform: 'translate(-50%, -50%)',
-                            zIndex: 100,
-                            width: '40%',
-                            height: '80%',
-                            padding: '0',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '4px',
-                            fontSize: 'clamp(20px, 4vw, 32px)',
-                            fontWeight: 700,
-                            background: 'var(--accent)',
-                            color: '#000',
-                            border: 'none',
-                            borderRadius: '12px',
-                            cursor: 'pointer',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                            animation: 'lineupFlash 1.5s ease-in-out infinite'
-                          }}
-                        >
-                          <span>{t('scoreboard.lineup', 'Line-up')}</span>
-                          <span style={{ fontSize: 'clamp(12px, 2.5vw, 18px)', fontWeight: 600 }}>{teamBLabel} - {teamBShortName}</span>
-                        </button>
-                      )}
-                    </>
-                  )}
-                  <div className="court-side court-side-left">
-                    <div className="court-team court-team-left">
-                      <div className="court-row court-row-front">
-                        {leftTeam.playersOnCourt.slice(0, 3).map((player, idx) => {
-                          const teamKey = leftIsHome ? 'home' : 'away'
-                          const teamSubstitutions = substitutionsUsed?.[teamKey] || 0
-                          const canSubstitute = rallyStatus === 'idle' && !isRallyReplayed && leftTeamLineupSet && player.number && player.number !== '' && !player.isPlaceholder && teamSubstitutions < 6
-                          const replacementNumber = resolveReplacementNumber(player, leftTeamActiveReplacements)
+                {/* Court with side controls container */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', justifyContent: 'center' }}>
+                  {/* Left side controls - Improper Request/Delay + TO for left team */}
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                    alignItems: 'center',
+                    minWidth: '40px'
+                  }}>
+                    {/* Improper Request (IR) */}
+                    <button
+                      onClick={() => setTeamSanctionModal({ team: leftIsHome ? 'home' : 'away', type: 'improper_request' })}
+                      style={{
+                        width: '36px',
+                        height: '28px',
+                        fontSize: '9px',
+                        fontWeight: 600,
+                        background: 'rgba(251, 191, 36, 0.2)',
+                        color: '#fbbf24',
+                        border: '1px solid rgba(251, 191, 36, 0.4)',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        padding: '2px'
+                      }}
+                      title="Improper Request"
+                    >IR</button>
+                    {/* Delay Sanction (DW/DP) */}
+                    <button
+                      onClick={() => setTeamSanctionModal({ team: leftIsHome ? 'home' : 'away', type: 'delay' })}
+                      style={{
+                        width: '36px',
+                        height: '28px',
+                        fontSize: '9px',
+                        fontWeight: 600,
+                        background: 'rgba(239, 68, 68, 0.2)',
+                        color: '#ef4444',
+                        border: '1px solid rgba(239, 68, 68, 0.4)',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        padding: '2px'
+                      }}
+                      title="Delay Sanction"
+                    >DW</button>
+                    {/* Timeout button */}
+                    <button
+                      onClick={() => handleTimeout(leftIsHome ? 'home' : 'away')}
+                      disabled={rallyStatus !== 'idle'}
+                      style={{
+                        width: '36px',
+                        height: '36px',
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        background: leftTeam.color,
+                        color: isBrightColor(leftTeam.color) ? '#000' : '#fff',
+                        border: '2px solid rgba(255, 255, 255, 0.3)',
+                        borderRadius: '6px',
+                        cursor: rallyStatus !== 'idle' ? 'not-allowed' : 'pointer',
+                        opacity: rallyStatus !== 'idle' ? 0.5 : 1,
+                        padding: '2px'
+                      }}
+                      title="Time-out"
+                    >TO</button>
+                    {/* TO counter */}
+                    <span style={{ fontSize: '10px', color: 'var(--muted)' }}>
+                      {timeoutsUsed[leftIsHome ? 'home' : 'away']}/1
+                    </span>
+                  </div>
 
-                          // Check if this player was recently substituted in
-                          const isRecentlySub = recentlySubstitutedPlayers.some(
-                            sub => sub.team === teamKey && String(sub.playerNumber) === String(player.number)
-                          )
+                  <div className="court" style={{ marginTop: isCompactMode ? '4px' : '2px', marginBottom: isCompactMode ? '2px' : '1px', flex: '1 1 auto', maxWidth: '80vmin' }}>
+                    <div className="court-attack-line court-attack-left" />
+                    <div className="court-attack-line court-attack-right" />
+                    {/* Beach volleyball: Lineup buttons removed - lineup is determined by first server selection */}
+                    <div className="court-side court-side-left">
+                      <div className="court-team court-team-left">
+                        <div className="court-row court-row-full">
+                          {leftTeam.playersOnCourt.map((player, idx) => {
+                            const teamKey = leftIsHome ? 'home' : 'away'
+                            const teamSubstitutions = substitutionsUsed?.[teamKey] || 0
+                            const canSubstitute = rallyStatus === 'idle' && !isRallyReplayed && leftTeamLineupSet && player.number && player.number !== '' && !player.isPlaceholder && teamSubstitutions < 6
+                            const replacementNumber = resolveReplacementNumber(player, leftTeamActiveReplacements)
 
                           // Get sanctions for this player
                           const sanctions = getPlayerSanctions(teamKey, player.number)
@@ -14500,15 +11349,16 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           const hasExpulsion = sanctions.some(s => s.payload?.type === 'expulsion')
                           const hasDisqualification = sanctions.some(s => s.payload?.type === 'disqualification')
 
-                          const isDropTarget = dropTargetPosition?.team === teamKey && dropTargetPosition?.position === player.position
-                          const isDragging = draggedPlayer?.type === 'court' && draggedPlayer?.team === teamKey && draggedPlayer?.position === player.position
-
                           // Check if this position is a valid touch drop target
                           const isTouchDropTargetCourt = touchDragState.isDragging && validDropTargets.some(t =>
                             t.type === 'court' && t.team === teamKey && t.position === player.position
                           )
                           // Check if this is an invalid drop zone during touch drag (wrong team or position)
                           const isInvalidTouchDropZone = touchDragState.isDragging && draggedPlayer?.team === teamKey && !isTouchDropTargetCourt
+                          // Stub: isDropTarget for drag-and-drop highlighting (not used in beach volleyball)
+                          const isDropTarget = false
+                          // Stub: isRecentlySub for recently substituted player highlighting (not used in beach volleyball)
+                          const isRecentlySub = false
 
                           return (
                             <div
@@ -14516,7 +11366,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               data-court-position={player.position}
                               data-team={teamKey}
                               data-player-number={player.number}
-                              className={`court-player${isRecentlySub ? ' recently-substituted' : ''}`}
+                              className="court-player"
                               draggable={canSubstitute && !player.isLibero}
                               onDragStart={(e) => canSubstitute && handleCourtDragStart(e, teamKey, player.position, player.number, player.isLibero)}
                               onDragEnd={handleCourtDragEnd}
@@ -14530,15 +11380,15 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               onTouchCancel={handleTouchCancel}
                               style={{
                                 cursor: canSubstitute && !player.isLibero ? 'grab' : 'pointer',
-                                opacity: isDragging ? 0.5 : isInvalidTouchDropZone ? 0.5 : undefined,
+                                opacity: isInvalidTouchDropZone ? 0.5 : undefined,
                                 transition: 'transform 0.2s, background 0.15s, box-shadow 0.15s',
                                 touchAction: canSubstitute && !player.isLibero ? 'none' : undefined,
                                 background: isTouchDropTargetCourt
                                   ? 'rgba(74, 222, 128, 0.5)'  // Bright green for valid touch target
                                   : isInvalidTouchDropZone
                                     ? 'rgba(239, 68, 68, 0.2)'  // Red tint for invalid
-                                    : isDropTarget ? 'rgba(74, 222, 128, 0.4)' : isRecentlySub ? '#fdba74' : player.isLibero ? '#FFF8E7' : undefined,
-                                color: isRecentlySub ? '#000' : player.isLibero ? '#000' : undefined,
+                                    : isDropTarget ? 'rgba(74, 222, 128, 0.4)' : isRecentlySub ? '#fdba74' : player.isLibero ? '#FFF8E7' : leftTeam.color,
+                                color: isRecentlySub ? '#000' : player.isLibero ? '#000' : isBrightColor(leftTeam.color) ? '#000' : '#fff',
                                 position: 'relative',
                                 animation: isRecentlySub ? 'recentSubFlash 0.5s ease-in-out infinite' : undefined,
                                 fontWeight: isRecentlySub ? 900 : undefined,
@@ -14546,10 +11396,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                   ? '3px solid #22c55e'
                                   : isInvalidTouchDropZone
                                     ? '2px dashed rgba(239, 68, 68, 0.5)'
-                                    : isDropTarget ? '3px solid #4ade80' : isRecentlySub ? '3px solid #f97316' : undefined,
+                                    : isDropTarget ? '3px solid #4ade80' : isRecentlySub ? '3px solid #f97316' : `2px solid ${leftTeam.color}`,
                                 boxShadow: isTouchDropTargetCourt
                                   ? '0 0 16px rgba(74, 222, 128, 0.6)'
-                                  : isDropTarget ? '0 0 12px rgba(74, 222, 128, 0.5)' : undefined
+                                  : isDropTarget ? '0 0 12px rgba(74, 222, 128, 0.5)' : `0 4px 12px ${leftTeam.color}40`
                               }}
                               onMouseEnter={(e) => {
                                 if (!isDropTarget && !isTouchDropTargetCourt) {
@@ -14570,6 +11420,41 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                 </span>
                               )}
                               <span className="court-player-position">{player.position}</span>
+                              {/* MTO/RIT indicators - top right of player circle (beach volleyball) */}
+                              {(player.mto > 0 || player.rit > 0) && (
+                                <div style={{
+                                  position: 'absolute',
+                                  top: '-1vmin',
+                                  right: '-1vmin',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '1px',
+                                  zIndex: 10
+                                }}>
+                                  {player.mto > 0 && (
+                                    <span style={{
+                                      background: '#dc2626',
+                                      color: '#fff',
+                                      fontSize: '1vmin',
+                                      fontWeight: 700,
+                                      padding: '1px 2px',
+                                      borderRadius: '2px',
+                                      whiteSpace: 'nowrap'
+                                    }}>MTO{player.mto > 1 ? ` x${player.mto}` : ''}</span>
+                                  )}
+                                  {player.rit > 0 && (
+                                    <span style={{
+                                      background: '#f59e0b',
+                                      color: '#000',
+                                      fontSize: '1vmin',
+                                      fontWeight: 700,
+                                      padding: '1px 2px',
+                                      borderRadius: '2px',
+                                      whiteSpace: 'nowrap'
+                                    }}>RIT{player.rit > 1 ? ` x${player.rit}` : ''}</span>
+                                  )}
+                                </div>
+                              )}
                               {/* Captain indicator - show C for captain (including libero-captain) */}
                               {player.isCaptain && (() => {
                                 if (player.isLibero) {
@@ -14747,7 +11632,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           )
                         })}
                       </div>
-                      <div className="court-row court-row-back">
+                      <div className="court-row court-row-back" style={{ display: 'none' }}>
                         {leftTeam.playersOnCourt.slice(3, 6).map((player, idx) => {
                           const leftTeamKey = leftIsHome ? 'home' : 'away'
                           const currentServe = getCurrentServe()
@@ -14757,11 +11642,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           const canSubstitute = rallyStatus === 'idle' && !isRallyReplayed && leftTeamLineupSet && player.number && player.number !== '' && !player.isPlaceholder && teamSubstitutions < 6
                           const replacementNumber = resolveReplacementNumber(player, leftTeamActiveReplacements)
 
-                          // Check if this player was recently substituted in
-                          const isRecentlySub = recentlySubstitutedPlayers.some(
-                            sub => sub.team === leftTeamKey && String(sub.playerNumber) === String(player.number)
-                          )
-
                           // Get sanctions for this player
                           const sanctions = getPlayerSanctions(leftTeamKey, player.number)
                           const hasWarning = sanctions.some(s => s.payload?.type === 'warning')
@@ -14769,8 +11649,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           const hasExpulsion = sanctions.some(s => s.payload?.type === 'expulsion')
                           const hasDisqualification = sanctions.some(s => s.payload?.type === 'disqualification')
 
-                          const isDropTarget = dropTargetPosition?.team === leftTeamKey && dropTargetPosition?.position === player.position
-                          const isDragging = draggedPlayer?.type === 'court' && draggedPlayer?.team === leftTeamKey && draggedPlayer?.position === player.position
                           // For liberos on court, they can be dragged back to libero bench
                           const canDragCourtPlayer = canSubstitute || (rallyStatus === 'idle' && player.isLibero)
 
@@ -14779,6 +11657,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                             t.type === 'court' && t.team === leftTeamKey && t.position === player.position
                           )
                           const isInvalidTouchDropZone = touchDragState.isDragging && draggedPlayer?.team === leftTeamKey && !isTouchDropTargetCourt
+                          // Stub: isDropTarget for drag-and-drop highlighting (not used in beach volleyball)
+                          const isDropTarget = false
+                          // Stub: isRecentlySub for recently substituted player highlighting (not used in beach volleyball)
+                          const isRecentlySub = false
 
                           return (
                             <div
@@ -14787,7 +11669,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               data-court-position={player.position}
                               data-team={leftTeamKey}
                               data-player-number={player.number}
-                              className={`court-player${isRecentlySub ? ' recently-substituted' : ''}`}
+                              className="court-player"
                               draggable={canDragCourtPlayer}
                               onDragStart={(e) => canDragCourtPlayer && handleCourtDragStart(e, leftTeamKey, player.position, player.number, player.isLibero)}
                               onDragEnd={handleCourtDragEnd}
@@ -14798,7 +11680,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               style={{
                                 position: 'relative',
                                 cursor: canDragCourtPlayer ? 'grab' : (player.number && player.number !== '' ? 'pointer' : 'default'),
-                                opacity: isDragging ? 0.5 : isInvalidTouchDropZone ? 0.5 : undefined,
+                                opacity: isInvalidTouchDropZone ? 0.5 : undefined,
                                 transition: 'transform 0.2s, background 0.15s, box-shadow 0.15s',
                                 touchAction: canDragCourtPlayer ? 'none' : undefined,
                                 background: isTouchDropTargetCourt
@@ -15071,8 +11953,8 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                   <div className="court-net" />
                   <div className="court-side court-side-right">
                     <div className="court-team court-team-right">
-                      <div className="court-row court-row-front">
-                        {rightTeam.playersOnCourt.slice(0, 3).map((player, idx) => {
+                      <div className="court-row court-row-full">
+                        {rightTeam.playersOnCourt.map((player, idx) => {
                           const teamKey = leftIsHome ? 'away' : 'home'
                           const teamSubstitutions = substitutionsUsed?.[teamKey] || 0
                           const canSubstitute = rallyStatus === 'idle' && !isRallyReplayed && rightTeamLineupSet && player.number && player.number !== '' && !player.isPlaceholder && teamSubstitutions < 6
@@ -15084,14 +11966,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           const hasPenalty = sanctions.some(s => s.payload?.type === 'penalty')
                           const hasExpulsion = sanctions.some(s => s.payload?.type === 'expulsion')
                           const hasDisqualification = sanctions.some(s => s.payload?.type === 'disqualification')
-
-                          // Check if this player was recently substituted in
-                          const isRecentlySub = recentlySubstitutedPlayers.some(
-                            sub => sub.team === teamKey && String(sub.playerNumber) === String(player.number)
-                          )
-
-                          const isDropTarget = dropTargetPosition?.team === teamKey && dropTargetPosition?.position === player.position
-                          const isDragging = draggedPlayer?.type === 'court' && draggedPlayer?.team === teamKey && draggedPlayer?.position === player.position
+                          // Stub: isDropTarget for drag-and-drop highlighting (not used in beach volleyball)
+                          const isDropTarget = false
+                          // Stub: isRecentlySub for recently substituted player highlighting (not used in beach volleyball)
+                          const isRecentlySub = false
 
                           return (
                             <div
@@ -15107,14 +11985,14 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               onDrop={(e) => handleCourtDrop(e, teamKey, player.position, player.number)}
                               style={{
                                 cursor: canSubstitute && !player.isLibero ? 'grab' : 'pointer',
-                                opacity: isDragging ? 0.5 : undefined,
+                                opacity: undefined,
                                 transition: 'transform 0.2s, background 0.15s, box-shadow 0.15s',
-                                background: isDropTarget ? 'rgba(74, 222, 128, 0.4)' : isRecentlySub ? '#86efac' : player.isLibero ? '#FFF8E7' : undefined,
-                                color: isRecentlySub ? '#000' : player.isLibero ? '#000' : undefined,
+                                background: isDropTarget ? 'rgba(74, 222, 128, 0.4)' : isRecentlySub ? '#86efac' : player.isLibero ? '#FFF8E7' : rightTeam.color,
+                                color: isRecentlySub ? '#000' : player.isLibero ? '#000' : isBrightColor(rightTeam.color) ? '#000' : '#fff',
                                 animation: isRecentlySub ? 'recentSubFlash 0.5s ease-in-out infinite' : undefined,
                                 fontWeight: isRecentlySub ? 900 : undefined,
-                                border: isDropTarget ? '3px solid #4ade80' : isRecentlySub ? '3px solid #22c55e' : undefined,
-                                boxShadow: isDropTarget ? '0 0 12px rgba(74, 222, 128, 0.5)' : undefined,
+                                border: isDropTarget ? '3px solid #4ade80' : isRecentlySub ? '3px solid #22c55e' : `2px solid ${rightTeam.color}`,
+                                boxShadow: isDropTarget ? '0 0 12px rgba(74, 222, 128, 0.5)' : `0 4px 12px ${rightTeam.color}40`,
                                 position: 'relative'
                               }}
                               onMouseEnter={(e) => {
@@ -15136,6 +12014,41 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                 </span>
                               )}
                               <span className="court-player-position">{player.position}</span>
+                              {/* MTO/RIT indicators - top right of player circle (beach volleyball) */}
+                              {(player.mto > 0 || player.rit > 0) && (
+                                <div style={{
+                                  position: 'absolute',
+                                  top: '-1vmin',
+                                  right: '-1vmin',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '1px',
+                                  zIndex: 10
+                                }}>
+                                  {player.mto > 0 && (
+                                    <span style={{
+                                      background: '#dc2626',
+                                      color: '#fff',
+                                      fontSize: '1vmin',
+                                      fontWeight: 700,
+                                      padding: '1px 2px',
+                                      borderRadius: '2px',
+                                      whiteSpace: 'nowrap'
+                                    }}>MTO{player.mto > 1 ? ` x${player.mto}` : ''}</span>
+                                  )}
+                                  {player.rit > 0 && (
+                                    <span style={{
+                                      background: '#f59e0b',
+                                      color: '#000',
+                                      fontSize: '1vmin',
+                                      fontWeight: 700,
+                                      padding: '1px 2px',
+                                      borderRadius: '2px',
+                                      whiteSpace: 'nowrap'
+                                    }}>RIT{player.rit > 1 ? ` x${player.rit}` : ''}</span>
+                                  )}
+                                </div>
+                              )}
                               {/* Bottom-left indicators: Captain C (including libero-captain) */}
                               {player.isCaptain && (() => {
                                 if (player.isLibero) {
@@ -15313,7 +12226,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           )
                         })}
                       </div>
-                      <div className="court-row court-row-back">
+                      <div className="court-row court-row-back" style={{ display: 'none' }}>
                         {rightTeam.playersOnCourt.slice(3, 6).map((player, idx) => {
                           const rightTeamKey = leftIsHome ? 'away' : 'home'
                           const currentServe = getCurrentServe()
@@ -15330,13 +12243,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           const hasExpulsion = sanctions.some(s => s.payload?.type === 'expulsion')
                           const hasDisqualification = sanctions.some(s => s.payload?.type === 'disqualification')
 
-                          // Check if this player was recently substituted in
-                          const isRecentlySub = recentlySubstitutedPlayers.some(
-                            sub => sub.team === rightTeamKey && String(sub.playerNumber) === String(player.number)
-                          )
-
-                          const isDropTarget = dropTargetPosition?.team === rightTeamKey && dropTargetPosition?.position === player.position
-                          const isDragging = draggedPlayer?.type === 'court' && draggedPlayer?.team === rightTeamKey && draggedPlayer?.position === player.position
                           // For liberos on court, they can be dragged back to libero bench
                           const canDragCourtPlayer = canSubstitute || (rallyStatus === 'idle' && player.isLibero)
 
@@ -15345,6 +12251,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                             t.type === 'court' && t.team === rightTeamKey && t.position === player.position
                           )
                           const isInvalidTouchDropZone = touchDragState.isDragging && draggedPlayer?.team === rightTeamKey && !isTouchDropTargetCourt
+                          // Stub: isDropTarget for drag-and-drop highlighting (not used in beach volleyball)
+                          const isDropTarget = false
+                          // Stub: isRecentlySub for recently substituted player highlighting (not used in beach volleyball)
+                          const isRecentlySub = false
 
                           return (
                             <div
@@ -15363,7 +12273,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               style={{
                                 position: 'relative',
                                 cursor: canDragCourtPlayer ? 'grab' : (player.number && player.number !== '' ? 'pointer' : 'default'),
-                                opacity: isDragging ? 0.5 : isInvalidTouchDropZone ? 0.5 : undefined,
+                                opacity: isInvalidTouchDropZone ? 0.5 : undefined,
                                 transition: 'transform 0.2s, background 0.15s, box-shadow 0.15s',
                                 touchAction: canDragCourtPlayer ? 'none' : undefined,
                                 background: isTouchDropTargetCourt
@@ -15675,7 +12585,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      marginTop: '-5px',
+                      marginTop: '0px',
                       height: ref2Name ? 'auto' : '12px'
                     }}>
                       {ref2Name && (
@@ -15752,7 +12662,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '9px' }}>Set</th>
                               <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '9px' }}>P</th>
                               <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '9px' }}>W</th>
-                              <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '9px' }}>S</th>
                               <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '9px' }}>T</th>
                             </tr>
                           </thead>
@@ -15761,9 +12670,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               const leftPoints = currentLeftTeamKey === 'home' ? set.homePoints : set.awayPoints
                               const rightPoints = currentLeftTeamKey === 'home' ? set.awayPoints : set.homePoints
                               const won = leftPoints > rightPoints ? 1 : 0
-                              const substitutions = (data?.events || []).filter(e =>
-                                e.type === 'substitution' && e.setIndex === set.index && e.payload?.team === currentLeftTeamKey
-                              ).length
                               const timeouts = (data?.events || []).filter(e =>
                                 e.type === 'timeout' && e.setIndex === set.index && e.payload?.team === currentLeftTeamKey
                               ).length
@@ -15782,7 +12688,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                   <td style={{ padding: '4px 2px', textAlign: 'center' }}>{set.index}</td>
                                   <td style={{ padding: '4px 2px', textAlign: 'center' }}>{leftPoints}</td>
                                   <td style={{ padding: '4px 2px', textAlign: 'center' }}>{won}</td>
-                                  <td style={{ padding: '4px 2px', textAlign: 'center' }}>{substitutions}</td>
                                   <td style={{ padding: '4px 2px', textAlign: 'center' }}>{timeouts}</td>
                                 </tr>
                               )
@@ -16205,7 +13110,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '9px' }}>Set</th>
                               <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '9px' }}>P</th>
                               <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '9px' }}>W</th>
-                              <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '9px' }}>S</th>
                               <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '9px' }}>T</th>
                             </tr>
                           </thead>
@@ -16214,9 +13118,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               const rightPoints = currentRightTeamKey === 'home' ? set.homePoints : set.awayPoints
                               const leftPoints = currentRightTeamKey === 'home' ? set.awayPoints : set.homePoints
                               const won = rightPoints > leftPoints ? 1 : 0
-                              const substitutions = (data?.events || []).filter(e =>
-                                e.type === 'substitution' && e.setIndex === set.index && e.payload?.team === currentRightTeamKey
-                              ).length
                               const timeouts = (data?.events || []).filter(e =>
                                 e.type === 'timeout' && e.setIndex === set.index && e.payload?.team === currentRightTeamKey
                               ).length
@@ -16235,7 +13136,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                   <td style={{ padding: '4px 2px', textAlign: 'center' }}>{set.index}</td>
                                   <td style={{ padding: '4px 2px', textAlign: 'center' }}>{rightPoints}</td>
                                   <td style={{ padding: '4px 2px', textAlign: 'center' }}>{won}</td>
-                                  <td style={{ padding: '4px 2px', textAlign: 'center' }}>{substitutions}</td>
                                   <td style={{ padding: '4px 2px', textAlign: 'center' }}>{timeouts}</td>
                                 </tr>
                               )
@@ -16248,9 +13148,9 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                 </div>
               )}
             </div>
-          </ScoreboardCourtColumn>
+          </div>
 
-          <ScoreboardTeamColumn side="right">
+          <div style={{ display: 'none' }}>
             <div className="team-info" style={{ overflow: 'hidden' }}>
               <div
                 style={{
@@ -16647,13 +13547,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           }
                         }
                         // For neverPlayed case, courtPlayerToSwapWith stays null - we'll show expandable list
-                        const isDragging = draggedPlayer?.team === teamKey && draggedPlayer?.playerNumber === player.number && draggedPlayer?.type === 'bench'
-                        const isDropTargetForCourt = dropTargetBench?.team === teamKey && dropTargetBench?.playerNumber === player.number && !dropTargetBench?.isLibero
-
-                        // Check if this player is a valid drop target during touch drag (RIGHT TEAM)
-                        const isTouchDropTarget = touchDragState.isDragging && validDropTargets.some(t =>
-                          t.type === 'bench' && t.team === teamKey && String(t.playerNumber) === String(player.number) && !t.isLibero
-                        )
 
                         return (
                           <div
@@ -16674,7 +13567,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                             onClick={(e) => {
                               if (rallyStatus === 'idle' && !touchDragState.isDragging) {
                                 const rect = e.currentTarget.getBoundingClientRect()
-                                setBenchPlayerActionMenu({
+                                setPlayerActionMenu({
                                   team: teamKey,
                                   playerNumber: player.number,
                                   element: e.currentTarget,
@@ -16690,24 +13583,19 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                             style={{
                               padding: '5px 10px',
                               touchAction: (canSubBenchPlayer || isSubstitutedByLibero) ? 'none' : undefined,
-                              background: isTouchDropTarget
-                                ? 'rgba(74, 222, 128, 0.4)'  // Green for valid touch drop target
-                                : isDropTargetForCourt
-                                  ? 'rgba(239, 68, 68, 0.4)'  // Red highlight for court player drop
-                                  : isSubstitutedByLibero
-                                    ? '#ffffff'  // White for libero-replaced
-                                    : (wasSubstitutedOut && !showX && !hasComeBack)
-                                      ? '#0f172a'  // Black bg for substituted-out (only if can still sub back)
-                                      : (hasComeBack || showX ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)'),
+                              background: isSubstitutedByLibero
+                                ? '#ffffff'  // White for libero-replaced
+                                : (wasSubstitutedOut && !showX && !hasComeBack)
+                                  ? '#0f172a'  // Black bg for substituted-out (only if can still sub back)
+                                  : (hasComeBack || showX ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)'),
                               borderRadius: '4px',
                               fontSize: '14px',
                               display: 'flex',
                               alignItems: 'center',
                               gap: '4px',
                               position: 'relative',
-                              border: isDropTargetForCourt ? '2px solid #ef4444' : (wasSubstitutedOut && !isSubstitutedByLibero && !showX && !hasComeBack ? '2px solid #fde047' : undefined),
-                              boxShadow: isDropTargetForCourt ? '0 0 8px rgba(239, 68, 68, 0.5)' : undefined,
-                              opacity: isDragging ? 0.5 : (hasComeBack || showX) ? 0.4 : 1,
+                              border: wasSubstitutedOut && !isSubstitutedByLibero && !showX && !hasComeBack ? '2px solid #fde047' : undefined,
+                              opacity: (hasComeBack || showX) ? 0.4 : 1,
                               color: isSubstitutedByLibero ? '#000' : (wasSubstitutedOut && !showX && !hasComeBack ? '#fde047' : undefined),
                               cursor: rallyStatus === 'idle' && canSubBenchPlayer ? 'grab' : (rallyStatus === 'idle' ? 'pointer' : 'default')
                             }}
@@ -16854,224 +13742,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           </div>
                         )
                       })}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Liberos */}
-              {rightTeamBench.liberos.length > 0 && (
-                <div style={{ marginBottom: isCompactMode ? '8px' : '16px' }}>
-                  <h4
-                    onClick={() => isCompactMode && setRightMainLiberosExpanded(!rightMainLiberosExpanded)}
-                    style={{
-                      margin: '0 0 8px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      color: 'var(--muted)',
-                      cursor: isCompactMode ? 'pointer' : 'default',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between'
-                    }}
-                  >
-                    <span>{t('scoreboard.roster.liberos')}</span>
-                    {isCompactMode && <span style={{ fontSize: '10px' }}>{rightMainLiberosExpanded ? '▲' : '▼'}</span>}
-                  </h4>
-                  {(!isCompactMode || rightMainLiberosExpanded) && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                      {rightTeamBench.liberos.map(player => {
-                        const teamKey = leftIsHome ? 'away' : 'home'
-                        const isUnable = isLiberoUnable(teamKey, player.number)
-                        const liberoOnCourt = getLiberoOnCourt(teamKey)
-                        const canDragLibero = rallyStatus === 'idle' && !isUnable && !liberoOnCourt && hasPointSinceLastLiberoExchange(teamKey)
-                        const isDraggingLibero = draggedPlayer?.team === teamKey && draggedPlayer?.playerNumber === player.number && draggedPlayer?.type === 'bench'
-                        // Can receive court player drop (libero exit/exchange if libero on court, OR libero entry if no libero on court)
-                        // The handler will validate whether it's a valid operation
-                        const canReceiveLiberoFromCourt = rallyStatus === 'idle' && !isUnable
-                        const isLiberoDropTarget = dropTargetBench?.team === teamKey && dropTargetBench?.playerNumber === player.number && dropTargetBench?.isLibero
-
-                        // Get sanctions for this libero (RIGHT TEAM)
-                        const sanctions = getPlayerSanctions(teamKey, player.number)
-                        const hasWarning = sanctions.some(s => s.payload?.type === 'warning')
-                        const hasPenalty = sanctions.some(s => s.payload?.type === 'penalty')
-                        const hasExpulsion = sanctions.some(s => s.payload?.type === 'expulsion')
-                        const hasDisqualification = sanctions.some(s => s.payload?.type === 'disqualification')
-
-                        return (
-                          <div
-                            key={`${teamKey}-bench-libero-${player.id || player.number}`}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px'
-                            }}
-                          >
-                            <div
-                              draggable={canDragLibero}
-                              onDragStart={(e) => canDragLibero && handleBenchDragStart(e, teamKey, player.number, true)}
-                              onDragEnd={handleBenchDragEnd}
-                              onDragOver={(e) => canReceiveLiberoFromCourt && handleBenchDropOver(e, teamKey, player.number, true)}
-                              onDragLeave={handleBenchDropLeave}
-                              onDrop={(e) => canReceiveLiberoFromCourt && handleBenchDrop(e, teamKey, player.number, true)}
-                              onClick={(e) => {
-                                if (rallyStatus === 'idle' && !isUnable) {
-                                  // Open action menu for libero on bench
-                                  const rect = e.currentTarget.getBoundingClientRect()
-                                  setLiberoBenchActionMenu({
-                                    team: teamKey,
-                                    liberoNumber: player.number,
-                                    liberoType: player.libero,
-                                    element: e.currentTarget,
-                                    x: rect.left + rect.width / 2,
-                                    y: rect.top + rect.height / 2,
-                                    side: 'right'
-                                  })
-                                }
-                              }}
-                              style={{
-                                padding: '5px 10px',
-                                background: isLiberoDropTarget ? 'rgba(59, 130, 246, 0.5)' : isUnable ? 'rgba(239, 68, 68, 0.2)' : 'rgba(59, 130, 246, 0.2)',
-                                borderRadius: '4px',
-                                fontSize: '14px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                border: isLiberoDropTarget ? '2px solid #3b82f6' : `1px solid ${isUnable ? 'rgba(239, 68, 68, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`,
-                                boxShadow: isLiberoDropTarget ? '0 0 8px rgba(59, 130, 246, 0.5)' : undefined,
-                                cursor: canDragLibero ? 'grab' : (rallyStatus === 'idle' && !isUnable) ? 'pointer' : 'default',
-                                opacity: isDraggingLibero ? 0.5 : isUnable ? 0.6 : 1
-                              }}
-                            >
-                              <span style={{ fontWeight: 600 }}>{player.number}</span>
-                              <span style={{ color: isUnable ? '#f87171' : '#60a5fa', fontSize: '12px', fontWeight: 700 }}>
-                                {player.libero === 'libero1' ? 'L1' : player.libero === 'redesignated' ? 'LR' : 'L2'}
-                              </span>
-                              {/* Captain badge for libero-captain on bench (right team) */}
-                              {(player.isCaptain || player.captain) && (
-                                <span style={{
-                                  background: '#fff',
-                                  color: '#10b981',
-                                  border: '1px solid #10b981',
-                                  borderRadius: '3px',
-                                  padding: '0 3px',
-                                  fontSize: '10px',
-                                  fontWeight: 700
-                                }}>C</span>
-                              )}
-                              {sanctions.length > 0 && (
-                                <span style={{ display: 'flex', gap: '1px', alignItems: 'center' }}>
-                                  {hasExpulsion ? (
-                                    <div style={{ position: 'relative', width: '9px', height: '9px' }}>
-                                      <div className="sanction-card yellow" style={{
-                                        width: '5px',
-                                        height: '7px',
-                                        position: 'absolute',
-                                        left: '0',
-                                        top: '1px',
-                                        transform: 'rotate(-8deg)',
-                                        zIndex: 1,
-                                        borderRadius: '1px'
-                                      }}></div>
-                                      <div className="sanction-card red" style={{
-                                        width: '5px',
-                                        height: '7px',
-                                        position: 'absolute',
-                                        right: '0',
-                                        top: '1px',
-                                        transform: 'rotate(8deg)',
-                                        zIndex: 2,
-                                        borderRadius: '1px'
-                                      }}></div>
-                                    </div>
-                                  ) : (
-                                    <>
-                                      {(hasWarning || hasDisqualification) && (
-                                        <div className="sanction-card yellow" style={{ width: '6px', height: '8px', borderRadius: '1px' }}></div>
-                                      )}
-                                      {(hasPenalty || hasDisqualification) && (
-                                        <div className="sanction-card red" style={{ width: '6px', height: '8px', borderRadius: '1px' }}></div>
-                                      )}
-                                    </>
-                                  )}
-                                </span>
-                              )}
-                            </div>
-                            {/* Exchange Libero button - show when another libero is on court */}
-                            {liberoOnCourt &&
-                              liberoOnCourt.liberoNumber !== player.number &&
-                              hasPointSinceLastLiberoExchange(teamKey) &&
-                              !isUnable && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleExchangeLibero('right')
-                                  }}
-                                  style={{
-                                    padding: '4px 8px',
-                                    background: '#fff',
-                                    color: '#000',
-                                    border: '1px solid #ccc',
-                                    borderRadius: '4px',
-                                    fontSize: '11px',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '4px'
-                                  }}
-                                  title="Exchange liberos (swap L1 ↔ L2)"
-                                >
-                                  <span style={{ fontSize: '12px' }}>⇄</span>
-                                  Exch.
-                                </button>
-                              )}
-                          </div>
-                        )
-                      })}
-                      {/* Redesignate Libero button - shows when all liberos are unable */}
-                      {(() => {
-                        const teamKey = leftIsHome ? 'away' : 'home'
-                        // Get ALL liberos from player list, not just bench (bench excludes liberos on court)
-                        const teamPlayers = leftIsHome ? data?.awayPlayers : data?.homePlayers
-                        const allLiberos = (teamPlayers || []).filter(p => p.libero && p.libero !== '' && p.libero !== 'unable')
-                        const activeLiberos = allLiberos.filter(p => !isLiberoUnable(teamKey, p.number))
-                        const unableLiberos = allLiberos.filter(p => isLiberoUnable(teamKey, p.number))
-                        const alreadyRedesignated = data?.events?.some(e =>
-                          e.type === 'libero_redesignation' && e.payload?.team === teamKey
-                        )
-                        const shouldShow = activeLiberos.length === 0 && unableLiberos.length > 0 && !alreadyRedesignated && rallyStatus === 'idle'
-
-                        if (!shouldShow) return null
-
-                        return (
-                          <button
-                            onClick={() => {
-                              const lastUnable = unableLiberos[unableLiberos.length - 1]
-                              setLiberoRedesignationModal({
-                                team: teamKey,
-                                unableLiberoNumber: lastUnable.number,
-                                unableLiberoType: lastUnable.libero
-                              })
-                            }}
-                            style={{
-                              padding: '6px 12px',
-                              background: '#f97316',
-                              color: '#000',
-                              border: 'none',
-                              borderRadius: '4px',
-                              fontSize: '11px',
-                              fontWeight: 600,
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px'
-                            }}
-                          >
-                            <span>🔄</span> Redesignate Libero
-                          </button>
-                        )
-                      })()}
                     </div>
                   )}
                 </div>
@@ -17231,11 +13901,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px', tableLayout: 'fixed' }}>
                           <thead>
                             <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
-                              <th style={{ padding: '2px 1px', textAlign: 'center', fontWeight: 600, fontSize: '7px', width: '20%' }}>Set</th>
-                              <th style={{ padding: '2px 1px', textAlign: 'center', fontWeight: 600, fontSize: '7px', width: '20%' }}>P</th>
-                              <th style={{ padding: '2px 1px', textAlign: 'center', fontWeight: 600, fontSize: '7px', width: '20%' }}>W</th>
-                              <th style={{ padding: '2px 1px', textAlign: 'center', fontWeight: 600, fontSize: '7px', width: '20%' }}>S</th>
-                              <th style={{ padding: '2px 1px', textAlign: 'center', fontWeight: 600, fontSize: '7px', width: '20%' }}>T</th>
+                              <th style={{ padding: '2px 1px', textAlign: 'center', fontWeight: 600, fontSize: '7px', width: '25%' }}>Set</th>
+                              <th style={{ padding: '2px 1px', textAlign: 'center', fontWeight: 600, fontSize: '7px', width: '25%' }}>P</th>
+                              <th style={{ padding: '2px 1px', textAlign: 'center', fontWeight: 600, fontSize: '7px', width: '25%' }}>W</th>
+                              <th style={{ padding: '2px 1px', textAlign: 'center', fontWeight: 600, fontSize: '7px', width: '25%' }}>T</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -17243,9 +13912,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               const rightPoints = currentRightTeamKey === 'home' ? set.homePoints : set.awayPoints
                               const leftPoints = currentRightTeamKey === 'home' ? set.awayPoints : set.homePoints
                               const won = rightPoints > leftPoints ? 1 : 0
-                              const substitutions = (data?.events || []).filter(e =>
-                                e.type === 'substitution' && e.setIndex === set.index && e.payload?.team === currentRightTeamKey
-                              ).length
                               const timeouts = (data?.events || []).filter(e =>
                                 e.type === 'timeout' && e.setIndex === set.index && e.payload?.team === currentRightTeamKey
                               ).length
@@ -17258,7 +13924,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                   <td style={{ padding: '2px 1px', textAlign: 'center' }}>{set.index}</td>
                                   <td style={{ padding: '2px 1px', textAlign: 'center' }}>{rightPoints}</td>
                                   <td style={{ padding: '2px 1px', textAlign: 'center' }}>{won}</td>
-                                  <td style={{ padding: '2px 1px', textAlign: 'center' }}>{substitutions}</td>
                                   <td style={{ padding: '2px 1px', textAlign: 'center' }}>{timeouts}</td>
                                 </tr>
                               )
@@ -17272,7 +13937,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
               )}
             </div>
 
-          </ScoreboardTeamColumn>
+          </div>
         </div>
       )}
 
@@ -21250,26 +17915,22 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               </tr>
                               <tr style={{ borderBottom: '2px solid rgba(255,255,255,0.2)' }}>
                                 <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>T</th>
-                                <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>S</th>
                                 <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>W</th>
                                 <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>P</th>
                                 <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}></th>
                                 <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>P</th>
                                 <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>W</th>
-                                <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>S</th>
                                 <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>T</th>
                               </tr>
                             </thead>
                             <tbody>
                               <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
                                 <td style={{ padding: '4px 2px', textAlign: 'center' }}>{leftTotalTimeouts}</td>
-                                <td style={{ padding: '4px 2px', textAlign: 'center' }}>{leftTotalSubs}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center' }}>{leftTotalWins}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center' }}>{leftTotalPoints}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center', fontSize: '8px', color: 'var(--muted)' }}>{totalDurationMin}'</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center' }}>{rightTotalPoints}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center' }}>{rightTotalWins}</td>
-                                <td style={{ padding: '4px 2px', textAlign: 'center' }}>{rightTotalSubs}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center' }}>{rightTotalTimeouts}</td>
                               </tr>
                             </tbody>
@@ -21406,13 +18067,11 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           <tr style={{ borderBottom: '2px solid rgba(255,255,255,0.2)' }}>
                             <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>Set</th>
                             <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>T</th>
-                            <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>S</th>
                             <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>W</th>
                             <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>P</th>
                             <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}></th>
                             <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>P</th>
                             <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>W</th>
-                            <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>S</th>
                             <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>T</th>
                           </tr>
                         </thead>
@@ -21428,14 +18087,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                             ).length
                             const rightTimeouts = (data?.events || []).filter(e =>
                               e.type === 'timeout' && e.setIndex === set.index && e.payload?.team === currentRightTeamKey
-                            ).length
-
-                            // Calculate substitutions for current left/right teams
-                            const leftSubs = (data?.events || []).filter(e =>
-                              e.type === 'substitution' && e.setIndex === set.index && e.payload?.team === currentLeftTeamKey
-                            ).length
-                            const rightSubs = (data?.events || []).filter(e =>
-                              e.type === 'substitution' && e.setIndex === set.index && e.payload?.team === currentRightTeamKey
                             ).length
 
                             // Determine winner for current left/right teams
@@ -21456,13 +18107,11 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               <tr key={set.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
                                 <td style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>{toRoman(set.index)}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center', fontSize: '8px' }}>{leftTimeouts || 0}</td>
-                                <td style={{ padding: '4px 2px', textAlign: 'center', fontSize: '8px' }}>{leftSubs || 0}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center', fontSize: '8px' }}>{leftWon}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center', fontSize: '8px' }}>{leftPoints}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center', fontSize: '8px', color: 'var(--muted)' }}>{duration}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center', fontSize: '8px' }}>{rightPoints}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center', fontSize: '8px' }}>{rightWon}</td>
-                                <td style={{ padding: '4px 2px', textAlign: 'center', fontSize: '8px' }}>{rightSubs || 0}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center', fontSize: '8px' }}>{rightTimeouts || 0}</td>
                               </tr>
                             )
@@ -21629,7 +18278,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
 
         // Get available substitutes for this player
         const { team, position, playerNumber } = playerActionMenu
-        const availableSubs = playerActionMenu.canSubstitute ? getAvailableSubstitutes(team, playerNumber) : []
+
 
         // Get sanction availability
         const teamWarning = teamHasFormalWarning(team)
@@ -21653,18 +18302,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
           })
         }
 
-        const handleSubFromMenu = (subPlayer) => {
-          setPlayerActionMenu(null)
-          setCourtSubExpanded(false)
-          setCourtSanctionExpanded(false)
-          // Open substitution confirmation modal (which properly creates both lineup and substitution events)
-          setSubstitutionConfirm({
-            team,
-            position,
-            playerOut: playerNumber,
-            playerIn: subPlayer.number
-          })
-        }
+
 
         return (
           <>
@@ -21700,451 +18338,8 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                 <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--muted)', textAlign: 'center', marginBottom: '4px' }}>
                   # {playerNumber}
                 </div>
-                {/* Substitution - auto-fire if only 1 legal substitute, otherwise expandable */}
-                {playerActionMenu.canSubstitute && availableSubs.length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <button
-                      onClick={() => {
-                        // If only 1 legal substitute, go directly to confirmation
-                        if (availableSubs.length === 1) {
-                          handleSubFromMenu(availableSubs[0])
-                        } else {
-                          setCourtSubExpanded(!courtSubExpanded)
-                        }
-                      }}
-                      style={{
-                        padding: '8px 12px',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        background: 'linear-gradient(135deg, #22c55e, #16a34a)',
-                        color: '#000',
-                        border: '1px solid rgba(0, 0, 0, 0.2)',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                        transition: 'all 0.2s',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '6px',
-                        width: '100%'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'linear-gradient(135deg, #4ade80, #22c55e)'
-                        e.currentTarget.style.transform = 'scale(1.02)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'linear-gradient(135deg, #22c55e, #16a34a)'
-                        e.currentTarget.style.transform = 'scale(1)'
-                      }}
-                    >
-                      <span>Substitution</span>
-                      {/* Only show arrow if more than 1 substitute available */}
-                      {availableSubs.length > 1 && (
-                        <span style={{ fontSize: '14px', lineHeight: '1', transform: courtSubExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
-                      )}
-                    </button>
-                    {courtSubExpanded && availableSubs.length > 1 && (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
-                        {availableSubs.map(sub => (
-                          <button
-                            key={sub.number}
-                            onClick={() => handleSubFromMenu(sub)}
-                            style={{
-                              padding: '6px 10px',
-                              fontSize: '12px',
-                              fontWeight: 700,
-                              background: 'rgba(34, 197, 94, 0.2)',
-                              color: '#22c55e',
-                              border: '1px solid rgba(34, 197, 94, 0.4)',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s',
-                              minWidth: '40px'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.background = 'rgba(34, 197, 94, 0.4)'
-                              e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.6)'
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.background = 'rgba(34, 197, 94, 0.2)'
-                              e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.4)'
-                            }}
-                          >
-                            {sub.number}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {/* Libero - expandable */}
-                {playerActionMenu.canEnterLibero && (() => {
-                  // Get available liberos for this team
-                  const teamPlayers = team === 'home' ? data?.homePlayers : data?.awayPlayers
-                  const availableLiberos = (teamPlayers || [])
-                    .filter(p => p.libero && p.libero !== '' && !isLiberoUnable(team, p.number))
-                    .map(p => ({
-                      number: p.number,
-                      type: p.libero,
-                      label: p.libero === 'libero1' ? 'L1' : p.libero === 'redesignated' ? 'LR' : 'L2'
-                    }))
 
-                  const handleLiberoSelect = async (libero) => {
-                    // Close menus first
-                    setPlayerActionMenu(null)
-                    setCourtSubExpanded(false)
-                    setCourtLiberoExpanded(false)
-                    setCourtSanctionExpanded(false)
 
-                    // Directly execute libero substitution
-                    const liberoType = libero.type
-                    const liberoPlayer = teamPlayers?.find(p => p.libero === liberoType)
-                    if (!liberoPlayer || !data?.set) return
-
-                    // Get current lineup
-                    const lineupEvents = data.events?.filter(e =>
-                      e.type === 'lineup' &&
-                      e.payload?.team === team &&
-                      e.setIndex === data.set.index
-                    ) || []
-                    const lineupEvent = lineupEvents.length > 0 ? lineupEvents[lineupEvents.length - 1] : null
-                    const currentLineup = lineupEvent?.payload?.lineup || {}
-
-                    // Create new lineup with libero entry
-                    const validPositions = ['I', 'II', 'III', 'IV', 'V', 'VI']
-                    const cleanedCurrentLineup = {}
-                    for (const pos of validPositions) {
-                      if (currentLineup[pos] !== undefined) {
-                        cleanedCurrentLineup[pos] = currentLineup[pos]
-                      }
-                    }
-
-                    const newLineup = { ...cleanedCurrentLineup }
-                    newLineup[position] = String(liberoPlayer.number)
-
-                    const finalLineup = {}
-                    for (const pos of validPositions) {
-                      if (newLineup[pos] !== undefined) {
-                        finalLineup[pos] = newLineup[pos]
-                      }
-                    }
-
-                    // Log the libero entry event FIRST (main event)
-                    await logEvent('libero_entry', {
-                      team,
-                      position,
-                      playerOut: playerNumber,
-                      liberoIn: liberoPlayer.number,
-                      liberoType
-                    })
-
-                    // Save the updated lineup as a SUB-EVENT (seq N.1) so it's deleted together with libero_entry on undo
-                    const allEvents = await db.events.where({ matchId }).toArray()
-                    const maxSeq = allEvents.length > 0 ? Math.max(...allEvents.map(e => e.seq || 0)) : 0
-                    const subEventSeq = Math.floor(maxSeq) + 0.1 // Sub-event of the libero_entry
-
-                    await db.events.add({
-                      matchId,
-                      setIndex: data.set.index,
-                      type: 'lineup',
-                      payload: {
-                        team,
-                        lineup: finalLineup,
-                        liberoSubstitution: {
-                          position,
-                          liberoNumber: liberoPlayer.number,
-                          playerNumber,
-                          liberoType
-                        }
-                      },
-                      ts: new Date().toISOString(),
-                      seq: subEventSeq
-                    })
-                  }
-
-                  return (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <button
-                        onClick={() => setCourtLiberoExpanded(!courtLiberoExpanded)}
-                        style={{
-                          padding: '8px 12px',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          background: '#FFF8E7',
-                          color: '#000',
-                          border: '1px solid rgba(0, 0, 0, 0.2)',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                          transition: 'all 0.2s',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: '6px',
-                          width: '100%'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = '#fff4d6'
-                          e.currentTarget.style.transform = 'scale(1.02)'
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = '#FFF8E7'
-                          e.currentTarget.style.transform = 'scale(1)'
-                        }}
-                      >
-                        <span>Libero</span>
-                        <span style={{ fontSize: '14px', lineHeight: '1', transform: courtLiberoExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
-                      </button>
-                      {courtLiberoExpanded && (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
-                          {availableLiberos.map(libero => (
-                            <button
-                              key={libero.number}
-                              onClick={() => handleLiberoSelect(libero)}
-                              style={{
-                                padding: '6px 10px',
-                                fontSize: '12px',
-                                fontWeight: 700,
-                                background: '#fff',
-                                color: '#000',
-                                border: '1px solid rgba(0, 0, 0, 0.3)',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                minWidth: '50px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.background = '#f3f4f6'
-                                e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.5)'
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.background = '#fff'
-                                e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.3)'
-                              }}
-                            >
-                              <span>{libero.number}</span>
-                              <span style={{ fontSize: '10px', fontWeight: 600, color: '#000' }}>({libero.label})</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })()}
-                {/* Libero on court controls - Libero Out and Exchange */}
-                {playerActionMenu.isLiberoOnCourt && (() => {
-                  const teamPlayers = team === 'home' ? data?.homePlayers : data?.awayPlayers
-                  const liberos = teamPlayers?.filter(p => p.libero && p.libero !== '') || []
-                  const hasPointSinceLibero = hasPointSinceLastLiberoExchange(team)
-                  const side = (team === 'home' && leftIsHome) || (team === 'away' && !leftIsHome) ? 'left' : 'right'
-
-                  // Libero out disabled if no point since libero exchange
-                  const liberoOutDisabled = !hasPointSinceLibero
-
-                  // Exchange libero disabled if only 1 libero or the other libero is unable
-                  const liberoOnCourt = playerActionMenu.liberoOnCourt
-                  const liberoOnCourtUnable = liberoOnCourt && isLiberoUnable(team, liberoOnCourt.liberoNumber)
-                  const otherLibero = liberos.find(p =>
-                    String(p.number) !== String(liberoOnCourt?.liberoNumber) &&
-                    p.libero !== 'unable' &&
-                    (p.libero === 'libero1' || p.libero === 'libero2' || p.libero === 'redesignated')
-                  )
-                  const otherLiberoUnable = otherLibero && isLiberoUnable(team, otherLibero.number)
-                  const exchangeLiberoDisabled = !hasPointSinceLibero || liberos.length < 2 || liberoOnCourtUnable || otherLiberoUnable
-
-                  return (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      {/* Libero Out button */}
-                      <button
-                        onClick={() => {
-                          setPlayerActionMenu(null)
-                          setCourtSubExpanded(false)
-                          setCourtLiberoExpanded(false)
-                          setCourtSanctionExpanded(false)
-                          handleLiberoOut(side)
-                        }}
-                        disabled={liberoOutDisabled}
-                        style={{
-                          padding: '8px 12px',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          background: liberoOutDisabled ? '#888' : '#FFF8E7',
-                          color: '#000',
-                          border: '1px solid rgba(0, 0, 0, 0.2)',
-                          borderRadius: '6px',
-                          cursor: liberoOutDisabled ? 'not-allowed' : 'pointer',
-                          textAlign: 'center',
-                          transition: 'all 0.2s',
-                          width: '100%',
-                          opacity: liberoOutDisabled ? 0.5 : 1
-                        }}
-                        onMouseEnter={(e) => {
-                          if (!liberoOutDisabled) {
-                            e.currentTarget.style.background = '#FFF0C0'
-                            e.currentTarget.style.transform = 'scale(1.02)'
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (!liberoOutDisabled) {
-                            e.currentTarget.style.background = '#FFF8E7'
-                            e.currentTarget.style.transform = 'scale(1)'
-                          }
-                        }}
-                      >
-                        Libero Out
-                      </button>
-                      {/* Exchange Libero button - only if 2 liberos */}
-                      {liberos.length >= 2 && (
-                        <button
-                          onClick={() => {
-                            setPlayerActionMenu(null)
-                            setCourtSubExpanded(false)
-                            setCourtLiberoExpanded(false)
-                            setCourtSanctionExpanded(false)
-                            handleExchangeLibero(side)
-                          }}
-                          disabled={exchangeLiberoDisabled}
-                          style={{
-                            padding: '8px 12px',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            background: exchangeLiberoDisabled ? '#888' : '#FFF8E7',
-                            color: '#000',
-                            border: '1px solid rgba(0, 0, 0, 0.2)',
-                            borderRadius: '6px',
-                            cursor: exchangeLiberoDisabled ? 'not-allowed' : 'pointer',
-                            textAlign: 'center',
-                            transition: 'all 0.2s',
-                            width: '100%',
-                            opacity: exchangeLiberoDisabled ? 0.5 : 1
-                          }}
-                          onMouseEnter={(e) => {
-                            if (!exchangeLiberoDisabled) {
-                              e.currentTarget.style.background = '#FFF0C0'
-                              e.currentTarget.style.transform = 'scale(1.02)'
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            if (!exchangeLiberoDisabled) {
-                              e.currentTarget.style.background = '#FFF8E7'
-                              e.currentTarget.style.transform = 'scale(1)'
-                            }
-                          }}
-                        >
-                          Exchange Libero
-                        </button>
-                      )}
-                      {/* Unable to play - expandable */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <button
-                          onClick={() => setCourtLiberoUnableExpanded(!courtLiberoUnableExpanded)}
-                          style={{
-                            padding: '8px 12px',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            background: '#ef4444',
-                            color: '#fff',
-                            border: '1px solid rgba(255, 255, 255, 0.2)',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            textAlign: 'left',
-                            transition: 'all 0.2s',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: '6px',
-                            width: '100%'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = '#dc2626'
-                            e.currentTarget.style.transform = 'scale(1.02)'
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = '#ef4444'
-                            e.currentTarget.style.transform = 'scale(1)'
-                          }}
-                        >
-                          <span>Unable to play</span>
-                          <span style={{ fontSize: '14px', lineHeight: '1', transform: courtLiberoUnableExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
-                        </button>
-                        {courtLiberoUnableExpanded && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
-                            <button
-                              onClick={() => {
-                                setPlayerActionMenu(null)
-                                setCourtSubExpanded(false)
-                                setCourtLiberoExpanded(false)
-                                setCourtSanctionExpanded(false)
-                                setCourtLiberoUnableExpanded(false)
-                                setLiberoUnableModal({
-                                  team,
-                                  liberoNumber: liberoOnCourt.liberoNumber,
-                                  liberoType: liberoOnCourt.liberoType,
-                                  reason: 'declared',
-                                  isOnCourt: true
-                                })
-                              }}
-                              style={{
-                                padding: '6px 10px',
-                                fontSize: '11px',
-                                fontWeight: 600,
-                                background: '#f97316',
-                                color: '#000',
-                                border: '1px solid rgba(0, 0, 0, 0.2)',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                gap: '8px'
-                              }}
-                            >
-                              <span>Declared unable</span>
-                              <span style={{ fontSize: '14px' }}>🗣️</span>
-                            </button>
-                            <button
-                              onClick={() => {
-                                setPlayerActionMenu(null)
-                                setCourtSubExpanded(false)
-                                setCourtLiberoExpanded(false)
-                                setCourtSanctionExpanded(false)
-                                setCourtLiberoUnableExpanded(false)
-                                setLiberoUnableModal({
-                                  team,
-                                  liberoNumber: liberoOnCourt.liberoNumber,
-                                  liberoType: liberoOnCourt.liberoType,
-                                  reason: 'injury',
-                                  isOnCourt: true
-                                })
-                              }}
-                              style={{
-                                padding: '6px 10px',
-                                fontSize: '11px',
-                                fontWeight: 600,
-                                background: 'rgba(239, 68, 68,1)',
-                                color: '#ffff',
-                                border: '1px solid rgba(239, 68, 68, 0.3)',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                gap: '8px'
-                              }}
-                            >
-                              <span>Injury / Illness</span>
-                              <span style={{ fontSize: '14px' }}>✚</span>
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })()}
                 {/* Sanction - expandable */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <button
@@ -22272,518 +18467,47 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                     </div>
                   )}
                 </div>
-                {/* Injury - direct button (NOT shown for liberos on court - they have "Unable to play" menu) */}
-                {!playerActionMenu.isLiberoOnCourt && (
-                  <button
-                    onClick={openInjuryFromMenu}
-                    style={{
-                      padding: '8px 12px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      background: '#dc2626',
-                      color: '#fff',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      transition: 'all 0.2s',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '6px',
-                      width: '100%'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = '#ef4444'
-                      e.currentTarget.style.transform = 'scale(1.02)'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = '#dc2626'
-                      e.currentTarget.style.transform = 'scale(1)'
-                    }}
-                  >
-                    <span>Injury</span>
-                    <span style={{ fontSize: '14px', lineHeight: '1' }}>✚</span>
-                  </button>
-                )}
+                {/* Medical - opens dropdown with Medical Timeout / Player Unable to Play */}
+                <button
+                  onClick={openMedicalFromMenu}
+                  style={{
+                    padding: '8px 12px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    background: '#dc2626',
+                    color: '#fff',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '6px',
+                    width: '100%'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#ef4444'
+                    e.currentTarget.style.transform = 'scale(1.02)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#dc2626'
+                    e.currentTarget.style.transform = 'scale(1)'
+                  }}
+                >
+                  <span>Medical</span>
+                  <span style={{ fontSize: '14px', lineHeight: '1' }}>✚</span>
+                </button>
               </div>
             </div>
           </>
         )
       })()}
 
-      {substitutionDropdown && (() => {
-        const teamKey = substitutionDropdown.team
-        const teamData = teamKey === 'home' ? data?.homeTeam : data?.awayTeam
 
-        // Check if substitution is legal
-        const isLegal = isSubstitutionLegal(teamKey, substitutionDropdown.playerNumber)
 
-        // Get available substitutes - use exceptional if flagged, otherwise check legal status
-        const isExceptional = substitutionDropdown.isExceptional === true
-        const availableSubstitutes = isExceptional
-          ? getAvailableExceptionalSubstitutes(teamKey, substitutionDropdown.playerNumber)
-          : getAvailableSubstitutes(teamKey, substitutionDropdown.playerNumber, !isLegal)
 
-        // Check if player is expelled or disqualified - use stored flags or query events
-        const isExpelled = substitutionDropdown.isExpelled || data?.events?.some(e =>
-          e.type === 'sanction' &&
-          e.payload?.team === teamKey &&
-          e.payload?.playerNumber === substitutionDropdown.playerNumber &&
-          e.payload?.type === 'expulsion'
-        )
-        const isDisqualified = substitutionDropdown.isDisqualified || data?.events?.some(e =>
-          e.type === 'sanction' &&
-          e.payload?.team === teamKey &&
-          e.payload?.playerNumber === substitutionDropdown.playerNumber &&
-          e.payload?.type === 'disqualification'
-        )
-
-        // Get element position - use stored coordinates if available, otherwise try to find element
-        // For left side teams, menu opens to the right (use left CSS)
-        // For right side teams, menu opens to the left (use right CSS)
-        const isRightSide = substitutionDropdown.side === 'right'
-        let dropdownStyle
-        if (substitutionDropdown.x !== undefined && substitutionDropdown.y !== undefined) {
-          dropdownStyle = {
-            position: 'fixed',
-            left: isRightSide ? undefined : `${substitutionDropdown.x}px`,
-            right: isRightSide ? `${window.innerWidth - substitutionDropdown.x}px` : undefined,
-            top: `${substitutionDropdown.y}px`,
-            transform: 'translateY(-50%)',
-            zIndex: 1000
-          }
-        } else {
-          // Fallback: try to find element
-          let element = substitutionDropdown.element
-          if (!element || !element.getBoundingClientRect) {
-            const playerElements = document.querySelectorAll(`.court-player`)
-            element = Array.from(playerElements).find(el => {
-              const position = el.querySelector('.court-player-position')?.textContent
-              return position === substitutionDropdown.position
-            })
-          }
-          const rect = element?.getBoundingClientRect?.()
-          dropdownStyle = rect ? {
-            position: 'fixed',
-            left: isRightSide ? undefined : `${rect.right + 30}px`,
-            right: isRightSide ? `${window.innerWidth - rect.left + 30}px` : undefined,
-            top: `${rect.top + rect.height / 2}px`,
-            transform: 'translateY(-50%)',
-            zIndex: 1000
-          } : {
-            position: 'absolute',
-            left: '50%',
-            top: '50%',
-            transform: 'translate(-50%, -50%)',
-            zIndex: 1000
-          }
-        }
-
-        // Block closing if player is expelled or disqualified - they MUST substitute
-        const mustSubstitute = isExpelled || isDisqualified
-
-        return (
-          <>
-            {/* Backdrop to close dropdown on click outside - disabled if player must substitute */}
-            <div
-              style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                zIndex: 999,
-                background: mustSubstitute ? 'rgba(0, 0, 0, 0.3)' : 'transparent',
-                cursor: mustSubstitute ? 'not-allowed' : 'default'
-              }}
-              onClick={() => {
-                if (mustSubstitute) return // Block closing for expelled/disqualified players
-                setSubstitutionDropdown(null)
-                setLiberoDropdown(null)
-                setLiberoInDropdown(null)
-                setSanctionDropdown(null)
-                setInjuryDropdown(null)
-                setPlayerActionMenu(null)
-              }}
-            />
-            {/* Dropdown */}
-            <div style={dropdownStyle} className="modal-wrapper-roll-down">
-              <div
-                data-substitution-dropdown
-                style={{
-                  background: 'rgba(15, 23, 42, 0.95)',
-                  border: '2px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: '8px',
-                  padding: '8px',
-                  minWidth: '80px',
-                  maxWidth: '100px',
-                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)'
-                }}
-              >
-                <div style={{ marginBottom: '8px', fontSize: '12px', fontWeight: 600, color: 'var(--text)', textAlign: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '8px' }}>
-                  {isExceptional ? 'Exceptional Substitution' : 'Substitution'}
-                </div>
-                <div style={{ marginBottom: '8px', fontSize: '11px', color: 'var(--muted)', textAlign: 'center' }}>
-                  # {substitutionDropdown.playerNumber} out
-                </div>
-                {isExceptional && availableSubstitutes.length > 0 && (
-                  <div style={{ marginBottom: '8px', padding: '4px', textAlign: 'center', color: '#facc15', fontSize: '10px', fontWeight: 600, background: 'rgba(234, 179, 8, 0.15)', border: '1px solid rgba(234, 179, 8, 0.3)', borderRadius: '4px' }}>
-                    Exceptional
-                  </div>
-                )}
-                {availableSubstitutes.length === 0 ? (
-                  <div style={{ padding: '8px', textAlign: 'center', color: 'var(--muted)', fontSize: '11px' }}>
-                    No substitutes
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    {availableSubstitutes.map(player => (
-                      <button
-                        key={player.id}
-                        onClick={() => showSubstitutionConfirm(player.number)}
-                        style={{
-                          padding: '4px 6px',
-                          fontSize: '13px',
-                          fontWeight: 700,
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          color: 'var(--accent)',
-                          border: '1px solid rgba(255, 255, 255, 0.1)',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          textAlign: 'center',
-                          transition: 'all 0.2s',
-                          width: '100%',
-                          minHeight: '28px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'
-                          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)'
-                          e.currentTarget.style.transform = 'scale(1.05)'
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
-                          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
-                          e.currentTarget.style.transform = 'scale(1)'
-                        }}
-                      >
-                        # {player.number}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {/* Cancel Sanction button - only shown when player must substitute due to expulsion/disqualification */}
-                {mustSubstitute && (
-                  <button
-                    onClick={async () => {
-                      // Find and delete the most recent sanction event for this player
-                      const sanctionEvent = data?.events?.filter(e =>
-                        e.type === 'sanction' &&
-                        e.payload?.team === teamKey &&
-                        e.payload?.playerNumber === substitutionDropdown.playerNumber &&
-                        (e.payload?.type === 'expulsion' || e.payload?.type === 'disqualification')
-                      ).sort((a, b) => b.id - a.id)[0]
-
-                      if (sanctionEvent) {
-                        await db.events.delete(sanctionEvent.id)
-                      }
-                      setSubstitutionDropdown(null)
-                    }}
-                    style={{
-                      marginTop: '8px',
-                      padding: '6px 8px',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      background: 'rgba(239, 68, 68, 0.15)',
-                      color: '#ef4444',
-                      border: '1px solid rgba(239, 68, 68, 0.3)',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      textAlign: 'center',
-                      transition: 'all 0.2s',
-                      width: '100%'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'rgba(239, 68, 68, 0.25)'
-                      e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)'
-                      e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)'
-                    }}
-                  >
-                    Cancel Sanction
-                  </button>
-                )}
-              </div>
-            </div>
-          </>
-        )
-      })()}
-
-      {liberoDropdown && (() => {
-        const teamKey = liberoDropdown.team
-        const teamPlayers = teamKey === 'home' ? data?.homePlayers : data?.awayPlayers
-        const allLiberos = teamPlayers?.filter(p => p.libero && p.libero !== '') || []
-
-        // Check if a libero is already on court
-        const liberoOnCourt = getLiberoOnCourt(teamKey)
-        // If a libero is already on court, filter out all liberos (can't have two liberos on court)
-        // Also filter out liberos that are unable to play
-        const liberos = liberoOnCourt ? [] : allLiberos.filter(libero => {
-          return !isLiberoUnable(teamKey, libero.number)
-        })
-
-        // Get element position - use stored coordinates if available, otherwise try to find element
-        // For left side teams, menu opens to the right (use left CSS)
-        // For right side teams, menu opens to the left (use right CSS)
-        const isRightSide = liberoDropdown.side === 'right'
-        let dropdownStyle
-        if (liberoDropdown.x !== undefined && liberoDropdown.y !== undefined) {
-          dropdownStyle = {
-            position: 'fixed',
-            left: isRightSide ? undefined : `${liberoDropdown.x}px`,
-            right: isRightSide ? `${window.innerWidth - liberoDropdown.x}px` : undefined,
-            top: `${liberoDropdown.y}px`,
-            transform: 'translateY(-50%)',
-            zIndex: 1000
-          }
-        } else {
-          // Fallback: try to find element
-          let element = liberoDropdown.element
-          if (!element || !element.getBoundingClientRect) {
-            const playerElements = document.querySelectorAll(`.court-player`)
-            element = Array.from(playerElements).find(el => {
-              const position = el.querySelector('.court-player-position')?.textContent
-              return position === liberoDropdown.position
-            })
-          }
-          const rect = element?.getBoundingClientRect?.()
-          dropdownStyle = rect ? {
-            position: 'fixed',
-            left: isRightSide ? undefined : `${rect.right + 30}px`,
-            right: isRightSide ? `${window.innerWidth - rect.left + 30}px` : undefined,
-            top: `${rect.top + rect.height / 2}px`,
-            transform: 'translateY(-50%)',
-            zIndex: 1000
-          } : {
-            position: 'absolute',
-            left: '50%',
-            top: '50%',
-            transform: 'translate(-50%, -50%)',
-            zIndex: 1000
-          }
-        }
-
-        return (
-          <>
-            {/* Backdrop to close dropdown on click outside */}
-            <div
-              style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                zIndex: 999,
-                background: 'transparent'
-              }}
-              onClick={() => {
-                setSubstitutionDropdown(null)
-                setLiberoDropdown(null)
-                setLiberoInDropdown(null)
-                setSanctionDropdown(null)
-                setInjuryDropdown(null)
-                setPlayerActionMenu(null)
-              }}
-            />
-            {/* Dropdown */}
-            <div style={dropdownStyle} className="modal-wrapper-roll-down">
-              <div
-                data-libero-dropdown
-                style={{
-                  background: '#FFF8E7',
-                  border: '2px solid rgba(0, 0, 0, 0.2)',
-                  borderRadius: '8px',
-                  padding: '8px',
-                  minWidth: '80px',
-                  maxWidth: '100px',
-                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)'
-                }}
-              >
-                <div style={{ marginBottom: '8px', fontSize: '12px', fontWeight: 600, color: '#000', textAlign: 'center', borderBottom: '1px solid rgba(0, 0, 0, 0.1)', paddingBottom: '8px' }}>
-                  Libero
-                </div>
-                <div style={{ marginBottom: '8px', fontSize: '11px', color: '#666', textAlign: 'center' }}>
-                  # {liberoDropdown.playerNumber} out
-                </div>
-                {liberos.length === 0 ? (
-                  <div style={{ padding: '8px', textAlign: 'center', color: '#666', fontSize: '11px' }}>
-                    No liberos
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    {liberos.map(player => (
-                      <button
-                        key={player.id}
-                        onClick={() => showLiberoConfirm(player.libero)}
-                        style={{
-                          padding: '4px 6px',
-                          fontSize: '13px',
-                          fontWeight: 700,
-                          background: 'rgba(0, 0, 0, 0.05)',
-                          color: '#000',
-                          border: '1px solid rgba(0, 0, 0, 0.1)',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          textAlign: 'center',
-                          transition: 'all 0.2s',
-                          width: '100%',
-                          minHeight: '28px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '4px'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = 'rgba(0, 0, 0, 0.15)'
-                          e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.3)'
-                          e.currentTarget.style.transform = 'scale(1.05)'
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'rgba(0, 0, 0, 0.05)'
-                          e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.1)'
-                          e.currentTarget.style.transform = 'scale(1)'
-                        }}
-                      >
-                        {player.libero === 'libero1' ? 'L1' : player.libero === 'redesignated' ? 'LR' : 'L2'} # {player.number}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </>
-        )
-      })()}
-
-      {liberoInDropdown && (() => {
-        const teamKey = liberoInDropdown.team
-        const { playersOnCourt } = getTeamLineupState(teamKey)
-
-        // Get eligible players (I if not serving, II, III)
-        const currentServe = getCurrentServe()
-        const teamServes = currentServe === teamKey
-        const eligiblePlayers = playersOnCourt.filter(p => {
-          if (p.position === 'I') return !teamServes // Position I only if not serving
-          return p.position === 'II' || p.position === 'III'
-        })
-
-        // Get dropdown position
-        // For left side teams, menu opens to the right (use left CSS)
-        // For right side teams, menu opens to the left (use right CSS)
-        const isRightSide = liberoInDropdown.side === 'right'
-        const dropdownStyle = {
-          position: 'fixed',
-          left: isRightSide ? undefined : `${liberoInDropdown.x}px`,
-          right: isRightSide ? `${window.innerWidth - liberoInDropdown.x}px` : undefined,
-          top: `${liberoInDropdown.y}px`,
-          transform: 'translateX(-50%)',
-          zIndex: 1000
-        }
-
-        return (
-          <>
-            {/* Backdrop to close dropdown on click outside */}
-            <div
-              style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                zIndex: 999,
-                background: 'transparent'
-              }}
-              onClick={() => {
-                setLiberoInDropdown(null)
-                setSubstitutionDropdown(null)
-                setLiberoDropdown(null)
-                setSanctionDropdown(null)
-                setInjuryDropdown(null)
-                setPlayerActionMenu(null)
-              }}
-            />
-            {/* Dropdown */}
-            <div style={dropdownStyle} className="modal-wrapper-roll-down">
-              <div
-                data-libero-in-dropdown
-                style={{
-                  background: '#FFF8E7',
-                  border: '2px solid rgba(0, 0, 0, 0.2)',
-                  borderRadius: '8px',
-                  padding: '8px',
-                  minWidth: '120px',
-                  maxWidth: '150px',
-                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)'
-                }}
-              >
-                <div style={{ marginBottom: '8px', fontSize: '12px', fontWeight: 600, color: '#000', textAlign: 'center', borderBottom: '1px solid rgba(0, 0, 0, 0.1)', paddingBottom: '8px' }}>
-                  Libero In
-                </div>
-                {eligiblePlayers.length === 0 ? (
-                  <div style={{ padding: '8px', textAlign: 'center', color: '#666', fontSize: '11px' }}>
-                    No eligible players
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    {eligiblePlayers.map(player => (
-                      <button
-                        key={`${player.position}-${player.number}`}
-                        onClick={() => handleLiberoInPlayerSelect(player.position, player.number)}
-                        style={{
-                          padding: '6px 8px',
-                          fontSize: '12px',
-                          fontWeight: 700,
-                          background: 'rgba(0, 0, 0, 0.05)',
-                          color: '#000',
-                          border: '1px solid rgba(0, 0, 0, 0.1)',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          textAlign: 'center',
-                          transition: 'all 0.2s',
-                          width: '100%',
-                          minHeight: '32px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '4px'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = 'rgba(0, 0, 0, 0.15)'
-                          e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.3)'
-                          e.currentTarget.style.transform = 'scale(1.05)'
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'rgba(0, 0, 0, 0.05)'
-                          e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.1)'
-                          e.currentTarget.style.transform = 'scale(1)'
-                        }}
-                      >
-                        <span style={{ fontSize: '10px', opacity: 0.7 }}>Pos {player.position}:</span>
-                        <span>#{player.number}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </>
-        )
-      })()}
 
       {sanctionDropdown && (() => {
         // Get element position - use stored coordinates if available
@@ -23039,439 +18763,8 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         )
       })()}
 
-      {/* Bench Player Action Menu */}
-      {benchPlayerActionMenu && (() => {
-        // Get element position - use stored coordinates if available
-        // For left side teams, menu opens to the right (use left CSS)
-        // For right side teams, menu opens to the left (use right CSS)
-        const isRightSide = benchPlayerActionMenu.side === 'right'
-        let menuStyle
-        if (benchPlayerActionMenu.x !== undefined && benchPlayerActionMenu.y !== undefined) {
-          menuStyle = {
-            position: 'fixed',
-            left: isRightSide ? undefined : `${benchPlayerActionMenu.x}px`,
-            right: isRightSide ? `${window.innerWidth - benchPlayerActionMenu.x}px` : undefined,
-            top: `${benchPlayerActionMenu.y}px`,
-            transform: 'translateY(-50%)',
-            zIndex: 1000
-          }
-        } else {
-          const rect = benchPlayerActionMenu.element?.getBoundingClientRect?.()
-          menuStyle = rect ? {
-            position: 'fixed',
-            left: isRightSide ? undefined : `${rect.right + 30}px`,
-            right: isRightSide ? `${window.innerWidth - rect.left + 30}px` : undefined,
-            top: `${rect.top + rect.height / 2}px`,
-            transform: 'translateY(-50%)',
-            zIndex: 1000
-          } : {
-            position: 'absolute',
-            left: '50%',
-            top: '50%',
-            transform: 'translate(-50%, -50%)',
-            zIndex: 1000
-          }
-        }
-
-        const { team, playerNumber, canSubstitute, courtPlayerToSwapWith, neverPlayed } = benchPlayerActionMenu
-
-        // For "never played" bench players, get available court players to substitute
-        // Filter out liberos - cannot substitute for a libero on court
-        const availableCourtPlayers = []
-        if (neverPlayed && canSubstitute) {
-          const currentLineup = getCurrentLineup(team)
-          const liberoOnCourt = getLiberoOnCourt(team)
-          const teamPlayers = team === 'home' ? data?.homePlayers : data?.awayPlayers
-          if (currentLineup) {
-            Object.entries(currentLineup).forEach(([pos, num]) => {
-              if (num) {
-                // Check if this court player can be substituted
-                const canBeSub = canPlayerBeSubstituted(team, num)
-                // Check if this is a libero (cannot substitute for libero)
-                const isLibero = teamPlayers?.some(p =>
-                  String(p.number) === String(num) && (p.role === 'libero1' || p.role === 'libero2')
-                )
-                // Also check if current libero is on court at this position
-                const isLiberoOnCourt = liberoOnCourt && String(liberoOnCourt.liberoNumber) === String(num)
-                if (canBeSub && !isLibero && !isLiberoOnCourt) {
-                  availableCourtPlayers.push({ position: pos, number: num })
-                }
-              }
-            })
-          }
-        }
-
-
-        return (
-          <>
-            {/* Backdrop to close menu on click outside */}
-            <div
-              style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                zIndex: 999,
-                background: 'transparent'
-              }}
-              onClick={() => { setBenchPlayerActionMenu(null); setBenchSubExpanded(false); setBenchSanctionExpanded(false) }}
-            />
-            {/* Action Menu */}
-            <div style={menuStyle} className="modal-wrapper-roll-down">
-              <div
-                data-bench-player-action-menu
-                style={{
-                  background: 'rgba(15, 23, 42, 0.95)',
-                  border: '2px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: '8px',
-                  padding: '8px',
-                  minWidth: '140px',
-                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '6px'
-                }}
-              >
-                <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--muted)', textAlign: 'center', marginBottom: '4px' }}>
-                  # {playerNumber}
-                </div>
-                {/* Substitution Button - for returning players */}
-                {courtPlayerToSwapWith && (
-                  <button
-                    onClick={() => {
-                      if (canSubstitute && courtPlayerToSwapWith) {
-                        setBenchPlayerActionMenu(null)
-                        // Go directly to substitution confirmation modal
-                        setSubstitutionConfirm({
-                          team,
-                          position: courtPlayerToSwapWith.position,
-                          playerOut: courtPlayerToSwapWith.number,
-                          playerIn: playerNumber
-                        })
-                      }
-                    }}
-                    disabled={!canSubstitute}
-                    style={{
-                      padding: '8px 12px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      background: canSubstitute ? 'linear-gradient(135deg, #22c55e, #16a34a)' : 'rgba(255, 255, 255, 0.05)',
-                      color: canSubstitute ? '#000' : 'var(--muted)',
-                      border: canSubstitute ? '1px solid rgba(0, 0, 0, 0.2)' : '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: '6px',
-                      cursor: canSubstitute ? 'pointer' : 'not-allowed',
-                      textAlign: 'left',
-                      transition: 'all 0.2s',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '6px',
-                      width: '100%',
-                      opacity: canSubstitute ? 1 : 0.5
-                    }}
-                    onMouseEnter={(e) => {
-                      if (canSubstitute) {
-                        e.currentTarget.style.background = 'linear-gradient(135deg, #4ade80, #22c55e)'
-                        e.currentTarget.style.transform = 'scale(1.02)'
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (canSubstitute) {
-                        e.currentTarget.style.background = 'linear-gradient(135deg, #22c55e, #16a34a)'
-                        e.currentTarget.style.transform = 'scale(1)'
-                      }
-                    }}
-                  >
-                    <span>Substitution</span>
-                    <span style={{ fontSize: '14px', lineHeight: '1' }}>⇅</span>
-                  </button>
-                )}
-                {/* Substitution button with expandable list - for players who never played */}
-                {neverPlayed && availableCourtPlayers.length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <button
-                      onClick={() => setBenchSubExpanded(!benchSubExpanded)}
-                      style={{
-                        padding: '8px 12px',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        background: 'linear-gradient(135deg, #22c55e, #16a34a)',
-                        color: '#000',
-                        border: '1px solid rgba(0, 0, 0, 0.2)',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                        transition: 'all 0.2s',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '6px',
-                        width: '100%'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'linear-gradient(135deg, #4ade80, #22c55e)'
-                        e.currentTarget.style.transform = 'scale(1.02)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'linear-gradient(135deg, #22c55e, #16a34a)'
-                        e.currentTarget.style.transform = 'scale(1)'
-                      }}
-                    >
-                      <span>Substitution</span>
-                      <span style={{ fontSize: '14px', lineHeight: '1', transform: benchSubExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
-                    </button>
-                    {benchSubExpanded && (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
-                        {availableCourtPlayers.map(cp => (
-                          <button
-                            key={cp.position}
-                            onClick={() => {
-                              setBenchPlayerActionMenu(null)
-                              setBenchSubExpanded(false)
-                              // Go directly to substitution confirmation modal
-                              setSubstitutionConfirm({
-                                team,
-                                position: cp.position,
-                                playerOut: cp.number,
-                                playerIn: playerNumber
-                              })
-                            }}
-                            style={{
-                              padding: '6px 10px',
-                              fontSize: '12px',
-                              fontWeight: 700,
-                              background: 'rgba(34, 197, 94, 0.2)',
-                              color: '#22c55e',
-                              border: '1px solid rgba(34, 197, 94, 0.4)',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s',
-                              minWidth: '40px'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.background = 'rgba(34, 197, 94, 0.4)'
-                              e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.6)'
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.background = 'rgba(34, 197, 94, 0.2)'
-                              e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.4)'
-                            }}
-                          >
-                            {cp.number}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {/* Sanction - expandable */}
-                {(() => {
-                  // Get sanction availability for bench player
-                  const teamWarning = teamHasFormalWarning(team)
-                  const hasWarning = playerHasSanctionType(team, playerNumber, 'warning')
-                  const hasPenalty = playerHasSanctionType(team, playerNumber, 'penalty')
-                  const hasExpulsion = playerHasSanctionType(team, playerNumber, 'expulsion')
-                  const canGetWarning = !hasWarning && !teamWarning
-                  const canGetPenalty = !hasPenalty
-                  const canGetExpulsion = !hasExpulsion
-
-                  const showSanctionConfirmFromBenchMenu = (sanctionType) => {
-                    setBenchPlayerActionMenu(null)
-                    setBenchSubExpanded(false)
-                    setBenchSanctionExpanded(false)
-                    setSanctionConfirmModal({
-                      team,
-                      type: 'bench',
-                      playerNumber,
-                      sanctionType
-                    })
-                  }
-
-                  return (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <button
-                        onClick={() => setBenchSanctionExpanded(!benchSanctionExpanded)}
-                        style={{
-                          padding: '8px 12px',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          background: '#000',
-                          color: '#fff',
-                          border: '1px solid rgba(255, 255, 255, 0.2)',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                          transition: 'all 0.2s',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: '6px',
-                          width: '100%'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = '#1a1a1a'
-                          e.currentTarget.style.transform = 'scale(1.02)'
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = '#000'
-                          e.currentTarget.style.transform = 'scale(1)'
-                        }}
-                      >
-                        <span>Sanction</span>
-                        <span style={{ fontSize: '14px', lineHeight: '1', transform: benchSanctionExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
-                      </button>
-                      {benchSanctionExpanded && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
-                          <button
-                            onClick={() => showSanctionConfirmFromBenchMenu('warning')}
-                            disabled={!canGetWarning}
-                            style={{
-                              padding: '6px 10px',
-                              fontSize: '11px',
-                              fontWeight: 600,
-                              background: canGetWarning ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.02)',
-                              color: canGetWarning ? 'var(--text)' : 'var(--muted)',
-                              border: '1px solid rgba(255, 255, 255, 0.1)',
-                              borderRadius: '4px',
-                              cursor: canGetWarning ? 'pointer' : 'not-allowed',
-                              textAlign: 'left',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              opacity: canGetWarning ? 1 : 0.5
-                            }}
-                          >
-                            <div className="sanction-card yellow" style={{ flexShrink: 0, width: '20px', height: '26px' }}></div>
-                            <span>Warning</span>
-                          </button>
-                          <button
-                            onClick={() => showSanctionConfirmFromBenchMenu('penalty')}
-                            disabled={!canGetPenalty}
-                            style={{
-                              padding: '6px 10px',
-                              fontSize: '11px',
-                              fontWeight: 600,
-                              background: canGetPenalty ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.02)',
-                              color: canGetPenalty ? 'var(--text)' : 'var(--muted)',
-                              border: '1px solid rgba(255, 255, 255, 0.1)',
-                              borderRadius: '4px',
-                              cursor: canGetPenalty ? 'pointer' : 'not-allowed',
-                              textAlign: 'left',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              opacity: canGetPenalty ? 1 : 0.5
-                            }}
-                          >
-                            <div className="sanction-card red" style={{ flexShrink: 0, width: '20px', height: '26px' }}></div>
-                            <span>Penalty</span>
-                          </button>
-                          <button
-                            onClick={() => showSanctionConfirmFromBenchMenu('expulsion')}
-                            disabled={!canGetExpulsion}
-                            style={{
-                              padding: '6px 10px',
-                              fontSize: '11px',
-                              fontWeight: 600,
-                              background: canGetExpulsion ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.02)',
-                              color: canGetExpulsion ? 'var(--text)' : 'var(--muted)',
-                              border: '1px solid rgba(255, 255, 255, 0.1)',
-                              borderRadius: '4px',
-                              cursor: canGetExpulsion ? 'pointer' : 'not-allowed',
-                              textAlign: 'left',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              opacity: canGetExpulsion ? 1 : 0.5
-                            }}
-                          >
-                            <div className="sanction-card combo" style={{ flexShrink: 0, width: '24px', height: '26px' }}></div>
-                            <span>Expulsion</span>
-                          </button>
-                          <button
-                            onClick={() => showSanctionConfirmFromBenchMenu('disqualification')}
-                            style={{
-                              padding: '6px 10px',
-                              fontSize: '11px',
-                              fontWeight: 600,
-                              background: 'rgba(255, 255, 255, 0.05)',
-                              color: 'var(--text)',
-                              border: '1px solid rgba(255, 255, 255, 0.1)',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              textAlign: 'left',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px'
-                            }}
-                          >
-                            <div className="sanction-cards-separate" style={{ flexShrink: 0, display: 'flex', gap: '2px' }}>
-                              <div className="sanction-card yellow" style={{ width: '16px', height: '22px' }}></div>
-                              <div className="sanction-card red" style={{ width: '16px', height: '22px' }}></div>
-                            </div>
-                            <span>Disqualification</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })()}
-                {/* Injury Button */}
-                <button
-                  onClick={async () => {
-                    // For bench player injury, just add a remark (no substitution needed since they're not on court)
-                    const remarks = data?.match?.remarks || ''
-                    const now = new Date()
-                    const timestamp = `${String(now.getUTCHours()).padStart(2, '0')}:${String(now.getUTCMinutes()).padStart(2, '0')}`
-                    const teamName = team === 'home' ? (data?.homeTeam?.name || 'Home') : (data?.awayTeam?.name || 'Away')
-                    const newRemark = `[${timestamp}] Injury: ${teamName} #${playerNumber} (bench)`
-                    const updatedRemarks = remarks ? `${remarks}\n${newRemark}` : newRemark
-
-                    await db.matches.update(matchId, { remarks: updatedRemarks })
-                    setBenchPlayerActionMenu(null)
-                    setConfirmMessage(`Injury recorded for #${playerNumber}`)
-                  }}
-                  style={{
-                    padding: '8px 12px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    background: '#dc2626',
-                    color: '#fff',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    transition: 'all 0.2s',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '6px',
-                    width: '100%'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#ef4444'
-                    e.currentTarget.style.transform = 'scale(1.02)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = '#dc2626'
-                    e.currentTarget.style.transform = 'scale(1)'
-                  }}
-                >
-                  <span>Injury</span>
-                  <span style={{ fontSize: '14px', lineHeight: '1' }}>✚</span>
-                </button>
-              </div>
-            </div>
-          </>
-        )
-      })()}
-
-
+      {/* Medical Dropdown - Medical Timeout / Player Unable to Play */}
       {injuryDropdown && (() => {
-        // Get element position - use stored coordinates if available
-        // For left side teams, menu opens to the right (use left CSS)
-        // For right side teams, menu opens to the left (use right CSS)
         const isRightSide = injuryDropdown.side === 'right'
         let dropdownStyle
         if (injuryDropdown.x !== undefined && injuryDropdown.y !== undefined) {
@@ -23501,9 +18794,13 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
           }
         }
 
+        const teamData = injuryDropdown.team === 'home' ? data?.homeTeam : data?.awayTeam
+        const teamName = teamData?.name || (injuryDropdown.team === 'home' ? 'Home' : 'Away')
+        const playerNumber = injuryDropdown.playerNumber
+
         return (
           <>
-            {/* Backdrop to close dropdown on click outside */}
+            {/* Backdrop */}
             <div
               style={{
                 position: 'fixed',
@@ -23514,60 +18811,122 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                 zIndex: 999,
                 background: 'transparent'
               }}
-              onClick={() => {
-                setSubstitutionDropdown(null)
-                setLiberoDropdown(null)
-                setLiberoInDropdown(null)
-                setSanctionDropdown(null)
-                setInjuryDropdown(null)
-                setPlayerActionMenu(null)
-              }}
+              onClick={cancelMedical}
             />
             {/* Dropdown */}
             <div style={dropdownStyle} className="modal-wrapper-roll-up">
               <div
-                data-injury-dropdown
                 style={{
                   background: 'rgba(15, 23, 42, 0.95)',
-                  border: '2px solid rgba(255, 255, 255, 0.2)',
+                  border: '2px solid rgba(220, 38, 38, 0.5)',
                   borderRadius: '8px',
                   padding: '8px',
-                  minWidth: '120px',
+                  minWidth: '200px',
                   boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)'
                 }}
               >
                 <div style={{ marginBottom: '8px', fontSize: '11px', fontWeight: 600, color: 'var(--text)', textAlign: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '6px' }}>
-                  Injury
+                  Medical - {teamName} #{playerNumber}
                 </div>
-                <div style={{ marginBottom: '8px', fontSize: '11px', color: 'var(--muted)', textAlign: 'center' }}>
-                  # {injuryDropdown.playerNumber}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {/* Medical Timeout */}
+                  <button
+                    onClick={handleMedicalTimeout}
+                    style={{
+                      padding: '10px 12px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      background: 'rgba(59, 130, 246, 0.2)',
+                      color: '#fff',
+                      border: '1px solid rgba(59, 130, 246, 0.4)',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '2px',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(59, 130, 246, 0.3)'
+                      e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.6)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)'
+                      e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.4)'
+                    }}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '16px' }}>⏱</span>
+                      Medical Timeout
+                    </span>
+                    <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)', marginLeft: '24px' }}>
+                      5 minute recovery time
+                    </span>
+                  </button>
+
+                  {/* Player Unable to Play (Recovery Interruption) */}
+                  <button
+                    onClick={handlePlayerUnableToPlay}
+                    style={{
+                      padding: '10px 12px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      background: 'rgba(220, 38, 38, 0.2)',
+                      color: '#fff',
+                      border: '1px solid rgba(220, 38, 38, 0.4)',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '2px',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(220, 38, 38, 0.3)'
+                      e.currentTarget.style.borderColor = 'rgba(220, 38, 38, 0.6)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(220, 38, 38, 0.2)'
+                      e.currentTarget.style.borderColor = 'rgba(220, 38, 38, 0.4)'
+                    }}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '16px' }}>🚫</span>
+                      Player Unable to Play
+                    </span>
+                    <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)', marginLeft: '24px' }}>
+                      Recovery interruption (forfeit)
+                    </span>
+                  </button>
+
+                  {/* Cancel */}
+                  <button
+                    onClick={cancelMedical}
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: '11px',
+                      fontWeight: 500,
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      color: 'var(--muted)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      marginTop: '4px',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
+                    }}
+                  >
+                    Cancel
+                  </button>
                 </div>
-                <button
-                  onClick={handleInjury}
-                  style={{
-                    padding: '6px 12px',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    background: 'rgba(239, 68, 68, 0.2)',
-                    color: '#f87171',
-                    border: '1px solid rgba(239, 68, 68, 0.4)',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    textAlign: 'center',
-                    width: '100%',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(239, 68, 68, 0.3)'
-                    e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.6)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'
-                    e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)'
-                  }}
-                >
-                  Substitute
-                </button>
               </div>
             </div>
           </>
@@ -23594,8 +18953,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
               { key: 'pointRight', labelKey: 'scoreboard.keybindings.pointRightTeam', descKey: 'scoreboard.keybindings.pointRightTeamDesc', label: 'Point Right Team', description: 'Award point to right team' },
               { key: 'timeoutLeft', labelKey: 'scoreboard.keybindings.timeoutLeftTeam', descKey: 'scoreboard.keybindings.timeoutLeftTeamDesc', label: 'Timeout Left Team', description: 'Call timeout for left team' },
               { key: 'timeoutRight', labelKey: 'scoreboard.keybindings.timeoutRightTeam', descKey: 'scoreboard.keybindings.timeoutRightTeamDesc', label: 'Timeout Right Team', description: 'Call timeout for right team' },
-              { key: 'exchangeLiberoLeft', labelKey: 'scoreboard.keybindings.exchangeLiberoLeft', descKey: 'scoreboard.keybindings.exchangeLiberoLeftDesc', label: 'Exchange Libero Left', description: 'Exchange L1/L2 for left team' },
-              { key: 'exchangeLiberoRight', labelKey: 'scoreboard.keybindings.exchangeLiberoRight', descKey: 'scoreboard.keybindings.exchangeLiberoRightDesc', label: 'Exchange Libero Right', description: 'Exchange L1/L2 for right team' },
+
               { key: 'undo', labelKey: 'scoreboard.keybindings.undo', descKey: 'scoreboard.keybindings.undoDesc', label: 'Undo', description: 'Undo last action' },
               { key: 'startRally', labelKey: 'scoreboard.keybindings.startRallyConfirm', descKey: 'scoreboard.keybindings.startRallyConfirmDesc', label: 'Start Rally / Confirm', description: 'Start rally or confirm modal' },
               { key: 'cancel', labelKey: 'scoreboard.keybindings.cancelClose', descKey: 'scoreboard.keybindings.cancelCloseDesc', label: 'Cancel / Close', description: 'Cancel or close menus' }
@@ -24096,542 +19454,11 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         )
       })()}
 
-      {liberoConfirm && (() => {
-        const teamData = liberoConfirm.team === 'home' ? data?.homeTeam : data?.awayTeam
-        const teamColor = teamData?.color || (liberoConfirm.team === 'home' ? '#ef4444' : '#3b82f6')
-        const teamLabel = liberoConfirm.team === teamAKey ? 'A' : 'B'
-        const teamName = teamData?.name || (liberoConfirm.team === 'home' ? 'Home' : 'Away')
+{/* REMOVED: liberoConfirm - beach volleyball doesn't use liberos */}
 
-        // Get libero number from players list
-        const teamPlayers = liberoConfirm.team === 'home' ? data?.homePlayers : data?.awayPlayers
-        const liberoPlayer = teamPlayers?.find(p => p.libero === liberoConfirm.liberoIn)
-        const liberoNumber = liberoConfirm.newLiberoNumber || liberoPlayer?.number
-        const liberoLabel = liberoConfirm.liberoIn === 'libero1' ? 'L1' : liberoConfirm.liberoIn === 'redesignated' ? 'LR' : 'L2'
+      {/* REMOVED: liberoReentryModal - beach volleyball doesn't use liberos */}
 
-        return (
-          <div
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: 'rgba(0, 0, 0, 0.5)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 9999
-            }}
-            onClick={cancelLiberoConfirm}
-          >
-            <div
-              style={{
-                background: '#fff',
-                borderRadius: '16px',
-                padding: '24px 32px',
-                minWidth: '280px',
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
-              }}
-              onClick={e => e.stopPropagation()}
-            >
-              {/* Header with team name and badge */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '12px',
-                marginBottom: '20px',
-                paddingBottom: '16px',
-                borderBottom: '2px solid #e5e7eb'
-              }}>
-                <span style={{ fontSize: '18px', fontWeight: 600, color: '#1f2937' }}>{teamName}</span>
-                <span style={{
-                  padding: '4px 12px',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  fontWeight: 700,
-                  background: teamColor,
-                  color: isBrightColor(teamColor) ? '#000' : '#fff'
-                }}>{teamLabel}</span>
-              </div>
-
-              {/* Libero IN/OUT and Player Replaced/Returns - side by side */}
-              <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
-                {liberoConfirm.isExit ? (
-                  <>
-                    {/* Libero OUT */}
-                    <div style={{
-                      flex: 1,
-                      padding: '14px',
-                      background: '#fef2f2',
-                      borderRadius: '12px',
-                      border: '2px solid #ef4444',
-                      textAlign: 'center'
-                    }}>
-                      <div style={{
-                        fontSize: '11px',
-                        color: '#991b1b',
-                        fontWeight: 600,
-                        marginBottom: '6px',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px'
-                      }}>
-                        Libero OUT
-                      </div>
-                      <div style={{
-                        fontSize: '26px',
-                        fontWeight: 700,
-                        color: '#991b1b'
-                      }}>
-                        #{liberoConfirm.playerOut}
-                      </div>
-                    </div>
-
-                    {/* Player Returns */}
-                    <div style={{
-                      flex: 1,
-                      padding: '14px',
-                      background: '#dcfce7',
-                      borderRadius: '12px',
-                      border: '2px solid #22c55e',
-                      textAlign: 'center'
-                    }}>
-                      <div style={{
-                        fontSize: '11px',
-                        color: '#166534',
-                        fontWeight: 600,
-                        marginBottom: '6px',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px'
-                      }}>
-                        Returns
-                      </div>
-                      <div style={{
-                        fontSize: '26px',
-                        fontWeight: 700,
-                        color: '#166534'
-                      }}>
-                        #{liberoConfirm.replacedPlayer}
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    {/* Libero IN */}
-                    <div style={{
-                      flex: 1,
-                      padding: '14px',
-                      background: '#dcfce7',
-                      borderRadius: '12px',
-                      border: '2px solid #22c55e',
-                      textAlign: 'center'
-                    }}>
-                      <div style={{
-                        fontSize: '11px',
-                        color: '#166534',
-                        fontWeight: 600,
-                        marginBottom: '6px',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px'
-                      }}>
-                        Libero IN
-                      </div>
-                      <div style={{
-                        fontSize: '26px',
-                        fontWeight: 700,
-                        color: '#166534'
-                      }}>
-                        #{liberoNumber || '?'}
-                      </div>
-                      <div style={{
-                        fontSize: '12px',
-                        padding: '2px 8px',
-                        background: '#22c55e',
-                        color: '#fff',
-                        borderRadius: '4px',
-                        display: 'inline-block',
-                        marginTop: '4px'
-                      }}>{liberoLabel}</div>
-                    </div>
-
-                    {/* Player Replaced */}
-                    <div style={{
-                      flex: 1,
-                      padding: '14px',
-                      background: '#fef2f2',
-                      borderRadius: '12px',
-                      border: '2px solid #ef4444',
-                      textAlign: 'center'
-                    }}>
-                      <div style={{
-                        fontSize: '11px',
-                        color: '#991b1b',
-                        fontWeight: 600,
-                        marginBottom: '6px',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px'
-                      }}>
-                        Replaced
-                      </div>
-                      <div style={{
-                        fontSize: '26px',
-                        fontWeight: 700,
-                        color: '#991b1b'
-                      }}>
-                        #{liberoConfirm.playerOut}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Buttons */}
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                <button
-                  onClick={confirmLibero}
-                  style={{
-                    padding: '12px 28px',
-                    fontSize: '16px',
-                    fontWeight: 600,
-                    background: '#22c55e',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Confirm
-                </button>
-                <button
-                  onClick={cancelLiberoConfirm}
-                  style={{
-                    padding: '12px 28px',
-                    fontSize: '16px',
-                    fontWeight: 600,
-                    background: '#f3f4f6',
-                    color: '#374151',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '8px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
-
-      {liberoReentryModal && (() => {
-        const teamData = liberoReentryModal.team === 'home' ? data?.homeTeam : data?.awayTeam
-        const teamColor = teamData?.color || (liberoReentryModal.team === 'home' ? '#ef4444' : '#3b82f6')
-        const teamLabel = liberoReentryModal.team === teamAKey ? 'A' : 'B'
-        const teamName = teamData?.name || (liberoReentryModal.team === 'home' ? 'Home' : 'Away')
-
-        // Get the selected libero info
-        const selectedLibero = liberoReentryModal.availableLiberos?.[liberoReentryModal.selectedLiberoIndex || 0]
-        const liberoNumber = selectedLibero?.number || liberoReentryModal.liberoNumber
-        const liberoLabel = selectedLibero?.label || (liberoReentryModal.liberoType === 'libero1' ? 'L1' : liberoReentryModal.liberoType === 'redesignated' ? 'LR' : 'L2')
-
-        // Determine if this team is on the left or right side
-        const isOnLeftSide = (liberoReentryModal.team === 'home') === leftIsHome
-
-        // Get position from the appropriate ref
-        const positionRef = isOnLeftSide ? leftCourtPositionVRef : rightCourtPositionIIRef
-        const rect = positionRef.current?.getBoundingClientRect()
-
-        // Calculate modal position (top-left corner at the position box)
-        const modalTop = rect ? rect.top : (isOnLeftSide ? '50%' : '30%')
-        const modalLeft = rect ? rect.left : (isOnLeftSide ? '10%' : '55%')
-
-        return (
-          <div
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: 'rgba(0, 0, 0, 0.5)',
-              zIndex: 9999
-            }}
-            onClick={cancelLiberoReentry}
-          >
-            <div
-              style={{
-                position: 'absolute',
-                top: typeof modalTop === 'number' ? `${modalTop}px` : modalTop,
-                left: typeof modalLeft === 'number' ? `${modalLeft}px` : modalLeft,
-                background: '#fff',
-                borderRadius: '16px',
-                padding: '24px 32px',
-                minWidth: '320px',
-                maxWidth: '420px',
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
-              }}
-              onClick={e => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '12px',
-                marginBottom: '16px',
-                paddingBottom: '12px',
-                borderBottom: '2px solid #e5e7eb'
-              }}>
-                <span style={{ fontSize: '18px', fontWeight: 600, color: '#1f2937' }}>{teamName}</span>
-                <span style={{
-                  padding: '4px 12px',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  fontWeight: 700,
-                  background: teamColor,
-                  color: isBrightColor(teamColor) ? '#000' : '#fff'
-                }}>{teamLabel}</span>
-              </div>
-
-              {/* Message */}
-              <div style={{
-                fontSize: '14px',
-                color: '#6b7280',
-                textAlign: 'center',
-                marginBottom: '16px'
-              }}>
-                Sub libero in position I?
-              </div>
-
-              {/* Player OUT and Libero IN - side by side */}
-              <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-                {/* Player OUT */}
-                <div style={{
-                  flex: 1,
-                  padding: '14px',
-                  background: '#fef2f2',
-                  borderRadius: '12px',
-                  border: '2px solid #ef4444',
-                  textAlign: 'center'
-                }}>
-                  <div style={{
-                    fontSize: '11px',
-                    color: '#991b1b',
-                    fontWeight: 600,
-                    marginBottom: '6px',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px'
-                  }}>
-                    Player OUT
-                  </div>
-                  <div style={{
-                    fontSize: '26px',
-                    fontWeight: 700,
-                    color: '#991b1b'
-                  }}>
-                    #{liberoReentryModal.playerNumber}
-                  </div>
-                </div>
-
-                {/* Libero IN */}
-                <div style={{
-                  flex: 1,
-                  padding: '14px',
-                  background: '#dcfce7',
-                  borderRadius: '12px',
-                  border: '2px solid #22c55e',
-                  textAlign: 'center'
-                }}>
-                  <div style={{
-                    fontSize: '11px',
-                    color: '#166534',
-                    fontWeight: 600,
-                    marginBottom: '6px',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px'
-                  }}>
-                    Libero IN
-                  </div>
-                  <div style={{
-                    fontSize: '26px',
-                    fontWeight: 700,
-                    color: '#166534'
-                  }}>
-                    #{liberoNumber}
-                  </div>
-                  <div style={{
-                    fontSize: '12px',
-                    padding: '2px 8px',
-                    background: '#22c55e',
-                    color: '#fff',
-                    borderRadius: '4px',
-                    display: 'inline-block',
-                    marginTop: '4px'
-                  }}>{liberoLabel}</div>
-                </div>
-              </div>
-
-              {/* Libero selection if multiple available */}
-              {liberoReentryModal.availableLiberos && liberoReentryModal.availableLiberos.length > 1 && (
-                <div style={{ marginBottom: '16px' }}>
-                  <div style={{ fontSize: '12px', color: '#6b7280', textAlign: 'center', marginBottom: '8px' }}>
-                    Select libero:
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                    {liberoReentryModal.availableLiberos.map((libero, index) => (
-                      <button
-                        key={`${libero.type}-${libero.number}`}
-                        onClick={() => {
-                          setLiberoReentryModal({
-                            ...liberoReentryModal,
-                            selectedLiberoIndex: index
-                          })
-                        }}
-                        style={{
-                          padding: '8px 16px',
-                          background: index === (liberoReentryModal.selectedLiberoIndex || 0)
-                            ? '#22c55e'
-                            : '#f3f4f6',
-                          color: index === (liberoReentryModal.selectedLiberoIndex || 0)
-                            ? '#fff'
-                            : '#374151',
-                          border: index === (liberoReentryModal.selectedLiberoIndex || 0)
-                            ? '2px solid #16a34a'
-                            : '1px solid #d1d5db',
-                          borderRadius: '8px',
-                          cursor: 'pointer',
-                          fontWeight: 600,
-                          fontSize: '14px',
-                          transition: 'all 0.2s ease'
-                        }}
-                      >
-                        <div>{libero.label}</div>
-                        <div style={{ fontSize: '16px', marginTop: '2px' }}>#{libero.number}</div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Buttons */}
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                <button
-                  onClick={confirmLiberoReentry}
-                  style={{
-                    padding: '12px 28px',
-                    fontSize: '15px',
-                    fontWeight: 600,
-                    background: '#22c55e',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Confirm
-                </button>
-                <button
-                  onClick={cancelLiberoReentry}
-                  style={{
-                    padding: '12px 28px',
-                    fontSize: '15px',
-                    fontWeight: 600,
-                    background: '#f3f4f6',
-                    color: '#374151',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '8px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
-
-      {liberoRedesignationModal && data && (() => {
-        let availablePlayers = []
-        try {
-          if (getAvailablePlayersForRedesignation) {
-            availablePlayers = getAvailablePlayersForRedesignation(
-              liberoRedesignationModal.team,
-              liberoRedesignationModal.unableLiberoNumber
-            ) || []
-          }
-        } catch (error) {
-          availablePlayers = []
-        }
-        return (
-          <Modal
-            title={t('scoreboard.modals.liberoRedesignation')}
-            open={true}
-            onClose={() => setLiberoRedesignationModal(null)}
-            width={480}
-            hideCloseButton={true}
-          >
-            <div style={{ padding: '29px' }}>
-              <p style={{ marginBottom: '29px', fontSize: '17px', color: 'var(--muted)' }}>
-                Select a player to re-designate as Libero:
-              </p>
-              {availablePlayers.length === 0 ? (
-                <p style={{ textAlign: 'center', color: 'var(--muted)', marginBottom: '29px', fontSize: '17px' }}>
-                  No available players for re-designation
-                </p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '29px', maxHeight: '360px', overflowY: 'auto' }}>
-                  {availablePlayers.map(player => (
-                    <button
-                      key={player.id}
-                      onClick={() => confirmLiberoRedesignation(player.number)}
-                      style={{
-                        padding: '14px',
-                        fontSize: '17px',
-                        fontWeight: 600,
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        color: 'var(--text)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                        borderRadius: '7px',
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                        transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
-                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
-                      }}
-                    >
-                      #{player.number} - {player.lastName || player.name} {player.firstName}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <div style={{ display: 'flex', gap: '14px', justifyContent: 'center' }}>
-                <button
-                  onClick={() => setLiberoRedesignationModal(null)}
-                  style={{
-                    padding: '14px 29px',
-                    fontSize: '17px',
-                    fontWeight: 600,
-                    background: 'rgba(255, 255, 255, 0.1)',
-                    color: 'var(--text)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    borderRadius: '10px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </Modal>
-        )
-      })()}
+      {/* REMOVED: liberoRedesignationModal - beach volleyball doesn't use liberos */}
 
       {reopenSetConfirm && (
         <Modal
@@ -24701,660 +19528,11 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         </Modal>
       )}
 
-      {liberoBenchActionMenu && (() => {
-        const isRightSide = liberoBenchActionMenu.side === 'right'
-        const menuStyle = {
-          position: 'fixed',
-          left: isRightSide ? undefined : `${liberoBenchActionMenu.x}px`,
-          right: isRightSide ? `${window.innerWidth - liberoBenchActionMenu.x}px` : undefined,
-          top: `${liberoBenchActionMenu.y}px`,
-          transform: 'translateY(-50%)',
-          zIndex: 1000
-        }
+{/* REMOVED: liberoBenchActionMenu - beach volleyball doesn't use liberos */}
 
-        // Get eligible back-row players for libero substitution
-        const teamKey = liberoBenchActionMenu.team
-        const { playersOnCourt } = getTeamLineupState(teamKey)
-        const currentServe = getCurrentServe()
-        const isServing = currentServe === teamKey
-        const teamPlayers = teamKey === 'home' ? data?.homePlayers : data?.awayPlayers
+{/* REMOVED: liberoUnableModal - beach volleyball doesn't use liberos */}
 
-        // Back row positions: I, V, VI - but I cannot be replaced when serving
-        const backRowPositions = ['I', 'V', 'VI']
-        const eligiblePositions = backRowPositions.filter(pos => {
-          // Position I cannot be replaced when this team is serving
-          if (pos === 'I' && isServing) return false
-          // Check if there's been a point since last libero exchange for this position
-          return hasPointSinceLastLiberoExchange(teamKey, pos)
-        })
-
-        // Get the lineup to find player numbers at each position
-        const lineupEvents = (data?.events || [])
-          .filter(e => e.type === 'lineup' && e.payload?.team === teamKey && e.setIndex === data?.set?.index)
-        const latestLineup = lineupEvents[lineupEvents.length - 1]?.payload?.lineup || {}
-
-        const eligiblePlayers = eligiblePositions.map(pos => {
-          const posData = latestLineup[pos]
-          // Handle both rich format (object with number) and legacy format (just number)
-          const playerNum = posData && typeof posData === 'object' && posData.number !== undefined
-            ? posData.number
-            : posData
-          const player = teamPlayers?.find(p => String(p.number) === String(playerNum))
-          return { position: pos, number: playerNum, player }
-        }).filter(p => p.number && !teamPlayers?.find(tp => String(tp.number) === String(p.number))?.libero)
-
-        // Check if libero is already on court
-        const liberoOnCourt = getLiberoOnCourt(teamKey)
-        const canPutIn = !liberoOnCourt && eligiblePlayers.length > 0 && rallyStatus === 'idle'
-
-        return (
-          <>
-            <div
-              style={{
-                position: 'fixed',
-                inset: 0,
-                zIndex: 999
-              }}
-              onClick={() => { setLiberoBenchActionMenu(null); setLiberoBenchReplaceExpanded(false); setLiberoBenchUnableExpanded(false) }}
-            />
-            <div style={menuStyle}>
-              <div style={{
-                background: 'rgba(15, 23, 42, 0.98)',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                borderRadius: '8px',
-                padding: '8px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '4px',
-                minWidth: '200px'
-              }}>
-                {/* Put in section - collapsible */}
-                {canPutIn && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <button
-                      onClick={() => setLiberoBenchReplaceExpanded(!liberoBenchReplaceExpanded)}
-                      style={{
-                        padding: '8px 12px',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        background: '#FFF8E7',
-                        color: '#000',
-                        border: '1px solid rgba(0, 0, 0, 0.2)',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                        transition: 'all 0.2s',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '6px',
-                        width: '100%'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = '#fff3cd'
-                        e.currentTarget.style.transform = 'scale(1.02)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = '#FFF8E7'
-                        e.currentTarget.style.transform = 'scale(1)'
-                      }}
-                    >
-                      <span>Replace</span>
-                      <span style={{ fontSize: '14px', lineHeight: '1', transform: liberoBenchReplaceExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
-                    </button>
-                    {liberoBenchReplaceExpanded && (
-                      <div style={{ display: 'flex', justifyContent: 'space-evenly', gap: '4px', marginTop: '4px' }}>
-                        {eligiblePlayers.map(({ position, number }) => (
-                          <button
-                            key={position}
-                            onClick={() => {
-                              // Open libero confirmation with this position
-                              setLiberoDropdown({
-                                team: teamKey,
-                                position,
-                                playerNumber: number,
-                                element: liberoBenchActionMenu.element,
-                                x: liberoBenchActionMenu.x,
-                                y: liberoBenchActionMenu.y
-                              })
-                              // Auto-select this libero
-                              setTimeout(() => {
-                                showLiberoConfirm(liberoBenchActionMenu.liberoType)
-                              }, 50)
-                              setLiberoBenchActionMenu(null)
-                              setLiberoBenchReplaceExpanded(false)
-                            }}
-                            style={{
-                              padding: '6px 12px',
-                              fontSize: '14px',
-                              fontWeight: 700,
-                              background: '#fff',
-                              color: '#000',
-                              border: '1px solid rgba(0, 0, 0, 0.2)',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              textAlign: 'center',
-                              transition: 'all 0.2s',
-                              minWidth: '45px'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.background = '#f3f4f6'
-                              e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.4)'
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.background = '#fff'
-                              e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.2)'
-                            }}
-                          >
-                            {number}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Unable to play - expandable */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <button
-                    onClick={() => setLiberoBenchUnableExpanded(!liberoBenchUnableExpanded)}
-                    style={{
-                      padding: '8px 12px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      background: '#ef4444',
-                      color: '#fff',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      transition: 'all 0.2s',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '6px',
-                      width: '100%'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = '#dc2626'
-                      e.currentTarget.style.transform = 'scale(1.02)'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = '#ef4444'
-                      e.currentTarget.style.transform = 'scale(1)'
-                    }}
-                  >
-                    <span>Unable to play</span>
-                    <span style={{ fontSize: '14px', lineHeight: '1', transform: liberoBenchUnableExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
-                  </button>
-                  {liberoBenchUnableExpanded && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
-                      <button
-                        onClick={() => {
-                          setLiberoUnableModal({
-                            team: liberoBenchActionMenu.team,
-                            liberoNumber: liberoBenchActionMenu.liberoNumber,
-                            liberoType: liberoBenchActionMenu.liberoType,
-                            reason: 'declared',
-                            isOnCourt: false
-                          })
-                          setLiberoBenchActionMenu(null)
-                          setLiberoBenchUnableExpanded(false)
-                        }}
-                        style={{
-                          padding: '6px 10px',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          background: '#f97316',
-                          color: '#000',
-                          border: '1px solid rgba(0, 0, 0, 0.2)',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: '8px'
-                        }}
-                      >
-                        <span>Declared unable</span>
-                        <span style={{ fontSize: '14px' }}>🗣️</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setLiberoUnableModal({
-                            team: liberoBenchActionMenu.team,
-                            liberoNumber: liberoBenchActionMenu.liberoNumber,
-                            liberoType: liberoBenchActionMenu.liberoType,
-                            reason: 'injury',
-                            isOnCourt: false
-                          })
-                          setLiberoBenchActionMenu(null)
-                          setLiberoBenchUnableExpanded(false)
-                        }}
-                        style={{
-                          padding: '6px 10px',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          background: 'rgba(239, 68, 68,1)',
-                          color: '#ffff',
-                          border: '1px solid rgba(239, 68, 68, 0.3)',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: '8px'
-                        }}
-                      >
-                        <span>Injury / Illness</span>
-                        <span style={{ fontSize: '14px' }}>✚</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Sanction */}
-                <button
-                  onClick={() => {
-                    setSanctionDropdown({
-                      team: liberoBenchActionMenu.team,
-                      type: 'libero',
-                      playerNumber: liberoBenchActionMenu.liberoNumber,
-                      element: liberoBenchActionMenu.element,
-                      x: liberoBenchActionMenu.x,
-                      y: liberoBenchActionMenu.y,
-                      side: liberoBenchActionMenu.side
-                    })
-                    setLiberoBenchActionMenu(null)
-                  }}
-                  style={{
-                    padding: '8px 12px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    background: '#000',
-                    color: '#fff',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    transition: 'all 0.2s',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '6px'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#1a1a1a'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = '#000'
-                  }}
-                >
-                  <span>Sanction</span>
-                  <div style={{ display: 'flex', gap: '2px' }}>
-                    <div className="sanction-card yellow" style={{ width: '12px', height: '16px' }}></div>
-                    <div className="sanction-card red" style={{ width: '12px', height: '16px' }}></div>
-                  </div>
-                </button>
-              </div>
-            </div>
-          </>
-        )
-      })()}
-
-      {liberoUnableModal && data && (() => {
-        const teamData = liberoUnableModal.team === 'home' ? data?.homeTeam : data?.awayTeam
-        const teamColor = teamData?.color || (liberoUnableModal.team === 'home' ? '#ef4444' : '#3b82f6')
-        const teamLabel = liberoUnableModal.team === teamAKey ? 'A' : 'B'
-        const teamName = teamData?.name || (liberoUnableModal.team === 'home' ? 'Home' : 'Away')
-        const liberoLabel = liberoUnableModal.liberoType === 'libero1' ? 'L1' : liberoUnableModal.liberoType === 'redesignated' ? 'LR' : 'L2'
-
-        // If reason is already selected, show confirmation
-        const reasonSelected = liberoUnableModal.reason && liberoUnableModal.reason !== 'pending'
-
-        return (
-          <div
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: 'rgba(0, 0, 0, 0.5)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 9999
-            }}
-            onClick={() => setLiberoUnableModal(null)}
-          >
-            <div
-              style={{
-                background: '#fff',
-                borderRadius: '16px',
-                padding: '24px 32px',
-                minWidth: '340px',
-                maxWidth: '420px',
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
-              }}
-              onClick={e => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '12px',
-                marginBottom: '16px',
-                paddingBottom: '12px',
-                borderBottom: '2px solid #e5e7eb'
-              }}>
-                <span style={{ fontSize: '18px', fontWeight: 600, color: '#1f2937' }}>{teamName}</span>
-                <span style={{
-                  padding: '4px 12px',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  fontWeight: 700,
-                  background: teamColor,
-                  color: isBrightColor(teamColor) ? '#000' : '#fff'
-                }}>{teamLabel}</span>
-              </div>
-
-              {/* Libero Info */}
-              <div style={{
-                textAlign: 'center',
-                marginBottom: '20px',
-                padding: '16px',
-                background: '#fef2f2',
-                borderRadius: '12px',
-                border: '2px solid #ef4444'
-              }}>
-                <div style={{ fontSize: '12px', color: '#991b1b', fontWeight: 600, marginBottom: '6px', textTransform: 'uppercase' }}>
-                  Libero Unable to Play
-                </div>
-                <div style={{ fontSize: '28px', fontWeight: 700, color: '#991b1b' }}>
-                  #{liberoUnableModal.liberoNumber}
-                </div>
-                <div style={{
-                  fontSize: '12px',
-                  padding: '2px 8px',
-                  background: '#ef4444',
-                  color: '#fff',
-                  borderRadius: '4px',
-                  display: 'inline-block',
-                  marginTop: '4px'
-                }}>{liberoLabel}</div>
-              </div>
-
-              {liberoUnableModal.step === 'redesignate' ? (
-                <>
-                  {/* Redesignation Prompt */}
-                  <div style={{ fontSize: '14px', color: '#6b7280', textAlign: 'center', marginBottom: '20px' }}>
-                    The libero is now unable to play. Do you want to redesignate a new libero now?
-                  </div>
-                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                    <button
-                      onClick={() => {
-                        checkLiberoRedesignation(liberoUnableModal.team, liberoUnableModal.liberoNumber, liberoUnableModal.liberoType, liberoUnableModal.reason)
-                        setLiberoUnableModal(null)
-                      }}
-                      style={{
-                        padding: '12px 28px',
-                        fontSize: '15px',
-                        fontWeight: 600,
-                        background: '#3b82f6',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '8px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Yes, Redesignate
-                    </button>
-                    <button
-                      onClick={() => setLiberoUnableModal(null)}
-                      style={{
-                        padding: '12px 28px',
-                        fontSize: '15px',
-                        fontWeight: 600,
-                        background: '#f3f4f6',
-                        color: '#374151',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '8px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      No, Later
-                    </button>
-                  </div>
-                </>
-              ) : !reasonSelected ? (
-                <>
-                  {/* Select reason */}
-                  <div style={{ fontSize: '14px', color: '#6b7280', textAlign: 'center', marginBottom: '16px' }}>
-                    Select reason:
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
-                    <button
-                      onClick={() => setLiberoUnableModal({ ...liberoUnableModal, reason: 'declared' })}
-                      style={{
-                        padding: '14px 20px',
-                        fontSize: '15px',
-                        fontWeight: 600,
-                        background: '#f97316',
-                        color: '#000',
-                        border: '1px solid rgba(0, 0, 0, 0.2)',
-                        borderRadius: '10px',
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                        transition: 'all 0.2s',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '12px'
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontWeight: 700 }}>Declared unable</div>
-                        <div style={{ fontSize: '12px', opacity: 0.8, marginTop: '4px' }}>
-                          Declares libero unable to continue
-                        </div>
-                      </div>
-                      <span style={{ fontSize: '18px' }}>🗣️</span>
-                    </button>
-                    <button
-                      onClick={() => setLiberoUnableModal({ ...liberoUnableModal, reason: 'injury' })}
-                      style={{
-                        padding: '14px 20px',
-                        fontSize: '15px',
-                        fontWeight: 600,
-                        background: '#fef2f2',
-                        color: '#991b1b',
-                        border: '1px solid #fecaca',
-                        borderRadius: '10px',
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                        transition: 'all 0.2s',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '12px'
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontWeight: 700 }}>Injury / Illness</div>
-                        <div style={{ fontSize: '12px', color: '#991b1b', marginTop: '4px' }}>
-                          Libero is injured or ill
-                        </div>
-                      </div>
-                      <span style={{ fontSize: '18px' }}>✚</span>
-                    </button>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'center' }}>
-                    <button
-                      onClick={() => setLiberoUnableModal(null)}
-                      style={{
-                        padding: '10px 24px',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        background: '#f3f4f6',
-                        color: '#374151',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '8px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {/* Confirmation */}
-                  <div style={{ fontSize: '14px', color: '#6b7280', textAlign: 'center', marginBottom: '16px' }}>
-                    {(() => {
-                      const courtText = liberoUnableModal.isOnCourt ? ' The replaced player will return to court.' : ''
-                      switch (liberoUnableModal.reason) {
-                        case 'injury':
-                          return `The libero will be marked as injured. They may return to play later unless a redesignation occurs.${courtText}`
-                        case 'expulsion':
-                          return `The libero is expelled and cannot play for the remainder of this set. They may return in the next set.${courtText}`
-                        case 'disqualification':
-                          return `The libero is disqualified and cannot play for the remainder of the match.${courtText}`
-                        default: // 'declared'
-                          return `The libero will be declared unable to play.${courtText}`
-                      }
-                    })()}
-                  </div>
-                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                    <button
-                      onClick={confirmLiberoUnable}
-                      style={{
-                        padding: '12px 28px',
-                        fontSize: '15px',
-                        fontWeight: 600,
-                        background: '#ef4444',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '8px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Confirm
-                    </button>
-                    <button
-                      onClick={() => setLiberoUnableModal(null)}
-                      style={{
-                        padding: '12px 28px',
-                        fontSize: '15px',
-                        fontWeight: 600,
-                        background: '#f3f4f6',
-                        color: '#374151',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '8px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        )
-      })()}
-
-      {liberoReminder && (
-        <Modal
-          title={t('scoreboard.modals.liberoReminder')}
-          open={true}
-          onClose={() => {
-            setLiberoReminder(null)
-          }}
-          width={480}
-          hideCloseButton={true}
-        >
-          <div style={{ padding: '29px', textAlign: 'center' }}>
-            <p style={{ marginBottom: '29px', fontSize: '19px' }}>
-              Remember to insert the libero if available
-            </p>
-            {liberoReminder.teams.length > 1 && (
-              <p style={{ marginBottom: '19px', fontSize: '17px', color: 'var(--muted)' }}>
-                {liberoReminder.teams.map((team, idx) => {
-                  const teamName = team === 'home'
-                    ? (data?.homeTeam?.name || 'Home')
-                    : (data?.awayTeam?.name || 'Away')
-                  return (
-                    <span key={team}>
-                      {teamName}
-                      {idx < liberoReminder.teams.length - 1 ? ' and ' : ''}
-                    </span>
-                  )
-                })}
-              </p>
-            )}
-            <div style={{ display: 'flex', gap: '14px', justifyContent: 'center' }}>
-              <button
-                onClick={() => {
-                  setLiberoReminder(null)
-                }}
-                style={{
-                  padding: '14px 29px',
-                  fontSize: '17px',
-                  fontWeight: 600,
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  color: 'var(--text)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: '10px',
-                  cursor: 'pointer'
-                }}
-              >
-                Back
-              </button>
-              <button
-                onClick={async () => {
-                  setLiberoReminder(null)
-
-                  // Show set start time confirmation
-                  let defaultTime = roundToMinute(new Date().toISOString())
-
-                  if (data?.set?.index === 1) {
-                    // Use scheduled time from match
-                    if (data?.match?.scheduledAt) {
-                      defaultTime = roundToMinute(data.match.scheduledAt)
-                    }
-                  } else {
-                    // Get previous set's end time
-                    const allSets = await db.sets.where('matchId').equals(matchId).toArray()
-                    const previousSet = allSets.find(s => s.index === (data.set.index - 1))
-                    if (previousSet?.endTime) {
-                      // Add 3 minutes to previous set end time
-                      const prevEndTime = new Date(previousSet.endTime)
-                      prevEndTime.setMinutes(prevEndTime.getMinutes() + 3)
-                      defaultTime = prevEndTime.toISOString()
-                    }
-                  }
-
-                  setSetStartTimeModal({ setIndex: data?.set?.index, defaultTime })
-                }}
-                style={{
-                  padding: '14px 29px',
-                  fontSize: '17px',
-                  fontWeight: 600,
-                  background: 'var(--accent)',
-                  color: '#000',
-                  border: 'none',
-                  borderRadius: '10px',
-                  cursor: 'pointer'
-                }}
-              >
-                Continue
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+{/* REMOVED: liberoReminder - beach volleyball doesn't use liberos */}
 
       {setStartTimeModal && (
         <SetStartTimeModal
@@ -25838,226 +20016,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       )}
 
       {/* Exceptional Substitution Modal */}
-      {exceptionalSubstitutionModal && (() => {
-        const { team, position, playerOut, reason } = exceptionalSubstitutionModal
-        const teamLabel = team === teamAKey ? 'A' : 'B'
-        const reasonText = reason === 'expulsion' ? 'expelled' : reason === 'disqualification' ? 'disqualified' : 'injured'
-        const exceptionalSubstitutes = getAvailableExceptionalSubstitutes(team, playerOut)
 
-        return (
-          <Modal
-            title={t('scoreboard.modals.noLegalSubstitution')}
-            open={true}
-            onClose={() => { }}
-            width={500}
-            hideCloseButton={true}
-          >
-            <div style={{ padding: '24px', textAlign: 'center' }}>
-              <p style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 700, color: 'var(--accent)' }}>
-                Player #{playerOut} ({reasonText})
-              </p>
-              <p style={{ marginBottom: '16px', fontSize: '16px' }}>
-                No legal substitution is possible for this player.
-              </p>
-              {exceptionalSubstitutes.length > 0 ? (
-                <>
-                  <p style={{ marginBottom: '24px', fontSize: '14px', color: 'var(--muted)' }}>
-                    Choose an option:
-                  </p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    <button
-                      onClick={() => handleExceptionalSubstitutionChoice('exceptional')}
-                      style={{
-                        padding: '16px 24px',
-                        fontSize: '16px',
-                        fontWeight: 600,
-                        background: '#facc15',
-                        color: '#000',
-                        border: 'none',
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        textAlign: 'left'
-                      }}
-                    >
-                      <div style={{ fontWeight: 700, marginBottom: '4px' }}>
-                        Exceptional Substitution
-                      </div>
-                      <div style={{ fontSize: '13px', opacity: 0.8 }}>
-                        Substitute with any eligible player on the bench (excluding liberos, expelled/disqualified players, and player #{playerOut}). Player #{playerOut} cannot take part in the game anymore.
-                      </div>
-                    </button>
-                    <button
-                      onClick={() => handleExceptionalSubstitutionChoice('forfait')}
-                      style={{
-                        padding: '16px 24px',
-                        fontSize: '16px',
-                        fontWeight: 600,
-                        background: '#ef4444',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        textAlign: 'left'
-                      }}
-                    >
-                      <div style={{ fontWeight: 700, marginBottom: '4px' }}>
-                        Forfait
-                      </div>
-                      <div style={{ fontSize: '13px', opacity: 0.9 }}>
-                        Opponent wins current set and all remaining sets (25-0 or 15-0 for set 5).
-                      </div>
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div style={{ marginTop: '24px', padding: '16px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px' }}>
-                  <p style={{ marginBottom: '16px', fontSize: '16px', fontWeight: 600, color: '#ef4444' }}>
-                    No exceptional substitution possible
-                  </p>
-                  <p style={{ marginBottom: '16px', fontSize: '14px', color: 'var(--muted)' }}>
-                    No eligible players available for exceptional substitution. Forfait will be declared automatically.
-                  </p>
-                  <button
-                    onClick={() => handleExceptionalSubstitutionChoice('forfait')}
-                    style={{
-                      padding: '12px 24px',
-                      fontSize: '16px',
-                      fontWeight: 600,
-                      background: '#ef4444',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Confirm Forfait
-                  </button>
-                </div>
-              )}
-            </div>
-          </Modal>
-        )
-      })()}
-
-      {/* Sanction Substitution Modal - for bench player (libero replacement) expelled/disqualified */}
-      {sanctionSubstitutionModal && (() => {
-        const { team, expelledPlayer, liberoOnCourt, availableSubs, reason, isExceptional } = sanctionSubstitutionModal
-        const teamLabel = team === teamAKey ? 'A' : 'B'
-        const teamData = team === 'home' ? data?.homeTeam : data?.awayTeam
-        const teamColor = teamData?.color || (team === 'home' ? '#ef4444' : '#3b82f6')
-        const reasonText = reason === 'expulsion' ? 'expelled' : 'disqualified'
-
-        return (
-          <Modal
-            title={isExceptional ? 'Exceptional Substitution Required' : 'Substitution Required'}
-            open={true}
-            onClose={() => { }}
-            width={450}
-            hideCloseButton={true}
-            zIndex={2000}
-          >
-            <div style={{ padding: '16px', textAlign: 'center' }}>
-              {/* Team badge */}
-              <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '8px 16px',
-                background: teamColor,
-                color: isBrightColor(teamColor) ? '#000' : '#fff',
-                borderRadius: '8px',
-                fontWeight: 700,
-                fontSize: '14px',
-                marginBottom: '16px'
-              }}>
-                Team {teamLabel}
-              </div>
-
-              <p style={{ marginBottom: '16px', fontSize: '16px' }}>
-                Player <strong>#{expelledPlayer}</strong> has been <strong style={{ color: '#ef4444' }}>{reasonText}</strong>.
-              </p>
-
-              {liberoOnCourt && (
-                <p style={{
-                  marginBottom: '16px',
-                  padding: '12px',
-                  background: 'rgba(250, 204, 21, 0.1)',
-                  border: '1px solid rgba(250, 204, 21, 0.3)',
-                  borderRadius: '8px',
-                  fontSize: '14px'
-                }}>
-                  Libero <strong>#{liberoOnCourt.liberoNumber}</strong> remains on court at position <strong>{liberoOnCourt.position}</strong>.
-                </p>
-              )}
-
-              {isExceptional && (
-                <p style={{
-                  marginBottom: '16px',
-                  padding: '8px 12px',
-                  background: 'rgba(245, 158, 11, 0.1)',
-                  border: '1px solid rgba(245, 158, 11, 0.3)',
-                  borderRadius: '6px',
-                  fontSize: '13px',
-                  color: '#f59e0b'
-                }}>
-                  No legal substitutes available - exceptional substitution required.
-                </p>
-              )}
-
-              <p style={{ marginBottom: '16px', fontWeight: 600, fontSize: '15px' }}>
-                Select replacement player:
-              </p>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {availableSubs.map(sub => (
-                  <button
-                    key={sub.number}
-                    onClick={() => handleSanctionSubstitution(sub.number)}
-                    style={{
-                      padding: '14px 16px',
-                      fontSize: '16px',
-                      fontWeight: 600,
-                      background: 'var(--accent)',
-                      color: '#000',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px'
-                    }}
-                  >
-                    <span style={{ fontSize: '18px', fontWeight: 700 }}>#{sub.number}</span>
-                    {sub.name && <span style={{ opacity: 0.8 }}>{sub.name}</span>}
-                  </button>
-                ))}
-              </div>
-
-              {/* Cancel/Forfeit option */}
-              <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                <button
-                  onClick={async () => {
-                    await handleForfait(team, reason === 'expulsion' ? 'expulsion' : 'disqualification')
-                    setSanctionSubstitutionModal(null)
-                  }}
-                  style={{
-                    padding: '10px 16px',
-                    fontSize: '14px',
-                    background: 'rgba(239, 68, 68, 0.2)',
-                    color: '#ef4444',
-                    border: '1px solid rgba(239, 68, 68, 0.4)',
-                    borderRadius: '6px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Declare Forfeit Instead
-                </button>
-              </div>
-            </div>
-          </Modal>
-        )
-      })()}
 
       {/* Set 5 Side and Service Modal */}
       {set5SideServiceModal && (() => {
@@ -26236,172 +20195,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         )
       })()}
 
-      {liberoRotationModal && !courtSwitchModal && !setEndTimeModal && (() => {
-        const teamData = liberoRotationModal.team === 'home' ? data?.homeTeam : data?.awayTeam
-        const teamColor = teamData?.color || (liberoRotationModal.team === 'home' ? '#ef4444' : '#3b82f6')
-        const teamLabel = liberoRotationModal.team === teamAKey ? 'A' : 'B'
-        const teamName = teamData?.name || (liberoRotationModal.team === 'home' ? 'Home' : 'Away')
-        const liberoLabel = liberoRotationModal.liberoType === 'libero1' ? 'L1' : liberoRotationModal.liberoType === 'redesignated' ? 'LR' : 'L2'
-
-        // Determine if this team is on the left or right side
-        const isOnLeftSide = (liberoRotationModal.team === 'home') === leftIsHome
-
-        // Get position from the appropriate ref
-        const positionRef = isOnLeftSide ? leftCourtPositionVRef : rightCourtPositionIIRef
-        const rect = positionRef.current?.getBoundingClientRect()
-
-        // Calculate modal position (top-left corner at the position box)
-        const modalTop = rect ? rect.top : (isOnLeftSide ? '50%' : '30%')
-        const modalLeft = rect ? rect.left : (isOnLeftSide ? '10%' : '55%')
-
-        return (
-          <div
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: 'rgba(0, 0, 0, 0.5)',
-              zIndex: 9999
-            }}
-            onClick={() => setLiberoRotationModal(null)}
-          >
-            <div
-              style={{
-                position: 'absolute',
-                top: typeof modalTop === 'number' ? `${modalTop}px` : modalTop,
-                left: typeof modalLeft === 'number' ? `${modalLeft}px` : modalLeft,
-                background: '#fff',
-                borderRadius: '16px',
-                padding: '24px 32px',
-                minWidth: '320px',
-                maxWidth: '400px',
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
-              }}
-              onClick={e => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '12px',
-                marginBottom: '16px',
-                paddingBottom: '12px',
-                borderBottom: '2px solid #e5e7eb'
-              }}>
-                <span style={{ fontSize: '18px', fontWeight: 600, color: '#1f2937' }}>{teamName}</span>
-                <span style={{
-                  padding: '4px 12px',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  fontWeight: 700,
-                  background: teamColor,
-                  color: isBrightColor(teamColor) ? '#000' : '#fff'
-                }}>{teamLabel}</span>
-              </div>
-
-              {/* Message */}
-              <div style={{
-                fontSize: '14px',
-                color: '#6b7280',
-                textAlign: 'center',
-                marginBottom: '16px'
-              }}>
-                Libero rotated to position IV
-              </div>
-
-              {/* Player IN and Libero OUT - side by side */}
-              <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
-                {/* Player IN */}
-                <div style={{
-                  flex: 1,
-                  padding: '14px',
-                  background: '#dcfce7',
-                  borderRadius: '12px',
-                  border: '2px solid #22c55e',
-                  textAlign: 'center'
-                }}>
-                  <div style={{
-                    fontSize: '11px',
-                    color: '#166534',
-                    fontWeight: 600,
-                    marginBottom: '6px',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px'
-                  }}>
-                    Player IN
-                  </div>
-                  <div style={{
-                    fontSize: '26px',
-                    fontWeight: 700,
-                    color: '#166534'
-                  }}>
-                    #{liberoRotationModal.playerNumber}
-                  </div>
-                </div>
-
-                {/* Libero OUT */}
-                <div style={{
-                  flex: 1,
-                  padding: '14px',
-                  background: '#fef2f2',
-                  borderRadius: '12px',
-                  border: '2px solid #ef4444',
-                  textAlign: 'center'
-                }}>
-                  <div style={{
-                    fontSize: '11px',
-                    color: '#991b1b',
-                    fontWeight: 600,
-                    marginBottom: '6px',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px'
-                  }}>
-                    Libero OUT
-                  </div>
-                  <div style={{
-                    fontSize: '26px',
-                    fontWeight: 700,
-                    color: '#991b1b'
-                  }}>
-                    #{liberoRotationModal.liberoNumber}
-                  </div>
-                  <div style={{
-                    fontSize: '12px',
-                    padding: '2px 8px',
-                    background: '#ef4444',
-                    color: '#fff',
-                    borderRadius: '4px',
-                    display: 'inline-block',
-                    marginTop: '4px'
-                  }}>{liberoLabel}</div>
-                </div>
-              </div>
-
-              {/* OK Button */}
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <button
-                  onClick={() => setLiberoRotationModal(null)}
-                  style={{
-                    padding: '12px 40px',
-                    fontSize: '16px',
-                    fontWeight: 600,
-                    background: '#22c55e',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  OK
-                </button>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
+{/* REMOVED: liberoRotationModal - beach volleyball doesn't use liberos */}
 
       {undoConfirm && (
         <Modal
@@ -26782,10 +20576,7 @@ function LineupModal({ team, teamData, players, matchId, setIndex, mode = 'initi
       if (!player) {
         newErrors[index] = 'Not on roster'
       }
-      // Check if it's a libero
-      else if (player.libero && player.libero !== '') {
-        newErrors[index] = 'Cannot be libero'
-      }
+
       // Check if disqualified
       else if (events) {
         const isDisqualified = events.some(e =>
@@ -26797,21 +20588,7 @@ function LineupModal({ team, teamData, players, matchId, setIndex, mode = 'initi
         if (isDisqualified) {
           newErrors[index] = 'Disqualified'
         }
-        // Check if exceptionally substituted
-        else {
-          const wasExceptionallySubstituted = events.some(e =>
-            e.type === 'substitution' &&
-            e.payload?.team === team &&
-            String(e.payload?.playerOut) === String(num) &&
-            e.payload?.isExceptional === true
-          )
-          if (wasExceptionallySubstituted) {
-            newErrors[index] = 'Exceptionally substituted'
-          } else {
-            // Clear error if valid
-            delete newErrors[index]
-          }
-        }
+
       } else {
         // Clear error if valid
         delete newErrors[index]
@@ -26998,11 +20775,7 @@ function LineupModal({ team, teamData, players, matchId, setIndex, mode = 'initi
         return
       }
 
-      // 4. Is a libero
-      if (player.libero && player.libero !== '') {
-        newErrors[i] = 'Cannot be libero'
-        return
-      }
+
 
       // 5. Is disqualified - cannot enter the game ever again
       if (events) {
@@ -27018,19 +20791,7 @@ function LineupModal({ team, teamData, players, matchId, setIndex, mode = 'initi
         }
       }
 
-      // 6. Was exceptionally substituted - cannot take part in the game anymore
-      if (events) {
-        const wasExceptionallySubstituted = events.some(e =>
-          e.type === 'substitution' &&
-          e.payload?.team === team &&
-          String(e.payload?.playerOut) === String(num) &&
-          e.payload?.isExceptional === true
-        )
-        if (wasExceptionallySubstituted) {
-          newErrors[i] = 'Exceptionally substituted'
-          return
-        }
-      }
+
     })
 
     // Re-check for duplicates to mark all of them

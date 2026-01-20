@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, useCallback } from 'react'
-import { useTranslation } from 'react-i18next'
 
 const AlertContext = createContext(null)
 
@@ -17,13 +16,20 @@ const TYPE_ICONS = {
   info: 'i'
 }
 
+const TYPE_LABELS = {
+  error: 'Error',
+  success: 'Success',
+  warning: 'Warning',
+  info: 'Info'
+}
+
 function AlertModal({ alert, onClose }) {
-  const { t } = useTranslation()
 
   if (!alert) return null
 
   const color = TYPE_COLORS[alert.type] || TYPE_COLORS.info
   const icon = TYPE_ICONS[alert.type] || TYPE_ICONS.info
+  const label = TYPE_LABELS[alert.type] || 'Info'
 
   return (
     <div
@@ -80,7 +86,7 @@ function AlertModal({ alert, onClose }) {
             {icon}
           </span>
           <span style={{ fontWeight: 600, color, textTransform: 'capitalize' }}>
-            {t(`alert.${alert.type}`, alert.type)}
+            {label}
           </span>
         </div>
 
@@ -104,7 +110,7 @@ function AlertModal({ alert, onClose }) {
               fontSize: 14
             }}
           >
-            {t('common.ok', 'OK')}
+            OK
           </button>
         </div>
       </div>

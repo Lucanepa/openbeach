@@ -189,8 +189,8 @@ export async function getMatchData(matchId) {
         .maybeSingle()
 
       // Build team info from matches table (prefer JSONB, fallback to old columns for transition)
-      const homeTeamName = match.home_team?.name || match.home_team_name || 'Home'
-      const awayTeamName = match.away_team?.name || match.away_team_name || 'Away'
+      const team1Name = match.home_team?.name || match.home_team_name || 'Home'
+      const team2Name = match.away_team?.name || match.away_team_name || 'Away'
 
       // A/B Model: Team A = coin toss winner (constant), side_a = which side they're on
       // Determine coinTossTeamA: is Team A the home or away team?
@@ -199,7 +199,7 @@ export async function getMatchData(matchId) {
 
       if (liveState?.team_a_name) {
         // Compare live state team_a_name with matches table to determine if Team A is home
-        teamAIsHome = liveState.team_a_name === homeTeamName
+        teamAIsHome = liveState.team_a_name === team1Name
         coinTossTeamA = teamAIsHome ? 'home' : 'away'
       } else {
         // Fallback to coin_toss if live state doesn't have A/B data (prefer JSONB, fallback to old columns)
@@ -216,13 +216,13 @@ export async function getMatchData(matchId) {
       const homeColorFromLive = liveState ? (teamAIsHome ? liveState.team_a_color : liveState.team_b_color) : null
       const awayColorFromLive = liveState ? (teamAIsHome ? liveState.team_b_color : liveState.team_a_color) : null
 
-      const homeTeam = {
-        name: homeTeamName,
+      const team1 = {
+        name: team1Name,
         shortName: match.home_team?.short_name || match.home_short_name || 'HOM',
         color: homeColorFromLive || match.home_team?.color || '#ef4444'
       }
-      const awayTeam = {
-        name: awayTeamName,
+      const team2 = {
+        name: team2Name,
         shortName: match.away_team?.short_name || match.away_short_name || 'AWY',
         color: awayColorFromLive || match.away_team?.color || '#3b82f6'
       }
@@ -231,8 +231,8 @@ export async function getMatchData(matchId) {
       let sets = []
       if (liveState) {
         // Convert A/B points to home/away
-        const homePoints = teamAIsHome ? liveState.points_a : liveState.points_b
-        const awayPoints = teamAIsHome ? liveState.points_b : liveState.points_a
+        const team1Points = teamAIsHome ? liveState.points_a : liveState.points_b
+        const team2Points = teamAIsHome ? liveState.points_b : liveState.points_a
 
         // Determine serving team - priority: serving_team field, then lineup isServing
         let servingTeam = 'home'
@@ -268,8 +268,8 @@ export async function getMatchData(matchId) {
 
         const currentSet = {
           index: liveState.current_set || 1,
-          homePoints: homePoints || 0,
-          awayPoints: awayPoints || 0,
+          team1Points: team1Points || 0,
+          team2Points: team2Points || 0,
           finished: false,
           servingTeam,
           serverNumber
@@ -277,12 +277,12 @@ export async function getMatchData(matchId) {
         sets = [currentSet]
 
         // Set scores
-        const homeSetsWon = teamAIsHome ? liveState.sets_won_a : liveState.sets_won_b
-        const awaySetsWon = teamAIsHome ? liveState.sets_won_b : liveState.sets_won_a
+        const team1SetsWon = teamAIsHome ? liveState.sets_won_a : liveState.sets_won_b
+        const team2SetsWon = teamAIsHome ? liveState.sets_won_b : liveState.sets_won_a
         // We only have set counts, not individual set scores - this is a limitation
       } else {
         // No live state yet (before first point) - create empty set 1
-        sets = [{ index: 1, homePoints: 0, awayPoints: 0, finished: false }]
+        sets = [{ index: 1, team1Points: 0, team2Points: 0, finished: false }]
       }
 
       // Build events array with lineup info from live state
@@ -435,23 +435,23 @@ export async function getMatchData(matchId) {
       }
 
       // Build players from matches table JSONB columns
-      const homePlayers = match.players_home || []
-      const awayPlayers = match.players_away || []
+      const team1Players = match.players_home || []
+      const team2Players = match.players_away || []
 
       // Extract captain info from rich lineup format
-      let homeCaptain = null
-      let awayCaptain = null
-      let homeCourtCaptain = null
-      let awayCourtCaptain = null
+      let team1Captain = null
+      let team2Captain = null
+      let team1CourtCaptain = null
+      let team2CourtCaptain = null
 
       const homeLineup = teamAIsHome ? liveState?.lineup_a : liveState?.lineup_b
       const awayLineup = teamAIsHome ? liveState?.lineup_b : liveState?.lineup_a
 
       for (const pos of ['I', 'II', 'III', 'IV', 'V', 'VI']) {
-        if (homeLineup?.[pos]?.isCaptain) homeCaptain = homeLineup[pos].number
-        if (homeLineup?.[pos]?.isCourtCaptain) homeCourtCaptain = homeLineup[pos].number
-        if (awayLineup?.[pos]?.isCaptain) awayCaptain = awayLineup[pos].number
-        if (awayLineup?.[pos]?.isCourtCaptain) awayCourtCaptain = awayLineup[pos].number
+        if (homeLineup?.[pos]?.isCaptain) team1Captain = homeLineup[pos].number
+        if (homeLineup?.[pos]?.isCourtCaptain) team1CourtCaptain = homeLineup[pos].number
+        if (awayLineup?.[pos]?.isCaptain) team2Captain = awayLineup[pos].number
+        if (awayLineup?.[pos]?.isCourtCaptain) team2CourtCaptain = awayLineup[pos].number
       }
 
       return {
@@ -468,25 +468,25 @@ export async function getMatchData(matchId) {
           // coin_toss_confirmed = true if we have liveState with team names (means coin toss happened)
           coin_toss_confirmed: !!(liveState?.team_a_name),
           // Get short names from JSONB, or fallback to old columns
-          homeShortName: match.home_team?.short_name || match.home_short_name || homeTeam.shortName,
-          awayShortName: match.away_team?.short_name || match.away_short_name || awayTeam.shortName,
-          homeName: homeTeam.name,
-          awayName: awayTeam.name,
-          homeColor: homeTeam.color,
-          awayColor: awayTeam.color,
+          team1ShortName: match.home_team?.short_name || match.home_short_name || team1.shortName,
+          team2ShortName: match.away_team?.short_name || match.away_short_name || team2.shortName,
+          homeName: team1.name,
+          awayName: team2.name,
+          homeColor: team1.color,
+          awayColor: team2.color,
           // Captain info
-          homeCaptain: homeCaptain || null,
-          awayCaptain: awayCaptain || null,
-          homeCourtCaptain: homeCourtCaptain || null,
-          awayCourtCaptain: awayCourtCaptain || null,
+          team1Captain: team1Captain || null,
+          team2Captain: team2Captain || null,
+          team1CourtCaptain: team1CourtCaptain || null,
+          team2CourtCaptain: team2CourtCaptain || null,
           // Also ensure gameNumber is set
           gameNumber: match.game_n ? String(match.game_n) : null,
           gameN: match.game_n
         },
-        homeTeam,
-        awayTeam,
-        homePlayers,
-        awayPlayers,
+        team1,
+        team2,
+        team1Players,
+        team2Players,
         sets,
         events,
         isRichFormat: true, // Always rich format now
@@ -701,10 +701,10 @@ export function subscribeToMatchData(matchId, onUpdate) {
             // Server sends data directly on message, not in a .data wrapper
             const dataWithTimestamps = {
               match: message.match,
-              homeTeam: message.homeTeam || message.teams?.[0],
-              awayTeam: message.awayTeam || message.teams?.[1],
-              homePlayers: message.homePlayers || message.players?.filter(p => p.teamId === message.match?.homeTeamId) || [],
-              awayPlayers: message.awayPlayers || message.players?.filter(p => p.teamId === message.match?.awayTeamId) || [],
+              team1: message.team1 || message.teams?.[0],
+              team2: message.team2 || message.teams?.[1],
+              team1Players: message.team1Players || message.players?.filter(p => p.teamId === message.match?.team1Id) || [],
+              team2Players: message.team2Players || message.players?.filter(p => p.teamId === message.match?.team2Id) || [],
               sets: message.sets || [],
               events: message.events || [],
               _timestamp: message._timestamp || message.timestamp,
@@ -1011,8 +1011,8 @@ export async function listAvailableMatchesSupabase() {
       }
 
       // Read from JSONB columns only (clean schema)
-      const homeTeamName = m.home_team?.name || 'Home'
-      const awayTeamName = m.away_team?.name || 'Away'
+      const team1Name = m.home_team?.name || 'Home'
+      const team2Name = m.away_team?.name || 'Away'
       const connections = m.connections || {}
       const connectionPins = m.connection_pins || {}
 
@@ -1020,17 +1020,17 @@ export async function listAvailableMatchesSupabase() {
         id: m.external_id || m.id,
         external_id: m.external_id, // Keep original for Supabase writes
         gameNumber: m.game_n || m.external_id,
-        homeTeam: homeTeamName,
-        awayTeam: awayTeamName,
-        homeTeamName: homeTeamName,
-        awayTeamName: awayTeamName,
+        team1: team1Name,
+        team2: team2Name,
+        team1Name: team1Name,
+        team2Name: team2Name,
         scheduledAt: m.scheduled_at,
         dateTime,
         status: m.status,
         refereeConnectionEnabled: connections.referee_enabled === true,
         // Include upload PINs for roster upload app
-        homeTeamUploadPin: connectionPins.upload_home,
-        awayTeamUploadPin: connectionPins.upload_away
+        team1UploadPin: connectionPins.upload_home,
+        team2UploadPin: connectionPins.upload_away
       }
     })
 
@@ -1098,8 +1098,8 @@ export async function listAvailableMatchesForBenchSupabase() {
       }
 
       // Read from JSONB columns only (clean schema)
-      const homeTeamName = m.home_team?.name || 'Home'
-      const awayTeamName = m.away_team?.name || 'Away'
+      const team1Name = m.home_team?.name || 'Home'
+      const team2Name = m.away_team?.name || 'Away'
       const connections = m.connections || {}
       const connectionPins = m.connection_pins || {}
 
@@ -1107,16 +1107,16 @@ export async function listAvailableMatchesForBenchSupabase() {
         id: m.external_id || m.id,
         external_id: m.external_id,
         gameNumber: m.game_n || m.external_id,
-        homeTeam: homeTeamName,
-        awayTeam: awayTeamName,
-        homeTeamName: homeTeamName,
-        awayTeamName: awayTeamName,
+        team1: team1Name,
+        team2: team2Name,
+        team1Name: team1Name,
+        team2Name: team2Name,
         scheduledAt: m.scheduled_at,
         dateTime,
         homeBenchEnabled: connections.home_bench_enabled,
         awayBenchEnabled: connections.away_bench_enabled,
-        homeTeamPin: connectionPins.bench_home,
-        awayTeamPin: connectionPins.bench_away,
+        team1Pin: connectionPins.bench_home,
+        team2Pin: connectionPins.bench_away,
         status: m.status
       }
     })
@@ -1189,10 +1189,10 @@ export async function validatePinSupabase(pin, type = 'referee') {
       status: matchData.status,
       scheduledAt: matchData.scheduled_at,
       refereeConnectionEnabled: connections.referee_enabled,
-      homeTeam: matchData.home_team?.name || 'Home',
-      awayTeam: matchData.away_team?.name || 'Away',
-      homeTeamColor: matchData.home_team?.color,
-      awayTeamColor: matchData.away_team?.color
+      team1: matchData.home_team?.name || 'Home',
+      team2: matchData.away_team?.name || 'Away',
+      team1Color: matchData.home_team?.color,
+      team2Color: matchData.away_team?.color
     }
 
     return { success: true, match }

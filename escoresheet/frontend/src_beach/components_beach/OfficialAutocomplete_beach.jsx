@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
 
 /**
  * Official (referee/scorer) autocomplete with dropdown
@@ -15,7 +14,6 @@ export default function OfficialAutocomplete({
   style = {},
   inputStyle = {}
 }) {
-  const { t } = useTranslation()
   const [showDropdown, setShowDropdown] = useState(false)
   const [filteredOfficials, setFilteredOfficials] = useState([])
   const containerRef = useRef(null)
@@ -161,7 +159,7 @@ export default function OfficialAutocomplete({
             borderBottom: '1px solid rgba(255,255,255,0.1)',
             background: 'rgba(0,0,0,0.2)'
           }}>
-            {t('officialAutocomplete.selectFromHistory', 'Select from history')}
+            Select from history
           </div>
 
           {filteredOfficials.map((official, index) => (

@@ -61,12 +61,12 @@ function formatDateToDDMMYYYY(dateStr) {
 export default function UploadRosterApp() {
   const { t } = useTranslation()
   const [gameNumber, setGameNumber] = useState('')
-  const [team, setTeam] = useState('home') // 'home' or 'away'
+  const [team, setTeam] = useState('team1') // 'team1' or 'team2'
   const [uploadPin, setUploadPin] = useState('')
   const [match, setMatch] = useState(null)
   const [matchId, setMatchId] = useState(null)
-  const [homeTeam, setHomeTeam] = useState(null)
-  const [awayTeam, setAwayTeam] = useState(null)
+  const [team1Data, setTeam1Data] = useState(null)
+  const [team2Data, setTeam2Data] = useState(null)
   const [validationError, setValidationError] = useState('')
   const [pdfFile, setPdfFile] = useState(null)
   const [pdfLoading, setPdfLoading] = useState(false)
@@ -397,11 +397,11 @@ export default function UploadRosterApp() {
     setMatchId(match.id)
 
     // Use team data from the match object
-    if (match.homeTeamName) {
-      setHomeTeam({ name: match.homeTeamName })
+    if (match.team1Name) {
+      setTeam1Data({ name: match.team1Name })
     }
-    if (match.awayTeamName) {
-      setAwayTeam({ name: match.awayTeamName })
+    if (match.team2Name) {
+      setTeam2Data({ name: match.team2Name })
     }
     setValidationError('')
   }
@@ -410,12 +410,12 @@ export default function UploadRosterApp() {
   const handleBackToGames = () => {
     setSelectedMatch(null)
     setGameNumber('')
-    setTeam('home')
+    setTeam('team1')
     setUploadPin('')
     setMatch(null)
     setMatchId(null)
-    setHomeTeam(null)
-    setAwayTeam(null)
+    setTeam1Data(null)
+    setTeam2Data(null)
     setValidationError('')
     setMatchStatusCheck(null)
     setManuallyValidated(false)
@@ -466,8 +466,8 @@ export default function UploadRosterApp() {
         return Boolean(
           set.finished ||
           set.startTime ||
-          set.homePoints > 0 ||
-          set.awayPoints > 0
+          set.team1Points > 0 ||
+          set.team2Points > 0
         )
       })
       
@@ -497,8 +497,8 @@ export default function UploadRosterApp() {
       setMatchId(foundMatch.id)
       
       // Set teams from match data
-      if (matchData.homeTeam) setHomeTeam(matchData.homeTeam)
-      if (matchData.awayTeam) setAwayTeam(matchData.awayTeam)
+      if (matchData.team1Data) setTeam1Data(matchData.team1Data)
+      if (matchData.team2Data) setTeam2Data(matchData.team2Data)
       
       setValidationError('')
     } catch (error) {
@@ -540,9 +540,9 @@ export default function UploadRosterApp() {
     }
 
     // Handle both camelCase (local) and snake_case (Supabase) field names
-    const correctPin = team === 'home'
-      ? (match.homeTeamUploadPin || match.home_team_upload_pin)
-      : (match.awayTeamUploadPin || match.away_team_upload_pin)
+    const correctPin = team === 'team1'
+      ? (match.team1UploadPin || match.team1_upload_pin)
+      : (match.team2UploadPin || match.team2_upload_pin)
     const pinIsRequired = correctPin != null && correctPin !== ''
 
     // If no PIN is required, clear any errors
@@ -585,9 +585,9 @@ export default function UploadRosterApp() {
       setMatchId(foundMatch.id)
 
       // Handle both camelCase (local) and snake_case (Supabase) field names
-      const correctPin = team === 'home'
-        ? (foundMatch.homeTeamUploadPin || foundMatch.home_team_upload_pin)
-        : (foundMatch.awayTeamUploadPin || foundMatch.away_team_upload_pin)
+      const correctPin = team === 'team1'
+        ? (foundMatch.team1UploadPin || foundMatch.team1_upload_pin)
+        : (foundMatch.team2UploadPin || foundMatch.team2_upload_pin)
       const pinIsRequired = correctPin != null && correctPin !== ''
 
       if (pinIsRequired) {
@@ -639,7 +639,6 @@ export default function UploadRosterApp() {
         firstName: p.firstName || '',
         lastName: p.lastName || '',
         dob: p.dob || '',
-        libero: '',
         isCaptain: false
       }))
 
@@ -707,7 +706,6 @@ export default function UploadRosterApp() {
       firstName: '',
       lastName: '',
       dob: '',
-      libero: '',
       isCaptain: false
     }
     setParsedData({ ...parsedData, players: [...parsedData.players, newPlayer] })
@@ -752,7 +750,7 @@ export default function UploadRosterApp() {
     setUploading(true)
     try {
       // Store pending roster in match
-      const pendingField = team === 'home' ? 'pending_home_roster' : 'pending_away_roster'
+      const pendingField = team === 'team1' ? 'pending_team1_roster' : 'pending_team2_roster'
       const rosterData = {
         players: parsedData.players,
         bench: parsedData.bench,
@@ -766,8 +764,8 @@ export default function UploadRosterApp() {
         console.log('[Roster] Writing roster to Supabase for match:', selectedMatch.external_id)
 
         // JSONB signature keys
-        const coachSigJsonKey = team === 'home' ? 'home_coach' : 'away_coach'
-        const captainSigJsonKey = team === 'home' ? 'home_captain' : 'away_captain'
+        const coachSigJsonKey = team === 'team1' ? 'team1_coach' : 'team2_coach'
+        const captainSigJsonKey = team === 'team1' ? 'team1_captain' : 'team2_captain'
 
         const supabaseUpdate = {
           [pendingField]: rosterData
@@ -776,7 +774,7 @@ export default function UploadRosterApp() {
         // Build signatures JSONB partial update
         const signaturesUpdate = {}
         // Build connections JSONB partial update for pending roster
-        const pendingRosterJsonKey = team === 'home' ? 'pending_home_roster' : 'pending_away_roster'
+        const pendingRosterJsonKey = team === 'team1' ? 'pending_team1_roster' : 'pending_team2_roster'
 
         // Save signatures to JSONB
         if (coachSignature) {
@@ -823,7 +821,7 @@ export default function UploadRosterApp() {
       // Also try to update via server (for local sync and WebSocket updates)
       // This is optional - if Supabase worked, we still show success
       try {
-        const serverPendingField = team === 'home' ? 'pendingHomeRoster' : 'pendingAwayRoster'
+        const serverPendingField = team === 'team1' ? 'pendingTeam1Roster' : 'pendingTeam2Roster'
         await updateMatchData(matchId, {
           [serverPendingField]: rosterData
         })
@@ -851,12 +849,12 @@ export default function UploadRosterApp() {
 
     // Clear all form data
     setGameNumber('')
-    setTeam('home')
+    setTeam('team1')
     setUploadPin('')
     setMatch(null)
     setMatchId(null)
-    setHomeTeam(null)
-    setAwayTeam(null)
+    setTeam1Data(null)
+    setTeam2Data(null)
     setValidationError('')
     setPdfFile(null)
     setPdfError('')
@@ -872,9 +870,9 @@ export default function UploadRosterApp() {
 
   // Check if PIN is required (only if a PIN is set in the match)
   // Handle both camelCase (local) and snake_case (Supabase) field names
-  const teamUploadPin = team === 'home'
-    ? (match?.homeTeamUploadPin || match?.home_team_upload_pin)
-    : (match?.awayTeamUploadPin || match?.away_team_upload_pin)
+  const teamUploadPin = team === 'team1'
+    ? (match?.team1UploadPin || match?.team1_upload_pin)
+    : (match?.team2UploadPin || match?.team2_upload_pin)
   const isPinRequired = teamUploadPin != null && teamUploadPin !== ''
   // When PIN is required, validate with PIN. When no PIN required, require manual validation click.
   const isValid = match && matchId && (isPinRequired ? (uploadPin && teamUploadPin === uploadPin) : manuallyValidated)
@@ -909,17 +907,17 @@ export default function UploadRosterApp() {
           id: -1,
           gameNumber: 999,
           status: 'setup',
-          homeTeamName: 'Test Home',
-          awayTeamName: 'Test Away',
-          homeTeamUploadPin: '123456',
-          awayTeamUploadPin: '654321'
+          team1Name: 'Test Home',
+          team2Name: 'Test Away',
+          team1UploadPin: '123456',
+          team2UploadPin: '654321'
         }
         setSelectedMatch(testMatch)
         setGameNumber('999')
         setMatch(testMatch)
         setMatchId(-1)
-        setHomeTeam({ name: 'Test Home', color: '#ef4444' })
-        setAwayTeam({ name: 'Test Away', color: '#3b82f6' })
+        setTeam1Data({ name: 'Test Home', color: '#ef4444' })
+        setTeam2Data({ name: 'Test Away', color: '#3b82f6' })
         setMatchStatusCheck('valid')
         setValidationError('')
         console.log('[Test Mode] Activated with mock data')
@@ -1046,7 +1044,7 @@ export default function UploadRosterApp() {
                       fontSize: '16px',
                       fontWeight: 500
                     }}>
-                      {match.homeTeamName || t('common.home')} {t('uploadRoster.vs')} {match.awayTeamName || t('common.away')}
+                      {match.team1Name || t('common.home')} {t('uploadRoster.vs')} {match.team2Name || t('common.away')}
                     </div>
                   </button>
                 ))}
@@ -1091,7 +1089,7 @@ export default function UploadRosterApp() {
               marginBottom: '8px'
             }}>
               <div style={{ fontSize: '18px', fontWeight: 600 }}>
-                {homeTeam?.name || t('common.home')} {t('uploadRoster.vs')} {awayTeam?.name || t('common.away')}
+                {team1Data?.name || t('common.home')} {t('uploadRoster.vs')} {team2Data?.name || t('common.away')}
               </div>
             </div>
 
@@ -1117,7 +1115,7 @@ export default function UploadRosterApp() {
                     <button
                       type="button"
                       onClick={() => {
-                        setTeam('home')
+                        setTeam('team1')
                         setValidationError('')
                         setUploadPin('')
                         setManuallyValidated(false)
@@ -1127,20 +1125,20 @@ export default function UploadRosterApp() {
                         padding: '12px',
                         fontSize: '16px',
                         fontWeight: 600,
-                        background: team === 'home' ? 'var(--accent)' : 'rgba(255, 255, 255, 0.1)',
-                        color: team === 'home' ? '#000' : 'var(--text)',
+                        background: team === 'team1' ? 'var(--accent)' : 'rgba(255, 255, 255, 0.1)',
+                        color: team === 'team1' ? '#000' : 'var(--text)',
                         border: '1px solid rgba(255, 255, 255, 0.2)',
                         borderRadius: '6px',
                         cursor: 'pointer',
                         width: 'auto',
                       }}
                     >
-                      {t('uploadRoster.home')} {homeTeam?.name && `(${homeTeam.name})`}
+                      {t('uploadRoster.home')} {team1Data?.name && `(${team1Data.name})`}
                     </button>
                     <button
                       type="button"
                       onClick={() => {
-                        setTeam('away')
+                        setTeam('team2')
                         setValidationError('')
                         setUploadPin('')
                         setManuallyValidated(false)
@@ -1150,15 +1148,15 @@ export default function UploadRosterApp() {
                         padding: '12px',
                         fontSize: '16px',
                         fontWeight: 600,
-                        background: team === 'away' ? 'var(--accent)' : 'rgba(255, 255, 255, 0.1)',
-                        color: team === 'away' ? '#000' : 'var(--text)',
+                        background: team === 'team2' ? 'var(--accent)' : 'rgba(255, 255, 255, 0.1)',
+                        color: team === 'team2' ? '#000' : 'var(--text)',
                         border: '1px solid rgba(255, 255, 255, 0.2)',
                         borderRadius: '6px',
                         cursor: 'pointer',
                         width: 'auto',
                       }}
                     >
-                      {t('uploadRoster.away')} {awayTeam?.name && `(${awayTeam.name})`}
+                      {t('uploadRoster.away')} {team2Data?.name && `(${team2Data.name})`}
                     </button>
                   </div>
                 </div>
@@ -1334,7 +1332,6 @@ export default function UploadRosterApp() {
               <span>{t('rosterSetup.lastName', 'Last Name')}</span>
               <span>{t('rosterSetup.firstName', 'First Name')}</span>
               <span>{t('rosterSetup.dob', 'DOB')}</span>
-              <span>{t('rosterSetup.libero', 'Libero')}</span>
               <span>{t('rosterSetup.captain', 'Captain')}</span>
               <span></span>
             </div>
@@ -1346,7 +1343,7 @@ export default function UploadRosterApp() {
                   background: 'rgba(255, 255, 255, 0.05)',
                   borderRadius: '8px',
                   display: 'grid',
-                  gridTemplateColumns: '60px 1fr 1fr 140px 100px 100px 70px',
+                  gridTemplateColumns: '60px 1fr 1fr 140px 100px 70px',
                   gap: '12px',
                   alignItems: 'center'
                 }}>
@@ -1414,24 +1411,6 @@ export default function UploadRosterApp() {
                       boxSizing: 'border-box'
                     }}
                   />
-                  <select
-                    value={player.libero}
-                    onChange={(e) => handlePlayerChange(index, 'libero', e.target.value)}
-                    style={{
-                      padding: '8px',
-                      fontSize: '14px',
-                      background: 'rgba(26, 26, 46, 0.95)',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      borderRadius: '4px',
-                      color: 'var(--text)',
-                      width: '100%',
-                      boxSizing: 'border-box'
-                    }}
-                  >
-                    <option value=""></option>
-                    <option value="libero1">{t('rosterSetup.libero', 'Libero')} 1</option>
-                    <option value="libero2">{t('rosterSetup.libero', 'Libero')} 2</option>
-                  </select>
                   <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                     <input
                       type="radio"

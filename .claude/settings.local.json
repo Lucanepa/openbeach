@@ -10,7 +10,12 @@
       "Bash(git -C \"c:\\\\Users\\\\lcane\\\\Desktop\\\\openbeach\" update-index --refresh)",
       "Bash(git -C \"c:\\\\Users\\\\lcane\\\\Desktop\\\\openbeach\" status)",
       "Bash(git -C \"c:\\\\Users\\\\lcane\\\\Desktop\\\\openbeach\" ls-files --error-unmatch escoresheet/frontend/src_beach/ref.png)",
-      "Bash(git -C \"c:\\\\Users\\\\lcane\\\\Desktop\\\\openbeach\" log --oneline -10 origin/main)"
+      "Bash(git -C \"c:\\\\Users\\\\lcane\\\\Desktop\\\\openbeach\" log --oneline -10 origin/main)",
+      "Bash(npm uninstall:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npx eslint:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(timeout:*)"
     ]
   }
 }

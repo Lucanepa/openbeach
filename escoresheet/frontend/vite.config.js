@@ -16,6 +16,7 @@ export default defineConfig({
   // Set base from env for GitHub Pages project site deployments.
   // If deploying to a custom domain (CNAME), use '/'. Otherwise set to '/<repo-name>/'
   base: process.env.VITE_BASE_PATH || '/',
+  publicDir: 'public_beach',
   optimizeDeps: {
     include: ['pdfjs-dist']
   },

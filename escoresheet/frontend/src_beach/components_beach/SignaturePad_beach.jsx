@@ -1,9 +1,7 @@
 import { useRef, useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import Modal from './Modal'
 
 export default function SignaturePad({ open, onClose, onSave, title = 'Sign', existingSignature = null, readOnly = false }) {
-  const { t } = useTranslation()
   const canvasRef = useRef(null)
   const isDrawingRef = useRef(false)
   const [isDrawing, setIsDrawing] = useState(false)
@@ -14,31 +12,31 @@ export default function SignaturePad({ open, onClose, onSave, title = 'Sign', ex
       setHasSignature(false)
       return
     }
-    
+
     let cleanup = null
     let timerId = null
-    
+
     // Wait for modal to render before sizing canvas
     timerId = setTimeout(() => {
       const canvas = canvasRef.current
       if (!canvas) return
       const ctx = canvas.getContext('2d')
-      
+
       // Set canvas size based on container
       const rect = canvas.getBoundingClientRect()
       const dpr = window.devicePixelRatio || 1
       canvas.width = rect.width * dpr
       canvas.height = rect.height * dpr
-      
+
       // Scale context to match device pixel ratio
       ctx.scale(dpr, dpr)
-      
+
       // Set drawing style
       ctx.strokeStyle = '#000000' // Black strokes
       ctx.lineWidth = 4 // Thicker lines for better visibility in PDF
       ctx.lineCap = 'round'
       ctx.lineJoin = 'round'
-      
+
       // Load existing signature if provided, otherwise clear canvas
       if (existingSignature) {
         const img = new Image()
@@ -59,7 +57,7 @@ export default function SignaturePad({ open, onClose, onSave, title = 'Sign', ex
         ctx.clearRect(0, 0, rect.width, rect.height)
         setHasSignature(false)
       }
-      
+
       // Add touch event listeners with passive: false to allow preventDefault
       const getPointForTouch = (e) => {
         const rect = canvas.getBoundingClientRect()
@@ -74,7 +72,7 @@ export default function SignaturePad({ open, onClose, onSave, title = 'Sign', ex
           y: e.clientY - rect.top
         }
       }
-      
+
       const touchStartHandler = (e) => {
         e.preventDefault()
         isDrawingRef.current = true
@@ -96,7 +94,7 @@ export default function SignaturePad({ open, onClose, onSave, title = 'Sign', ex
         isDrawingRef.current = false
         setIsDrawing(false)
       }
-      
+
       // Only add drawing event listeners if not read-only
       if (!readOnly) {
         canvas.addEventListener('touchstart', touchStartHandler, { passive: false })
@@ -110,7 +108,7 @@ export default function SignaturePad({ open, onClose, onSave, title = 'Sign', ex
         }
       }
     }, 100)
-    
+
     return () => {
       if (timerId) clearTimeout(timerId)
       if (cleanup) cleanup()
@@ -186,9 +184,9 @@ export default function SignaturePad({ open, onClose, onSave, title = 'Sign', ex
   return (
     <Modal title={title} open={open} onClose={onClose} width={600}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div style={{ 
-          border: '2px solid rgba(0,0,0,.3)', 
-          borderRadius: 8, 
+        <div style={{
+          border: '2px solid rgba(0,0,0,.3)',
+          borderRadius: 8,
           background: '#ffffff',
           position: 'relative',
           touchAction: 'none'
@@ -210,12 +208,12 @@ export default function SignaturePad({ open, onClose, onSave, title = 'Sign', ex
         </div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           {readOnly ? (
-            <button onClick={onClose}>{t('signature.close', 'Close')}</button>
+            <button onClick={onClose}>Close</button>
           ) : (
             <>
-              <button className="secondary" onClick={clear}>{t('signature.clear', 'Clear')}</button>
-              <button className="secondary" onClick={handleCancel}>{t('signature.cancel', 'Cancel')}</button>
-              <button onClick={save} disabled={!hasSignature}>{t('signature.save', 'Save')}</button>
+              <button className="secondary" onClick={clear}>Clear</button>
+              <button className="secondary" onClick={handleCancel}>Cancel</button>
+              <button onClick={save} disabled={!hasSignature}>Save</button>
             </>
           )}
         </div>

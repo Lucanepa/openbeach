@@ -1,9 +1,7 @@
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../contexts_beach/AuthContext_beach'
 
 export default function LoginModal({ open, onClose, onSwitchToSignUp }) {
-  const { t } = useTranslation()
   const { signIn, resetPassword } = useAuth()
 
   const [email, setEmail] = useState('')
@@ -34,7 +32,7 @@ export default function LoginModal({ open, onClose, onSwitchToSignUp }) {
   const handleForgotPassword = async (e) => {
     e.preventDefault()
     if (!email) {
-      setError(t('auth.enterEmail', 'Please enter your email'))
+      setError('Please enter your email')
       return
     }
     setError('')
@@ -109,8 +107,8 @@ export default function LoginModal({ open, onClose, onSwitchToSignUp }) {
         <div style={headerStyle}>
           <h2 style={{ margin: 0, color: '#fff', fontSize: 20, fontWeight: 600 }}>
             {showForgotPassword
-              ? t('auth.resetPassword', 'Reset Password')
-              : t('auth.signIn', 'Sign In')}
+              ? 'Reset Password'
+              : 'Sign In'}
           </h2>
           <button
             onClick={onClose}
@@ -147,7 +145,7 @@ export default function LoginModal({ open, onClose, onSwitchToSignUp }) {
           {resetSent ? (
             <div style={{ textAlign: 'center', color: '#22c55e', padding: '20px 0' }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>✓</div>
-              <p>{t('auth.resetEmailSent', 'Check your email for a password reset link')}</p>
+              <p>Check your email for a reset link</p>
               <button
                 onClick={() => {
                   setShowForgotPassword(false)
@@ -155,26 +153,26 @@ export default function LoginModal({ open, onClose, onSwitchToSignUp }) {
                 }}
                 style={{ ...buttonStyle, marginTop: 16 }}
               >
-                {t('auth.backToSignIn', 'Back to Sign In')}
+                Back to Sign In
               </button>
             </div>
           ) : showForgotPassword ? (
             <form onSubmit={handleForgotPassword}>
               <p style={{ color: '#9ca3af', marginBottom: 16, fontSize: 14 }}>
-                {t('auth.resetInstructions', 'Enter your email and we\'ll send you a reset link')}
+                Enter your email and we'll send you a reset link
               </p>
               <div style={{ marginBottom: 16 }}>
                 <input
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  placeholder={t('auth.email', 'Email')}
+                  placeholder="Email"
                   style={inputStyle}
                   required
                 />
               </div>
               <button type="submit" style={buttonStyle} disabled={loading}>
-                {loading ? t('auth.sending', 'Sending...') : t('auth.sendResetLink', 'Send Reset Link')}
+                {loading ? 'Sending...' : 'Send Reset Link'}
               </button>
               <button
                 type="button"
@@ -189,7 +187,7 @@ export default function LoginModal({ open, onClose, onSwitchToSignUp }) {
                   marginTop: 8
                 }}
               >
-                {t('auth.backToSignIn', 'Back to Sign In')}
+                Back to Sign In
               </button>
             </form>
           ) : (
@@ -200,7 +198,7 @@ export default function LoginModal({ open, onClose, onSwitchToSignUp }) {
                     type="email"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
-                    placeholder={t('auth.email', 'Email')}
+                    placeholder="Email"
                     style={inputStyle}
                     required
                   />
@@ -210,13 +208,13 @@ export default function LoginModal({ open, onClose, onSwitchToSignUp }) {
                     type="password"
                     value={password}
                     onChange={e => setPassword(e.target.value)}
-                    placeholder={t('auth.password', 'Password')}
+                    placeholder="Password"
                     style={inputStyle}
                     required
                   />
                 </div>
                 <button type="submit" style={buttonStyle} disabled={loading}>
-                  {loading ? t('common.signingIn', 'Signing in...') : t('auth.signIn', 'Sign In')}
+                  {loading ? 'Signing in...' : 'Sign In'}
                 </button>
               </form>
 
@@ -233,7 +231,7 @@ export default function LoginModal({ open, onClose, onSwitchToSignUp }) {
                   marginTop: 8
                 }}
               >
-                {t('auth.forgotPassword', 'Forgot password?')}
+                Forgot password?
               </button>
 
               <div style={{
@@ -242,7 +240,7 @@ export default function LoginModal({ open, onClose, onSwitchToSignUp }) {
                 color: '#9ca3af',
                 fontSize: 14
               }}>
-                {t('auth.noAccount', "Don't have an account?")}{' '}
+                Don't have an account?{' '}
                 <button
                   onClick={onSwitchToSignUp}
                   style={{
@@ -254,7 +252,7 @@ export default function LoginModal({ open, onClose, onSwitchToSignUp }) {
                     textDecoration: 'underline'
                   }}
                 >
-                  {t('auth.signUp', 'Sign Up')}
+                  Sign Up
                 </button>
               </div>
             </>

@@ -1,9 +1,7 @@
-import { useTranslation } from 'react-i18next'
-
-export default function Modal({ title, open, onClose, children, width = 800, hideCloseButton = false, position = 'center', customStyle = {}, zIndex = 1000 }) {
-  const { t } = useTranslation()
+export default function Modal({ title, open, onClose, children, width = 800, height, hideCloseButton = false, position = 'center', customStyle = {}, zIndex = 1000 }) {
   if (!open) return null
-  const widthStyle = width === 'auto' ? 'auto' : `min(95vw,${width}px)`
+  const widthStyle = width === 'auto' ? 'auto' : (width === '100vw' ? '100vw' : `min(95vw,${width}px)`)
+  const heightStyle = height ? height : '90vh'
 
   // Stop all clicks/touches on backdrop to prevent interaction with elements behind modal
   const handleBackdropClick = (e) => {
@@ -22,7 +20,7 @@ export default function Modal({ title, open, onClose, children, width = 800, hid
         <div
           style={{
             width: widthStyle,
-            maxHeight:'90vh',
+            maxHeight: heightStyle,
             overflow:'auto',
             background:'#111827',
             border:'1px solid rgba(255,255,255,.08)',
@@ -35,7 +33,7 @@ export default function Modal({ title, open, onClose, children, width = 800, hid
           {(title || !hideCloseButton) && (
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
               <h3 style={{ margin:0 }}>{title}</h3>
-              {!hideCloseButton && <button className="secondary" onClick={onClose}>{t('modal.close', 'Close')}</button>}
+              {!hideCloseButton && <button className="secondary" onClick={onClose}>Close</button>}
             </div>
           )}
           {children}
@@ -56,13 +54,13 @@ export default function Modal({ title, open, onClose, children, width = 800, hid
       onTouchStart={handleBackdropClick}
     >
       <div
-        style={{ width: widthStyle, maxHeight:'90vh', overflow:'auto', background:'#111827', border:'1px solid rgba(255,255,255,.08)', borderRadius:12, padding:16 }}
+        style={{ width: widthStyle, maxHeight: heightStyle, overflow:'auto', background:'#111827', border:'1px solid rgba(255,255,255,.08)', borderRadius:12, padding:16 }}
         onClick={(e) => e.stopPropagation()}
       >
         {(title || !hideCloseButton) && (
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
             <h3 style={{ margin:0 }}>{title}</h3>
-            {!hideCloseButton && <button className="secondary" onClick={onClose}>{t('modal.close', 'Close')}</button>}
+            {!hideCloseButton && <button className="secondary" onClick={onClose}>Close</button>}
           </div>
         )}
         {children}

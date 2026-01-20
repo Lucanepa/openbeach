@@ -18,8 +18,8 @@ export default function ConnectionSetupModal({
   onClose,
   matchId,
   refereePin,
-  homeTeamPin,
-  awayTeamPin,
+  team1Pin,
+  team2Pin,
   gameNumber
 }) {
   const { t } = useTranslation()
@@ -270,7 +270,7 @@ export default function ConnectionSetupModal({
       )}
 
       {/* Bench Connection */}
-      {localIP && (homeTeamPin || awayTeamPin) && (
+      {localIP && (team1Pin || team2Pin) && (
         <div style={{
           background: 'rgba(255,255,255,0.05)',
           borderRadius: 8,
@@ -306,9 +306,9 @@ export default function ConnectionSetupModal({
           </ol>
 
           <div style={{ display: 'flex', gap: 16, marginTop: 12 }}>
-            {homeTeamPin && (
+            {team1Pin && (
               <div style={{ flex: 1, textAlign: 'center' }}>
-                <div style={{ fontSize: 12, marginBottom: 4 }}>{t('connection.homeTeamPin')}</div>
+                <div style={{ fontSize: 12, marginBottom: 4 }}>{t('connection.team1Pin', 'Team 1 PIN')}</div>
                 <code style={{
                   display: 'block',
                   background: 'rgba(59, 130, 246, 0.2)',
@@ -318,28 +318,28 @@ export default function ConnectionSetupModal({
                   fontWeight: 600,
                   fontSize: 18
                 }}>
-                  {homeTeamPin}
+                  {team1Pin}
                 </code>
                 <button
-                  onClick={() => handleCopy(homeTeamPin, 'Home PIN')}
+                  onClick={() => handleCopy(team1Pin, 'Team 1 PIN')}
                   style={{
                     marginTop: 8,
                     padding: '4px 12px',
                     fontSize: 12,
-                    background: copyFeedback === 'Home PIN' ? '#22c55e' : 'rgba(255,255,255,0.1)',
+                    background: copyFeedback === 'Team 1 PIN' ? '#22c55e' : 'rgba(255,255,255,0.1)',
                     border: 'none',
                     borderRadius: 4,
                     color: '#fff',
                     cursor: 'pointer'
                   }}
                 >
-                  {copyFeedback === 'Home PIN' ? t('options.copied') : t('options.copy')}
+                  {copyFeedback === 'Team 1 PIN' ? t('options.copied') : t('options.copy')}
                 </button>
               </div>
             )}
-            {awayTeamPin && (
+            {team2Pin && (
               <div style={{ flex: 1, textAlign: 'center' }}>
-                <div style={{ fontSize: 12, marginBottom: 4 }}>{t('connection.awayTeamPin')}</div>
+                <div style={{ fontSize: 12, marginBottom: 4 }}>{t('connection.team2Pin', 'Team 2 PIN')}</div>
                 <code style={{
                   display: 'block',
                   background: 'rgba(239, 68, 68, 0.2)',
@@ -349,22 +349,22 @@ export default function ConnectionSetupModal({
                   fontWeight: 600,
                   fontSize: 18
                 }}>
-                  {awayTeamPin}
+                  {team2Pin}
                 </code>
                 <button
-                  onClick={() => handleCopy(awayTeamPin, 'Away PIN')}
+                  onClick={() => handleCopy(team2Pin, 'Team 2 PIN')}
                   style={{
                     marginTop: 8,
                     padding: '4px 12px',
                     fontSize: 12,
-                    background: copyFeedback === 'Away PIN' ? '#22c55e' : 'rgba(255,255,255,0.1)',
+                    background: copyFeedback === 'Team 2 PIN' ? '#22c55e' : 'rgba(255,255,255,0.1)',
                     border: 'none',
                     borderRadius: 4,
                     color: '#fff',
                     cursor: 'pointer'
                   }}
                 >
-                  {copyFeedback === 'Away PIN' ? t('options.copied') : t('options.copy')}
+                  {copyFeedback === 'Team 2 PIN' ? t('options.copied') : t('options.copy')}
                 </button>
               </div>
             )}

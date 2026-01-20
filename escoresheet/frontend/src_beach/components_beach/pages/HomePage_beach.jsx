@@ -34,7 +34,7 @@ export default function HomePage({
           <h1 className="home-title" style={{ width: 'auto', margin: 0 }}>{t('home.title')}</h1>
         </div>
         <div className="home-logo">
-          <img src={'/openvolley_no_bg.png'} alt="Openvolley" />
+          <img src={'/openbeach_no_bg.png'} alt="openBeach" />
         </div>
 
         <div className="home-match-section" style={{ margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>

@@ -2,6 +2,7 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App_beach'
 import './styles_beach.css'
+import 'flag-icons/css/flag-icons.min.css'
 import { initLogger } from './utils_beach/logger_beach'
 import './i18n_beach'  // Initialize i18n for localization
 import { AlertProvider } from './contexts_beach/AlertContext_beach'

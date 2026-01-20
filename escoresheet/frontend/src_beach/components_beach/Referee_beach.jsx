@@ -4,18 +4,16 @@ import { useAlert } from '../contexts_beach/AlertContext_beach'
 import i18n from '../i18n'
 import { getMatchData, subscribeToMatchData, listAvailableMatches, getWebSocketStatus, forceReconnect } from '../utils_beach/serverDataSync_beach'
 import { useRealtimeConnection, CONNECTION_TYPES, CONNECTION_STATUS } from '../hooks_beach/useRealtimeConnection_beach'
-import mikasaVolleyball from '../mikasa_v200w.png'
-
-// Primary ball image (with mikasa as fallback)
-const ballImage = '/ball.png'
+// Beach volleyball ball image
+const ballImage = '/beachball.png'
 import { ConnectionManager } from '../utils_beach/connectionManager_beach'
-import ConnectionStatus from './ConnectionStatus'
-import Modal from './Modal'
-import WsDebugOverlay from './WsDebugOverlay'
+import ConnectionStatus from './ConnectionStatus_beach'
+import Modal from './Modal_beach'
+import WsDebugOverlay from './WsDebugOverlay_beach'
 import { db } from '../db_beach/db_beach'
-import TestModeControls from './TestModeControls'
-import SimpleHeader from './SimpleHeader'
-import DonutCountdown from './DonutCountdown'
+import TestModeControls from './TestModeControls_beach'
+import SimpleHeader from './SimpleHeader_beach'
+import DonutCountdown from './DonutCountdown_beach'
 import { supabase } from '../lib_beach/supabaseClient_beach'
 import { useSyncQueue } from '../hooks_beach/useSyncQueue_beach'
 
@@ -196,30 +194,10 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   const [showTimeoutModal, setShowTimeoutModal] = useState(false) // Modal visibility (separate from countdown state)
   const timeoutActiveRef = useRef(false) // Track if timeout is active (for closure-safe checks)
 
-  // Flashing substitution state (like Scoreboard)
-  const [recentlySubstitutedPlayers, setRecentlySubstitutedPlayers] = useState([]) // [{ team, playerNumber, timestamp }]
-  const recentSubFlashTimeoutRef = useRef(null)
 
   // Connection type state (auto, supabase, websocket)
   const [connectionType, setConnectionType] = useState(CONNECTION_TYPES.AUTO)
 
-  // Advanced mode state for reception formations
-  const [advancedMode, setAdvancedMode] = useState({ left: false, right: false }) // Per-side advanced mode
-  const [setterNumber, setSetterNumber] = useState({ left: null, right: null }) // Per-side setter number
-  const [setterSelectionModal, setSetterSelectionModal] = useState(null) // 'left' | 'right' | null
-
-  // Reception mode: 'standard' (grid layout) or 'reception' (formation positions)
-  const [receptionMode, setReceptionMode] = useState({ left: 'standard', right: 'standard' })
-
-  // Custom formation positions (drag and drop adjustments) per set
-  const [customFormations, setCustomFormations] = useState({}) // { [setIndex]: { left: { [position]: { top, left } }, right: { ... } } }
-
-  // Dragging state for player repositioning
-  const [draggingPlayer, setDraggingPlayer] = useState(null) // { side: 'left'|'right', position: 'I'-'VI' }
-  const courtRef = useRef({ left: null, right: null })
-
-  // Timer ref for auto-revert to standard mode
-  const receptionModeTimerRef = useRef({ left: null, right: null })
 
   // Connection state
   const [connectionStatuses, setConnectionStatuses] = useState({
@@ -341,10 +319,10 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
       const newData = {
         match: result.match,
-        homeTeam: result.homeTeam,
-        awayTeam: result.awayTeam,
-        homePlayers: (result.homePlayers || []).sort((a, b) => (a.number || 0) - (b.number || 0)),
-        awayPlayers: (result.awayPlayers || []).sort((a, b) => (a.number || 0) - (b.number || 0)),
+        team1: result.team1,
+        team2: result.team2,
+        team1Players: (result.team1Players || []).sort((a, b) => (a.number || 0) - (b.number || 0)),
+        team2Players: (result.team2Players || []).sort((a, b) => (a.number || 0) - (b.number || 0)),
         sets,
         currentSet,
         events: result.events || [],
@@ -396,23 +374,20 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           coinTossTeamA: 'home',
           firstServe: 'home'
         },
-        homeTeam: { name: 'Home Team', color: '#ef4444' },
-        awayTeam: { name: 'Away Team', color: '#3b82f6' },
-        homePlayers: [
-          { number: 1 }, { number: 2 }, { number: 3 },
-          { number: 4 }, { number: 99 }, { number: 6 },
-          { number: 7, libero: 'libero1' }
+        team1: { name: 'Home Team', color: '#ef4444' },
+        team2: { name: 'Away Team', color: '#3b82f6' },
+        // Beach volleyball: 2 players per team
+        team1Players: [
+          { number: 1 }, { number: 2 }
         ],
-        awayPlayers: [
-          { number: 11 }, { number: 12 }, { number: 13 },
-          { number: 54 }, { number: 15 }, { number: 16 },
-          { number: 17, libero: 'libero1' }
+        team2Players: [
+          { number: 11 }, { number: 12 }
         ],
-        sets: [{ index: 1, homePoints: 12, awayPoints: 10, finished: false }],
-        currentSet: { index: 1, homePoints: 12, awayPoints: 10, finished: false },
+        sets: [{ index: 1, team1Points: 12, team2Points: 10, finished: false }],
+        currentSet: { index: 1, team1Points: 12, team2Points: 10, finished: false },
         events: [
-          { type: 'lineup', setIndex: 1, payload: { team: 'home', lineup: { I: 1, II: 2, III: 3, IV: 4, V: 99, VI: 6 } } },
-          { type: 'lineup', setIndex: 1, payload: { team: 'away', lineup: { I: 11, II: 12, III: 13, IV: 54, V: 15, VI: 16 } } }
+          { type: 'lineup', setIndex: 1, payload: { team: 'home', lineup: { '1': 1, '2': 2 } } },
+          { type: 'lineup', setIndex: 1, payload: { team: 'away', lineup: { '1': 11, '2': 12 } } }
         ]
       })
     }
@@ -499,8 +474,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         updateMatchDataState(result)
         console.log('[Referee] Fresh data received:', {
           currentSet: result.sets?.find(s => !s.finished)?.index,
-          homePoints: result.sets?.find(s => !s.finished)?.homePoints,
-          awayPoints: result.sets?.find(s => !s.finished)?.awayPoints
+          team1Points: result.sets?.find(s => !s.finished)?.team1Points,
+          team2Points: result.sets?.find(s => !s.finished)?.team2Points
         })
       } else {
         // Match not found or fetch failed
@@ -527,21 +502,21 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
     const receiveTimestamp = Date.now()
     console.log(`[Referee] 📥 Received match-data-update at ${new Date(receiveTimestamp).toISOString()}:`, {
-      hasHomeTeam: !!result.homeTeam,
-      hasAwayTeam: !!result.awayTeam,
+      hasHomeTeam: !!result.team1,
+      hasAwayTeam: !!result.team2,
       setsCount: result.sets?.length,
       eventsCount: result.events?.length
     })
 
     // Only update if data is complete (has teams and sets)
-    if (result.homeTeam && result.awayTeam && result.sets?.length > 0) {
+    if (result.team1 && result.team2 && result.sets?.length > 0) {
       updateMatchDataState(result)
     } else {
       console.debug('[Referee] Received partial data (missing teams/sets), skipping UI update')
     }
   }, [updateMatchDataState])
 
-  // Handle realtime actions (timeout, substitution, set_end)
+  // Handle realtime actions (timeout, set_end)
   const handleRealtimeAction = useCallback((action, actionData) => {
     const receiveTimestamp = Date.now()
     console.log(`[Referee] 📥 Received action '${action}' at ${new Date(receiveTimestamp).toISOString()}:`, actionData)
@@ -564,17 +539,6 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       console.log('[REF_TO_DEBUG] Setting timeoutModal state', newTimeoutModal)
       setTimeoutModal(newTimeoutModal)
       setShowTimeoutModal(true) // Show the modal overlay
-    } else if (action === 'substitution') {
-      // Add player to recently substituted list for flashing effect (no modal, just flash)
-      setRecentlySubstitutedPlayers(prev => [...prev, { team: actionData.team, playerNumber: actionData.playerIn, timestamp: Date.now() }])
-
-      // Clear the flash after 5 seconds
-      if (recentSubFlashTimeoutRef.current) {
-        clearTimeout(recentSubFlashTimeoutRef.current)
-      }
-      recentSubFlashTimeoutRef.current = setTimeout(() => {
-        setRecentlySubstitutedPlayers([])
-      }, 5000)
     } else if (action === 'set_end') {
       console.log('═══════════════════════════════════════════════════════════════')
       console.log('[Referee] 🏁 SET_END Action Received (WebSocket):')
@@ -582,8 +546,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       console.log('[Referee] 📊 Action Data:', {
         setIndex: actionData.setIndex,
         winner: actionData.winner,
-        homePoints: actionData.homePoints,
-        awayPoints: actionData.awayPoints,
+        team1Points: actionData.team1Points,
+        team2Points: actionData.team2Points,
         countdown: actionData.countdown,
         homeSetsWon: actionData.homeSetsWon,
         awaySetsWon: actionData.awaySetsWon
@@ -749,10 +713,10 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           // side_a = 'left' or 'right' indicates which side Team A is on
           const localTeamAKey = data?.match?.coinTossTeamA || 'home'
           const sideA = state.side_a || 'left'
-          const homeTeamOnLeft = (sideA === 'left') === (localTeamAKey === 'home')
+          const team1OnLeft = (sideA === 'left') === (localTeamAKey === 'home')
           const getTeamFromSide = (side) => {
-            if (side === 'left') return homeTeamOnLeft ? 'home' : 'away'
-            return homeTeamOnLeft ? 'away' : 'home'
+            if (side === 'left') return team1OnLeft ? 'home' : 'away'
+            return team1OnLeft ? 'away' : 'home'
           }
 
           // Handle timeout start/stop based on timeout_active flag
@@ -779,33 +743,6 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             timeoutActiveRef.current = false
             setTimeoutModal(null)
             setShowTimeoutModal(false)
-          }
-
-          // Handle substitution - flash effect only (no modal)
-          // Note: last_event_team is 'home'/'away', not 'left'/'right', so use directly
-          if (state.last_event_type === 'substitution') {
-            const team = state.last_event_team // Already 'home' or 'away'
-            setRecentlySubstitutedPlayers(prev => [
-              ...prev,
-              { team, playerNumber: state.last_event_data?.playerIn, timestamp: Date.now() }
-            ])
-            if (recentSubFlashTimeoutRef.current) clearTimeout(recentSubFlashTimeoutRef.current)
-            recentSubFlashTimeoutRef.current = setTimeout(() => setRecentlySubstitutedPlayers([]), 5000)
-          }
-
-          // Handle libero entry/exit/exchange
-          // Note: last_event_team is 'home'/'away', not 'left'/'right', so use directly
-          if (['libero_entry', 'libero_exit', 'libero_exchange'].includes(state.last_event_type)) {
-            const team = state.last_event_team // Already 'home' or 'away'
-            const playerNumber = state.last_event_data?.liberoNumber || state.last_event_data?.playerIn
-            if (playerNumber) {
-              setRecentlySubstitutedPlayers(prev => [
-                ...prev,
-                { team, playerNumber, timestamp: Date.now() }
-              ])
-              if (recentSubFlashTimeoutRef.current) clearTimeout(recentSubFlashTimeoutRef.current)
-              recentSubFlashTimeoutRef.current = setTimeout(() => setRecentlySubstitutedPlayers([]), 5000)
-            }
           }
 
           // Handle set end (3-minute interval)
@@ -853,7 +790,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           }
 
           // Store last event for footer display (only specific event types)
-          const displayableEvents = ['point', 'timeout', 'substitution', 'libero_entry', 'libero_exit', 'libero_exchange', 'libero_redesignation', 'set_end', 'sanction', 'court_captain_designation']
+          // Beach volleyball: no substitution or libero events
+          const displayableEvents = ['point', 'timeout', 'set_end', 'sanction', 'court_captain_designation', 'challenge']
           if (state.last_event_type && displayableEvents.includes(state.last_event_type)) {
             setLastEvent({
               type: state.last_event_type,
@@ -863,7 +801,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             })
           }
 
-          // ALWAYS refetch data on ANY change - handles points, lineups, subs, libero, sanctions, undoes, replays, etc.
+          // ALWAYS refetch data on ANY change - handles points, lineups, sanctions, undoes, replays, etc.
           console.log('[Referee] 📡 Realtime change detected, refetching data...')
           fetchFreshData()
         }
@@ -916,112 +854,9 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     return () => clearInterval(timer)
   }, [timeoutModal?.started, timeoutModal?.startTimestamp, timeoutModal?.initialCountdown])
 
-  // Track last point count to detect when points change (rally ends)
-  const lastPointsRef = useRef({ home: 0, away: 0 })
 
-  // Auto-revert reception mode to standard after rally starts (3 seconds after point)
-  useEffect(() => {
-    if (!data?.currentSet) return
 
-    const currentHomePoints = data.currentSet.homePoints || 0
-    const currentAwayPoints = data.currentSet.awayPoints || 0
-
-    const pointsChanged = currentHomePoints !== lastPointsRef.current.home ||
-      currentAwayPoints !== lastPointsRef.current.away
-
-    // Update last points
-    lastPointsRef.current = { home: currentHomePoints, away: currentAwayPoints }
-
-    // If points changed (rally ended), start 3 second timer to revert to standard mode
-    if (pointsChanged) {
-      // Clear existing timers
-      if (receptionModeTimerRef.current.left) {
-        clearTimeout(receptionModeTimerRef.current.left)
-      }
-      if (receptionModeTimerRef.current.right) {
-        clearTimeout(receptionModeTimerRef.current.right)
-      }
-
-      // Start new timer for both sides if in reception mode
-      if (receptionMode.left === 'reception') {
-        receptionModeTimerRef.current.left = setTimeout(() => {
-          setReceptionMode(prev => ({ ...prev, left: 'standard' }))
-        }, 3000)
-      }
-      if (receptionMode.right === 'reception') {
-        receptionModeTimerRef.current.right = setTimeout(() => {
-          setReceptionMode(prev => ({ ...prev, right: 'standard' }))
-        }, 3000)
-      }
-    }
-
-    return () => {
-      if (receptionModeTimerRef.current.left) {
-        clearTimeout(receptionModeTimerRef.current.left)
-      }
-      if (receptionModeTimerRef.current.right) {
-        clearTimeout(receptionModeTimerRef.current.right)
-      }
-    }
-  }, [data?.currentSet?.homePoints, data?.currentSet?.awayPoints, receptionMode.left, receptionMode.right])
-
-  // Toggle reception mode for a side
-  const toggleReceptionMode = useCallback((side) => {
-    setReceptionMode(prev => ({
-      ...prev,
-      [side]: prev[side] === 'standard' ? 'reception' : 'standard'
-    }))
-  }, [])
-
-  // Handle drag start for player repositioning
-  const handleDragStart = useCallback((e, side, position) => {
-    e.dataTransfer.effectAllowed = 'move'
-    setDraggingPlayer({ side, position })
-  }, [])
-
-  // Handle drag over court
-  const handleDragOver = useCallback((e) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-  }, [])
-
-  // Handle drop on court - save custom position
-  const handleDrop = useCallback((e, side) => {
-    e.preventDefault()
-    if (!draggingPlayer || draggingPlayer.side !== side) return
-
-    const courtEl = courtRef.current[side]
-    if (!courtEl) return
-
-    const rect = courtEl.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
-
-    // Convert to percentage
-    const leftPercent = (x / rect.width) * 100
-    const topPercent = (y / rect.height) * 100
-
-    // Clamp values to court bounds
-    const clampedLeft = Math.max(5, Math.min(95, leftPercent))
-    const clampedTop = Math.max(5, Math.min(95, topPercent))
-
-    const setIndex = data?.currentSet?.index || 1
-
-    setCustomFormations(prev => ({
-      ...prev,
-      [setIndex]: {
-        ...prev[setIndex],
-        [side]: {
-          ...prev[setIndex]?.[side],
-          [draggingPlayer.position]: { top: clampedTop, left: clampedLeft }
-        }
-      }
-    }))
-
-    setDraggingPlayer(null)
-  }, [draggingPlayer, data?.currentSet?.index])
-
-  // Calculate statistics
+  // Calculate statistics - Beach volleyball: only timeouts (no substitutions)
   const stats = useMemo(() => {
     // First, try to get stats from liveState (most accurate for Supabase-sourced data)
     if (data?.liveState) {
@@ -1037,12 +872,10 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
       return {
         home: {
-          timeouts: teamAIsHome ? getCount(liveState.timeouts_a) : getCount(liveState.timeouts_b),
-          substitutions: teamAIsHome ? getCount(liveState.subs_a) : getCount(liveState.subs_b)
+          timeouts: teamAIsHome ? getCount(liveState.timeouts_a) : getCount(liveState.timeouts_b)
         },
         away: {
-          timeouts: teamAIsHome ? getCount(liveState.timeouts_b) : getCount(liveState.timeouts_a),
-          substitutions: teamAIsHome ? getCount(liveState.subs_b) : getCount(liveState.subs_a)
+          timeouts: teamAIsHome ? getCount(liveState.timeouts_b) : getCount(liveState.timeouts_a)
         }
       }
     }
@@ -1050,8 +883,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     // Fallback: count from events (when data comes from local IndexedDB or WebSocket)
     if (!data || !data.events || !data.currentSet) {
       return {
-        home: { timeouts: 0, substitutions: 0 },
-        away: { timeouts: 0, substitutions: 0 }
+        home: { timeouts: 0 },
+        away: { timeouts: 0 }
       }
     }
 
@@ -1061,18 +894,17 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
     return {
       home: {
-        timeouts: currentSetEvents.filter(e => e.type === 'timeout' && e.payload?.team === 'home').length,
-        substitutions: currentSetEvents.filter(e => e.type === 'substitution' && e.payload?.team === 'home').length
+        timeouts: currentSetEvents.filter(e => e.type === 'timeout' && e.payload?.team === 'home').length
       },
       away: {
-        timeouts: currentSetEvents.filter(e => e.type === 'timeout' && e.payload?.team === 'away').length,
-        substitutions: currentSetEvents.filter(e => e.type === 'substitution' && e.payload?.team === 'away').length
+        timeouts: currentSetEvents.filter(e => e.type === 'timeout' && e.payload?.team === 'away').length
       }
     }
   }, [data])
 
   // Get lineup for current set - returns null for team if no lineup exists
-  // Rich format: lineup positions contain { number, isServing, isLibero, replacedNumber, isSubstituted, substitutedFor, hasSanction, sanctions, isCaptain, isCourtCaptain }
+  // Beach volleyball: 2 players per team (positions 1 and 2)
+  // Rich format: lineup positions contain { number, isServing, hasSanction, sanctions, isCaptain }
   // Legacy format: lineup positions just contain player number
   const lineup = useMemo(() => {
     if (!data || !data.events || !data.currentSet) {
@@ -1131,8 +963,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
     const finishedSets = data.sets?.filter(s => s.finished) || []
     return {
-      home: finishedSets.filter(s => s.homePoints > s.awayPoints).length,
-      away: finishedSets.filter(s => s.awayPoints > s.homePoints).length
+      home: finishedSets.filter(s => s.team1Points > s.team2Points).length,
+      away: finishedSets.filter(s => s.team2Points > s.team1Points).length
     }
   }, [data])
 
@@ -1230,12 +1062,12 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     return sideA === 'left' ? (teamAKey === 'home') : (teamAKey !== 'home')
   }, [data?.currentSet, data?.match?.setLeftTeamOverrides, data?.match?.set5CourtSwitched, data?.match?.set5LeftTeam, teamAKey, data?.liveState?.side_a])
 
-  const homeTeamOnLeft = refereeView === '1st' ? !homeOnLeftFor2ndRef : homeOnLeftFor2ndRef
+  const team1OnLeft = refereeView === '1st' ? !homeOnLeftFor2ndRef : homeOnLeftFor2ndRef
 
-  const leftTeam = homeTeamOnLeft ? 'home' : 'away'
-  const rightTeam = homeTeamOnLeft ? 'away' : 'home'
-  const leftTeamData = leftTeam === 'home' ? data?.homeTeam : data?.awayTeam
-  const rightTeamData = rightTeam === 'home' ? data?.homeTeam : data?.awayTeam
+  const leftTeam = team1OnLeft ? 'home' : 'away'
+  const rightTeam = team1OnLeft ? 'away' : 'home'
+  const leftTeamData = leftTeam === 'home' ? data?.team1 : data?.team2
+  const rightTeamData = rightTeam === 'home' ? data?.team1 : data?.team2
   const leftLabel = leftTeam === 'home' ? homeLabel : awayLabel
   const rightLabel = rightTeam === 'home' ? homeLabel : awayLabel
   const leftServing = getCurrentServe === leftTeam
@@ -1265,93 +1097,65 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   // Synced font sizes for paired team names (SECTION 2A)
   const section2AFontSize = useSyncedFontSize([leftShortName, rightShortName], section2AWidth, 28, 14, true)
 
-  // Get team-level sanctions (formal warning, improper request, delay warning, bench sanctions)
+  // Get team-level sanctions (formal warning, improper request, delay warning)
   // Also returns player-level sanctions (warnings, penalties, expulsions, disqualifications)
+  // Beach volleyball: no bench sanctions (only 2 players per team, no bench staff)
   const getTeamSanctions = useCallback((teamKey) => {
     if (!data?.events) return {
       formalWarning: false, improperRequest: false, delayWarning: false, delayPenalty: false,
-      benchSanctions: [], warnings: [], penalties: [], expulsions: [], disqualifications: []
+      warnings: [], penalties: [], expulsions: [], disqualifications: []
     }
 
     const teamSanctions = data.events.filter(e =>
       e.type === 'sanction' && e.payload?.team === teamKey
     )
 
-    // Helper to get display identifier (number or function abbreviation)
+    // Helper to get display identifier (player number)
     const getIdentifier = (s) => {
-      const playerNum = s.payload?.playerNumber || s.payload?.player
-      const playerType = s.payload?.playerType
-      const role = s.payload?.role || s.payload?.function
-
-      // For bench/official sanctions, show role abbreviation
-      if (playerType === 'bench' || playerType === 'official') {
-        if (role) {
-          // Map common roles to abbreviations (lowercase keys for case-insensitive lookup)
-          const roleMap = {
-            'coach': 'C',
-            'assistant coach 1': 'AC1',
-            'assistant coach 2': 'AC2',
-            'physiotherapist': 'PH',
-            'medic': 'M'
-          }
-          // Fallback: first 2 letters of role if not in map
-          return roleMap[role.toLowerCase()] || role.substring(0, 2).toUpperCase()
-        }
-        return playerNum || 'B' // B for bench if no specific identifier
-      }
-      return playerNum
+      return s.payload?.playerNumber || s.payload?.player
     }
 
-    // Warnings (player or bench/official, excluding team/formal warnings and delay warnings)
+    // Warnings (player only, excluding team/formal warnings and delay warnings)
     const warnings = teamSanctions.filter(s => {
       const type = s.payload?.type || s.payload?.sanctionType
       const playerNum = s.payload?.playerNumber || s.payload?.player
       const playerType = s.payload?.playerType
-      const isBenchOrOfficial = playerType === 'bench' || playerType === 'official'
-      // For players: require a number. For bench/officials: don't require number
-      const hasValidTarget = isBenchOrOfficial || (playerNum && String(playerNum) !== 'D')
+      const hasValidTarget = playerNum && String(playerNum) !== 'D'
       return type === 'warning' &&
         hasValidTarget &&
         playerType !== 'team' && !s.payload?.isTeamWarning
     }).map(s => ({
-      id: getIdentifier(s),
-      isBench: s.payload?.playerType === 'bench' || s.payload?.playerType === 'official'
+      id: getIdentifier(s)
     }))
 
-    // Penalties (player or bench/official, excluding delay penalties)
+    // Penalties (player only, excluding delay penalties)
     const penalties = teamSanctions.filter(s => {
       const type = s.payload?.type || s.payload?.sanctionType
       const playerNum = s.payload?.playerNumber || s.payload?.player
-      const playerType = s.payload?.playerType
-      const isBenchOrOfficial = playerType === 'bench' || playerType === 'official'
-      // For players: require a number. For bench/officials: don't require number
-      const hasValidTarget = isBenchOrOfficial || (playerNum && String(playerNum) !== 'D')
+      const hasValidTarget = playerNum && String(playerNum) !== 'D'
       return type === 'penalty' && hasValidTarget
     }).map(s => ({
-      id: getIdentifier(s),
-      isBench: s.payload?.playerType === 'bench' || s.payload?.playerType === 'official'
+      id: getIdentifier(s)
     }))
 
-    // Expulsions (any - player or bench)
+    // Expulsions (player only)
     const expulsions = teamSanctions.filter(s => {
       const type = s.payload?.type || s.payload?.sanctionType
       return type === 'expulsion'
     }).map(s => ({
-      id: getIdentifier(s),
-      isBench: s.payload?.playerType === 'bench' || s.payload?.playerType === 'official'
+      id: getIdentifier(s)
     }))
 
-    // Disqualifications (any - player or bench)
+    // Disqualifications (player only)
     const disqualifications = teamSanctions.filter(s => {
       const type = s.payload?.type || s.payload?.sanctionType
       return type === 'disqualification'
     }).map(s => ({
-      id: getIdentifier(s),
-      isBench: s.payload?.playerType === 'bench' || s.payload?.playerType === 'official'
+      id: getIdentifier(s)
     }))
 
     return {
-      // Formal warning: ANY warning to ANY team member (player, bench, official) triggers this
+      // Formal warning: ANY warning to ANY player triggers this
       formalWarning: teamSanctions.some(s => {
         const type = s.payload?.type || s.payload?.sanctionType
         return type === 'warning'
@@ -1369,9 +1173,6 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         ((s.payload?.type === 'penalty' || s.payload?.sanctionType === 'penalty') &&
           (String(s.payload?.playerNumber) === 'D' || String(s.payload?.player) === 'D'))
       ),
-      benchSanctions: teamSanctions.filter(s =>
-        s.payload?.playerType === 'bench' || s.payload?.playerType === 'official'
-      ),
       warnings,
       penalties,
       expulsions,
@@ -1381,91 +1182,6 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
   const leftTeamSanctions = getTeamSanctions(leftTeam)
   const rightTeamSanctions = getTeamSanctions(rightTeam)
-
-  // Get libero on court for a team - returns { position, liberoNumber, liberoType, playerNumber } or null
-  const getLiberoOnCourt = useCallback((teamKey) => {
-    if (!data?.events || !data?.currentSet) return null
-
-    const currentSetEvents = data.events.filter(e => e.setIndex === data.currentSet.index)
-    const lineupEvents = currentSetEvents
-      .filter(e => e.type === 'lineup' && e.payload?.team === teamKey)
-      .sort((a, b) => (a.seq || 0) - (b.seq || 0))
-
-    if (lineupEvents.length === 0) return null
-
-    const latestLineup = lineupEvents[lineupEvents.length - 1]
-    const currentLineup = latestLineup?.payload?.lineup || {}
-    const liberoSub = latestLineup?.payload?.liberoSubstitution
-
-    // Get initial lineup (marked with isInitial: true)
-    const initialLineupEvent = lineupEvents.find(e => e.payload?.isInitial === true)
-    const initialLineup = initialLineupEvent?.payload?.lineup || {}
-
-    const teamPlayers = teamKey === 'home' ? data.homePlayers : data.awayPlayers
-
-    // Check each position to find if a libero is there
-    for (const [position, posData] of Object.entries(currentLineup)) {
-      // Handle both rich format (posData is object with number) and legacy format (posData is number)
-      const playerNum = typeof posData === 'object' && posData?.number !== undefined ? posData.number : posData
-      const player = teamPlayers?.find(p => String(p.number) === String(playerNum))
-      if (player && (player.libero === 'libero1' || player.libero === 'libero2')) {
-        // Found a libero on court - try to find which player they replaced
-        let replacedPlayer = liberoSub?.playerNumber
-
-        if (!replacedPlayer) {
-          // Look through lineup history to find the original player at this position
-          for (let i = lineupEvents.length - 2; i >= 0; i--) {
-            const prevLineup = lineupEvents[i]?.payload?.lineup
-            if (prevLineup && prevLineup[position]) {
-              const prevPosData = prevLineup[position]
-              const prevNum = typeof prevPosData === 'object' && prevPosData?.number !== undefined ? prevPosData.number : prevPosData
-              const prevPlayer = teamPlayers?.find(p => String(p.number) === String(prevNum))
-              if (prevPlayer && prevPlayer.libero !== 'libero1' && prevPlayer.libero !== 'libero2') {
-                replacedPlayer = prevPlayer.number
-                break
-              }
-            }
-          }
-        }
-
-        // Fallback: Check initial lineup for who was at this position
-        if (!replacedPlayer && initialLineup[position]) {
-          const initPosData = initialLineup[position]
-          const initNum = typeof initPosData === 'object' && initPosData?.number !== undefined ? initPosData.number : initPosData
-          const initialPlayer = teamPlayers?.find(p => String(p.number) === String(initNum))
-          if (initialPlayer && initialPlayer.libero !== 'libero1' && initialPlayer.libero !== 'libero2') {
-            replacedPlayer = initialPlayer.number
-          }
-        }
-
-        return {
-          position,
-          liberoNumber: player.number,
-          liberoType: player.libero,
-          playerNumber: replacedPlayer
-        }
-      }
-    }
-
-    return null
-  }, [data?.events, data?.currentSet, data?.homePlayers, data?.awayPlayers])
-
-  // Get substitution info for a player on court - returns { replacedNumber } or null
-  const getSubstitutionInfo = useCallback((teamKey, playerNumber) => {
-    if (!data?.events || !data?.currentSet) return null
-
-    const currentSetSubs = data.events
-      .filter(e => e.type === 'substitution' && e.payload?.team === teamKey && e.setIndex === data.currentSet.index)
-      .sort((a, b) => new Date(b.ts) - new Date(a.ts))
-
-    // Find if this player came in as a substitute
-    const subIn = currentSetSubs.find(s => String(s.payload?.playerIn) === String(playerNumber))
-    if (subIn) {
-      return { replacedNumber: subIn.payload?.playerOut }
-    }
-
-    return null
-  }, [data?.events, data?.currentSet])
 
   // Get sanctions for a player
   const getPlayerSanctions = useCallback((teamKey, playerNumber) => {
@@ -1489,115 +1205,6 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     return brightness > 155
   }
 
-  // Get setter position (P1-P6) based on current lineup
-  const getSetterPosition = useCallback((lineup, setterNum) => {
-    if (!lineup || !setterNum) return null
-    for (const [position, posData] of Object.entries(lineup)) {
-      // Handle both rich format (posData is object with number) and legacy format (posData is number)
-      const playerNum = typeof posData === 'object' && posData?.number !== undefined ? posData.number : posData
-      if (String(playerNum) === String(setterNum)) {
-        // Convert position (I, II, III, IV, V, VI) to P number (1-6)
-        const posMap = { 'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5, 'VI': 6 }
-        return posMap[position] || null
-      }
-    }
-    return null
-  }, [])
-
-  // Reception formation positions based on setter position (P1-P6)
-  // Positions are percentages: { top: %, left: % } from court perspective (net at top)
-  // These are for a SINGLE side court view - approved from visualization
-  const getReceptionFormation = useCallback((setterPos) => {
-    // Standard positions for when no advanced mode
-    const standard = {
-      I: { top: 85, left: 85 },   // Back right
-      II: { top: 15, left: 85 },  // Front right
-      III: { top: 15, left: 50 }, // Front middle
-      IV: { top: 15, left: 15 },  // Front left
-      V: { top: 85, left: 15 },   // Back left
-      VI: { top: 85, left: 50 }   // Back middle
-    }
-
-    if (!setterPos) return standard
-
-    // Reception formations based on setter position (approved from visualization)
-    const formations = {
-      // P1: Setter in position I (back right corner)
-      1: {
-        I: { top: 88, left: 88 },   // Setter: back right corner
-        II: { top: 70, left: 80 },  // Next to setter (top-left of I)
-        III: { top: 28, left: 50 }, // 3m line, middle
-        IV: { top: 28, left: 15 },  // 3m line, left
-        V: { top: 80, left: 15 },   // Bottom left
-        VI: { top: 78, left: 50 }   // Between II and V
-      },
-      // P2: Setter in position II (front right at net)
-      2: {
-        I: { top: 70, left: 85 },   // Back right area
-        II: { top: 12, left: 88 },  // Setter: at net, right
-        III: { top: 28, left: 50 }, // 3m line, middle
-        IV: { top: 70, left: 15 },  // Same line as I and VI
-        V: { top: 88, left: 40 },   // Back, beneath IV and VI
-        VI: { top: 70, left: 50 }   // Same line as IV and I
-      },
-      // P3: Setter in position III (front middle at net)
-      3: {
-        I: { top: 70, left: 82 },   // Back right
-        II: { top: 12, left: 82 },  // Front right at net
-        III: { top: 13, left: 50 }, // Setter: at net, middle
-        IV: { top: 67, left: 15 },  // Dropped back left
-        V: { top: 70, left: 45 },   // Back center-left
-        VI: { top: 88, left: 60 }   // Back, towards end line
-      },
-      // P4: Setter in position IV (front left at net)
-      4: {
-        I: { top: 88, left: 88 },   // Back right corner
-        II: { top: 70, left: 35 },  // Dropped back
-        III: { top: 40, left: 25 }, // Diagonally between IV and II
-        IV: { top: 12, left: 15 },  // Setter: at net, left
-        V: { top: 70, left: 55 },   // Back middle
-        VI: { top: 70, left: 75 }   // Back right area
-      },
-      // P5: Setter in position V (back left, penetrating)
-      5: {
-        I: { top: 75, left: 82 },   // Back right
-        II: { top: 12, left: 85 },  // Front right at net
-        III: { top: 75, left: 35 }, // Dropped back for passing
-        IV: { top: 12, left: 15 },  // Front left at net
-        V: { top: 42, left: 33 },   // Setter: back left, penetrating
-        VI: { top: 75, left: 58 }   // Back middle
-      },
-      // P6: Setter in position VI (back middle, penetrating)
-      6: {
-        I: { top: 78, left: 82 },   // Back right
-        II: { top: 25, left: 82 },  // Towards 3m line
-        III: { top: 12, left: 50 }, // At net, middle
-        IV: { top: 72, left: 18 },  // Dropped back left
-        V: { top: 78, left: 44 },   // Back center-left
-        VI: { top: 42, left: 59 }   // Setter: penetrating from back middle
-      }
-    }
-
-    return formations[setterPos] || standard
-  }, [])
-
-  // Get formation positions with custom overrides
-  const getFormationWithCustom = useCallback((side, setterPos) => {
-    const baseFormation = getReceptionFormation(setterPos)
-    const setIndex = data?.currentSet?.index || 1
-    const customPositions = customFormations[setIndex]?.[side]
-
-    if (!customPositions) return baseFormation
-
-    // Merge custom positions with base formation
-    const merged = { ...baseFormation }
-    for (const [pos, coords] of Object.entries(customPositions)) {
-      if (coords) {
-        merged[pos] = coords
-      }
-    }
-    return merged
-  }, [getReceptionFormation, customFormations, data?.currentSet?.index])
 
   // Re-enable wake lock (call this when entering fullscreen or on user interaction)
   const reEnableWakeLock = useCallback(async () => {
@@ -1752,10 +1359,10 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   const leftLineup = (isInSetInterval || isMatchEnded) ? null : (leftTeam === 'home' ? lineup.home : lineup.away)
   const rightLineup = (isInSetInterval || isMatchEnded) ? null : (rightTeam === 'home' ? lineup.home : lineup.away)
   const leftStats = (isInSetInterval || isMatchEnded)
-    ? { timeouts: 0, substitutions: 0 }
+    ? { timeouts: 0 }
     : (leftTeam === 'home' ? stats.home : stats.away)
   const rightStats = (isInSetInterval || isMatchEnded)
-    ? { timeouts: 0, substitutions: 0 }
+    ? { timeouts: 0 }
     : (rightTeam === 'home' ? stats.home : stats.away)
 
   // Get the last finished set's final score for display when match ends
@@ -1767,11 +1374,11 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
   // Current set points - when match ended, show last set's final score
   const leftPoints = isMatchEnded && lastFinishedSet
-    ? (leftTeam === 'home' ? lastFinishedSet.homePoints : lastFinishedSet.awayPoints)
-    : (leftTeam === 'home' ? data?.currentSet?.homePoints || 0 : data?.currentSet?.awayPoints || 0)
+    ? (leftTeam === 'home' ? lastFinishedSet.team1Points : lastFinishedSet.team2Points)
+    : (leftTeam === 'home' ? data?.currentSet?.team1Points || 0 : data?.currentSet?.team2Points || 0)
   const rightPoints = isMatchEnded && lastFinishedSet
-    ? (rightTeam === 'home' ? lastFinishedSet.homePoints : lastFinishedSet.awayPoints)
-    : (rightTeam === 'home' ? data?.currentSet?.homePoints || 0 : data?.currentSet?.awayPoints || 0)
+    ? (rightTeam === 'home' ? lastFinishedSet.team1Points : lastFinishedSet.team2Points)
+    : (rightTeam === 'home' ? data?.currentSet?.team1Points || 0 : data?.currentSet?.team2Points || 0)
 
   // Sets won by each side - use liveState if available (from Supabase), otherwise fall back to setsWon
   const liveStateSetsWonHome = teamAKey === 'home'
@@ -1935,8 +1542,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                 match: {
                   ...connectionDebugInfo?.match,
                   matchId: matchId,
-                  homeTeam: data?.homeTeam?.name,
-                  awayTeam: data?.awayTeam?.name
+                  team1: data?.team1?.name,
+                  team2: data?.team2?.name
                 }
               }}
               queueStats={syncStatus}
@@ -1963,8 +1570,6 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                 border: '1px solid rgba(59, 130, 246, 0.4)',
                 borderRadius: '6px',
                 cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
                 gap: '6px'
               }}
               title={t('refereeDashboard.refresh')}
@@ -2113,14 +1718,14 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           padding: '20px'
         }}>
           {/* Team names if available */}
-          {data?.homeTeam?.name && data?.awayTeam?.name && (
+          {data?.team1?.name && data?.team2?.name && (
             <div style={{
               fontSize: 'clamp(18px, 4vw, 28px)',
               fontWeight: 700,
               textAlign: 'center',
               marginBottom: '16px'
             }}>
-              {data.homeTeam.name} vs {data.awayTeam.name}
+              {data.team1.name} vs {data.team2.name}
             </div>
           )}
 
@@ -2167,13 +1772,11 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
   if (!data) return null
 
-  // Player circle component - BIG responsive sizing with all indicators
-  // positionData: for rich format this is { number, isServing, isLibero, replacedNumber, isSubstituted, substitutedFor, hasSanction, sanctions, isCaptain, isCourtCaptain }
+  // Player circle component - Beach volleyball simplified (2 players per team)
+  // positionData: for rich format this is { number, isServing, hasSanction, sanctions, isCaptain }
   //               for legacy format this is just a number
   const PlayerCircle = ({ number: legacyNumber, positionData, position, team, isServing: legacyIsServing }) => {
     // Support both rich format (positionData) and legacy format (number)
-    // Rich format: positionData is { number, isServing, isLibero, ... }
-    // Legacy format: positionData is just a number (or undefined, using legacyNumber)
     let isRichFormat = positionData && typeof positionData === 'object' && positionData.number !== undefined
 
     // Extract number - ensure it's always a primitive, never an object
@@ -2182,7 +1785,6 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     // Extra safety: if positionData was passed as a number but we're in legacy mode,
     // but that "number" is actually an object (edge case from malformed data), handle it
     if (number && typeof number === 'object' && number.number !== undefined) {
-      // The "number" is actually rich format data that wasn't detected
       isRichFormat = true
       positionData = number
       number = number.number
@@ -2190,23 +1792,19 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
     if (!number) return null
 
-    const teamPlayers = team === 'home' ? data.homePlayers : data.awayPlayers
+    const teamPlayers = team === 'home' ? data.team1Players : data.team2Players
     const player = teamPlayers?.find(p => String(p.number) === String(number))
 
-    // For rich format, use embedded data; for legacy, compute from player lookup and functions
-    let isLibero, shouldShowBall, liberoReplacedPlayer, isSubstituted, substitutedFor
+    // Beach volleyball: simplified - no libero or substitutions
+    let shouldShowBall
     let hasWarning, hasPenalty, hasExpulsion, hasDisqualification
-    let isCaptain, isCourtCaptain
+    let isCaptain
 
     if (isRichFormat) {
-      // Rich format - all data is embedded in positionData
-      isLibero = positionData.isLibero || false
-      shouldShowBall = position === 'I' && positionData.isServing
-      liberoReplacedPlayer = isLibero ? positionData.replacedNumber : null
-      isSubstituted = positionData.isSubstituted || false
-      substitutedFor = positionData.substitutedFor || null
+      // Rich format - data is embedded in positionData
+      // Beach volleyball: position 1 is serving position
+      shouldShowBall = (position === '1' || position === 'I') && positionData.isServing
       isCaptain = positionData.isCaptain || false
-      isCourtCaptain = positionData.isCourtCaptain || false
 
       // Sanctions from rich format
       const sanctions = positionData.sanctions || []
@@ -2216,17 +1814,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       hasDisqualification = sanctions.some(s => s.type === 'disqualification')
     } else {
       // Legacy format - compute from player data and helper functions
-      isLibero = player?.libero === 'libero1' || player?.libero === 'libero2'
-      shouldShowBall = position === 'I' && legacyIsServing
-
-      // Get libero info - if this is a libero, show which player they replaced
-      const liberoOnCourt = getLiberoOnCourt(team)
-      liberoReplacedPlayer = isLibero && liberoOnCourt?.playerNumber ? liberoOnCourt.playerNumber : null
-
-      // Get substitution info - if this player came in as a substitute
-      const subInfo = !isLibero ? getSubstitutionInfo(team, number) : null
-      isSubstituted = !!subInfo
-      substitutedFor = subInfo?.replacedNumber || null
+      shouldShowBall = (position === '1' || position === 'I') && legacyIsServing
 
       // Get sanctions for this player
       const sanctions = getPlayerSanctions(team, number)
@@ -2235,71 +1823,10 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       hasExpulsion = sanctions.some(s => s.payload?.type === 'expulsion')
       hasDisqualification = sanctions.some(s => s.payload?.type === 'disqualification')
 
-      // Check if this player is captain or court captain
+      // Check if this player is captain
       const teamCaptain = team === 'home' ? data.match?.homeCaptain : data.match?.awayCaptain
-      const teamCourtCaptain = team === 'home' ? data.match?.homeCourtCaptain : data.match?.awayCourtCaptain
       isCaptain = player?.isCaptain || player?.captain || (teamCaptain && String(teamCaptain) === String(number))
-      isCourtCaptain = !isCaptain && teamCourtCaptain && String(teamCourtCaptain) === String(number)
     }
-
-    // Check if this player was recently substituted in (for flashing effect)
-    const isRecentlySub = recentlySubstitutedPlayers.some(
-      sub => sub.team === team && String(sub.playerNumber) === String(number)
-    )
-
-    // Determine what to show in top-right badge
-    // Ensure badge values are primitives (not objects)
-    const safeBadgeValue = (val) => {
-      if (val && typeof val === 'object' && val.number !== undefined) return val.number
-      return val
-    }
-    const topRightBadge = safeBadgeValue(liberoReplacedPlayer) || safeBadgeValue(substitutedFor) || null
-    const isLiberoReplacementBadge = !!liberoReplacedPlayer
-
-    // Get libero label for bottom-left
-    const liberoType = player?.libero
-    const isUnable = liberoType === 'unable'
-    const isRedesignated = liberoType === 'redesignated'
-    const liberoCount = teamPlayers?.filter(p => p.libero === 'libero1' || p.libero === 'libero2' || p.libero === 'redesignated').length || 0
-
-    // Determine base label
-    let baseLabel = ''
-    if (isLibero) {
-      if (liberoCount === 1) {
-        baseLabel = 'L'
-      } else if (liberoType === 'libero1') {
-        baseLabel = 'L1'
-      } else if (liberoType === 'libero2') {
-        baseLabel = 'L2'
-      } else if (isRedesignated) {
-        baseLabel = 'L'
-      } else {
-        baseLabel = 'L'
-      }
-    }
-
-    // Create display label with special formatting
-    const displayLiberoLabel = isLibero ? (
-      <span style={{ position: 'relative', display: 'inline-block' }}>
-        {baseLabel}
-        {isRedesignated && R}
-        {isUnable && (
-          <span style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            fontSize: '1.2em',
-            color: '#ef4444',
-            fontWeight: 900
-          }}>✕</span>
-        )}
-      </span>
-    ) : null
-
-    const showCaptainBadge = isCaptain || isCourtCaptain // Liberos can be captains too
-    const isLiberoCaptain = isLibero && isCaptain // Special styling for libero who is also team captain
-    const isLiberoCourtCaptain = isLibero && isCourtCaptain && !isCaptain // Libero designated as game captain
 
     return (
       <div style={{
@@ -2307,27 +1834,25 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         aspectRatio: '1/1',
         height: 'auto',
         padding: '4px',
-        border: isRecentlySub ? '3px solid #f97316' : '1px solid rgba(255, 255, 255, 0.4)',
+        border: '1px solid rgba(255, 255, 255, 0.4)',
         borderRadius: '50%',
-        background: isRecentlySub ? '#fdba74' : isLibero ? '#FFF8E7' : (team === leftTeam ? 'rgba(65, 66, 68, 0.9)' : 'rgba(12, 14, 100, 0.7)'),
-        color: isRecentlySub ? '#000' : isLibero ? '#000' : '#fff',
+        background: team === leftTeam ? 'rgba(65, 66, 68, 0.9)' : 'rgba(12, 14, 100, 0.7)',
+        color: '#fff',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         fontSize: '8vmin',
-        fontWeight: isRecentlySub ? 900 : 700,
+        fontWeight: 700,
         boxShadow: '0 3px 12px rgba(0, 0, 0, 0.5)',
-        flexShrink: 0,
-        animation: isRecentlySub ? 'recentSubFlash 0.5s ease-in-out infinite' : undefined
+        flexShrink: 0
       }}>
         {/* Serve ball indicator */}
         {shouldShowBall && (
           <img
-            src={ballImage} onError={(e) => e.target.src = mikasaVolleyball}
+            src={ballImage}
             alt="Ball"
             style={{
               position: 'absolute',
-              // Position outside player box with vmin gap - responsive to viewport
               left: team === rightTeam ? 'calc(100% + 1vmin)' : 'auto',
               right: team === leftTeam ? 'calc(100% + 1vmin)' : 'auto',
               top: '50%',
@@ -2359,32 +1884,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           {position}
         </span>
 
-        {/* Top-right: Replaced player badge (white for libero replacement, yellow for substitution) */}
-        {topRightBadge && (
-          <span style={{
-            position: 'absolute',
-            top: '-6px',
-            right: '-6px',
-            minWidth: 'clamp(16px, 4vw, 22px)',
-            height: 'clamp(16px, 4vw, 22px)',
-            padding: '0 3px',
-            background: isLiberoReplacementBadge ? '#ffffff' : '#fde047',
-            border: isLiberoReplacementBadge ? '2px solid rgba(0, 0, 0, 0.3)' : '2px solid rgba(0, 0, 0, 0.25)',
-            borderRadius: '4px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 'clamp(9px, 2vw, 12px)',
-            fontWeight: 700,
-            color: '#0f172a',
-            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.25)'
-          }}>
-            {topRightBadge}
-          </span>
-        )}
-
-        {/* Bottom-left: Libero indicator (L, L1, L2) - hide if libero-captain or libero-court-captain (show LC instead) */}
-        {displayLiberoLabel && !isLiberoCaptain && !isLiberoCourtCaptain && (
+        {/* Bottom-left: Captain badge (C) */}
+        {isCaptain && (
           <span style={{
             position: 'absolute',
             bottom: '-6px',
@@ -2392,47 +1893,21 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             minWidth: 'clamp(16px, 4vw, 22px)',
             height: 'clamp(16px, 4vw, 22px)',
             padding: '0 3px',
-            background: '#3b82f6',
-            border: '2px solid rgba(255, 255, 255, 0.3)',
+            background: 'rgba(15, 23, 42, 0.95)',
+            border: '2px solid #22c55e',
             borderRadius: '4px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: 'clamp(9px, 2vw, 12px)',
             fontWeight: 700,
-            color: '#fff'
+            color: '#22c55e'
           }}>
-            {displayLiberoLabel}
-          </span>
-        )}
-        {/* Captain badge (C or LC) - show for captains including libero-captains */}
-        {showCaptainBadge && (
-          <span style={{
-            position: 'absolute',
-            bottom: '-6px',
-            // If libero but not libero-captain/court-captain, position next to L badge; otherwise position at left
-            left: (isLibero && !isLiberoCaptain && !isLiberoCourtCaptain) ? 'calc(clamp(16px, 4vw, 22px) + 2px)' : '-6px',
-            minWidth: 'clamp(16px, 4vw, 22px)',
-            height: 'clamp(16px, 4vw, 22px)',
-            padding: '0 3px',
-            // Libero-captain: white bg; Libero-court-captain: blue bg; Regular/Court captain: black bg
-            background: isLiberoCaptain ? '#ffffff' : (isLiberoCourtCaptain ? '#3b82f6' : 'rgba(15, 23, 42, 0.95)'),
-            // Libero-captain: green border; Libero-court-captain: amber border; Regular captain: green border; Court captain: amber border
-            border: isLiberoCaptain ? '2px solid #22c55e' : (isLiberoCourtCaptain ? '2px solid #fbbf24' : (isCaptain ? '2px solid #22c55e' : '2px solid #fbbf24')),
-            borderRadius: '4px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: (isLiberoCaptain || isLiberoCourtCaptain) ? 'clamp(8px, 1.8vw, 11px)' : 'clamp(9px, 2vw, 12px)',
-            fontWeight: 700,
-            // Libero-captain: green on white; Libero-court-captain: amber on blue; Regular captain: green; Court captain: amber
-            color: isLiberoCaptain ? '#22c55e' : (isLiberoCourtCaptain ? '#fbbf24' : (isCaptain ? '#22c55e' : '#fbbf24'))
-          }}>
-            {(isLiberoCaptain || isLiberoCourtCaptain) ? 'LC' : 'C'}
+            C
           </span>
         )}
 
-        {/* Bottom-right: Sanction indicators - same height as corner badges */}
+        {/* Bottom-right: Sanction indicators */}
         {(hasWarning || hasPenalty || hasExpulsion || hasDisqualification) && (
           <div style={{
             position: 'absolute',
@@ -2473,8 +1948,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   // Match finished info - use liveState sets won for accurate data
   const matchWinner = isMatchFinished && data
     ? (liveStateSetsWonHome > liveStateSetsWonAway
-      ? (data.homeTeam?.name || 'Home')
-      : (data.awayTeam?.name || 'Away'))
+      ? (data.team1?.name || 'Home')
+      : (data.team2?.name || 'Away'))
     : ''
 
   const matchResult = isMatchFinished
@@ -2635,149 +2110,6 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
       {/* Debug overlay - triple-tap to show */}
       {!isMasterMode && <WsDebugOverlay matchId={matchId} />}
-
-
-
-      {/* Setter Selection Modal for Advanced Mode */}
-      {setterSelectionModal && (
-        <div
-          onClick={() => setSetterSelectionModal(null)}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0, 0, 0, 0.9)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            cursor: 'pointer'
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
-              borderRadius: '24px',
-              padding: '32px',
-              textAlign: 'center',
-              border: '2px solid rgba(139, 92, 246, 0.5)',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-              minWidth: '320px',
-              maxWidth: '90vw',
-              maxHeight: '80vh',
-              overflow: 'auto'
-            }}
-          >
-            <div style={{
-              fontSize: '18px',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '2px',
-              color: '#8b5cf6',
-              marginBottom: '8px'
-            }}>
-              🏐 Select Setter
-            </div>
-            <div style={{
-              fontSize: '14px',
-              color: 'rgba(255, 255, 255, 0.7)',
-              marginBottom: '24px'
-            }}>
-              {setterSelectionModal === 'left' ? leftTeamData?.name : rightTeamData?.name}
-            </div>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: '12px',
-              marginBottom: '20px'
-            }}>
-              {(() => {
-                const teamLineup = setterSelectionModal === 'left' ? leftLineup : rightLineup
-                const currentSetter = setterSelectionModal === 'left' ? setterNumber.left : setterNumber.right
-                if (!teamLineup) return <div style={{ gridColumn: '1/-1', color: 'rgba(255,255,255,0.5)' }}>No lineup available</div>
-
-                return Object.entries(teamLineup).map(([position, posData]) => {
-                  // Handle both rich format (posData is object with number) and legacy format (posData is number)
-                  const playerNum = typeof posData === 'object' && posData?.number !== undefined ? posData.number : posData
-                  return (
-                    <button
-                      key={position}
-                      onClick={() => {
-                        const side = setterSelectionModal
-                        setSetterNumber(prev => ({ ...prev, [side]: playerNum }))
-                        setAdvancedMode(prev => ({ ...prev, [side]: true }))
-                        setSetterSelectionModal(null)
-                      }}
-                      style={{
-                        padding: '16px 12px',
-                        fontSize: '20px',
-                        fontWeight: 700,
-                        background: String(playerNum) === String(currentSetter)
-                          ? 'rgba(139, 92, 246, 0.4)'
-                          : 'rgba(255, 255, 255, 0.1)',
-                        color: String(playerNum) === String(currentSetter) ? '#a78bfa' : '#fff',
-                        border: String(playerNum) === String(currentSetter)
-                          ? '2px solid #8b5cf6'
-                          : '1px solid rgba(255, 255, 255, 0.2)',
-                        borderRadius: '12px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        gap: '4px',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>{position}</span>
-                      <span>#{playerNum}</span>
-                    </button>
-                  )
-                })
-              })()}
-            </div>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-              <button
-                onClick={() => {
-                  const side = setterSelectionModal
-                  setAdvancedMode(prev => ({ ...prev, [side]: false }))
-                  setSetterNumber(prev => ({ ...prev, [side]: null }))
-                  setSetterSelectionModal(null)
-                }}
-                style={{
-                  padding: '10px 20px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  background: 'rgba(239, 68, 68, 0.2)',
-                  color: '#ef4444',
-                  border: '1px solid rgba(239, 68, 68, 0.4)',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
-                Exit Advanced
-              </button>
-              <button
-                onClick={() => setSetterSelectionModal(null)}
-                style={{
-                  padding: '10px 20px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  color: '#fff',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* SECTION 1: Header - 40px */}
       <SimpleHeader
@@ -3067,7 +2399,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           </div>
         </div>
 
-        {/* SECTION 3: Court Area - 40% (includes advanced mode buttons) */}
+        {/* SECTION 3: Court Area - Beach Volleyball (2 players per team) */}
         <div style={{
           flex: '0 0 40%',
           display: 'flex',
@@ -3075,78 +2407,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           overflow: 'hidden',
           minHeight: 0
         }}>
-          {/* Advanced Mode Buttons - Above Court */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '2px 8px',
-            background: 'rgba(0, 0, 0, 0.15)',
-            flex: '0 0 auto'
-          }}>
-            {/* Left team advanced mode button - only show when receiving and 2R view */}
-            <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-              {refereeView === '2nd' && !leftServing && leftLineup && (
-                <button
-                  onClick={() => setSetterSelectionModal('left')}
-                  style={{
-                    padding: '4px 12px',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    background: advancedMode.left ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255, 255, 255, 0.1)',
-                    color: advancedMode.left ? '#a78bfa' : 'rgba(255, 255, 255, 0.7)',
-                    border: advancedMode.left ? '1px solid rgba(139, 92, 246, 0.5)' : '1px solid rgba(255, 255, 255, 0.2)',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px'
-                  }}
-                >
-                  {advancedMode.left ? (
-                    <>
-                      <span style={{ color: '#8b5cf6' }}>P{getSetterPosition(leftLineup, setterNumber.left) || '?'}</span>
-                      <span>#{setterNumber.left}</span>
-                    </>
-                  ) : (
-                    '⚙️ Advanced'
-                  )}
-                </button>
-              )}
-            </div>
-            {/* Right team advanced mode button - only show when receiving and 2R view */}
-            <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-              {refereeView === '2nd' && !rightServing && rightLineup && (
-                <button
-                  onClick={() => setSetterSelectionModal('right')}
-                  style={{
-                    padding: '4px 12px',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    background: advancedMode.right ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255, 255, 255, 0.1)',
-                    color: advancedMode.right ? '#a78bfa' : 'rgba(255, 255, 255, 0.7)',
-                    border: advancedMode.right ? '1px solid rgba(139, 92, 246, 0.5)' : '1px solid rgba(255, 255, 255, 0.2)',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px'
-                  }}
-                >
-                  {advancedMode.right ? (
-                    <>
-                      <span style={{ color: '#8b5cf6' }}>P{getSetterPosition(rightLineup, setterNumber.right) || '?'}</span>
-                      <span>#{setterNumber.right}</span>
-                    </>
-                  ) : (
-                    '⚙️ Advanced'
-                  )}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Court visualization - takes remaining space in 40% */}
+          {/* Court visualization - takes full space */}
           <div style={{
             flex: 1,
             display: 'flex',
@@ -3179,357 +2440,56 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                 zIndex: 2
               }} />
 
-              {/* Attack lines */}
+              {/* Left side - Beach volleyball: 2 players */}
               <div style={{
-                position: 'absolute',
-                top: 0,
-                bottom: 0,
-                left: 'calc(50% - 22.667%)',
-                width: '2px',
-                background: 'rgba(255, 255, 255, 0.15)',
-                zIndex: 1
-              }} />
-              <div style={{
-                position: 'absolute',
-                top: 0,
-                bottom: 0,
-                left: 'calc(50% + 22.667%)',
-                width: '2px',
-                background: 'rgba(255, 255, 255, 0.15)',
-                zIndex: 1
-              }} />
-
-              {/* Left side */}
-              <div
-                ref={(el) => { courtRef.current.left = el }}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, 'left')}
-                style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                position: 'relative',
+                height: '100%'
+              }}>
+                <div style={{
                   display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-around',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  position: 'relative',
-                  height: '100%'
-                }}
-              >
-                {/* Circular arrows toggle for reception mode - only show when in advanced mode and receiving */}
-                {advancedMode.left && !leftServing && (
-                  <button
-                    onClick={() => toggleReceptionMode('left')}
-                    style={{
-                      position: 'absolute',
-                      bottom: '8px',
-                      left: '8px',
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '50%',
-                      background: receptionMode.left === 'reception' ? 'rgba(139, 92, 246, 0.4)' : 'rgba(255, 255, 255, 0.15)',
-                      border: receptionMode.left === 'reception' ? '2px solid #8b5cf6' : '1px solid rgba(255, 255, 255, 0.3)',
-                      color: receptionMode.left === 'reception' ? '#a78bfa' : 'rgba(255, 255, 255, 0.7)',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '16px',
-                      zIndex: 10,
-                      transition: 'all 0.2s'
-                    }}
-                    title={receptionMode.left === 'reception' ? 'Switch to standard view' : 'Switch to reception formation'}
-                  >
-                    🔄
-                  </button>
-                )}
-
-                {/* Standard grid layout when NOT in advanced mode OR when serving OR when in standard mode */}
-                {(!advancedMode.left || leftServing || receptionMode.left === 'standard') ? (
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1.5fr 1fr',
-                    gap: 'clamp(4px, 2vw, 12px)',
-                    width: '100%',
-                    height: '100%',
-                    padding: 'clamp(4px, 2vw, 12px)'
-                  }}>
-                    {/* Back row (V, VI, I) - left side of left court */}
-                    <div style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-around',
-                      alignItems: 'center'
-                    }}>
-                      <PlayerCircle positionData={leftLineup?.V} position="V" team={leftTeam} isServing={leftServing} />
-                      <PlayerCircle positionData={leftLineup?.VI} position="VI" team={leftTeam} isServing={leftServing} />
-                      <PlayerCircle positionData={leftLineup?.I} position="I" team={leftTeam} isServing={leftServing} />
-                    </div>
-                    {/* Front row (IV, III, II) - right side of left court (near net) */}
-                    <div style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-around',
-                      alignItems: 'center'
-                    }}>
-                      <PlayerCircle positionData={leftLineup?.IV} position="IV" team={leftTeam} isServing={leftServing} />
-                      <PlayerCircle positionData={leftLineup?.III} position="III" team={leftTeam} isServing={leftServing} />
-                      <PlayerCircle positionData={leftLineup?.II} position="II" team={leftTeam} isServing={leftServing} />
-                    </div>
-                  </div>
-                ) : (
-                  /* Advanced mode + reception - absolute positioning for reception formations */
-                  /* Court perspective: Net is on RIGHT side (towards center), end line on LEFT */
-                  <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-                    {(() => {
-                      const setterPos = getSetterPosition(leftLineup, setterNumber.left)
-                      const formation = getFormationWithCustom('left', setterPos)
-                      // For left court: Net is on right
-                      // formation gives top (from net) and left (from left side looking at net from behind)
-                      // For horizontal court with net in middle:
-                      // - top in formation = distance from net = maps to distance from RIGHT edge of left half
-                      // - left in formation = horizontal position = maps directly to vertical position
-                      //   (left side of court = top, right side = bottom)
-                      return ['I', 'II', 'III', 'IV', 'V', 'VI'].map(pos => {
-                        const coords = formation[pos]
-                        // Transform: formation top -> distance from net (right edge)
-                        // formation left -> vertical position (mirrored for left side view)
-                        const rightPercent = coords.top // Distance from net
-                        const topPercent = coords.left // Left side: no inversion (mirrored from right side)
-                        return (
-                          <div
-                            key={pos}
-                            draggable
-                            onDragStart={(e) => handleDragStart(e, 'left', pos)}
-                            style={{
-                              position: 'absolute',
-                              right: `${rightPercent}%`,
-                              top: `${topPercent}%`,
-                              transform: 'translate(50%, -50%) scale(0.8)',
-                              zIndex: 3,
-                              cursor: 'grab',
-                              touchAction: 'none'
-                            }}
-                          >
-                            <PlayerCircle positionData={leftLineup?.[pos]} position={pos} team={leftTeam} isServing={leftServing} />
-                          </div>
-                        )
-                      })
-                    })()}
-                  </div>
-                )}
-                {/* Blur overlay when lineup is set but other team hasn't set theirs yet */}
-                {leftLineup && !rightLineup && isFirstRally && !peekingLineup.left && (
-                  <div style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    background: 'rgba(0, 0, 0, 0.75)',
-                    backdropFilter: 'blur(8px)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '12px',
-                    zIndex: 50,
-                    borderRadius: '8px'
-                  }}>
-                    <div style={{
-                      fontSize: 'clamp(14px, 3vw, 20px)',
-                      fontWeight: 700,
-                      color: '#22c55e',
-                      textAlign: 'center'
-                    }}>
-                      {t('refereeDashboard.lineupSet', 'Line-up set')}
-                    </div>
-                    <button
-                      onMouseDown={() => setPeekingLineup(prev => ({ ...prev, left: true }))}
-                      onMouseUp={() => setPeekingLineup(prev => ({ ...prev, left: false }))}
-                      onMouseLeave={() => setPeekingLineup(prev => ({ ...prev, left: false }))}
-                      onTouchStart={() => setPeekingLineup(prev => ({ ...prev, left: true }))}
-                      onTouchEnd={() => setPeekingLineup(prev => ({ ...prev, left: false }))}
-                      style={{
-                        padding: '8px 16px',
-                        fontSize: 'clamp(10px, 2vw, 13px)',
-                        fontWeight: 600,
-                        background: 'rgba(59, 130, 246, 0.3)',
-                        color: '#fff',
-                        border: '1px solid rgba(59, 130, 246, 0.5)',
-                        borderRadius: '6px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {t('refereeDashboard.showLineup', 'Show Line-up')}
-                    </button>
-                  </div>
-                )}
+                  height: '80%',
+                  padding: 'clamp(8px, 3vw, 20px)'
+                }}>
+                  {/* Player 1 (serving position when serving) */}
+                  <PlayerCircle positionData={leftLineup?.['1'] || leftLineup?.I} position="1" team={leftTeam} isServing={leftServing} />
+                  {/* Player 2 */}
+                  <PlayerCircle positionData={leftLineup?.['2'] || leftLineup?.II} position="2" team={leftTeam} isServing={leftServing} />
+                </div>
               </div>
 
-              {/* Right side */}
-              <div
-                ref={(el) => { courtRef.current.right = el }}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, 'right')}
-                style={{
+              {/* Right side - Beach volleyball: 2 players */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                position: 'relative',
+                height: '100%'
+              }}>
+                <div style={{
                   display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-around',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  position: 'relative',
-                  height: '100%'
-                }}
-              >
-                {/* Circular arrows toggle for reception mode - only show when in advanced mode and receiving */}
-                {advancedMode.right && !rightServing && (
-                  <button
-                    onClick={() => toggleReceptionMode('right')}
-                    style={{
-                      position: 'absolute',
-                      bottom: '8px',
-                      right: '8px',
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '50%',
-                      background: receptionMode.right === 'reception' ? 'rgba(139, 92, 246, 0.4)' : 'rgba(255, 255, 255, 0.15)',
-                      border: receptionMode.right === 'reception' ? '2px solid #8b5cf6' : '1px solid rgba(255, 255, 255, 0.3)',
-                      color: receptionMode.right === 'reception' ? '#a78bfa' : 'rgba(255, 255, 255, 0.7)',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '16px',
-                      zIndex: 10,
-                      transition: 'all 0.2s'
-                    }}
-                    title={receptionMode.right === 'reception' ? 'Switch to standard view' : 'Switch to reception formation'}
-                  >
-                    🔄
-                  </button>
-                )}
-
-                {/* Standard grid layout when NOT in advanced mode OR when serving OR when in standard mode */}
-                {(!advancedMode.right || rightServing || receptionMode.right === 'standard') ? (
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1.5fr',
-                    gap: 'clamp(4px, 2vw, 12px)',
-                    width: '100%',
-                    height: '100%',
-                    padding: 'clamp(4px, 2vw, 12px)'
-                  }}>
-                    {/* Front row (II, III, IV) - left side of right court (near net) */}
-                    <div style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-around',
-                      alignItems: 'center'
-                    }}>
-                      <PlayerCircle positionData={rightLineup?.II} position="II" team={rightTeam} isServing={rightServing} />
-                      <PlayerCircle positionData={rightLineup?.III} position="III" team={rightTeam} isServing={rightServing} />
-                      <PlayerCircle positionData={rightLineup?.IV} position="IV" team={rightTeam} isServing={rightServing} />
-                    </div>
-                    {/* Back row (I, VI, V) - right side of right court */}
-                    <div style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-around',
-                      alignItems: 'center'
-                    }}>
-                      <PlayerCircle positionData={rightLineup?.I} position="I" team={rightTeam} isServing={rightServing} />
-                      <PlayerCircle positionData={rightLineup?.VI} position="VI" team={rightTeam} isServing={rightServing} />
-                      <PlayerCircle positionData={rightLineup?.V} position="V" team={rightTeam} isServing={rightServing} />
-                    </div>
-                  </div>
-                ) : (
-                  /* Advanced mode + reception - absolute positioning for reception formations */
-                  /* Court perspective: Net is on LEFT side (towards center), end line on RIGHT */
-                  <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-                    {(() => {
-                      const setterPos = getSetterPosition(rightLineup, setterNumber.right)
-                      const formation = getFormationWithCustom('right', setterPos)
-                      // For right court: Net is on left
-                      // formation gives top (from net) and left (from left side looking at net from behind)
-                      // For horizontal court with net in middle:
-                      // - top in formation = distance from net = maps to distance from LEFT edge of right half
-                      // - left in formation = horizontal position = maps to vertical position
-                      return ['I', 'II', 'III', 'IV', 'V', 'VI'].map(pos => {
-                        const coords = formation[pos]
-                        // Transform: formation top -> distance from net (left edge)
-                        // formation left -> vertical position (need to flip for right side view)
-                        const leftPercent = coords.top // Distance from net
-                        const topPercent = 100 - coords.left // Invert: formation left (0) = bottom, left (100) = top
-                        return (
-                          <div
-                            key={pos}
-                            draggable
-                            onDragStart={(e) => handleDragStart(e, 'right', pos)}
-                            style={{
-                              position: 'absolute',
-                              left: `${leftPercent}%`,
-                              top: `${topPercent}%`,
-                              transform: 'translate(-50%, -50%) scale(0.8)',
-                              zIndex: 3,
-                              cursor: 'grab',
-                              touchAction: 'none'
-                            }}
-                          >
-                            <PlayerCircle positionData={rightLineup?.[pos]} position={pos} team={rightTeam} isServing={rightServing} />
-                          </div>
-                        )
-                      })
-                    })()}
-                  </div>
-                )}
-                {/* Blur overlay when lineup is set but other team hasn't set theirs yet */}
-                {rightLineup && !leftLineup && isFirstRally && !peekingLineup.right && (
-                  <div style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    background: 'rgba(0, 0, 0, 0.75)',
-                    backdropFilter: 'blur(8px)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '12px',
-                    zIndex: 50,
-                    borderRadius: '8px'
-                  }}>
-                    <div style={{
-                      fontSize: 'clamp(3vmin, 6vmin, 12vmin)',
-                      fontWeight: 700,
-                      color: '#22c55e',
-                      textAlign: 'center'
-                    }}>
-                      {t('refereeDashboard.lineupSet', 'Line-up set')}
-                    </div>
-                    <button
-                      onMouseDown={() => setPeekingLineup(prev => ({ ...prev, right: true }))}
-                      onMouseUp={() => setPeekingLineup(prev => ({ ...prev, right: false }))}
-                      onMouseLeave={() => setPeekingLineup(prev => ({ ...prev, right: false }))}
-                      onTouchStart={() => setPeekingLineup(prev => ({ ...prev, right: true }))}
-                      onTouchEnd={() => setPeekingLineup(prev => ({ ...prev, right: false }))}
-                      style={{
-                        padding: '8px 16px',
-                        fontSize: 'clamp(10px, 2vw, 13px)',
-                        fontWeight: 600,
-                        background: 'rgba(59, 130, 246, 0.3)',
-                        color: '#fff',
-                        border: '1px solid rgba(59, 130, 246, 0.5)',
-                        borderRadius: '6px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {t('refereeDashboard.showLineup', 'Show Line-up')}
-                    </button>
-                  </div>
-                )}
+                  height: '80%',
+                  padding: 'clamp(8px, 3vw, 20px)'
+                }}>
+                  {/* Player 1 (serving position when serving) */}
+                  <PlayerCircle positionData={rightLineup?.['1'] || rightLineup?.I} position="1" team={rightTeam} isServing={rightServing} />
+                  {/* Player 2 */}
+                  <PlayerCircle positionData={rightLineup?.['2'] || rightLineup?.II} position="2" team={rightTeam} isServing={rightServing} />
+                </div>
               </div>
             </div>
           </div>
-        </div>{/* End SECTION 3: Court Area - 40% */}
+        </div>{/* End SECTION 3: Court Area */}
 
-        {/* SECTION 4: Combined TO/SUB counters + Sanctions - fills remaining space */}
+        {/* SECTION 4: TO counters + Sanctions - Beach volleyball (no substitutions) */}
         <div style={{
           flex: '1 1 auto',
           border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -3542,7 +2502,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           minHeight: 0,
           overflow: 'hidden'
         }}>
-          {/* Left team counters - TO SUB (vertical stacked) */}
+          {/* Left team counters - TO only (beach volleyball: 1 timeout per set) */}
           <div style={{
             display: 'flex',
             flexDirection: 'column',
@@ -3555,29 +2515,15 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
               <span style={{ fontWeight: 600, color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.6em' }}>TO</span>
               <span style={{
-                background: leftStats.timeouts >= 2 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255, 255, 255, 0.15)',
+                background: leftStats.timeouts >= 1 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255, 255, 255, 0.15)',
                 padding: '7px 14px',
                 borderRadius: '6px',
-                border: leftStats.timeouts >= 2 ? '1px solid rgba(239, 68, 68, 0.6)' : '1px solid rgba(255, 255, 255, 0.3)',
+                border: leftStats.timeouts >= 1 ? '1px solid rgba(239, 68, 68, 0.6)' : '1px solid rgba(255, 255, 255, 0.3)',
                 minWidth: '42px',
                 aspectRatio: '1',
                 textAlign: 'center',
-                color: leftStats.timeouts >= 2 ? '#ef4444' : 'rgba(255, 255, 255, 0.9)'
+                color: leftStats.timeouts >= 1 ? '#ef4444' : 'rgba(255, 255, 255, 0.9)'
               }}>{leftStats.timeouts}</span>
-            </div>
-            {/* SUB counter */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-              <span style={{ fontWeight: 600, color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.6em' }}>SUB</span>
-              <span style={{
-                background: leftStats.substitutions >= 6 ? 'rgba(239, 68, 68, 0.3)' : leftStats.substitutions >= 5 ? 'rgba(234, 179, 8, 0.3)' : 'rgba(255, 255, 255, 0.15)',
-                padding: '7px 14px',
-                aspectRatio: '1',
-                borderRadius: '6px',
-                border: leftStats.substitutions >= 6 ? '1px solid rgba(239, 68, 68, 0.6)' : leftStats.substitutions >= 5 ? '1px solid rgba(234, 179, 8, 0.6)' : '1px solid rgba(255, 255, 255, 0.3)',
-                minWidth: '42px',
-                textAlign: 'center',
-                color: leftStats.substitutions >= 6 ? '#ef4444' : leftStats.substitutions >= 5 ? '#eab308' : 'rgba(255, 255, 255, 0.9)'
-              }}>{leftStats.substitutions}</span>
             </div>
           </div>
 
@@ -3765,8 +2711,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                 </div>
               ) : (
                 <img
-                  src="/openvolley_no_bg.png"
-                  alt="OpenVolley"
+                  src="/openbeach_no_bg.png"
+                  alt="openBeach"
                   style={{
                     width: '100%',
                     height: '100%',
@@ -3927,7 +2873,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             </div>
           </div>
 
-          {/* Right team counters - TO SUB (vertical stacked) */}
+          {/* Right team counters - TO only (beach volleyball: 1 timeout per set) */}
           <div style={{
             display: 'flex',
             flexDirection: 'column',
@@ -3940,29 +2886,15 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
               <span style={{ fontWeight: 600, color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.6em' }}>TO</span>
               <span style={{
-                background: rightStats.timeouts >= 2 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255, 255, 255, 0.15)',
+                background: rightStats.timeouts >= 1 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255, 255, 255, 0.15)',
                 padding: '7px 14px',
                 borderRadius: '6px',
                 aspectRatio: '1',
-                border: rightStats.timeouts >= 2 ? '1px solid rgba(239, 68, 68, 0.6)' : '1px solid rgba(255, 255, 255, 0.3)',
+                border: rightStats.timeouts >= 1 ? '1px solid rgba(239, 68, 68, 0.6)' : '1px solid rgba(255, 255, 255, 0.3)',
                 minWidth: '42px',
                 textAlign: 'center',
-                color: rightStats.timeouts >= 2 ? '#ef4444' : 'rgba(255, 255, 255, 0.9)'
+                color: rightStats.timeouts >= 1 ? '#ef4444' : 'rgba(255, 255, 255, 0.9)'
               }}>{rightStats.timeouts}</span>
-            </div>
-            {/* SUB counter */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-              <span style={{ fontWeight: 600, color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.6em' }}>SUB</span>
-              <span style={{
-                background: rightStats.substitutions >= 6 ? 'rgba(239, 68, 68, 0.3)' : rightStats.substitutions >= 5 ? 'rgba(234, 179, 8, 0.3)' : 'rgba(255, 255, 255, 0.15)',
-                padding: '7px 14px',
-                borderRadius: '6px',
-                aspectRatio: '1',
-                border: rightStats.substitutions >= 6 ? '1px solid rgba(239, 68, 68, 0.6)' : rightStats.substitutions >= 5 ? '1px solid rgba(234, 179, 8, 0.6)' : '1px solid rgba(255, 255, 255, 0.3)',
-                minWidth: '42px',
-                textAlign: 'center',
-                color: rightStats.substitutions >= 6 ? '#ef4444' : rightStats.substitutions >= 5 ? '#eab308' : 'rgba(255, 255, 255, 0.9)'
-              }}>{rightStats.substitutions}</span>
             </div>
           </div>
         </div>
@@ -3999,17 +2931,13 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                   {(() => {
                     // lastEvent.team is 'home' or 'away', need to map to display values
                     const teamLbl = lastEvent.team === 'home' ? homeLabel : lastEvent.team === 'away' ? awayLabel : ''
-                    const teamShort = lastEvent.team === 'home' ? (data?.match?.homeShortName || data?.homeTeam?.name || 'Home') : lastEvent.team === 'away' ? (data?.match?.awayShortName || data?.awayTeam?.name || 'Away') : ''
+                    const teamShort = lastEvent.team === 'home' ? (data?.match?.homeShortName || data?.team1?.name || 'Home') : lastEvent.team === 'away' ? (data?.match?.awayShortName || data?.team2?.name || 'Away') : ''
                     const scoreStr = `(${leftDisplayScore}-${rightDisplayScore})`
                     const teamInfo = teamLbl ? `${teamLbl} ${teamShort} ${scoreStr}` : ''
 
                     if (lastEvent.type === 'point') return `${t('refereeDashboard.events.point')} ${teamInfo}`
                     if (lastEvent.type === 'timeout') return `${t('refereeDashboard.events.timeout')} ${teamInfo}`
-                    if (lastEvent.type === 'substitution') return `${t('refereeDashboard.events.substitution')} ${teamInfo}: #${lastEvent.data?.playerOut} → #${lastEvent.data?.playerIn}`
-                    if (lastEvent.type === 'libero_entry') return `${t('refereeDashboard.events.liberoIn')} ${teamInfo}`
-                    if (lastEvent.type === 'libero_exit') return `${t('refereeDashboard.events.liberoOut')} ${teamInfo}`
-                    if (lastEvent.type === 'libero_exchange') return `${t('refereeDashboard.events.liberoExchange')} ${teamInfo}`
-                    if (lastEvent.type === 'libero_redesignation') return `${t('refereeDashboard.events.liberoRedesignation')} ${teamInfo}`
+                    if (lastEvent.type === 'challenge') return `${t('refereeDashboard.events.challenge', 'Challenge')} ${teamInfo}`
                     if (lastEvent.type === 'set_end') return t('refereeDashboard.events.setEnd', { set: lastEvent.data?.setIndex || '' })
                     if (lastEvent.type === 'sanction') {
                       const sanctionData = lastEvent.data || {}
@@ -4028,15 +2956,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                       const isDelayOrIR = ['delay_warning', 'delay_penalty', 'improper_request'].includes(sanctionData.type)
 
                       let memberInfo = ''
-                      if (!isDelayOrIR) {
-                        if (sanctionData.playerNumber) {
-                          memberInfo = `#${sanctionData.playerNumber}`
-                        } else if (sanctionData.role) {
-                          // For officials: coach, assistant coach, etc.
-                          memberInfo = sanctionData.role
-                        } else if (sanctionData.playerType) {
-                          memberInfo = sanctionData.playerType
-                        }
+                      if (!isDelayOrIR && sanctionData.playerNumber) {
+                        memberInfo = `#${sanctionData.playerNumber}`
                       }
 
                       const parts = [sanctionTypeShort, teamInfo, memberInfo].filter(Boolean)
@@ -4070,8 +2991,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                 const match = await db.matches.get(matchId)
                 const sets = await db.sets.where('matchId').equals(matchId).sortBy('index')
                 const events = await db.events.where('matchId').equals(matchId).sortBy('seq')
-                const homeTeam = await db.teams.get(match?.homeTeamId)
-                const awayTeam = await db.teams.get(match?.awayTeamId)
+                const team1 = await db.teams.get(match?.team1Id)
+                const team2 = await db.teams.get(match?.team2Id)
 
                 console.log('[TestModeControls] Reloaded from IndexedDB:', {
                   matchId,
@@ -4084,8 +3005,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                 setData({
                   success: true,
                   match,
-                  homeTeam,
-                  awayTeam,
+                  team1,
+                  team2,
                   sets,
                   events
                 })

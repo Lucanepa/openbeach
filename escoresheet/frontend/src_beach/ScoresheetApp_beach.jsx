@@ -94,8 +94,8 @@ const fetchAllScoresheets = async () => {
 
           return {
             ...item,
-            homeTeam: json.homeTeam?.name || json.match?.homeTeamName || 'Team A',
-            awayTeam: json.awayTeam?.name || json.match?.awayTeamName || 'Team B',
+            team1: json.team1?.name || json.match?.team1Name || 'Team A',
+            team2: json.team2?.name || json.match?.team2Name || 'Team B',
             finalScore: json.match?.final_score || '',
             uploadedAt: json.uploadedAt
           }
@@ -235,7 +235,7 @@ const ScoresheetList = () => {
       <div className="max-w-3xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
-          <img src="/openvolley_no_bg.png" alt="OpenVolley" className="w-12 h-12" />
+          <img src="/openbeach_no_bg.png" alt="openBeach" className="w-12 h-12" />
           <div>
             <h1 className="text-2xl font-bold text-gray-800">Scoresheet Archive</h1>
             <p className="text-gray-500">
@@ -277,7 +277,7 @@ const ScoresheetList = () => {
                             )}
                           </div>
                           <div className="text-base font-medium text-gray-800">
-                            {item.homeTeam || 'Team A'} vs {item.awayTeam || 'Team B'}
+                            {item.team1 || 'Team A'} vs {item.team2 || 'Team B'}
                           </div>
                         </div>
                         <div className="flex gap-2">

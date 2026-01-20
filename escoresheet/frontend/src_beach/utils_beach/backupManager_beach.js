@@ -178,14 +178,14 @@ export async function exportMatchData(matchId) {
   if (!match) throw new Error('Match not found')
 
   // Get related data
-  const [homeTeam, awayTeam] = await Promise.all([
-    match.homeTeamId ? db.teams.get(match.homeTeamId) : null,
-    match.awayTeamId ? db.teams.get(match.awayTeamId) : null
+  const [team1, team2] = await Promise.all([
+    match.team1Id ? db.teams.get(match.team1Id) : null,
+    match.team2Id ? db.teams.get(match.team2Id) : null
   ])
 
-  const [homePlayers, awayPlayers] = await Promise.all([
-    match.homeTeamId ? db.players.where('teamId').equals(match.homeTeamId).toArray() : [],
-    match.awayTeamId ? db.players.where('teamId').equals(match.awayTeamId).toArray() : []
+  const [team1Players, team2Players] = await Promise.all([
+    match.team1Id ? db.players.where('teamId').equals(match.team1Id).toArray() : [],
+    match.team2Id ? db.players.where('teamId').equals(match.team2Id).toArray() : []
   ])
 
   const sets = await db.sets.where('matchId').equals(matchId).toArray()
@@ -195,10 +195,10 @@ export async function exportMatchData(matchId) {
     version: 1, // Schema version for future compatibility
     lastUpdated: new Date().toISOString(),
     match,
-    homeTeam,
-    awayTeam,
-    homePlayers,
-    awayPlayers,
+    team1,
+    team2,
+    team1Players,
+    team2Players,
     sets,
     events
   }
@@ -219,8 +219,8 @@ export function generateBackupFilename(data) {
     const latestSet = data.sets.sort((a, b) => (b.index || 0) - (a.index || 0))[0]
     if (latestSet) {
       setIndex = latestSet.index || 1
-      leftScore = latestSet.homePoints || 0
-      rightScore = latestSet.awayPoints || 0
+      leftScore = latestSet.team1Points || 0
+      rightScore = latestSet.team2Points || 0
     }
   }
 
@@ -282,7 +282,7 @@ export async function restoreMatchFromJson(jsonData) {
     throw new Error('Invalid backup file format')
   }
 
-  const { match, homeTeam, awayTeam, homePlayers, awayPlayers, sets, events } = jsonData
+  const { match, team1, team2, team1Players, team2Players, sets, events } = jsonData
 
   // Get external_id for Supabase sync (seed_key in local, external_id in backup)
   const externalId = match.seed_key || match.seedKey || match.external_id
@@ -303,39 +303,39 @@ export async function restoreMatchFromJson(jsonData) {
     await db.sync_queue.clear()
 
     // STEP B: Create teams (reuse existing or create new)
-    let homeTeamId = null
-    let awayTeamId = null
+    let team1Id = null
+    let team2Id = null
 
-    if (homeTeam) {
-      const existingHome = await db.teams.where('name').equals(homeTeam.name).first()
-      if (existingHome) {
-        homeTeamId = existingHome.id
-        await db.teams.update(homeTeamId, {
-          ...homeTeam,
-          id: homeTeamId,
+    if (team1) {
+      const existingTeam1 = await db.teams.where('name').equals(team1.name).first()
+      if (existingTeam1) {
+        team1Id = existingTeam1.id
+        await db.teams.update(team1Id, {
+          ...team1,
+          id: team1Id,
           updatedAt: new Date().toISOString()
         })
       } else {
-        homeTeamId = await db.teams.add({
-          ...homeTeam,
+        team1Id = await db.teams.add({
+          ...team1,
           id: undefined,
           createdAt: new Date().toISOString()
         })
       }
     }
 
-    if (awayTeam) {
-      const existingAway = await db.teams.where('name').equals(awayTeam.name).first()
-      if (existingAway) {
-        awayTeamId = existingAway.id
-        await db.teams.update(awayTeamId, {
-          ...awayTeam,
-          id: awayTeamId,
+    if (team2) {
+      const existingTeam2 = await db.teams.where('name').equals(team2.name).first()
+      if (existingTeam2) {
+        team2Id = existingTeam2.id
+        await db.teams.update(team2Id, {
+          ...team2,
+          id: team2Id,
           updatedAt: new Date().toISOString()
         })
       } else {
-        awayTeamId = await db.teams.add({
-          ...awayTeam,
+        team2Id = await db.teams.add({
+          ...team2,
           id: undefined,
           createdAt: new Date().toISOString()
         })
@@ -346,8 +346,8 @@ export async function restoreMatchFromJson(jsonData) {
     const matchId = await db.matches.add({
       ...match,
       id: 1, // Fixed ID for single match
-      homeTeamId,
-      awayTeamId,
+      team1Id,
+      team2Id,
       seed_key: externalId, // Ensure seed_key is set for sync
       restoredAt: new Date().toISOString()
     })
@@ -355,30 +355,30 @@ export async function restoreMatchFromJson(jsonData) {
     restoredMatchId = matchId
 
     // Delete existing players for these teams and recreate
-    if (homeTeamId) {
-      await db.players.where('teamId').equals(homeTeamId).delete()
+    if (team1Id) {
+      await db.players.where('teamId').equals(team1Id).delete()
     }
-    if (awayTeamId) {
-      await db.players.where('teamId').equals(awayTeamId).delete()
+    if (team2Id) {
+      await db.players.where('teamId').equals(team2Id).delete()
     }
 
     // Create players
-    if (homePlayers?.length && homeTeamId) {
-      for (const player of homePlayers) {
+    if (team1Players?.length && team1Id) {
+      for (const player of team1Players) {
         await db.players.add({
           ...player,
           id: undefined,
-          teamId: homeTeamId
+          teamId: team1Id
         })
       }
     }
 
-    if (awayPlayers?.length && awayTeamId) {
-      for (const player of awayPlayers) {
+    if (team2Players?.length && team2Id) {
+      for (const player of team2Players) {
         await db.players.add({
           ...player,
           id: undefined,
-          teamId: awayTeamId
+          teamId: team2Id
         })
       }
     }
@@ -418,18 +418,18 @@ export async function restoreMatchFromJson(jsonData) {
         game_pin: match.gamePin || match.game_pin,
         game_n: match.gameN || match.game_n,
         status: match.status || 'live',
-        home_team: homeTeam ? {
-          name: homeTeam.name,
-          short_name: homeTeam.shortName || homeTeam.short_name,
-          color: homeTeam.color
+        home_team: team1 ? {
+          name: team1.name,
+          short_name: team1.shortName || team1.short_name,
+          color: team1.color
         } : null,
-        away_team: awayTeam ? {
-          name: awayTeam.name,
-          short_name: awayTeam.shortName || awayTeam.short_name,
-          color: awayTeam.color
+        away_team: team2 ? {
+          name: team2.name,
+          short_name: team2.shortName || team2.short_name,
+          color: team2.color
         } : null,
-        players_home: homePlayers || [],
-        players_away: awayPlayers || [],
+        players_home: team1Players || [],
+        players_away: team2Players || [],
         // Include match_info fields (stored as JSONB)
         match_info: {
           hall: match.hall,
@@ -451,8 +451,8 @@ export async function restoreMatchFromJson(jsonData) {
       const setsPayload = (sets || []).map(s => ({
         external_id: s.externalId || s.external_id || `${externalId}_set_${s.index}`,
         index: s.index,
-        home_points: s.homePoints ?? s.home_points ?? 0,
-        away_points: s.awayPoints ?? s.away_points ?? 0,
+        home_points: s.team1Points ?? s.home_points ?? 0,
+        away_points: s.team2Points ?? s.away_points ?? 0,
         finished: s.finished || false,
         start_time: s.startTime || s.start_time,
         end_time: s.endTime || s.end_time
@@ -473,15 +473,15 @@ export async function restoreMatchFromJson(jsonData) {
         ? [...sets].sort((a, b) => (b.index || 0) - (a.index || 0))[0]
         : null
       const finishedSets = (sets || []).filter(s => s.finished)
-      const homeSetsWon = finishedSets.filter(s => (s.homePoints ?? s.home_points ?? 0) > (s.awayPoints ?? s.away_points ?? 0)).length
-      const awaySetsWon = finishedSets.filter(s => (s.awayPoints ?? s.away_points ?? 0) > (s.homePoints ?? s.home_points ?? 0)).length
+      const team1SetsWon = finishedSets.filter(s => (s.team1Points ?? s.home_points ?? 0) > (s.team2Points ?? s.away_points ?? 0)).length
+      const team2SetsWon = finishedSets.filter(s => (s.team2Points ?? s.away_points ?? 0) > (s.team1Points ?? s.home_points ?? 0)).length
 
       const liveStatePayload = {
         current_set: latestSet?.index || 1,
-        points_a: latestSet?.homePoints ?? latestSet?.home_points ?? 0,
-        points_b: latestSet?.awayPoints ?? latestSet?.away_points ?? 0,
-        sets_won_a: homeSetsWon,
-        sets_won_b: awaySetsWon,
+        points_a: latestSet?.team1Points ?? latestSet?.home_points ?? 0,
+        points_b: latestSet?.team2Points ?? latestSet?.away_points ?? 0,
+        sets_won_a: team1SetsWon,
+        sets_won_b: team2SetsWon,
         status: match.status || 'live'
       }
 
@@ -520,7 +520,7 @@ export async function restoreMatchInPlace(matchId, jsonData) {
     throw new Error('Invalid backup file format')
   }
 
-  const { match, homeTeam, awayTeam, homePlayers, awayPlayers, sets, events } = jsonData
+  const { match, team1, team2, team1Players, team2Players, sets, events } = jsonData
 
   // Get external_id for Supabase sync
   const externalId = match.seed_key || match.seedKey || match.external_id
@@ -574,18 +574,18 @@ export async function restoreMatchInPlace(matchId, jsonData) {
         game_pin: match.gamePin || match.game_pin,
         game_n: match.gameN || match.game_n,
         status: match.status || 'live',
-        home_team: homeTeam ? {
-          name: homeTeam.name,
-          short_name: homeTeam.shortName || homeTeam.short_name,
-          color: homeTeam.color
+        home_team: team1 ? {
+          name: team1.name,
+          short_name: team1.shortName || team1.short_name,
+          color: team1.color
         } : (match.home_team || null),
-        away_team: awayTeam ? {
-          name: awayTeam.name,
-          short_name: awayTeam.shortName || awayTeam.short_name,
-          color: awayTeam.color
+        away_team: team2 ? {
+          name: team2.name,
+          short_name: team2.shortName || team2.short_name,
+          color: team2.color
         } : (match.away_team || null),
-        players_home: homePlayers || match.players_home || [],
-        players_away: awayPlayers || match.players_away || [],
+        players_home: team1Players || match.players_home || [],
+        players_away: team2Players || match.players_away || [],
         // Include match_info fields (stored as JSONB)
         match_info: {
           hall: match.hall,
@@ -607,8 +607,8 @@ export async function restoreMatchInPlace(matchId, jsonData) {
       const setsPayload = (sets || []).map(s => ({
         external_id: s.externalId || s.external_id || `${externalId}_set_${s.index}`,
         index: s.index,
-        home_points: s.homePoints ?? s.home_points ?? 0,
-        away_points: s.awayPoints ?? s.away_points ?? 0,
+        home_points: s.team1Points ?? s.home_points ?? 0,
+        away_points: s.team2Points ?? s.away_points ?? 0,
         finished: s.finished || false,
         start_time: s.startTime || s.start_time,
         end_time: s.endTime || s.end_time
@@ -629,15 +629,15 @@ export async function restoreMatchInPlace(matchId, jsonData) {
         ? [...sets].sort((a, b) => (b.index || 0) - (a.index || 0))[0]
         : null
       const finishedSets = (sets || []).filter(s => s.finished)
-      const homeSetsWon = finishedSets.filter(s => (s.homePoints ?? s.home_points ?? 0) > (s.awayPoints ?? s.away_points ?? 0)).length
-      const awaySetsWon = finishedSets.filter(s => (s.awayPoints ?? s.away_points ?? 0) > (s.homePoints ?? s.home_points ?? 0)).length
+      const team1SetsWon = finishedSets.filter(s => (s.team1Points ?? s.home_points ?? 0) > (s.team2Points ?? s.away_points ?? 0)).length
+      const team2SetsWon = finishedSets.filter(s => (s.team2Points ?? s.away_points ?? 0) > (s.team1Points ?? s.home_points ?? 0)).length
 
       const liveStatePayload = {
         current_set: latestSet?.index || 1,
-        points_a: latestSet?.homePoints ?? latestSet?.home_points ?? 0,
-        points_b: latestSet?.awayPoints ?? latestSet?.away_points ?? 0,
-        sets_won_a: homeSetsWon,
-        sets_won_b: awaySetsWon,
+        points_a: latestSet?.team1Points ?? latestSet?.home_points ?? 0,
+        points_b: latestSet?.team2Points ?? latestSet?.away_points ?? 0,
+        sets_won_a: team1SetsWon,
+        sets_won_b: team2SetsWon,
         status: match.status || 'live'
       }
 
@@ -753,7 +753,7 @@ export async function fetchMatchByPin(gamePin, gameN) {
   // If no lineup type events, create them from event lineup_left/lineup_right columns
   // or from match_live_state
   if (!hasLineupTypeEvents) {
-    const teamAIsHome = matchData.coin_toss_team_a === 'home'
+    const teamAIsTeam1 = matchData.coin_toss_team_a === 'team1'
 
     // First try: get lineup from the latest event that has lineup_left/lineup_right
     const eventWithLineup = [...events]
@@ -765,30 +765,30 @@ export async function fetchMatchByPin(gamePin, gameN) {
       // Determine left/right to home/away mapping from the event
       // lineup_left/lineup_right are stored by court position, need to map to team
       // For now, use coin_toss_team_a to determine
-      const leftIsHome = (setIndex % 2 === 1) ? (teamAIsHome) : (!teamAIsHome)
+      const leftIsTeam1 = (setIndex % 2 === 1) ? (teamAIsTeam1) : (!teamAIsTeam1)
 
-      const homeRawLineup = leftIsHome ? eventWithLineup.lineup_left : eventWithLineup.lineup_right
-      const awayRawLineup = leftIsHome ? eventWithLineup.lineup_right : eventWithLineup.lineup_left
-      const homeLineup = extractLineupNumbers(homeRawLineup)
-      const awayLineup = extractLineupNumbers(awayRawLineup)
-      const homeLiberoSub = extractLiberoSubstitution(homeRawLineup)
-      const awayLiberoSub = extractLiberoSubstitution(awayRawLineup)
+      const team1RawLineup = leftIsTeam1 ? eventWithLineup.lineup_left : eventWithLineup.lineup_right
+      const team2RawLineup = leftIsTeam1 ? eventWithLineup.lineup_right : eventWithLineup.lineup_left
+      const team1Lineup = extractLineupNumbers(team1RawLineup)
+      const team2Lineup = extractLineupNumbers(team2RawLineup)
+      const team1LiberoSub = extractLiberoSubstitution(team1RawLineup)
+      const team2LiberoSub = extractLiberoSubstitution(team2RawLineup)
 
       console.log('[Restore] Creating lineup from event lineup_left/lineup_right:', {
         eventSeq: eventWithLineup.seq,
         setIndex,
-        leftIsHome,
-        homeLineup,
-        awayLineup,
-        homeLiberoSub,
-        awayLiberoSub,
+        leftIsTeam1,
+        team1Lineup,
+        team2Lineup,
+        team1LiberoSub,
+        team2LiberoSub,
         rawLineupLeft: eventWithLineup.lineup_left,
         rawLineupRight: eventWithLineup.lineup_right
       })
 
-      if (homeLineup) {
-        const payload = { team: 'home', lineup: homeLineup, isInitial: true }
-        if (homeLiberoSub) payload.liberoSubstitution = homeLiberoSub
+      if (team1Lineup) {
+        const payload = { team: 'team1', lineup: team1Lineup, isInitial: true }
+        if (team1LiberoSub) payload.liberoSubstitution = team1LiberoSub
         events.push({
           type: 'lineup',
           set_index: setIndex,
@@ -797,9 +797,9 @@ export async function fetchMatchByPin(gamePin, gameN) {
           ts: eventWithLineup.ts || new Date().toISOString()
         })
       }
-      if (awayLineup) {
-        const payload = { team: 'away', lineup: awayLineup, isInitial: true }
-        if (awayLiberoSub) payload.liberoSubstitution = awayLiberoSub
+      if (team2Lineup) {
+        const payload = { team: 'team2', lineup: team2Lineup, isInitial: true }
+        if (team2LiberoSub) payload.liberoSubstitution = team2LiberoSub
         events.push({
           type: 'lineup',
           set_index: setIndex,
@@ -818,7 +818,7 @@ export async function fetchMatchByPin(gamePin, gameN) {
 
       console.log('[Restore] Creating lineup from match_live_state:', {
         currentSet,
-        teamAIsHome,
+        teamAIsTeam1,
         lineupANumbers,
         lineupBNumbers,
         liberoSubA,
@@ -829,7 +829,7 @@ export async function fetchMatchByPin(gamePin, gameN) {
 
       if (lineupANumbers) {
         const payload = {
-          team: teamAIsHome ? 'home' : 'away',
+          team: teamAIsTeam1 ? 'team1' : 'team2',
           lineup: lineupANumbers,
           isInitial: true
         }
@@ -845,7 +845,7 @@ export async function fetchMatchByPin(gamePin, gameN) {
 
       if (lineupBNumbers) {
         const payload = {
-          team: teamAIsHome ? 'away' : 'home',
+          team: teamAIsTeam1 ? 'team2' : 'team1',
           lineup: lineupBNumbers,
           isInitial: true
         }
@@ -866,8 +866,8 @@ export async function fetchMatchByPin(gamePin, gameN) {
   const pointEvents = events.filter(e => e.type === 'point')
   console.log('[Restore] Summary - will restore:', {
     match: matchData.external_id,
-    homeTeam: matchData.home_team?.name,
-    awayTeam: matchData.away_team?.name,
+    team1: matchData.home_team?.name,
+    team2: matchData.away_team?.name,
     sets: (setsResult.data || []).map(s => ({ index: s.index, home: s.home_points, away: s.away_points, finished: s.finished })),
     totalEvents: events.length,
     lineupEvents: lineupEvents.length,
@@ -896,29 +896,29 @@ export async function importMatchFromSupabase(cloudData) {
 
   await db.transaction('rw', db.matches, db.teams, db.players, db.sets, db.events, async () => {
     // Extract team data from JSONB columns
-    const homeTeamData = match.home_team || {}
-    const awayTeamData = match.away_team || {}
-    const playersHome = match.players_home || []
-    const playersAway = match.players_away || []
+    const team1Data = match.home_team || {}
+    const team2Data = match.away_team || {}
+    const playersTeam1 = match.players_home || []
+    const playersTeam2 = match.players_away || []
 
     // Create local teams (always create new teams for imported matches to avoid duplicates)
-    let homeTeamId = null
-    let awayTeamId = null
+    let team1Id = null
+    let team2Id = null
 
-    if (homeTeamData.name) {
-      homeTeamId = await db.teams.add({
-        name: homeTeamData.name,
-        shortName: homeTeamData.short_name,
-        color: homeTeamData.color,
+    if (team1Data.name) {
+      team1Id = await db.teams.add({
+        name: team1Data.name,
+        shortName: team1Data.short_name,
+        color: team1Data.color,
         createdAt: new Date().toISOString()
       })
     }
 
-    if (awayTeamData.name) {
-      awayTeamId = await db.teams.add({
-        name: awayTeamData.name,
-        shortName: awayTeamData.short_name,
-        color: awayTeamData.color,
+    if (team2Data.name) {
+      team2Id = await db.teams.add({
+        name: team2Data.name,
+        shortName: team2Data.short_name,
+        color: team2Data.color,
         createdAt: new Date().toISOString()
       })
     }
@@ -934,8 +934,8 @@ export async function importMatchFromSupabase(cloudData) {
 
     // Create match with all JSONB data (prefer JSONB, fallback to legacy)
     const localMatchId = await db.matches.add({
-      homeTeamId,
-      awayTeamId,
+      team1Id,
+      team2Id,
       status: match.status,
       scheduledAt: match.scheduled_at,
       // Match info: prefer JSONB, fallback to legacy
@@ -950,21 +950,21 @@ export async function importMatchFromSupabase(cloudData) {
       test: match.test || false,
       seed_key: match.external_id,
       // Short names at match level (for easy access)
-      homeShortName: homeTeamData.short_name || null,
-      awayShortName: awayTeamData.short_name || null,
+      team1ShortName: team1Data.short_name || null,
+      team2ShortName: team2Data.short_name || null,
       // JSONB data stored locally
       officials: match.officials || [],
       bench_home: match.bench_home || [],
       bench_away: match.bench_away || [],
       // Signatures: prefer JSONB, fallback to legacy
-      homeCoachSignature: signatures.home_coach || match.home_coach_signature,
-      homeCaptainSignature: signatures.home_captain || match.home_captain_signature,
-      awayCoachSignature: signatures.away_coach || match.away_coach_signature,
-      awayCaptainSignature: signatures.away_captain || match.away_captain_signature,
-      homeCoachPostGameSignature: signatures.home_coach_post_game || match.home_coach_post_game_signature,
-      homeCaptainPostGameSignature: signatures.home_captain_post_game || match.home_captain_post_game_signature,
-      awayCoachPostGameSignature: signatures.away_coach_post_game || match.away_coach_post_game_signature,
-      awayCaptainPostGameSignature: signatures.away_captain_post_game || match.away_captain_post_game_signature,
+      team1CoachSignature: signatures.home_coach || match.home_coach_signature,
+      team1CaptainSignature: signatures.home_captain || match.home_captain_signature,
+      team2CoachSignature: signatures.away_coach || match.away_coach_signature,
+      team2CaptainSignature: signatures.away_captain || match.away_captain_signature,
+      team1CoachPostGameSignature: signatures.home_coach_post_game || match.home_coach_post_game_signature,
+      team1CaptainPostGameSignature: signatures.home_captain_post_game || match.home_captain_post_game_signature,
+      team2CoachPostGameSignature: signatures.away_coach_post_game || match.away_coach_post_game_signature,
+      team2CaptainPostGameSignature: signatures.away_captain_post_game || match.away_captain_post_game_signature,
       refereeSignature: signatures.referee || match.referee_signature,
       scorerSignature: signatures.scorer || match.scorer_signature,
       // Coin toss: prefer JSONB, fallback to legacy
@@ -983,16 +983,16 @@ export async function importMatchFromSupabase(cloudData) {
       approvedAt: approval.approved_at || match.approved_at,
       // Connection settings: prefer JSONB, fallback to legacy
       refereeConnectionEnabled: connections.referee_enabled !== undefined ? connections.referee_enabled : match.referee_connection_enabled,
-      homeTeamConnectionEnabled: connections.home_bench_enabled !== undefined ? connections.home_bench_enabled : match.home_team_connection_enabled,
-      awayTeamConnectionEnabled: connections.away_bench_enabled !== undefined ? connections.away_bench_enabled : match.away_team_connection_enabled,
-      homeTeamPin: connectionPins.bench_home || match.bench_home_pin,
-      awayTeamPin: connectionPins.bench_away || match.bench_away_pin,
+      team1ConnectionEnabled: connections.home_bench_enabled !== undefined ? connections.home_bench_enabled : match.home_team_connection_enabled,
+      team2ConnectionEnabled: connections.away_bench_enabled !== undefined ? connections.away_bench_enabled : match.away_team_connection_enabled,
+      team1Pin: connectionPins.bench_home || match.bench_home_pin,
+      team2Pin: connectionPins.bench_away || match.bench_away_pin,
       refereePin: connectionPins.referee || match.referee_pin,
-      homeTeamUploadPin: connectionPins.upload_home || match.home_team_upload_pin,
-      awayTeamUploadPin: connectionPins.upload_away || match.away_team_upload_pin,
+      team1UploadPin: connectionPins.upload_home || match.home_team_upload_pin,
+      team2UploadPin: connectionPins.upload_away || match.away_team_upload_pin,
       // Pending rosters: prefer JSONB, fallback to legacy
-      pendingHomeRoster: connections.pending_home_roster || match.pending_home_roster,
-      pendingAwayRoster: connections.pending_away_roster || match.pending_away_roster,
+      pendingTeam1Roster: connections.pending_home_roster || match.pending_home_roster,
+      pendingTeam2Roster: connections.pending_away_roster || match.pending_away_roster,
       // Import metadata
       importedFrom: 'supabase',
       importedAt: new Date().toISOString(),
@@ -1004,10 +1004,10 @@ export async function importMatchFromSupabase(cloudData) {
     importedMatchId = localMatchId
 
     // Create players from JSONB arrays (fresh teams, so no duplicates)
-    if (playersHome.length && homeTeamId) {
-      for (const p of playersHome) {
+    if (playersTeam1.length && team1Id) {
+      for (const p of playersTeam1) {
         await db.players.add({
-          teamId: homeTeamId,
+          teamId: team1Id,
           number: p.number,
           name: `${p.last_name || ''} ${p.first_name || ''}`.trim(),
           firstName: p.first_name,
@@ -1020,10 +1020,10 @@ export async function importMatchFromSupabase(cloudData) {
       }
     }
 
-    if (playersAway.length && awayTeamId) {
-      for (const p of playersAway) {
+    if (playersTeam2.length && team2Id) {
+      for (const p of playersTeam2) {
         await db.players.add({
-          teamId: awayTeamId,
+          teamId: team2Id,
           number: p.number,
           name: `${p.last_name || ''} ${p.first_name || ''}`.trim(),
           firstName: p.first_name,
@@ -1041,8 +1041,8 @@ export async function importMatchFromSupabase(cloudData) {
       await db.sets.add({
         matchId: localMatchId,
         index: set.index,
-        homePoints: set.home_points,
-        awayPoints: set.away_points,
+        team1Points: set.home_points,
+        team2Points: set.away_points,
         finished: set.finished,
         startTime: set.start_time,
         endTime: set.end_time,
@@ -1057,8 +1057,8 @@ export async function importMatchFromSupabase(cloudData) {
       await db.sets.add({
         matchId: localMatchId,
         index: 1,
-        homePoints: 0,
-        awayPoints: 0,
+        team1Points: 0,
+        team2Points: 0,
         finished: false
       })
     }

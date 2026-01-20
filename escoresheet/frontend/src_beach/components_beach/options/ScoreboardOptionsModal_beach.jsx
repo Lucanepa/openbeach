@@ -285,14 +285,6 @@ export default function ScoreboardOptionsModal({
     setCheckAccidentalPointAward,
     accidentalPointAwardDuration,
     setAccidentalPointAwardDuration,
-    manageCaptainOnCourt,
-    setManageCaptainOnCourt,
-    liberoExitConfirmation,
-    setLiberoExitConfirmation,
-    liberoEntrySuggestion,
-    setLiberoEntrySuggestion,
-    setIntervalDuration,
-    setSetIntervalDuration,
     scoreFont,
     setScoreFont,
     keybindingsEnabled,
@@ -560,71 +552,6 @@ export default function ScoreboardOptionsModal({
             <ToggleSwitch
               value={displayOptions?.showNamesOnCourt}
               onToggle={() => displayOptions?.setShowNamesOnCourt?.(!displayOptions?.showNamesOnCourt)}
-            />
-          </Row>
-          <Row style={{ marginBottom: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <div style={{ fontWeight: 600, fontSize: '15px' }}>{t('options.manageCaptainOnCourt')}</div>
-              <InfoDot title={t('options.manageCaptainOnCourtInfo')} />
-            </div>
-            <ToggleSwitch
-              value={manageCaptainOnCourt}
-              onToggle={() => {
-                const newValue = !manageCaptainOnCourt
-                setManageCaptainOnCourt(newValue)
-                localStorage.setItem('manageCaptainOnCourt', String(newValue))
-              }}
-            />
-          </Row>
-
-          <Row style={{ marginBottom: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <div style={{ fontWeight: 600, fontSize: '15px' }}>{t('options.liberoExitConfirmation')}</div>
-              <InfoDot title={t('options.liberoExitConfirmationInfo')} />
-            </div>
-            <ToggleSwitch
-              value={liberoExitConfirmation}
-              onToggle={() => {
-                const newValue = !liberoExitConfirmation
-                setLiberoExitConfirmation(newValue)
-                localStorage.setItem('liberoExitConfirmation', String(newValue))
-              }}
-            />
-          </Row>
-
-          <Row style={{ marginBottom: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <div style={{ fontWeight: 600, fontSize: '15px' }}>{t('options.liberoEntrySuggestion')}</div>
-              <InfoDot title={t('options.liberoEntrySuggestionInfo')} />
-            </div>
-            <ToggleSwitch
-              value={liberoEntrySuggestion}
-              onToggle={() => {
-                const newValue = !liberoEntrySuggestion
-                setLiberoEntrySuggestion(newValue)
-                localStorage.setItem('liberoEntrySuggestion', String(newValue))
-              }}
-            />
-          </Row>
-
-          <Row style={{ marginBottom: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <div style={{ fontWeight: 600, fontSize: '15px' }}>{t('options.setIntervalDuration')}</div>
-              <InfoDot title={t('options.setIntervalDurationInfo')} />
-            </div>
-            <Stepper
-              value={setIntervalDuration}
-              label={t('options.setIntervalDurationLabel', 'set interval duration')}
-              onDecrement={() => {
-                const newVal = Math.max(60, setIntervalDuration - 15)
-                setSetIntervalDuration(newVal)
-                localStorage.setItem('setIntervalDuration', String(newVal))
-              }}
-              onIncrement={() => {
-                const newVal = Math.min(600, setIntervalDuration + 15)
-                setSetIntervalDuration(newVal)
-                localStorage.setItem('setIntervalDuration', String(newVal))
-              }}
             />
           </Row>
 
@@ -1097,8 +1024,8 @@ export default function ScoreboardOptionsModal({
                 marginBottom: '16px'
               }}>
                 <div style={{ fontWeight: 600, fontSize: '16px' }}>
-                  {restoreConfirm.homePoints !== undefined ? (
-                    t('options.backupSetScore', { setIndex: restoreConfirm.setIndex, homePoints: restoreConfirm.homePoints, awayPoints: restoreConfirm.awayPoints })
+                  {restoreConfirm.team1Points !== undefined ? (
+                    t('options.backupSetScore', { setIndex: restoreConfirm.setIndex, team1Points: restoreConfirm.team1Points, team2Points: restoreConfirm.team2Points })
                   ) : (
                     restoreConfirm.name
                   )}

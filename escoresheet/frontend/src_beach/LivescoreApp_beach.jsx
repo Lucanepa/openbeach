@@ -3,10 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { supabase } from './lib_beach/supabaseClient_beach'
 import UpdateBanner from './components_beach/UpdateBanner_beach'
 import DashboardHeader from './components_beach/DashboardHeader_beach'
-import mikasaVolleyball from './mikasa_v200w.png'
-
-// Primary ball image (with mikasa as fallback)
-const ballImage = '/ball.png'
+// Beach volleyball ball image
+const ballImage = '/beachball.png'
 
 /**
  * Simplified Livescore App
@@ -268,7 +266,7 @@ export default function LivescoreApp() {
             {!isMatchEnded && (
               <div style={{ width: '60px', display: 'flex', justifyContent: 'center' }}>
                 {servingTeam === 'left' && (
-                  <img src={ballImage} onError={(e) => e.target.src = mikasaVolleyball} alt="Serve" style={{ width: '50px', height: '50px' }} />
+                  <img src={ballImage} alt="Serve" style={{ width: '50px', height: '50px' }} />
                 )}
               </div>
             )}
@@ -302,7 +300,7 @@ export default function LivescoreApp() {
             {!isMatchEnded && (
               <div style={{ width: '60px', display: 'flex', justifyContent: 'center' }}>
                 {servingTeam === 'right' && (
-                  <img src={ballImage} onError={(e) => e.target.src = mikasaVolleyball} alt="Serve" style={{ width: '50px', height: '50px' }} />
+                  <img src={ballImage} alt="Serve" style={{ width: '50px', height: '50px' }} />
                 )}
               </div>
             )}
@@ -497,7 +495,7 @@ export default function LivescoreApp() {
           </div>
         ) : liveGames.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.6)' }}>
-            <img src={ballImage} onError={(e) => e.target.src = mikasaVolleyball} alt="" style={{ width: '60px', opacity: 0.5, marginBottom: '16px' }} />
+            <img src={ballImage} alt="" style={{ width: '60px', opacity: 0.5, marginBottom: '16px' }} />
             <div>{t('livescore.noActiveGame', 'No live games')}</div>
           </div>
         ) : (
@@ -559,7 +557,7 @@ export default function LivescoreApp() {
                       gap: '6px'
                     }}>
                       {!isMatchEnded && servingTeam === 'left' && (
-                        <img src={ballImage} onError={(e) => e.target.src = mikasaVolleyball} alt="" style={{ width: '14px', height: '14px' }} />
+                        <img src={ballImage} alt="" style={{ width: '14px', height: '14px' }} />
                       )}
                       {leftName}
                     </div>
@@ -580,7 +578,7 @@ export default function LivescoreApp() {
                     }}>
                       {rightName}
                       {!isMatchEnded && servingTeam === 'right' && (
-                        <img src={ballImage} onError={(e) => e.target.src = mikasaVolleyball} alt="" style={{ width: '14px', height: '14px' }} />
+                        <img src={ballImage} alt="" style={{ width: '14px', height: '14px' }} />
                       )}
                     </div>
                   </div>

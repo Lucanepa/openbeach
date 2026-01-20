@@ -629,7 +629,7 @@ export default function RefereeApp() {
                           {t('refereeDashboard.gameNumber', { number: selected.gameNumber })}
                         </div>
                         <div style={{ fontSize: '14px', marginBottom: '4px' }}>
-                          {selected.homeTeam} <span style={{ color: 'var(--muted)' }}>{t('refereeDashboard.vs')}</span> {selected.awayTeam}
+                          {selected.team1Name} <span style={{ color: 'var(--muted)' }}>{t('refereeDashboard.vs')}</span> {selected.team2Name}
                         </div>
                         <div style={{ fontSize: '12px', color: 'var(--muted)' }}>
                           {selected.dateTime || t('refereeDashboard.tbd')}
@@ -764,7 +764,7 @@ export default function RefereeApp() {
                   {t('refereeDashboard.gameNumber', { number: m.gameNumber })}
                 </div>
                 <div style={{ fontSize: '16px', marginBottom: '4px' }}>
-                  {m.homeTeam} <span style={{ color: 'var(--muted)' }}>{t('refereeDashboard.vs')}</span> {m.awayTeam}
+                  {m.team1Name} <span style={{ color: 'var(--muted)' }}>{t('refereeDashboard.vs')}</span> {m.team2Name}
                 </div>
                 <div style={{ fontSize: '14px', color: 'var(--muted)' }}>
                   {m.dateTime || t('refereeDashboard.tbd')}

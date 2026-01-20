@@ -1,20 +1,18 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db_beach/db_beach'
 import { useAlert } from '../contexts_beach/AlertContext_beach'
 import SignaturePad from './SignaturePad'
 import MenuList from './MenuList'
 import Modal from './Modal'
-import mikasaVolleyball from '../mikasa_v200w.png'
+// Beach volleyball ball image
+const ballImage = '/beachball.png'
 import JSZip from 'jszip'
 import { supabase } from '../lib_beach/supabaseClient_beach'
 import { uploadScoresheet } from '../utils_beach/scoresheetUploader_beach'
 import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { exportLogsAsNDJSON } from '../utils_beach/comprehensiveLogger_beach'
 
-// Primary ball image (with mikasa as fallback)
-const ballImage = '/ball.png'
 import { sanitizeForFilename } from '../utils_beach/stringUtils_beach'
 import { formatTimeLocal } from '../utils_beach/timeUtils_beach'
 
@@ -34,8 +32,6 @@ const formatDurationHHMM = (durationStr) => {
 
 // Standard Results component for MatchEnd page
 const ResultsTable = ({ teamAName, teamBName, setResults, matchStart, matchEnd, matchDuration }) => {
-  const { t } = useTranslation()
-
   // Calculate winner
   const teamAWins = setResults?.reduce((sum, r) => sum + (r.teamAWon ?? 0), 0) || 0
   const teamBWins = setResults?.reduce((sum, r) => sum + (r.teamBWon ?? 0), 0) || 0
@@ -61,7 +57,7 @@ const ResultsTable = ({ teamAName, teamBName, setResults, matchStart, matchEnd, 
           <span>T</span><span>S</span><span>W</span><span>P</span>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', fontSize: '9px', textAlign: 'center', color: '#333', fontWeight: 600 }}>
-          <span>{t('matchEnd.set', 'Set')}</span><span>{t('matchEnd.time', 'Time')}</span>
+          <span>Set</span><span>Time</span>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', fontSize: '9px', textAlign: 'center', color: '#333', fontWeight: 600 }}>
           <span>P</span><span>W</span><span>S</span><span>T</span>
@@ -116,7 +112,7 @@ const ResultsTable = ({ teamAName, teamBName, setResults, matchStart, matchEnd, 
               <span style={{ fontWeight: 700 }}>{setResults?.reduce((sum, r) => sum + (r.teamAPoints ?? 0), 0) || 0}</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', fontSize: '11px', textAlign: 'center', fontWeight: 600, color: '#000' }}>
-              <span>{t('matchEnd.tot', 'Tot')}</span>
+              <span>Tot</span>
               <span>{totalSetDuration}</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', fontSize: '11px', textAlign: 'center', fontWeight: 600, color: '#000' }}>
@@ -132,20 +128,20 @@ const ResultsTable = ({ teamAName, teamBName, setResults, matchStart, matchEnd, 
       {/* Winner Row */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '16px', padding: '6px 8px', background: '#e8e8e8', borderRadius: '0 0 4px 4px', borderTop: '1px solid #ccc' }}>
         <div>
-          <span style={{ fontSize: '9px', color: '#666', textTransform: 'uppercase' }}>{t('matchEnd.winner', 'Winner')}</span>
+          <span style={{ fontSize: '9px', color: '#666', textTransform: 'uppercase' }}>Winner</span>
           <div style={{ fontWeight: 700, fontSize: '14px', color: '#000' }}>{winnerName || '-'}</div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <span style={{ fontSize: '9px', color: '#666', textTransform: 'uppercase' }}>{t('matchEnd.result', 'Result')}</span>
+          <span style={{ fontSize: '9px', color: '#666', textTransform: 'uppercase' }}>Result</span>
           <div style={{ fontWeight: 700, fontSize: '14px', color: '#000' }}>{Math.max(teamAWins, teamBWins)}:{Math.min(teamAWins, teamBWins)}</div>
         </div>
       </div>
 
       {/* Match Time Info */}
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#000', marginTop: '8px', padding: '6px', background: '#f0f0f0', borderRadius: '4px' }}>
-        <span>{t('matchEnd.start', 'Start')}: <strong>{matchStart}</strong></span>
-        <span>{t('matchEnd.end', 'End')}: <strong>{matchEnd}</strong></span>
-        <span>{t('matchEnd.duration', 'Duration')}: <strong>{formatDurationHHMM(matchDuration)}</strong></span>
+        <span>Start: <strong>{matchStart}</strong></span>
+        <span>End: <strong>{matchEnd}</strong></span>
+        <span>Duration: <strong>{formatDurationHHMM(matchDuration)}</strong></span>
       </div>
     </div>
   )
@@ -153,12 +149,11 @@ const ResultsTable = ({ teamAName, teamBName, setResults, matchStart, matchEnd, 
 
 // Standard Sanctions component for MatchEnd page
 const SanctionsTable = ({ items = [], improperRequests = { teamA: false, teamB: false } }) => {
-  const { t } = useTranslation()
   return (
     <div style={{ padding: '12px', fontSize: '12px', background: '#fff', color: '#000', height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Improper Request Row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', background: '#f0f0f0', borderRadius: '4px', marginBottom: '8px' }}>
-        <span style={{ fontSize: '11px', fontWeight: 600, color: '#000' }}>{t('matchEnd.improperRequest', 'Improper Request')}</span>
+        <span style={{ fontSize: '11px', fontWeight: 600, color: '#000' }}>Improper Request</span>
         <div style={{ display: 'flex', gap: '8px' }}>
           <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: '2px solid #000', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, position: 'relative', color: '#000' }}>
             A
@@ -185,7 +180,7 @@ const SanctionsTable = ({ items = [], improperRequests = { teamA: false, teamB: 
 
       {/* Header */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', fontSize: '10px', fontWeight: 600, textAlign: 'center', color: '#333', padding: '4px 0', borderBottom: '2px solid #000' }}>
-        <span>W</span><span>P</span><span>E</span><span>D</span><span>Team</span><span>{t('matchEnd.set', 'Set')}</span><span>Score</span>
+        <span>W</span><span>P</span><span>E</span><span>D</span><span>Team</span><span>Set</span><span>Score</span>
       </div>
 
       {/* Sanction Rows */}
@@ -203,7 +198,7 @@ const SanctionsTable = ({ items = [], improperRequests = { teamA: false, teamB: 
             </div>
           ))
         ) : (
-          <div style={{ textAlign: 'center', color: '#666', padding: '16px', fontSize: '11px' }}>{t('matchEnd.noSanctions', 'No sanctions')}</div>
+          <div style={{ textAlign: 'center', color: '#666', padding: '16px', fontSize: '11px' }}>No sanctions</div>
         )}
       </div>
     </div>
@@ -212,21 +207,19 @@ const SanctionsTable = ({ items = [], improperRequests = { teamA: false, teamB: 
 
 // Standard Remarks component for MatchEnd page
 const RemarksBox = ({ overflowSanctions = [], remarks = '' }) => {
-  const { t } = useTranslation()
-
   const formatSanction = (sanction) => {
     const isDelay = sanction.playerNr === 'D'
     const typeLabel = sanction.type === 'warning'
-      ? (isDelay ? t('matchEnd.sanctionTypes.delayWarning', 'Delay Warning') : t('matchEnd.sanctionTypes.warning', 'Warning'))
+      ? (isDelay ? 'Delay Warning' : 'Warning')
       : sanction.type === 'penalty'
-        ? (isDelay ? t('matchEnd.sanctionTypes.delayPenalty', 'Delay Penalty') : t('matchEnd.sanctionTypes.penalty', 'Penalty'))
+        ? (isDelay ? 'Delay Penalty' : 'Penalty')
         : sanction.type === 'expulsion'
-          ? t('matchEnd.sanctionTypes.expulsion', 'Expulsion')
+          ? 'Expulsion'
           : sanction.type === 'disqualification'
-            ? t('matchEnd.sanctionTypes.disqualification', 'Disqualification')
+            ? 'Disqualification'
             : ''
     const playerInfo = !isDelay && sanction.playerNr ? `, #${sanction.playerNr}` : ''
-    return `${t('coinToss.teamA', 'Team')} ${sanction.team}, ${t('matchEnd.set', 'Set')} ${sanction.set}, ${sanction.score}, ${typeLabel}${playerInfo}`
+    return `Team ${sanction.team}, Set ${sanction.set}, ${sanction.score}, ${typeLabel}${playerInfo}`
   }
 
   const hasContent = remarks?.trim() || overflowSanctions.length > 0
@@ -238,7 +231,7 @@ const RemarksBox = ({ overflowSanctions = [], remarks = '' }) => {
           {remarks?.trim() && <div style={{ marginBottom: '8px', whiteSpace: 'pre-wrap', color: '#000' }}>{remarks.trim()}</div>}
           {overflowSanctions.length > 0 && (
             <>
-              <div style={{ fontWeight: 600, marginBottom: '4px', fontSize: '11px', color: '#000' }}>{t('matchEnd.sanctionsOverflow', 'Sanctions (overflow):')}</div>
+              <div style={{ fontWeight: 600, marginBottom: '4px', fontSize: '11px', color: '#000' }}>Sanctions (overflow):</div>
               {overflowSanctions.map((sanction, idx) => (
                 <div key={idx} style={{ fontSize: '11px', color: '#000', marginBottom: '2px' }}>{formatSanction(sanction)}</div>
               ))}
@@ -246,7 +239,7 @@ const RemarksBox = ({ overflowSanctions = [], remarks = '' }) => {
           )}
         </>
       ) : (
-        <div style={{ color: '#666', fontSize: '11px' }}>{t('matchEnd.noRemarks', 'No remarks')}</div>
+        <div style={{ color: '#666', fontSize: '11px' }}>No remarks</div>
       )}
     </div>
   )
@@ -270,17 +263,17 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     const match = await db.matches.get(matchId)
     if (!match) return null
 
-    const [homeTeam, awayTeam] = await Promise.all([
-      match?.homeTeamId ? db.teams.get(match.homeTeamId) : null,
-      match?.awayTeamId ? db.teams.get(match.awayTeamId) : null
+    const [team1, team2] = await Promise.all([
+      match?.team1Id ? db.teams.get(match.team1Id) : null,
+      match?.team2Id ? db.teams.get(match.team2Id) : null
     ])
 
-    const [homePlayers, awayPlayers] = await Promise.all([
-      match?.homeTeamId
-        ? db.players.where('teamId').equals(match.homeTeamId).sortBy('number')
+    const [team1Players, team2Players] = await Promise.all([
+      match?.team1Id
+        ? db.players.where('teamId').equals(match.team1Id).sortBy('number')
         : [],
-      match?.awayTeamId
-        ? db.players.where('teamId').equals(match.awayTeamId).sortBy('number')
+      match?.team2Id
+        ? db.players.where('teamId').equals(match.team2Id).sortBy('number')
         : []
     ])
 
@@ -296,15 +289,14 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
 
     return {
       match,
-      homeTeam,
-      awayTeam,
-      homePlayers,
-      awayPlayers,
+      team1,
+      team2,
+      team1Players,
+      team2Players,
       sets,
       events
     }
   }, [matchId])
-  const { t } = useTranslation()
 
   const { showAlert } = useAlert()
   const [openSignature, setOpenSignature] = useState(null)
@@ -325,7 +317,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
 
     const handleBeforeUnload = (e) => {
       e.preventDefault()
-      e.returnValue = t('matchEnd.matchDataNotApproved', 'Match data has not been approved. Are you sure you want to leave?')
+      e.returnValue = 'Match data has not been approved. Are you sure you want to leave?'
       return e.returnValue
     }
 
@@ -338,8 +330,8 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     if (!data) return []
 
     const { match, sets, events } = data
-    const teamAKey = match?.coinTossTeamA || 'home'
-    const teamBKey = teamAKey === 'home' ? 'away' : 'home'
+    const teamAKey = match?.coinTossTeamA || 'team1'
+    const teamBKey = teamAKey === 'team1' ? 'team2' : 'team1'
 
     const results = []
     for (let setNum = 1; setNum <= 5; setNum++) {
@@ -349,10 +341,10 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       const isSetFinished = setInfo?.finished === true
 
       const teamAPoints = isSetFinished
-        ? (teamAKey === 'home' ? (setInfo?.homePoints || 0) : (setInfo?.awayPoints || 0))
+        ? (teamAKey === 'team1' ? (setInfo?.team1Points || 0) : (setInfo?.team2Points || 0))
         : null
       const teamBPoints = isSetFinished
-        ? (teamBKey === 'home' ? (setInfo?.homePoints || 0) : (setInfo?.awayPoints || 0))
+        ? (teamBKey === 'team1' ? (setInfo?.team1Points || 0) : (setInfo?.team2Points || 0))
         : null
 
       const teamATimeouts = isSetFinished
@@ -413,8 +405,8 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     if (!data) return { sanctions: [], improperRequests: { teamA: false, teamB: false } }
 
     const { match, events } = data
-    const teamAKey = match?.coinTossTeamA || 'home'
-    const teamBKey = teamAKey === 'home' ? 'away' : 'home'
+    const teamAKey = match?.coinTossTeamA || 'team1'
+    const teamBKey = teamAKey === 'team1' ? 'team2' : 'team1'
 
     const sanctionRecords = []
     const improperReqs = { teamA: false, teamB: false }
@@ -444,16 +436,16 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
           return new Date(a.ts).getTime() - new Date(b.ts).getTime()
         })
 
-      let homeScore = 0
-      let awayScore = 0
+      let team1Score = 0
+      let team2Score = 0
 
       for (const e of pointEvents) {
-        if (e.payload?.team === 'home') homeScore++
-        else if (e.payload?.team === 'away') awayScore++
+        if (e.payload?.team === 'team1') team1Score++
+        else if (e.payload?.team === 'team2') team2Score++
       }
 
-      const teamAScore = teamAKey === 'home' ? homeScore : awayScore
-      const teamBScore = teamBKey === 'home' ? homeScore : awayScore
+      const teamAScore = teamAKey === 'team1' ? team1Score : team2Score
+      const teamBScore = teamBKey === 'team1' ? team1Score : team2Score
 
       return `${teamAScore}:${teamBScore}`
     }
@@ -526,23 +518,23 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
 
   if (!data) return null
 
-  const { match, homeTeam, awayTeam, homePlayers, awayPlayers, sets, events } = data
+  const { match, team1, team2, team1Players, team2Players, sets, events } = data
 
   // Calculate set scores
   const finishedSets = sets.filter(s => s.finished)
-  const homeSetsWon = finishedSets.filter(s => s.homePoints > s.awayPoints).length
-  const awaySetsWon = finishedSets.filter(s => s.awayPoints > s.homePoints).length
+  const team1SetsWon = finishedSets.filter(s => s.team1Points > s.team2Points).length
+  const team2SetsWon = finishedSets.filter(s => s.team2Points > s.team1Points).length
 
   // Find captains
-  const homeCaptain = homePlayers.find(p => p.captain)
-  const awayCaptain = awayPlayers.find(p => p.captain)
+  const team1Captain = team1Players.find(p => p.captain)
+  const team2Captain = team2Players.find(p => p.captain)
 
   // Determine team labels (A or B)
-  const teamAKey = match.coinTossTeamA || 'home'
-  const homeLabel = teamAKey === 'home' ? 'A' : 'B'
+  const teamAKey = match.coinTossTeamA || 'team1'
+  const team1Label = teamAKey === 'team1' ? 'A' : 'B'
 
   // Winner info
-  const winner = homeSetsWon > awaySetsWon ? (homeTeam?.name || 'Home') : (awayTeam?.name || 'Away')
+  const winner = team1SetsWon > team2SetsWon ? (team1?.name || 'Team 1') : (team2?.name || 'Team 2')
 
   // Match time info - duration is matchEnd - matchStart
   const matchStartDate = match?.scheduledAt ? new Date(match.scheduledAt) : null
@@ -582,8 +574,8 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     ))
 
   // Signature status checks - use POST-GAME captain signatures (not pre-match)
-  const captainASigned = homeLabel === 'A' ? !!match.homePostGameCaptainSignature : !!match.awayPostGameCaptainSignature
-  const captainBSigned = homeLabel === 'B' ? !!match.homePostGameCaptainSignature : !!match.awayPostGameCaptainSignature
+  const captainASigned = team1Label === 'A' ? !!match.team1PostGameCaptainSignature : !!match.team2PostGameCaptainSignature
+  const captainBSigned = team1Label === 'B' ? !!match.team1PostGameCaptainSignature : !!match.team2PostGameCaptainSignature
   const captainsDone = captainASigned && captainBSigned
 
   const asstScorerSigned = !hasAsstScorer || !!match.asstScorerSignature
@@ -606,8 +598,8 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
   const handleSaveSignature = async (role, signatureData) => {
     cLogger.logHandler('handleSaveSignature', { role })
     const fieldMap = {
-      'captain-a': homeLabel === 'A' ? 'homePostGameCaptainSignature' : 'awayPostGameCaptainSignature',
-      'captain-b': homeLabel === 'B' ? 'homePostGameCaptainSignature' : 'awayPostGameCaptainSignature',
+      'captain-a': team1Label === 'A' ? 'team1PostGameCaptainSignature' : 'team2PostGameCaptainSignature',
+      'captain-b': team1Label === 'B' ? 'team1PostGameCaptainSignature' : 'team2PostGameCaptainSignature',
       'asst-scorer': 'asstScorerSignature',
       'scorer': 'scorerSignature',
       'ref2': 'ref2Signature',
@@ -621,8 +613,8 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
   }
 
   const getSignatureData = (role) => {
-    if (role === 'captain-a') return homeLabel === 'A' ? match.homePostGameCaptainSignature : match.awayPostGameCaptainSignature
-    if (role === 'captain-b') return homeLabel === 'B' ? match.homePostGameCaptainSignature : match.awayPostGameCaptainSignature
+    if (role === 'captain-a') return team1Label === 'A' ? match.team1PostGameCaptainSignature : match.team2PostGameCaptainSignature
+    if (role === 'captain-b') return team1Label === 'B' ? match.team1PostGameCaptainSignature : match.team2PostGameCaptainSignature
     if (role === 'asst-scorer') return match.asstScorerSignature
     if (role === 'scorer') return match.scorerSignature
     if (role === 'ref2') return match.ref2Signature
@@ -632,21 +624,19 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
 
   const getSignatureLabel = (role) => {
     if (role === 'captain-a') {
-      const team = homeLabel === 'A' ? homeTeam : awayTeam
-      const captain = homeLabel === 'A' ? homeCaptain : awayCaptain
-      // return `Captain A - ${team?.shortName || team?.name || 'Team A'}${captain ? ` (#${captain.number})` : ''}`
-      return t('matchEnd.captainA', { team: team?.shortName || team?.name || 'Team A' }) + (captain ? ` (#${captain.number})` : '')
+      const team = team1Label === 'A' ? team1 : team2
+      const captain = team1Label === 'A' ? team1Captain : team2Captain
+      return `Captain A - ${team?.shortName || team?.name || 'Team A'}${captain ? ` (#${captain.number})` : ''}`
     }
     if (role === 'captain-b') {
-      const team = homeLabel === 'B' ? homeTeam : awayTeam
-      const captain = homeLabel === 'B' ? homeCaptain : awayCaptain
-      // return `Captain B - ${team?.shortName || team?.name || 'Team B'}${captain ? ` (#${captain.number})` : ''}`
-      return t('matchEnd.captainB', { team: team?.shortName || team?.name || 'Team B' }) + (captain ? ` (#${captain.number})` : '')
+      const team = team1Label === 'B' ? team1 : team2
+      const captain = team1Label === 'B' ? team1Captain : team2Captain
+      return `Captain B - ${team?.shortName || team?.name || 'Team B'}${captain ? ` (#${captain.number})` : ''}`
     }
-    if (role === 'asst-scorer') return t('matchEnd.assistantScorer', 'Assistant Scorer')
-    if (role === 'scorer') return t('matchEnd.scorer', 'Scorer')
-    if (role === 'ref2') return t('matchEnd.referee2', '2nd Referee')
-    if (role === 'ref1') return t('matchEnd.referee1', '1st Referee')
+    if (role === 'asst-scorer') return 'Assistant Scorer'
+    if (role === 'scorer') return 'Scorer'
+    if (role === 'ref2') return '2nd Referee'
+    if (role === 'ref1') return '1st Referee'
     return ''
   }
 
@@ -695,7 +685,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
             />
           ) : (
             <div style={{ color: '#333', fontSize: '14px' }}>
-              {disabled ? t('matchEnd.waiting', 'Waiting...') : t('matchEnd.tapToSign', 'Tap to sign')}
+              {disabled ? 'Waiting...' : 'Tap to sign'}
             </div>
           )}
         </div>
@@ -705,18 +695,25 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
 
   const handleShowScoresheet = (action = 'preview') => {
     cLogger.logHandler('handleShowScoresheet', { action })
-    // Prepare scoresheet data
+    // Prepare scoresheet data - add country from match to team objects
+    const team1WithCountry = team1 ? { ...team1, country: match?.team1Country || '' } : { name: '', country: match?.team1Country || '' }
+    const team2WithCountry = team2 ? { ...team2, country: match?.team2Country || '' } : { name: '', country: match?.team2Country || '' }
+
     const scoresheetData = {
-      match,
-      homeTeam,
-      awayTeam,
-      homePlayers,
-      awayPlayers,
+      match: {
+        ...match,
+        team_1Country: match?.team1Country || '',
+        team_2Country: match?.team2Country || ''
+      },
+      team_1Team: team1WithCountry,
+      team_2Team: team2WithCountry,
+      team_1Players: team1Players,
+      team_2Players: team2Players,
       sets,
       events
     }
     sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
-    const url = action === 'preview' ? '/scoresheet' : `/scoresheet?action=${action}`
+    const url = action === 'preview' ? '/scoresheet_beach.html' : `/scoresheet_beach.html?action=${action}`
     window.open(url, '_blank', 'width=1600,height=1200')
   }
 
@@ -727,10 +724,10 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       const gameN = match?.gameNumber || match?.game_n || null
       const { downloadLogs } = await import('../utils_beach/comprehensiveLogger_beach')
       await downloadLogs(gameN, 'ndjson')
-      showAlert(t('matchEnd.logsDownloaded', 'Interaction logs downloaded successfully'), 'success')
+      showAlert('Interaction logs downloaded successfully', 'success')
     } catch (err) {
       console.error('[MatchEnd] Failed to download logs:', err)
-      showAlert(t('matchEnd.logsDownloadFailed', 'Failed to download logs'), 'error')
+      showAlert('Failed to download logs', 'error')
     }
   }
 
@@ -740,7 +737,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     try {
       // Only check signatures for official matches
       if (!match.test && !allSignaturesDone) {
-        showAlert(t('matchEnd.pleaseCompleteSignatures', 'Please complete all signatures before approving.'), 'warning')
+        showAlert('Please complete all signatures before approving.', 'warning')
         setIsSaving(false)
         return
       }
@@ -753,9 +750,9 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       const allEvents = await db.events.where('matchId').equals(matchId).sortBy('seq')
 
       const exportData = {
-        match: { ...match, homeTeam, awayTeam },
-        homePlayers,
-        awayPlayers,
+        match: { ...match, team1, team2 },
+        team1Players,
+        team2Players,
         sets: allSets,
         events: allEvents,
         exportedAt: new Date().toISOString()
@@ -765,18 +762,25 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       const matchDate = match.scheduledAt
         ? new Date(match.scheduledAt).toLocaleDateString('en-GB', { timeZone: 'UTC' }).replace(/\//g, '-')
         : new Date().toLocaleDateString('en-GB').replace(/\//g, '-')
-      const jsonFilename = `MatchData_${sanitizeForFilename(homeTeam?.name || 'Home')}_vs_${sanitizeForFilename(awayTeam?.name || 'Away')}_${matchDate}.json`
+      const jsonFilename = `MatchData_${sanitizeForFilename(team1?.name || 'Team 1')}_vs_${sanitizeForFilename(team2?.name || 'Team 2')}_${matchDate}.json`
 
       // Mark JSON as ready
       setDownloadProgress(prev => ({ ...prev, json: true }))
 
       // Generate PDF via scoresheet window with postMessage
+      const team1WithCountry = team1 ? { ...team1, country: match?.team1Country || '' } : { name: '', country: match?.team1Country || '' }
+      const team2WithCountry = team2 ? { ...team2, country: match?.team2Country || '' } : { name: '', country: match?.team2Country || '' }
+
       const scoresheetData = {
-        match,
-        homeTeam,
-        awayTeam,
-        homePlayers,
-        awayPlayers,
+        match: {
+          ...match,
+          team_1Country: match?.team1Country || '',
+          team_2Country: match?.team2Country || ''
+        },
+        team_1Team: team1WithCountry,
+        team_2Team: team2WithCountry,
+        team_1Players: team1Players,
+        team_2Players: team2Players,
         sets,
         events
       }
@@ -801,7 +805,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       })
 
       // Open scoresheet window with getBlob action
-      window.open('/scoresheet?action=getBlob', '_blank', 'width=1600,height=1200')
+      window.open('/scoresheet_beach.html?action=getBlob', '_blank', 'width=1600,height=1200')
 
       // Wait for PDF blob
       const pdfResult = await pdfPromise
@@ -825,7 +829,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       }
 
       const zipBlob = await zip.generateAsync({ type: 'blob' })
-      const zipFilename = `Match_${sanitizeForFilename(homeTeam?.name || 'Home')}_vs_${sanitizeForFilename(awayTeam?.name || 'Away')}_${matchDate}.zip`
+      const zipFilename = `Match_${sanitizeForFilename(team1?.name || 'Team 1')}_vs_${sanitizeForFilename(team2?.name || 'Team 2')}_${matchDate}.zip`
 
       // Upload PDF and final JSON to Supabase storage "scoresheets" bucket
       if (supabase && !match?.test) {
@@ -852,10 +856,10 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
           // Upload final JSON (with _final suffix for approved matches)
           const jsonResult = await uploadScoresheet({
             match,
-            homeTeam,
-            awayTeam,
-            homePlayers,
-            awayPlayers,
+            team1,
+            team2,
+            team1Players,
+            team2Players,
             sets: allSets,
             events: allEvents,
             final: true
@@ -882,8 +886,8 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         const approvalData = {
           approvedAt: new Date().toISOString(),
           signatures: {
-            captainA: homeLabel === 'A' ? match.homePostGameCaptainSignature : match.awayPostGameCaptainSignature,
-            captainB: homeLabel === 'B' ? match.homePostGameCaptainSignature : match.awayPostGameCaptainSignature,
+            captainA: team1Label === 'A' ? match.team1PostGameCaptainSignature : match.team2PostGameCaptainSignature,
+            captainB: team1Label === 'B' ? match.team1PostGameCaptainSignature : match.team2PostGameCaptainSignature,
             scorer: match.scorerSignature || null,
             asstScorer: match.asstScorerSignature || null,
             ref1: match.ref1Signature || null,
@@ -918,7 +922,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       setIsApproved(true)
     } catch (error) {
       console.error('Error approving match:', error)
-      showAlert(t('matchEnd.errorApproving', { error: error.message }), 'error')
+      showAlert(`Error approving match: ${error.message}`, 'error')
       setDownloadProgress(null)
       setIsSaving(false)
     }
@@ -955,13 +959,13 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         const matchData = await db.matches.get(matchId)
         if (matchData) {
           // Delete players for both teams
-          if (matchData.homeTeamId) {
-            await db.players.where('teamId').equals(matchData.homeTeamId).delete()
-            await db.teams.delete(matchData.homeTeamId)
+          if (matchData.team1Id) {
+            await db.players.where('teamId').equals(matchData.team1Id).delete()
+            await db.teams.delete(matchData.team1Id)
           }
-          if (matchData.awayTeamId) {
-            await db.players.where('teamId').equals(matchData.awayTeamId).delete()
-            await db.teams.delete(matchData.awayTeamId)
+          if (matchData.team2Id) {
+            await db.players.where('teamId').equals(matchData.team2Id).delete()
+            await db.teams.delete(matchData.team2Id)
           }
         }
 
@@ -973,7 +977,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       if (onGoHome) onGoHome()
     } catch (error) {
       console.error('[MatchEnd] Error closing match:', error)
-      showAlert(t('matchEnd.errorClosing', 'Error closing match: ') + error.message, 'error')
+      showAlert('Error closing match: ' + error.message, 'error')
     }
   }
 
@@ -993,7 +997,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       setIsApproved(false)
     } catch (error) {
       console.error('[MatchEnd] Error reopening match:', error)
-      showAlert(t('matchEnd.errorReopening', 'Error reopening match: ') + error.message, 'error')
+      showAlert('Error reopening match: ' + error.message, 'error')
     }
   }
 
@@ -1006,7 +1010,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       // Find the last (highest index) set
       const allSets = await db.sets.where('matchId').equals(matchId).toArray()
       if (allSets.length === 0) {
-        showAlert(t('matchEnd.noSetsReopen', 'No sets found to reopen'), 'error')
+        showAlert('No sets found to reopen', 'error')
         return
       }
       const lastSet = allSets.reduce((a, b) => (a.index > b.index ? a : b))
@@ -1022,8 +1026,8 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         approved: false,
         approvedAt: null,
         // Clear all signature fields - they must be re-collected after changes
-        captainSignatureHomePost: null,
-        captainSignatureAwayPost: null,
+        team1PostGameCaptainSignature: null,
+        team2PostGameCaptainSignature: null,
         assistantScorerSignature: null,
         scorerSignature: null,
         referee2Signature: null,
@@ -1081,7 +1085,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         })
       }
 
-      showAlert(t('matchEnd.setReopened', { index: lastSet.index }), 'success')
+      showAlert(`Set ${lastSet.index} reopened successfully`, 'success')
 
       // Navigate back to Scoreboard
       if (onReopenLastSet) {
@@ -1091,7 +1095,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       }
     } catch (error) {
       console.error('[MatchEnd] Error reopening last set:', error)
-      showAlert(t('matchEnd.errorReopening', { error: error.message }), 'error')
+      showAlert(`Error reopening set: ${error.message}`, 'error')
     }
   }
 
@@ -1100,16 +1104,16 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', gap: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center', width: '100%', flexWrap: 'wrap' }}>
-          <img src={ballImage} onError={(e) => e.target.src = mikasaVolleyball} alt="Volleyball" style={{ width: '4vmin', aspectRatio: '1' }} />
-          <h1 style={{ margin: 0 }}>{t('matchEnd.title', 'Match Complete')}</h1>
-          <img src={ballImage} onError={(e) => e.target.src = mikasaVolleyball} alt="Volleyball" style={{ width: '4vmin', aspectRatio: '1' }} />
+          <img src={ballImage} alt="Volleyball" style={{ width: '4vmin', aspectRatio: '1' }} />
+          <h1 style={{ margin: 0 }}>Match Complete</h1>
+          <img src={ballImage} alt="Volleyball" style={{ width: '4vmin', aspectRatio: '1' }} />
         </div>
 
       </div>
 
       {/* Winner Card */}
       <div className="card" style={{ marginBottom: '16px', padding: '20px' }}>
-        <h3 style={{ margin: 0, textAlign: 'center' }}>{t('matchEnd.winner', 'Winner')}</h3>
+        <h3 style={{ margin: 0, textAlign: 'center' }}>Winner</h3>
         {/* Team Name with background */}
         <div style={{ background: 'var(--accent)', color: '#000', padding: '12px 20px', borderRadius: '8px', textAlign: 'center', fontSize: '26px', fontWeight: 700, marginBottom: '20px' }}>
           {winner}
@@ -1118,7 +1122,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '32px' }}>
           {/* Main Score */}
           <div style={{ fontSize: '10vmin', fontWeight: 800, color: 'var(--accent)' }}>
-            {homeSetsWon}<span style={{ color: 'var(--muted)' }}>:</span>{awaySetsWon}
+            {team1SetsWon}<span style={{ color: 'var(--muted)' }}>:</span>{team2SetsWon}
           </div>
           {/* Set Scores - Vertical List */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '1.5vmin' }}>
@@ -1127,12 +1131,12 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
               return (
                 <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '15px', color: 'var(--muted)'}}>
                   <span style={{ width: '24px', fontSize: '1.5vmin', color: 'var(--muted)', marginRight: '15px', textAlign: 'center' }}>{romanNumerals[idx]}</span>
-                  <span style={{ fontWeight: set.homePoints > set.awayPoints ? 700 : 400, color: set.homePoints > set.awayPoints ? 'var(--foreground)' : 'var(--muted)',  }}>
-                    {set.homePoints}
+                  <span style={{ fontWeight: set.team1Points > set.team2Points ? 700 : 400, color: set.team1Points > set.team2Points ? 'var(--foreground)' : 'var(--muted)',  }}>
+                    {set.team1Points}
                   </span>
                   <span>:</span>
-                  <span style={{ fontWeight: set.awayPoints > set.homePoints ? 700 : 400, color: set.awayPoints > set.homePoints ? 'var(--foreground)' : 'var(--muted)' }}>
-                    {set.awayPoints}
+                  <span style={{ fontWeight: set.team2Points > set.team1Points ? 700 : 400, color: set.team2Points > set.team1Points ? 'var(--foreground)' : 'var(--muted)' }}>
+                    {set.team2Points}
                   </span>
                 </div>
               )
@@ -1144,7 +1148,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       {/* Captain Signatures - Right after winner */}
       {!isApproved && (
         <div className="card" style={{ marginBottom: '16px' }}>
-          <h3 style={{ margin: '0 0 12px 0' }}>{t('matchEnd.teamCaptains', 'Team Captains')}</h3>
+          <h3 style={{ margin: '0 0 12px 0' }}>Team Captains</h3>
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
             <SignatureBox role="captain-a" />
             <SignatureBox role="captain-b" />
@@ -1160,11 +1164,11 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
           style={{ flex: '1 1 300px', minWidth: '280px', cursor: 'pointer', display: 'flex', flexDirection: 'column' }}
           onClick={() => setZoomedSection('results')}
         >
-          <h3 style={{ margin: '0 0 12px 0' }}>{t('matchEnd.results', 'Results')}</h3>
+          <h3 style={{ margin: '0 0 12px 0' }}>Results</h3>
           <div style={{ background: '#fff', borderRadius: '6px', overflow: 'hidden', border: '2px solid #333', flex: 1 }}>
             <ResultsTable
-              teamAName={homeLabel === 'A' ? (homeTeam?.name || 'Team A') : (awayTeam?.name || 'Team A')}
-              teamBName={homeLabel === 'B' ? (homeTeam?.name || 'Team B') : (awayTeam?.name || 'Team B')}
+              teamAName={team1Label === 'A' ? (team1?.name || 'Team A') : (team2?.name || 'Team A')}
+              teamBName={team1Label === 'B' ? (team1?.name || 'Team B') : (team2?.name || 'Team B')}
               setResults={calculateSetResults}
               matchStart={matchStart}
               matchEnd={matchEndTime}
@@ -1179,7 +1183,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
           style={{ flex: '1 1 300px', minWidth: '280px', cursor: 'pointer', display: 'flex', flexDirection: 'column' }}
           onClick={() => setZoomedSection('sanctions')}
         >
-          <h3 style={{ margin: '0 0 12px 0' }}>{t('matchEnd.sanctions', 'Sanctions')}</h3>
+          <h3 style={{ margin: '0 0 12px 0' }}>Sanctions</h3>
           <div style={{ background: '#fff', borderRadius: '6px', overflow: 'hidden', border: '2px solid #333', flex: 1 }}>
             <SanctionsTable
               items={sanctionsInBox}
@@ -1192,7 +1196,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       {/* Remarks Card */}
       <div className="card" style={{ marginBottom: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <h3 style={{ margin: 0 }}>{t('matchEnd.remarks', 'Remarks')}</h3>
+          <h3 style={{ margin: 0 }}>Remarks</h3>
           {!isApproved && (
             <button
               onClick={() => {
@@ -1208,7 +1212,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
                 cursor: 'pointer'
               }}
             >
-              {t('matchEnd.editRemarks', 'Edit Remarks')}
+              Edit Remarks
             </button>
           )}
         </div>
@@ -1222,13 +1226,13 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         <div className="card" style={{ marginBottom: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <div>
-              <h3 style={{ margin: 0, display: 'inline' }}>{t('matchEnd.officialSignatures', 'Official Signatures')}</h3>
+              <h3 style={{ margin: 0, display: 'inline' }}>Official Signatures</h3>
               <span className="text-sm" style={{ marginLeft: '12px' }}>
-                {currentStep === 'asst-scorer' && t('matchEnd.assistantScorer', 'Assistant Scorer')}
-                {currentStep === 'scorer' && t('matchEnd.scorer', 'Scorer')}
-                {currentStep === 'ref2' && t('matchEnd.referee2', '2nd Referee')}
-                {currentStep === 'ref1' && t('matchEnd.referee1', '1st Referee')}
-                {currentStep === 'complete' && t('matchEnd.allSignaturesCollected', 'All signatures collected')}
+                {currentStep === 'asst-scorer' && 'Assistant Scorer'}
+                {currentStep === 'scorer' && 'Scorer'}
+                {currentStep === 'ref2' && '2nd Referee'}
+                {currentStep === 'ref1' && '1st Referee'}
+                {currentStep === 'complete' && 'All signatures collected'}
               </span>
             </div>
           </div>
@@ -1269,7 +1273,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
                 background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)'
               }}
             >
-              {t('matchEnd.closeMatch', 'Close Match')}
+              Close Match
             </button>
             <button
               onClick={handleReopenMatch}
@@ -1281,7 +1285,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
                 color: '#000',
               }}
             >
-              {t('matchEnd.reopenMatch', 'Reopen Match')}
+              Reopen Match
             </button>
           </>
         ) : !showReopenConfirm && (
@@ -1300,7 +1304,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
                 cursor: (isSaving || (!match.test && !allSignaturesDone)) ? 'not-allowed' : 'pointer'
               }}
             >
-              {isSaving ? t('matchEnd.downloading', 'Downloading...') : t('matchEnd.approveParams', 'Confirm and Approve')}
+              {isSaving ? 'Downloading...' : 'Confirm and Approve'}
             </button>
             <button
               onClick={() => setShowReopenConfirm(true)}
@@ -1312,7 +1316,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
                 color: '#000',
               }}
             >
-              {t('matchEnd.reopenLastSet', 'Reopen Last Set')}
+              Reopen Last Set
             </button>
             <button
               onClick={onManualAdjustments}
@@ -1322,20 +1326,20 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
                 fontSize: '15px',
               }}
             >
-              {t('matchEnd.manualAdjustments', 'Manual Adjustments')}
+              Manual Adjustments
             </button>
             <MenuList
-              buttonLabel={`📄 ${t('matchEnd.scoresheet')}`}
+              buttonLabel="📄 Scoresheet"
               buttonClassName="secondary"
               buttonStyle={{ padding: '14px 20px', fontSize: '15px' }}
               showArrow={true}
               position="right"
               vertical="top"
               items={[
-                { key: 'preview', label: `🔍 ${t('matchEnd.preview', 'Preview')}`, onClick: () => handleShowScoresheet('preview') },
-                { key: 'print', label: `🖨️ ${t('matchEnd.print', 'Print')}`, onClick: () => handleShowScoresheet('print') },
-                { key: 'save', label: `💾 ${t('matchEnd.savePdf', 'Save PDF')}`, onClick: () => handleShowScoresheet('save') },
-                { key: 'logs', label: `📊 ${t('matchEnd.downloadLogs', 'Download Logs')}`, onClick: handleDownloadLogs }
+                { key: 'preview', label: '🔍 Preview', onClick: () => handleShowScoresheet('preview') },
+                { key: 'print', label: '🖨️ Print', onClick: () => handleShowScoresheet('print') },
+                { key: 'save', label: '💾 Save PDF', onClick: () => handleShowScoresheet('save') },
+                { key: 'logs', label: '📊 Download Logs', onClick: handleDownloadLogs }
               ]}
             />
           </>
@@ -1364,7 +1368,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
             width: '90%',
             textAlign: 'center'
           }}>
-            <h3 style={{ margin: '0 0 16px 0' }}>{t('matchEnd.preparingExport', 'Preparing Match Export...')}</h3>
+            <h3 style={{ margin: '0 0 16px 0' }}>Preparing Match Export...</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', justifyContent: 'center' }}>
                 <span style={{ fontSize: '20px' }}>{downloadProgress.json ? '✓' : '⏳'}</span>
@@ -1372,13 +1376,13 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', justifyContent: 'center' }}>
                 <span style={{ fontSize: '20px' }}>{downloadProgress.pdf ? '✓' : '⏳'}</span>
-                <span style={{ color: downloadProgress.pdf ? '#22c55e' : 'var(--muted)' }}>{t('matchEnd.generatingPdf', 'Generating Scoresheet (PDF)')}</span>
+                <span style={{ color: downloadProgress.pdf ? '#22c55e' : 'var(--muted)' }}>Generating Scoresheet (PDF)</span>
               </div>
             </div>
             <p style={{ margin: 0, fontSize: '13px', color: 'var(--muted)' }}>
               {downloadProgress.json && downloadProgress.pdf
-                ? t('matchEnd.creatingZip', 'Creating ZIP and uploading to cloud...')
-                : t('matchEnd.waitCheck', 'Please wait while files are being prepared...')}
+                ? 'Creating ZIP and uploading to cloud...'
+                : 'Please wait while files are being prepared...'}
             </p>
           </div>
         </div>
@@ -1406,12 +1410,12 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
             width: '90%',
             textAlign: 'center'
           }}>
-            <h3 style={{ margin: '0 0 16px 0' }}>{t('matchEnd.reopenSetConfirmTitle', 'Reopen Last Set?')}</h3>
+            <h3 style={{ margin: '0 0 16px 0' }}>Reopen Last Set?</h3>
             <p style={{ margin: '0 0 16px 0', color: 'var(--muted)' }}>
-              {t('matchEnd.reopenSetConfirmBody', 'This will reopen the last set for corrections and allow you to continue scoring.')}
+              This will reopen the last set for corrections and allow you to continue scoring.
             </p>
             <p style={{ margin: '0 0 24px 0', color: 'var(--warning)', fontSize: '14px' }}>
-              {t('matchEnd.reopenSetWarning', 'Warning: All collected signatures will be cleared and must be collected again after approval.')}
+              Warning: All collected signatures will be cleared and must be collected again after approval.
             </p>
             <div style={{ display: 'flex', gap: '12px' }}>
               <button
@@ -1419,14 +1423,14 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
                 className="primary"
                 style={{ flex: 1, padding: '12px', fontSize: '15px' }}
               >
-                {t('matchEnd.yesReopen', 'Yes, Reopen Set')}
+                Yes, Reopen Set
               </button>
               <button
                 onClick={() => setShowReopenConfirm(false)}
                 className="secondary"
                 style={{ flex: 1, padding: '12px', fontSize: '15px' }}
               >
-                {t('matchEnd.cancel', 'Cancel')}
+                Cancel
               </button>
             </div>
           </div>
@@ -1465,8 +1469,8 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
           >
             {zoomedSection === 'results' && (
               <ResultsTable
-                teamAName={homeLabel === 'A' ? (homeTeam?.name || 'Team A') : (awayTeam?.name || 'Team A')}
-                teamBName={homeLabel === 'B' ? (homeTeam?.name || 'Team B') : (awayTeam?.name || 'Team B')}
+                teamAName={team1Label === 'A' ? (team1?.name || 'Team A') : (team2?.name || 'Team A')}
+                teamBName={team1Label === 'B' ? (team1?.name || 'Team B') : (team2?.name || 'Team B')}
                 setResults={calculateSetResults}
                 matchStart={matchStart}
                 matchEnd={matchEndTime}
@@ -1516,7 +1520,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       {/* Remarks Modal */}
       {showRemarksModal && (
         <Modal
-          title={t('matchEnd.editRemarks', 'Edit Remarks')}
+          title="Edit Remarks"
           open={true}
           onClose={() => {
             setShowRemarksModal(false)
@@ -1527,7 +1531,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
           <div style={{ padding: '20px' }}>
             <textarea
               ref={remarksTextareaRef}
-              placeholder={t('matchEnd.remarksPlaceholder', 'Record match remarks...')}
+              placeholder="Record match remarks..."
               value={remarksText}
               onChange={e => setRemarksText(e.target.value)}
               style={{
@@ -1558,7 +1562,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
                   cursor: 'pointer'
                 }}
               >
-                {t('common.cancel', 'Cancel')}
+                Cancel
               </button>
               <button
                 onClick={async () => {
@@ -1576,7 +1580,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
                   cursor: 'pointer'
                 }}
               >
-                {t('common.save', 'Save')}
+                Save
               </button>
             </div>
           </div>

@@ -182,8 +182,6 @@ const defaultKeyBindings = {
   pointRight: 'l',
   timeoutLeft: 'q',
   timeoutRight: 'p',
-  exchangeLiberoLeft: 'w',
-  exchangeLiberoRight: 'o',
   undo: 'z',
   confirm: 'Enter',
   cancel: 'Escape',
@@ -196,8 +194,6 @@ const keyBindingKeys = [
   'pointRight',
   'timeoutLeft',
   'timeoutRight',
-  'exchangeLiberoLeft',
-  'exchangeLiberoRight',
   'undo',
   'confirm',
   'cancel',
@@ -312,14 +308,6 @@ export default function HomeOptionsModal({
     setCheckAccidentalPointAward,
     accidentalPointAwardDuration,
     setAccidentalPointAwardDuration,
-    manageCaptainOnCourt,
-    setManageCaptainOnCourt,
-    liberoExitConfirmation,
-    setLiberoExitConfirmation,
-    liberoEntrySuggestion,
-    setLiberoEntrySuggestion,
-    setIntervalDuration,
-    setSetIntervalDuration,
     keybindingsEnabled,
     setKeybindingsEnabled
   } = matchOptions
@@ -493,72 +481,6 @@ export default function HomeOptionsModal({
                 const newValue = !checkAccidentalPointAward
                 setCheckAccidentalPointAward(newValue)
                 localStorage.setItem('checkAccidentalPointAward', String(newValue))
-              }}
-            />
-          </Row>
-
-          <Row style={{ marginBottom: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <div style={{ fontWeight: 600, fontSize: '15px' }}>{t('options.manageCaptainOnCourt')}</div>
-              <InfoDot title={t('options.manageCaptainOnCourtInfo')} />
-            </div>
-            <ToggleSwitch
-              value={manageCaptainOnCourt}
-              onToggle={() => {
-                const newValue = !manageCaptainOnCourt
-                setManageCaptainOnCourt(newValue)
-                localStorage.setItem('manageCaptainOnCourt', String(newValue))
-              }}
-            />
-          </Row>
-
-          <Row style={{ marginBottom: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <div style={{ fontWeight: 600, fontSize: '15px' }}>{t('options.liberoExitConfirmation')}</div>
-              <InfoDot title={t('options.liberoExitConfirmationInfo')} />
-            </div>
-            <ToggleSwitch
-              value={liberoExitConfirmation}
-              onToggle={() => {
-                const newValue = !liberoExitConfirmation
-                setLiberoExitConfirmation(newValue)
-                localStorage.setItem('liberoExitConfirmation', String(newValue))
-              }}
-            />
-          </Row>
-
-          <Row style={{ marginBottom: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <div style={{ fontWeight: 600, fontSize: '15px' }}>{t('options.liberoEntrySuggestion')}</div>
-              <InfoDot title={t('options.liberoEntrySuggestionInfo')} />
-            </div>
-            <ToggleSwitch
-              value={liberoEntrySuggestion}
-              onToggle={() => {
-                const newValue = !liberoEntrySuggestion
-                setLiberoEntrySuggestion(newValue)
-                localStorage.setItem('liberoEntrySuggestion', String(newValue))
-              }}
-            />
-          </Row>
-
-          <Row style={{ marginBottom: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <div style={{ fontWeight: 600, fontSize: '15px' }}>{t('options.setIntervalDuration')}</div>
-              <InfoDot title={t('options.setIntervalDurationInfo')} />
-            </div>
-            <Stepper
-              value={setIntervalDuration}
-              label={t('options.setIntervalDurationLabel', 'set interval duration')}
-              onDecrement={() => {
-                const newVal = Math.max(60, setIntervalDuration - 15)
-                setSetIntervalDuration(newVal)
-                localStorage.setItem('setIntervalDuration', String(newVal))
-              }}
-              onIncrement={() => {
-                const newVal = Math.min(600, setIntervalDuration + 15)
-                setSetIntervalDuration(newVal)
-                localStorage.setItem('setIntervalDuration', String(newVal))
               }}
             />
           </Row>
@@ -958,7 +880,7 @@ export default function HomeOptionsModal({
         {activeDisplayMode === 'desktop' && (
           <Section title={t('options.downloadDesktopApp')} borderBottom={false}>
             <a
-              href="https://github.com/Lucanepa/openvolley/releases"
+              href="https://github.com/Lucanepa/openbeach/releases"
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -995,15 +917,13 @@ export default function HomeOptionsModal({
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {[
-              { path: '/', name: t('options.scoreboard'), desc: t('options.scoreboardDesc') },
-              { path: '/referee/index.html', name: t('header.referee'), desc: t('options.refereeDesc') },
-              { path: '/bench/index.html', name: t('header.bench'), desc: t('options.benchDesc') },
-              { path: '/livescore/index.html', name: t('options.livescore'), desc: t('options.livescoreDesc') },
-              { path: '/upload_roster/index.html', name: t('options.uploadRoster'), desc: t('options.uploadRosterDesc') }
+              { url: 'https://beach.openvolley.app', name: t('options.scoreboard'), desc: t('options.scoreboardDesc') },
+              { url: 'https://referee-beach.openvolley.app', name: t('header.referee'), desc: t('options.refereeDesc') },
+              { url: 'https://livescore-beach.openvolley.app', name: t('options.livescore'), desc: t('options.livescoreDesc') }
             ].map(page => (
               <a
-                key={page.path}
-                href={`https://app.openvolley.app${page.path}`}
+                key={page.url}
+                href={page.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{

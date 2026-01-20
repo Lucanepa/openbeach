@@ -321,7 +321,7 @@
       "invalidDate": "Ungültigs Datum",
       "invalidHour": "Ungültigi Stund: {{hour}}",
       "invalidMinutes": "Ungültigi Minute: {{minutes}}",
-      "minPlayers": "Need at least 6 players with numbers (not liberos). Currently: {{count}}",
+      "minPlayers": "Gnau 2 Spieler mit Nummere bruucht. Aktuell: {{count}}",
       "noCaptain": "No captain selected",
       "noCoach": "No coach set",
       "duplicateNumbers": "Duplicate jersey numbers: {{numbers}}",
@@ -357,9 +357,8 @@
       "benchOfficialsCount": "+ {{count}} Bankoffizielle",
       "benchOfficialsCountPlural": "+ {{count}} Bankoffizielli",
       "reviewImportedData": "Bitte überprüefed Sie die importierte Date:",
-      "reviewAddBenchOfficials": "Fählendi Bankoffizielli hinzuefüege (Arzt, Physio, etc.)",
       "reviewVerifyDob": "Überprüefed Sie, öb d Geburtsdate korrekt sind",
-      "reviewSetCaptainLibero": "Captain- und Libero-Bezeichnige festlege"
+      "reviewSetCaptain": "Captain-Bezeichnig festlege"
     },
     "coinToss": "Usloosig",
     "chooseTeamColor": "Farb für Team {{team}} wähle",
@@ -770,7 +769,7 @@
     "allowPopups": "Bitte erlaubed Sie Popups, um s eMatchblatt aazeige"
   },
   "home": {
-    "title": "Openvolley eScoresheet",
+    "title": "openBeach eScoresheet",
     "newMatch": "Neus Spiil",
     "officialMatch": "Offiziells Spiil",
     "testMatch": "Testspiil",
@@ -869,7 +868,7 @@
     "livescoreDesc": "Öffentlichi Aazeig",
     "uploadRoster": "Kader ufelade",
     "uploadRosterDesc": "Team-Kader aus PDF/CSV importiere",
-    "environmentTip": "Für lokals Netzwerk-Setup verwended Sie d IP-Adresse vo Ihrem Grät statt app.openvolley.app",
+    "environmentTip": "Für lokals Netzwerk-Setup verwended Sie d IP-Adresse vo Ihrem Grät statt beach.openvolley.app",
     "backup": "Sicherig",
     "autoBackup": "Automatischi Sicherig",
     "autoBackupFolderInfo": "Spiildate automatisch im usgwählte Ordner bi jedere Änderig speichere",
@@ -1163,6 +1162,7 @@
     "rosterSentMessage": "S Kader isch zum eScoresheet gschickt worde. De Schreiber wird s Kader überprüefe und akzeptiere oder ablehne.",
     "signatures": "Underschrifte",
     "signaturesDescription": "Optional: Trainer und Captain chönd s Kader vor em Abschicke unterschriibe.",
+    "signaturesAtCoinToss": "Captain-Underschrift wird bim Münzwurf erfasst.",
     "coachSignature": "Trainer-Underschrift",
     "captainSignature": "Captain-Underschrift",
     "tapToSign": "Tippe zum unterschriibe"
@@ -1326,31 +1326,6 @@
     "shareWithRemote": "Mit entfernte Grät teile",
     "refereeUrl": "Schiri-URL",
     "gamePin": "Spiil-PIN"
-  },
-  "loadOfficialMatch": {
-    "title": "Spiil us em Spiilplan lade",
-    "button": "Spiil us em Spiilplan lade",
-    "federation": "Verband",
-    "selectFederation": "Uswähle...",
-    "gender": "Geschlecht",
-    "selectGender": "Uswähle...",
-    "league": "Liga",
-    "selectLeague": "Uswähle...",
-    "gameN": "Spiil #",
-    "date": "Datum",
-    "time": "Ziit",
-    "homeVsAway": "Heim vs Gast",
-    "noUpcomingMatches": "Kei aastelligi Spiil gfunde",
-    "fetchError": "Spiil händ nöd chönne glade werde. Verbindig prüefe.",
-    "backendNotAvailable": "Backend-Server nöd verfügbar",
-    "reminderAlert": "Ligagruppe falls vorhande, Teamfarbe und Kurznäme iistelle",
-    "loading": "Lade Spiil...",
-    "selectFilters": "Wähled Sie Geschlecht und Liga um Spiil aazeige",
-    "searchPlaceholder": "Sueche...",
-    "today": "Hüt",
-    "tomorrow": "Morn",
-    "clearFilter": "Filter lösche",
-    "noMatchesForFilter": "Kei Spiil für dä Filter gfunde"
   },
   "livescore": {
     "title": "Live-Ergebnis",
@@ -1593,7 +1568,7 @@
       "dashboards": "Dashboards"
     },
     "quickstart": {
-      "intro": "Willkommen bei OpenVolley eScoresheet! In diesem Leitfaden erfahren Sie, wie Sie die App nutzen können, um Volleyballspiele professionell zu bewerten.",
+      "intro": "Willkommen bei openBeach eScoresheet! In diesem Leitfaden erfahren Sie, wie Sie die App nutzen können, um Volleyballspiele professionell zu bewerten.",
       "flowTitle": "Spielverlauf",
       "tip": "Für Test-/Praxiszwecke erstellen Sie ein \"Testspiel\", das einfachere Anforderungen hat. Für offizielle Spiele verwenden Sie \"Offizielles Spiel\", das eine vollständige Dateneingabe erfordert."
     },
@@ -1646,7 +1621,7 @@
       "playerStep4": "Gegebenenfalls als Libero 1 oder Libero 2 markieren",
       "playerStep5": "Ernennung des Mannschaftskapitäns",
       "pdfTip": "Sie können Dienstpläne aus PDF-Dateien importieren, indem Sie die Schaltfläche \"PDF importieren\" verwenden. Dadurch werden die Spielerdaten automatisch aus den offiziellen Dienstplänen analysiert.",
-      "minPlayers": "Jede Mannschaft muss mit mindestens 6 Spielern (ohne Liberos) antreten.",
+      "minPlayers": "Jedi Mannschaft muss gnau 2 Spieler ha zum witerfahre.",
       "signatures": "Unterschriften",
       "signaturesDesc": "Für offizielle Spiele sammeln Sie Unterschriften von:",
       "sig1": "Trainer (beide Teams)",
@@ -1964,7 +1939,7 @@
       "exportJson": "JSON exportieren",
       "uploadCloud": "Hochladen in die Cloud"
     },
-    "footer": "OpenVolley eScoresheet - Professionelle Volleyball-Wertung"
+    "footer": "openBeach eScoresheet - Professionelle Volleyball-Wertung"
   },
   "manualAdjustmentsEditor": {
     "title": "Manuelli Anpassige",
