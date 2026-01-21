@@ -1325,32 +1325,48 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           }
           
           // Fallback to coin toss data if serviceOrder not available or empty (for set 1)
+          // Also check if any player numbers are missing and fill them
           // team_up goes in rows I and III (ABOVE), team_down goes in rows II and IV (BELOW)
-          if (!playerNumbersSet) {
-            console.log(`[DEBUG Set ${setNum}] Using fallback - playerNumbersSet=false`, {
+          const currentR1 = get(`${prefix}_r1_player`);
+          const currentR2 = get(`${prefix}_r2_player`);
+          const currentR3 = get(`${prefix}_r3_player`);
+          const currentR4 = get(`${prefix}_r4_player`);
+          
+          const needsFallback = !playerNumbersSet || !currentR1 || !currentR2 || !currentR3 || !currentR4;
+          
+          if (needsFallback) {
+            console.log(`[DEBUG Set ${setNum}] Using fallback - playerNumbersSet=${playerNumbersSet}, missing players:`, {
+              r1: !currentR1,
+              r2: !currentR2,
+              r3: !currentR3,
+              r4: !currentR4,
               teamUpData: { p1: teamUpData?.player1?.number, p2: teamUpData?.player2?.number },
               teamDownData: { p1: teamDownData?.player1?.number, p2: teamDownData?.player2?.number }
             });
+            
+            // Fill missing team_up players (rows I and III)
             if (teamUpData) {
               const p1Num = String(teamUpData.player1?.number || '');
               const p2Num = String(teamUpData.player2?.number || '');
-              if (p1Num) {
+              if (p1Num && !currentR1) {
                 set(`${prefix}_r1_player`, p1Num);
                 console.log(`[DEBUG Set ${setNum}] Fallback: Set r1_player = ${p1Num}`);
               }
-              if (p2Num) {
+              if (p2Num && !currentR3) {
                 set(`${prefix}_r3_player`, p2Num);
                 console.log(`[DEBUG Set ${setNum}] Fallback: Set r3_player = ${p2Num}`);
               }
             }
+            
+            // Fill missing team_down players (rows II and IV)
             if (teamDownData) {
               const p1Num = String(teamDownData.player1?.number || '');
               const p2Num = String(teamDownData.player2?.number || '');
-              if (p1Num) {
+              if (p1Num && !currentR2) {
                 set(`${prefix}_r2_player`, p1Num);
                 console.log(`[DEBUG Set ${setNum}] Fallback: Set r2_player = ${p1Num}`);
               }
-              if (p2Num) {
+              if (p2Num && !currentR4) {
                 set(`${prefix}_r4_player`, p2Num);
                 console.log(`[DEBUG Set ${setNum}] Fallback: Set r4_player = ${p2Num}`);
               }
