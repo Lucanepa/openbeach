@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAlert } from '../../contexts_beach/AlertContext_beach'
-import Modal from '../Modal'
+import Modal from '../Modal_beach'
 import { listCloudBackups, loadCloudBackup } from '../../utils_beach/logger_beach'
 import { restoreMatchInPlace } from '../../utils_beach/backupManager_beach'
-import BackupTable from '../BackupTable'
+import BackupTable from '../BackupTable_beach'
 
 function InfoDot({ title }) {
   const [showTooltip, setShowTooltip] = useState(false)

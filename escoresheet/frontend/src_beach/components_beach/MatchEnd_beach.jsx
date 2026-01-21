@@ -2,9 +2,9 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db_beach/db_beach'
 import { useAlert } from '../contexts_beach/AlertContext_beach'
-import SignaturePad from './SignaturePad'
-import MenuList from './MenuList'
-import Modal from './Modal'
+import SignaturePad from './SignaturePad_beach'
+import MenuList from './MenuList_beach'
+import Modal from './Modal_beach'
 // Beach volleyball ball image
 const ballImage = '/beachball.png'
 import JSZip from 'jszip'
@@ -53,14 +53,14 @@ const ResultsTable = ({ teamAName, teamBName, setResults, matchStart, matchEnd, 
 
       {/* Column Headers */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px 1fr', gap: '4px', marginBottom: '2px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', fontSize: '9px', textAlign: 'center', color: '#333', fontWeight: 600 }}>
-          <span>T</span><span>S</span><span>W</span><span>P</span>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', fontSize: '9px', textAlign: 'center', color: '#333', fontWeight: 600 }}>
+          <span>T</span><span>W</span><span>P</span>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', fontSize: '9px', textAlign: 'center', color: '#333', fontWeight: 600 }}>
           <span>Set</span><span>Time</span>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', fontSize: '9px', textAlign: 'center', color: '#333', fontWeight: 600 }}>
-          <span>P</span><span>W</span><span>S</span><span>T</span>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', fontSize: '9px', textAlign: 'center', color: '#333', fontWeight: 600 }}>
+          <span>P</span><span>W</span><span>T</span>
         </div>
       </div>
 
@@ -72,9 +72,8 @@ const ResultsTable = ({ teamAName, teamBName, setResults, matchStart, matchEnd, 
           if (!isFinished) return null
           return (
             <div key={setNum} style={{ display: 'grid', gridTemplateColumns: '1fr 60px 1fr', gap: '4px', borderBottom: '1px solid #ccc', padding: '2px 0' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', fontSize: '11px', textAlign: 'center', fontWeight: 500, color: '#000' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', fontSize: '11px', textAlign: 'center', fontWeight: 500, color: '#000' }}>
                 <span>{setData.teamATimeouts ?? ''}</span>
-                <span>{setData.teamASubstitutions ?? ''}</span>
                 <span>{setData.teamAWon ?? ''}</span>
                 <span style={{ fontWeight: 700 }}>{setData.teamAPoints ?? ''}</span>
               </div>
@@ -82,10 +81,9 @@ const ResultsTable = ({ teamAName, teamBName, setResults, matchStart, matchEnd, 
                 <span style={{ fontWeight: 600 }}>{setNum}</span>
                 <span>{setData?.duration || ''}</span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', fontSize: '11px', textAlign: 'center', fontWeight: 500, color: '#000' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', fontSize: '11px', textAlign: 'center', fontWeight: 500, color: '#000' }}>
                 <span style={{ fontWeight: 700 }}>{setData.teamBPoints ?? ''}</span>
                 <span>{setData.teamBWon ?? ''}</span>
-                <span>{setData.teamBSubstitutions ?? ''}</span>
                 <span>{setData.teamBTimeouts ?? ''}</span>
               </div>
             </div>
@@ -105,9 +103,8 @@ const ResultsTable = ({ teamAName, teamBName, setResults, matchStart, matchEnd, 
 
         return (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px 1fr', gap: '4px', padding: '4px 0', background: '#e8e8e8', marginTop: '2px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', fontSize: '11px', textAlign: 'center', fontWeight: 600, color: '#000' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', fontSize: '11px', textAlign: 'center', fontWeight: 600, color: '#000' }}>
               <span>{setResults?.reduce((sum, r) => sum + (r.teamATimeouts ?? 0), 0) || 0}</span>
-              <span>{setResults?.reduce((sum, r) => sum + (r.teamASubstitutions ?? 0), 0) || 0}</span>
               <span>{setResults?.reduce((sum, r) => sum + (r.teamAWon ?? 0), 0) || 0}</span>
               <span style={{ fontWeight: 700 }}>{setResults?.reduce((sum, r) => sum + (r.teamAPoints ?? 0), 0) || 0}</span>
             </div>
@@ -115,10 +112,9 @@ const ResultsTable = ({ teamAName, teamBName, setResults, matchStart, matchEnd, 
               <span>Tot</span>
               <span>{totalSetDuration}</span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', fontSize: '11px', textAlign: 'center', fontWeight: 600, color: '#000' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', fontSize: '11px', textAlign: 'center', fontWeight: 600, color: '#000' }}>
               <span style={{ fontWeight: 700 }}>{setResults?.reduce((sum, r) => sum + (r.teamBPoints ?? 0), 0) || 0}</span>
               <span>{setResults?.reduce((sum, r) => sum + (r.teamBWon ?? 0), 0) || 0}</span>
-              <span>{setResults?.reduce((sum, r) => sum + (r.teamBSubstitutions ?? 0), 0) || 0}</span>
               <span>{setResults?.reduce((sum, r) => sum + (r.teamBTimeouts ?? 0), 0) || 0}</span>
             </div>
           </div>
@@ -310,7 +306,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
   const [remarksText, setRemarksText] = useState('')
   const remarksTextareaRef = useRef(null)
 
-  // Prevent accidental navigation away before approval
+  // Prevent accidental navigation team2 before approval
   // Skip warning during save process (isSaving) to avoid dialog during PDF generation
   useEffect(() => {
     if (isApproved || isSaving) return // Allow navigation after approval or during save
@@ -354,13 +350,6 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         ? setEvents.filter(e => e.type === 'timeout' && e.payload?.team === teamBKey).length
         : null
 
-      const teamASubstitutions = isSetFinished
-        ? setEvents.filter(e => e.type === 'substitution' && e.payload?.team === teamAKey).length
-        : null
-      const teamBSubstitutions = isSetFinished
-        ? setEvents.filter(e => e.type === 'substitution' && e.payload?.team === teamBKey).length
-        : null
-
       const teamAWon = isSetFinished && teamAPoints !== null && teamBPoints !== null
         ? (teamAPoints > teamBPoints ? 1 : 0)
         : null
@@ -387,11 +376,9 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       results.push({
         setNumber: setNum,
         teamATimeouts,
-        teamASubstitutions,
         teamAWon,
         teamAPoints,
         teamBTimeouts,
-        teamBSubstitutions,
         teamBWon,
         teamBPoints,
         duration
@@ -699,11 +686,22 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     const team1WithCountry = team1 ? { ...team1, country: match?.team1Country || '' } : { name: '', country: match?.team1Country || '' }
     const team2WithCountry = team2 ? { ...team2, country: match?.team2Country || '' } : { name: '', country: match?.team2Country || '' }
 
+    // Normalize team keys for scoresheet (team1 -> team_1)
+    const normalizeTeamKey = (key) => key ? key.replace('team1', 'team_1').replace('team2', 'team_2') : key
     const scoresheetData = {
       match: {
         ...match,
         team_1Country: match?.team1Country || '',
-        team_2Country: match?.team2Country || ''
+        team_2Country: match?.team2Country || '',
+        // Normalize coinTossTeamA/B for scoresheet
+        coinTossTeamA: normalizeTeamKey(match?.coinTossTeamA),
+        coinTossTeamB: normalizeTeamKey(match?.coinTossTeamB),
+        // Build coinTossData for scoresheet compatibility
+        coinTossData: {
+          coinTossWinner: normalizeTeamKey(match?.coinTossWinner),
+          teamA: normalizeTeamKey(match?.coinTossTeamA),
+          teamB: normalizeTeamKey(match?.coinTossTeamB)
+        }
       },
       team_1Team: team1WithCountry,
       team_2Team: team2WithCountry,
@@ -771,11 +769,22 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       const team1WithCountry = team1 ? { ...team1, country: match?.team1Country || '' } : { name: '', country: match?.team1Country || '' }
       const team2WithCountry = team2 ? { ...team2, country: match?.team2Country || '' } : { name: '', country: match?.team2Country || '' }
 
+      // Normalize team keys for scoresheet (team1 -> team_1)
+      const normalizeTeamKey = (key) => key ? key.replace('team1', 'team_1').replace('team2', 'team_2') : key
       const scoresheetData = {
         match: {
           ...match,
           team_1Country: match?.team1Country || '',
-          team_2Country: match?.team2Country || ''
+          team_2Country: match?.team2Country || '',
+          // Normalize coinTossTeamA/B for scoresheet
+          coinTossTeamA: normalizeTeamKey(match?.coinTossTeamA),
+          coinTossTeamB: normalizeTeamKey(match?.coinTossTeamB),
+          // Build coinTossData for scoresheet compatibility
+          coinTossData: {
+            coinTossWinner: normalizeTeamKey(match?.coinTossWinner),
+            teamA: normalizeTeamKey(match?.coinTossTeamA),
+            teamB: normalizeTeamKey(match?.coinTossTeamB)
+          }
         },
         team_1Team: team1WithCountry,
         team_2Team: team2WithCountry,

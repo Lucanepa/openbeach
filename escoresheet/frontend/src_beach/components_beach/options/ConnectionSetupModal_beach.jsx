@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import Modal from '../Modal'
+import Modal from '../Modal_beach'
 import {
   getLocalIP,
   getServerStatus,

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import Modal from './Modal'
+import Modal from './Modal_beach'
 
 // CSS Keyframe animations as inline styles
 const animationStyles = `
@@ -301,9 +301,9 @@ function CourtDemo({ showLiberoZones = false, animateRotation = false, highlight
 // Interactive Score Demo
 function ScoreDemo({ t }) {
   const [homeScore, setHomeScore] = useState(12)
-  const [awayScore, setAwayScore] = useState(10)
+  const [team2Score, setteam2Score] = useState(10)
   const [homeFlash, setHomeFlash] = useState(false)
-  const [awayFlash, setAwayFlash] = useState(false)
+  const [team2Flash, setteam2Flash] = useState(false)
 
   const addHomePoint = () => {
     setHomeScore(s => Math.min(s + 1, 25))
@@ -311,10 +311,10 @@ function ScoreDemo({ t }) {
     setTimeout(() => setHomeFlash(false), 300)
   }
 
-  const addAwayPoint = () => {
-    setAwayScore(s => Math.min(s + 1, 25))
-    setAwayFlash(true)
-    setTimeout(() => setAwayFlash(false), 300)
+  const addteam2Point = () => {
+    setteam2Score(s => Math.min(s + 1, 25))
+    setteam2Flash(true)
+    setTimeout(() => setteam2Flash(false), 300)
   }
 
   return (
@@ -335,15 +335,15 @@ function ScoreDemo({ t }) {
         </div>
         <div style={{ fontSize: 24, opacity: 0.5 }}>:</div>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 4 }}>{t('interactiveGuide.demos.away')}</div>
+          <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 4 }}>{t('interactiveGuide.demos.team2')}</div>
           <div style={{
             fontSize: 48,
             fontWeight: 700,
             color: '#ef4444',
             transition: 'all 0.2s',
-            transform: awayFlash ? 'scale(1.2)' : 'scale(1)'
+            transform: team2Flash ? 'scale(1.2)' : 'scale(1)'
           }}>
-            {awayScore}
+            {team2Score}
           </div>
         </div>
       </div>
@@ -351,7 +351,7 @@ function ScoreDemo({ t }) {
       {/* Point buttons */}
       <div style={{ display: 'flex', gap: 12 }}>
         <DemoButton label={t('interactiveGuide.demos.pointHome')} color="#3b82f6" onClick={addHomePoint} />
-        <DemoButton label={t('interactiveGuide.demos.pointAway')} color="#ef4444" onClick={addAwayPoint} />
+        <DemoButton label={t('interactiveGuide.demos.pointteam2')} color="#ef4444" onClick={addteam2Point} />
       </div>
 
       <div style={{ fontSize: 11, opacity: 0.5 }}>{t('interactiveGuide.demos.clickToScore')}</div>
@@ -421,79 +421,11 @@ function CountdownDemo({ t }) {
   )
 }
 
-// Substitution Demo
-function SubstitutionDemo({ t }) {
-  const [courtPlayer, setCourtPlayer] = useState(8)
-  const [benchPlayer, setBenchPlayer] = useState(15)
-  const [isSwapping, setIsSwapping] = useState(false)
-
-  const doSwap = () => {
-    if (isSwapping) return
-    setIsSwapping(true)
-    setTimeout(() => {
-      const temp = courtPlayer
-      setCourtPlayer(benchPlayer)
-      setBenchPlayer(temp)
-      setIsSwapping(false)
-    }, 500)
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 40 }}>
-        {/* Court */}
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 4 }}>{t('interactiveGuide.demos.onCourt')}</div>
-          <div style={{
-            width: 50,
-            height: 50,
-            borderRadius: '50%',
-            background: '#22c55e',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 20,
-            fontWeight: 700,
-            animation: isSwapping ? 'slide-swap 0.5s ease-in-out' : 'none'
-          }}>
-            {courtPlayer}
-          </div>
-        </div>
-
-        {/* Arrow */}
-        <div style={{ fontSize: 24, opacity: 0.5 }}>⇄</div>
-
-        {/* Bench */}
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 4 }}>{t('interactiveGuide.demos.onBench')}</div>
-          <div style={{
-            width: 50,
-            height: 50,
-            borderRadius: '50%',
-            background: 'rgba(255,255,255,0.2)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 20,
-            fontWeight: 700,
-            animation: isSwapping ? 'slide-swap 0.5s ease-in-out' : 'none'
-          }}>
-            {benchPlayer}
-          </div>
-        </div>
-      </div>
-
-      <DemoButton label={t('interactiveGuide.demos.substitute')} color="#8b5cf6" onClick={doSwap} small />
-      <div style={{ fontSize: 11, opacity: 0.5 }}>{t('interactiveGuide.demos.clickToSwap')}</div>
-    </div>
-  )
-}
-
 // Interactive Button State Demo - Shows what buttons do and when they're enabled/disabled
 function ButtonStateDemo({ t }) {
   const [rallyActive, setRallyActive] = useState(false)
-  const [homeScore, setHomeScore] = useState(0)
-  const [awayScore, setAwayScore] = useState(0)
+  const [team1Score, setTeam1Score] = useState(0)
+  const [team2Score, setTeam2Score] = useState(0)
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState('info') // 'info', 'success', 'error'
 
@@ -517,10 +449,10 @@ function ButtonStateDemo({ t }) {
       showMessage(t('interactiveGuide.buttonDemo.startFirst'), 'error')
       return
     }
-    if (team === 'home') {
-      setHomeScore(s => s + 1)
+    if (team === 'team1') {
+      setTeam1Score(s => s + 1)
     } else {
-      setAwayScore(s => s + 1)
+      setTeam2Score(s => s + 1)
     }
     setRallyActive(false)
     showMessage(t('interactiveGuide.buttonDemo.pointAwarded'), 'success')
@@ -528,8 +460,8 @@ function ButtonStateDemo({ t }) {
 
   const resetDemo = () => {
     setRallyActive(false)
-    setHomeScore(0)
-    setAwayScore(0)
+    setTeam1Score(0)
+    setTeam2Score(0)
     setMessage('')
   }
 
@@ -552,13 +484,13 @@ function ButtonStateDemo({ t }) {
       {/* Score Display */}
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 24, marginBottom: 20 }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 4 }}>{t('interactiveGuide.demos.home')}</div>
-          <div style={{ fontSize: 32, fontWeight: 700, color: '#3b82f6' }}>{homeScore}</div>
+          <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 4 }}>{t('interactiveGuide.demos.team1')}</div>
+          <div style={{ fontSize: 32, fontWeight: 700, color: '#3b82f6' }}>{team1Score}</div>
         </div>
         <div style={{ fontSize: 20, opacity: 0.3 }}>:</div>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 4 }}>{t('interactiveGuide.demos.away')}</div>
-          <div style={{ fontSize: 32, fontWeight: 700, color: '#ef4444' }}>{awayScore}</div>
+          <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 4 }}>{t('interactiveGuide.demos.team2')}</div>
+          <div style={{ fontSize: 32, fontWeight: 700, color: '#ef4444' }}>{team2Score}</div>
         </div>
       </div>
 
@@ -612,10 +544,10 @@ function ButtonStateDemo({ t }) {
           </div>
         </div>
 
-        {/* Home Point Button */}
+        {/* Team 1 Point Button */}
         <div style={{ textAlign: 'center' }}>
           <button
-            onClick={() => handlePoint('home')}
+            onClick={() => handlePoint('team1')}
             style={{
               padding: '12px 20px',
               background: !rallyActive ? 'rgba(107, 114, 128, 0.3)' : 'linear-gradient(180deg, #60a5fa 0%, #3b82f6 100%)',
@@ -630,17 +562,17 @@ function ButtonStateDemo({ t }) {
               boxShadow: !rallyActive ? 'none' : '0 4px 12px rgba(59, 130, 246, 0.3)'
             }}
           >
-            {t('interactiveGuide.demos.pointHome')}
+            {t('interactiveGuide.demos.pointTeam1')}
           </button>
           <div style={{ fontSize: 10, opacity: 0.5, marginTop: 4 }}>
             {!rallyActive ? '❌ ' + t('interactiveGuide.buttonDemo.disabled') : '✓ ' + t('interactiveGuide.buttonDemo.enabled')}
           </div>
         </div>
 
-        {/* Away Point Button */}
+        {/* Team 2 Point Button */}
         <div style={{ textAlign: 'center' }}>
           <button
-            onClick={() => handlePoint('away')}
+            onClick={() => handlePoint('team2')}
             style={{
               padding: '12px 20px',
               background: !rallyActive ? 'rgba(107, 114, 128, 0.3)' : 'linear-gradient(180deg, #f87171 0%, #ef4444 100%)',
@@ -655,7 +587,7 @@ function ButtonStateDemo({ t }) {
               boxShadow: !rallyActive ? 'none' : '0 4px 12px rgba(239, 68, 68, 0.3)'
             }}
           >
-            {t('interactiveGuide.demos.pointAway')}
+            {t('interactiveGuide.demos.pointTeam2')}
           </button>
           <div style={{ fontSize: 10, opacity: 0.5, marginTop: 4 }}>
             {!rallyActive ? '❌ ' + t('interactiveGuide.buttonDemo.disabled') : '✓ ' + t('interactiveGuide.buttonDemo.enabled')}
@@ -710,165 +642,14 @@ function ButtonStateDemo({ t }) {
   )
 }
 
-// Interactive Libero Entry Demo - Shows when libero can/cannot enter
-function LiberoEntryDemo({ t }) {
-  const [selectedPosition, setSelectedPosition] = useState(null)
-  const [liberoOnCourt, setLiberoOnCourt] = useState(false)
-  const [message, setMessage] = useState('')
-  const [messageType, setMessageType] = useState('info')
-
-  const positions = [
-    { id: 'IV', row: 'front', canEnter: false },
-    { id: 'III', row: 'front', canEnter: false },
-    { id: 'II', row: 'front', canEnter: false },
-    { id: 'V', row: 'back', canEnter: true },
-    { id: 'VI', row: 'back', canEnter: true },
-    { id: 'I', row: 'back', canEnter: true }
-  ]
-
-  const showMessage = (msg, type) => {
-    setMessage(msg)
-    setMessageType(type)
-    setTimeout(() => setMessage(''), 2500)
-  }
-
-  const handlePositionClick = (pos) => {
-    setSelectedPosition(pos.id)
-    if (liberoOnCourt) {
-      // Libero exit
-      if (pos.canEnter) {
-        setLiberoOnCourt(false)
-        showMessage(t('interactiveGuide.liberoDemo.exitSuccess'), 'success')
-      } else {
-        showMessage(t('interactiveGuide.liberoDemo.exitWrongPos'), 'error')
-      }
-    } else {
-      // Libero entry
-      if (pos.canEnter) {
-        setLiberoOnCourt(true)
-        showMessage(t('interactiveGuide.liberoDemo.entrySuccess'), 'success')
-      } else {
-        showMessage(t('interactiveGuide.liberoDemo.cannotEnterFront'), 'error')
-      }
-    }
-    setTimeout(() => setSelectedPosition(null), 300)
-  }
-
-  return (
-    <div style={{
-      padding: 20,
-      background: 'rgba(0,0,0,0.4)',
-      borderRadius: 12,
-      border: '1px solid rgba(255,255,255,0.1)'
-    }}>
-      <div style={{ textAlign: 'center', marginBottom: 16 }}>
-        <h4 style={{ margin: '0 0 8px 0', fontSize: 14, opacity: 0.8 }}>
-          {t('interactiveGuide.liberoDemo.title')}
-        </h4>
-        <div style={{ fontSize: 12, opacity: 0.6 }}>
-          {t('interactiveGuide.liberoDemo.instruction')}
-        </div>
-      </div>
-
-      {/* Libero Status */}
-      <div style={{
-        textAlign: 'center',
-        marginBottom: 16,
-        padding: '8px 16px',
-        background: liberoOnCourt ? 'rgba(234, 179, 8, 0.2)' : 'rgba(255,255,255,0.05)',
-        borderRadius: 8,
-        border: `1px solid ${liberoOnCourt ? 'rgba(234, 179, 8, 0.5)' : 'rgba(255,255,255,0.1)'}`
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-          <span style={{ fontSize: 18 }}>{liberoOnCourt ? '🦸' : '🪑'}</span>
-          <span style={{ fontSize: 13, fontWeight: 500 }}>
-            {liberoOnCourt ? t('interactiveGuide.liberoDemo.onCourt') : t('interactiveGuide.liberoDemo.onBench')}
-          </span>
-        </div>
-      </div>
-
-      {/* Court Grid */}
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 56px)',
-          gap: 8,
-          padding: 12,
-          background: 'rgba(34, 197, 94, 0.1)',
-          border: '2px solid rgba(34, 197, 94, 0.3)',
-          borderRadius: 8
-        }}>
-          {positions.map((pos) => (
-            <button
-              key={pos.id}
-              onClick={() => handlePositionClick(pos)}
-              style={{
-                width: 56,
-                height: 56,
-                borderRadius: '50%',
-                background: pos.canEnter
-                  ? (selectedPosition === pos.id ? '#eab308' : 'rgba(234, 179, 8, 0.3)')
-                  : (selectedPosition === pos.id ? '#ef4444' : 'rgba(255,255,255,0.1)'),
-                border: pos.canEnter
-                  ? '2px solid #eab308'
-                  : '2px solid rgba(255,255,255,0.2)',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                animation: pos.canEnter && !liberoOnCourt ? 'glow 2s infinite' : 'none'
-              }}
-            >
-              <span style={{ fontSize: 14, fontWeight: 700, color: 'white' }}>{pos.id}</span>
-              <span style={{ fontSize: 9, opacity: 0.6 }}>{pos.row === 'front' ? t('interactiveGuide.liberoDemo.front') : t('interactiveGuide.liberoDemo.back')}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Legend */}
-      <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
-          <div style={{ width: 12, height: 12, borderRadius: '50%', background: 'rgba(234, 179, 8, 0.3)', border: '1px solid #eab308' }} />
-          <span style={{ opacity: 0.7 }}>{t('interactiveGuide.liberoDemo.allowed')}</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
-          <div style={{ width: 12, height: 12, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)' }} />
-          <span style={{ opacity: 0.7 }}>{t('interactiveGuide.liberoDemo.notAllowed')}</span>
-        </div>
-      </div>
-
-      {/* Feedback Message */}
-      <div style={{ minHeight: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {message && (
-          <div style={{
-            padding: '6px 14px',
-            borderRadius: 6,
-            fontSize: 12,
-            fontWeight: 500,
-            animation: 'fade-in 0.2s ease-out',
-            background: messageType === 'success' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)',
-            color: messageType === 'success' ? '#4ade80' : '#f87171',
-            border: `1px solid ${messageType === 'success' ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`
-          }}>
-            {messageType === 'success' ? '✓' : '✗'} {message}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 // Interactive Timeout Demo - Shows when timeouts are available
 function TimeoutAvailabilityDemo({ t }) {
-  const [homeTimeouts, setHomeTimeouts] = useState(0)
-  const [awayTimeouts, setAwayTimeouts] = useState(0)
+  const [team1Timeouts, setTeam1Timeouts] = useState(0)
+  const [team2Timeouts, setTeam2Timeouts] = useState(0)
   const [rallyActive, setRallyActive] = useState(false)
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState('info')
-  const [activeCountdown, setActiveCountdown] = useState(null) // 'home' or 'away'
+  const [activeCountdown, setActiveCountdown] = useState(null) // 'team1' or 'team2'
   const [countdown, setCountdown] = useState(30)
 
   const showMessage = (msg, type) => {
@@ -893,7 +674,7 @@ function TimeoutAvailabilityDemo({ t }) {
       return
     }
 
-    const currentTimeouts = team === 'home' ? homeTimeouts : awayTimeouts
+    const currentTimeouts = team === 'team1' ? team1Timeouts : team2Timeouts
     if (currentTimeouts >= 2) {
       showMessage(t('interactiveGuide.timeoutDemo.maxReached'), 'error')
       return
@@ -904,26 +685,26 @@ function TimeoutAvailabilityDemo({ t }) {
       return
     }
 
-    if (team === 'home') {
-      setHomeTimeouts(t => t + 1)
+    if (team === 'team1') {
+      setTeam1Timeouts(t => t + 1)
     } else {
-      setAwayTimeouts(t => t + 1)
+      setTeam2Timeouts(t => t + 1)
     }
     setActiveCountdown(team)
     showMessage(t('interactiveGuide.timeoutDemo.timeoutCalled'), 'success')
   }
 
   const resetDemo = () => {
-    setHomeTimeouts(0)
-    setAwayTimeouts(0)
+    setTeam1Timeouts(0)
+    setTeam2Timeouts(0)
     setRallyActive(false)
     setActiveCountdown(null)
     setCountdown(30)
     setMessage('')
   }
 
-  const homeCanCall = !rallyActive && homeTimeouts < 2 && !activeCountdown
-  const awayCanCall = !rallyActive && awayTimeouts < 2 && !activeCountdown
+  const team1CanCall = !rallyActive && team1Timeouts < 2 && !activeCountdown
+  const team2CanCall = !rallyActive && team2Timeouts < 2 && !activeCountdown
 
   return (
     <div style={{
@@ -983,55 +764,55 @@ function TimeoutAvailabilityDemo({ t }) {
       <div style={{ display: 'flex', justifyContent: 'center', gap: 24, marginBottom: 16 }}>
         <div style={{ textAlign: 'center' }}>
           <button
-            onClick={() => handleTimeout('home')}
+            onClick={() => handleTimeout('team1')}
             style={{
               padding: '12px 18px',
-              background: homeCanCall ? 'linear-gradient(180deg, #60a5fa 0%, #3b82f6 100%)' : 'rgba(107, 114, 128, 0.3)',
+              background: team1CanCall ? 'linear-gradient(180deg, #60a5fa 0%, #3b82f6 100%)' : 'rgba(107, 114, 128, 0.3)',
               border: 'none',
               borderRadius: 8,
               color: 'white',
               fontSize: 13,
               fontWeight: 600,
-              cursor: homeCanCall ? 'pointer' : 'not-allowed',
-              opacity: homeCanCall ? 1 : 0.5,
+              cursor: team1CanCall ? 'pointer' : 'not-allowed',
+              opacity: team1CanCall ? 1 : 0.5,
               transition: 'all 0.2s'
             }}
           >
-            ⏱ {t('interactiveGuide.demos.home')}
+            ⏱ {t('interactiveGuide.demos.team1')}
           </button>
           <div style={{ fontSize: 11, marginTop: 6 }}>
             <span style={{ opacity: 0.6 }}>TO: </span>
-            <span style={{ fontWeight: 600 }}>{homeTimeouts}/2</span>
+            <span style={{ fontWeight: 600 }}>{team1Timeouts}/2</span>
           </div>
           <div style={{ fontSize: 10, opacity: 0.5, marginTop: 2 }}>
-            {homeCanCall ? '✓ ' + t('interactiveGuide.buttonDemo.enabled') : '❌ ' + t('interactiveGuide.buttonDemo.disabled')}
+            {team1CanCall ? '✓ ' + t('interactiveGuide.buttonDemo.enabled') : '❌ ' + t('interactiveGuide.buttonDemo.disabled')}
           </div>
         </div>
 
         <div style={{ textAlign: 'center' }}>
           <button
-            onClick={() => handleTimeout('away')}
+            onClick={() => handleTimeout('team2')}
             style={{
               padding: '12px 18px',
-              background: awayCanCall ? 'linear-gradient(180deg, #f87171 0%, #ef4444 100%)' : 'rgba(107, 114, 128, 0.3)',
+              background: team2CanCall ? 'linear-gradient(180deg, #f87171 0%, #ef4444 100%)' : 'rgba(107, 114, 128, 0.3)',
               border: 'none',
               borderRadius: 8,
               color: 'white',
               fontSize: 13,
               fontWeight: 600,
-              cursor: awayCanCall ? 'pointer' : 'not-allowed',
-              opacity: awayCanCall ? 1 : 0.5,
+              cursor: team2CanCall ? 'pointer' : 'not-allowed',
+              opacity: team2CanCall ? 1 : 0.5,
               transition: 'all 0.2s'
             }}
           >
-            ⏱ {t('interactiveGuide.demos.away')}
+            ⏱ {t('interactiveGuide.demos.team2')}
           </button>
           <div style={{ fontSize: 11, marginTop: 6 }}>
             <span style={{ opacity: 0.6 }}>TO: </span>
-            <span style={{ fontWeight: 600 }}>{awayTimeouts}/2</span>
+            <span style={{ fontWeight: 600 }}>{team2Timeouts}/2</span>
           </div>
           <div style={{ fontSize: 10, opacity: 0.5, marginTop: 2 }}>
-            {awayCanCall ? '✓ ' + t('interactiveGuide.buttonDemo.enabled') : '❌ ' + t('interactiveGuide.buttonDemo.disabled')}
+            {team2CanCall ? '✓ ' + t('interactiveGuide.buttonDemo.enabled') : '❌ ' + t('interactiveGuide.buttonDemo.disabled')}
           </div>
         </div>
       </div>
@@ -1051,230 +832,6 @@ function TimeoutAvailabilityDemo({ t }) {
           border: `1px solid ${rallyActive ? 'rgba(239, 68, 68, 0.3)' : 'rgba(34, 197, 94, 0.3)'}`
         }}>
           {rallyActive ? t('interactiveGuide.timeoutDemo.rallyActive') : t('interactiveGuide.timeoutDemo.noRally')}
-        </div>
-      </div>
-
-      {/* Feedback Message */}
-      <div style={{ minHeight: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {message && (
-          <div style={{
-            padding: '6px 14px',
-            borderRadius: 6,
-            fontSize: 12,
-            fontWeight: 500,
-            animation: 'fade-in 0.2s ease-out',
-            background: messageType === 'success' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)',
-            color: messageType === 'success' ? '#4ade80' : '#f87171'
-          }}>
-            {messageType === 'success' ? '✓' : '✗'} {message}
-          </div>
-        )}
-      </div>
-
-      {/* Reset */}
-      <div style={{ textAlign: 'center' }}>
-        <button onClick={resetDemo} style={{
-          padding: '6px 14px',
-          background: 'transparent',
-          border: '1px solid rgba(255,255,255,0.2)',
-          borderRadius: 6,
-          color: 'rgba(255,255,255,0.6)',
-          fontSize: 12,
-          cursor: 'pointer'
-        }}>
-          ↺ {t('interactiveGuide.buttonDemo.reset')}
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// Interactive Substitution Rules Demo
-function SubstitutionRulesDemo({ t }) {
-  const [subsUsed, setSubsUsed] = useState(0)
-  const [rallyActive, setRallyActive] = useState(false)
-  const [selectedCourtPlayer, setSelectedCourtPlayer] = useState(null)
-  const [message, setMessage] = useState('')
-  const [messageType, setMessageType] = useState('info')
-
-  const courtPlayers = [7, 3, 12, 5, 9, 1]
-  const benchPlayers = [15, 18, 22]
-
-  const showMessage = (msg, type) => {
-    setMessage(msg)
-    setMessageType(type)
-    setTimeout(() => setMessage(''), 2500)
-  }
-
-  const handleCourtPlayerClick = (player) => {
-    if (rallyActive) {
-      showMessage(t('interactiveGuide.subDemo.notDuringRally'), 'error')
-      return
-    }
-    if (subsUsed >= 6) {
-      showMessage(t('interactiveGuide.subDemo.maxReached'), 'error')
-      return
-    }
-    setSelectedCourtPlayer(selectedCourtPlayer === player ? null : player)
-  }
-
-  const handleBenchPlayerClick = () => {
-    if (!selectedCourtPlayer) {
-      showMessage(t('interactiveGuide.subDemo.selectFirst'), 'error')
-      return
-    }
-    setSubsUsed(s => s + 1)
-    setSelectedCourtPlayer(null)
-    showMessage(t('interactiveGuide.subDemo.success'), 'success')
-  }
-
-  const canSubstitute = !rallyActive && subsUsed < 6
-
-  const resetDemo = () => {
-    setSubsUsed(0)
-    setRallyActive(false)
-    setSelectedCourtPlayer(null)
-    setMessage('')
-  }
-
-  return (
-    <div style={{
-      padding: 20,
-      background: 'rgba(0,0,0,0.4)',
-      borderRadius: 12,
-      border: '1px solid rgba(255,255,255,0.1)'
-    }}>
-      <div style={{ textAlign: 'center', marginBottom: 16 }}>
-        <h4 style={{ margin: '0 0 8px 0', fontSize: 14, opacity: 0.8 }}>
-          {t('interactiveGuide.subDemo.title')}
-        </h4>
-        <div style={{ fontSize: 12, opacity: 0.6 }}>
-          {t('interactiveGuide.subDemo.instruction')}
-        </div>
-      </div>
-
-      {/* Toggle Rally State */}
-      <div style={{ textAlign: 'center', marginBottom: 16 }}>
-        <button
-          onClick={() => {
-            setRallyActive(!rallyActive)
-            setSelectedCourtPlayer(null)
-          }}
-          style={{
-            padding: '8px 16px',
-            background: rallyActive ? 'rgba(234, 179, 8, 0.3)' : 'rgba(255,255,255,0.1)',
-            border: `1px solid ${rallyActive ? '#eab308' : 'rgba(255,255,255,0.2)'}`,
-            borderRadius: 6,
-            color: 'white',
-            fontSize: 12,
-            cursor: 'pointer'
-          }}
-        >
-          {rallyActive ? '⏸ ' + t('interactiveGuide.timeoutDemo.endRally') : '▶ ' + t('interactiveGuide.timeoutDemo.simulateRally')}
-        </button>
-      </div>
-
-      {/* Substitutions Counter */}
-      <div style={{ textAlign: 'center', marginBottom: 16 }}>
-        <div style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '8px 16px',
-          background: subsUsed >= 6 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255,255,255,0.05)',
-          border: `1px solid ${subsUsed >= 6 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255,255,255,0.1)'}`,
-          borderRadius: 8
-        }}>
-          <span style={{ fontSize: 13 }}>SUB:</span>
-          <span style={{ fontSize: 18, fontWeight: 700, color: subsUsed >= 6 ? '#ef4444' : 'white' }}>
-            {subsUsed}/6
-          </span>
-          {subsUsed >= 6 && <span style={{ fontSize: 11, color: '#ef4444' }}>MAX</span>}
-        </div>
-      </div>
-
-      {/* Court Players */}
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 6, textAlign: 'center' }}>
-          {t('interactiveGuide.subDemo.courtPlayers')}
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
-          {courtPlayers.map(player => (
-            <button
-              key={player}
-              onClick={() => handleCourtPlayerClick(player)}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: '50%',
-                background: selectedCourtPlayer === player ? '#8b5cf6' :
-                           canSubstitute ? '#22c55e' : 'rgba(107, 114, 128, 0.5)',
-                border: selectedCourtPlayer === player ? '3px solid #a78bfa' : 'none',
-                color: 'white',
-                fontSize: 16,
-                fontWeight: 700,
-                cursor: canSubstitute ? 'pointer' : 'not-allowed',
-                opacity: canSubstitute ? 1 : 0.5,
-                transition: 'all 0.2s'
-              }}
-            >
-              {player}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Arrow */}
-      <div style={{ textAlign: 'center', fontSize: 20, opacity: selectedCourtPlayer ? 1 : 0.3, marginBottom: 12 }}>
-        ↕
-      </div>
-
-      {/* Bench Players */}
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 6, textAlign: 'center' }}>
-          {t('interactiveGuide.subDemo.benchPlayers')}
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
-          {benchPlayers.map(player => (
-            <button
-              key={player}
-              onClick={handleBenchPlayerClick}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: '50%',
-                background: selectedCourtPlayer && canSubstitute ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.1)',
-                border: selectedCourtPlayer && canSubstitute ? '2px dashed #8b5cf6' : '2px solid rgba(255,255,255,0.2)',
-                color: 'white',
-                fontSize: 16,
-                fontWeight: 700,
-                cursor: selectedCourtPlayer && canSubstitute ? 'pointer' : 'not-allowed',
-                opacity: selectedCourtPlayer && canSubstitute ? 1 : 0.5,
-                transition: 'all 0.2s',
-                animation: selectedCourtPlayer && canSubstitute ? 'pulse 1s infinite' : 'none'
-              }}
-            >
-              {player}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Status */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        gap: 8,
-        marginBottom: 12,
-        fontSize: 11
-      }}>
-        <div style={{
-          padding: '4px 10px',
-          borderRadius: 4,
-          background: canSubstitute ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)',
-          border: `1px solid ${canSubstitute ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`
-        }}>
-          {canSubstitute ? '✓ ' + t('interactiveGuide.subDemo.canSub') : '✗ ' + t('interactiveGuide.subDemo.cannotSub')}
         </div>
       </div>
 
@@ -1557,17 +1114,13 @@ function CoinTossMockup({ t }) {
 
 // Scoreboard Screen Mockup - Multiple states
 function ScoreboardMockup({ t, state = 'normal' }) {
-  // States: 'normal', 'rally', 'timeout', 'substitution', 'libero', 'sanction'
+  // States: 'normal', 'rally', 'timeout', 'sanction'
   const getStatusBar = () => {
     switch (state) {
       case 'rally':
         return { bg: '#22c55e', text: t('interactiveGuide.mockups.rallyInProgress'), icon: '🏐' }
       case 'timeout':
         return { bg: '#eab308', text: t('interactiveGuide.mockups.timeout') + ' - 0:25', icon: '⏱️' }
-      case 'substitution':
-        return { bg: '#8b5cf6', text: t('interactiveGuide.mockups.substitution'), icon: '🔄' }
-      case 'libero':
-        return { bg: '#f59e0b', text: t('interactiveGuide.mockups.liberoEntry'), icon: '🦸' }
       case 'sanction':
         return { bg: '#ef4444', text: t('interactiveGuide.mockups.sanction'), icon: '🟨' }
       default:
@@ -1627,7 +1180,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
             <div style={{ fontSize: 10, opacity: 0.5 }}>{t('interactiveGuide.mockups.sets')}</div>
           </div>
 
-          {/* Away Team */}
+          {/* team2 Team */}
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>Volley Luzern</div>
             <div style={{
@@ -1660,13 +1213,12 @@ function ScoreboardMockup({ t, state = 'normal' }) {
                 width: 28,
                 height: 28,
                 borderRadius: '50%',
-                background: i >= 3 && state === 'libero' ? 'rgba(245, 158, 11, 0.5)' : '#3b82f6',
+                background: '#3b82f6',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontSize: 11,
-                fontWeight: 600,
-                border: state === 'substitution' && i === 2 ? '2px solid #8b5cf6' : 'none'
+                fontWeight: 600
               }}>
                 {num}
               </div>
@@ -2369,22 +1921,6 @@ export default function InteractiveGuide({ open, onClose }) {
                   <ScoreboardMockup t={t} state="timeout" />
                 </div>
 
-                {/* Substitution State */}
-                <div>
-                  <h4 style={{ marginBottom: 8, fontSize: 14, color: '#8b5cf6' }}>
-                    {t('interactiveGuide.mockups.stateSub')}
-                  </h4>
-                  <ScoreboardMockup t={t} state="substitution" />
-                </div>
-
-                {/* Libero Entry State */}
-                <div>
-                  <h4 style={{ marginBottom: 8, fontSize: 14, color: '#f59e0b' }}>
-                    {t('interactiveGuide.mockups.stateLibero')}
-                  </h4>
-                  <ScoreboardMockup t={t} state="libero" />
-                </div>
-
                 {/* Sanction State */}
                 <div>
                   <h4 style={{ marginBottom: 8, fontSize: 14, color: '#ef4444' }}>
@@ -2399,7 +1935,7 @@ export default function InteractiveGuide({ open, onClose }) {
               <p style={{ marginBottom: 16 }}>
                 {t('interactiveGuide.scoreboard.courtDesc')}
               </p>
-              <CourtDemo showLiberoZones t={t} />
+              <CourtDemo t={t} />
             </Section>
 
             <Section title={t('interactiveGuide.scoreboard.recordingPoints')} icon="📈">
@@ -2454,50 +1990,6 @@ export default function InteractiveGuide({ open, onClose }) {
               <TipBox type="tip">
                 {t('interactiveGuide.scoreboard.toTip')}
               </TipBox>
-            </Section>
-
-            <Section title={t('interactiveGuide.scoreboard.substitutions')} icon="🔄">
-              <p>{t('interactiveGuide.scoreboard.subsDesc')}</p>
-
-              <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center' }}>
-                <SubstitutionDemo t={t} />
-              </div>
-
-              <h4 style={{ marginTop: 20 }}>{t('interactiveGuide.scoreboard.subMethods')}</h4>
-              <ol style={{ paddingLeft: 20 }}>
-                <li><strong>{t('interactiveGuide.scoreboard.subClick')}</strong> {t('interactiveGuide.scoreboard.subClickDesc')}</li>
-                <li><strong>{t('interactiveGuide.scoreboard.subDrag')}</strong> {t('interactiveGuide.scoreboard.subDragDesc')}</li>
-                <li><strong>{t('interactiveGuide.scoreboard.subLongPress')}</strong> {t('interactiveGuide.scoreboard.subLongPressDesc')}</li>
-              </ol>
-
-              <h4 style={{ marginTop: 24, marginBottom: 12 }}>{t('interactiveGuide.subDemo.tryIt')}</h4>
-              <SubstitutionRulesDemo t={t} />
-
-              <TipBox type="important">
-                {t('interactiveGuide.scoreboard.subRules')}
-              </TipBox>
-            </Section>
-
-            <Section title={t('interactiveGuide.scoreboard.libero')} icon="🦸">
-              <p>{t('interactiveGuide.scoreboard.liberoDesc')}</p>
-
-              <h4>{t('interactiveGuide.scoreboard.liberoEntry')}</h4>
-              <ul style={{ paddingLeft: 20 }}>
-                <li>{t('interactiveGuide.scoreboard.liberoRule1')}</li>
-                <li>{t('interactiveGuide.scoreboard.liberoRule2')}</li>
-                <li>{t('interactiveGuide.scoreboard.liberoRule3')}</li>
-              </ul>
-
-              <CourtDemo showLiberoZones t={t} />
-
-              <h4 style={{ marginTop: 24, marginBottom: 12 }}>{t('interactiveGuide.liberoDemo.tryIt')}</h4>
-              <LiberoEntryDemo t={t} />
-
-              <h4 style={{ marginTop: 20 }}>{t('interactiveGuide.scoreboard.liberoExchange')}</h4>
-              <p>{t('interactiveGuide.scoreboard.liberoExchangeDesc')}</p>
-
-              <h4 style={{ marginTop: 16 }}>{t('interactiveGuide.scoreboard.liberoRedesignation')}</h4>
-              <p>{t('interactiveGuide.scoreboard.liberoRedesignationDesc')}</p>
             </Section>
 
             <Section title={t('interactiveGuide.scoreboard.sanctions')} icon="🟨">
@@ -2634,8 +2126,6 @@ export default function InteractiveGuide({ open, onClose }) {
               { action: t('interactiveGuide.shortcuts.pointRight'), key: 'L', description: t('interactiveGuide.shortcuts.pointRightDesc') },
               { action: t('interactiveGuide.shortcuts.timeoutLeft'), key: 'Q', description: t('interactiveGuide.shortcuts.timeoutLeftDesc') },
               { action: t('interactiveGuide.shortcuts.timeoutRight'), key: 'P', description: t('interactiveGuide.shortcuts.timeoutRightDesc') },
-              { action: t('interactiveGuide.shortcuts.liberoLeft'), key: 'W', description: t('interactiveGuide.shortcuts.liberoLeftDesc') },
-              { action: t('interactiveGuide.shortcuts.liberoRight'), key: 'O', description: t('interactiveGuide.shortcuts.liberoRightDesc') },
               { action: t('interactiveGuide.shortcuts.undo'), key: 'Z', description: t('interactiveGuide.shortcuts.undoDesc') },
               { action: t('interactiveGuide.shortcuts.startRally'), key: 'Enter', description: t('interactiveGuide.shortcuts.startRallyDesc') },
               { action: t('interactiveGuide.shortcuts.cancel'), key: 'Esc', description: t('interactiveGuide.shortcuts.cancelDesc') }
@@ -2664,13 +2154,6 @@ export default function InteractiveGuide({ open, onClose }) {
                 <li><strong>{t('interactiveGuide.settings.desktop')}</strong> - {t('interactiveGuide.settings.desktopDesc')}</li>
                 <li><strong>{t('interactiveGuide.settings.tablet')}</strong> - {t('interactiveGuide.settings.tabletDesc')}</li>
                 <li><strong>{t('interactiveGuide.settings.smartphone')}</strong> - {t('interactiveGuide.settings.smartphoneDesc')}</li>
-              </ul>
-            </Section>
-
-            <Section title={t('interactiveGuide.settings.liberoOptions')} icon="🦸">
-              <ul style={{ paddingLeft: 20 }}>
-                <li><strong>{t('interactiveGuide.settings.liberoExit')}</strong> - {t('interactiveGuide.settings.liberoExitDesc')}</li>
-                <li><strong>{t('interactiveGuide.settings.liberoEntry')}</strong> - {t('interactiveGuide.settings.liberoEntryDesc')}</li>
               </ul>
             </Section>
 
@@ -2709,36 +2192,6 @@ export default function InteractiveGuide({ open, onClose }) {
               <QAItem
                 question={t('interactiveGuide.troubleshooting.q4')}
                 answer={t('interactiveGuide.troubleshooting.a4')}
-              />
-            </Section>
-
-            <Section title={t('interactiveGuide.troubleshooting.liberoIssues')} icon="🦸">
-              <QAItem
-                question={t('interactiveGuide.troubleshooting.q5')}
-                answer={t('interactiveGuide.troubleshooting.a5')}
-              />
-              <QAItem
-                question={t('interactiveGuide.troubleshooting.q6')}
-                answer={t('interactiveGuide.troubleshooting.a6')}
-              />
-              <QAItem
-                question={t('interactiveGuide.troubleshooting.q7')}
-                answer={t('interactiveGuide.troubleshooting.a7')}
-              />
-            </Section>
-
-            <Section title={t('interactiveGuide.troubleshooting.subIssues')} icon="🔄">
-              <QAItem
-                question={t('interactiveGuide.troubleshooting.q8')}
-                answer={t('interactiveGuide.troubleshooting.a8')}
-              />
-              <QAItem
-                question={t('interactiveGuide.troubleshooting.q9')}
-                answer={t('interactiveGuide.troubleshooting.a9')}
-              />
-              <QAItem
-                question={t('interactiveGuide.troubleshooting.q10')}
-                answer={t('interactiveGuide.troubleshooting.a10')}
               />
             </Section>
 

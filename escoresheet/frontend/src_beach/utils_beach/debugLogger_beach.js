@@ -132,31 +132,31 @@ export function createStateSnapshot(data) {
     setIndex: currentSet?.setIndex,
 
     // Scores
-    homeScore: currentSet?.homeScore,
-    awayScore: currentSet?.awayScore,
-    homeSetsWon: sets?.filter(s => s.winner === 'home').length,
-    awaySetsWon: sets?.filter(s => s.winner === 'away').length,
+    team1Score: currentSet?.team1Score,
+    team2Score: currentSet?.team2Score,
+    team1SetsWon: sets?.filter(s => s.winner === 'team1').length,
+    team2SetsWon: sets?.filter(s => s.winner === 'team2').length,
 
     // Service
     currentServe: currentSet?.currentServe,
 
     // Rotations (positions 1-6)
-    homeRotation: currentSet?.homeRotation,
-    awayRotation: currentSet?.awayRotation,
+    team1Rotation: currentSet?.team1Rotation,
+    team2Rotation: currentSet?.team2Rotation,
 
     // On court players
-    homeOnCourt: currentSet?.homeOnCourt,
-    awayOnCourt: currentSet?.awayOnCourt,
+    team1OnCourt: currentSet?.team1OnCourt,
+    team2OnCourt: currentSet?.team2OnCourt,
 
     // Libero tracking
-    homeLiberoIn: currentSet?.homeLiberoIn,
-    awayLiberoIn: currentSet?.awayLiberoIn,
-    homeLiberoFor: currentSet?.homeLiberoFor,
-    awayLiberoFor: currentSet?.awayLiberoFor,
+    team1LiberoIn: currentSet?.team1LiberoIn,
+    team2LiberoIn: currentSet?.team2LiberoIn,
+    team1LiberoFor: currentSet?.team1LiberoFor,
+    team2LiberoFor: currentSet?.team2LiberoFor,
 
     // Timeouts
-    homeTimeouts: currentSet?.homeTimeouts,
-    awayTimeouts: currentSet?.awayTimeouts,
+    team1Timeouts: currentSet?.team1Timeouts,
+    team2Timeouts: currentSet?.team2Timeouts,
 
     // Technical timeouts
     technicalTimeoutAt8: currentSet?.technicalTimeoutAt8,

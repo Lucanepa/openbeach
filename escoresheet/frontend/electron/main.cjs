@@ -35,7 +35,7 @@ function createWindow() {
   // Load the app
   if (isDev) {
     // Development: load from Vite dev server
-    mainWindow.loadURL('http://localhost:5173')
+    mainWindow.loadURL('http://localhost:6173')
     // Open DevTools in development
     mainWindow.webContents.openDevTools()
   } else {
@@ -65,7 +65,7 @@ function createWindow() {
   mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
     const parsedUrl = new URL(navigationUrl)
     
-    if (isDev && parsedUrl.origin === 'http://localhost:5173') {
+    if (isDev && parsedUrl.origin === 'http://localhost:6173') {
       return // Allow navigation within dev server
     }
     

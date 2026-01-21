@@ -6,13 +6,12 @@ import { useRealtimeConnection } from '../hooks_beach/useRealtimeConnection_beac
 import { parseRosterPdf } from '../utils_beach/parseRosterPdf_beach'
 import { db } from '../db_beach/db_beach'
 import { supabase } from '../lib_beach/supabaseClient_beach'
-import SignaturePad from './SignaturePad'
+import SignaturePad from './SignaturePad_beach'
 
 export default function RosterSetup({ matchId, team, onBack, embedded = false, useSupabaseConnection = false, matchData = null }) {
   const { t } = useTranslation()
   const { showAlert } = useAlert()
   const [players, setPlayers] = useState([])
-  const [benchOfficials, setBenchOfficials] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [pdfFile, setPdfFile] = useState(null)
@@ -22,10 +21,10 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const fileInputRef = useRef(null)
 
-  // Signature states
-  const [coachSignature, setCoachSignature] = useState(null)
+  // Signature states (beach volleyball: captain only, no coach)
+  const [coachSignature, setCoachSignature] = useState(null) // Stub for legacy compatibility
   const [captainSignature, setCaptainSignature] = useState(null)
-  const [openSignature, setOpenSignature] = useState(null) // 'coach' | 'captain' | null
+  const [openSignature, setOpenSignature] = useState(null) // 'captain' | null
 
   const [match, setMatch] = useState(matchData)
 
@@ -58,15 +57,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
         isCaptain: p.isCaptain || false
       })))
 
-    const benchKey = team === 'team1' ? 'bench_team1' : 'bench_team2'
-    if (result.match[benchKey]) {
-      setBenchOfficials(result.match[benchKey].map(b => ({
-        role: b.role || '',
-        firstName: b.firstName || b.first_name || '',
-        lastName: b.lastName || b.last_name || '',
-        dob: b.dob || b.date_of_birth || b.dateOfBirth || ''
-      })))
-    }
+    
   }, [team])
 
   // Handle match deletion - navigate back
@@ -103,10 +94,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
       setPlayers([
         { id: 1, number: 1, firstName: 'Test', lastName: 'Player 1', dob: '', isCaptain: true },
         { id: 2, number: 2, firstName: 'Test', lastName: 'Player 2', dob: '', isCaptain: false }
-      ])
-      setBenchOfficials([
-        { role: 'Coach', firstName: 'Test', lastName: 'Coach', dob: '' },
-        { role: 'Assistant Coach 1', firstName: 'Test', lastName: 'Assistant', dob: '' }
       ])
       return
     }
@@ -199,12 +186,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
         dob: p.dob || '',
         isCaptain: p.isCaptain || false
       })))
-      setBenchOfficials(importedBench.map(b => ({
-        role: b.role || '',
-        firstName: b.firstName || b.first_name || '',
-        lastName: b.lastName || b.last_name || '',
-        dob: b.dob || b.date_of_birth || ''
-      })))
+     
 
       // Extract signatures from pending roster
       const importedCoachSignature = pendingRoster.coachSignature || null
@@ -370,24 +352,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
     setPlayers(updated)
   }
 
-  const handleAddOfficial = () => {
-    setBenchOfficials([...benchOfficials, {
-      role: 'Coach',
-      firstName: '',
-      lastName: '',
-      dob: ''
-    }])
-  }
-
-  const handleDeleteOfficial = (index) => {
-    setBenchOfficials(benchOfficials.filter((_, i) => i !== index))
-  }
-
-  const handleUpdateOfficial = (index, field, value) => {
-    const updated = [...benchOfficials]
-    updated[index] = { ...updated[index], [field]: value }
-    setBenchOfficials(updated)
-  }
 
   const handlePdfUpload = async (file) => {
     // Removed console.log('[RosterSetup] handlePdfUpload called with file:', file)
@@ -417,35 +381,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
       setPlayers(mergedPlayers)
       
       // Prepare bench officials from imported data (will be saved to DB below)
-      const importedBenchOfficials = []
-      if (parsedData.coach) {
-        importedBenchOfficials.push({ 
-          role: 'Coach', 
-          firstName: parsedData.coach.firstName || '',
-          lastName: parsedData.coach.lastName || '',
-          dob: parsedData.coach.dob || ''
-        })
-      }
-      if (parsedData.ac1) {
-        importedBenchOfficials.push({ 
-          role: 'Assistant Coach 1', 
-          firstName: parsedData.ac1.firstName || '',
-          lastName: parsedData.ac1.lastName || '',
-          dob: parsedData.ac1.dob || ''
-        })
-      }
-      if (parsedData.ac2) {
-        importedBenchOfficials.push({ 
-          role: 'Assistant Coach 2', 
-          firstName: parsedData.ac2.firstName || '',
-          lastName: parsedData.ac2.lastName || '',
-          dob: parsedData.ac2.dob || ''
-        })
-      }
-      
-      // Update UI state immediately
-      setBenchOfficials(importedBenchOfficials)
-      
+   
       // Auto-save to database with overwrite mode (skip in test mode)
       if (teamId && matchId && matchId !== -1 && teamId !== -1) {
         // Save immediately with overwrite flag
@@ -469,11 +405,8 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
         )
         
         // Overwrite bench officials in database with imported data
-        const benchKey = team === 'team1' ? 'bench_team1' : 'bench_team2'
-        await db.matches.update(matchId, {
-          [benchKey]: importedBenchOfficials
-        })
-        
+
+
       }
       
       // Reset file input to allow re-uploading the same file
@@ -589,17 +522,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
         )
       }
 
-      // Save bench officials - always overwrite completely
-      const benchKey = team === 'team1' ? 'bench_team1' : 'bench_team2'
-      await db.matches.update(matchId, {
-        [benchKey]: benchOfficials.map(o => ({
-          role: o.role,
-          firstName: o.firstName,
-          lastName: o.lastName,
-          dob: o.dob
-        }))
-      })
-
       // If connected to Supabase, also send roster as pending for scorer approval
       if (useSupabaseConnection && supabase && matchData?.external_id) {
         setSyncing(true)
@@ -612,13 +534,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
             dob: p.dob || '',
             isCaptain: !!p.isCaptain
           })),
-          bench: benchOfficials.map(o => ({
-            role: o.role,
-            firstName: o.firstName,
-            lastName: o.lastName,
-            dob: o.dob || ''
-          })),
-          coachSignature: coachSignature || null,
           captainSignature: captainSignature || null,
           timestamp: new Date().toISOString()
         }
@@ -713,7 +628,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
           marginBottom: '30px'
         }}>
           <h1 style={{ fontSize: '28px', fontWeight: 700, margin: 0 }}>
-            {t('rosterSetup.title')} — {team === 'team1' ? (match?.team1Name || t('common.home')) : (match?.team2Name || t('common.away'))}
+            {t('rosterSetup.title')} — {team === 'team1' ? (match?.team1Name || t('Home')) : (match?.team2Name || t('common.team2'))}
           </h1>
           <button
             onClick={onBack}
@@ -854,9 +769,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
               <div style={{ fontSize: '14px' }}>
                 {t('rosterSetup.playersCount')}: {pendingRoster.players?.length || 0}
-              </div>
-              <div style={{ fontSize: '14px' }}>
-                {t('rosterSetup.benchOfficialsCount')}: {pendingRoster.bench?.length || 0}
               </div>
               {pendingRoster.timestamp && (
                 <div style={{ fontSize: '12px', color: 'var(--muted)' }}>
@@ -1086,146 +998,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
           </div>
         </div>
 
-        {/* Bench Officials Section */}
-        <div style={{
-          marginBottom: '30px',
-          padding: '20px',
-          background: 'var(--bg)',
-          borderRadius: '8px',
-          border: '1px solid rgba(255,255,255,0.1)'
-        }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '20px'
-          }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 600, margin: 0 }}>
-              {t('rosterSetup.benchOfficials')}
-            </h2>
-            <button
-              onClick={handleAddOfficial}
-              style={{
-                padding: '8px 16px',
-                fontSize: '14px',
-                fontWeight: 600,
-                background: 'var(--accent)',
-                color: '#000',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer'
-              }}
-            >
-              {t('rosterSetup.addOfficial')}
-            </button>
-          </div>
-
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
-                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.role')}</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.firstName')}</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.lastName')}</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.dob')}</th>
-                  <th style={{ padding: '12px', textAlign: 'center', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.actions')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {benchOfficials.map((official, index) => (
-                  <tr key={index} style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                    <td style={{ padding: '12px' }}>
-                      <select
-                        value={official.role}
-                        onChange={(e) => handleUpdateOfficial(index, 'role', e.target.value)}
-                        style={{
-                          width: '180px',
-                          padding: '6px',
-                          fontSize: '14px',
-                          background: 'var(--bg-secondary)',
-                          border: '1px solid rgba(255,255,255,0.2)',
-                          borderRadius: '4px',
-                          color: 'var(--text)'
-                        }}
-                      >
-                        <option value="Coach">{t('benchRoles.coach')}</option>
-                        <option value="Assistant Coach 1">{t('benchRoles.assistantCoach1')}</option>
-                        <option value="Assistant Coach 2">{t('benchRoles.assistantCoach2')}</option>
-                        <option value="Physiotherapist">{t('benchRoles.physiotherapist')}</option>
-                        <option value="Medic">{t('benchRoles.medic')}</option>
-                      </select>
-                    </td>
-                    <td style={{ padding: '12px' }}>
-                      <input
-                        type="text"
-                        value={official.firstName}
-                        onChange={(e) => handleUpdateOfficial(index, 'firstName', e.target.value)}
-                        style={{
-                          width: '150px',
-                          padding: '6px',
-                          fontSize: '14px',
-                          background: 'var(--bg-secondary)',
-                          border: '1px solid rgba(255,255,255,0.2)',
-                          borderRadius: '4px',
-                          color: 'var(--text)'
-                        }}
-                      />
-                    </td>
-                    <td style={{ padding: '12px' }}>
-                      <input
-                        type="text"
-                        value={official.lastName}
-                        onChange={(e) => handleUpdateOfficial(index, 'lastName', e.target.value)}
-                        style={{
-                          width: '150px',
-                          padding: '6px',
-                          fontSize: '14px',
-                          background: 'var(--bg-secondary)',
-                          border: '1px solid rgba(255,255,255,0.2)',
-                          borderRadius: '4px',
-                          color: 'var(--text)'
-                        }}
-                      />
-                    </td>
-                    <td style={{ padding: '12px' }}>
-                      <input
-                        type="text"
-                        value={official.dob}
-                        onChange={(e) => handleUpdateOfficial(index, 'dob', e.target.value)}
-                        placeholder="DD/MM/YYYY"
-                        style={{
-                          width: '120px',
-                          padding: '6px',
-                          fontSize: '14px',
-                          background: 'var(--bg-secondary)',
-                          border: '1px solid rgba(255,255,255,0.2)',
-                          borderRadius: '4px',
-                          color: 'var(--text)'
-                        }}
-                      />
-                    </td>
-                    <td style={{ padding: '12px', textAlign: 'center' }}>
-                      <button
-                        onClick={() => handleDeleteOfficial(index)}
-                        style={{
-                          padding: '6px 12px',
-                          fontSize: '12px',
-                          background: 'rgba(239, 68, 68, 0.2)',
-                          color: '#ef4444',
-                          border: '1px solid #ef4444',
-                          borderRadius: '4px',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        {t('common.delete')}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        {/* Beach volleyball: No bench officials section (2v2 sport with no coaches on bench) */}
 
         {/* Signatures Section */}
         <div style={{
@@ -1239,55 +1012,10 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
             {t('rosterSetup.signatures', 'Signatures')}
           </h2>
           <p style={{ fontSize: '14px', color: 'var(--muted)', marginBottom: '20px' }}>
-            {t('rosterSetup.signaturesDescription', 'Optional: Coach and captain can sign the roster before submitting.')}
+            {t('rosterSetup.signaturesDescription', 'Optional: Captain can sign the roster before submitting.')}
           </p>
           <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-            {/* Coach Signature */}
-            <div style={{ flex: 1, minWidth: '200px' }}>
-              <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '8px' }}>
-                {t('rosterSetup.coachSignature', 'Coach Signature')}
-              </div>
-              <div
-                onClick={() => setOpenSignature('coach')}
-                style={{
-                  width: '100%',
-                  height: '100px',
-                  background: coachSignature ? 'white' : 'rgba(255,255,255,0.05)',
-                  border: coachSignature ? '2px solid #22c55e' : '2px dashed rgba(255,255,255,0.3)',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  overflow: 'hidden'
-                }}
-              >
-                {coachSignature ? (
-                  <img src={coachSignature} alt="Coach signature" style={{ maxWidth: '100%', maxHeight: '100%' }} />
-                ) : (
-                  <span style={{ color: 'var(--muted)', fontSize: '13px' }}>
-                    {t('rosterSetup.tapToSign', 'Tap to sign')}
-                  </span>
-                )}
-              </div>
-              {coachSignature && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setCoachSignature(null); }}
-                  style={{
-                    marginTop: '8px',
-                    padding: '4px 12px',
-                    fontSize: '12px',
-                    background: 'rgba(239, 68, 68, 0.2)',
-                    color: '#ef4444',
-                    border: '1px solid #ef4444',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {t('common.clear', 'Clear')}
-                </button>
-              )}
-            </div>
+            {/* Beach volleyball: No coach signature (2v2 sport) */}
 
             {/* Captain Signature */}
             <div style={{ flex: 1, minWidth: '200px' }}>
@@ -1418,46 +1146,10 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
                       <th style={{ padding: '8px', textAlign: 'center' }}>{t('rosterSetup.captain')}</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {(pendingRoster.players || []).map((p, i) => (
-                      <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                        <td style={{ padding: '6px 8px' }}>{p.number}</td>
-                        <td style={{ padding: '6px 8px' }}>{p.lastName || ''}</td>
-                        <td style={{ padding: '6px 8px' }}>{p.firstName || ''}</td>
-                        <td style={{ padding: '6px 8px', textAlign: 'center' }}>{p.isCaptain ? 'C' : ''}</td>
-                      </tr>
-                    ))}
-                  </tbody>
                 </table>
               </div>
 
-              {pendingRoster.bench && pendingRoster.bench.length > 0 && (
-                <>
-                  <h3 style={{ marginTop: '20px', marginBottom: '12px', fontSize: '16px' }}>
-                    {t('rosterSetup.benchOfficialsCount')}: {pendingRoster.bench.length}
-                  </h3>
-                  <div style={{ marginBottom: '20px', overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                      <thead>
-                        <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
-                          <th style={{ padding: '8px', textAlign: 'left' }}>{t('rosterSetup.role')}</th>
-                          <th style={{ padding: '8px', textAlign: 'left' }}>{t('rosterSetup.lastName')}</th>
-                          <th style={{ padding: '8px', textAlign: 'left' }}>{t('rosterSetup.firstName')}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pendingRoster.bench.map((b, i) => (
-                          <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                            <td style={{ padding: '6px 8px' }}>{b.role || ''}</td>
-                            <td style={{ padding: '6px 8px' }}>{b.lastName || ''}</td>
-                            <td style={{ padding: '6px 8px' }}>{b.firstName || ''}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
+            
 
               <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
                 <button

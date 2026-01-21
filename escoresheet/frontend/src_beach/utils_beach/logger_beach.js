@@ -205,7 +205,7 @@ export async function uploadBackupToCloud(matchId, backupData) {
     if (latestSet) {
       setIndex = latestSet.index || 1
       leftScore = latestSet.homePoints || 0
-      rightScore = latestSet.awayPoints || 0
+      rightScore = latestSet.team2Points || 0
     }
   }
 

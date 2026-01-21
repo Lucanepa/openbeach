@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useAuth } from '../../contexts_beach/AuthContext_beach'
-import LoginModal from './LoginModal'
-import SignUpModal from './SignUpModal'
-import ProfileModal from './ProfileModal'
-import MatchHistory from './MatchHistory'
+import LoginModal from './LoginModal_beach'
+import SignUpModal from './SignUpModal_beach'
+import ProfileModal from './ProfileModal_beach'
+import MatchHistory from './MatchHistory_beach'
 
 export default function UserButton({ style = {}, fullWidth = false }) {
   const { user, profile, loading, signOut } = useAuth()

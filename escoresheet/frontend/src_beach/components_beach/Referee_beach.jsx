@@ -64,11 +64,7 @@ const FlagCH = () => (
 )
 
 const languages = [
-  { code: 'en', Flag: FlagGB, label: 'EN' },
-  { code: 'it', Flag: FlagIT, label: 'IT' },
-  { code: 'de', Flag: FlagDE, label: 'DE' },
-  { code: 'de-CH', Flag: FlagCH, label: 'DE' },
-  { code: 'fr', Flag: FlagFR, label: 'FR' }
+  { code: 'en', Flag: FlagGB, label: 'EN' }
 ]
 
 // Hook to compute synced font size for paired texts using off-screen measurement
@@ -369,13 +365,13 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         match: {
           id: -1,
           status: 'live',
-          homeShortName: 'HOM',
-          awayShortName: 'AWY',
-          coinTossTeamA: 'home',
-          firstServe: 'home'
+          team1ShortName: 'T1',
+          team2ShortName: 'T2',
+          coinTossTeamA: 'team1',
+          firstServe: 'team1'
         },
-        team1: { name: 'Home Team', color: '#ef4444' },
-        team2: { name: 'Away Team', color: '#3b82f6' },
+        team1: { name: 'Team 1', color: '#ef4444' },
+        team2: { name: 'Team 2', color: '#3b82f6' },
         // Beach volleyball: 2 players per team
         team1Players: [
           { number: 1 }, { number: 2 }
@@ -386,8 +382,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         sets: [{ index: 1, team1Points: 12, team2Points: 10, finished: false }],
         currentSet: { index: 1, team1Points: 12, team2Points: 10, finished: false },
         events: [
-          { type: 'lineup', setIndex: 1, payload: { team: 'home', lineup: { '1': 1, '2': 2 } } },
-          { type: 'lineup', setIndex: 1, payload: { team: 'away', lineup: { '1': 11, '2': 12 } } }
+          { type: 'lineup', setIndex: 1, payload: { team: 'team1', lineup: { '1': 1, '2': 2 } } },
+          { type: 'lineup', setIndex: 1, payload: { team: 'team2', lineup: { '1': 11, '2': 12 } } }
         ]
       })
     }
@@ -503,7 +499,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     const receiveTimestamp = Date.now()
     console.log(`[Referee] 📥 Received match-data-update at ${new Date(receiveTimestamp).toISOString()}:`, {
       hasHomeTeam: !!result.team1,
-      hasAwayTeam: !!result.team2,
+      hasteam2Team: !!result.team2,
       setsCount: result.sets?.length,
       eventsCount: result.events?.length
     })
@@ -550,11 +546,11 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         team2Points: actionData.team2Points,
         countdown: actionData.countdown,
         homeSetsWon: actionData.homeSetsWon,
-        awaySetsWon: actionData.awaySetsWon
+        team2SetsWon: actionData.team2SetsWon
       })
 
       // Check if match is finished (one team won 3 sets) - don't show interval
-      const isMatchFinishedNow = actionData.homeSetsWon >= 3 || actionData.awaySetsWon >= 3
+      const isMatchFinishedNow = actionData.homeSetsWon >= 3 || actionData.team2SetsWon >= 3
       if (isMatchFinishedNow) {
         console.log('[Referee] 🏆 Match is finished! Not showing interval countdown.')
         // Clear any existing interval state - full-screen match ended view will show
@@ -709,14 +705,14 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             lineup_b: !!state.lineup_b
           })
 
-          // A/B Model: Convert left/right to home/away using side_a (for modal handling)
+          // A/B Model: Convert left/right to team1/team2 using side_a (for modal handling)
           // side_a = 'left' or 'right' indicates which side Team A is on
-          const localTeamAKey = data?.match?.coinTossTeamA || 'home'
+          const localTeamAKey = data?.match?.coinTossTeamA || 'team1'
           const sideA = state.side_a || 'left'
-          const team1OnLeft = (sideA === 'left') === (localTeamAKey === 'home')
+          const team1OnLeft = (sideA === 'left') === (localTeamAKey === 'team1')
           const getTeamFromSide = (side) => {
-            if (side === 'left') return team1OnLeft ? 'home' : 'away'
-            return team1OnLeft ? 'away' : 'home'
+            if (side === 'left') return team1OnLeft ? 'team1' : 'team2'
+            return team1OnLeft ? 'team2' : 'team1'
           }
 
           // Handle timeout start/stop based on timeout_active flag
@@ -790,7 +786,6 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           }
 
           // Store last event for footer display (only specific event types)
-          // Beach volleyball: no substitution or libero events
           const displayableEvents = ['point', 'timeout', 'set_end', 'sanction', 'court_captain_designation', 'challenge']
           if (state.last_event_type && displayableEvents.includes(state.last_event_type)) {
             setLastEvent({
@@ -861,7 +856,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     // First, try to get stats from liveState (most accurate for Supabase-sourced data)
     if (data?.liveState) {
       const liveState = data.liveState
-      const teamAIsHome = data.match?.coinTossTeamA === 'home'
+      const teamAIsTeam1 = data.match?.coinTossTeamA === 'team1'
 
       // Helper to get count from either array (new format) or number (old format)
       const getCount = (value) => {
@@ -871,11 +866,11 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       }
 
       return {
-        home: {
-          timeouts: teamAIsHome ? getCount(liveState.timeouts_a) : getCount(liveState.timeouts_b)
+        team1: {
+          timeouts: teamAIsTeam1 ? getCount(liveState.timeouts_a) : getCount(liveState.timeouts_b)
         },
-        away: {
-          timeouts: teamAIsHome ? getCount(liveState.timeouts_b) : getCount(liveState.timeouts_a)
+        team2: {
+          timeouts: teamAIsTeam1 ? getCount(liveState.timeouts_b) : getCount(liveState.timeouts_a)
         }
       }
     }
@@ -883,8 +878,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     // Fallback: count from events (when data comes from local IndexedDB or WebSocket)
     if (!data || !data.events || !data.currentSet) {
       return {
-        home: { timeouts: 0 },
-        away: { timeouts: 0 }
+        team1: { timeouts: 0 },
+        team2: { timeouts: 0 }
       }
     }
 
@@ -893,11 +888,11 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     )
 
     return {
-      home: {
-        timeouts: currentSetEvents.filter(e => e.type === 'timeout' && e.payload?.team === 'home').length
+      team1: {
+        timeouts: currentSetEvents.filter(e => e.type === 'timeout' && e.payload?.team === 'team1').length
       },
-      away: {
-        timeouts: currentSetEvents.filter(e => e.type === 'timeout' && e.payload?.team === 'away').length
+      team2: {
+        timeouts: currentSetEvents.filter(e => e.type === 'timeout' && e.payload?.team === 'team2').length
       }
     }
   }, [data])
@@ -908,7 +903,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   // Legacy format: lineup positions just contain player number
   const lineup = useMemo(() => {
     if (!data || !data.events || !data.currentSet) {
-      return { home: null, away: null, isRichFormat: false }
+      return { home: null, team2: null, isRichFormat: false }
     }
 
     const currentSetIndex = data.currentSet?.index || 1
@@ -916,19 +911,20 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       e => (e.setIndex || 1) === currentSetIndex
     )
 
-    const homeLineupEvents = currentSetEvents.filter(e => e.type === 'lineup' && e.payload?.team === 'home')
-    const awayLineupEvents = currentSetEvents.filter(e => e.type === 'lineup' && e.payload?.team === 'away')
+    const team1LineupEvents = currentSetEvents.filter(e => e.type === 'lineup' && e.payload?.team === 'team1')
+    const team2LineupEvents = currentSetEvents.filter(e => e.type === 'lineup' && e.payload?.team === 'team2')
 
-    const latestHomeLineup = homeLineupEvents[homeLineupEvents.length - 1]
-    const latestAwayLineup = awayLineupEvents[awayLineupEvents.length - 1]
+    const latestTeam1Lineup = team1LineupEvents[team1LineupEvents.length - 1]
+    const latestTeam2Lineup = team2LineupEvents[team2LineupEvents.length - 1]
+
+    const team1LineupData = latestTeam1Lineup?.payload?.lineup
+    const team2LineupData = latestTeam2Lineup?.payload?.lineup
 
     // Check if using rich format (position I has isServing field)
-    const homeLineupData = latestHomeLineup?.payload?.lineup || null
-    const awayLineupData = latestAwayLineup?.payload?.lineup || null
-    const isRichFormat = latestHomeLineup?.payload?.isRichFormat ||
-      latestAwayLineup?.payload?.isRichFormat ||
-      homeLineupData?.I?.isServing !== undefined ||
-      awayLineupData?.I?.isServing !== undefined
+    const isRichFormat = latestTeam1Lineup?.payload?.isRichFormat ||
+      latestTeam2Lineup?.payload?.isRichFormat ||
+      team1LineupData?.I?.isServing !== undefined ||
+      team2LineupData?.I?.isServing !== undefined
 
     // Check if we're between sets (previous set finished, current set not started)
     // During set interval, only show lineup if we have lineup events for the NEW set
@@ -940,31 +936,31 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       // If previous set is finished and current set has no points yet (between sets)
       // Only show lineups if we have lineup events specifically for the new set
       if (previousSet?.finished && !currentSetHasPoints) {
-        const hasHomeLineupForNewSet = homeLineupEvents.length > 0
-        const hasAwayLineupForNewSet = awayLineupEvents.length > 0
+        const hasTeam1LineupForNewSet = team1LineupEvents.length > 0
+        const hasTeam2LineupForNewSet = team2LineupEvents.length > 0
 
         // If no lineup events exist for the new set, return null for both
-        if (!hasHomeLineupForNewSet && !hasAwayLineupForNewSet) {
-          return { home: null, away: null, isRichFormat: false, isBetweenSets: true }
+        if (!hasTeam1LineupForNewSet && !hasTeam2LineupForNewSet) {
+          return { team1: null, team2: null, isRichFormat: false, isBetweenSets: true }
         }
       }
     }
 
     return {
-      home: homeLineupData,
-      away: awayLineupData,
+      team1: team1LineupData,
+      team2: team2LineupData,
       isRichFormat
     }
   }, [data])
 
   // Calculate sets won by each team (from finished sets)
   const setsWon = useMemo(() => {
-    if (!data) return { home: 0, away: 0 }
+    if (!data) return { team1: 0, team2: 0 }
 
     const finishedSets = data.sets?.filter(s => s.finished) || []
     return {
-      home: finishedSets.filter(s => s.team1Points > s.team2Points).length,
-      away: finishedSets.filter(s => s.team2Points > s.team1Points).length
+      team1: finishedSets.filter(s => s.team1Points > s.team2Points).length,
+      team2: finishedSets.filter(s => s.team2Points > s.team1Points).length
     }
   }, [data])
 
@@ -982,13 +978,13 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     }
 
     if (!data?.currentSet || !data?.match) {
-      return data?.match?.firstServe || 'home'
+      return data?.match?.firstServe || 'team1'
     }
 
     const setIndex = data.currentSet.index
-    const set1FirstServe = data.match.firstServe || 'home'
-    const teamAKey = data.match.coinTossTeamA || 'home'
-    const teamBKey = data.match.coinTossTeamB || 'away'
+    const set1FirstServe = data.match.firstServe || 'team1'
+    const teamAKey = data.match.coinTossTeamA || 'team1'
+    const teamBKey = data.match.coinTossTeamB || 'team2'
 
     // Calculate first serve for current set based on alternation pattern
     let currentSetFirstServe
@@ -998,7 +994,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       currentSetFirstServe = set1FirstServe
     } else {
       // Sets 1-4: odd sets (1, 3) same as Set 1, even sets (2, 4) opposite
-      currentSetFirstServe = setIndex % 2 === 1 ? set1FirstServe : (set1FirstServe === 'home' ? 'away' : 'home')
+      currentSetFirstServe = setIndex % 2 === 1 ? set1FirstServe : (set1FirstServe === 'team1' ? 'team2' : 'team1')
     }
 
     if (!data?.events || data.events.length === 0) {
@@ -1021,20 +1017,20 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   }, [data?.events, data?.currentSet, data?.match])
 
   // Determine team labels
-  const teamAKey = data?.match?.coinTossTeamA || 'home'
-  const homeLabel = teamAKey === 'home' ? 'A' : 'B'
-  const awayLabel = teamAKey === 'away' ? 'A' : 'B'
+  const teamAKey = data?.match?.coinTossTeamA || 'team1'
+  const team1Label = teamAKey === 'team1' ? 'A' : 'B'
+  const team2Label = teamAKey === 'team2' ? 'A' : 'B'
 
   // Determine which team is on the left (from referee's perspective)
   // Uses same alternating pattern as Scoreboard: odd sets = Team A on left, even sets = Team A on right
-  const homeOnLeftFor2ndRef = useMemo(() => {
+  const team1OnLeftFor2ndRef = useMemo(() => {
     if (!data?.currentSet) return true
 
     // PRIORITY 1: Live state from server (Scoreboard source of truth)
     // side_a indicates which side Team A is on ('left' or 'right')
     if (data?.liveState?.side_a) {
       const sideA = data.liveState.side_a
-      return sideA === 'left' ? (teamAKey === 'home') : (teamAKey !== 'home')
+      return sideA === 'left' ? (teamAKey === 'team1') : (teamAKey !== 'team1')
     }
 
     const setIndex = data.currentSet.index
@@ -1056,28 +1052,28 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       sideA = setIndex % 2 === 1 ? 'left' : 'right'
     }
 
-    // Convert sideA to homeOnLeft:
-    // If sideA='left' (Team A on left), then home is on left only if teamAKey='home'
-    // If sideA='right' (Team A on right), then home is on left only if teamAKey!='home' (i.e., Team B is on left)
-    return sideA === 'left' ? (teamAKey === 'home') : (teamAKey !== 'home')
+    // Convert sideA to team1OnLeft:
+    // If sideA='left' (Team A on left), then team1 is on left only if teamAKey='team1'
+    // If sideA='right' (Team A on right), then team1 is on left only if teamAKey!='team1' (i.e., Team B is on left)
+    return sideA === 'left' ? (teamAKey === 'team1') : (teamAKey !== 'team1')
   }, [data?.currentSet, data?.match?.setLeftTeamOverrides, data?.match?.set5CourtSwitched, data?.match?.set5LeftTeam, teamAKey, data?.liveState?.side_a])
 
-  const team1OnLeft = refereeView === '1st' ? !homeOnLeftFor2ndRef : homeOnLeftFor2ndRef
+  const team1OnLeft = refereeView === '1st' ? !team1OnLeftFor2ndRef : team1OnLeftFor2ndRef
 
-  const leftTeam = team1OnLeft ? 'home' : 'away'
-  const rightTeam = team1OnLeft ? 'away' : 'home'
-  const leftTeamData = leftTeam === 'home' ? data?.team1 : data?.team2
-  const rightTeamData = rightTeam === 'home' ? data?.team1 : data?.team2
-  const leftLabel = leftTeam === 'home' ? homeLabel : awayLabel
-  const rightLabel = rightTeam === 'home' ? homeLabel : awayLabel
+  const leftTeam = team1OnLeft ? 'team1' : 'team2'
+  const rightTeam = team1OnLeft ? 'team2' : 'team1'
+  const leftTeamData = leftTeam === 'team1' ? data?.team1 : data?.team2
+  const rightTeamData = rightTeam === 'team1' ? data?.team1 : data?.team2
+  const leftLabel = leftTeam === 'team1' ? team1Label : team2Label
+  const rightLabel = rightTeam === 'team1' ? team1Label : team2Label
   const leftServing = getCurrentServe === leftTeam
   const rightServing = getCurrentServe === rightTeam
-  const leftColor = leftTeamData?.color || (leftTeam === 'home' ? '#ef4444' : '#3b82f6')
-  const rightColor = rightTeamData?.color || (rightTeam === 'home' ? '#ef4444' : '#3b82f6')
+  const leftColor = leftTeamData?.color || (leftTeam === 'team1' ? '#ef4444' : '#3b82f6')
+  const rightColor = rightTeamData?.color || (rightTeam === 'team1' ? '#ef4444' : '#3b82f6')
 
   // Compute team name texts for adaptive sizing
-  const leftShortName = (leftTeam === 'home' ? data?.match?.homeShortName : data?.match?.awayShortName) || leftTeamData?.name || 'Team'
-  const rightShortName = (rightTeam === 'home' ? data?.match?.homeShortName : data?.match?.awayShortName) || rightTeamData?.name || 'Team'
+  const leftShortName = (leftTeam === 'team1' ? data?.match?.team1ShortName : data?.match?.team2ShortName) || leftTeamData?.name || 'Team'
+  const rightShortName = (rightTeam === 'team1' ? data?.match?.team1ShortName : data?.match?.team2ShortName) || rightTeamData?.name || 'Team'
 
   // Resize observer for adaptive text container widths
   useEffect(() => {
@@ -1343,7 +1339,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   // Check if match has ended (from liveState status or sets won)
   const isMatchEnded = data?.liveState?.match_status === 'ended' ||
     (data?.liveState?.sets_won_a >= 3 || data?.liveState?.sets_won_b >= 3) ||
-    (setsWon.home >= 3 || setsWon.away >= 3)
+    (setsWon.home >= 3 || setsWon.team2 >= 3)
 
   // Check if we're in set interval (from liveState or local detection)
   // But NOT if match is already finished
@@ -1356,14 +1352,14 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     : null
 
   // During set interval or match ended, show cleared values
-  const leftLineup = (isInSetInterval || isMatchEnded) ? null : (leftTeam === 'home' ? lineup.home : lineup.away)
-  const rightLineup = (isInSetInterval || isMatchEnded) ? null : (rightTeam === 'home' ? lineup.home : lineup.away)
+  const leftLineup = (isInSetInterval || isMatchEnded) ? null : (leftTeam === 'team1' ? lineup.team1 : lineup.team2)
+  const rightLineup = (isInSetInterval || isMatchEnded) ? null : (rightTeam === 'team1' ? lineup.team1 : lineup.team2)
   const leftStats = (isInSetInterval || isMatchEnded)
     ? { timeouts: 0 }
-    : (leftTeam === 'home' ? stats.home : stats.away)
+    : (leftTeam === 'team1' ? stats.team1 : stats.team2)
   const rightStats = (isInSetInterval || isMatchEnded)
     ? { timeouts: 0 }
-    : (rightTeam === 'home' ? stats.home : stats.away)
+    : (rightTeam === 'team1' ? stats.team1 : stats.team2)
 
   // Get the last finished set's final score for display when match ends
   const lastFinishedSet = useMemo(() => {
@@ -1374,21 +1370,21 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
   // Current set points - when match ended, show last set's final score
   const leftPoints = isMatchEnded && lastFinishedSet
-    ? (leftTeam === 'home' ? lastFinishedSet.team1Points : lastFinishedSet.team2Points)
-    : (leftTeam === 'home' ? data?.currentSet?.team1Points || 0 : data?.currentSet?.team2Points || 0)
+    ? (leftTeam === 'team1' ? lastFinishedSet.team1Points : lastFinishedSet.team2Points)
+    : (leftTeam === 'team1' ? data?.currentSet?.team1Points || 0 : data?.currentSet?.team2Points || 0)
   const rightPoints = isMatchEnded && lastFinishedSet
-    ? (rightTeam === 'home' ? lastFinishedSet.team1Points : lastFinishedSet.team2Points)
-    : (rightTeam === 'home' ? data?.currentSet?.team1Points || 0 : data?.currentSet?.team2Points || 0)
+    ? (rightTeam === 'team1' ? lastFinishedSet.team1Points : lastFinishedSet.team2Points)
+    : (rightTeam === 'team1' ? data?.currentSet?.team1Points || 0 : data?.currentSet?.team2Points || 0)
 
   // Sets won by each side - use liveState if available (from Supabase), otherwise fall back to setsWon
-  const liveStateSetsWonHome = teamAKey === 'home'
-    ? (data?.liveState?.sets_won_a ?? setsWon.home)
-    : (data?.liveState?.sets_won_b ?? setsWon.home)
-  const liveStateSetsWonAway = teamAKey === 'home'
-    ? (data?.liveState?.sets_won_b ?? setsWon.away)
-    : (data?.liveState?.sets_won_a ?? setsWon.away)
-  const leftSetsWon = leftTeam === 'home' ? liveStateSetsWonHome : liveStateSetsWonAway
-  const rightSetsWon = rightTeam === 'home' ? liveStateSetsWonHome : liveStateSetsWonAway
+  const liveStateSetsWonTeam1 = teamAKey === 'team1'
+    ? (data?.liveState?.sets_won_a ?? setsWon.team1)
+    : (data?.liveState?.sets_won_b ?? setsWon.team1)
+  const liveStateSetsWonTeam2 = teamAKey === 'team1'
+    ? (data?.liveState?.sets_won_b ?? setsWon.team2)
+    : (data?.liveState?.sets_won_a ?? setsWon.team2)
+  const leftSetsWon = leftTeam === 'team1' ? liveStateSetsWonTeam1 : liveStateSetsWonTeam2
+  const rightSetsWon = rightTeam === 'team1' ? liveStateSetsWonTeam1 : liveStateSetsWonTeam2
 
   // During interval, show sets won; during play, show current set points
   const leftDisplayScore = leftPoints
@@ -1792,10 +1788,9 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
     if (!number) return null
 
-    const teamPlayers = team === 'home' ? data.team1Players : data.team2Players
+    const teamPlayers = team === 'team1' ? data.team1Players : data.team2Players
     const player = teamPlayers?.find(p => String(p.number) === String(number))
 
-    // Beach volleyball: simplified - no libero or substitutions
     let shouldShowBall
     let hasWarning, hasPenalty, hasExpulsion, hasDisqualification
     let isCaptain
@@ -1824,7 +1819,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       hasDisqualification = sanctions.some(s => s.payload?.type === 'disqualification')
 
       // Check if this player is captain
-      const teamCaptain = team === 'home' ? data.match?.homeCaptain : data.match?.awayCaptain
+      const teamCaptain = team === 'team1' ? data.match?.team1Captain : data.match?.team2Captain
       isCaptain = player?.isCaptain || player?.captain || (teamCaptain && String(teamCaptain) === String(number))
     }
 
@@ -1947,13 +1942,13 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
   // Match finished info - use liveState sets won for accurate data
   const matchWinner = isMatchFinished && data
-    ? (liveStateSetsWonHome > liveStateSetsWonAway
+    ? (liveStateSetsWonHome > liveStateSetsWonteam2
       ? (data.team1?.name || 'Home')
-      : (data.team2?.name || 'Away'))
+      : (data.team2?.name || 'team2'))
     : ''
 
   const matchResult = isMatchFinished
-    ? `${Math.max(liveStateSetsWonHome, liveStateSetsWonAway)}:${Math.min(liveStateSetsWonHome, liveStateSetsWonAway)}`
+    ? `${Math.max(liveStateSetsWonHome, liveStateSetsWonteam2)}:${Math.min(liveStateSetsWonHome, liveStateSetsWonteam2)}`
     : ''
 
   // Show results when match is finished
@@ -2320,7 +2315,11 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                     minWidth: '6vmin'
                   }}>
                     <span style={{ fontSize: '7vmin', paddingBottom: '0.5vmin', fontWeight: 700, color: 'var(--accent)', lineHeight: 0.8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {typeof leftLineup?.I === 'object' ? leftLineup?.I?.number : leftLineup?.I || ''}
+                      {(() => {
+                        // Beach volleyball: team that serves first has position I, team that serves second has position II
+                        const serverPos = leftLineup?.I || leftLineup?.II
+                        return typeof serverPos === 'object' ? serverPos?.number : serverPos || ''
+                      })()}
                     </span>
                   </div>
                 </div>
@@ -2390,7 +2389,11 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                     minWidth: '6vmin'
                   }}>
                     <span style={{ fontSize: '8vmin', fontWeight: 700, color: 'var(--accent)', lineHeight: '1', textAlign: 'center' }}>
-                      {typeof rightLineup?.I === 'object' ? rightLineup?.I?.number : rightLineup?.I || ''}
+                      {(() => {
+                        // Beach volleyball: team that serves first has position I, team that serves second has position II
+                        const serverPos = rightLineup?.I || rightLineup?.II
+                        return typeof serverPos === 'object' ? serverPos?.number : serverPos || ''
+                      })()}
                     </span>
                   </div>
                 </div>
@@ -2929,9 +2932,9 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                 </span>
                 <span style={{ fontWeight: 600 }}>
                   {(() => {
-                    // lastEvent.team is 'home' or 'away', need to map to display values
-                    const teamLbl = lastEvent.team === 'home' ? homeLabel : lastEvent.team === 'away' ? awayLabel : ''
-                    const teamShort = lastEvent.team === 'home' ? (data?.match?.homeShortName || data?.team1?.name || 'Home') : lastEvent.team === 'away' ? (data?.match?.awayShortName || data?.team2?.name || 'Away') : ''
+                    // lastEvent.team is 'team1' or 'team2', need to map to display values
+                    const teamLbl = lastEvent.team === 'team1' ? team1Label : lastEvent.team === 'team2' ? team2Label : ''
+                    const teamShort = lastEvent.team === 'team1' ? (data?.match?.team1ShortName || data?.team1?.name || 'Team 1') : lastEvent.team === 'team2' ? (data?.match?.team2ShortName || data?.team2?.name || 'Team 2') : ''
                     const scoreStr = `(${leftDisplayScore}-${rightDisplayScore})`
                     const teamInfo = teamLbl ? `${teamLbl} ${teamShort} ${scoreStr}` : ''
 

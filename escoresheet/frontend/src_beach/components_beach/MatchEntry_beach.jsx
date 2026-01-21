@@ -15,7 +15,7 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
     return () => clearInterval(timer)
   }, [])
 
-  // Send heartbeat to indicate bench connection is active (only if connection is enabled)
+  // Send heartbeat to indicate benc h connection is active (only if connection is enabled)
   useEffect(() => {
     if (!matchId || !team || matchId === -1) return // Skip in test mode
 
@@ -126,7 +126,7 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
           coinTossTeamB: 'team2'
         },
         team1: { name: 'Test Home', color: '#ef4444' },
-        team2: { name: 'Test Away', color: '#3b82f6' },
+        team2: { name: 'Test team2', color: '#3b82f6' },
         set: { index: 1, team1Points: 12, team2Points: 10, finished: false },
         allSets: [{ index: 1, team1Points: 12, team2Points: 10, finished: false }],
         events: [],
@@ -139,12 +139,12 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
           { id: 6, number: 15, firstName: 'Test', lastName: 'Player 6' }
         ],
         team2Players: [
-          { id: 7, number: 2, firstName: 'Test', lastName: 'Away 1' },
-          { id: 8, number: 4, firstName: 'Test', lastName: 'Away 2' },
-          { id: 9, number: 8, firstName: 'Test', lastName: 'Away 3' },
-          { id: 10, number: 11, firstName: 'Test', lastName: 'Away 4' },
-          { id: 11, number: 13, firstName: 'Test', lastName: 'Away 5' },
-          { id: 12, number: 16, firstName: 'Test', lastName: 'Away 6' }
+          { id: 7, number: 2, firstName: 'Test', lastName: 'team2 1' },
+          { id: 8, number: 4, firstName: 'Test', lastName: 'team2 2' },
+          { id: 9, number: 8, firstName: 'Test', lastName: 'team2 3' },
+          { id: 10, number: 11, firstName: 'Test', lastName: 'team2 4' },
+          { id: 11, number: 13, firstName: 'Test', lastName: 'team2 5' },
+          { id: 12, number: 16, firstName: 'Test', lastName: 'team2 6' }
         ]
       })
       return
@@ -214,7 +214,7 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
       name: isTeam1 ? data.team1?.name : data.team2?.name,
       color: isTeam1 ? data.team1?.color : data.team2?.color,
       players: isTeam1 ? data.team1Players : data.team2Players,
-      bench: isTeam1 ? (data.match?.bench_home || []) : (data.match?.bench_away || [])
+      bench: isTeam1 ? (data.match?.bench_home || []) : (data.match?.bench_team2 || [])
     }
   }, [data, team])
 
@@ -226,7 +226,7 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
       name: isTeam1 ? data.team2?.name : data.team1?.name,
       color: isTeam1 ? data.team2?.color : data.team1?.color,
       players: isTeam1 ? data.team2Players : data.team1Players,
-      bench: isTeam1 ? (data.match?.bench_away || []) : (data.match?.bench_home || [])
+      bench: isTeam1 ? (data.match?.bench_team2 || []) : (data.match?.bench_home || [])
     }
   }, [data, team])
 
@@ -293,13 +293,6 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
         ? setEvents.filter(e => e.type === 'timeout' && e.payload?.team === localTeamBKey).length
         : null
 
-      const teamASubstitutions = isSetFinished
-        ? setEvents.filter(e => e.type === 'substitution' && e.payload?.team === localTeamAKey).length
-        : null
-      const teamBSubstitutions = isSetFinished
-        ? setEvents.filter(e => e.type === 'substitution' && e.payload?.team === localTeamBKey).length
-        : null
-
       const teamAWon = isSetFinished && teamAPoints !== null && teamBPoints !== null
         ? (teamAPoints > teamBPoints ? 1 : 0)
         : null
@@ -326,11 +319,9 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
       results.push({
         setNumber: setNum,
         teamATimeouts,
-        teamASubstitutions,
         teamAWon,
         teamAPoints,
         teamBTimeouts,
-        teamBSubstitutions,
         teamBWon,
         teamBPoints,
         duration
@@ -356,16 +347,6 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
     if (!data?.events || !data?.set) return 0
     return data.events.filter(
       event => event.type === 'timeout' && 
-      event.setIndex === data.set.index && 
-      event.payload?.team === team
-    ).length
-  }, [data?.events, data?.set, team])
-
-  // Get substitutions used in current set
-  const substitutionsUsed = useMemo(() => {
-    if (!data?.events || !data?.set) return 0
-    return data.events.filter(
-      event => event.type === 'substitution' && 
       event.setIndex === data.set.index && 
       event.payload?.team === team
     ).length
@@ -397,8 +378,6 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
         number: null,
         position: pos,
         isCaptain: false,
-        isLibero: false,
-        liberoType: null
       }))
     }
     
@@ -415,8 +394,6 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
         number: null,
         position: pos,
         isCaptain: false,
-        isLibero: false,
-        liberoType: null
       }))
     }
     
@@ -429,10 +406,7 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
       return positions.map(pos => ({
         number: null,
         position: pos,
-        isCaptain: false,
-        isLibero: false,
-        liberoType: null,
-        substitutedPlayerNumber: null
+        isCaptain: false
       }))
     }
     
@@ -447,9 +421,6 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
           number: null,
           position: pos,
           isCaptain: false,
-          isLibero: false,
-          liberoType: null,
-          substitutedPlayerNumber: null
         }
       }
 
@@ -459,9 +430,6 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
         number: playerNum,
         position: pos,
         isCaptain: player?.isCaptain || false,
-        isLibero: false, // Beach volleyball doesn't use liberos
-        liberoType: null,
-        substitutedPlayerNumber: null
       }
     })
     
@@ -488,85 +456,6 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
       !e.payload?.playerNumber // Only team/official sanctions, not player sanctions
     )
   }, [data?.events, team])
-
-  // Get bench players (players not on court, excluding liberos)
-  const benchPlayersWithSanctions = useMemo(() => {
-    if (!teamInfo?.players || !data?.events || !data?.set) return []
-    
-    // Get players currently on court
-    const lineupEvents = data.events
-      .filter(e => e.type === 'lineup' && e.setIndex === data.set.index && e.payload?.team === team)
-      .sort((a, b) => new Date(b.ts) - new Date(a.ts))
-    
-    const playersOnCourtSet = new Set()
-    if (lineupEvents.length > 0) {
-      const latestLineup = lineupEvents[0].payload?.lineup
-      if (latestLineup && typeof latestLineup === 'object') {
-        Object.values(latestLineup).forEach(posData => {
-          // Handle both rich format (object with number) and legacy format (just number)
-          const num = posData && typeof posData === 'object' && posData.number !== undefined
-            ? posData.number
-            : posData
-          if (num) playersOnCourtSet.add(Number(num))
-        })
-      }
-    }
-
-    // Get bench players: all players not on court, excluding liberos
-    const benchPlayers = teamInfo.players
-      .filter(p => {
-        const playerNumber = Number(p.number)
-        if (Number.isNaN(playerNumber)) return false
-        if (playersOnCourtSet.has(playerNumber)) return false
-        if (p.libero && p.libero !== '') return false // Exclude liberos
-        
-        // Filter out players who were exceptionally substituted
-        const wasExceptionallySubstituted = data.events?.some(e =>
-          e.type === 'substitution' &&
-          e.payload?.team === team &&
-          String(e.payload?.playerOut) === String(playerNumber) &&
-          e.payload?.isExceptional === true
-        )
-        if (wasExceptionallySubstituted) return false
-        
-        return true
-      })
-      .map(p => {
-        const sanctions = getPlayerSanctions(p.number)
-        return {
-          number: p.number,
-          firstName: p.firstName || '',
-          lastName: p.lastName || p.name || '',
-          dob: p.dob || '',
-          sanctions,
-          type: 'player'
-        }
-      })
-      .sort((a, b) => (a.number || 0) - (b.number || 0))
-    
-    return benchPlayers
-  }, [teamInfo, data?.events, data?.set, team, getPlayerSanctions])
-
-  // Beach volleyball doesn't use liberos
-  const benchLiberos = []
-
-  // Get bench officials
-  const benchOfficials = useMemo(() => {
-    if (!teamInfo?.bench) return []
-    return teamInfo.bench
-      .filter(b => b.firstName || b.lastName || b.role)
-      .map(bench => {
-        const sanctions = getOfficialSanctions(bench.role || '')
-        return {
-          role: bench.role || '',
-          firstName: bench.firstName || '',
-          lastName: bench.lastName || '',
-          dob: bench.dob || '',
-          sanctions,
-          type: 'official'
-        }
-      })
-  }, [teamInfo, getOfficialSanctions])
 
   // Get overall team sanctions
   const overallSanctions = useMemo(() => {
@@ -596,40 +485,8 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
       }
     })
 
-    // Bench player sanctions
-    benchPlayersWithSanctions.forEach(player => {
-      player.sanctions.forEach(s => {
-        sanctions.push({
-          type: 'bench',
-          number: player.number,
-          sanctionType: s.payload?.type || 'warning'
-        })
-      })
-    })
+  
 
-    // Libero sanctions
-    benchLiberos.forEach(libero => {
-      libero.sanctions.forEach(s => {
-        sanctions.push({
-          type: 'libero',
-          number: libero.number,
-          sanctionType: s.payload?.type || 'warning'
-        })
-      })
-    })
-
-    // Official sanctions
-    benchOfficials.forEach(official => {
-      if (official.sanctions) {
-        official.sanctions.forEach(s => {
-          sanctions.push({
-            type: 'official',
-            role: official.role,
-            sanctionType: s.payload?.type || 'warning'
-          })
-        })
-      }
-    })
 
     // Overall team sanctions
     overallSanctions.forEach(s => {
@@ -641,7 +498,7 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
     })
 
     return sanctions
-  }, [playersOnCourt, benchPlayersWithSanctions, benchLiberos, benchOfficials, overallSanctions, getPlayerSanctions])
+  }, [playersOnCourt, overallSanctions, getPlayerSanctions])
 
   if (!data || !teamInfo) {
     if (embedded) {
@@ -870,27 +727,6 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
               {timeoutsUsed}
             </div>
           </div>
-          {/* SUB Counter */}
-          <div style={{
-            background: substitutionsUsed >= 6 ? 'rgba(239, 68, 68, 0.2)' : substitutionsUsed >= 5 ? 'rgba(234, 179, 8, 0.2)' : 'rgba(255,255,255,0.05)',
-            borderRadius: '8px',
-            padding: '6px 12px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            border: substitutionsUsed >= 6 ? '2px solid #ef4444' : substitutionsUsed >= 5 ? '2px solid #eab308' : '1px solid rgba(255,255,255,0.1)',
-            minWidth: '50px'
-          }}>
-            <div style={{ fontSize: '10px', color: 'var(--muted)', marginBottom: '2px' }}>SUB</div>
-            <div style={{
-              fontSize: '28px',
-              fontWeight: 800,
-              color: substitutionsUsed >= 6 ? '#ef4444' : substitutionsUsed >= 5 ? '#eab308' : '#fff'
-            }}>
-              {substitutionsUsed}
-            </div>
-          </div>
         </div>
 
         {/* Center: Score and Set Counter */}
@@ -978,9 +814,9 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
                   borderRadius: '1px'
                 }}></div>
                 <span style={{ fontWeight: 600 }}>
-                  {s.type === 'player' || s.type === 'bench' || s.type === 'libero' ? `#${s.number}` : s.role}
+                  {s.type === 'player' ? `#${s.number}` : s.role}
                 </span>
-              </div>
+              </div>  
             ))
           )}
           {allSanctionsForDisplay.length > 3 && (
@@ -1144,94 +980,6 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
             </div>
           </div>
         </div>
-      </div>
-
-      {/* SECTION 3: Bench - Players, Liberos, Officials (N and Codes only) */}
-      <div style={{
-        background: 'rgba(255,255,255,0.03)',
-        borderRadius: '8px',
-        padding: '8px 12px',
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: '8px',
-        alignItems: 'center'
-      }}>
-        {/* Bench Players */}
-        {benchPlayersWithSanctions.map((player, idx) => (
-          <div key={`bp-${idx}`} style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            padding: '4px 8px',
-            background: 'rgba(255,255,255,0.05)',
-            borderRadius: '4px',
-            fontSize: '13px'
-          }}>
-            <span style={{ fontWeight: 700 }}>#{player.number}</span>
-            {player.sanctions.length > 0 && (
-              <div style={{ display: 'flex', gap: '1px' }}>
-                {player.sanctions.map((s, sIdx) => (
-                  <div key={sIdx} style={{
-                    width: '6px', height: '9px', borderRadius: '1px',
-                    background: s.payload?.type === 'warning' || s.payload?.type === 'disqualification' ? '#eab308' : '#ef4444'
-                  }}></div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-
-        {/* Separator if players and officials exist */}
-        {benchPlayersWithSanctions.length > 0 && benchOfficials.length > 0 && (
-          <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.2)' }}></div>
-        )}
-
-        {/* Officials - show role codes */}
-        {benchOfficials.map((official, idx) => {
-          // Convert role to short code
-          const roleCode = official.role === 'Coach' || official.role === 'coach' ? 'C' :
-                          official.role === 'Assistant Coach' || official.role === 'assistant_coach' ? 'AC' :
-                          official.role === 'Doctor' || official.role === 'doctor' ? 'D' :
-                          official.role === 'Physio' || official.role === 'physio' ? 'P' :
-                          official.role === 'Manager' || official.role === 'manager' ? 'M' :
-                          official.role?.charAt(0)?.toUpperCase() || '?'
-          return (
-            <div key={`off-${idx}`} style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 8px',
-              background: 'rgba(255,255,255,0.05)',
-              borderRadius: '4px',
-              fontSize: '13px'
-            }}>
-              <span style={{
-                background: 'rgba(255,255,255,0.2)',
-                padding: '1px 4px',
-                borderRadius: '2px',
-                fontSize: '10px',
-                fontWeight: 700
-              }}>{roleCode}</span>
-              {official.sanctions && official.sanctions.length > 0 && (
-                <div style={{ display: 'flex', gap: '1px' }}>
-                  {official.sanctions.map((s, sIdx) => (
-                    <div key={sIdx} style={{
-                      width: '6px', height: '9px', borderRadius: '1px',
-                      background: s.payload?.type === 'warning' || s.payload?.type === 'disqualification' ? '#eab308' : '#ef4444'
-                    }}></div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )
-        })}
-
-        {/* Empty state */}
-        {benchPlayersWithSanctions.length === 0 && benchOfficials.length === 0 && (
-          <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '12px' }}>
-            No bench data
-          </div>
-        )}
       </div>
 
       {/* Test Mode Controls - only shown in test mode */}

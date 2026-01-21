@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import Modal from './Modal'
+import Modal from './Modal_beach'
 import { getApiUrl } from '../utils_beach/backendConfig_beach'
 
 const CONTACT_TYPES = ['support', 'feedback', 'request']

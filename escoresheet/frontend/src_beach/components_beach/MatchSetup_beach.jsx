@@ -4,9 +4,9 @@ import { useTranslation } from 'react-i18next'
 import { useAlert } from '../contexts_beach/AlertContext_beach'
 import { useAuth } from '../contexts_beach/AuthContext_beach'
 import { db } from '../db_beach/db_beach'
-import SignaturePad from './SignaturePad'
-import Modal from './Modal'
-import RefereeSelector from './RefereeSelector'
+import SignaturePad from './SignaturePad_beach'
+import Modal from './Modal_beach'
+import RefereeSelector from './RefereeSelector_beach'
 import CountrySelect from './CountrySelect_beach'
 // Beach volleyball ball image
 const ballImage = '/beachball.png'
@@ -16,7 +16,7 @@ import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { uploadBackupToCloud, uploadLogsToCloud } from '../utils_beach/logger_beach'
 import { supabase } from '../lib_beach/supabaseClient_beach'
 import { generateMatchSeedKey } from '../utils_beach/serverDataSync_beach'
-import { TEST_TEAM_SEED_DATA } from '../constants/testSeeds'
+import { TEST_TEAM_SEED_DATA } from '../constants_beach/testSeeds_beach'
 import { splitLocalDateTime, parseLocalDateTimeToISO, roundToMinute } from '../utils_beach/timeUtils_beach'
 
 // Date formatting helpers (outside component to avoid recreation)
@@ -438,7 +438,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     team1Name?.trim() &&
     team2Name?.trim() &&
     team1Country?.trim() &&  // Home country must be filled
-    team2Country?.trim() &&  // Away country must be filled
+    team2Country?.trim() &&  // team2 country must be filled
     date?.trim() &&      // Date must be filled
     !dateError &&        // Date must be valid
     time?.trim() &&      // Time must be filled
@@ -453,7 +453,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   const getMissingFieldsTooltip = () => {
     const missing = []
     if (!team1Name?.trim()) missing.push(t('matchSetup.team1Name') || 'Home team')
-    if (!team2Name?.trim()) missing.push(t('matchSetup.team2Name') || 'Away team')
+    if (!team2Name?.trim()) missing.push(t('matchSetup.team2Name') || 'team2 team')
     if (!team1Country?.trim()) missing.push(t('matchSetup.country') || 'Country')
     if (!team2Country?.trim()) missing.push(t('matchSetup.country') || 'Country')
     if (!date?.trim()) missing.push(t('matchSetup.date') || 'Date')
@@ -677,7 +677,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   // Coach signatures kept for compatibility but not used in beach volleyball
   const [team1CoachSignature, setTeam1CoachSignature] = useState(null)
   const [team2CoachSignature, setTeam2CoachSignature] = useState(null)
-  const [savedSignatures, setSavedSignatures] = useState({ homeCoach: null, awayCoach: null })
+  const [savedSignatures, setSavedSignatures] = useState({ homeCoach: null, team2Coach: null })
 
   // Load match data if matchId is provided
   const match = useLiveQuery(async () => {
@@ -730,7 +730,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         // Legacy columns that no longer exist in Supabase
         const legacyColumns = [
           'team2_data_name', 'team1_data_name', 'team2_data_short_name', 'team1_data_short_name',
-          'home_short_name', 'away_short_name', 'coin_toss_confirmed', 'coin_toss_team_a',
+          'home_short_name', 'team2_short_name', 'coin_toss_confirmed', 'coin_toss_team_a',
           'coin_toss_team_b', 'coin_toss_serve_a', 'first_serve', 'referee_pin',
           'referee_connection_enabled', 'team1_data_connection_enabled', 'team2_data_connection_enabled'
         ]
@@ -904,8 +904,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 color: team1?.color || team1Color
               },
               team2_data: {
-                name: team2?.name || team2Name || 'Away',
-                short_name: team2?.shortName || match.team2ShortName || generateShortName(team2?.name || team2Name || 'Away'),
+                name: team2?.name || team2Name || 'team2',
+                short_name: team2?.shortName || match.team2ShortName || generateShortName(team2?.name || team2Name || 'team2'),
                 color: team2?.color || team2Color
               },
             },
@@ -1009,7 +1009,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             team1InputRef.current.style.width = `${Math.max(80, measuredWidth + 24)}px`
           }
           if (team2MeasureRef.current && team2InputRef.current) {
-            const currentValue = team2?.name || team2Name || 'Away team name'
+            const currentValue = team2?.name || team2Name || 'team2 team name'
             team2MeasureRef.current.textContent = currentValue
             const measuredWidth = team2MeasureRef.current.offsetWidth
             team2InputRef.current.style.width = `${Math.max(80, measuredWidth + 24)}px`
@@ -1019,7 +1019,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         // Load match info - use safe parser to handle invalid dates
         if (match.scheduledAt) {
           const parsed = safeParseScheduledAt(match.scheduledAt)
-          if (parsed.date) setDate(parsed.date)
+          if (parsed.date) {
+            // Convert ISO date (YYYY-MM-DD) to dd.mm.yyyy format
+            const [year, month, day] = parsed.date.split('-')
+            setDate(`${day}.${month}.${year}`)
+          }
           if (parsed.time) setTime(parsed.time)
         }
         // Load beach volleyball specific fields
@@ -1126,7 +1130,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 const connectionPinsUpdate = {
                   ...(existingMatch.connection_pins || {}),
                   ...(team1UploadPin ? { upload_home: team1UploadPin } : {}),
-                  ...(team2UploadPin ? { upload_away: team2UploadPin } : {})
+                  ...(team2UploadPin ? { upload_team2: team2UploadPin } : {})
                 }
 
                 await supabase
@@ -1413,7 +1417,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         const draft = await db.match_setup.orderBy('updatedAt').last()
         if (draft) {
           if (draft.home !== undefined) setTeam1Name(draft.home)
-          if (draft.away !== undefined) setTeam2Name(draft.away)
+          if (draft.team2 !== undefined) setTeam2Name(draft.team2)
           if (draft.date !== undefined) setDate(draft.date)
           if (draft.time !== undefined) setTime(draft.time)
           if (draft.hall !== undefined) setHall(draft.hall)
@@ -1464,7 +1468,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     try {
       const draft = {
         home: team1Name,
-        away: team2Name,
+        team2: team2Name,
         date,
         time,
         hall,
@@ -1513,7 +1517,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         // Only validate date/time if at least one is set
         if (date || time) {
           try {
-            scheduledAt = createScheduledAt(date, time, { allowEmpty: true })
+            // Convert dd.mm.yyyy to YYYY-MM-DD for createScheduledAt
+            let dateForCreate = date
+            if (date && /^\d{2}\.\d{2}\.\d{4}$/.test(date)) {
+              const [day, month, year] = date.split('.')
+              dateForCreate = `${year}-${month}-${day}`
+            }
+            scheduledAt = createScheduledAt(dateForCreate, time, { allowEmpty: true })
           } catch (err) {
             // For silent saves, just log and use existing value
             // For explicit saves, show error to user
@@ -1554,7 +1564,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             { lj1: lineJudge1, lj2: lineJudge2, lj3: lineJudge3, lj4: lineJudge4 }
           ),
           bench_home: team1Bench,
-          bench_away: team2Bench
+          bench_team2: team2Bench
         }
 
         // Only save match type fields if explicitly saving OR match was previously confirmed
@@ -1637,7 +1647,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     }
   }, [date, time, hall, city, type2, gameN, league, team1Name, team2Name, team1Color, team2Color, team1Country, team2Country, team1ShortName, team2ShortName, team1Roster, team2Roster, team1Bench, team2Bench, ref1First, ref1Last, ref1Country, ref1Dob, ref2First, ref2Last, ref2Country, ref2Dob, scorerFirst, scorerLast, scorerCountry, scorerDob, asstFirst, asstLast, asstCountry, asstDob, team1CoachSignature, team2CoachSignature, currentView])
 
-  // Update input widths when home/away values change - set default width based on content
+  // Update input widths when home/team2 values change - set default width based on content
   useEffect(() => {
     if (team1MeasureRef.current && team1InputRef.current) {
       const currentValue = team1Name || 'Home team name'
@@ -1650,7 +1660,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
   useEffect(() => {
     if (team2MeasureRef.current && team2InputRef.current) {
-      const currentValue = team2Name || 'Away team name'
+      const currentValue = team2Name || 'team2 team name'
       team2MeasureRef.current.textContent = currentValue
       const measuredWidth = team2MeasureRef.current.offsetWidth
       // Always set width based on content, not just on focus
@@ -1670,7 +1680,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           team1InputRef.current.style.width = `${Math.max(80, measuredWidth + 24)}px`
         }
         if (team2MeasureRef.current && team2InputRef.current) {
-          const currentValue = team2Name || 'Away team name'
+          const currentValue = team2Name || 'team2 team name'
           team2MeasureRef.current.textContent = currentValue
           const measuredWidth = team2MeasureRef.current.offsetWidth
           team2InputRef.current.style.width = `${Math.max(80, measuredWidth + 24)}px`
@@ -1680,7 +1690,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     }
   }, [currentView, team1Name, team2Name])
 
-  // Update input widths when home/away values change (e.g., when loaded from match)
+  // Update input widths when home/team2 values change (e.g., when loaded from match)
   useEffect(() => {
     if (currentView === 'main') {
       const timeoutId = setTimeout(() => {
@@ -1717,19 +1727,24 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     return isBrightColor(color) ? '#000000' : '#ffffff'
   }
 
-  // Validate and set date with immediate feedback
+  // Validate and set date with immediate feedback (dd.mm.yyyy format)
   function handleDateChange(value) {
     setDate(value)
     if (!value) {
       setDateError('')
       return
     }
-    // Validate format YYYY-MM-DD
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    // Validate format dd.mm.yyyy
+    if (!/^\d{2}\.\d{2}\.\d{4}$/.test(value)) {
+      // Don't show error while typing (incomplete format)
+      if (value.length < 10) {
+        setDateError('')
+        return
+      }
       setDateError(t('matchSetup.validation.invalidFormat'))
       return
     }
-    const [year, month, day] = value.split('-').map(Number)
+    const [day, month, year] = value.split('.').map(Number)
     if (year < 1900 || year > 2100) {
       setDateError(t('matchSetup.validation.invalidYear', { year }))
       return
@@ -1743,8 +1758,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       return
     }
     // Check if date is valid (e.g., Feb 30 is invalid)
-    const dateObj = new Date(value)
-    if (isNaN(dateObj.getTime()) || dateObj.getMonth() + 1 !== month) {
+    const dateObj = new Date(year, month - 1, day)
+    if (isNaN(dateObj.getTime()) || dateObj.getDate() !== day || dateObj.getMonth() + 1 !== month) {
       setDateError(t('matchSetup.validation.invalidDate'))
       return
     }
@@ -1786,7 +1801,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       return
     }
     if (!team2Name || !team2Name.trim()) {
-      setNoticeModal({ message: 'Away team name is required' })
+      setNoticeModal({ message: 'team2 team name is required' })
       return
     }
     if (!team1Country || !team1Country.trim()) {
@@ -1863,7 +1878,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       // Build scheduledAt if date is set
       let scheduledAt = null
       if (date) {
-        scheduledAt = createScheduledAt(date, time, { allowEmpty: true })
+        // Convert dd.mm.yyyy to YYYY-MM-DD for createScheduledAt
+        let dateForCreate = date
+        if (date && /^\d{2}\.\d{2}\.\d{4}$/.test(date)) {
+          const [day, month, year] = date.split('.')
+          dateForCreate = `${year}-${month}-${day}`
+        }
+        scheduledAt = createScheduledAt(dateForCreate, time, { allowEmpty: true })
       }
 
       // Generate seed_key if match doesn't have one (for older matches or matches created via other flows)
@@ -1879,8 +1900,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       await db.matches.update(matchId, {
         team1Id,
         team2Id,
-        homeName: team1Name.trim(),
-        awayName: team2Name.trim(),
+        team1Name: team1Name.trim(),
+        team2Name: team2Name.trim(),
         team1ShortName: team1ShortName || generateShortName(team1Name.trim()),
         team2ShortName: team2ShortName || generateShortName(team2Name.trim()),
         team1Color,
@@ -1893,7 +1914,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         game_n: gameN ? parseInt(gameN, 10) : null,
         seed_key: matchSeedKey, // Ensure seed_key is set
         bench_home: team1Bench,
-        bench_away: team2Bench,
+        bench_team2: team2Bench,
         matchInfoConfirmedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       })
@@ -1917,7 +1938,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         team1_data: { name: team1Name.trim(), short_name: team1ShortName || generateShortName(team1Name.trim()), color: team1Color, country: team1Country || '' },
         team2_data: { name: team2Name.trim(), short_name: team2ShortName || generateShortName(team2Name.trim()), color: team2Color, country: team2Country || '' },
         bench_home: team1Bench || [],
-        bench_away: team2Bench || []
+        bench_team2: team2Bench || []
       }
 
       // Only set status to 'setup' when creating a new match
@@ -1949,7 +1970,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           gameN: gameN || 'N/A',
           gamePin: match.gamePin,
           home: team1Name.trim(),
-          away: team2Name.trim(),
+          team2: team2Name.trim(),
           team1ShortName: team1ShortName || '',
           team2ShortName: team2ShortName || '',
           date: date || '',
@@ -2045,7 +2066,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     // Validate date/time first
     let scheduledAt
     try {
-      scheduledAt = createScheduledAt(date, time, { allowEmpty: false })
+      // Convert dd.mm.yyyy to YYYY-MM-DD for createScheduledAt
+      let dateForCreate = date
+      if (date && /^\d{2}\.\d{2}\.\d{4}$/.test(date)) {
+        const [day, month, year] = date.split('.')
+        dateForCreate = `${year}-${month}-${day}`
+      }
+      scheduledAt = createScheduledAt(dateForCreate, time, { allowEmpty: false })
     } catch (err) {
       setNoticeModal({ message: `Invalid date/time: ${err.message}` })
       return
@@ -2061,7 +2088,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     }
 
     if (!team2HasCaptain) {
-      setNoticeModal({ message: 'Away team must have at least one captain.' })
+      setNoticeModal({ message: 'team2 team must have at least one captain.' })
       return
     }
 
@@ -2083,7 +2110,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     if (team2Duplicates.length > 0) {
       const dupNumbers = [...new Set(team2Duplicates.map(p => p.number))].join(', ')
       setNoticeModal({
-        message: `${team2Name || 'Away'} team has duplicate player numbers: #${dupNumbers}\n\nPlease fix duplicate numbers before proceeding.`
+        message: `${team2Name || 'team2'} team has duplicate player numbers: #${dupNumbers}\n\nPlease fix duplicate numbers before proceeding.`
       })
       return
     }
@@ -2176,8 +2203,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         phase, // main | qualification
         round, // pool | winner | class | semifinals | finals
         // Team names and colors for local access
-        homeName: team1Name.trim(),
-        awayName: team2Name.trim(),
+        team1Name: team1Name.trim(),
+        team2Name: team2Name.trim(),
         team1ShortName: team1ShortName || team1Name.substring(0, 3).toUpperCase(),
         team2ShortName: team2ShortName || team2Name.substring(0, 3).toUpperCase(),
         team1Color: team1Color || '#ef4444',
@@ -2236,7 +2263,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             dob: formatDobForSync(p.dob),
             is_captain: !!p.isCaptain
           })),
-          players_away: team2Roster.map(p => ({
+          players_team2: team2Roster.map(p => ({
             number: p.number,
             first_name: p.firstName,
             last_name: p.lastName,
@@ -2382,11 +2409,22 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     const team1WithCountry = team1Data ? { ...team1Data, country: matchData.team1Country || team1Country || '' } : { name: team1Name, country: matchData.team1Country || team1Country || '' }
     const team2WithCountry = team2Data ? { ...team2Data, country: matchData.team2Country || team2Country || '' } : { name: team2Name, country: matchData.team2Country || team2Country || '' }
 
+    // Normalize team keys for scoresheet (team1 -> team_1)
+    const normalizeTeamKey = (key) => key ? key.replace('team1', 'team_1').replace('team2', 'team_2') : key
     const scoresheetData = {
       match: {
         ...matchData,
         team_1Country: matchData.team1Country || team1Country || '',
-        team_2Country: matchData.team2Country || team2Country || ''
+        team_2Country: matchData.team2Country || team2Country || '',
+        // Normalize coinTossTeamA/B for scoresheet
+        coinTossTeamA: normalizeTeamKey(matchData.coinTossTeamA),
+        coinTossTeamB: normalizeTeamKey(matchData.coinTossTeamB),
+        // Build coinTossData for scoresheet compatibility
+        coinTossData: {
+          coinTossWinner: normalizeTeamKey(matchData.coinTossWinner),
+          teamA: normalizeTeamKey(matchData.coinTossTeamA),
+          teamB: normalizeTeamKey(matchData.coinTossTeamB)
+        }
       },
       team_1Team: team1WithCountry,
       team_2Team: team2WithCountry,
@@ -2497,7 +2535,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               dob: p.dob || null,
               is_captain: !!p.isCaptain
             })),
-            players_away: team2Roster.filter(p => p.firstName || p.lastName).map(p => ({
+            players_team2: team2Roster.filter(p => p.firstName || p.lastName).map(p => ({
               number: p.number || null,
               first_name: p.firstName || '',
               last_name: p.lastName || '',
@@ -2612,7 +2650,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           match_id: matchForSet.seed_key, // Use seed_key (external_id) for Supabase lookup
           index: 1,
           home_points: 0,
-          away_points: 0,
+          team2_points: 0,
           finished: false,
           start_time: roundToMinute(new Date().toISOString())
         },
@@ -2720,29 +2758,29 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     setTeam2RosterSearching(true)
     try {
       const gameNumber = match.game_n || match.gameNumber || gameN
-      console.log('[MatchSetup] Searching for away roster, game number:', gameNumber)
+      console.log('[MatchSetup] Searching for team2 roster, game number:', gameNumber)
 
       // Search for pending roster in Supabase
       const { data, error } = await supabase
         .from('matches')
-        .select('pending_away_roster, external_id')
+        .select('pending_team2_roster, external_id')
         .eq('game_n', gameNumber)
-        .not('pending_away_roster', 'is', null)
+        .not('pending_team2_roster', 'is', null)
         .limit(1)
         .single()
 
-      if (error || !data?.pending_away_roster) {
-        console.log('[MatchSetup] No pending away roster found')
+      if (error || !data?.pending_team2_roster) {
+        console.log('[MatchSetup] No pending team2 roster found')
         setNoticeModal({ message: t('matchSetup.noRosterFound') })
         return
       }
 
-      console.log('[MatchSetup] Found pending away roster:', data.pending_away_roster)
+      console.log('[MatchSetup] Found pending team2 roster:', data.pending_team2_roster)
 
       // Store in local match data to trigger the pending roster UI
-      await db.matches.update(matchId, { pendingAwayRoster: data.pending_away_roster })
+      await db.matches.update(matchId, { pendingteam2Roster: data.pending_team2_roster })
     } catch (err) {
-      console.error('[MatchSetup] Error searching for away roster:', err)
+      console.error('[MatchSetup] Error searching for team2 roster:', err)
       setNoticeModal({ message: t('matchSetup.errorSearchingRoster') })
     } finally {
       setTeam2RosterSearching(false)
@@ -2898,84 +2936,105 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           <h1 style={{ margin: 8 }}>{t('matchSetup.matchInfo')}</h1>
           <div style={{ width: 80 }}></div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
-          {/* Competition & Match Info */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
           <div className="card">
-            <h3 style={{ marginTop: 0 }}>{t('matchSetup.competitionInfo')}</h3>
-            <div className="field">
-              <label>{t('matchSetup.competitionName')}</label>
-              <input className="w-200 capitalize" value={league} onChange={e => setLeague(e.target.value)} placeholder={t('matchSetup.enterCompetitionName')} />
-            </div>
-            <div className="field">
-              <label>{t('matchSetup.matchNumber')}</label>
-              <input className="w-100" value={gameN} onChange={e => setGameN(e.target.value)} placeholder="e.g. M01" />
-            </div>
-            <div className="field">
-              <label>{t('matchSetup.date')}</label>
-              <input
-                className="w-120"
-                type="date"
-                value={date}
-                onChange={e => handleDateChange(e.target.value)}
-                style={dateError ? { borderColor: '#ef4444', boxShadow: '0 0 0 1px #ef4444' } : {}}
-              />
-              {dateError && <span style={{ color: '#ef4444', fontSize: '12px', marginLeft: '8px' }}>{dateError}</span>}
-            </div>
-            <div className="field">
-              <label>{t('matchSetup.time')}</label>
-              <input
-                className="w-100"
-                type="time"
-                value={time}
-                onChange={e => handleTimeChange(e.target.value)}
-                style={timeError ? { borderColor: '#ef4444', boxShadow: '0 0 0 1px #ef4444' } : {}}
-              />
-              {timeError && <span style={{ color: '#ef4444', fontSize: '12px', marginLeft: '8px' }}>{timeError}</span>}
+            <h3 style={{ marginTop: 0 }}>{t('matchSetup.competitionName')}</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+              <div className="field" style={{ gridColumn: 'span 2' }}>
+                <label>{t('matchSetup.competitionName')}</label>
+                <input style={{ width: '100%' }} className="capitalize" value={league} onChange={e => setLeague(e.target.value)} placeholder={t('matchSetup.enterCompetitionName')} />
+              </div>
+              <div className="field">
+                <label>{t('matchSetup.matchNumber')}</label>
+                <input style={{ width: '100%' }} value={gameN} onChange={e => setGameN(e.target.value)} placeholder="e.g. M01" />
+              </div>
+              <div className="field">
+                <label>{t('matchSetup.date')}</label>
+                <input
+                  type="text"
+                  value={date}
+                  onChange={e => {
+                    let val = e.target.value
+                    // Auto-format as user types: dd.mm.yyyy
+                    val = val.replace(/[^\d.]/g, '') // Remove non-digits and dots
+                    if (val.length > 2 && val[2] !== '.') val = val.slice(0, 2) + '.' + val.slice(2)
+                    if (val.length > 5 && val[5] !== '.') val = val.slice(0, 5) + '.' + val.slice(5)
+                    if (val.length > 10) val = val.slice(0, 10)
+                    handleDateChange(val)
+                  }}
+                  placeholder="dd.mm.yyyy"
+                  style={dateError ? { borderColor: '#ef4444', boxShadow: '0 0 0 1px #ef4444', width: '100%' } : { width: '100%' }}
+                />
+                {dateError && <span style={{ color: '#ef4444', fontSize: '12px', marginLeft: '8px' }}>{dateError}</span>}
+              </div>
+              <div className="field">
+                <label>{t('matchSetup.time')}</label>
+                <input
+                  type="text"
+                  value={time}
+                  onChange={e => {
+                    let val = e.target.value
+                    // Only allow digits and colon, format as HH:MM
+                    val = val.replace(/[^\d:]/g, '')
+                    if (val.length > 2 && val[2] !== ':') val = val.slice(0, 2) + ':' + val.slice(2)
+                    if (val.length > 5) val = val.slice(0, 5)
+                    handleTimeChange(val)
+                  }}
+                  placeholder="HH:MM"
+                  style={timeError ? { borderColor: '#ef4444', boxShadow: '0 0 0 1px #ef4444', width: '100%' } : { width: '100%' }}
+                />
+                {timeError && <span style={{ color: '#ef4444', fontSize: '12px', marginLeft: '8px' }}>{timeError}</span>}
+              </div>
             </div>
           </div>
 
-          {/* Location */}
           <div className="card">
             <h3 style={{ marginTop: 0 }}>{t('matchSetup.location')}</h3>
-            <div className="field">
-              <label>{t('matchSetup.site')}</label>
-              <input className="w-200 capitalize" value={city} onChange={e => setCity(e.target.value)} placeholder={t('matchSetup.enterSite')} />
-            </div>
-            <div className="field">
-              <label>{t('matchSetup.court')}</label>
-              <input className="w-100" value={court} onChange={e => setCourt(e.target.value)} placeholder="e.g. 1, Center" />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+              <div className="field">
+                <label>{t('matchSetup.site')}</label>
+                <input style={{ width: '100%' }} className="capitalize" value={city} onChange={e => setCity(e.target.value)} placeholder={t('matchSetup.enterSite')} />
+              </div>
+              <div className="field">
+                <label>{t('matchSetup.beach')}</label>
+                <input style={{ width: '100%' }} className="capitalize" value={hall} onChange={e => setHall(e.target.value)} placeholder={t('matchSetup.enterBeach')} />
+              </div>
+              <div className="field" style={{ gridColumn: 'span 2' }}>
+                <label>{t('matchSetup.court')}</label>
+                <input style={{ width: '100%' }} value={court} onChange={e => setCourt(e.target.value)} placeholder="e.g. 1, Center" />
+              </div>
             </div>
           </div>
 
-          {/* Category */}
           <div className="card">
             <h3 style={{ marginTop: 0 }}>{t('matchSetup.category')}</h3>
-            <div className="field">
-              <label>{t('matchSetup.gender')}</label>
-              <select className="w-120" value={type2} onChange={e => setType2(e.target.value)}>
-                <option value="men">{t('matchSetup.men')}</option>
-                <option value="women">{t('matchSetup.women')}</option>
-              </select>
-            </div>
-            <div className="field">
-              <label>{t('matchSetup.phase')}</label>
-              <select className="w-140" value={phase} onChange={e => setPhase(e.target.value)}>
-                <option value="main">{t('matchSetup.mainDraw')}</option>
-                <option value="qualification">{t('matchSetup.qualification')}</option>
-              </select>
-            </div>
-            <div className="field">
-              <label>{t('matchSetup.round')}</label>
-              <select className="w-160" value={round} onChange={e => setRound(e.target.value)}>
-                <option value="pool">{t('matchSetup.poolPlay')}</option>
-                <option value="winner">{t('matchSetup.winnerBracket')}</option>
-                <option value="class">{t('matchSetup.classificationRound')}</option>
-                <option value="semifinals">{t('matchSetup.semifinals')}</option>
-                <option value="finals">{t('matchSetup.finals')}</option>
-              </select>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+              <div className="field">
+                <label>{t('matchSetup.gender')}</label>
+                <select style={{ width: '100%' }} value={type2} onChange={e => setType2(e.target.value)}>
+                  <option value="men">{t('matchSetup.men')}</option>
+                  <option value="women">{t('matchSetup.women')}</option>
+                </select>
+              </div>
+              <div className="field">
+                <label>{t('matchSetup.phase')}</label>
+                <select style={{ width: '100%' }} value={phase} onChange={e => setPhase(e.target.value)}>
+                  <option value="main">{t('matchSetup.mainDraw')}</option>
+                  <option value="qualification">{t('matchSetup.qualification')}</option>
+                </select>
+              </div>
+              <div className="field" style={{ gridColumn: 'span 2' }}>
+                <label>{t('matchSetup.round')}</label>
+                <select style={{ width: '100%' }} value={round} onChange={e => setRound(e.target.value)}>
+                  <option value="pool">{t('matchSetup.poolPlay')}</option>
+                  <option value="winner">{t('matchSetup.winnerBracket')}</option>
+                  <option value="class">{t('matchSetup.classificationRound')}</option>
+                  <option value="semifinals">{t('matchSetup.semifinals')}</option>
+                  <option value="finals">{t('matchSetup.finals')}</option>
+                </select>
+              </div>
             </div>
           </div>
-
         </div>
         {match && !match.test && match.gamePin && (
           <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center' }}>
@@ -3041,7 +3100,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                                 gamePin: match.gamePin,
                                 home: team1Name,
                                 team1ShortName: team1ShortName,
-                                away: team2Name,
+                                team2: team2Name,
                                 team2ShortName: team2ShortName,
                                 date: date,
                                 time: time,
@@ -3946,11 +4005,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                   <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)' }}>
                     {t('matchSetup.modals.successfullyImported')}
                   </div>
-                  {importSummaryModal.benchOfficials > 0 && (
-                    <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', marginTop: '8px' }}>
-                      {importSummaryModal.benchOfficials > 1 ? t('matchSetup.modals.benchOfficialsCountPlural', { count: importSummaryModal.benchOfficials }) : t('matchSetup.modals.benchOfficialsCount', { count: importSummaryModal.benchOfficials })}
-                    </div>
-                  )}
+
                 </div>
                 <div style={{
                   background: 'rgba(234, 179, 8, 0.1)',
@@ -4035,7 +4090,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             >
               <div style={{ padding: '16px', maxHeight: '70vh', overflowY: 'auto' }}>
                 {(() => {
-                  const roster = rosterPreview === 'team1' ? match?.pendingHomeRoster : match?.pendingAwayRoster
+                  const roster = rosterPreview === 'team1' ? match?.pendingHomeRoster : match?.pendingteam2Roster
                   if (!roster) return <p>{t('matchSetup.noRosterFound')}</p>
                   return (
                     <>
@@ -4064,33 +4119,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                           </tbody>
                         </table>
                       </div>
-                      {roster.bench && roster.bench.length > 0 && (
-                        <>
-                          <h3 style={{ marginTop: '16px', marginBottom: '12px', fontSize: '16px' }}>
-                            {t('matchSetup.benchOfficialsCount')}: {roster.bench.length}
-                          </h3>
-                          <div>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                              <thead>
-                                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
-                                  <th style={{ padding: '8px', textAlign: 'left' }}>{t('rosterSetup.role')}</th>
-                                  <th style={{ padding: '8px', textAlign: 'left' }}>{t('rosterSetup.lastName')}</th>
-                                  <th style={{ padding: '8px', textAlign: 'left' }}>{t('rosterSetup.firstName')}</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {roster.bench.map((b, i) => (
-                                  <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                                    <td style={{ padding: '6px 8px' }}>{b.role || ''}</td>
-                                    <td style={{ padding: '6px 8px' }}>{b.lastName || ''}</td>
-                                    <td style={{ padding: '6px 8px' }}>{b.firstName || ''}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </>
-                      )}
+                      
                     </>
                   )
                 })()}
@@ -4132,10 +4161,12 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
                   <button
                     onClick={() => {
+                      if (!TEST_TEAM_1) return
                       setTeam1Roster([...TEST_TEAM_1.players])
                       setTeam1Bench([])
                       if (!team1Name || team1Name === 'Home') setTeam1Name(TEST_TEAM_1.name)
                       if (!team1ShortName) setTeam1ShortName(TEST_TEAM_1.shortName)
+                      setTeam1Country(TEST_TEAM_1.country || '')
                       setTestRosterConfirm(null)
                     }}
                     style={{
@@ -4223,18 +4254,18 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             </button>
           </div>
         </div>
-        {/* Player Stats for Away Team */}
+        {/* Player Stats for team2 Team */}
         <div style={{ marginBottom: '12px', display: 'flex', gap: '12px' }}>
           {/* Player Stats */}
           {(() => {
             const team2CaptainForm = team2Roster.find(p => p.isCaptain)
-            const awayHasError = !team2CaptainForm || team2Roster.length !== 2
+            const team2HasError = !team2CaptainForm || team2Roster.length !== 2
             return (
               <div style={{
-                border: awayHasError ? '1px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.2)',
+                border: team2HasError ? '1px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.2)',
                 borderRadius: '8px',
                 padding: '12px',
-                background: awayHasError ? 'rgba(239, 68, 68, 0.15)' : 'rgba(15, 23, 42, 0.2)',
+                background: team2HasError ? 'rgba(239, 68, 68, 0.15)' : 'rgba(15, 23, 42, 0.2)',
                 flex: 1,
                 display: 'flex',
                 alignItems: 'center',
@@ -4484,7 +4515,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
             // If no changes, just go back to main view
             if (!hasChanges) {
-              console.log('[MatchSetup] No away roster changes, skipping sync')
+              console.log('[MatchSetup] No team2 roster changes, skipping sync')
               setCurrentView('main')
               return
             }
@@ -4493,14 +4524,14 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             const validationErrors = []
 
             // 1. Check exactly 2 players for beach volleyball (numbers are optional)
-            console.log('[MatchSetup] Away players count:', team2Roster.length)
+            console.log('[MatchSetup] team2 players count:', team2Roster.length)
             if (team2Roster.length !== 2) {
               validationErrors.push(`Beach volleyball requires exactly 2 players. Currently: ${team2Roster.length}`)
             }
 
             // 2. Check captain is set
             const hasCaptain = team2Roster.some(p => p.isCaptain)
-            console.log('[MatchSetup] Away has captain:', hasCaptain)
+            console.log('[MatchSetup] team2 has captain:', hasCaptain)
             if (!hasCaptain) {
               validationErrors.push(t('matchSetup.validation.noCaptain'))
             }
@@ -4509,14 +4540,14 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             const numbers = team2Roster.filter(p => p.number != null && p.number !== '').map(p => p.number)
             const duplicateNumbers = numbers.filter((num, idx) => numbers.indexOf(num) !== idx)
             if (duplicateNumbers.length > 0) {
-              console.log('[MatchSetup] Away duplicate numbers:', duplicateNumbers)
+              console.log('[MatchSetup] team2 duplicate numbers:', duplicateNumbers)
               validationErrors.push(t('matchSetup.validation.duplicateNumbers', { numbers: [...new Set(duplicateNumbers)].join(', ') }))
             }
 
             // 4. Check for invalid numbers (must be 1-99 if provided)
             const invalidNumbers = team2Roster.filter(p => p.number != null && p.number !== '' && (p.number < 1 || p.number > 99))
             if (invalidNumbers.length > 0) {
-              console.log('[MatchSetup] Away invalid numbers:', invalidNumbers.map(p => p.number))
+              console.log('[MatchSetup] team2 invalid numbers:', invalidNumbers.map(p => p.number))
               validationErrors.push(t('matchSetup.validation.invalidNumbers', { numbers: invalidNumbers.map(p => p.number).join(', ') }))
             }
 
@@ -4524,12 +4555,12 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
             // Show validation errors if any
             if (validationErrors.length > 0) {
-              console.log('[MatchSetup] Away roster validation errors:', validationErrors)
+              console.log('[MatchSetup] team2 roster validation errors:', validationErrors)
               setNoticeModal({ message: t('matchSetup.validation.fixIssues', { issues: validationErrors.join('\n• ') }) })
               return
             }
 
-            console.log('[MatchSetup] Away roster validation passed, saving...')
+            console.log('[MatchSetup] team2 roster validation passed, saving...')
 
             // Auto-set team name from player last names if both players have last names
             if (team2Roster.length === 2 && team2Roster[0]?.lastName && team2Roster[1]?.lastName) {
@@ -4537,7 +4568,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               setTeam2Name(newTeamName)
             }
 
-            // Save away team data to database if matchId exists
+            // Save team2 team data to database if matchId exists
             if (matchId && match?.team2Id) {
               const finalTeam2Name = team2Roster.length === 2 && team2Roster[0]?.lastName && team2Roster[1]?.lastName
                 ? getTeamDisplayName(team2Roster, 'team2', team2Country)
@@ -4593,25 +4624,25 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               const updateData = {
                 team2ShortName: team2ShortName || team2Name.substring(0, 3).toUpperCase(),
                 team2Country: team2Country || '',
-                bench_away: team2Bench  // Save bench officials to match record
+                bench_team2: team2Bench  // Save bench officials to match record
               }
 
               // Save current signatures (new or existing) to database
               if (team2CoachSignature) {
                 updateData.team2CoachSignature = team2CoachSignature
-                setSavedSignatures(prev => ({ ...prev, awayCoach: team2CoachSignature }))
-              } else if (savedSignatures.awayCoach) {
+                setSavedSignatures(prev => ({ ...prev, team2Coach: team2CoachSignature }))
+              } else if (savedSignatures.team2Coach) {
                 // Restore previously saved signature if current is empty (re-lock the team)
-                updateData.team2CoachSignature = savedSignatures.awayCoach
-                setTeam2CoachSignature(savedSignatures.awayCoach)
+                updateData.team2CoachSignature = savedSignatures.team2Coach
+                setTeam2CoachSignature(savedSignatures.team2Coach)
               }
               // Captain signatures are collected at coin toss
 
               await db.matches.update(matchId, updateData)
 
-              // Sync away team data to Supabase as JSONB
+              // Sync team2 team data to Supabase as JSONB
               if (match?.seed_key) {
-                const awayCoachSig = team2CoachSignature || savedSignatures.awayCoach || null
+                const team2CoachSig = team2CoachSignature || savedSignatures.team2Coach || null
                 await db.sync_queue.add({
                   resource: 'match',
                   action: 'update',
@@ -4620,14 +4651,14 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     // JSONB columns
                     team2_data: { name: finalTeam2Name?.trim() || '', short_name: team2ShortName || generateShortName(finalTeam2Name), color: team2Color, country: team2Country || '' },
                     // Captain signatures synced from CoinToss component
-                    players_away: team2Roster.filter(p => p.firstName || p.lastName).map(p => ({
+                    players_team2: team2Roster.filter(p => p.firstName || p.lastName).map(p => ({
                       number: p.number || null,
                       first_name: p.firstName || '',
                       last_name: p.lastName || '',
                       dob: formatDobForSync(p.dob),
                       is_captain: !!p.isCaptain
                     })),
-                    bench_away: team2Bench || []
+                    bench_team2: team2Bench || []
                   },
                   ts: new Date().toISOString(),
                   status: 'queued'
@@ -4644,7 +4675,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                   if (supabaseMatch?.id) {
                     const coinTossTeamA = match.coinTossTeamA || 'team1'
                     const homeIsTeamA = coinTossTeamA === 'team1'
-                    // Away is Team B if home is Team A, and vice versa
+                    // team2 is Team B if home is Team A, and vice versa
                     const colorKey = homeIsTeamA ? 'team_b_color' : 'team_a_color'
                     const shortKey = homeIsTeamA ? 'team_b_short' : 'team_a_short'
                     const nameKey = homeIsTeamA ? 'team_b_name' : 'team_a_name'
@@ -4658,14 +4689,14 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                         updated_at: new Date().toISOString()
                       })
                       .eq('match_id', supabaseMatch.id)
-                    console.log('[MatchSetup] Synced away team to match_live_state')
+                    console.log('[MatchSetup] Synced team2 team to match_live_state')
                   }
                 } catch (err) {
-                  console.debug('[MatchSetup] Could not sync away team to match_live_state:', err.message)
+                  console.debug('[MatchSetup] Could not sync team2 team to match_live_state:', err.message)
                 }
               }
 
-              setNoticeModal({ message: t('matchSetup.awaySaved'), type: 'success', syncing: true })
+              setNoticeModal({ message: t('matchSetup.team2Saved'), type: 'success', syncing: true })
 
               // Poll to check when sync completes
               const checkSyncStatus = async () => {
@@ -4677,10 +4708,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     const queued = await db.sync_queue.where('status').equals('queued').count()
                     if (queued === 0) {
                       clearInterval(interval)
-                      setNoticeModal({ message: t('matchSetup.awaySynced'), type: 'success' })
+                      setNoticeModal({ message: t('matchSetup.team2Synced'), type: 'success' })
                     } else if (attempts >= maxAttempts) {
                       clearInterval(interval)
-                      setNoticeModal({ message: t('matchSetup.awaySavedLocal'), type: 'success' })
+                      setNoticeModal({ message: t('matchSetup.team2SavedLocal'), type: 'success' })
                     }
                   } catch (err) {
                     clearInterval(interval)
@@ -4714,11 +4745,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)' }}>
                   {t('matchSetup.modals.successfullyImported')}
                 </div>
-                {importSummaryModal.benchOfficials > 0 && (
-                  <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', marginTop: '8px' }}>
-                    {importSummaryModal.benchOfficials > 1 ? t('matchSetup.modals.benchOfficialsCountPlural', { count: importSummaryModal.benchOfficials }) : t('matchSetup.modals.benchOfficialsCount', { count: importSummaryModal.benchOfficials })}
-                  </div>
-                )}
+              
               </div>
               <div style={{
                 background: 'rgba(234, 179, 8, 0.1)',
@@ -4799,7 +4826,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           >
             <div style={{ padding: '16px', maxHeight: '70vh', overflowY: 'auto' }}>
               {(() => {
-                const roster = rosterPreview === 'team1' ? match?.pendingHomeRoster : match?.pendingAwayRoster
+                const roster = rosterPreview === 'team1' ? match?.pendingHomeRoster : match?.pendingteam2Roster
                 if (!roster) return <p>{t('matchSetup.noRosterFound')}</p>
                 return (
                   <>
@@ -4828,33 +4855,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                         </tbody>
                       </table>
                     </div>
-                    {roster.bench && roster.bench.length > 0 && (
-                      <>
-                        <h3 style={{ marginTop: '16px', marginBottom: '12px', fontSize: '16px' }}>
-                          {t('matchSetup.benchOfficialsCount')}: {roster.bench.length}
-                        </h3>
-                        <div>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                            <thead>
-                              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
-                                <th style={{ padding: '8px', textAlign: 'left' }}>{t('rosterSetup.role')}</th>
-                                <th style={{ padding: '8px', textAlign: 'left' }}>{t('rosterSetup.lastName')}</th>
-                                <th style={{ padding: '8px', textAlign: 'left' }}>{t('rosterSetup.firstName')}</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {roster.bench.map((b, i) => (
-                                <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                                  <td style={{ padding: '6px 8px' }}>{b.role || ''}</td>
-                                  <td style={{ padding: '6px 8px' }}>{b.lastName || ''}</td>
-                                  <td style={{ padding: '6px 8px' }}>{b.firstName || ''}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </>
-                    )}
+                   
                   </>
                 )
               })()}
@@ -4894,10 +4895,12 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
                 <button
                   onClick={() => {
+                    if (!TEST_TEAM_2) return
                     setTeam2Roster([...TEST_TEAM_2.players])
                     setTeam2Bench([])
-                    if (!team2Name || team2Name === 'Away') setTeam2Name(TEST_TEAM_2.name)
+                    if (!team2Name || team2Name === 'team2') setTeam2Name(TEST_TEAM_2.name)
                     if (!team2ShortName) setTeam2ShortName(TEST_TEAM_2.shortName)
+                    setTeam2Country(TEST_TEAM_2.country || '')
                     setTestRosterConfirm(null)
                   }}
                   style={{
@@ -4925,7 +4928,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           </Modal>
         )}
 
-        {/* SignaturePad for away team view */}
+        {/* SignaturePad for team2 team view */}
         <SignaturePad
           open={openSignature !== null}
           onClose={() => setOpenSignature(null)}
@@ -5680,7 +5683,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                   // Validate date/time before going to coin toss
                   let scheduledAt
                   try {
-                    scheduledAt = createScheduledAt(date, time, { allowEmpty: false })
+                    // Convert dd.mm.yyyy to YYYY-MM-DD for createScheduledAt
+      let dateForCreate = date
+      if (date && /^\d{2}\.\d{2}\.\d{4}$/.test(date)) {
+        const [day, month, year] = date.split('.')
+        dateForCreate = `${year}-${month}-${day}`
+      }
+      scheduledAt = createScheduledAt(dateForCreate, time, { allowEmpty: false })
                   } catch (err) {
                     setNoticeModal({ message: `Invalid date/time: ${err.message}` })
                     return
@@ -5707,7 +5716,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                       { lj1: lineJudge1, lj2: lineJudge2, lj3: lineJudge3, lj4: lineJudge4 }
                     ),
                     bench_home: team1Bench,
-                    bench_away: team2Bench
+                    bench_team2: team2Bench
                   })
 
                   // Update teams if needed
@@ -5818,14 +5827,14 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         const maxPlayers = Math.max(team1Players.length, team2Players.length)
 
         const paddedHomePlayers = [...team1Players, ...Array(maxPlayers - team1Players.length).fill(null)]
-        const paddedAwayPlayers = [...team2Players, ...Array(maxPlayers - team2Players.length).fill(null)]
+        const paddedteam2Players = [...team2Players, ...Array(maxPlayers - team2Players.length).fill(null)]
 
         // Bench officials
         const homeBench = (team1Bench || []).filter(b => b.firstName || b.lastName || b.dob)
-        const awayBench = (team2Bench || []).filter(b => b.firstName || b.lastName || b.dob)
-        const maxBench = Math.max(homeBench.length, awayBench.length)
+        const team2Bench = (team2Bench || []).filter(b => b.firstName || b.lastName || b.dob)
+        const maxBench = Math.max(homeBench.length, team2Bench.length)
         const paddedHomeBench = [...homeBench, ...Array(maxBench - homeBench.length).fill(null)]
-        const paddedAwayBench = [...awayBench, ...Array(maxBench - awayBench.length).fill(null)]
+        const paddedteam2Bench = [...team2Bench, ...Array(maxBench - team2Bench.length).fill(null)]
 
         return (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginTop: 24 }}>
@@ -5881,7 +5890,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     </tr>
                   </thead>
                   <tbody>
-                    {paddedAwayPlayers.map((player, idx) => (
+                    {paddedteam2Players.map((player, idx) => (
                       <tr key={player ? `p-${idx}` : `empty-${idx}`}>
                         {player ? (
                           <>
@@ -6131,11 +6140,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)' }}>
                 {t('matchSetup.modals.successfullyImported')}
               </div>
-              {importSummaryModal.benchOfficials > 0 && (
-                <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', marginTop: '8px' }}>
-                  {importSummaryModal.benchOfficials > 1 ? t('matchSetup.modals.benchOfficialsCountPlural', { count: importSummaryModal.benchOfficials }) : t('matchSetup.modals.benchOfficialsCount', { count: importSummaryModal.benchOfficials })}
-                </div>
-              )}
+            
             </div>
 
             {/* Errors if any */}
@@ -6292,7 +6297,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 </div>
                 <div style={{ textAlign: 'center' }}>
                   <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '4px' }}>
-                    {t('matchSetup.awayBenchPinLabel')}
+                    {t('matchSetup.team2BenchPinLabel')}
                   </span>
                   <span style={{
                     fontSize: '18px',
@@ -6340,7 +6345,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       {/* Edit PIN Modal */}
       {editPinModal && (
         <Modal
-          title={editPinType === 'referee' ? t('matchSetup.modals.editRefereePin') : editPinType === 'team1Bench' ? t('matchSetup.modals.editHomeBenchPin') : t('matchSetup.modals.editAwayBenchPin')}
+          title={editPinType === 'referee' ? t('matchSetup.modals.editRefereePin') : editPinType === 'team1Bench' ? t('matchSetup.modals.editHomeBenchPin') : t('matchSetup.modals.editteam2BenchPin')}
           open={true}
           onClose={() => {
             setEditPinModal(false)
@@ -6432,10 +6437,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         open={openSignature !== null}
         onClose={() => setOpenSignature(null)}
         onSave={handleSignatureSave}
-        title={openSignature === 'team1-coach' ? 'Home Coach Signature' :
-          openSignature === 'team1-captain' ? 'Home Captain Signature' :
-            openSignature === 'team2-coach' ? 'Away Coach Signature' :
-              openSignature === 'team2-captain' ? 'Away Captain Signature' : 'Sign'}
+        title={openSignature === 'team1-captain' ? 'Home Captain Signature' :
+              openSignature === 'team2-captain' ? 'team2 Captain Signature' : 'Sign'}
       />
     </MatchSetupMainView>
   )

@@ -15,7 +15,13 @@
       "Bash(npm run dev:*)",
       "Bash(npx eslint:*)",
       "mcp__ide__getDiagnostics",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(npx tsc:*)",
+      "Bash(node -e:*)",
+      "Bash(awk:*)",
+      "Read(//home/luca-canepa/Desktop/Github/openbeach/escoresheet/frontend/**)",
+      "Bash(curl:*)"
     ]
-  }
+  },
+  "outputStyle": "default"
 }

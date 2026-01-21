@@ -189,81 +189,83 @@ export async function getMatchData(matchId) {
         .maybeSingle()
 
       // Build team info from matches table (prefer JSONB, fallback to old columns for transition)
-      const team1Name = match.home_team?.name || match.home_team_name || 'Home'
-      const team2Name = match.away_team?.name || match.away_team_name || 'Away'
+      const team1Name = match.home_team?.name || match.home_team_name || 'Team 1'
+      const team2Name = match.team2_team?.name || match.team2_team_name || 'Team 2'
 
       // A/B Model: Team A = coin toss winner (constant), side_a = which side they're on
-      // Determine coinTossTeamA: is Team A the home or away team?
+      // Determine coinTossTeamA: is Team A team1 or team2?
       let coinTossTeamA = null
-      let teamAIsHome = true
+      let teamAIsTeam1 = true
 
       if (liveState?.team_a_name) {
-        // Compare live state team_a_name with matches table to determine if Team A is home
-        teamAIsHome = liveState.team_a_name === team1Name
-        coinTossTeamA = teamAIsHome ? 'home' : 'away'
+        // Compare live state team_a_name with matches table to determine if Team A is team1
+        teamAIsTeam1 = liveState.team_a_name === team1Name
+        coinTossTeamA = teamAIsTeam1 ? 'team1' : 'team2'
       } else {
         // Fallback to coin_toss if live state doesn't have A/B data (prefer JSONB, fallback to old columns)
-        coinTossTeamA = match.coin_toss?.team_a || match.coin_toss_team_a || 'home'
-        teamAIsHome = coinTossTeamA === 'home'
+        const rawTeamA = match.coin_toss?.team_a || match.coin_toss_team_a || 'team1'
+        // Normalize legacy 'home'/'team2' to 'team1'/'team2'
+        coinTossTeamA = rawTeamA === 'home' ? 'team1' : rawTeamA === 'team2' ? 'team2' : rawTeamA
+        teamAIsTeam1 = coinTossTeamA === 'team1'
       }
 
-      // Determine which side is home based on side_a
+      // Determine which side is team1 based on side_a
       // side_a = 'left' means Team A is on left, side_a = 'right' means Team A is on right
       const sideA = liveState?.side_a || 'left'
-      const leftIsHome = (sideA === 'left') === teamAIsHome
+      const leftIsTeam1 = (sideA === 'left') === teamAIsTeam1
 
       // Build team info with live state colors
-      const homeColorFromLive = liveState ? (teamAIsHome ? liveState.team_a_color : liveState.team_b_color) : null
-      const awayColorFromLive = liveState ? (teamAIsHome ? liveState.team_b_color : liveState.team_a_color) : null
+      const team1ColorFromLive = liveState ? (teamAIsTeam1 ? liveState.team_a_color : liveState.team_b_color) : null
+      const team2ColorFromLive = liveState ? (teamAIsTeam1 ? liveState.team_b_color : liveState.team_a_color) : null
 
       const team1 = {
         name: team1Name,
-        shortName: match.home_team?.short_name || match.home_short_name || 'HOM',
-        color: homeColorFromLive || match.home_team?.color || '#ef4444'
+        shortName: match.home_team?.short_name || match.home_short_name || 'T1',
+        color: team1ColorFromLive || match.home_team?.color || '#ef4444'
       }
       const team2 = {
         name: team2Name,
-        shortName: match.away_team?.short_name || match.away_short_name || 'AWY',
-        color: awayColorFromLive || match.away_team?.color || '#3b82f6'
+        shortName: match.team2_team?.short_name || match.team2_short_name || 'T2',
+        color: team2ColorFromLive || match.team2_team?.color || '#3b82f6'
       }
 
       // Build sets from live state using A/B model
       let sets = []
       if (liveState) {
-        // Convert A/B points to home/away
-        const team1Points = teamAIsHome ? liveState.points_a : liveState.points_b
-        const team2Points = teamAIsHome ? liveState.points_b : liveState.points_a
+        // Convert A/B points to team1/team2
+        const team1Points = teamAIsTeam1 ? liveState.points_a : liveState.points_b
+        const team2Points = teamAIsTeam1 ? liveState.points_b : liveState.points_a
 
         // Determine serving team - priority: serving_team field, then lineup isServing
-        let servingTeam = 'home'
+        let servingTeam = 'team1'
         let serverNumber = null
 
         const lineupA = liveState.lineup_a
         const lineupB = liveState.lineup_b
 
         // First priority: use serving_team from live state (set by manual changes or score events)
-        // serving_team stores 'left' or 'right', convert to 'home'/'away'
+        // serving_team stores 'left' or 'right', convert to 'team1'/'team2'
         if (liveState.serving_team) {
           const servingSide = liveState.serving_team // 'left' or 'right'
-          // leftIsHome tells us if home is on left
-          servingTeam = (servingSide === 'left') === leftIsHome ? 'home' : 'away'
+          // leftIsTeam1 tells us if team1 is on left
+          servingTeam = (servingSide === 'left') === leftIsTeam1 ? 'team1' : 'team2'
           // Get server number from the serving team's lineup position I
-          // If serving home and Team A is home, use lineupA. Otherwise use lineupB.
-          const servingTeamIsA = (servingTeam === 'home') === teamAIsHome
+          // If serving team1 and Team A is team1, use lineupA. Otherwise use lineupB.
+          const servingTeamIsA = (servingTeam === 'team1') === teamAIsTeam1
           const servingTeamLineup = servingTeamIsA ? lineupA : lineupB
           serverNumber = servingTeamLineup?.I?.number || null
-          console.log('[serverDataSync] Using serving_team field:', { servingSide, leftIsHome, servingTeam, serverNumber })
+          console.log('[serverDataSync] Using serving_team field:', { servingSide, leftIsTeam1, servingTeam, serverNumber })
         } else if (lineupA?.I?.isServing) {
           // Fallback: Rich format with serving info in position I (isServing field)
-          servingTeam = teamAIsHome ? 'home' : 'away'
+          servingTeam = teamAIsTeam1 ? 'team1' : 'team2'
           serverNumber = lineupA.I.number
           console.log('[serverDataSync] Using lineupA.I.isServing:', { servingTeam, serverNumber })
         } else if (lineupB?.I?.isServing) {
-          servingTeam = teamAIsHome ? 'away' : 'home'
+          servingTeam = teamAIsTeam1 ? 'team2' : 'team1'
           serverNumber = lineupB.I.number
           console.log('[serverDataSync] Using lineupB.I.isServing:', { servingTeam, serverNumber })
         } else {
-          console.log('[serverDataSync] No serving info found, defaulting to home')
+          console.log('[serverDataSync] No serving info found, defaulting to team1')
         }
 
         const currentSet = {
@@ -277,8 +279,8 @@ export async function getMatchData(matchId) {
         sets = [currentSet]
 
         // Set scores
-        const team1SetsWon = teamAIsHome ? liveState.sets_won_a : liveState.sets_won_b
-        const team2SetsWon = teamAIsHome ? liveState.sets_won_b : liveState.sets_won_a
+        const team1SetsWon = teamAIsTeam1 ? liveState.sets_won_a : liveState.sets_won_b
+        const team2SetsWon = teamAIsTeam1 ? liveState.sets_won_b : liveState.sets_won_a
         // We only have set counts, not individual set scores - this is a limitation
       } else {
         // No live state yet (before first point) - create empty set 1
@@ -296,7 +298,7 @@ export async function getMatchData(matchId) {
             setIndex: liveState.current_set || 1,
             seq: 1,
             payload: {
-              team: teamAIsHome ? 'home' : 'away',
+              team: teamAIsTeam1 ? 'team1' : 'team2',
               lineup: liveState.lineup_a,
               isRichFormat: true
             }
@@ -308,7 +310,7 @@ export async function getMatchData(matchId) {
             setIndex: liveState.current_set || 1,
             seq: 1.1,
             payload: {
-              team: teamAIsHome ? 'away' : 'home',
+              team: teamAIsTeam1 ? 'team2' : 'team1',
               lineup: liveState.lineup_b,
               isRichFormat: true
             }
@@ -323,7 +325,7 @@ export async function getMatchData(matchId) {
               setIndex: liveState.current_set || 1,
               ts: sanction.ts,
               payload: {
-                team: teamAIsHome ? 'home' : 'away',
+                team: teamAIsTeam1 ? 'team1' : 'team2',
                 playerNumber: sanction.player,
                 type: sanction.type,
                 playerType: sanction.playerType, // 'player', 'bench', 'libero', 'official'
@@ -340,46 +342,12 @@ export async function getMatchData(matchId) {
               setIndex: liveState.current_set || 1,
               ts: sanction.ts,
               payload: {
-                team: teamAIsHome ? 'away' : 'home',
+                team: teamAIsTeam1 ? 'team2' : 'team1',
                 playerNumber: sanction.player,
                 type: sanction.type,
                 playerType: sanction.playerType,
                 position: sanction.position,
                 role: sanction.role
-              }
-            })
-          }
-        }
-
-        // Build substitution events from live state (if stored as JSONB arrays)
-        if (Array.isArray(liveState.subs_a)) {
-          for (const sub of liveState.subs_a) {
-            events.push({
-              type: 'substitution',
-              setIndex: liveState.current_set || 1,
-              ts: sub.ts,
-              payload: {
-                team: teamAIsHome ? 'home' : 'away',
-                playerIn: sub.playerIn,
-                playerOut: sub.playerOut,
-                position: sub.position,
-                exceptional: sub.exceptional || false
-              }
-            })
-          }
-        }
-        if (Array.isArray(liveState.subs_b)) {
-          for (const sub of liveState.subs_b) {
-            events.push({
-              type: 'substitution',
-              setIndex: liveState.current_set || 1,
-              ts: sub.ts,
-              payload: {
-                team: teamAIsHome ? 'away' : 'home',
-                playerIn: sub.playerIn,
-                playerOut: sub.playerOut,
-                position: sub.position,
-                exceptional: sub.exceptional || false
               }
             })
           }
@@ -393,7 +361,7 @@ export async function getMatchData(matchId) {
               setIndex: liveState.current_set || 1,
               ts: timeout.ts,
               payload: {
-                team: teamAIsHome ? 'home' : 'away'
+                team: teamAIsTeam1 ? 'team1' : 'team2'
               }
             })
           }
@@ -404,7 +372,7 @@ export async function getMatchData(matchId) {
               type: 'timeout',
               setIndex: liveState.current_set || 1,
               payload: {
-                team: teamAIsHome ? 'home' : 'away'
+                team: teamAIsTeam1 ? 'team1' : 'team2'
               }
             })
           }
@@ -416,7 +384,7 @@ export async function getMatchData(matchId) {
               setIndex: liveState.current_set || 1,
               ts: timeout.ts,
               payload: {
-                team: teamAIsHome ? 'away' : 'home'
+                team: teamAIsTeam1 ? 'team2' : 'team1'
               }
             })
           }
@@ -427,7 +395,7 @@ export async function getMatchData(matchId) {
               type: 'timeout',
               setIndex: liveState.current_set || 1,
               payload: {
-                team: teamAIsHome ? 'away' : 'home'
+                team: teamAIsTeam1 ? 'team2' : 'team1'
               }
             })
           }
@@ -436,7 +404,7 @@ export async function getMatchData(matchId) {
 
       // Build players from matches table JSONB columns
       const team1Players = match.players_home || []
-      const team2Players = match.players_away || []
+      const team2Players = match.players_team2 || []
 
       // Extract captain info from rich lineup format
       let team1Captain = null
@@ -444,14 +412,14 @@ export async function getMatchData(matchId) {
       let team1CourtCaptain = null
       let team2CourtCaptain = null
 
-      const homeLineup = teamAIsHome ? liveState?.lineup_a : liveState?.lineup_b
-      const awayLineup = teamAIsHome ? liveState?.lineup_b : liveState?.lineup_a
+      const team1Lineup = teamAIsTeam1 ? liveState?.lineup_a : liveState?.lineup_b
+      const team2Lineup = teamAIsTeam1 ? liveState?.lineup_b : liveState?.lineup_a
 
       for (const pos of ['I', 'II', 'III', 'IV', 'V', 'VI']) {
-        if (homeLineup?.[pos]?.isCaptain) team1Captain = homeLineup[pos].number
-        if (homeLineup?.[pos]?.isCourtCaptain) team1CourtCaptain = homeLineup[pos].number
-        if (awayLineup?.[pos]?.isCaptain) team2Captain = awayLineup[pos].number
-        if (awayLineup?.[pos]?.isCourtCaptain) team2CourtCaptain = awayLineup[pos].number
+        if (team1Lineup?.[pos]?.isCaptain) team1Captain = team1Lineup[pos].number
+        if (team1Lineup?.[pos]?.isCourtCaptain) team1CourtCaptain = team1Lineup[pos].number
+        if (team2Lineup?.[pos]?.isCaptain) team2Captain = team2Lineup[pos].number
+        if (team2Lineup?.[pos]?.isCourtCaptain) team2CourtCaptain = team2Lineup[pos].number
       }
 
       return {
@@ -462,18 +430,18 @@ export async function getMatchData(matchId) {
           // Use liveState.match_status if available (reflects actual game state)
           status: liveState?.match_status || match.status,
           coinTossTeamA: coinTossTeamA, // Derived from live state if not in matches table
-          coinTossTeamB: coinTossTeamA === 'home' ? 'away' : 'home',
+          coinTossTeamB: coinTossTeamA === 'team1' ? 'team2' : 'team1',
           coinTossServeA: match.coin_toss?.serve_a ?? match.coin_toss_serve_a,
           firstServe: match.coin_toss?.first_serve || match.first_serve,
           // coin_toss_confirmed = true if we have liveState with team names (means coin toss happened)
           coin_toss_confirmed: !!(liveState?.team_a_name),
           // Get short names from JSONB, or fallback to old columns
           team1ShortName: match.home_team?.short_name || match.home_short_name || team1.shortName,
-          team2ShortName: match.away_team?.short_name || match.away_short_name || team2.shortName,
-          homeName: team1.name,
-          awayName: team2.name,
-          homeColor: team1.color,
-          awayColor: team2.color,
+          team2ShortName: match.team2_team?.short_name || match.team2_short_name || team2.shortName,
+          team1Name: team1.name,
+          team2Name: team2.name,
+          team1Color: team1.color,
+          team2Color: team2.color,
           // Captain info
           team1Captain: team1Captain || null,
           team2Captain: team2Captain || null,
@@ -727,7 +695,7 @@ export function subscribeToMatchData(matchId, onUpdate) {
               }
             })
           } else if (message.type === 'match-action' && String(message.matchId) === matchIdStr) {
-            // Action received from scoreboard (timeout, substitution, set_end, etc.)
+            // Action received from scoreboard (timeout, set_end, etc.)
             connection.subscribers.forEach(subscriber => {
               try {
                 // Pass the action with a special _action wrapper, including timestamps for latency tracking
@@ -972,7 +940,7 @@ export async function listAvailableMatchesSupabase() {
         status,
         scheduled_at,
         home_team,
-        away_team,
+        team2_team,
         connections,
         connection_pins
       `)
@@ -1011,8 +979,8 @@ export async function listAvailableMatchesSupabase() {
       }
 
       // Read from JSONB columns only (clean schema)
-      const team1Name = m.home_team?.name || 'Home'
-      const team2Name = m.away_team?.name || 'Away'
+      const team1Name = m.home_team?.name || 'Team 1'
+      const team2Name = m.team2_team?.name || 'Team 2'
       const connections = m.connections || {}
       const connectionPins = m.connection_pins || {}
 
@@ -1030,7 +998,7 @@ export async function listAvailableMatchesSupabase() {
         refereeConnectionEnabled: connections.referee_enabled === true,
         // Include upload PINs for roster upload app
         team1UploadPin: connectionPins.upload_home,
-        team2UploadPin: connectionPins.upload_away
+        team2UploadPin: connectionPins.upload_team2
       }
     })
 
@@ -1060,7 +1028,7 @@ export async function listAvailableMatchesForBenchSupabase() {
         status,
         scheduled_at,
         home_team,
-        away_team,
+        team2_team,
         connections,
         connection_pins
       `)
@@ -1075,7 +1043,7 @@ export async function listAvailableMatchesForBenchSupabase() {
     // Filter to only show matches where at least one bench connection is enabled
     const filteredData = (data || []).filter(m => {
       const connections = m.connections || {}
-      return connections.home_bench_enabled === true || connections.away_bench_enabled === true
+      return connections.home_bench_enabled === true || connections.team2_bench_enabled === true
     })
 
     // Format to match the WebSocket server format
@@ -1098,8 +1066,8 @@ export async function listAvailableMatchesForBenchSupabase() {
       }
 
       // Read from JSONB columns only (clean schema)
-      const team1Name = m.home_team?.name || 'Home'
-      const team2Name = m.away_team?.name || 'Away'
+      const team1Name = m.home_team?.name || 'Team 1'
+      const team2Name = m.team2_team?.name || 'Team 2'
       const connections = m.connections || {}
       const connectionPins = m.connection_pins || {}
 
@@ -1114,9 +1082,9 @@ export async function listAvailableMatchesForBenchSupabase() {
         scheduledAt: m.scheduled_at,
         dateTime,
         homeBenchEnabled: connections.home_bench_enabled,
-        awayBenchEnabled: connections.away_bench_enabled,
+        team2BenchEnabled: connections.team2_bench_enabled,
         team1Pin: connectionPins.bench_home,
-        team2Pin: connectionPins.bench_away,
+        team2Pin: connectionPins.bench_team2,
         status: m.status
       }
     })
@@ -1150,7 +1118,7 @@ export async function validatePinSupabase(pin, type = 'referee') {
         status,
         scheduled_at,
         home_team,
-        away_team,
+        team2_team,
         connections,
         connection_pins
       `)
@@ -1170,8 +1138,8 @@ export async function validatePinSupabase(pin, type = 'referee') {
         return connectionPins.referee === pinStr && connections.referee_enabled
       } else if (type === 'bench_home') {
         return connectionPins.bench_home === pinStr && connections.home_bench_enabled
-      } else if (type === 'bench_away') {
-        return connectionPins.bench_away === pinStr && connections.away_bench_enabled
+      } else if (type === 'bench_team2') {
+        return connectionPins.bench_team2 === pinStr && connections.team2_bench_enabled
       }
       return false
     })
@@ -1189,10 +1157,10 @@ export async function validatePinSupabase(pin, type = 'referee') {
       status: matchData.status,
       scheduledAt: matchData.scheduled_at,
       refereeConnectionEnabled: connections.referee_enabled,
-      team1: matchData.home_team?.name || 'Home',
-      team2: matchData.away_team?.name || 'Away',
+      team1: matchData.home_team?.name || 'Team 1',
+      team2: matchData.team2_team?.name || 'Team 2',
       team1Color: matchData.home_team?.color,
-      team2Color: matchData.away_team?.color
+      team2Color: matchData.team2_team?.color
     }
 
     return { success: true, match }

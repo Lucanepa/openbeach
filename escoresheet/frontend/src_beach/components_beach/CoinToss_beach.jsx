@@ -3,9 +3,9 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useAlert } from '../contexts_beach/AlertContext_beach'
 import { db } from '../db_beach/db_beach'
 import { supabase } from '../lib_beach/supabaseClient_beach'
-import SignaturePad from './SignaturePad'
-import Modal from './Modal'
-import MenuList from './MenuList'
+import SignaturePad from './SignaturePad_beach'
+import Modal from './Modal_beach'
+import MenuList from './MenuList_beach'
 // Beach volleyball ball image
 const ballImage = '/beachball.png'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
@@ -127,6 +127,9 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
   const [team2Name, setTeam2Name] = useState('Team 2')
   const [team1ShortName, setTeam1ShortName] = useState('')
   const [team2ShortName, setTeam2ShortName] = useState('')
+  // Colors loaded from team entities
+  const [team1ColorState, setTeam1ColorState] = useState(null)
+  const [team2ColorState, setTeam2ColorState] = useState(null)
 
   // Rosters
   const [team1Roster, setTeam1Roster] = useState([])
@@ -149,6 +152,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
   const [teamB, setTeamB] = useState('team2')
   const [serveA, setServeA] = useState(true)
   const [serveB, setServeB] = useState(false)
+  const [coinTossWinner, setCoinTossWinner] = useState('team1') // Which team won the coin toss
 
   // First serve player within each team (beach volleyball)
   const [team1FirstServe, setTeam1FirstServe] = useState(null) // player number
@@ -163,15 +167,15 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
   const [initModal, setInitModal] = useState(null) // { status: 'syncing' | 'verifying' | 'success' | 'error', message: string }
   const [openSignature, setOpenSignature] = useState(null)
   const [birthdateConfirmModal, setBirthdateConfirmModal] = useState(null) // { suspiciousDates: [], onConfirm: fn }
-  const [rosterModalSignature, setRosterModalSignature] = useState(null) // 'coach' | 'captain' | null - for signing within roster modal
+  const [rosterModalSignature, setRosterModalSignature] = useState(null) // 'captain' | null - for signing within roster modal (beach volleyball: captain only, no coach)
 
   // Track original roster data when modal opens for change detection
   const originalRosterDataRef = useRef(null) // { roster: [] }
 
-  // Signatures
-  const [team1CoachSignature, setTeam1CoachSignature] = useState(null)
+  // Signatures (beach volleyball: captain only, no coach)
+  const [team1CoachSignature, setTeam1CoachSignature] = useState(null) // Stub for legacy compatibility
   const [team1CaptainSignature, setTeam1CaptainSignature] = useState(null)
-  const [team2CoachSignature, setTeam2CoachSignature] = useState(null)
+  const [team2CoachSignature, setTeam2CoachSignature] = useState(null) // Stub for legacy compatibility
   const [team2CaptainSignature, setTeam2CaptainSignature] = useState(null)
   const [savedSignatures, setSavedSignatures] = useState({
     team1Coach: null, team1Captain: null, team2Coach: null, team2Captain: null
@@ -324,9 +328,10 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
     }
   }, [matchId])
 
-  // Colors are derived from match - no local state (can't change in CoinToss)
-  const team1Color = match?.team1Color || '#ef4444'
-  const team2Color = match?.team2Color || '#3b82f6'
+  // Colors are derived from match or team entities (loaded in useEffect)
+  // Priority: state (loaded from team) > match.team1Color > default
+  const team1Color = team1ColorState || match?.team1Color || '#ef4444'
+  const team2Color = team2ColorState || match?.team2Color || '#3b82f6'
 
   // Check if coin toss was previously confirmed
   // Use the dedicated coinTossConfirmed field instead of signature comparison
@@ -347,20 +352,15 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           match.team2Id ? db.teams.get(match.team2Id) : null
         ])
 
-        if (team1Data) {
-          setTeam1Name(team1Data.name || 'Team 1')
-          // Use team shortName, or match-level shortName as fallback
-          setTeam1ShortName(team1Data.shortName || match.team1ShortName || '')
-        } else if (match.team1ShortName) {
-          setTeam1ShortName(match.team1ShortName)
-        }
-        if (team2Data) {
-          setTeam2Name(team2Data.name || 'Team 2')
-          // Use team shortName, or match-level shortName as fallback
-          setTeam2ShortName(team2Data.shortName || match.team2ShortName || '')
-        } else if (match.team2ShortName) {
-          setTeam2ShortName(match.team2ShortName)
-        }
+        // Store shortNames from team data (will be used as fallback)
+        const team1StoredShortName = team1Data?.shortName || match.team1ShortName || ''
+        const team2StoredShortName = team2Data?.shortName || match.team2ShortName || ''
+        setTeam1ShortName(team1StoredShortName)
+        setTeam2ShortName(team2StoredShortName)
+
+        // Store colors from team data (to override defaults)
+        if (team1Data?.color) setTeam1ColorState(team1Data.color)
+        if (team2Data?.color) setTeam2ColorState(team2Data.color)
 
         // Load rosters
         const [team1Players, team2Players] = await Promise.all([
@@ -368,24 +368,52 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           match.team2Id ? db.players.where('teamId').equals(match.team2Id).toArray() : []
         ])
 
+        // Helper to generate beach volleyball team name from players: "LastName1/LastName2 (COUNTRY)"
+        const generateBeachTeamName = (players, country) => {
+          if (!players || players.length === 0) return null
+          const sorted = [...players].sort((a, b) => (a.number || 999) - (b.number || 999))
+          const lastNames = sorted.map(p => p.lastName || '').filter(n => n)
+          if (lastNames.length === 0) return null
+          const namesPart = lastNames.join('/')
+          return country ? `${namesPart} (${country})` : namesPart
+        }
+
         if (team1Players.length) {
-          setTeam1Roster(team1Players.map(p => ({
+          const sortedTeam1 = team1Players.map(p => ({
             number: p.number,
             lastName: p.lastName || (p.name ? p.name.split(' ')[0] : ''),
             firstName: p.firstName || (p.name ? p.name.split(' ').slice(1).join(' ') : ''),
             dob: normalizeDob(p.dob) || '',
             isCaptain: p.isCaptain || false
-          })).sort((a, b) => (a.number || 999) - (b.number || 999)))
+          })).sort((a, b) => (a.number || 999) - (b.number || 999))
+          setTeam1Roster(sortedTeam1)
+          // Generate team name from player last names
+          const generatedName = generateBeachTeamName(sortedTeam1, match.team1Country)
+          setTeam1Name(generatedName || team1Data?.name || 'Team 1')
+          // Default first serve to player 1 (or first player's number)
+          const player1 = sortedTeam1.find(p => p.number === 1) || sortedTeam1[0]
+          if (player1) setTeam1FirstServe(player1.number)
+        } else {
+          setTeam1Name(team1Data?.name || 'Team 1')
         }
 
         if (team2Players.length) {
-          setTeam2Roster(team2Players.map(p => ({
+          const sortedTeam2 = team2Players.map(p => ({
             number: p.number,
             lastName: p.lastName || (p.name ? p.name.split(' ')[0] : ''),
             firstName: p.firstName || (p.name ? p.name.split(' ').slice(1).join(' ') : ''),
             dob: normalizeDob(p.dob) || '',
             isCaptain: p.isCaptain || false
-          })).sort((a, b) => (a.number || 999) - (b.number || 999)))
+          })).sort((a, b) => (a.number || 999) - (b.number || 999))
+          setTeam2Roster(sortedTeam2)
+          // Generate team name from player last names
+          const generatedName = generateBeachTeamName(sortedTeam2, match.team2Country)
+          setTeam2Name(generatedName || team2Data?.name || 'Team 2')
+          // Default first serve to player 1 (or first player's number)
+          const player1 = sortedTeam2.find(p => p.number === 1) || sortedTeam2[0]
+          if (player1) setTeam2FirstServe(player1.number)
+        } else {
+          setTeam2Name(team2Data?.name || 'Team 2')
         }
 
         // Load coin toss data if previously saved
@@ -394,6 +422,10 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           setTeamB(match.coinTossTeamB)
           setServeA(match.coinTossServeA !== undefined ? match.coinTossServeA : true)
           setServeB(match.coinTossServeB !== undefined ? match.coinTossServeB : false)
+        }
+        // Load coin toss winner if previously saved
+        if (match.coinTossWinner) {
+          setCoinTossWinner(match.coinTossWinner)
         }
 
         // Load signatures
@@ -464,10 +496,13 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
       // Build update object
       const updateData = {
         firstServe: firstServeTeam,
+        team1FirstServePlayer: team1FirstServe,
+        team2FirstServePlayer: team2FirstServe,
         coinTossTeamA: teamA,
         coinTossTeamB: teamB,
         coinTossServeA: serveA,
         coinTossServeB: serveB,
+        coinTossWinner: coinTossWinner,  // Which team won the coin toss
         coinTossConfirmed: true  // Mark coin toss as confirmed
       }
 
@@ -498,7 +533,8 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
             teamB: teamB,
             serveA: serveA,
             serveB: serveB,
-            firstServe: firstServeTeam
+            firstServe: firstServeTeam,
+            coinTossWinner: coinTossWinner
           },
           ts: new Date().toISOString(),
           seq: 1
@@ -526,7 +562,8 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               teamB: teamB,
               serveA: serveA,
               serveB: serveB,
-              firstServe: firstServeTeam
+              firstServe: firstServeTeam,
+              coinTossWinner: coinTossWinner
             },
             seq: 1,
             test: !!match?.test,
@@ -553,7 +590,8 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               team_b: teamB,
               serve_a: serveA,
               confirmed: true,
-              first_serve: firstServeTeam
+              first_serve: firstServeTeam,
+              winner: coinTossWinner
             },
             team1: { name: team1Name, short_name: team1ShortName || generateShortName(team1Name), color: team1Color },
             team2: { name: team2Name, short_name: team2ShortName || generateShortName(team2Name), color: team2Color },
@@ -670,7 +708,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           match_id: match.seed_key, // Use seed_key (external_id) for Supabase lookup
           index: 1,
           home_points: 0,
-          away_points: 0,
+          team2_points: 0,
           finished: false,
           test: isTest,
           start_time: new Date().toISOString()
@@ -696,24 +734,16 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           current_set: 1, // Match starts at set 1
           // Officials as JSONB
           officials: match?.officials || [],
-          // Connections JSONB - include both referee and bench settings
+          // Connections JSONB - include referee settings
           connections: {
-            referee_enabled: match?.refereeConnectionEnabled === true,
-            home_bench_enabled: match?.team1DataConnectionEnabled === true,
-            away_bench_enabled: match?.team2DataConnectionEnabled === true
-          },
-          // Connection PINs JSONB - include both referee and bench PINs
-          connection_pins: {
-            referee: match?.refereePin || '',
-            bench_home: match?.team1DataPin || '',
-            bench_away: match?.team2DataPin || ''
+            referee_enabled: match?.refereeConnectionEnabled === true
           },
           // Signatures JSONB
           signatures: !match?.test ? {
             home_coach: team1CoachSignature || '',
             home_captain: team1CaptainSignature || '',
-            away_coach: team2CoachSignature || '',
-            away_captain: team2CaptainSignature || ''
+            team2_coach: team2CoachSignature || '',
+            team2_captain: team2CaptainSignature || ''
           } : {}
         },
         ts: new Date().toISOString(),
@@ -1178,6 +1208,23 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               {getDisplayName(teamAInfo.name)}
             </div>
           </div>
+          {/* Coin Toss Winner Toggle for Team A */}
+          <button
+            onClick={() => setCoinTossWinner(teamA)}
+            style={{
+              padding: '6px 12px',
+              marginBottom: isCompact ? 8 : 12,
+              fontSize: '13px',
+              fontWeight: 600,
+              background: coinTossWinner === teamA ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255, 255, 255, 0.1)',
+              border: coinTossWinner === teamA ? '2px solid #22c55e' : '1px solid rgba(255, 255, 255, 0.2)',
+              borderRadius: '8px',
+              color: coinTossWinner === teamA ? '#22c55e' : 'var(--muted)',
+              cursor: 'pointer'
+            }}
+          >
+            {coinTossWinner === teamA ? 'Toss Won ✓' : 'Toss Won'}
+          </button>
 
           <div style={{ marginBottom: isCompact ? 12 : 16, display: 'flex', justifyContent: 'center', height: sizes.volleyballSize, alignItems: 'center' }}>
             {serveA ? volleyballImage : volleyballPlaceholder}
@@ -1227,6 +1274,23 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               {getDisplayName(teamBInfo.name)}
             </div>
           </div>
+          {/* Coin Toss Winner Toggle for Team B */}
+          <button
+            onClick={() => setCoinTossWinner(teamB)}
+            style={{
+              padding: '6px 12px',
+              marginBottom: isCompact ? 8 : 12,
+              fontSize: '13px',
+              fontWeight: 600,
+              background: coinTossWinner === teamB ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255, 255, 255, 0.1)',
+              border: coinTossWinner === teamB ? '2px solid #22c55e' : '1px solid rgba(255, 255, 255, 0.2)',
+              borderRadius: '8px',
+              color: coinTossWinner === teamB ? '#22c55e' : 'var(--muted)',
+              cursor: 'pointer'
+            }}
+          >
+            {coinTossWinner === teamB ? 'Toss Won ✓' : 'Toss Won'}
+          </button>
 
           <div style={{ marginBottom: isCompact ? 12 : 16, display: 'flex', justifyContent: 'center', height: sizes.volleyballSize, alignItems: 'center' }}>
             {serveB ? volleyballImage : volleyballPlaceholder}
@@ -1368,12 +1432,23 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                   const team1PlayersData = team1Roster.length > 0 ? team1Roster : team1PlayersRaw || []
                   const team2PlayersData = team2Roster.length > 0 ? team2Roster : team2PlayersRaw || []
 
+                  // Normalize team keys for scoresheet (team1 -> team_1)
+                  const normalizeTeamKey = (key) => key ? key.replace('team1', 'team_1').replace('team2', 'team_2') : key
                   const scoresheetData = {
                     match: {
                       ...match,
                       // Add underscore versions for scoresheet compatibility
                       team_1Country: match.team1Country || '',
-                      team_2Country: match.team2Country || ''
+                      team_2Country: match.team2Country || '',
+                      // Normalize coinTossTeamA/B for scoresheet
+                      coinTossTeamA: normalizeTeamKey(match.coinTossTeamA || teamA),
+                      coinTossTeamB: normalizeTeamKey(match.coinTossTeamB || teamB),
+                      // Build coinTossData for scoresheet compatibility
+                      coinTossData: {
+                        coinTossWinner: normalizeTeamKey(match.coinTossWinner || coinTossWinner),
+                        teamA: normalizeTeamKey(match.coinTossTeamA || teamA),
+                        teamB: normalizeTeamKey(match.coinTossTeamB || teamB)
+                      }
                     },
                     team_1Team: team1Data,
                     team_2Team: team2Data,
@@ -1433,10 +1508,8 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           roster
         )
 
-        // Get signature state for this team
-        const coachSig = currentTeam === 'team1' ? team1CoachSignature : team2CoachSignature
+        // Get signature state for this team (beach volleyball: captain only, no coach)
         const captainSig = currentTeam === 'team1' ? team1CaptainSignature : team2CaptainSignature
-        const setCoachSig = currentTeam === 'team1' ? setTeam1CoachSignature : setTeam2CoachSignature
         const setCaptainSig = currentTeam === 'team1' ? setTeam1CaptainSignature : setTeam2CaptainSignature
 
         // Handle close/modify
@@ -1582,18 +1655,10 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                 </table>
               </div>
 
-              {/* Signatures Section */}
+              {/* Signatures Section - Beach volleyball: captain only, no coach */}
               <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 16, marginTop: 16 }}>
-                <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600 }}>Signatures</h4>
+                <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600 }}>Captain Signature</h4>
                 <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    className={`sign ${coachSig ? 'signed' : ''}`}
-                    onClick={() => setRosterModalSignature('coach')}
-                    style={{ padding: '8px 16px', fontSize: '13px', flex: 1, minWidth: '120px' }}
-                  >
-                    Coach {coachSig ? '✓' : ''}
-                  </button>
                   <button
                     type="button"
                     className={`sign ${captainSig ? 'signed' : ''}`}
@@ -1616,19 +1681,15 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                     border: '1px solid rgba(255,255,255,0.1)', maxWidth: '90vw'
                   }}>
                     <h3 style={{ margin: '0 0 12px 0' }}>
-                      {`${rosterModalSignature === 'coach' ? 'Coach' : 'Captain'} Signature - ${teamInfo.name}`}
+                      {`Captain Signature - ${teamInfo.name}`}
                     </h3>
                     <SignaturePad
                       onSave={(sig) => {
-                        if (rosterModalSignature === 'coach') {
-                          setCoachSig(sig)
-                        } else {
-                          setCaptainSig(sig)
-                        }
+                        setCaptainSig(sig)
                         setRosterModalSignature(null)
                       }}
                       onCancel={() => setRosterModalSignature(null)}
-                      title={`${rosterModalSignature === 'coach' ? 'Coach' : 'Captain'} Signature`}
+                      title="Captain Signature"
                     />
                   </div>
                 </div>
@@ -1881,7 +1942,11 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                                 color: p.number === num ? '#000' : 'var(--text)',
                                 border: 'none',
                                 borderRadius: '8px',
-                                cursor: 'pointer'
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: 0
                               }}
                             >
                               {num}

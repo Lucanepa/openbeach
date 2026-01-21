@@ -74,7 +74,13 @@ export default defineConfig({
   ],
   server: {
     port: 6173,
-    https: process.env.VITE_HTTPS === 'true'
+    https: process.env.VITE_HTTPS === 'true',
+    host: true, // Allow external connections
+    allowedHosts: [
+      'yael-ethnic-aliana.ngrok-free.dev',
+      '.ngrok-free.dev',
+      '.ngrok.io'
+    ]
   },
   build: {
     // Use safer build options to avoid eval in production

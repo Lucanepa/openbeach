@@ -11,11 +11,7 @@ import { CONNECTION_TYPES, CONNECTION_STATUS } from '../hooks_beach/useRealtimeC
 
 // Available languages with flag image URLs (using flagcdn.com)
 const LANGUAGES = [
-  { code: 'en', label: 'English', flagUrl: 'https://flagcdn.com/w20/gb.png' },
-  { code: 'fr', label: 'Français', flagUrl: 'https://flagcdn.com/w20/fr.png' },
-  { code: 'de', label: 'Deutsch', flagUrl: 'https://flagcdn.com/w20/de.png' },
-  { code: 'de-CH', label: 'Schweizerdeutsch', flagUrl: 'https://flagcdn.com/w20/ch.png' },
-  { code: 'it', label: 'Italiano', flagUrl: 'https://flagcdn.com/w20/it.png' }
+  { code: 'en', label: 'English', flagUrl: 'https://flagcdn.com/w20/gb.png' }
 ]
 
 /**
@@ -68,9 +64,7 @@ async function clearAllCache() {
       const key = localStorage.key(i)
       if (key && (
         key.startsWith('referee') ||
-        key.startsWith('bench') ||
         key.startsWith('livescore') ||
-        key.startsWith('roster') ||
         key.startsWith('match') ||
         key === 'preferredConnection'
       )) {

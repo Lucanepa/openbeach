@@ -7,11 +7,9 @@ import { db } from '../db_beach/db_beach'
  *
  * Provides random actions for:
  * - Add a point
- * - Insert libero
  * - Switch side
  * - Switch serve
  * - Trigger timeout
- * - Substitute player
  * - Trigger match end
  * - Trigger set end
  * - Call referee
@@ -88,52 +86,6 @@ export default function TestModeControls({ matchId, onRefresh }) {
     }
   }
 
-  const handleInsertLibero = async () => {
-    try {
-      const { currentSet, currentSetEvents } = await getMatchState()
-      if (!currentSet) {
-        setLastAction('No active set')
-        return
-      }
-
-      const team = randomTeam()
-
-      // Get current lineup for this team
-      const lineupEvents = currentSetEvents.filter(e =>
-        e.type === 'lineup' && e.payload?.team === team
-      )
-      const lastLineup = lineupEvents[lineupEvents.length - 1]
-
-      if (!lastLineup?.payload?.lineup) {
-        setLastAction('No lineup found')
-        return
-      }
-
-      // Find a back row position (4, 5, or 6) to insert libero
-      const positions = [4, 5, 6]
-      const position = positions[Math.floor(Math.random() * positions.length)]
-
-      // Create new lineup with libero substitution marker
-      const newLineup = { ...lastLineup.payload.lineup }
-
-      await addEvent('lineup', {
-        team,
-        lineup: newLineup,
-        liberoSubstitution: {
-          position,
-          liberoIn: true,
-          liberoNumber: 99, // Mock libero number
-          replacedPlayer: newLineup[position]
-        }
-      }, currentSet.index)
-
-      setLastAction(`Libero: ${team} pos ${position}`)
-      onRefresh?.()
-    } catch (err) {
-      setLastAction(`Error: ${err.message}`)
-    }
-  }
-
   const handleSwitchSide = async () => {
     try {
       const { match } = await getMatchState()
@@ -160,7 +112,7 @@ export default function TestModeControls({ matchId, onRefresh }) {
       // Find current serve from lineup events
       const lineupEvents = currentSetEvents.filter(e => e.type === 'lineup')
       const lastHomeLineup = lineupEvents.filter(e => e.payload?.team === 'team1').pop()
-      const lastAwayLineup = lineupEvents.filter(e => e.payload?.team === 'team2').pop()
+      const lastteam2Lineup = lineupEvents.filter(e => e.payload?.team === 'team2').pop()
 
       // Rotate serve between teams
       const currentServe = currentSet.firstServe || 'team1'
@@ -187,47 +139,6 @@ export default function TestModeControls({ matchId, onRefresh }) {
       await addEvent('timeout', { team }, currentSet.index)
 
       setLastAction(`Timeout: ${team}`)
-      onRefresh?.()
-    } catch (err) {
-      setLastAction(`Error: ${err.message}`)
-    }
-  }
-
-  const handleSubstitute = async () => {
-    try {
-      const { currentSet, currentSetEvents } = await getMatchState()
-      if (!currentSet) {
-        setLastAction('No active set')
-        return
-      }
-
-      const team = randomTeam()
-
-      // Get current lineup
-      const lineupEvents = currentSetEvents.filter(e =>
-        e.type === 'lineup' && e.payload?.team === team
-      )
-      const lastLineup = lineupEvents[lineupEvents.length - 1]
-
-      if (!lastLineup?.payload?.lineup) {
-        setLastAction('No lineup found')
-        return
-      }
-
-      // Pick random position to substitute
-      const position = Math.floor(Math.random() * 6) + 1
-      const currentPlayer = lastLineup.payload.lineup[position]
-      const newPlayer = Math.floor(Math.random() * 20) + 1 // Random player number
-
-      const newLineup = { ...lastLineup.payload.lineup, [position]: newPlayer }
-
-      await addEvent('lineup', {
-        team,
-        lineup: newLineup,
-        fromSubstitution: true
-      }, currentSet.index)
-
-      setLastAction(`Sub: ${team} #${currentPlayer} -> #${newPlayer}`)
       onRefresh?.()
     } catch (err) {
       setLastAction(`Error: ${err.message}`)
@@ -441,9 +352,6 @@ export default function TestModeControls({ matchId, onRefresh }) {
         <button style={buttonStyle} onClick={handleAddPoint}>
           + Point
         </button>
-        <button style={buttonStyle} onClick={handleInsertLibero}>
-          Libero
-        </button>
         <button style={buttonStyle} onClick={handleSwitchSide}>
           Side
         </button>
@@ -452,9 +360,6 @@ export default function TestModeControls({ matchId, onRefresh }) {
         </button>
         <button style={buttonStyle} onClick={handleTriggerTimeout}>
           Timeout
-        </button>
-        <button style={buttonStyle} onClick={handleSubstitute}>
-          Sub
         </button>
         <button style={buttonStyle} onClick={handleTriggerSetEnd}>
           Set End

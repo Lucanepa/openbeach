@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react'
-import Modal from './Modal'
+import Modal from './Modal_beach'
 
 export default function SignaturePad({ open, onClose, onSave, title = 'Sign', existingSignature = null, readOnly = false }) {
   const canvasRef = useRef(null)

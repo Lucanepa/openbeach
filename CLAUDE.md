@@ -68,8 +68,14 @@ npm run electron:build:linux # Build Linux packages
 - `*_beach.jsx/js` - Beach volleyball specific files
 - `*_old.jsx/js` - Legacy code kept for reference
 - `*-main_beach.jsx` - Entry point files
+- team1 and team2 instead of home and away, forever, for the teams
+
+
+
 
 ## Guidelines
+
+DELETE LIBERO, SUBSTITUTION, COACH, EXCEPTIONAL SUBSTITUTION, BENCH OFFICIAL, BENCH PLAYERS mentions and code
 
 ### Do
 - Use functional components with hooks
@@ -84,6 +90,7 @@ npm run electron:build:linux # Build Linux packages
 - Break offline functionality
 - Add inline styles (use CSS classes)
 - Forget to handle loading/error states for async operations
+- keep libero, substitutions, coach, bench players and officials, drag etc function
 
 ## Environment Variables
 

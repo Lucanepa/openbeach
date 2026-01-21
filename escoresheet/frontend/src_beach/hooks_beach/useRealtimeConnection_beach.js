@@ -30,7 +30,7 @@ export const CONNECTION_STATUS = {
  * @param {string|number} options.matchId - Match ID to subscribe to
  * @param {string} options.preferredConnection - Preferred connection type (auto|supabase|websocket)
  * @param {function} options.onData - Callback when data is received
- * @param {function} options.onAction - Callback when action is received (timeout, substitution, etc.)
+ * @param {function} options.onAction - Callback when action is received (timeout, sanction, etc.)
  * @param {function} options.onDeleted - Callback when match is deleted from server
  * @param {boolean} options.enabled - Whether to enable the connection
  */

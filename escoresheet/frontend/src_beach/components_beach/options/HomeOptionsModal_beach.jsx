@@ -1,8 +1,8 @@
 import { useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAlert } from '../../contexts_beach/AlertContext_beach'
-import Modal from '../Modal'
-import SupportFeedbackModal from '../SupportFeedbackModal'
+import Modal from '../Modal_beach'
+import SupportFeedbackModal from '../SupportFeedbackModal_beach'
 import { copyToClipboard, generateQRCodeUrl } from '../../utils_beach/networkInfo_beach'
 
 const currentVersion = __APP_VERSION__

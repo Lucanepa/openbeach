@@ -222,6 +222,54 @@
       .input-dense:focus {
         background-color: rgba(59, 130, 246, 0.1);
       }
+
+      /* Scoresheet app container */
+      .scoresheet-app {
+        min-height: 100vh;
+      }
+
+      /* Toolbar styles */
+      .scoresheet-toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      }
+
+      .scoresheet-toolbar button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      /* Zoom content container */
+      .scoresheet-content {
+        width: fit-content;
+      }
+
+      /* Print-specific overrides for zoom wrapper */
+      @media print {
+        .scoresheet-app {
+          height: auto !important;
+          min-height: auto !important;
+          overflow: visible !important;
+          background: white !important;
+        }
+
+        .scoresheet-toolbar {
+          display: none !important;
+        }
+
+        .scoresheet-content {
+          transform: none !important;
+          width: auto !important;
+        }
+
+        /* Reset any parent containers for print */
+        .scoresheet-app > div {
+          overflow: visible !important;
+          padding: 0 !important;
+        }
+      }
     </style>
   <script type="importmap">
 {
@@ -234,7 +282,7 @@
 </script>
 <link rel="stylesheet" href="/index.css">
 </head>
-  <body class="bg-gray-100 text-gray-900 antialiased print:bg-white text-[10px] ml-1 mr-1 print:ml-1 print:mr-1">
+  <body class="text-gray-900 antialiased print:bg-white text-[10px] m-0 p-0">
     <div id="root"></div>
   <script type="module" src="./index.tsx"></script>
 </body>

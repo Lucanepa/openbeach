@@ -46,15 +46,11 @@ const FlagCH = () => (
 )
 
 const languages = [
-  { code: 'en', Flag: FlagGB, label: 'EN' },
-  { code: 'it', Flag: FlagIT, label: 'IT' },
-  { code: 'de', Flag: FlagDE, label: 'DE' },
-  { code: 'de-CH', Flag: FlagCH, label: 'DE' },
-  { code: 'fr', Flag: FlagFR, label: 'FR' }
+  { code: 'en', Flag: FlagGB, label: 'EN' }
 ]
 
 /**
- * DashboardHeader - 3-column header for dashboard views (Bench, Livescore)
+ * DashboardHeader - 3-column header for dashboard views 
  * Left: Title/version
  * Middle: Hamburger menu (collapsible)
  * Right: Fullscreen button

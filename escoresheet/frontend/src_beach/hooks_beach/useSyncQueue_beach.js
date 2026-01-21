@@ -60,7 +60,7 @@ const SPORT_TYPE = 'beach'
 const VALID_MATCH_COLUMNS = [
   'external_id', 'game_n', 'game_pin', 'status', 'connections', 'connection_pins',
   'scheduled_at', 'match_info', 'officials', 'home_team', 'players_home', 'bench_home',
-  'away_team', 'players_away', 'bench_away', 'coin_toss', 'results', 'signatures',
+  'team2_team', 'players_team2', 'bench_team2', 'coin_toss', 'results', 'signatures',
   'approval', 'test', 'created_at', 'updated_at', 'manual_changes', 'current_set',
   'set_results', 'final_score', 'sanctions', 'winner', 'sport_type'
 ]

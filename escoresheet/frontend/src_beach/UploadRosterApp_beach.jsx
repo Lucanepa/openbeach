@@ -71,7 +71,7 @@ export default function UploadRosterApp() {
   const [pdfFile, setPdfFile] = useState(null)
   const [pdfLoading, setPdfLoading] = useState(false)
   const [pdfError, setPdfError] = useState('')
-  const [parsedData, setParsedData] = useState(null) // { players: [], bench: [] }
+  const [parsedData, setParsedData] = useState(null)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -642,34 +642,9 @@ export default function UploadRosterApp() {
         isCaptain: false
       }))
 
-      // Prepare bench officials
-      const bench = []
-      if (data.coach) {
-        bench.push({
-          role: 'Coach',
-          firstName: data.coach.firstName || '',
-          lastName: data.coach.lastName || '',
-          dob: data.coach.dob || ''
-        })
-      }
-      if (data.ac1) {
-        bench.push({
-          role: 'Assistant Coach 1',
-          firstName: data.ac1.firstName || '',
-          lastName: data.ac1.lastName || '',
-          dob: data.ac1.dob || ''
-        })
-      }
-      if (data.ac2) {
-        bench.push({
-          role: 'Assistant Coach 2',
-          firstName: data.ac2.firstName || '',
-          lastName: data.ac2.lastName || '',
-          dob: data.ac2.dob || ''
-        })
-      }
+      
 
-      setParsedData({ players, bench })
+      setParsedData({ players })
       setPdfFile(null)
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
@@ -688,14 +663,6 @@ export default function UploadRosterApp() {
     const updatedPlayers = [...parsedData.players]
     updatedPlayers[index] = { ...updatedPlayers[index], [field]: value }
     setParsedData({ ...parsedData, players: updatedPlayers })
-  }
-
-  // Handle bench official edit
-  const handleBenchChange = (index, field, value) => {
-    if (!parsedData) return
-    const updatedBench = [...parsedData.bench]
-    updatedBench[index] = { ...updatedBench[index], [field]: value }
-    setParsedData({ ...parsedData, bench: updatedBench })
   }
 
   // Add player
@@ -718,25 +685,6 @@ export default function UploadRosterApp() {
     setParsedData({ ...parsedData, players: updatedPlayers })
   }
 
-  // Add bench official
-  const handleAddBench = () => {
-    if (!parsedData) return
-    const newBench = {
-      role: 'Coach',
-      firstName: '',
-      lastName: '',
-      dob: ''
-    }
-    setParsedData({ ...parsedData, bench: [...parsedData.bench, newBench] })
-  }
-
-  // Delete bench official
-  const handleDeleteBench = (index) => {
-    if (!parsedData) return
-    const updatedBench = parsedData.bench.filter((_, i) => i !== index)
-    setParsedData({ ...parsedData, bench: updatedBench })
-  }
-
   // Handle confirm
   const handleConfirm = () => {
     if (!parsedData || !matchId) return
@@ -753,8 +701,6 @@ export default function UploadRosterApp() {
       const pendingField = team === 'team1' ? 'pending_team1_roster' : 'pending_team2_roster'
       const rosterData = {
         players: parsedData.players,
-        bench: parsedData.bench,
-        coachSignature: coachSignature || null,
         captainSignature: captainSignature || null,
         timestamp: new Date().toISOString()
       }
@@ -907,8 +853,8 @@ export default function UploadRosterApp() {
           id: -1,
           gameNumber: 999,
           status: 'setup',
-          team1Name: 'Test Home',
-          team2Name: 'Test Away',
+          team1Name: 'Test Team 1',
+          team2Name: 'Test Team 2',
           team1UploadPin: '123456',
           team2UploadPin: '654321'
         }
@@ -916,8 +862,8 @@ export default function UploadRosterApp() {
         setGameNumber('999')
         setMatch(testMatch)
         setMatchId(-1)
-        setTeam1Data({ name: 'Test Home', color: '#ef4444' })
-        setTeam2Data({ name: 'Test Away', color: '#3b82f6' })
+        setTeam1Data({ name: 'Test Team 1', color: '#ef4444' })
+        setTeam2Data({ name: 'Test Team 2', color: '#3b82f6' })
         setMatchStatusCheck('valid')
         setValidationError('')
         console.log('[Test Mode] Activated with mock data')
@@ -1044,7 +990,7 @@ export default function UploadRosterApp() {
                       fontSize: '16px',
                       fontWeight: 500
                     }}>
-                      {match.team1Name || t('common.home')} {t('uploadRoster.vs')} {match.team2Name || t('common.away')}
+                      {match.team1Name || t('Home')} {t('uploadRoster.vs')} {match.team2Name || t('common.team2')}
                     </div>
                   </button>
                 ))}
@@ -1089,7 +1035,7 @@ export default function UploadRosterApp() {
               marginBottom: '8px'
             }}>
               <div style={{ fontSize: '18px', fontWeight: 600 }}>
-                {team1Data?.name || t('common.home')} {t('uploadRoster.vs')} {team2Data?.name || t('common.away')}
+                {team1Data?.name || t('Home')} {t('uploadRoster.vs')} {team2Data?.name || t('common.team2')}
               </div>
             </div>
 
@@ -1156,7 +1102,7 @@ export default function UploadRosterApp() {
                         width: 'auto',
                       }}
                     >
-                      {t('uploadRoster.away')} {team2Data?.name && `(${team2Data.name})`}
+                      {t('uploadRoster.team2')} {team2Data?.name && `(${team2Data.name})`}
                     </button>
                   </div>
                 </div>
@@ -1457,27 +1403,6 @@ export default function UploadRosterApp() {
               {t('roster.addPlayer')}
             </button>
 
-            <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '20px' }}>{t('uploadRoster.parsedBench')}</h2>
-
-            {/* Column headers for bench officials */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '180px 1fr 1fr 140px 70px',
-              gap: '12px',
-              alignItems: 'center',
-              padding: '8px 16px',
-              marginBottom: '4px',
-              fontSize: '12px',
-              fontWeight: 600,
-              color: 'rgba(255, 255, 255, 0.6)'
-            }}>
-              <span>{t('rosterSetup.role', 'Role')}</span>
-              <span>{t('rosterSetup.lastName', 'Last Name')}</span>
-              <span>{t('rosterSetup.firstName', 'First Name')}</span>
-              <span>{t('rosterSetup.dob', 'DOB')}</span>
-              <span></span>
-            </div>
-
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '24px' }}>
               {parsedData.bench.map((official, index) => (
                 <div key={index} style={{
@@ -1576,23 +1501,6 @@ export default function UploadRosterApp() {
                 </div>
               ))}
             </div>
-            <button
-              type="button"
-              onClick={handleAddBench}
-              style={{
-                padding: '10px 20px',
-                fontSize: '14px',
-                fontWeight: 600,
-                background: 'rgba(255, 255, 255, 0.1)',
-                color: 'var(--text)',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                marginBottom: '24px'
-              }}
-            >
-              + {t('roster.benchOfficials')}
-            </button>
 
             {/* Signatures Section */}
             <div style={{

@@ -187,38 +187,42 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         // Match header info - use match setup fields
         if (match.eventName) set('competition', match.eventName);
         else if (match.league) set('competition', match.league);
-        if (match.matchNumber) set('match_no', String(match.matchNumber));
-        else if (match.externalId) set('match_no', match.externalId);
+        // Match number - use game_n (the actual field name in the database)
+        if (match.game_n != null) set('match_no', String(match.game_n));
+        // Don't fall back to externalId as it often contains 'test-match-default' or similar
         if (match.site) set('site', match.site);
         else if (match.city) set('site', match.city);
         if (match.beach) set('beach', match.beach);
         else if (match.hall) set('beach', match.hall);
         if (match.court) set('court', String(match.court));
 
-        // Gender checkbox
-        if (match.matchGender === 'men') {
+        // Gender checkbox - check both matchGender and gender field names
+        const genderValue = match.matchGender || match.gender;
+        if (genderValue === 'men') {
           set('cat_men', true);
-        } else if (match.matchGender === 'women') {
+        } else if (genderValue === 'women') {
           set('cat_women', true);
         }
 
-        // Phase and Round checkboxes
-        if (match.matchPhase === 'main_draw') {
+        // Phase and Round checkboxes - check both naming conventions
+        const phaseValue = match.matchPhase || match.phase;
+        if (phaseValue === 'main_draw' || phaseValue === 'main') {
           set('md', true);
-        } else if (match.matchPhase === 'qualification') {
+        } else if (phaseValue === 'qualification') {
           set('qual', true);
         }
 
-        // Round checkboxes based on matchRound
-        if (match.matchRound === 'pool_play') {
+        // Round checkboxes - check both naming conventions
+        const roundValue = match.matchRound || match.round;
+        if (roundValue === 'pool_play' || roundValue === 'pool') {
           set('pp', true); // P.P.
-        } else if (match.matchRound === 'winner_bracket') {
+        } else if (roundValue === 'winner_bracket' || roundValue === 'winner') {
           set('wb', true); // W.B.
-        } else if (match.matchRound === 'class') {
+        } else if (roundValue === 'class') {
           set('class', true); // Class.
-        } else if (match.matchRound === 'semi_final') {
+        } else if (roundValue === 'semi_final' || roundValue === 'semifinals') {
           set('sf', true); // S-F
-        } else if (match.matchRound === 'finals') {
+        } else if (roundValue === 'finals') {
           set('final', true); // Finals
         }
 
@@ -234,49 +238,65 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         if (match.id) set('match_id', match.id);
       }
 
-      // Teams - countries always set, names and A/B circles set only for current set
+      // Teams - countries and names always set
       if (team_1Team) {
         const t1Country = team_1Team.country || match?.team_1Country || '';
         set('t1_country', t1Country);
         set('b_t1_country', t1Country);
+        // Set team name immediately (don't wait for sets)
+        const t1Name = team_1Team.name || '';
+        set('t1_name', t1Name);
       }
       if (team_2Team) {
         const t2Country = team_2Team.country || match?.team_2Country || '';
         set('t2_country', t2Country);
         set('b_t2_country', t2Country);
+        // Set team name immediately (don't wait for sets)
+        const t2Name = team_2Team.name || '';
+        set('t2_name', t2Name);
       }
 
       // Players (for TEAMS table)
       // TEAMS table always shows team_1 on left, team_2 on right (regardless of A/B)
       // A/B circles are filled separately based on coin toss
 
+      // Check if coin toss has been confirmed
+      const isCoinTossConfirmed = match?.coinTossConfirmed === true;
+
       // Determine which team is A and which is B for coin toss data lookup
-      const teamAKey = match?.coinTossTeamA || 'team_1';
-      const teamBKey = match?.coinTossTeamB || 'team_2';
+      // Only set if coin toss is confirmed
+      const teamAKey = isCoinTossConfirmed ? (match?.coinTossTeamA || 'team_1') : '';
+      const teamBKey = isCoinTossConfirmed ? (match?.coinTossTeamB || (teamAKey === 'team_1' ? 'team_2' : 'team_1')) : '';
 
-      // Medical Assistance Chart - Set A/B and countries
-      const teamACountry = teamAKey === 'team_1'
-        ? (team_1Team?.country || match?.team_1Country || '')
-        : (team_2Team?.country || match?.team_2Country || '');
-      const teamBCountry = teamBKey === 'team_1'
-        ? (team_1Team?.country || match?.team_1Country || '')
-        : (team_2Team?.country || match?.team_2Country || '');
+      // Medical Assistance Chart - Set A/B and countries only if coin toss confirmed
+      if (isCoinTossConfirmed && teamAKey && teamBKey) {
+        const teamACountry = teamAKey === 'team_1'
+          ? (team_1Team?.country || match?.team_1Country || '')
+          : (team_2Team?.country || match?.team_2Country || '');
+        const teamBCountry = teamBKey === 'team_1'
+          ? (team_1Team?.country || match?.team_1Country || '')
+          : (team_2Team?.country || match?.team_2Country || '');
 
-      // Team A (first row, index 1) - A above
-      set('ma_side_1', 'A');
-      set('ma_ctry_1', teamACountry);
-      // Team B (second row, index 2) - B below
-      set('ma_side_2', 'B');
-      set('ma_ctry_2', teamBCountry);
+        // Team A (first row, index 1) - A above
+        set('ma_side_1', 'A');
+        set('ma_ctry_1', teamACountry);
+        // Team B (second row, index 2) - B below
+        set('ma_side_2', 'B');
+        set('ma_ctry_2', teamBCountry);
+      }
 
       // Get coin toss data to determine first serve and player numbers
       const coinTossData = match?.coinTossData;
       const teamAData = coinTossData?.players?.teamA;
       const teamBData = coinTossData?.players?.teamB;
 
-      // Set A/B circles above TEAMS table based on coin toss
-      set('b_t1_side', teamAKey === 'team_1' ? 'A' : 'B');
-      set('b_t2_side', teamBKey === 'team_1' ? 'A' : 'B');
+      // Set A/B circles above TEAMS table based on coin toss (only if confirmed)
+      if (isCoinTossConfirmed && teamAKey && teamBKey) {
+        // b_t1_side: 'A' if team_1 is Team A, 'B' if team_1 is Team B
+        set('b_t1_side', teamAKey === 'team_1' ? 'A' : 'B');
+        // b_t2_side: 'A' if team_2 is Team A, 'B' if team_2 is Team B
+        set('b_t2_side', teamAKey === 'team_2' ? 'A' : 'B');
+      }
 
       // Team 1 players (left side of TEAMS table) - always team_1
       // Always try to populate, even if array is empty or missing
@@ -315,43 +335,50 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
 
           p1IsCaptain = team1CoinTossData.player1?.isCaptain || team_1Players[0]?.isCaptain || false;
           p2IsCaptain = team1CoinTossData.player2?.isCaptain || team_1Players[1]?.isCaptain || false;
-          p1FirstServe = team1CoinTossData.player1?.firstServe || false;
-          p2FirstServe = team1CoinTossData.player2?.firstServe || false;
+          // First serve: check match.team1FirstServePlayer (player number who serves first for team 1)
+          const team1FirstServePlayer = match?.team1FirstServePlayer;
+          p1FirstServe = team1FirstServePlayer !== null && team1FirstServePlayer !== undefined && String(team1FirstServePlayer) === p1No;
+          p2FirstServe = team1FirstServePlayer !== null && team1FirstServePlayer !== undefined && String(team1FirstServePlayer) === p2No;
         } else {
           // Fallback to player objects directly
           p1No = String(team_1Players[0]?.number || '');
           p2No = String(team_1Players[1]?.number || '');
           p1IsCaptain = team_1Players[0]?.isCaptain || false;
           p2IsCaptain = team_1Players[1]?.isCaptain || false;
-          p1FirstServe = false;
-          p2FirstServe = false;
+          // First serve: check match.team1FirstServePlayer (player number who serves first for team 1)
+          const team1FirstServePlayer = match?.team1FirstServePlayer;
+          p1FirstServe = team1FirstServePlayer !== null && team1FirstServePlayer !== undefined && String(team1FirstServePlayer) === p1No;
+          p2FirstServe = team1FirstServePlayer !== null && team1FirstServePlayer !== undefined && String(team1FirstServePlayer) === p2No;
         }
 
         // Format player number: circle if captain, asterisk on right if first serve
+        // Only show captain/first serve markers if coin toss is confirmed
         let p1Display = p1No;
-        if (p1IsCaptain && p1FirstServe) {
-          p1Display = `(${p1No})*`;
-        } else if (p1IsCaptain) {
-          p1Display = `(${p1No})`;
-        } else if (p1FirstServe) {
-          p1Display = `${p1No}*`;
-        }
-
         let p2Display = p2No;
-        if (p2IsCaptain && p2FirstServe) {
-          p2Display = `(${p2No})*`;
-        } else if (p2IsCaptain) {
-          p2Display = `(${p2No})`;
-        } else if (p2FirstServe) {
-          p2Display = `${p2No}*`;
+        if (isCoinTossConfirmed) {
+          if (p1IsCaptain && p1FirstServe) {
+            p1Display = `(${p1No})*`;
+          } else if (p1IsCaptain) {
+            p1Display = `(${p1No})`;
+          } else if (p1FirstServe) {
+            p1Display = `${p1No}*`;
+          }
+
+          if (p2IsCaptain && p2FirstServe) {
+            p2Display = `(${p2No})*`;
+          } else if (p2IsCaptain) {
+            p2Display = `(${p2No})`;
+          } else if (p2FirstServe) {
+            p2Display = `${p2No}*`;
+          }
         }
 
         set('b_t1_p1_no', p1Display);
         set('b_t1_p1_name', `${p1FirstName} ${p1LastName}`.trim());
         set('b_t1_p2_no', p2Display);
         set('b_t1_p2_name', `${p2FirstName} ${p2LastName}`.trim());
-      } else {
-        // If team_1Players array is missing or empty, try to use coin toss data
+      } else if (isCoinTossConfirmed) {
+        // If team_1Players array is missing or empty, try to use coin toss data (only if confirmed)
         const isTeam1A = teamAKey === 'team_1';
         const team1CoinTossData = isTeam1A ? coinTossData?.players?.teamA : coinTossData?.players?.teamB;
         if (team1CoinTossData) {
@@ -361,8 +388,10 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           const p2No = String(team1CoinTossData.player2?.number || '');
           const p1IsCaptain = team1CoinTossData.player1?.isCaptain || false;
           const p2IsCaptain = team1CoinTossData.player2?.isCaptain || false;
-          const p1FirstServe = team1CoinTossData.player1?.firstServe || false;
-          const p2FirstServe = team1CoinTossData.player2?.firstServe || false;
+          // First serve: check match.team1FirstServePlayer (player number who serves first for team 1)
+          const team1FirstServePlayer = match?.team1FirstServePlayer;
+          const p1FirstServe = team1FirstServePlayer !== null && team1FirstServePlayer !== undefined && String(team1FirstServePlayer) === p1No;
+          const p2FirstServe = team1FirstServePlayer !== null && team1FirstServePlayer !== undefined && String(team1FirstServePlayer) === p2No;
 
           let p1Display = p1No;
           if (p1IsCaptain && p1FirstServe) p1Display = `(${p1No})*`;
@@ -417,43 +446,50 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
 
           p1IsCaptain = team2CoinTossData.player1?.isCaptain || team_2Players[0]?.isCaptain || false;
           p2IsCaptain = team2CoinTossData.player2?.isCaptain || team_2Players[1]?.isCaptain || false;
-          p1FirstServe = team2CoinTossData.player1?.firstServe || false;
-          p2FirstServe = team2CoinTossData.player2?.firstServe || false;
+          // First serve: check match.team2FirstServePlayer (player number who serves first for team 2)
+          const team2FirstServePlayer = match?.team2FirstServePlayer;
+          p1FirstServe = team2FirstServePlayer !== null && team2FirstServePlayer !== undefined && String(team2FirstServePlayer) === p1No;
+          p2FirstServe = team2FirstServePlayer !== null && team2FirstServePlayer !== undefined && String(team2FirstServePlayer) === p2No;
         } else {
           // Fallback to player objects directly
           p1No = String(team_2Players[0]?.number || '');
           p2No = String(team_2Players[1]?.number || '');
           p1IsCaptain = team_2Players[0]?.isCaptain || false;
           p2IsCaptain = team_2Players[1]?.isCaptain || false;
-          p1FirstServe = false;
-          p2FirstServe = false;
+          // First serve: check match.team2FirstServePlayer (player number who serves first for team 2)
+          const team2FirstServePlayer = match?.team2FirstServePlayer;
+          p1FirstServe = team2FirstServePlayer !== null && team2FirstServePlayer !== undefined && String(team2FirstServePlayer) === p1No;
+          p2FirstServe = team2FirstServePlayer !== null && team2FirstServePlayer !== undefined && String(team2FirstServePlayer) === p2No;
         }
 
         // Format player number: circle if captain, asterisk on right if first serve
+        // Only show captain/first serve markers if coin toss is confirmed
         let p1Display = p1No;
-        if (p1IsCaptain && p1FirstServe) {
-          p1Display = `(${p1No})*`;
-        } else if (p1IsCaptain) {
-          p1Display = `(${p1No})`;
-        } else if (p1FirstServe) {
-          p1Display = `${p1No}*`;
-        }
-
         let p2Display = p2No;
-        if (p2IsCaptain && p2FirstServe) {
-          p2Display = `(${p2No})*`;
-        } else if (p2IsCaptain) {
-          p2Display = `(${p2No})`;
-        } else if (p2FirstServe) {
-          p2Display = `${p2No}*`;
+        if (isCoinTossConfirmed) {
+          if (p1IsCaptain && p1FirstServe) {
+            p1Display = `(${p1No})*`;
+          } else if (p1IsCaptain) {
+            p1Display = `(${p1No})`;
+          } else if (p1FirstServe) {
+            p1Display = `${p1No}*`;
+          }
+
+          if (p2IsCaptain && p2FirstServe) {
+            p2Display = `(${p2No})*`;
+          } else if (p2IsCaptain) {
+            p2Display = `(${p2No})`;
+          } else if (p2FirstServe) {
+            p2Display = `${p2No}*`;
+          }
         }
 
         set('b_t2_p1_no', p1Display);
         set('b_t2_p1_name', `${p1FirstName} ${p1LastName}`.trim());
         set('b_t2_p2_no', p2Display);
         set('b_t2_p2_name', `${p2FirstName} ${p2LastName}`.trim());
-      } else {
-        // If team_2Players array is missing or empty, try to use coin toss data
+      } else if (isCoinTossConfirmed) {
+        // If team_2Players array is missing or empty, try to use coin toss data (only if confirmed)
         const isTeam2A = teamAKey === 'team_2';
         const team2CoinTossData = isTeam2A ? coinTossData?.players?.teamA : coinTossData?.players?.teamB;
         if (team2CoinTossData) {
@@ -463,8 +499,10 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           const p2No = String(team2CoinTossData.player2?.number || '');
           const p1IsCaptain = team2CoinTossData.player1?.isCaptain || false;
           const p2IsCaptain = team2CoinTossData.player2?.isCaptain || false;
-          const p1FirstServe = team2CoinTossData.player1?.firstServe || false;
-          const p2FirstServe = team2CoinTossData.player2?.firstServe || false;
+          // First serve: check match.team2FirstServePlayer (player number who serves first for team 2)
+          const team2FirstServePlayer = match?.team2FirstServePlayer;
+          const p1FirstServe = team2FirstServePlayer !== null && team2FirstServePlayer !== undefined && String(team2FirstServePlayer) === p1No;
+          const p2FirstServe = team2FirstServePlayer !== null && team2FirstServePlayer !== undefined && String(team2FirstServePlayer) === p2No;
 
           let p1Display = p1No;
           if (p1IsCaptain && p1FirstServe) p1Display = `(${p1No})*`;
@@ -502,11 +540,18 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
 
           // Only process sets that have started (have a startTime or are finished)
           // This prevents filling data for sets that haven't been played yet
+          // Exception: Set 1 should be initialized if coin toss is confirmed, even if not started
           const setDataForFirstServe = sets?.find((s: any) => s.index === setNum);
           const setHasStarted = setDataForFirstServe?.startTime || setDataForFirstServe?.finished;
+          const shouldInitializeSet1 = setNum === 1 && isCoinTossConfirmed && !setHasStarted;
 
-          if (!setHasStarted) {
-            // Skip sets that haven't started yet
+          if (!setHasStarted && !shouldInitializeSet1) {
+            // Skip sets that haven't started yet (except set 1 if coin toss confirmed)
+            return;
+          }
+
+          // Skip A/B processing if coin toss not confirmed (except for set 1 initialization)
+          if (!isCoinTossConfirmed && !shouldInitializeSet1) {
             return;
           }
 
@@ -557,33 +602,6 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           // team_down = the other team (occupies lower part)
           const teamUp = firstServeTeam || teamAKey;
           const teamDown = teamUp === teamAKey ? teamBKey : teamAKey;
-
-          // Debug logging for set 2 and set 3
-          if (setNum === 2) {
-            console.log(`[DEBUG] Set ${setNum} - firstServeTeam: ${firstServeTeam}, teamAKey: ${teamAKey}, teamBKey: ${teamBKey}`);
-            console.log(`[DEBUG] Set ${setNum} - setDataForFirstServe?.serviceOrder:`, setDataForFirstServe?.serviceOrder);
-            console.log(`[DEBUG] Set ${setNum} - setDataForFirstServe?.finished:`, setDataForFirstServe?.finished);
-            console.log(`[DEBUG] Set ${setNum} - setDataForFirstServe?.startTime:`, setDataForFirstServe?.startTime);
-            console.log(`[DEBUG] Set ${setNum} - setItem:`, setItem);
-            console.log(`set 2 team up: ${teamUp}`);
-            console.log(`set 2 team down: ${teamDown}`);
-          }
-
-          if (setNum === 3) {
-            console.log(`set 3 team up: ${teamUp}`);
-            console.log(`set 3 team down: ${teamDown}`);
-            if (setDataForFirstServe?.serviceOrder) {
-              // Find player with service order 1
-              for (const [key, order] of Object.entries(setDataForFirstServe.serviceOrder)) {
-                if (order === 1) {
-                  console.log(`set 3 player in service order 1: ${key}`);
-                  break;
-                }
-              }
-            } else {
-              console.log(`set 3 player in service order 1: (no serviceOrder)`);
-            }
-          }
 
           set(`${prefix}_team_up`, teamUp);
           set(`${prefix}_team_down`, teamDown);
@@ -691,7 +709,8 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
       }
 
       // Results section - calculate from ALL sets (including current unfinished set)
-      if (sets && Array.isArray(sets)) {
+      // Only fill A/B results if coin toss is confirmed
+      if (sets && Array.isArray(sets) && isCoinTossConfirmed) {
         // Sort sets by index and process all (not just finished)
         const sortedSets = [...sets].sort((a: any, b: any) => (a.index || 0) - (b.index || 0));
 
@@ -874,17 +893,34 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         const coinTossData = match.coinTossData;
         // Determine which team is A and which is B
         const teamAKey = match.coinTossTeamA || 'team_1';
-        const teamBKey = match.coinTossTeamB || 'team_2';
+        const teamBKey = match.coinTossTeamB || (teamAKey === 'team_1' ? 'team_2' : 'team_1');
 
         // Set 1 coin toss winner
+        // coinTossWinner can be teamAKey or teamBKey, or it might be stored as 'team1'/'team2' format
         if (coinTossData.coinTossWinner) {
-          const set1Winner = coinTossData.coinTossWinner === teamAKey ? 'A' : 'B';
+          // Handle both 'team_1'/'team_2' and 'team1'/'team2' formats
+          let winnerKey = coinTossData.coinTossWinner;
+          if (winnerKey === 'team1') winnerKey = 'team_1';
+          else if (winnerKey === 'team2') winnerKey = 'team_2';
+          else if (winnerKey === 'home') winnerKey = 'team_1';
+          
+          // Determine if winner is Team A or Team B
+          const set1Winner = (winnerKey === teamAKey) ? 'A' : 'B';
           set('coin_s1', set1Winner);
+        } else if (match?.coinTossConfirmed && teamAKey) {
+          // If coin toss is confirmed but coinTossWinner is not set, default to Team A (coin toss winner)
+          set('coin_s1', 'A');
         }
 
         // Set 3 coin toss winner
         if (coinTossData.set3CoinTossWinner) {
-          const set3Winner = coinTossData.set3CoinTossWinner === teamAKey ? 'A' : 'B';
+          let set3WinnerKey = coinTossData.set3CoinTossWinner;
+          if (set3WinnerKey === 'team1') set3WinnerKey = 'team_1';
+          else if (set3WinnerKey === 'team2') set3WinnerKey = 'team_2';
+          else if (set3WinnerKey === 'home') set3WinnerKey = 'team_1';
+          
+          // Determine if winner is Team A or Team B
+          const set3Winner = (set3WinnerKey === teamAKey) ? 'A' : 'B';
           set('coin_s3', set3Winner);
         }
 
@@ -952,7 +988,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         // Get team data from matchData (already loaded, no need to fetch from db)
         // Determine team A and B (same for all sets, based on coin toss)
         const coinTossTeamAKey = match?.coinTossTeamA || 'team_1';
-        const coinTossTeamBKey = match?.coinTossTeamB || 'team_2';
+        const coinTossTeamBKey = match?.coinTossTeamB || (coinTossTeamAKey === 'team_1' ? 'team_2' : 'team_1');
 
         // Get team countries and colors from already loaded team data
         const coinTossTeamACountry = coinTossTeamAKey === 'team_1'
@@ -973,14 +1009,17 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         const coinTossT2Color = coinTossTeamAKey === 'team_2' ? coinTossTeamAColor : coinTossTeamBColor;
 
         // Set labels for all sets from 1 to currentSetNum (only for sets that have started)
+        // Exception: Set 1 should be initialized if coin toss is confirmed, even if not started
         for (let setNum = 1; setNum <= currentSetNum && setNum <= 3; setNum++) {
           const prefix = setNum === 1 ? 's1' : setNum === 2 ? 's2' : 's3';
 
           // Only set labels for sets that have actually started (have a startTime or are finished)
+          // Exception: Set 1 if coin toss is confirmed
           const setData = sets?.find((s: any) => s.index === setNum);
           const setHasStarted = setData?.startTime || setData?.finished;
+          const shouldInitializeSet1 = setNum === 1 && isCoinTossConfirmed && !setHasStarted;
 
-          if (setHasStarted) {
+          if (setHasStarted || shouldInitializeSet1) {
             // Store colors for this set
             set(`${prefix}_t1_team_color`, coinTossT1Color);
             set(`${prefix}_t2_team_color`, coinTossT2Color);
@@ -1002,11 +1041,13 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
 
           // Only process sets that have started (have a startTime or are finished)
           // This prevents filling data for sets that haven't been played yet (e.g., set 3 when only set 1 and 2 are played)
+          // Exception: Set 1 should be initialized if coin toss is confirmed, even if not started
           const setDataForEvents = sets?.find((s: any) => s.index === setNum);
           const setHasStarted = setDataForEvents?.startTime || setDataForEvents?.finished;
+          const shouldInitializeSet1 = setNum === 1 && isCoinTossConfirmed && !setHasStarted;
 
-          if (!setHasStarted) {
-            // Skip sets that haven't started yet
+          if (!setHasStarted && !shouldInitializeSet1) {
+            // Skip sets that haven't started yet (except set 1 if coin toss confirmed)
             return;
           }
 
@@ -1019,8 +1060,15 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
 
 
           // Determine team A and B for this set
-          const teamAKey = match?.coinTossTeamA || 'team_1';
-          const teamBKey = match?.coinTossTeamB || 'team_2';
+          // Normalize team keys to 'team_1'/'team_2' format
+          let teamAKey = match?.coinTossTeamA || 'team_1';
+          if (teamAKey === 'team1') teamAKey = 'team_1';
+          else if (teamAKey === 'team2') teamAKey = 'team_2';
+          else if (teamAKey === 'home') teamAKey = 'team_1';
+          
+          let teamBKey = match?.coinTossTeamB || (teamAKey === 'team_1' ? 'team_2' : 'team_1');
+          if (teamBKey === 'team1') teamBKey = 'team_1';
+          else if (teamBKey === 'team2') teamBKey = 'team_2';
 
           // Get the set data to access serviceOrder (use setDataForEvents which was already found)
           const setData = setDataForEvents;
@@ -1037,18 +1085,119 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           const teamBData = coinTossData?.teamB;
 
           // Get team_up and team_down for this set to ensure correct row assignment
-          const teamUp = get(`${prefix}_team_up`) || teamAKey;
-          const teamDown = get(`${prefix}_team_down`) || (teamUp === teamAKey ? teamBKey : teamAKey);
+          // For set 1, if coin toss is confirmed but set hasn't started, determine from firstServe
+          let teamUp = get(`${prefix}_team_up`);
+          let teamDown = get(`${prefix}_team_down`);
+          
+          if (!teamUp || !teamDown) {
+            // Determine first serve team for this set
+            let firstServeTeam: string | null = null;
+            if (setData?.serviceOrder) {
+              const serviceOrder = setData.serviceOrder;
+              for (const [key, order] of Object.entries(serviceOrder)) {
+                if (order === 1) {
+                  const matchKey = key.match(/^(team_[12])_player/);
+                  if (matchKey) {
+                    firstServeTeam = matchKey[1];
+                    break;
+                  }
+                }
+              }
+            }
+            
+            // Helper function to normalize team keys
+            const normalizeTeamKey = (key: string): string => {
+              if (key === 'team1' || key === 'home') return 'team_1';
+              if (key === 'team2') return 'team_2';
+              return key; // Already in correct format or unknown
+            };
+            
+            // Fallback: use match.firstServe or coin toss data
+            if (!firstServeTeam) {
+              if (setNum === 1) {
+                const rawFirstServe = match?.firstServe || match?.coinTossData?.firstServe || teamAKey;
+                firstServeTeam = normalizeTeamKey(rawFirstServe);
+              } else if (setNum === 2) {
+                const rawSet1FirstServe = match?.firstServe || match?.coinTossData?.firstServe || teamAKey;
+                const set1FirstServe = normalizeTeamKey(rawSet1FirstServe);
+                firstServeTeam = set1FirstServe === teamAKey ? teamBKey : teamAKey;
+              } else {
+                const coinTossDataForSet3 = match?.coinTossData;
+                if (coinTossDataForSet3?.set3CoinTossWinner) {
+                  firstServeTeam = normalizeTeamKey(coinTossDataForSet3.set3CoinTossWinner);
+                } else {
+                  const rawSet1FirstServe = match?.firstServe || match?.coinTossData?.firstServe || teamAKey;
+                  const set1FirstServe = normalizeTeamKey(rawSet1FirstServe);
+                  const set2FirstServe = set1FirstServe === teamAKey ? teamBKey : teamAKey;
+                  firstServeTeam = set2FirstServe === teamAKey ? teamBKey : teamAKey;
+                }
+              }
+            } else {
+              // Normalize firstServeTeam if it was found from serviceOrder
+              firstServeTeam = normalizeTeamKey(firstServeTeam);
+            }
+            
+            teamUp = firstServeTeam || teamAKey;
+            teamDown = teamUp === teamAKey ? teamBKey : teamAKey;
+            
+            // Store for later use
+            set(`${prefix}_team_up`, teamUp);
+            set(`${prefix}_team_down`, teamDown);
+          }
 
           // Get team data for team_up and team_down
           const teamUpData = teamUp === teamAKey ? teamAData : teamBData;
           const teamDownData = teamDown === teamAKey ? teamAData : teamBData;
 
+          // Calculate serviceOrder from coin toss data if not present on set
+          let serviceOrder = setData?.serviceOrder;
+          if (!serviceOrder || Object.keys(serviceOrder).length === 0) {
+            // Calculate serviceOrder from coin toss data
+            // The team that serves first gets positions I (1) and III (3)
+            // The team that receives first gets positions II (2) and IV (4)
+            const servingTeamIsA = teamUp === teamAKey;
+            const servingTeamData = servingTeamIsA ? teamAData : teamBData;
+            const receivingTeamData = servingTeamIsA ? teamBData : teamAData;
+            
+            // Normalize team keys to 'team_1'/'team_2' format for serviceOrder keys
+            // teamUp and teamDown should already be normalized, but ensure consistency
+            const servingTeamKey = teamUp;
+            const receivingTeamKey = teamDown;
+            
+            serviceOrder = {};
+            
+            // Serving team: player with firstServe gets position I (1), other gets III (3)
+            if (servingTeamData?.player1?.firstServe) {
+              serviceOrder[`${servingTeamKey}_player1`] = 1;
+              serviceOrder[`${servingTeamKey}_player2`] = 3;
+            } else if (servingTeamData?.player2?.firstServe) {
+              serviceOrder[`${servingTeamKey}_player1`] = 3;
+              serviceOrder[`${servingTeamKey}_player2`] = 1;
+            } else {
+              // Fallback: if firstServe not set, use player1 for position I
+              serviceOrder[`${servingTeamKey}_player1`] = 1;
+              serviceOrder[`${servingTeamKey}_player2`] = 3;
+            }
+            
+            // Receiving team: player with firstServe gets position II (2), other gets IV (4)
+            if (receivingTeamData?.player1?.firstServe) {
+              serviceOrder[`${receivingTeamKey}_player1`] = 2;
+              serviceOrder[`${receivingTeamKey}_player2`] = 4;
+            } else if (receivingTeamData?.player2?.firstServe) {
+              serviceOrder[`${receivingTeamKey}_player1`] = 4;
+              serviceOrder[`${receivingTeamKey}_player2`] = 2;
+            } else {
+              // Fallback: if firstServe not set, use player1 for position II
+              serviceOrder[`${receivingTeamKey}_player1`] = 2;
+              serviceOrder[`${receivingTeamKey}_player2`] = 4;
+            }
+          }
+
           // Fill player rotation boxes (I, II, III, IV) based on serviceOrder for this set
           // team_up players should ALWAYS be in rows I and III, team_down players in rows II and IV
           // regardless of what serviceOrder says
-          if (setData?.serviceOrder) {
-            const serviceOrder = setData.serviceOrder;
+          let playerNumbersSet = false;
+          if (serviceOrder && Object.keys(serviceOrder).length > 0) {
 
             // Find which players belong to team_up and team_down from serviceOrder
             const teamUpPlayerNumbers: string[] = [];
@@ -1090,20 +1239,67 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
             // Now assign players to rows based on team_up/team_down
             // team_up: rows I (r1) and III (r3) - assign first player to r1, second to r3
             // team_down: rows II (r2) and IV (r4) - assign first player to r2, second to r4
-            if (teamUpPlayerNumbers.length >= 1) set(`${prefix}_r1_player`, teamUpPlayerNumbers[0]);
-            if (teamUpPlayerNumbers.length >= 2) set(`${prefix}_r3_player`, teamUpPlayerNumbers[1]);
-            if (teamDownPlayerNumbers.length >= 1) set(`${prefix}_r2_player`, teamDownPlayerNumbers[0]);
-            if (teamDownPlayerNumbers.length >= 2) set(`${prefix}_r4_player`, teamDownPlayerNumbers[1]);
-          } else {
-            // Fallback to coin toss data if serviceOrder not available (for set 1)
-            // team_up goes in rows I and III (ABOVE), team_down goes in rows II and IV (BELOW)
+            console.log(`[DEBUG Set ${setNum}] serviceOrder player assignment:`, {
+              serviceOrder,
+              teamUp,
+              teamDown,
+              teamUpPlayerNumbers,
+              teamDownPlayerNumbers,
+              teamAData: { p1: teamAData?.player1?.number, p2: teamAData?.player2?.number },
+              teamBData: { p1: teamBData?.player1?.number, p2: teamBData?.player2?.number }
+            });
+            if (teamUpPlayerNumbers.length >= 1) {
+              set(`${prefix}_r1_player`, teamUpPlayerNumbers[0]);
+              playerNumbersSet = true;
+              console.log(`[DEBUG Set ${setNum}] Set r1_player = ${teamUpPlayerNumbers[0]}`);
+            }
+            if (teamUpPlayerNumbers.length >= 2) {
+              set(`${prefix}_r3_player`, teamUpPlayerNumbers[1]);
+              playerNumbersSet = true;
+              console.log(`[DEBUG Set ${setNum}] Set r3_player = ${teamUpPlayerNumbers[1]}`);
+            }
+            if (teamDownPlayerNumbers.length >= 1) {
+              set(`${prefix}_r2_player`, teamDownPlayerNumbers[0]);
+              playerNumbersSet = true;
+              console.log(`[DEBUG Set ${setNum}] Set r2_player = ${teamDownPlayerNumbers[0]}`);
+            }
+            if (teamDownPlayerNumbers.length >= 2) {
+              set(`${prefix}_r4_player`, teamDownPlayerNumbers[1]);
+              playerNumbersSet = true;
+              console.log(`[DEBUG Set ${setNum}] Set r4_player = ${teamDownPlayerNumbers[1]}`);
+            }
+          }
+          
+          // Fallback to coin toss data if serviceOrder not available or empty (for set 1)
+          // team_up goes in rows I and III (ABOVE), team_down goes in rows II and IV (BELOW)
+          if (!playerNumbersSet) {
+            console.log(`[DEBUG Set ${setNum}] Using fallback - playerNumbersSet=false`, {
+              teamUpData: { p1: teamUpData?.player1?.number, p2: teamUpData?.player2?.number },
+              teamDownData: { p1: teamDownData?.player1?.number, p2: teamDownData?.player2?.number }
+            });
             if (teamUpData) {
-              set(`${prefix}_r1_player`, String(teamUpData.player1?.number || ''));
-              set(`${prefix}_r3_player`, String(teamUpData.player2?.number || ''));
+              const p1Num = String(teamUpData.player1?.number || '');
+              const p2Num = String(teamUpData.player2?.number || '');
+              if (p1Num) {
+                set(`${prefix}_r1_player`, p1Num);
+                console.log(`[DEBUG Set ${setNum}] Fallback: Set r1_player = ${p1Num}`);
+              }
+              if (p2Num) {
+                set(`${prefix}_r3_player`, p2Num);
+                console.log(`[DEBUG Set ${setNum}] Fallback: Set r3_player = ${p2Num}`);
+              }
             }
             if (teamDownData) {
-              set(`${prefix}_r2_player`, String(teamDownData.player1?.number || ''));
-              set(`${prefix}_r4_player`, String(teamDownData.player2?.number || ''));
+              const p1Num = String(teamDownData.player1?.number || '');
+              const p2Num = String(teamDownData.player2?.number || '');
+              if (p1Num) {
+                set(`${prefix}_r2_player`, p1Num);
+                console.log(`[DEBUG Set ${setNum}] Fallback: Set r2_player = ${p1Num}`);
+              }
+              if (p2Num) {
+                set(`${prefix}_r4_player`, p2Num);
+                console.log(`[DEBUG Set ${setNum}] Fallback: Set r4_player = ${p2Num}`);
+              }
             }
           }
 
@@ -1915,9 +2111,11 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         // - Team 1: idx 0 (player 1), idx 1 (player 2)
         // - Team 2: idx 2 (player 1), idx 3 (player 2)
         // idx = (team - 1) * 2 + (player - 1)
+        // But the chart shows Team A in row 1 and Team B in row 2
+        // So we need to map team_1/team_2 to A/B correctly
 
         const teamAKey = match?.coinTossTeamA || 'team_1';
-        const teamBKey = match?.coinTossTeamB || 'team_2';
+        const teamBKey = match?.coinTossTeamB || (teamAKey === 'team_1' ? 'team_2' : 'team_1');
 
         // Track MTO/RIT per player (across all sets, per player)
         const playerMedicalData: Record<string, { mto_blood: boolean, rit_type: string | null, rit_used: boolean }> = {};
@@ -1969,13 +2167,18 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         });
 
         // Fill medical assistance chart
+        // Medical Assistance Chart: Row 1 is Team A, Row 2 is Team B
+        // But the chart structure is: idx 0,1 = team_1 players, idx 2,3 = team_2 players
+        // So we need to set ma_side_1 and ma_side_2 based on which team is A/B
+        
         // Team 1, Player 1: idx 0
         if (team_1Players && team_1Players.length >= 1) {
           const p1 = team_1Players[0];
           const p1Key = `team_1_player1_${p1.number}`;
           const p1Data = playerMedicalData[p1Key] || { mto_blood: false, rit_type: null, rit_used: false };
+          // ma_side_1: 'A' if team_1 is Team A, 'B' if team_1 is Team B
           set('ma_side_1', teamAKey === 'team_1' ? 'A' : 'B');
-          set('ma_ctry_1', teamAKey === 'team_1' ? (team_1Team?.country || match?.team_1Country || '') : (team_2Team?.country || match?.team_2Country || ''));
+          set('ma_ctry_1', team_1Team?.country || match?.team_1Country || '');
           set('ma_mto_b_0', p1Data.mto_blood ? true : false);
           if (p1Data.rit_used) {
             if (p1Data.rit_type === 'rit_no_blood') {
@@ -2022,8 +2225,9 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           const p1 = team_2Players[0];
           const p1Key = `team_2_player1_${p1.number}`;
           const p1Data = playerMedicalData[p1Key] || { mto_blood: false, rit_type: null, rit_used: false };
-          set('ma_side_2', teamBKey === 'team_1' ? 'A' : 'B');
-          set('ma_ctry_2', teamBKey === 'team_1' ? (team_1Team?.country || match?.team_1Country || '') : (team_2Team?.country || match?.team_2Country || ''));
+          // ma_side_2: 'A' if team_2 is Team A, 'B' if team_2 is Team B
+          set('ma_side_2', teamAKey === 'team_2' ? 'A' : 'B');
+          set('ma_ctry_2', team_2Team?.country || match?.team_2Country || '');
           set('ma_mto_b_2', p1Data.mto_blood ? true : false);
           if (p1Data.rit_used) {
             if (p1Data.rit_type === 'rit_no_blood') {
@@ -2090,7 +2294,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           const date = new Date(match.scheduledAt);
           set('bmp_date', date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }));
         }
-        set('bmp_match_no', String(match.matchNumber || match.id || ''));
+        set('bmp_match_no', String(match.game_n || ''));
         // Convert phase to capitalize (replace underscores with spaces and capitalize)
         const phaseStr = match.matchPhase || '';
         const formattedPhase = phaseStr
@@ -2101,12 +2305,15 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         set('bmp_phase', formattedPhase);
         set('bmp_gender', match.matchGender === 'men' ? 'Men' : match.matchGender === 'women' ? 'Women' : '');
 
-        const teamAKey = match.coinTossTeamA || 'team_1';
-        const teamBKey = match.coinTossTeamB || 'team_2';
-        const teamAName = teamAKey === 'team_1' ? (team_1Team?.name || '') : (team_2Team?.name || '');
-        const teamBName = teamBKey === 'team_1' ? (team_1Team?.name || '') : (team_2Team?.name || '');
-        set('bmp_team_a', teamAName);
-        set('bmp_team_b', teamBName);
+        // Only set team A/B names if coin toss is confirmed
+        if (match.coinTossConfirmed) {
+          const teamAKey = match.coinTossTeamA || 'team_1';
+          const teamBKey = match.coinTossTeamB || 'team_2';
+          const teamAName = teamAKey === 'team_1' ? (team_1Team?.name || '') : (team_2Team?.name || '');
+          const teamBName = teamBKey === 'team_1' ? (team_1Team?.name || '') : (team_2Team?.name || '');
+          set('bmp_team_a', teamAName);
+          set('bmp_team_b', teamBName);
+        }
       }
 
       // Process BMP events and fill rows
@@ -3025,20 +3232,20 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         <div className="page-break-indicator"></div>
         {/* HEADER */}
         <div className="bg-blue-900 text-white px-2 py-0.5 flex justify-between items-center">
-          <span className="text-[10px]">Beach volley eScoresheet Openvolley</span>
+          <span className="text-[9px]">Beach volley eScoresheet Openvolley</span>
         </div>
 
         {/* METADATA ROWS */}
         <div className="border border-black mb-2">
           {/* Row 1 */}
           <div className="flex items-center px-1 py-1 border-b border-black h-5">
-            <span className="text-[10px] w-28 text-black">Name of Competition:</span>
+            <span className="text-[9px] w-28 text-black">Name of Competition:</span>
             <Input value={get('competition')} onChange={v => set('competition', v)} className="flex-1 text-left px-1 text-sm font-bold text-black" />
-            <span className="text-[8px] text-black">v1.0 11/2025</span>
+            <span className="text-[7px] text-black">v1.0 11/2025</span>
           </div>
 
           {/* Row 2 */}
-          <div className="flex items-center text-[10px] h-5 divide-x divide-black text-black border-black">
+          <div className="flex items-center text-[9px] h-5 divide-x divide-black text-black border-black">
             <div className="flex items-center px-2 gap-1">
               <span>Match No.:</span>
               <Input value={get('match_no')} onChange={v => set('match_no', v)} className="w-5" />
@@ -3162,7 +3369,8 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           <div className="flex-1 flex flex-col gap-1 w-1/2">
 
             {/* TEAMS BOX - Side by Side */}
-            <div className="border-2 border-black flex h-[95px]">
+            {/* Height calculation: country/side ~20px + header 16px + player1 20px + player2 20px + signature 30px + padding = ~106px */}
+            <div className="border-2 border-black flex h-[106px]">
               <div className="w-8 font-bold text-sm border-r border-black bg-gray-50 text-black relative overflow-hidden">
                 <span style={{
                   position: 'absolute',
@@ -3194,7 +3402,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
                   <div className="w-6 border border-t-0 border-black" style={centerStyle}><Input value={get('b_t1_p2_no')} onChange={v => set('b_t1_p2_no', v)} className="w-full text-center" /></div>
                   <div className="flex-1 border border-l-0 border-t-0 border-black"><Input value={get('b_t1_p2_name')} onChange={v => set('b_t1_p2_name', v)} className="w-full px-1" style={{ textAlign: 'left' }} /></div>
                 </div>
-                <div className="text-[4px]">Captain's pre-match signature:</div>
+                <div className="text-[4px]" style={{ height: '30px' }}>Captain's pre-match signature:</div>
                 {/* Signature image for Team 1 */}
                 {matchData?.match?.team_1CaptainSignature && (
                   <div className="flex-1 border-white">
@@ -3224,7 +3432,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
                   <div className="w-6 border border-t-0 border-black" style={centerStyle}><Input value={get('b_t2_p2_no')} onChange={v => set('b_t2_p2_no', v)} className="w-full text-center" /></div>
                   <div className="flex-1 border border-l-0 border-t-0 border-black"><Input value={get('b_t2_p2_name')} onChange={v => set('b_t2_p2_name', v)} className="w-full px-1" style={{ textAlign: 'left' }} /></div>
                 </div>
-                <div className="text-[4px]">Captain's pre-match signature:</div>
+                <div className="text-[4px]" style={{ height: '30px' }}>Captain's pre-match signature:</div>
                 {/* Signature image for Team 2 */}
                 {matchData?.match?.team_2CaptainSignature && (
                   <div className="flex-1 border-white">
@@ -3239,7 +3447,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
 
             {/* RESULTS TABLE */}
             <div className="border-2 border-black flex">
-              <div className="w-8 font-bold text-sm border-r border-black bg-gray-400 text-black relative overflow-hidden" style={{ minHeight: '120px' }}>
+              <div className="w-8 font-bold text-sm border-r border-black bg-gray-400 text-black relative overflow-hidden" style={{ minHeight: '100px' }}>
                 <span style={{
                   position: 'absolute',
                   top: '50%',
@@ -3335,8 +3543,9 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
             </div>
 
             {/* APPROVAL TABLE */}
-            <div className="border-2 border-black flex h-[170px]">
-              <div className="w-8 font-bold text-xs border-r border-black bg-white text-black relative overflow-hidden" style={{ minHeight: '100px' }}>
+            {/* Height calculation: header 12px + 4 referees 64px + 2 line judges 32px + signatures 30px = 138px */}
+            <div className="border-2 border-black flex h-[150px] overflow-hidden">
+              <div className="w-8 font-bold text-xs border-r border-black bg-white text-black relative">
                 <span style={{
                   position: 'absolute',
                   top: '50%',
@@ -3346,7 +3555,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
                   letterSpacing: '0.08em'
                 }}>APPROVAL</span>
               </div>
-              <table className="flex-1 border-collapse text-[8px]" style={{ tableLayout: 'fixed', width: '100%' }}>
+              <table className="flex-1 border-collapse text-[8px] h-full" style={{ tableLayout: 'fixed', width: '100%' }}>
                 <colgroup>
                   <col style={{ width: '70px' }} />
                   <col style={{ width: 'auto' }} />
@@ -3356,32 +3565,32 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
                 {/* Header */}
                 <thead>
                   <tr className="bg-gray-100 text-black font-bold text-center h-3">
-                    <td className="border-r border-b border-black px-1 py-0.5">Officials</td>
-                    <td className="border-r border-b border-black px-1 py-0.5">Name</td>
-                    <td className="border-r border-b border-black px-1 py-0.5">Country</td>
-                    <td className="border-b border-black px-1 py-0.5">Signature</td>
+                    <td className="border-r border-b border-black px-1 py-0">Officials</td>
+                    <td className="border-r border-b border-black px-1 py-0">Name</td>
+                    <td className="border-r border-b border-black px-1 py-0">Country</td>
+                    <td className="border-b border-black px-1 py-0">Signature</td>
                   </tr>
                 </thead>
                 <tbody>
-                  {/* Referees */}
+                  {/* Referees - reduced height to h-4 (16px) */}
                   {[
                     { l: '1st Referee', k: 'ref1' },
                     { l: '2nd Referee', k: 'ref2' },
                     { l: 'Scorer', k: 'scorer' },
                     { l: 'Asst. Scorer', k: 'asst_scorer' }
                   ].map(r => (
-                    <tr key={r.k} className="h-5">
+                    <tr key={r.k} className="h-4">
                       <td className="border-r border-b border-black px-1 font-bold text-left">{r.l}</td>
                       <td className="border-r border-b border-black p-0"><Input value={get(`${r.k}_name`)} onChange={v => set(`${r.k}_name`, v)} className="w-full h-full px-1" style={{ textAlign: 'left' }} /></td>
                       <td className="border-r border-b border-black p-0"><Input value={get(`${r.k}_country`)} onChange={v => set(`${r.k}_country`, v)} className="w-full h-full text-center" /></td>
                       <td className="border-b border-black bg-gray-50"></td>
                     </tr>
                   ))}
-                  {/* Line Judges - spans across Name, Country, Signature columns */}
-                  <tr className="h-5">
+                  {/* Line Judges - reduced height to h-4 (16px) */}
+                  <tr className="h-4">
                     <td rowSpan={2} className="border-r border-b border-black px-1 font-bold text-left align-middle">Line<br />Judges</td>
                     <td colSpan={3} className="border-b border-black p-0">
-                      <div className="flex h-5">
+                      <div className="flex h-4">
                         <div className="flex-1 flex border-r border-black h-full">
                           <span className="w-4 border-r border-black font-bold h-full" style={centerStyle}>1</span>
                           <Input value={get('lj1')} onChange={v => set('lj1', v)} className="flex-1 px-1 h-full" style={{ textAlign: 'left' }} />
@@ -3393,9 +3602,9 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
                       </div>
                     </td>
                   </tr>
-                  <tr className="h-5">
+                  <tr className="h-4">
                     <td colSpan={3} className="border-b border-black p-0">
-                      <div className="flex h-5">
+                      <div className="flex h-4">
                         <div className="flex-1 flex border-r border-black h-full">
                           <span className="w-4 border-r border-black font-bold h-full" style={centerStyle}>3</span>
                           <Input value={get('lj3')} onChange={v => set('lj3', v)} className="flex-1 px-1 h-full" style={{ textAlign: 'left' }} />
@@ -3407,12 +3616,12 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
                       </div>
                     </td>
                   </tr>
-                  {/* Post-match Signatures - each takes half the width */}
-                  <tr style={{ height: '1.6rem' }}>
-                    <td colSpan={2} className="border-r border-black p-0.2 align-top">
+                  {/* Post-match Signatures - fixed height */}
+                  <tr style={{ height: '30px', display: 'table-row', overflow: 'hidden' }}>
+                    <td colSpan={2} className="border-r border-black p-0 align-top" style={{ height: '30px', overflow: 'hidden', paddingLeft: '2px' }}>
                       <span className="text-[4px]">Captain's post-match signature</span>
                     </td>
-                    <td colSpan={2} className="p-0.2 align-top">
+                    <td colSpan={2} className="p-0 align-top" style={{ height: '30px', overflow: 'hidden', paddingLeft: '2px' }}>
                       <span className="text-[4px]">Captain's post-match signature</span>
                     </td>
                   </tr>

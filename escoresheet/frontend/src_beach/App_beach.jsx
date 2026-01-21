@@ -34,7 +34,7 @@ import {
   getNextTestMatchStartTime,
   getTestTeam1ShortName,
   getTestTeam2ShortName
-} from './constants/testSeeds'
+} from './constants_beach/testSeeds_beach'
 import { supabase } from './lib_beach/supabaseClient_beach'
 import { checkMatchSession, lockMatchSession, unlockMatchSession, verifyGamePin } from './utils_beach/sessionManager_beach'
 
@@ -1788,14 +1788,14 @@ export default function App() {
 
     let team1PlayersData = (playersData || []).filter(p => p.team_id === matchData.team1_id)
     if (!team1PlayersData.length) {
-      team1PlayersData = buildFallbackPlayers('test-team-alpha')
+      team1PlayersData = buildFallbackPlayers(TEST_TEAM_1_EXTERNAL_ID)
       console.warn('[TestMatch] Supabase returned no team 1 players, using fallback seed roster')
     }
 
     let team2PlayersData = (playersData || []).filter(p => p.team_id === matchData.team2_id)
     if (!team2PlayersData.length) {
-      team2PlayersData = buildFallbackPlayers('test-team-bravo')
-      console.warn('[TestMatch] Supabase returned no away players, using fallback seed roster')
+      team2PlayersData = buildFallbackPlayers(TEST_TEAM_2_EXTERNAL_ID)
+      console.warn('[TestMatch] Supabase returned no team2 players, using fallback seed roster')
     }
 
     const fetchOfficialByExternalId = async (table, externalId) => {
@@ -1910,7 +1910,7 @@ export default function App() {
       // Connection PINs: prefer JSONB, fallback to legacy
       refereePin: connectionPins.referee || matchData.referee_pin || generateRefereePin(),
       team1UploadPin: connectionPins.upload_home || matchData.home_team_upload_pin || null,
-      team2UploadPin: connectionPins.upload_away || matchData.away_team_upload_pin || null,
+      team2UploadPin: connectionPins.upload_team2 || matchData.team2_team_upload_pin || null,
       team1Id,
       team2Id,
       officials,
@@ -1923,8 +1923,8 @@ export default function App() {
       // Signatures: prefer JSONB, fallback to legacy
       team1CoachSignature: signatures.home_coach || matchData.home_coach_signature || null,
       team1CaptainSignature: signatures.home_captain || matchData.home_captain_signature || null,
-      team2CoachSignature: signatures.away_coach || matchData.away_coach_signature || null,
-      team2CaptainSignature: signatures.away_captain || matchData.away_captain_signature || null,
+      team2CoachSignature: signatures.team2_coach || matchData.team2_coach_signature || null,
+      team2CaptainSignature: signatures.team2_captain || matchData.team2_captain_signature || null,
       // Coin toss: prefer JSONB, fallback to legacy
       coinTossTeamA: coinToss.team_a || matchData.coin_toss_team_a || null,
       coinTossTeamB: coinToss.team_b || matchData.coin_toss_team_b || null,
@@ -2031,7 +2031,7 @@ export default function App() {
       matchToDelete.team1Id ? db.teams.get(matchToDelete.team1Id) : null,
       matchToDelete.team2Id ? db.teams.get(matchToDelete.team2Id) : null
     ])
-    const matchName = `${team1?.name || 'Home'} vs ${team2?.name || 'Away'}`
+    const matchName = `${team1?.name || 'Home'} vs ${team2?.name || 'team2'}`
 
     setDeletePinInput('')
     setDeletePinError('')
@@ -2095,7 +2095,7 @@ export default function App() {
       }
       if (match?.team2Id) {
         const team2PlayersCount = await db.players.where('teamId').equals(match.team2Id).count()
-        console.log('[Delete Match] Deleting', team2PlayersCount, 'away players')
+        console.log('[Delete Match] Deleting', team2PlayersCount, 'team2 players')
         await db.players.where('teamId').equals(match.team2Id).delete()
       }
 
@@ -2470,6 +2470,12 @@ export default function App() {
     const scheduledAt = getNextTestMatchStartTime()
     const timestamp = new Date().toISOString()
 
+    // Get country codes from test seed data
+    const team1Seed = TEST_TEAM_SEED_DATA.find(t => t.seedKey === team1.seedKey)
+    const team2Seed = TEST_TEAM_SEED_DATA.find(t => t.seedKey === team2.seedKey)
+    const team1Country = team1Seed?.country || 'CHE'
+    const team2Country = team2Seed?.country || 'DEU'
+
     const findSeededRecord = (collection, seed) => {
       if (!seed) return null
       if (!collection?.length) return seed
@@ -2531,17 +2537,23 @@ export default function App() {
         status: 'scheduled',
         team1Id: team1.id,
         team2Id: team2.id,
-        homeShortName: team1.shortName,
-        awayShortName: team2.shortName,
+        team1ShortName: team1.shortName,
+        team2ShortName: team2.shortName,
+        team1Country,
+        team2Country,
         hall: TEST_MATCH_DEFAULTS.hall,
         city: TEST_MATCH_DEFAULTS.city,
         league: TEST_MATCH_DEFAULTS.league,
         gameNumber: TEST_MATCH_DEFAULTS.gameNumber,
+        court: TEST_MATCH_DEFAULTS.court || '',
+        gender: TEST_MATCH_DEFAULTS.gender || 'men',
+        phase: TEST_MATCH_DEFAULTS.phase || 'main',
+        round: TEST_MATCH_DEFAULTS.round || 'pool',
         scheduledAt,
         refereePin: generateRefereePin(),
         officials,
-        team1CaptainSignature: null,
-        team2CaptainSignature: null,
+        team1CaptainSignature: 'xxxxx',
+        team2CaptainSignature: 'xxxxx',
         coinTossConfirmed: false,
         test: true,
         seedKey: TEST_MATCH_SEED_KEY,
@@ -2574,6 +2586,15 @@ export default function App() {
         // Don't sync test match metadata to Supabase - it comes from the seed script
       }
     })
+
+    // Create draft in match_setup with country codes for immediate availability
+    if (createdMatchId) {
+      await db.match_setup.add({
+        team1Country,
+        team2Country,
+        updatedAt: timestamp
+      })
+    }
 
     if (createdMatchId) {
       setMatchId(createdMatchId)
@@ -2986,13 +3007,11 @@ export default function App() {
           <div className="container" style={{
             minHeight: 0,
             flex: '1 1 auto',
-            width: 'auto',
+            width: '100%',
             height: 'auto',
             display: 'flex',
             flexDirection: 'column',
             position: 'relative',
-            alignItems: 'center',
-            margin: '0 auto',
             padding: '5px',
             overflow: 'hidden'
           }}>
@@ -3001,7 +3020,7 @@ export default function App() {
               height: 'auto',
               overflowY: (matchId && !showCoinToss && !showMatchSetup && !showMatchEnd) ? 'hidden' : 'auto',
               overflowX: 'hidden',
-              width: 'auto',
+              width: '100%',
               maxWidth: '100%',
               padding: (matchId && !showCoinToss && !showMatchSetup && !showMatchEnd) ? '10px' : '10px',
               // Vertical centering for CoinToss and MatchSetup screens
@@ -3424,8 +3443,8 @@ export default function App() {
                       ? (d.match?.home_team?.name || d.match?.team1Name || 'Home')
                       : (d.team1?.name || d.match?.team1Name || 'Home')
                     const team2Name = isDbFormat
-                      ? (d.match?.away_team?.name || d.match?.team2Name || 'Away')
-                      : (d.team2?.name || d.match?.team2Name || 'Away')
+                      ? (d.match?.team2_team?.name || d.match?.team2Name || 'team2')
+                      : (d.team2?.name || d.match?.team2Name || 'team2')
 
                     const events = d.events || []
                     const sets = d.sets || []
@@ -3538,7 +3557,7 @@ export default function App() {
                           </div>
                           <div style={{ textAlign: 'center', flex: 1 }}>
                             <div style={{ fontSize: '18px', fontWeight: 700 }}>{team2Name}</div>
-                            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>Away</div>
+                            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>team2</div>
                           </div>
                         </div>
 
@@ -3596,7 +3615,7 @@ export default function App() {
                             textAlign: 'center'
                           }}>
                             <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>Timeouts</div>
-                            <div style={{ fontSize: '20px', fontWeight: 700 }}>{awayTimeouts}/2</div>
+                            <div style={{ fontSize: '20px', fontWeight: 700 }}>{team2Timeouts}/2</div>
                           </div>
                         </div>
 

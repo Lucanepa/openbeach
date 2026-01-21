@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import i18n from '../i18n'
-import ConnectionStatus from './ConnectionStatus'
-import UserButton from './auth/UserButton'
+import ConnectionStatus from './ConnectionStatus_beach'
+import UserButton from './auth/UserButton_beach'
 
 
 const FlagBox = ({ children }) => (
@@ -79,11 +79,7 @@ const FlagCH = () => (
 
 // Language options with flag components
 const languages = [
-  { code: 'en', Flag: FlagGB, label: 'EN' },
-  { code: 'it', Flag: FlagIT, label: 'IT' },
-  { code: 'de', Flag: FlagDE, label: 'DE' },
-  { code: 'de-CH', Flag: FlagCH, label: 'DE' },
-  { code: 'fr', Flag: FlagFR, label: 'FR' }
+  { code: 'en', Flag: FlagGB, label: 'EN' }
 ]
 
 export default function MainHeader({
@@ -731,12 +727,6 @@ export default function MainHeader({
                             <span>{dashboardServer.connectionUrl}/referee</span>
                           </div>
                         )}
-                        {dashboardServer.connectionUrl && (
-                          <div style={{ wordBreak: 'break-all' }}>
-                            <span style={{ color: 'rgba(255,255,255,0.5)', marginRight: '4px' }}>{t('header.bench')}:</span>
-                            <span>{dashboardServer.connectionUrl}/bench</span>
-                          </div>
-                        )}
                       </div>
                     </div>
                   )}
@@ -759,10 +749,6 @@ export default function MainHeader({
                       <div>
                         <span style={{ color: 'rgba(255,255,255,0.5)' }}>{t('header.referees')}: </span>
                         <span style={{ fontWeight: 600 }}>{dashboardServer.refereeCount || 0}</span>
-                      </div>
-                      <div>
-                        <span style={{ color: 'rgba(255,255,255,0.5)' }}>{t('header.bench')}: </span>
-                        <span style={{ fontWeight: 600 }}>{dashboardServer.benchCount || 0}</span>
                       </div>
                     </div>
                   </div>
@@ -1090,7 +1076,7 @@ export default function MainHeader({
                           e.currentTarget.style.background = 'transparent'
                         }}
                       >
-                        <span>{t('common.home')}</span>
+                        <span>{t('Home')}</span>
                       </button>
                     )}
 
@@ -1311,7 +1297,7 @@ export default function MainHeader({
                         }}
                       >
                         <span>🏠</span>
-                        <span>{t('common.home')}</span>
+                        <span>{t('Home')}</span>
                       </button>
                     )}
 
