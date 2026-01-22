@@ -128,6 +128,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   // Design size for continuous proportional scaling
   const DESIGN_WIDTH = 1920
   const DESIGN_HEIGHT = 1080
+  const DESIGN_VMIN = Math.min(DESIGN_WIDTH, DESIGN_HEIGHT) // 1080 - base unit for vmin-like calculations
   const [leftTeamSanctionsExpanded, setLeftTeamSanctionsExpanded] = useState(false)
   const [rightTeamSanctionsExpanded, setRightTeamSanctionsExpanded] = useState(false)
   // Main layout collapsible sections (collapsed by default on tablet)
@@ -543,11 +544,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     }
   }, [])
 
-  // Calculate scale factor for proportional viewport scaling
+  // Calculate scale factor for proportional viewport scaling (no cap - scales to fill available space)
   const scaleFactor = Math.min(
     viewportWidth / DESIGN_WIDTH,
-    viewportHeight / DESIGN_HEIGHT,
-    1  // Cap at 1 to prevent upscaling larger than design size
+    viewportHeight / DESIGN_HEIGHT
   )
 
   const data = useLiveQuery(async () => {
@@ -8773,10 +8773,8 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         <div
           className="match-content"
           style={{
-            width: `${DESIGN_WIDTH}px`,
-            minWidth: `${DESIGN_WIDTH}px`,
-            transform: scaleFactor < 1 ? `scale(${scaleFactor})` : 'none',
-            transformOrigin: 'top center'
+            width: `${DESIGN_WIDTH * scaleFactor}px`,
+            minWidth: `${DESIGN_WIDTH * scaleFactor}px`
           }}
         >
           <div style={{ display: 'none' }}>
@@ -9020,16 +9018,16 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                   {/* LEFT TEAM TOOLBOX (15%) */}
                   <div style={{
                     flex: '0 0 auto',
-                    width: 'min(30vh, 30vw)',
+                    width: `${DESIGN_VMIN * 0.3 * scaleFactor}px`,
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '8px',
+                    gap: `${8 * scaleFactor}px`,
                     alignItems: 'center',
                     justifyContent: 'flex-start',
                     background: 'rgba(15, 23, 42, 0.6)',
                     border: '1px solid rgba(255, 255, 255, 0.08)',
-                    borderRadius: '8px',
-                    padding: '8px'
+                    borderRadius: `${8 * scaleFactor}px`,
+                    padding: `${8 * scaleFactor}px`
                   }}>
                     {/* Team Header - A/B label, team name, country */}
                     {(() => {
@@ -9048,17 +9046,17 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                         <div style={{
                           width: '100%',
                           background: leftTeamColor,
-                          borderRadius: '6px',
-                          padding: '8px 4px',
+                          borderRadius: `${6 * scaleFactor}px`,
+                          padding: `${8 * scaleFactor}px ${4 * scaleFactor}px`,
                           textAlign: 'center',
                           color: isBrightColor(leftTeamColor) ? '#000' : '#fff'
                         }}>
-                          <div style={{ fontSize: '4vmin', fontWeight: 700, lineHeight: 1.2 }}>{leftTeamLabel}</div>
+                          <div style={{ fontSize: `${DESIGN_VMIN * 0.04 * scaleFactor}px`, fontWeight: 700, lineHeight: 1.2 }}>{leftTeamLabel}</div>
                           {playerNames && (
-                            <div style={{ fontSize: '2vmin', fontWeight: 600, marginTop: '2px', lineHeight: 1.2, wordBreak: 'break-word' }}>{playerNames}</div>
+                            <div style={{ fontSize: `${DESIGN_VMIN * 0.02 * scaleFactor}px`, fontWeight: 600, marginTop: `${2 * scaleFactor}px`, lineHeight: 1.2, wordBreak: 'break-word' }}>{playerNames}</div>
                           )}
                           {leftCountry && (
-                            <div style={{ fontSize: '2vmin', fontWeight: 500, marginTop: '2px', opacity: 0.9 }}>{leftCountry}</div>
+                            <div style={{ fontSize: `${DESIGN_VMIN * 0.02 * scaleFactor}px`, fontWeight: 500, marginTop: `${2 * scaleFactor}px`, opacity: 0.9 }}>{leftCountry}</div>
                           )}
                         </div>
                       )
@@ -9269,23 +9267,24 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    width: 'min(15vh, 15vw)',
+                    width: `${DESIGN_VMIN * 0.15 * scaleFactor}px`,
                     minWidth: 0,
                     flexShrink: 0,
-                    padding: '0 4px',
+                    padding: `0 ${4 * scaleFactor}px`,
                     overflow: 'hidden',
                     boxSizing: 'border-box'
                   }}>
                     {leftServing && (() => {
                       const leftTeamKey = leftisTeam1 ? 'team1' : 'team2'
                       const servingPlayer = getServingPlayer(leftTeamKey, leftTeam)
+                      const serveSize = DESIGN_VMIN * 0.15 * scaleFactor - 8
                       if (!servingPlayer || !servingPlayer.number) {
                         return (
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', maxWidth: '100%' }}>
                             <img
                               src={ballImage} onError={(e) => e.target.src = ballimage}
                               alt="Serving team"
-                              style={{ ...serveBallBaseStyle, width: 'calc(15vmin - 8px)', height: 'calc(15vmin - 8px)', maxWidth: '100%', margin: '0 auto' }}
+                              style={{ ...serveBallBaseStyle, width: `${serveSize}px`, height: `${serveSize}px`, maxWidth: '100%', margin: '0 auto' }}
                             />
                           </div>
                         )
@@ -9296,18 +9295,18 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           flexDirection: 'column',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          gap: '4px',
+                          gap: `${4 * scaleFactor}px`,
                           width: '100%',
                           maxWidth: '100%',
                           margin: '0 auto',
                           boxSizing: 'border-box'
                         }}>
                           <div style={{
-                            fontSize: '4vmin',
+                            fontSize: `${DESIGN_VMIN * 0.04 * scaleFactor}px`,
                             fontWeight: 700,
                             color: 'var(--accent)',
                             textTransform: 'uppercase',
-                            letterSpacing: '1px',
+                            letterSpacing: `${1 * scaleFactor}px`,
                             width: '100%',
                             textAlign: 'center',
                             overflow: 'hidden',
@@ -9316,19 +9315,18 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                             SERVE
                           </div>
                           <div style={{
-                            fontSize: '13vmin',
+                            fontSize: `${DESIGN_VMIN * 0.13 * scaleFactor}px`,
                             fontWeight: 700,
                             color: 'var(--accent)',
-                            width: 'calc(100% - 8px)',
-                            maxWidth: 'calc(15vmin - 8px)',
-                            aspectRatio: '1',
+                            width: `${serveSize}px`,
+                            height: `${serveSize}px`,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             margin: '0 auto',
                             background: 'rgba(34, 197, 94, 0.15)',
-                            border: '3px solid var(--accent)',
-                            borderRadius: '10px',
+                            border: `${3 * scaleFactor}px solid var(--accent)`,
+                            borderRadius: `${10 * scaleFactor}px`,
                             boxSizing: 'border-box'
                           }}>
                             {servingPlayer.number}
@@ -9405,6 +9403,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           const hasDisqualification = sanctions.some(s => s.payload?.type === 'disqualification')
 
 
+                          const playerSize = DESIGN_VMIN * 0.10 * scaleFactor
+                          const positionSize = DESIGN_VMIN * 0.03 * scaleFactor
+                          const positionOffset = DESIGN_VMIN * 0.015 * scaleFactor
+                          const ballSize = DESIGN_VMIN * 0.08 * scaleFactor
                           return (
                             <div
                               key={`${teamKey}-court-front-${player.position}-${player.id || player.number || idx}`}
@@ -9413,7 +9415,12 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               data-player-number={player.number}
                               className="court-player"
                               onClick={(e) => handlePlayerClick(teamKey, player.position, player.number, e)}
-                              style={{ cursor: rallyStatus === 'idle' && !isRallyReplayed ? 'pointer' : 'default' }}
+                              style={{
+                                cursor: rallyStatus === 'idle' && !isRallyReplayed ? 'pointer' : 'default',
+                                width: `${playerSize}px`,
+                                height: `${playerSize}px`,
+                                fontSize: `${DESIGN_VMIN * 0.06 * scaleFactor}px`
+                              }}
                             >
                               {shouldShowBall && (
                                 <img
@@ -9421,36 +9428,42 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                   alt="Volleyball"
                                   style={{
                                     position: 'absolute',
-                                    left: '-8vmin',
+                                    left: `${-ballSize - 12 * scaleFactor}px`,
                                     top: '50%',
                                     transform: 'translateY(-50%)',
-                                    width: '8vmin',
-                                    height: '8vmin',
+                                    width: `${ballSize}px`,
+                                    height: `${ballSize}px`,
                                     zIndex: 5
                                   }}
                                 />
                               )}
-                              <span className="court-player-number">{player.number}</span>
-                              <span className="court-player-position">{player.position}</span>
+                              <span className="court-player-number" style={{ fontSize: `${DESIGN_VMIN * 0.07 * scaleFactor}px` }}>{player.number}</span>
+                              <span className="court-player-position" style={{
+                                top: `${-positionOffset}px`,
+                                left: `${-positionOffset}px`,
+                                width: `${positionSize}px`,
+                                height: `${positionSize}px`,
+                                fontSize: `${DESIGN_VMIN * 0.018 * scaleFactor}px`
+                              }}>{player.position}</span>
                               {/* MTO/RIT indicators - top right of player circle (beach volleyball) */}
                               {(player.mto > 0 || player.rit > 0) && (
                                 <div style={{
                                   position: 'absolute',
-                                  top: '-1vmin',
-                                  right: '-1vmin',
+                                  top: `${-positionOffset}px`,
+                                  right: `${-positionOffset}px`,
                                   display: 'flex',
                                   flexDirection: 'column',
-                                  gap: '1px',
+                                  gap: `${1 * scaleFactor}px`,
                                   zIndex: 10
                                 }}>
                                   {player.mto > 0 && (
                                     <span style={{
                                       background: '#dc2626',
                                       color: '#fff',
-                                      fontSize: '1vmin',
+                                      fontSize: `${DESIGN_VMIN * 0.01 * scaleFactor}px`,
                                       fontWeight: 700,
-                                      padding: '1px 2px',
-                                      borderRadius: '2px',
+                                      padding: `${1 * scaleFactor}px ${2 * scaleFactor}px`,
+                                      borderRadius: `${2 * scaleFactor}px`,
                                       whiteSpace: 'nowrap'
                                     }}>MTO{player.mto > 1 ? ` x${player.mto}` : ''}</span>
                                   )}
@@ -9458,10 +9471,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                     <span style={{
                                       background: '#f59e0b',
                                       color: '#000',
-                                      fontSize: '1vmin',
+                                      fontSize: `${DESIGN_VMIN * 0.01 * scaleFactor}px`,
                                       fontWeight: 700,
-                                      padding: '1px 2px',
-                                      borderRadius: '2px',
+                                      padding: `${1 * scaleFactor}px ${2 * scaleFactor}px`,
+                                      borderRadius: `${2 * scaleFactor}px`,
                                       whiteSpace: 'nowrap'
                                     }}>RIT{player.rit > 1 ? ` x${player.rit}` : ''}</span>
                                   )}
@@ -9469,52 +9482,58 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               )}
                               {/* Captain indicator - show C for captain (including libero-captain) */}
                               {player.isCaptain && (() => {
-          
-                                return <span className="court-player-captain">C</span>
+
+                                return <span className="court-player-captain" style={{
+                                  bottom: `${-positionOffset}px`,
+                                  left: `${-positionOffset}px`,
+                                  width: `${positionSize}px`,
+                                  height: `${positionSize}px`,
+                                  fontSize: `${DESIGN_VMIN * 0.018 * scaleFactor}px`
+                                }}>C</span>
                               })()}
 
                               {/* Sanction cards indicator */}
                               {sanctions.length > 0 && (
                                 <div style={{
                                   position: 'absolute',
-                                  bottom: '-1vmin',
-                                  right: '-1vmin',
+                                  bottom: `${-positionOffset}px`,
+                                  right: `${-positionOffset}px`,
                                   zIndex: 10
                                 }}>
                                   {hasExpulsion ? (
                                     // Expulsion: overlapping rotated cards
-                                    <div style={{ position: 'relative', width: '2vmin', height: '2vmin' }}>
+                                    <div style={{ position: 'relative', width: `${DESIGN_VMIN * 0.02 * scaleFactor}px`, height: `${DESIGN_VMIN * 0.02 * scaleFactor}px` }}>
                                       <div className="sanction-card yellow" style={{
-                                        width: '1vmin',
-                                        height: '1.5vmin',
+                                        width: `${DESIGN_VMIN * 0.01 * scaleFactor}px`,
+                                        height: `${DESIGN_VMIN * 0.015 * scaleFactor}px`,
                                         boxShadow: '0 1px 3px rgba(0,0,0,0.8)',
                                         position: 'absolute',
                                         left: '0',
-                                        top: '0.15vmin',
+                                        top: `${DESIGN_VMIN * 0.0015 * scaleFactor}px`,
                                         transform: 'rotate(-8deg)',
                                         zIndex: 1,
-                                        borderRadius: '1px'
+                                        borderRadius: `${1 * scaleFactor}px`
                                       }}></div>
                                       <div className="sanction-card red" style={{
-                                        width: '1vmin',
-                                        height: '1.5vmin',
+                                        width: `${DESIGN_VMIN * 0.01 * scaleFactor}px`,
+                                        height: `${DESIGN_VMIN * 0.015 * scaleFactor}px`,
                                         boxShadow: '0 1px 3px rgba(0,0,0,0.8)',
                                         position: 'absolute',
                                         right: '0',
-                                        top: '0.15vmin',
+                                        top: `${DESIGN_VMIN * 0.0015 * scaleFactor}px`,
                                         transform: 'rotate(8deg)',
                                         zIndex: 2,
-                                        borderRadius: '1px'
+                                        borderRadius: `${1 * scaleFactor}px`
                                       }}></div>
                                     </div>
                                   ) : (
                                     // Other sanctions: separate cards
-                                    <div style={{ display: 'flex', gap: '0.15vmin' }}>
+                                    <div style={{ display: 'flex', gap: `${DESIGN_VMIN * 0.0015 * scaleFactor}px` }}>
                                       {(hasWarning || hasDisqualification) && (
-                                        <div className="sanction-card yellow" style={{ width: '1.3vmin', height: '1.8vmin', boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: '1px' }}></div>
+                                        <div className="sanction-card yellow" style={{ width: `${DESIGN_VMIN * 0.013 * scaleFactor}px`, height: `${DESIGN_VMIN * 0.018 * scaleFactor}px`, boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: `${1 * scaleFactor}px` }}></div>
                                       )}
                                       {(hasPenalty || hasDisqualification) && (
-                                        <div className="sanction-card red" style={{ width: '1.3vmin', height: '1.8vmin', boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: '1px' }}></div>
+                                        <div className="sanction-card red" style={{ width: `${DESIGN_VMIN * 0.013 * scaleFactor}px`, height: `${DESIGN_VMIN * 0.018 * scaleFactor}px`, boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: `${1 * scaleFactor}px` }}></div>
                                       )}
                                     </div>
                                   )}
@@ -9525,26 +9544,26 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                 <div
                                   style={{
                                     position: 'absolute',
-                                    bottom: '-37px',
+                                    bottom: `${-37 * scaleFactor}px`,
                                     left: '50%',
                                     transform: 'translateX(-50%)',
                                     background: 'rgba(0, 0, 0, 0.85)',
-                                    border: '1px solid rgba(255, 255, 255, 0.3)',
-                                    borderRadius: '3px',
-                                    padding: '1px 4px',
-                                    fontSize: '9px',
+                                    border: `${1 * scaleFactor}px solid rgba(255, 255, 255, 0.3)`,
+                                    borderRadius: `${3 * scaleFactor}px`,
+                                    padding: `${1 * scaleFactor}px ${4 * scaleFactor}px`,
+                                    fontSize: `${9 * scaleFactor}px`,
                                     fontWeight: 600,
                                     color: '#fff',
                                     whiteSpace: 'normal',
-                                    minWidth: '68px',
-                                    maxWidth: '120px',
+                                    minWidth: `${68 * scaleFactor}px`,
+                                    maxWidth: `${120 * scaleFactor}px`,
                                     zIndex: 10,
                                     textTransform: 'uppercase',
-                                    letterSpacing: '0.3px',
+                                    letterSpacing: `${0.3 * scaleFactor}px`,
                                     display: 'flex',
                                     flexDirection: 'column',
                                     alignItems: 'center',
-                                    gap: '2px',
+                                    gap: `${2 * scaleFactor}px`,
                                     textAlign: 'center',
                                     lineHeight: '1.2'
                                   }}>
@@ -9592,11 +9611,11 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                   alt="Volleyball"
                                   style={{
                                     position: 'absolute',
-                                    left: '-8vmin',
+                                    left: `${-(DESIGN_VMIN * 0.08 * scaleFactor) - 12 * scaleFactor}px`,
                                     top: '50%',
                                     transform: 'translateY(-50%)',
-                                    width: '8vmin',
-                                    height: '8vmin',
+                                    width: `${DESIGN_VMIN * 0.08 * scaleFactor}px`,
+                                    height: `${DESIGN_VMIN * 0.08 * scaleFactor}px`,
                                     zIndex: 5
                                   }}
                                 />
@@ -9716,13 +9735,22 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           const hasExpulsion = sanctions.some(s => s.payload?.type === 'expulsion')
                           const hasDisqualification = sanctions.some(s => s.payload?.type === 'disqualification')
 
+                          const playerSize = DESIGN_VMIN * 0.10 * scaleFactor
+                          const positionSize = DESIGN_VMIN * 0.03 * scaleFactor
+                          const positionOffset = DESIGN_VMIN * 0.015 * scaleFactor
+                          const ballSize = DESIGN_VMIN * 0.08 * scaleFactor
                           return (
                             <div
                               key={`${teamKey}-court-front-${player.position}-${player.id || player.number || idx}`}
                               ref={player.position === 'II' ? rightCourtPositionIIRef : undefined}
                               className="court-player"
                               onClick={(e) => handlePlayerClick(teamKey, player.position, player.number, e)}
-                              style={{ cursor: rallyStatus === 'idle' && !isRallyReplayed ? 'pointer' : 'default' }}
+                              style={{
+                                cursor: rallyStatus === 'idle' && !isRallyReplayed ? 'pointer' : 'default',
+                                width: `${playerSize}px`,
+                                height: `${playerSize}px`,
+                                fontSize: `${DESIGN_VMIN * 0.06 * scaleFactor}px`
+                              }}
                             >
                               {shouldShowBall && (
                                 <img
@@ -9730,36 +9758,42 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                   alt="Volleyball"
                                   style={{
                                     position: 'absolute',
-                                    right: '-8vmin',
+                                    right: `${-ballSize - 12 * scaleFactor}px`,
                                     top: '50%',
                                     transform: 'translateY(-50%)',
-                                    width: '8vmin',
-                                    height: '8vmin',
+                                    width: `${ballSize}px`,
+                                    height: `${ballSize}px`,
                                     zIndex: 5
                                   }}
                                 />
                               )}
-                              <span className="court-player-number">{player.number}</span>
-                              <span className="court-player-position">{player.position}</span>
+                              <span className="court-player-number" style={{ fontSize: `${DESIGN_VMIN * 0.07 * scaleFactor}px` }}>{player.number}</span>
+                              <span className="court-player-position" style={{
+                                top: `${-positionOffset}px`,
+                                left: `${-positionOffset}px`,
+                                width: `${positionSize}px`,
+                                height: `${positionSize}px`,
+                                fontSize: `${DESIGN_VMIN * 0.018 * scaleFactor}px`
+                              }}>{player.position}</span>
                               {/* MTO/RIT indicators - top right of player circle (beach volleyball) */}
                               {(player.mto > 0 || player.rit > 0) && (
                                 <div style={{
                                   position: 'absolute',
-                                  top: '-1vmin',
-                                  right: '-1vmin',
+                                  top: `${-positionOffset}px`,
+                                  right: `${-positionOffset}px`,
                                   display: 'flex',
                                   flexDirection: 'column',
-                                  gap: '1px',
+                                  gap: `${1 * scaleFactor}px`,
                                   zIndex: 10
                                 }}>
                                   {player.mto > 0 && (
                                     <span style={{
                                       background: '#dc2626',
                                       color: '#fff',
-                                      fontSize: '1vmin',
+                                      fontSize: `${DESIGN_VMIN * 0.01 * scaleFactor}px`,
                                       fontWeight: 700,
-                                      padding: '1px 2px',
-                                      borderRadius: '2px',
+                                      padding: `${1 * scaleFactor}px ${2 * scaleFactor}px`,
+                                      borderRadius: `${2 * scaleFactor}px`,
                                       whiteSpace: 'nowrap'
                                     }}>MTO{player.mto > 1 ? ` x${player.mto}` : ''}</span>
                                   )}
@@ -9767,10 +9801,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                     <span style={{
                                       background: '#f59e0b',
                                       color: '#000',
-                                      fontSize: '1vmin',
+                                      fontSize: `${DESIGN_VMIN * 0.01 * scaleFactor}px`,
                                       fontWeight: 700,
-                                      padding: '1px 2px',
-                                      borderRadius: '2px',
+                                      padding: `${1 * scaleFactor}px ${2 * scaleFactor}px`,
+                                      borderRadius: `${2 * scaleFactor}px`,
                                       whiteSpace: 'nowrap'
                                     }}>RIT{player.rit > 1 ? ` x${player.rit}` : ''}</span>
                                   )}
@@ -9778,52 +9812,57 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               )}
                               {/* Bottom-left indicators: Captain C (including libero-captain) */}
                               {player.isCaptain && (() => {
-                                return <span className="court-player-captain">C</span>
+                                return <span className="court-player-captain" style={{
+                                  bottom: `${-positionOffset}px`,
+                                  left: `${-positionOffset}px`,
+                                  width: `${positionSize}px`,
+                                  height: `${positionSize}px`,
+                                  fontSize: `${DESIGN_VMIN * 0.018 * scaleFactor}px`
+                                }}>C</span>
                               })()}
-                              
 
                               {/* Sanction cards indicator */}
                               {sanctions.length > 0 && (
                                 <div style={{
                                   position: 'absolute',
-                                  bottom: '-1vmin',
-                                  right: '-1vmin',
+                                  bottom: `${-positionOffset}px`,
+                                  right: `${-positionOffset}px`,
                                   zIndex: 10
                                 }}>
                                   {hasExpulsion ? (
                                     // Expulsion: overlapping rotated cards
-                                    <div style={{ position: 'relative', width: '2vmin', height: '2vmin' }}>
+                                    <div style={{ position: 'relative', width: `${DESIGN_VMIN * 0.02 * scaleFactor}px`, height: `${DESIGN_VMIN * 0.02 * scaleFactor}px` }}>
                                       <div className="sanction-card yellow" style={{
-                                        width: '1vmin',
-                                        height: '1.5vmin',
+                                        width: `${DESIGN_VMIN * 0.01 * scaleFactor}px`,
+                                        height: `${DESIGN_VMIN * 0.015 * scaleFactor}px`,
                                         boxShadow: '0 1px 3px rgba(0,0,0,0.8)',
                                         position: 'absolute',
                                         left: '0',
-                                        top: '0.15vmin',
+                                        top: `${DESIGN_VMIN * 0.0015 * scaleFactor}px`,
                                         transform: 'rotate(-8deg)',
                                         zIndex: 1,
-                                        borderRadius: '1px'
+                                        borderRadius: `${1 * scaleFactor}px`
                                       }}></div>
                                       <div className="sanction-card red" style={{
-                                        width: '1vmin',
-                                        height: '1.5vmin',
+                                        width: `${DESIGN_VMIN * 0.01 * scaleFactor}px`,
+                                        height: `${DESIGN_VMIN * 0.015 * scaleFactor}px`,
                                         boxShadow: '0 1px 3px rgba(0,0,0,0.8)',
                                         position: 'absolute',
                                         right: '0',
-                                        top: '0.15vmin',
+                                        top: `${DESIGN_VMIN * 0.0015 * scaleFactor}px`,
                                         transform: 'rotate(8deg)',
                                         zIndex: 2,
-                                        borderRadius: '1px'
+                                        borderRadius: `${1 * scaleFactor}px`
                                       }}></div>
                                     </div>
                                   ) : (
                                     // Other sanctions: separate cards
-                                    <div style={{ display: 'flex', gap: '0.15vmin' }}>
+                                    <div style={{ display: 'flex', gap: `${DESIGN_VMIN * 0.0015 * scaleFactor}px` }}>
                                       {(hasWarning || hasDisqualification) && (
-                                        <div className="sanction-card yellow" style={{ width: '1.3vmin', height: '1.8vmin', boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: '1px' }}></div>
+                                        <div className="sanction-card yellow" style={{ width: `${DESIGN_VMIN * 0.013 * scaleFactor}px`, height: `${DESIGN_VMIN * 0.018 * scaleFactor}px`, boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: `${1 * scaleFactor}px` }}></div>
                                       )}
                                       {(hasPenalty || hasDisqualification) && (
-                                        <div className="sanction-card red" style={{ width: '1.3vmin', height: '1.8vmin', boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: '1px' }}></div>
+                                        <div className="sanction-card red" style={{ width: `${DESIGN_VMIN * 0.013 * scaleFactor}px`, height: `${DESIGN_VMIN * 0.018 * scaleFactor}px`, boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: `${1 * scaleFactor}px` }}></div>
                                       )}
                                     </div>
                                   )}
@@ -9834,26 +9873,26 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                 <div
                                   style={{
                                     position: 'absolute',
-                                    bottom: '-37px',
+                                    bottom: `${-37 * scaleFactor}px`,
                                     left: '50%',
                                     transform: 'translateX(-50%)',
                                     background: 'rgba(0, 0, 0, 0.85)',
-                                    border: '1px solid rgba(255, 255, 255, 0.3)',
-                                    borderRadius: '3px',
-                                    padding: '1px 4px',
-                                    fontSize: '9px',
+                                    border: `${1 * scaleFactor}px solid rgba(255, 255, 255, 0.3)`,
+                                    borderRadius: `${3 * scaleFactor}px`,
+                                    padding: `${1 * scaleFactor}px ${4 * scaleFactor}px`,
+                                    fontSize: `${9 * scaleFactor}px`,
                                     fontWeight: 600,
                                     color: '#fff',
                                     whiteSpace: 'normal',
-                                    minWidth: '68px',
-                                    maxWidth: '120px',
+                                    minWidth: `${68 * scaleFactor}px`,
+                                    maxWidth: `${120 * scaleFactor}px`,
                                     zIndex: 10,
                                     textTransform: 'uppercase',
-                                    letterSpacing: '0.3px',
+                                    letterSpacing: `${0.3 * scaleFactor}px`,
                                     display: 'flex',
                                     flexDirection: 'column',
                                     alignItems: 'center',
-                                    gap: '2px',
+                                    gap: `${2 * scaleFactor}px`,
                                     textAlign: 'center',
                                     lineHeight: '1.2'
                                   }}>
@@ -9884,6 +9923,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           const hasExpulsion = sanctions.some(s => s.payload?.type === 'expulsion')
                           const hasDisqualification = sanctions.some(s => s.payload?.type === 'disqualification')
 
+                          const playerSize = DESIGN_VMIN * 0.10 * scaleFactor
+                          const positionSize = DESIGN_VMIN * 0.03 * scaleFactor
+                          const positionOffset = DESIGN_VMIN * 0.015 * scaleFactor
+                          const ballSize = DESIGN_VMIN * 0.08 * scaleFactor
                           return (
                             <div
                               key={`${rightTeamKey}-court-back-${player.position}-${player.id || player.number || idx}`}
@@ -9891,7 +9934,11 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               data-team={rightTeamKey}
                               data-player-number={player.number}
                               className="court-player"
-                              
+                              style={{
+                                width: `${playerSize}px`,
+                                height: `${playerSize}px`,
+                                fontSize: `${DESIGN_VMIN * 0.06 * scaleFactor}px`
+                              }}
                             >
                               {shouldShowBall && (
                                 <img
@@ -9899,61 +9946,66 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                   alt="Volleyball"
                                   style={{
                                     position: 'absolute',
-                                    right: '-8vmin',
+                                    right: `${-ballSize - 12 * scaleFactor}px`,
                                     top: '50%',
                                     transform: 'translateY(-50%)',
-                                    width: '8vmin',
-                                    height: '8vmin',
+                                    width: `${ballSize}px`,
+                                    height: `${ballSize}px`,
                                     zIndex: 5
                                   }}
                                 />
                               )}
-                              
-                              <span className="court-player-position">{player.position}</span>
-                              
+
+                              <span className="court-player-position" style={{
+                                top: `${-positionOffset}px`,
+                                left: `${-positionOffset}px`,
+                                width: `${positionSize}px`,
+                                height: `${positionSize}px`,
+                                fontSize: `${DESIGN_VMIN * 0.018 * scaleFactor}px`
+                              }}>{player.position}</span>
 
                               {/* Sanction cards indicator */}
                               {sanctions.length > 0 && (
                                 <div style={{
                                   position: 'absolute',
-                                  bottom: '-1vmin',
-                                  right: '-1vmin',
+                                  bottom: `${-positionOffset}px`,
+                                  right: `${-positionOffset}px`,
                                   zIndex: 10
                                 }}>
                                   {hasExpulsion ? (
                                     // Expulsion: overlapping rotated cards
-                                    <div style={{ position: 'relative', width: '2vmin', height: '2vmin' }}>
+                                    <div style={{ position: 'relative', width: `${DESIGN_VMIN * 0.02 * scaleFactor}px`, height: `${DESIGN_VMIN * 0.02 * scaleFactor}px` }}>
                                       <div className="sanction-card yellow" style={{
-                                        width: '1vmin',
-                                        height: '1.5vmin',
+                                        width: `${DESIGN_VMIN * 0.01 * scaleFactor}px`,
+                                        height: `${DESIGN_VMIN * 0.015 * scaleFactor}px`,
                                         boxShadow: '0 1px 3px rgba(0,0,0,0.8)',
                                         position: 'absolute',
                                         left: '0',
-                                        top: '0.15vmin',
+                                        top: `${DESIGN_VMIN * 0.0015 * scaleFactor}px`,
                                         transform: 'rotate(-8deg)',
                                         zIndex: 1,
-                                        borderRadius: '1px'
+                                        borderRadius: `${1 * scaleFactor}px`
                                       }}></div>
                                       <div className="sanction-card red" style={{
-                                        width: '1vmin',
-                                        height: '1.5vmin',
+                                        width: `${DESIGN_VMIN * 0.01 * scaleFactor}px`,
+                                        height: `${DESIGN_VMIN * 0.015 * scaleFactor}px`,
                                         boxShadow: '0 1px 3px rgba(0,0,0,0.8)',
                                         position: 'absolute',
                                         right: '0',
-                                        top: '0.15vmin',
+                                        top: `${DESIGN_VMIN * 0.0015 * scaleFactor}px`,
                                         transform: 'rotate(8deg)',
                                         zIndex: 2,
-                                        borderRadius: '1px'
+                                        borderRadius: `${1 * scaleFactor}px`
                                       }}></div>
                                     </div>
                                   ) : (
                                     // Other sanctions: separate cards
-                                    <div style={{ display: 'flex', gap: '0.15vmin' }}>
+                                    <div style={{ display: 'flex', gap: `${DESIGN_VMIN * 0.0015 * scaleFactor}px` }}>
                                       {(hasWarning || hasDisqualification) && (
-                                        <div className="sanction-card yellow" style={{ width: '1.3vmin', height: '1.8vmin', boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: '1px' }}></div>
+                                        <div className="sanction-card yellow" style={{ width: `${DESIGN_VMIN * 0.013 * scaleFactor}px`, height: `${DESIGN_VMIN * 0.018 * scaleFactor}px`, boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: `${1 * scaleFactor}px` }}></div>
                                       )}
                                       {(hasPenalty || hasDisqualification) && (
-                                        <div className="sanction-card red" style={{ width: '1.3vmin', height: '1.8vmin', boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: '1px' }}></div>
+                                        <div className="sanction-card red" style={{ width: `${DESIGN_VMIN * 0.013 * scaleFactor}px`, height: `${DESIGN_VMIN * 0.018 * scaleFactor}px`, boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: `${1 * scaleFactor}px` }}></div>
                                       )}
                                     </div>
                                   )}
@@ -9964,26 +10016,26 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                 <div
                                   style={{
                                     position: 'absolute',
-                                    bottom: '-37px',
+                                    bottom: `${-37 * scaleFactor}px`,
                                     left: '50%',
                                     transform: 'translateX(-50%)',
                                     background: 'rgba(0, 0, 0, 0.85)',
-                                    border: '1px solid rgba(255, 255, 255, 0.3)',
-                                    borderRadius: '3px',
-                                    padding: '1px 4px',
-                                    fontSize: '9px',
+                                    border: `${1 * scaleFactor}px solid rgba(255, 255, 255, 0.3)`,
+                                    borderRadius: `${3 * scaleFactor}px`,
+                                    padding: `${1 * scaleFactor}px ${4 * scaleFactor}px`,
+                                    fontSize: `${9 * scaleFactor}px`,
                                     fontWeight: 600,
                                     color: '#fff',
                                     whiteSpace: 'normal',
-                                    minWidth: '68px',
-                                    maxWidth: '120px',
+                                    minWidth: `${68 * scaleFactor}px`,
+                                    maxWidth: `${120 * scaleFactor}px`,
                                     zIndex: 10,
                                     textTransform: 'uppercase',
-                                    letterSpacing: '0.3px',
+                                    letterSpacing: `${0.3 * scaleFactor}px`,
                                     display: 'flex',
                                     flexDirection: 'column',
                                     alignItems: 'center',
-                                    gap: '2px',
+                                    gap: `${2 * scaleFactor}px`,
                                     textAlign: 'center',
                                     lineHeight: '1.2'
                                   }}>
@@ -10028,23 +10080,24 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    width: '15vmin',
+                    width: `${DESIGN_VMIN * 0.15 * scaleFactor}px`,
                     minWidth: 0,
                     flexShrink: 0,
-                    padding: '0 4px',
+                    padding: `0 ${4 * scaleFactor}px`,
                     overflow: 'hidden',
                     boxSizing: 'border-box'
                   }}>
                     {rightServing && (() => {
                       const rightTeamKey = leftisTeam1 ? 'team2' : 'team1'
                       const servingPlayer = getServingPlayer(rightTeamKey, rightTeam)
+                      const serveSize = DESIGN_VMIN * 0.15 * scaleFactor - 8
                       if (!servingPlayer || !servingPlayer.number) {
                         return (
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', maxWidth: '100%' }}>
                             <img
                               src={ballImage} onError={(e) => e.target.src = ballimage}
                               alt="Serving team"
-                              style={{ ...serveBallBaseStyle, width: 'calc(15vmin - 8px)', height: 'calc(15vmin - 8px)', maxWidth: '100%', margin: '0 auto' }}
+                              style={{ ...serveBallBaseStyle, width: `${serveSize}px`, height: `${serveSize}px`, maxWidth: '100%', margin: '0 auto' }}
                             />
                           </div>
                         )
@@ -10055,18 +10108,18 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           flexDirection: 'column',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          gap: '4px',
+                          gap: `${4 * scaleFactor}px`,
                           width: '100%',
                           maxWidth: '100%',
                           margin: '0 auto',
                           boxSizing: 'border-box'
                         }}>
                           <div style={{
-                            fontSize: '4vmin',
+                            fontSize: `${DESIGN_VMIN * 0.04 * scaleFactor}px`,
                             fontWeight: 700,
                             color: 'var(--accent)',
                             textTransform: 'uppercase',
-                            letterSpacing: '1px',
+                            letterSpacing: `${1 * scaleFactor}px`,
                             width: '100%',
                             textAlign: 'center',
                             overflow: 'hidden',
@@ -10075,19 +10128,18 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                             SERVE
                           </div>
                           <div style={{
-                            fontSize: '13vmin',
+                            fontSize: `${DESIGN_VMIN * 0.13 * scaleFactor}px`,
                             fontWeight: 700,
                             color: 'var(--accent)',
-                            width: 'calc(100% - 8px)',
-                            maxWidth: 'calc(15vmin - 8px)',
-                            aspectRatio: '1',
+                            width: `${serveSize}px`,
+                            height: `${serveSize}px`,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             margin: '0 auto',
                             background: 'rgba(34, 197, 94, 0.15)',
-                            border: '3px solid var(--accent)',
-                            borderRadius: '10px',
+                            border: `${3 * scaleFactor}px solid var(--accent)`,
+                            borderRadius: `${10 * scaleFactor}px`,
                             boxSizing: 'border-box'
                           }}>
                             {servingPlayer.number}
@@ -10100,16 +10152,16 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                   {/* RIGHT TEAM TOOLBOX (15%) */}
                   <div style={{
                     flex: '0 0 auto',
-                    width: 'min(30vh, 30vw)',
+                    width: `${DESIGN_VMIN * 0.3 * scaleFactor}px`,
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '8px',
+                    gap: `${8 * scaleFactor}px`,
                     alignItems: 'center',
                     justifyContent: 'flex-start',
                     background: 'rgba(15, 23, 42, 0.6)',
                     border: '1px solid rgba(255, 255, 255, 0.08)',
-                    borderRadius: '8px',
-                    padding: '8px'
+                    borderRadius: `${8 * scaleFactor}px`,
+                    padding: `${8 * scaleFactor}px`
                   }}>
                     {/* Team Header - A/B label, team name, country */}
                     {(() => {
@@ -10128,17 +10180,17 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                         <div style={{
                           width: '100%',
                           background: rightTeamColor,
-                          borderRadius: '6px',
-                          padding: '8px 4px',
+                          borderRadius: `${6 * scaleFactor}px`,
+                          padding: `${8 * scaleFactor}px ${4 * scaleFactor}px`,
                           textAlign: 'center',
                           color: isBrightColor(rightTeamColor) ? '#000' : '#fff'
                         }}>
-                          <div style={{ fontSize: '4vmin', fontWeight: 700, lineHeight: 1.2 }}>{rightTeamLabel}</div>
+                          <div style={{ fontSize: `${DESIGN_VMIN * 0.04 * scaleFactor}px`, fontWeight: 700, lineHeight: 1.2 }}>{rightTeamLabel}</div>
                           {playerNames && (
-                            <div style={{ fontSize: '2vmin', fontWeight: 600, marginTop: '2px', lineHeight: 1.2, wordBreak: 'break-word' }}>{playerNames}</div>
+                            <div style={{ fontSize: `${DESIGN_VMIN * 0.02 * scaleFactor}px`, fontWeight: 600, marginTop: `${2 * scaleFactor}px`, lineHeight: 1.2, wordBreak: 'break-word' }}>{playerNames}</div>
                           )}
                           {rightCountry && (
-                            <div style={{ fontSize: '2vmin', fontWeight: 500, marginTop: '2px', opacity: 0.9 }}>{rightCountry}</div>
+                            <div style={{ fontSize: `${DESIGN_VMIN * 0.02 * scaleFactor}px`, fontWeight: 500, marginTop: `${2 * scaleFactor}px`, opacity: 0.9 }}>{rightCountry}</div>
                           )}
                         </div>
                       )
