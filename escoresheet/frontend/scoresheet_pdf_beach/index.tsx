@@ -33,7 +33,6 @@ window.addEventListener('unhandledrejection', (event) => {
 const loadMatchData = () => {
   try {
     const dataStr = sessionStorage.getItem('scoresheetData');
-    console.log('[Scoresheet Load] Loading scoresheet data from sessionStorage:', dataStr ? 'Data found' : 'No data');
     
     if (!dataStr) {
       // No data available - show empty scoresheet
@@ -42,7 +41,7 @@ const loadMatchData = () => {
     }
     
     const data = JSON.parse(dataStr);
-    console.log('[Scoresheet Load] Parsed scoresheet data:', {
+    console.debug('[Scoresheet Load] Loaded data:', {
       hasData: !!data,
       match: data?.match ? {
         id: data.match.id,

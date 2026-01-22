@@ -593,7 +593,6 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
         throw matchError
       }
 
-      console.log('[ManualAdjustments] Supabase sync completed')
     } catch (error) {
       console.error('Supabase sync error:', error)
     }

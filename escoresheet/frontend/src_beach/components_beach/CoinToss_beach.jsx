@@ -251,7 +251,6 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         }
       })
 
-      console.log(`[CoinToss] Roster synced for ${teamType} team (local)`)
 
       // Also sync to Supabase if match has seed_key
       if (supabase && match.seed_key) {
@@ -284,7 +283,6 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
             .select('id')
             .single()
 
-          console.log(`[CoinToss] Roster synced for ${teamType} team (Supabase)`)
 
           // Also update match_live_state if it exists (just team info, not deprecated columns)
           if (supabaseMatch?.id) {
@@ -306,7 +304,6 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               })
               .eq('match_id', supabaseMatch.id)
 
-            console.log(`[CoinToss] Team info synced for ${teamType} team (match_live_state)`)
           }
         } catch (supabaseErr) {
           console.warn('[CoinToss] Failed to sync roster to Supabase:', supabaseErr)
@@ -479,7 +476,6 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
 
   // Execute coin toss after all validations pass
   async function proceedWithCoinToss() {
-    console.log('[CoinToss] proceedWithCoinToss called')
 
     if (!matchId) {
       console.error('[CoinToss] No match ID available')
@@ -720,7 +716,6 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
 
     // Update match status to 'live' and set current_set to 1
     await db.matches.update(matchId, { status: 'live', current_set: 1 })
-    console.log('[CoinToss] Match status updated to live, current_set: 1')
 
     // Sync match status to Supabase (including officials, signatures, and referee connection info)
     // Only sync if match has seed_key (for Supabase lookup)
@@ -806,7 +801,6 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           if (insertError) {
             console.warn('[CoinToss] Failed to create initial match_live_state:', insertError)
           } else {
-            console.log('[CoinToss] Created initial match_live_state for Referee app')
           }
         }
       } catch (err) {
@@ -884,7 +878,6 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
             })
             return
           } else {
-            console.log('[CoinToss] Match status verified as live in Supabase')
           }
         } else {
           // No seed key - skip verification
@@ -900,7 +893,6 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
     }
 
     if (verificationSkipped) {
-      console.log('[CoinToss] Verification skipped (offline or no Supabase), proceeding with local status')
     }
 
     // Upload scoresheet to cloud (async, non-blocking)
@@ -924,13 +916,11 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
     await new Promise(resolve => setTimeout(resolve, 1000))
 
     setInitModal(null)
-    console.log('[CoinToss] Coin toss complete, navigating to scoreboard')
     // Navigate to scoreboard
     onConfirm(matchId)
   }
 
   async function confirmCoinToss() {
-    console.log('[CoinToss] confirmCoinToss called, match:', { id: matchId, test: match?.test })
 
     // Validation checks (skip for test matches)
     if (!match?.test) {
@@ -1041,11 +1031,9 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
 
       // Show validation errors if any
       if (validationErrors.length > 0) {
-        console.log('[CoinToss] Validation errors:', validationErrors)
         setNoticeModal({ message: validationErrors.join('\n') })
         return
       }
-      console.log('[CoinToss] All validations passed')
 
       // 11. Check for dates that might be import errors (01.01.yyyy for any year) - ask for confirmation
       const suspiciousDates = []
@@ -1469,42 +1457,6 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                     events: [],
                     sanctions: []
                   }
-
-                  console.log('[CoinToss] Saving scoresheet data to sessionStorage:', {
-                    source: 'CoinToss Component',
-                    match: {
-                      id: scoresheetData.match.id,
-                      coinTossTeamA: scoresheetData.match.coinTossTeamA,
-                      coinTossTeamB: scoresheetData.match.coinTossTeamB,
-                      coinTossData: scoresheetData.match.coinTossData,
-                      team1Country: scoresheetData.match.team1Country,
-                      team2Country: scoresheetData.match.team2Country,
-                      team_1Country: scoresheetData.match.team_1Country,
-                      team_2Country: scoresheetData.match.team_2Country
-                    },
-                    team1Team: {
-                      name: scoresheetData.team_1Team?.name,
-                      country: scoresheetData.team_1Team?.country
-                    },
-                    team2Team: {
-                      name: scoresheetData.team_2Team?.name,
-                      country: scoresheetData.team_2Team?.country
-                    },
-                    team1Players: scoresheetData.team_1Players?.map(p => ({
-                      number: p.number,
-                      firstName: p.firstName,
-                      lastName: p.lastName,
-                      isCaptain: p.isCaptain
-                    })),
-                    team2Players: scoresheetData.team_2Players?.map(p => ({
-                      number: p.number,
-                      firstName: p.firstName,
-                      lastName: p.lastName,
-                      isCaptain: p.isCaptain
-                    })),
-                    setsCount: scoresheetData.sets?.length || 0,
-                    eventsCount: scoresheetData.events?.length || 0
-                  });
 
                   sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
                   const scoresheetWindow = window.open('/scoresheet_beach.html', '_blank', 'width=1200,height=900')

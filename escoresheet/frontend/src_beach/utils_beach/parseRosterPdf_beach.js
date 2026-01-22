@@ -34,12 +34,9 @@ export async function parseRosterPdf(file) {
       fullText += pageText + '\n'
     }
 
-    // Removed console.log('[parseRosterPdf] Extracted text (first 2000 chars):', fullText.substring(0, 2000))
-    // Removed console.log('[parseRosterPdf] Full text length:', fullText.length)
 
     // Parse the text to extract player and official data
     const result = parseRosterText(fullText)
-    // Removed console.log('[parseRosterPdf] Parse result:', result)
     return result
   } catch (error) {
     console.error('Error parsing PDF:', error)
@@ -55,12 +52,10 @@ function parseRosterText(text) {
     ac2: null
   }
 
-  // Removed console.log('[parseRosterText] Raw text (first 1000 chars):', text.substring(0, 1000))
 
   // Normalize text - remove extra whitespace
   const normalizedText = text.replace(/\s+/g, ' ').trim()
   
-  // Removed console.log('[parseRosterText] Normalized text (first 1000 chars):', normalizedText.substring(0, 1000))
   
   // Helper: name word pattern with hyphen and apostrophe support
   // Supports: Jean-Pierre, O'Brien, D'Angelo, Müller, François
@@ -212,7 +207,6 @@ function parseRosterText(text) {
           const lastName = match[3].trim()
           const dob = normalizeDate(match[4].trim())
           
-          // Removed console.log('[parseRosterText] Found simple format player:', { number, firstName, lastName, dob })
           
           result.players.push({
             number,
@@ -223,7 +217,6 @@ function parseRosterText(text) {
         }
       }
       
-      // Removed console.log('[parseRosterText] Total players found:', result.players.length)
     
     // Parse Italian/German/French coach format:
     // Italian: "Allenatore: #52205 | Michelle Howald (1997)"
@@ -238,7 +231,6 @@ function parseRosterText(text) {
           lastName: coachMatch[2]?.trim() || '',
           dob: coachMatch[3] ? `01/01/${coachMatch[3]}` : '' // Year only, set to Jan 1
         }
-        // Removed console.log('[parseRosterText] Found coach:', result.coach)
       }
     }
     
@@ -255,7 +247,6 @@ function parseRosterText(text) {
           lastName: ac1Match[2]?.trim() || '',
           dob: ac1Match[3] ? `01/01/${ac1Match[3]}` : ''
         }
-        // Removed console.log('[parseRosterText] Found AC1:', result.ac1)
       }
     }
     
@@ -272,7 +263,6 @@ function parseRosterText(text) {
           lastName: ac2Match[2]?.trim() || '',
           dob: ac2Match[3] ? `01/01/${ac2Match[3]}` : ''
         }
-        // Removed console.log('[parseRosterText] Found AC2:', result.ac2)
       }
     }
 

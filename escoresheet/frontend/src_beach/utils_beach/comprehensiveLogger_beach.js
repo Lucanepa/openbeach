@@ -74,7 +74,6 @@ export function initComprehensiveLogger(gameN = null, mId = null) {
   document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('beforeunload', handleBeforeUnload)
 
-  console.log('[ComprehensiveLogger] Initialized (local-only mode) with session:', sessionId)
 }
 
 /**
@@ -178,7 +177,6 @@ export function log(category, type, component, action, payload = {}, target = nu
 
   // Console output for debugging
   if (CONFIG.LOG_TO_CONSOLE) {
-    console.log(`[CLog] ${category}:${type} ${component}.${action}`, payload)
   }
 
   return entry
@@ -289,7 +287,6 @@ async function flushToIndexedDB() {
     await db.interaction_logs.bulkAdd(entriesToFlush)
 
     if (CONFIG.LOG_TO_CONSOLE) {
-      console.log(`[ComprehensiveLogger] Flushed ${entriesToFlush.length} entries to IndexedDB`)
     }
 
   } catch (err) {
@@ -309,7 +306,6 @@ async function flushToIndexedDB() {
         }
       }
       if (CONFIG.LOG_TO_CONSOLE) {
-        console.log(`[ComprehensiveLogger] Recovered ${successCount}/${entriesToFlush.length} entries`)
       }
     } else {
       console.error('[ComprehensiveLogger] IndexedDB flush failed:', err)
@@ -352,7 +348,6 @@ async function recoverFromStorage() {
           // Store in IndexedDB
           if (db.interaction_logs) {
             await db.interaction_logs.bulkAdd(logs)
-            console.log(`[ComprehensiveLogger] Recovered ${logs.length} entries from emergency backup`)
           }
         }
         localStorage.removeItem(key)
@@ -503,7 +498,6 @@ export async function downloadLogs(gameN = null, format = 'ndjson') {
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
 
-    console.log(`[ComprehensiveLogger] Downloaded logs: ${filename}`)
     return filename
 
   } catch (err) {
@@ -558,7 +552,6 @@ export async function clearLogs(gameN = null) {
       logBuffer = []
     }
 
-    console.log(`[ComprehensiveLogger] Cleared logs${gameN !== null ? ` for game ${gameN}` : ''}`)
 
   } catch (err) {
     console.error('[ComprehensiveLogger] Clear failed:', err)
@@ -580,7 +573,6 @@ export function shutdownLogger() {
   window.removeEventListener('beforeunload', handleBeforeUnload)
 
   isInitialized = false
-  console.log('[ComprehensiveLogger] Shutdown complete')
 }
 
 /**

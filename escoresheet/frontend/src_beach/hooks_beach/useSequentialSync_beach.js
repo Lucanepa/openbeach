@@ -43,7 +43,6 @@ export function useSequentialSync() {
 
       if (result.success) {
         await db.sync_queue.update(jobId, { status: 'sent' })
-        console.log(`[SequentialSync] ${job.resource} ${job.action} successful`)
         return { success: true, jobId }
       } else {
         // LOG THE ERROR with full details

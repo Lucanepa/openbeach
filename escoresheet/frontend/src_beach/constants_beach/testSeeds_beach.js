@@ -10,7 +10,7 @@ export const TEST_MATCH_DEFAULTS = {
   league: 'Beach Tour A1 - Zürich',
   matchNumber: '1',
   gameNumber: '1',
-  court: 'Main Court',
+  court: '1',
   gender: 'women',
   phase: 'main',
   round: 'pool',

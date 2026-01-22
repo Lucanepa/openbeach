@@ -210,7 +210,8 @@ export default function RefereeApp() {
       }
 
       if (result.success && result.matches) {
-        console.log(`[RefereeApp] Available games (${source}):`, result.matches.length, '| Games:', result.matches.map(m => ({
+        console.debug('[RefereeApp] Loaded matches:', result.matches.map(m => ({
+          id: m.id,
           gameNumber: m.gameNumber,
           refereeEnabled: m.refereeConnectionEnabled
         })))
@@ -266,17 +267,14 @@ export default function RefereeApp() {
             try { await wakeLockRef.current.release() } catch (e) {}
           }
           wakeLockRef.current = await navigator.wakeLock.request('screen')
-          console.log('[WakeLock] Screen wake lock acquired (RefereeApp)')
           setWakeLockActive(true)
           wakeLockRef.current.addEventListener('release', () => {
-            console.log('[WakeLock] Screen wake lock released (RefereeApp)')
             if (!wakeLockRef.current) {
               setWakeLockActive(false)
             }
           })
         }
       } catch (err) {
-        console.log('[WakeLock] Wake lock failed:', err.message)
       }
     }
 
@@ -309,16 +307,13 @@ export default function RefereeApp() {
         } catch (e) {}
       }
       setWakeLockActive(false)
-      console.log('[WakeLock] Manually disabled')
     } else {
       try {
         if ('wakeLock' in navigator) {
           wakeLockRef.current = await navigator.wakeLock.request('screen')
           setWakeLockActive(true)
-          console.log('[WakeLock] Manually enabled')
         }
       } catch (err) {
-        console.log('[WakeLock] Failed to enable:', err.message)
         setWakeLockActive(true)
       }
     }
@@ -406,7 +401,6 @@ export default function RefereeApp() {
       }
 
       if (result.success && result.match) {
-        console.log(`[RefereeApp] PIN validated via ${source}`)
         setMatchId(result.match.id)
         setMatch(result.match)
         localStorage.setItem('refereeMatchId', String(result.match.id))

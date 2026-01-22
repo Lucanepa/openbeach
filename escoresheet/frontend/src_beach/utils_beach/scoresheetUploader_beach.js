@@ -28,13 +28,11 @@ export async function uploadScoresheet({
 }) {
   // Skip if no supabase or no match
   if (!supabase || !match) {
-    console.log('[scoresheetUploader] Skipping - no supabase or match')
     return { success: false, error: 'No supabase or match' }
   }
 
   // Skip test matches
   if (match.test) {
-    console.log('[scoresheetUploader] Skipping test match')
     return { success: false, error: 'Test match' }
   }
 
@@ -77,7 +75,6 @@ export async function uploadScoresheet({
       return { success: false, error: uploadError.message }
     }
 
-    console.log('[scoresheetUploader] Uploaded successfully:', storagePath)
     return { success: true, path: storagePath }
 
   } catch (error) {
@@ -94,7 +91,6 @@ export function uploadScoresheetAsync(options) {
   uploadScoresheet(options)
     .then(result => {
       if (result.success) {
-        console.log('[scoresheetUploader] Background upload complete:', result.path)
       } else {
         console.warn('[scoresheetUploader] Background upload failed:', result.error)
       }

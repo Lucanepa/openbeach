@@ -266,7 +266,6 @@ export default function App() {
       } catch (err) {
         // Server might not be running, that's okay
         if (import.meta.env.DEV) {
-          console.log('[App] Server status not available:', err.message)
         }
       }
     }
@@ -308,7 +307,6 @@ export default function App() {
     // Request fullscreen
     if (document.documentElement.requestFullscreen) {
       document.documentElement.requestFullscreen().catch(err => {
-        console.log('Fullscreen request failed:', err)
       })
     }
 
@@ -324,7 +322,6 @@ export default function App() {
   const exitDisplayMode = useCallback(() => {
     if (document.exitFullscreen && document.fullscreenElement) {
       document.exitFullscreen().catch(err => {
-        console.log('Exit fullscreen failed:', err)
       })
     }
 
@@ -553,7 +550,6 @@ export default function App() {
           const timeout = setTimeout(() => {
             if (!resolved) {
               resolved = true
-              console.log(`⏱️  WebSocket connection timeout after ${connectionTimeout / 1000}s, readyState:`, wsTest.readyState)
               try {
                 if (wsTest.readyState === WebSocket.CONNECTING || wsTest.readyState === WebSocket.OPEN) {
                   wsTest.close()
@@ -603,7 +599,6 @@ export default function App() {
                 message: `WebSocket connection error. Server may not be available.`,
                 details: `Failed to connect to ${wsUrl}`
               }
-              console.log('❌ WebSocket test error - server may not be available')
               resolve()
             }
           }
@@ -1108,7 +1103,6 @@ export default function App() {
           const url = new URL(backendUrl)
           const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
           wsUrl = `${protocol}//${url.host}`
-          console.log('🌐 App connecting to cloud WebSocket backend:', wsUrl)
         } else {
           // Fallback to local WebSocket server
           const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
@@ -1118,7 +1112,6 @@ export default function App() {
             wsPort = serverStatus.wsPort
           }
           wsUrl = `${protocol}://${hostname}:${wsPort}`
-          console.log('💻 App connecting to local WebSocket server:', wsUrl)
         }
 
         wsRef.current = new WebSocket(wsUrl)
@@ -2062,7 +2055,7 @@ export default function App() {
     // Get match before deleting to check status and seed_key
     const matchToDelete = await db.matches.get(matchIdToDelete)
     const shouldDeleteFromSupabase = matchToDelete && matchToDelete.status !== 'final' && matchToDelete.seed_key
-    console.log('[Delete Match] 🗑️ Preparing to delete match:', {
+    console.debug('[App] Deleting match:', {
       matchId: matchIdToDelete,
       status: matchToDelete?.status,
       seed_key: matchToDelete?.seed_key,
@@ -2070,18 +2063,15 @@ export default function App() {
     })
 
     await db.transaction('rw', db.matches, db.sets, db.events, db.players, db.teams, db.sync_queue, db.match_setup, async () => {
-      console.log('[Delete Match] Starting local deletion of match:', matchIdToDelete)
 
       // Delete sets
       const sets = await db.sets.where('matchId').equals(matchIdToDelete).toArray()
-      console.log('[Delete Match] Found', sets.length, 'sets to delete')
       if (sets.length > 0) {
         await db.sets.bulkDelete(sets.map(s => s.id))
       }
 
       // Delete events - use direct delete instead of bulkDelete for better reliability
       const eventsCount = await db.events.where('matchId').equals(matchIdToDelete).count()
-      console.log('[Delete Match] Found', eventsCount, 'events to delete')
       await db.events.where('matchId').equals(matchIdToDelete).delete()
 
       // Get match to find team IDs
@@ -2090,12 +2080,10 @@ export default function App() {
       // Delete players
       if (match?.team1Id) {
         const team1PlayersCount = await db.players.where('teamId').equals(match.team1Id).count()
-        console.log('[Delete Match] Deleting', team1PlayersCount, 'home players')
         await db.players.where('teamId').equals(match.team1Id).delete()
       }
       if (match?.team2Id) {
         const team2PlayersCount = await db.players.where('teamId').equals(match.team2Id).count()
-        console.log('[Delete Match] Deleting', team2PlayersCount, 'team2 players')
         await db.players.where('teamId').equals(match.team2Id).delete()
       }
 
@@ -2109,7 +2097,6 @@ export default function App() {
 
       // Delete all sync queue items (since we can't filter by matchId easily)
       const syncQueueCount = await db.sync_queue.count()
-      console.log('[Delete Match] Clearing', syncQueueCount, 'sync queue items')
       await db.sync_queue.clear()
 
       // Delete match setup draft
@@ -2117,7 +2104,6 @@ export default function App() {
 
       // Delete match
       await db.matches.delete(matchIdToDelete)
-      console.log('[Delete Match] Match deleted successfully')
     })
 
     // Notify server to delete match from matchDataStore
@@ -2146,12 +2132,10 @@ export default function App() {
           ts: new Date().toISOString(),
           status: 'queued'
         })
-        console.log('[Delete Match] ✅ Queued Supabase delete for seed_key:', matchToDelete.seed_key)
       } catch (err) {
         console.error('[App] Error queuing Supabase match deletion:', err)
       }
     } else {
-      console.log('[Delete Match] ⏭️ Skipping Supabase delete (final status or no seed_key)')
     }
 
     setDeleteMatchModal(null)
@@ -2184,7 +2168,6 @@ export default function App() {
         return
       } else {
         // This is an unconfirmed match - delete it silently
-        console.log('[New Match] Deleting unconfirmed match:', currentMatch.id)
         await db.matches.delete(currentMatch.id)
       }
     }
@@ -2211,7 +2194,6 @@ export default function App() {
     // Delete current match first
     if (currentMatch) {
       await db.transaction('rw', db.matches, db.sets, db.events, db.players, db.teams, db.sync_queue, db.match_setup, async () => {
-        console.log('[New Match] Deleting existing match:', currentMatch.id)
 
         // Delete sets
         await db.sets.where('matchId').equals(currentMatch.id).delete()
@@ -2243,7 +2225,6 @@ export default function App() {
 
         // Delete match
         await db.matches.delete(currentMatch.id)
-        console.log('[New Match] Existing match deleted')
       })
     }
 

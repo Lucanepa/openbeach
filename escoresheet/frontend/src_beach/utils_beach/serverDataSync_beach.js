@@ -141,7 +141,6 @@ export async function getMatchData(matchId) {
   // Fallback to Supabase direct fetch
   if (supabase) {
     try {
-      console.log('[getMatchData] Fetching from Supabase for matchId:', matchId)
 
       let match = null
       let matchError = null
@@ -167,7 +166,6 @@ export async function getMatchData(matchId) {
 
           if (matchById) {
             match = matchById
-            console.log('[getMatchData] Found match by UUID fallback')
           } else {
             matchError = idError || extIdError
           }
@@ -254,18 +252,14 @@ export async function getMatchData(matchId) {
           const servingTeamIsA = (servingTeam === 'team1') === teamAIsTeam1
           const servingTeamLineup = servingTeamIsA ? lineupA : lineupB
           serverNumber = servingTeamLineup?.I?.number || null
-          console.log('[serverDataSync] Using serving_team field:', { servingSide, leftIsTeam1, servingTeam, serverNumber })
         } else if (lineupA?.I?.isServing) {
           // Fallback: Rich format with serving info in position I (isServing field)
           servingTeam = teamAIsTeam1 ? 'team1' : 'team2'
           serverNumber = lineupA.I.number
-          console.log('[serverDataSync] Using lineupA.I.isServing:', { servingTeam, serverNumber })
         } else if (lineupB?.I?.isServing) {
           servingTeam = teamAIsTeam1 ? 'team2' : 'team1'
           serverNumber = lineupB.I.number
-          console.log('[serverDataSync] Using lineupB.I.isServing:', { servingTeam, serverNumber })
         } else {
-          console.log('[serverDataSync] No serving info found, defaulting to team1')
         }
 
         const currentSet = {
@@ -517,11 +511,9 @@ export function forceReconnect(matchId) {
   const connection = wsConnections.get(matchIdStr)
 
   if (!connection) {
-    console.log('[ServerDataSync] No connection to reconnect for match', matchId)
     return false
   }
 
-  console.log('[ServerDataSync] Force reconnecting...')
 
   // Close existing connection with code 4000 (custom code that triggers reconnect)
   if (connection.ws) {
@@ -620,7 +612,6 @@ export function subscribeToMatchData(matchId, onUpdate) {
         connection.reconnectAttempts = 0 // Reset on successful connection
         wsDebugInfo.connectedAt = Date.now()
         wsDebugInfo.lastError = null
-        console.log('[ServerDataSync] WebSocket connected')
 
         // Request match data subscription
         try {
@@ -749,20 +740,17 @@ export function subscribeToMatchData(matchId, onUpdate) {
 
         // Don't reconnect on normal closure (code 1000)
         if (event.code === 1000) {
-          console.log('[ServerDataSync] WebSocket closed normally')
           return
         }
 
         // Only reconnect if there are still subscribers
         if (connection.subscribers.size === 0) {
-          console.log('[ServerDataSync] No subscribers, not reconnecting')
           return
         }
 
         // Exponential backoff for reconnection
         connection.reconnectAttempts++
         const delay = Math.min(3000 * connection.reconnectAttempts, maxReconnectDelay)
-        console.log(`[ServerDataSync] WebSocket disconnected, reconnecting in ${delay/1000} seconds... (attempt ${connection.reconnectAttempts})`)
         connection.reconnectTimeout = setTimeout(connect, delay)
       }
     } catch (err) {

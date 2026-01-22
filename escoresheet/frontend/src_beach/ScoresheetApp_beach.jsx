@@ -11,7 +11,6 @@ const fetchFromStorage = async (date, game) => {
     }
 
     const storagePath = `${date}/game${game}_final.json`
-    console.log('[Scoresheet] Fetching from storage:', storagePath)
 
     const { data, error } = await supabase.storage
       .from('scoresheets')

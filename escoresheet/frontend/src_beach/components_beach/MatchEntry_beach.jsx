@@ -93,7 +93,6 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
 
   // Handle match deletion - navigate back
   const handleMatchDeleted = useCallback(() => {
-    console.log('[MatchEntry] Match deleted, navigating back')
     if (onBack) {
       onBack()
     }

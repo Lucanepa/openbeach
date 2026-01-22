@@ -51,7 +51,6 @@ class DebugLogger {
 
     // Also log to console in dev mode
     if (process.env.NODE_ENV === 'development' || localStorage.getItem('debugLogConsole') === 'true') {
-      console.log(`[DEBUG] ${action}`, data, stateSnapshot ? '(state snapshot included)' : '')
     }
   }
 

@@ -296,7 +296,6 @@ export async function restoreMatchFromJson(jsonData) {
   await db.transaction('rw', db.matches, db.teams, db.players, db.sets, db.events, db.sync_queue, async () => {
     // STEP A: WIPE ALL existing match data from IndexedDB
     // (Keep teams/players/referees/scorers as they're reusable)
-    console.log('[Restore] Wiping local IndexedDB: events, sets, matches, sync_queue')
     await db.events.clear()
     await db.sets.clear()
     await db.matches.clear()
@@ -409,7 +408,6 @@ export async function restoreMatchFromJson(jsonData) {
 
     // STEP C: Queue Supabase 'restore' sync job (DELETE first, then UPSERT)
     if (externalId) {
-      console.log('[Restore] Queuing Supabase restore job for match:', externalId)
 
       // Build match payload for Supabase (convert local field names to Supabase column names)
       const matchPayload = {
@@ -499,7 +497,7 @@ export async function restoreMatchFromJson(jsonData) {
         status: 'queued'
       })
 
-      console.log('[Restore] Restore job queued:', {
+      console.debug('[BackupManager] Queued restore sync job:', {
         matchId: externalId,
         setsCount: setsPayload.length,
         eventsCount: eventsPayload.length
@@ -565,7 +563,6 @@ export async function restoreMatchInPlace(matchId, jsonData) {
 
     // Queue Supabase 'restore' sync job (same as restoreMatchFromJson)
     if (externalId) {
-      console.log('[RestoreInPlace] Queuing Supabase restore job for match:', externalId)
 
       // Build match payload for Supabase
       const matchPayload = {
@@ -655,7 +652,7 @@ export async function restoreMatchInPlace(matchId, jsonData) {
         status: 'queued'
       })
 
-      console.log('[RestoreInPlace] Restore job queued:', {
+      console.debug('[BackupManager] Queued restore in place sync job:', {
         matchId: externalId,
         setsCount: setsPayload.length,
         eventsCount: eventsPayload.length,
@@ -703,7 +700,7 @@ export async function fetchMatchByPin(gamePin, gameN) {
   let events = eventsResult.data || []
   const liveState = liveStateResult.data
 
-  console.log('[Restore] Fetched from Supabase:', {
+  console.debug('[BackupManager] Fetched match data from Supabase:', {
     matchId: matchData.id,
     matchStatus: matchData.status,
     setsCount: setsResult.data?.length || 0,
@@ -755,7 +752,7 @@ export async function fetchMatchByPin(gamePin, gameN) {
       const team1Lineup = extractLineupNumbers(team1RawLineup)
       const team2Lineup = extractLineupNumbers(team2RawLineup)
 
-      console.log('[Restore] Creating lineup from event lineup_left/lineup_right:', {
+      console.debug('[BackupManager] Extracted lineups from event:', {
         eventSeq: eventWithLineup.seq,
         setIndex,
         leftIsTeam1,
@@ -791,15 +788,6 @@ export async function fetchMatchByPin(gamePin, gameN) {
       const lineupANumbers = extractLineupNumbers(liveState.lineup_a)
       const lineupBNumbers = extractLineupNumbers(liveState.lineup_b)
 
-      console.log('[Restore] Creating lineup from match_live_state:', {
-        currentSet,
-        teamAIsTeam1,
-        lineupANumbers,
-        lineupBNumbers,
-        rawLineupA: liveState.lineup_a,
-        rawLineupB: liveState.lineup_b
-      })
-
       if (lineupANumbers) {
         const payload = {
           team: teamAIsTeam1 ? 'team1' : 'team2',
@@ -831,21 +819,6 @@ export async function fetchMatchByPin(gamePin, gameN) {
       }
     }
   }
-
-  // Log summary of what will be restored
-  const lineupEvents = events.filter(e => e.type === 'lineup')
-  const pointEvents = events.filter(e => e.type === 'point')
-  console.log('[Restore] Summary - will restore:', {
-    match: matchData.external_id,
-    team1: matchData.home_team?.name,
-    team2: matchData.team2_team?.name,
-    sets: (setsResult.data || []).map(s => ({ index: s.index, home: s.home_points, team2: s.team2_points, finished: s.finished })),
-    totalEvents: events.length,
-    lineupEvents: lineupEvents.length,
-    pointEvents: pointEvents.length,
-    lineupTeams: lineupEvents.map(e => e.payload?.team),
-    lineupSetIndices: lineupEvents.map(e => e.set_index)
-  })
 
   return {
     match: matchData,
@@ -1024,7 +997,6 @@ export async function importMatchFromSupabase(cloudData) {
     // If no sets exist but match has coin toss confirmed or has events, create Set 1
     // This handles the case where a match was started but no rallies were played yet
     if (sets.length === 0 && (match.coin_toss_confirmed || events.length > 0)) {
-      console.log('[Import] No sets found, creating Set 1 for match with coin toss confirmed or events')
       await db.sets.add({
         matchId: localMatchId,
         index: 1,

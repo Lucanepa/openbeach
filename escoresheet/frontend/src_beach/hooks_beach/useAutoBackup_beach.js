@@ -253,7 +253,6 @@ export default function useAutoBackup(activeMatchId = null) {
       return
     }
 
-    console.log(`📦 Event backup triggered: ${eventType}`)
     performBackup(activeMatchId)
   }, [hasFileSystemAccess, backupDirHandle, activeMatchId, autoBackupEnabled, performBackup])
 

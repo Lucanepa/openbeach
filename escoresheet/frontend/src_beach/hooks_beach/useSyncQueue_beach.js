@@ -81,7 +81,6 @@ async function retryErrorsInternal() {
     const errorJobs = await db.sync_queue.where('status').equals('error').toArray()
     if (errorJobs.length === 0) return false
 
-    console.log(`[SyncQueue] Auto-retrying ${errorJobs.length} errored jobs`)
     for (const job of errorJobs) {
       await db.sync_queue.update(job.id, { status: 'queued', retry_count: 0 })
     }
@@ -171,7 +170,6 @@ export function useSyncQueue() {
         // Filter to valid columns only - handles old backup formats with invalid fields
         const matchPayload = filterMatchPayload({ ...job.payload, sport_type: SPORT_TYPE })
 
-        console.log('[SyncQueue] Match insert payload:', matchPayload)
         const { error } = await supabase
           .from('matches')
           .upsert(matchPayload, { onConflict: 'external_id' })
@@ -179,7 +177,6 @@ export function useSyncQueue() {
           console.error('[SyncQueue] Match insert error:', error, matchPayload)
           return false
         }
-        console.log('[SyncQueue] Match insert successful')
         return true
       }
 
@@ -220,7 +217,6 @@ export function useSyncQueue() {
           }
         }
 
-        console.log('[SyncQueue] Match update payload:', { id, ...finalUpdateData })
         const { error } = await supabase
           .from('matches')
           .update(finalUpdateData)
@@ -230,13 +226,11 @@ export function useSyncQueue() {
           console.error('[SyncQueue] Match update error:', error, job.payload)
           return false
         }
-        console.log('[SyncQueue] Match update successful')
         return true
       }
 
       if (job.resource === 'match' && job.action === 'delete') {
         const { id } = job.payload
-        console.log('[SyncQueue] 🗑️ Starting match delete for external_id:', id)
 
         // First, look up the match to get its UUID (filtered by sport_type)
         const { data: matchData, error: lookupError } = await supabase
@@ -253,12 +247,10 @@ export function useSyncQueue() {
 
         if (!matchData) {
           // Match doesn't exist in Supabase, consider it successfully deleted
-          console.log('[SyncQueue] Match not found in Supabase (already deleted?):', id)
           return true
         }
 
         const matchUuid = matchData.id
-        console.log('[SyncQueue] 🔍 Found match UUID:', matchUuid)
 
         // Count records before deletion for debugging
         const { count: eventsCountBefore } = await supabase
@@ -273,14 +265,13 @@ export function useSyncQueue() {
           .from('match_live_state')
           .select('*', { count: 'exact', head: true })
           .eq('match_id', matchUuid)
-        console.log('[SyncQueue] 📊 Records before delete:', {
+        console.debug('[SyncQueue] Data counts before delete:', {
           events: eventsCountBefore,
           sets: setsCountBefore,
           match_live_state: liveStateCountBefore
         })
 
         // Delete events for this match
-        console.log('[SyncQueue] 🗑️ Deleting events...')
         const { error: eventsError, count: eventsDeleted } = await supabase
           .from('events')
           .delete()
@@ -289,11 +280,9 @@ export function useSyncQueue() {
         if (eventsError) {
           console.warn('[SyncQueue] Events delete error (continuing):', eventsError)
         } else {
-          console.log('[SyncQueue] ✅ Events deleted')
         }
 
         // Delete sets for this match
-        console.log('[SyncQueue] 🗑️ Deleting sets...')
         const { error: setsError } = await supabase
           .from('sets')
           .delete()
@@ -301,11 +290,9 @@ export function useSyncQueue() {
         if (setsError) {
           console.warn('[SyncQueue] Sets delete error (continuing):', setsError)
         } else {
-          console.log('[SyncQueue] ✅ Sets deleted')
         }
 
         // Delete match_live_state for this match
-        console.log('[SyncQueue] 🗑️ Deleting match_live_state...')
         const { error: liveStateError } = await supabase
           .from('match_live_state')
           .delete()
@@ -313,7 +300,6 @@ export function useSyncQueue() {
         if (liveStateError) {
           console.warn('[SyncQueue] match_live_state delete error (continuing):', liveStateError)
         } else {
-          console.log('[SyncQueue] ✅ match_live_state deleted')
         }
 
         // Verify all related records are deleted before deleting match
@@ -329,7 +315,7 @@ export function useSyncQueue() {
           .from('match_live_state')
           .select('*', { count: 'exact', head: true })
           .eq('match_id', matchUuid)
-        console.log('[SyncQueue] 📊 Records after delete:', {
+        console.debug('[SyncQueue] Data counts after delete:', {
           events: eventsCountAfter,
           sets: setsCountAfter,
           match_live_state: liveStateCountAfter
@@ -341,7 +327,6 @@ export function useSyncQueue() {
         }
 
         // Delete the match
-        console.log('[SyncQueue] 🗑️ Deleting match...')
         const { error: matchError } = await supabase
           .from('matches')
           .delete()
@@ -351,7 +336,6 @@ export function useSyncQueue() {
           return false
         }
 
-        console.log('[SyncQueue] ✅ Deleted match and related records from Supabase:', id)
         return true
       }
 
@@ -368,7 +352,6 @@ export function useSyncQueue() {
         }
 
         const externalId = match.external_id
-        console.log('[SyncQueue] Processing restore job for match:', externalId)
 
         try {
           // Step 1: Look up existing match UUID by external_id (THIS MATCH ONLY, filtered by sport_type)
@@ -387,7 +370,6 @@ export function useSyncQueue() {
           // Step 2: DELETE existing data for THIS MATCH ONLY (if it exists)
           if (existingMatch) {
             const matchUuid = existingMatch.id
-            console.log('[SyncQueue] Deleting existing data for match UUID:', matchUuid)
 
             // Delete ONLY records with this specific match_id
             const { error: eventsDelErr } = await supabase.from('events').delete().eq('match_id', matchUuid)
@@ -399,9 +381,7 @@ export function useSyncQueue() {
             const { error: liveStateDelErr } = await supabase.from('match_live_state').delete().eq('match_id', matchUuid)
             if (liveStateDelErr) console.warn('[SyncQueue] match_live_state delete warning:', liveStateDelErr)
 
-            console.log('[SyncQueue] Deleted existing data for match:', externalId)
           } else {
-            console.log('[SyncQueue] No existing match found in Supabase, will create new')
           }
 
           // Step 3: UPSERT match (creates or updates BY external_id)
@@ -420,7 +400,6 @@ export function useSyncQueue() {
           }
 
           const matchUuid = upsertedMatch.id
-          console.log('[SyncQueue] Match upserted, UUID:', matchUuid)
 
           // Step 4: INSERT all sets (with resolved match_id)
           if (sets?.length > 0) {
@@ -433,7 +412,6 @@ export function useSyncQueue() {
                 console.warn('[SyncQueue] Set upsert warning:', setErr, set.external_id)
               }
             }
-            console.log('[SyncQueue] Upserted', sets.length, 'sets')
           }
 
           // Step 5: INSERT all events (with resolved match_id)
@@ -450,7 +428,6 @@ export function useSyncQueue() {
                 await supabase.from('events').upsert(event, { onConflict: 'external_id' })
               }
             }
-            console.log('[SyncQueue] Upserted', events.length, 'events')
           }
 
           // Step 6: UPSERT match_live_state (keyed by match_id)
@@ -462,11 +439,9 @@ export function useSyncQueue() {
             if (liveStateErr) {
               console.warn('[SyncQueue] match_live_state upsert warning:', liveStateErr)
             } else {
-              console.log('[SyncQueue] match_live_state upserted')
             }
           }
 
-          console.log('[SyncQueue] Restore complete for match:', externalId)
           return true
 
         } catch (restoreErr) {
@@ -581,7 +556,6 @@ export function useSyncQueue() {
 
       busy.current = true
       setSyncStatus('syncing')
-      console.log(`[SyncQueue] Processing ${queued.length} queued items`)
 
       let hasError = false
       let hasRetry = false
@@ -653,7 +627,6 @@ export function useSyncQueue() {
           const connected = await checkSupabaseConnection(true)
           if (connected) {
             // When coming back online, retry errored jobs first, then flush queued
-            console.log('[SyncQueue] Back online - retrying errored jobs and flushing queue')
             await retryErrorsInternal()
             flush()
           }

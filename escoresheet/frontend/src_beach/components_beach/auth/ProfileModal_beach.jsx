@@ -30,7 +30,6 @@ export default function ProfileModal({ open, onClose }) {
 
   // Load profile data when modal opens OR when profile arrives (for late-loading profiles)
   useEffect(() => {
-    console.log('[ProfileModal] useEffect triggered:', { open, profile, formInitialized: formInitialized.current })
 
     // Reset initialization flag when modal closes
     if (!open) {
@@ -40,7 +39,6 @@ export default function ProfileModal({ open, onClose }) {
 
     // If modal is open and we have profile data, populate the form
     if (open && profile && !formInitialized.current) {
-      console.log('[ProfileModal] Loading profile data into form:', profile)
       setFirstName(profile.first_name || '')
       setLastName(profile.last_name || '')
       setCountry(profile.country || 'CHE')

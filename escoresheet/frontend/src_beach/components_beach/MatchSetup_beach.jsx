@@ -740,7 +740,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           const hasLegacyColumn = legacyColumns.some(col => col in payload)
 
           if (hasLegacyColumn) {
-            console.log('[MatchSetup] Removing stale error job with legacy columns:', job.id)
             await db.sync_queue.delete(job.id)
           }
         }
@@ -912,7 +911,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             ts: new Date().toISOString(),
             status: 'queued'
           })
-          console.log('[MatchSetup] Created new match insert job for Supabase sync')
         }
       }
 
@@ -1137,7 +1135,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                   .from('matches')
                   .update({ connection_pins: connectionPinsUpdate })
                   .eq('external_id', match.seed_key)
-                console.log('[MatchSetup] Synced upload PINs to Supabase connection_pins:', connectionPinsUpdate)
               }
             } catch (err) {
               console.warn('[MatchSetup] Failed to sync upload PINs to Supabase:', err)
@@ -1391,7 +1388,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         if (!result.success) {
           console.warn('Failed to register as main instance:', result.error)
         } else {
-          console.log('Registered as main instance:', instanceId)
         }
       } else {
         console.warn('Failed to register as main instance: HTTP', response.status)
@@ -1991,7 +1987,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           .then(res => res.json())
           .then(data => {
             if (data.success) {
-              console.log('[MatchSetup] Match info email sent successfully')
             } else {
               console.warn('[MatchSetup] Failed to send match info email:', data.error)
             }
@@ -2299,7 +2294,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             match_external_id: seedKey,
             role: 'scorer'
           }, { onConflict: 'user_id,match_external_id,role' })
-          console.log('[MatchSetup] Associated user with match:', seedKey)
         } catch (err) {
           // Don't fail match creation if user_matches insert fails
           console.warn('[MatchSetup] Failed to associate user with match:', err)
@@ -2445,42 +2439,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       events: allEvents,
       sanctions: []
     }
-
-    console.log('[MatchSetup] Saving scoresheet data to sessionStorage:', {
-      source: 'MatchSetup Component',
-      match: {
-        id: scoresheetData.match.id,
-        coinTossTeamA: scoresheetData.match.coinTossTeamA,
-        coinTossTeamB: scoresheetData.match.coinTossTeamB,
-        coinTossData: scoresheetData.match.coinTossData,
-        team1Country: scoresheetData.match.team1Country,
-        team2Country: scoresheetData.match.team2Country,
-        team_1Country: scoresheetData.match.team_1Country,
-        team_2Country: scoresheetData.match.team_2Country
-      },
-      team1Team: {
-        name: scoresheetData.team_1Team?.name,
-        country: scoresheetData.team_1Team?.country
-      },
-      team2Team: {
-        name: scoresheetData.team_2Team?.name,
-        country: scoresheetData.team_2Team?.country
-      },
-      team1Players: scoresheetData.team_1Players?.map(p => ({
-        number: p.number,
-        firstName: p.firstName,
-        lastName: p.lastName,
-        isCaptain: p.isCaptain
-      })),
-      team2Players: scoresheetData.team_2Players?.map(p => ({
-        number: p.number,
-        firstName: p.firstName,
-        lastName: p.lastName,
-        isCaptain: p.isCaptain
-      })),
-      setsCount: scoresheetData.sets?.length || 0,
-      eventsCount: scoresheetData.events?.length || 0
-    });
 
     // Store data in sessionStorage to pass to new window
     sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
@@ -2767,7 +2725,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     setTeam1RosterSearching(true)
     try {
       const gameNumber = match.game_n || match.gameNumber || gameN
-      console.log('[MatchSetup] Searching for home roster, game number:', gameNumber)
 
       // Search for pending roster in Supabase
       const { data, error } = await supabase
@@ -2779,12 +2736,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         .single()
 
       if (error || !data?.pending_home_roster) {
-        console.log('[MatchSetup] No pending home roster found')
         setNoticeModal({ message: t('matchSetup.noRosterFound') })
         return
       }
 
-      console.log('[MatchSetup] Found pending home roster:', data.pending_home_roster)
 
       // Store in local match data to trigger the pending roster UI
       await db.matches.update(matchId, { pendingHomeRoster: data.pending_home_roster })
@@ -2805,7 +2760,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     setTeam2RosterSearching(true)
     try {
       const gameNumber = match.game_n || match.gameNumber || gameN
-      console.log('[MatchSetup] Searching for team2 roster, game number:', gameNumber)
 
       // Search for pending roster in Supabase
       const { data, error } = await supabase
@@ -2817,12 +2771,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         .single()
 
       if (error || !data?.pending_team2_roster) {
-        console.log('[MatchSetup] No pending team2 roster found')
         setNoticeModal({ message: t('matchSetup.noRosterFound') })
         return
       }
 
-      console.log('[MatchSetup] Found pending team2 roster:', data.pending_team2_roster)
 
       // Store in local match data to trigger the pending roster UI
       await db.matches.update(matchId, { pendingteam2Roster: data.pending_team2_roster })
@@ -3130,7 +3082,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                         type="button"
                         disabled={sendingEmail}
                         onClick={async () => {
-                          console.log('[Email] Button clicked, email:', notificationEmail)
                           if (!notificationEmail || !notificationEmail.includes('@')) {
                             showAlert(t('matchSetup.invalidEmail') || 'Please enter a valid email address', 'warning')
                             return
@@ -3822,7 +3773,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
             // If no changes, just go back to main view
             if (!hasChanges) {
-              console.log('[MatchSetup] No home roster changes, skipping sync')
               setCurrentView('main')
               return
             }
@@ -3831,14 +3781,12 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             const validationErrors = []
 
             // 1. Check exactly 2 players for beach volleyball (numbers are optional)
-            console.log('[MatchSetup] Home players count:', team1Roster.length)
             if (team1Roster.length !== 2) {
               validationErrors.push(`Beach volleyball requires exactly 2 players. Currently: ${team1Roster.length}`)
             }
 
             // 2. Check captain is set
             const hasCaptain = team1Roster.some(p => p.isCaptain)
-            console.log('[MatchSetup] Home has captain:', hasCaptain)
             if (!hasCaptain) {
               validationErrors.push(t('matchSetup.validation.noCaptain'))
             }
@@ -3847,14 +3795,12 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             const numbers = team1Roster.filter(p => p.number != null && p.number !== '').map(p => p.number)
             const duplicateNumbers = numbers.filter((num, idx) => numbers.indexOf(num) !== idx)
             if (duplicateNumbers.length > 0) {
-              console.log('[MatchSetup] Home duplicate numbers:', duplicateNumbers)
               validationErrors.push(t('matchSetup.validation.duplicateNumbers', { numbers: [...new Set(duplicateNumbers)].join(', ') }))
             }
 
             // 4. Check for invalid numbers (must be 1-99 if provided)
             const invalidNumbers = team1Roster.filter(p => p.number != null && p.number !== '' && (p.number < 1 || p.number > 99))
             if (invalidNumbers.length > 0) {
-              console.log('[MatchSetup] Home invalid numbers:', invalidNumbers.map(p => p.number))
               validationErrors.push(t('matchSetup.validation.invalidNumbers', { numbers: invalidNumbers.map(p => p.number).join(', ') }))
             }
 
@@ -3862,12 +3808,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
             // Show validation errors if any
             if (validationErrors.length > 0) {
-              console.log('[MatchSetup] Home roster validation errors:', validationErrors)
               setNoticeModal({ message: t('matchSetup.validation.fixIssues', { issues: validationErrors.join('\n• ') }) })
               return
             }
 
-            console.log('[MatchSetup] Home roster validation passed, saving...')
 
             // Auto-set team name from player last names if both players have last names
             if (team1Roster.length === 2 && team1Roster[0]?.lastName && team1Roster[1]?.lastName) {
@@ -3995,7 +3939,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                         updated_at: new Date().toISOString()
                       })
                       .eq('match_id', supabaseMatch.id)
-                    console.log('[MatchSetup] Synced home team to match_live_state')
                   }
                 } catch (err) {
                   console.debug('[MatchSetup] Could not sync home team to match_live_state:', err.message)
@@ -4562,7 +4505,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
             // If no changes, just go back to main view
             if (!hasChanges) {
-              console.log('[MatchSetup] No team2 roster changes, skipping sync')
               setCurrentView('main')
               return
             }
@@ -4571,14 +4513,12 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             const validationErrors = []
 
             // 1. Check exactly 2 players for beach volleyball (numbers are optional)
-            console.log('[MatchSetup] team2 players count:', team2Roster.length)
             if (team2Roster.length !== 2) {
               validationErrors.push(`Beach volleyball requires exactly 2 players. Currently: ${team2Roster.length}`)
             }
 
             // 2. Check captain is set
             const hasCaptain = team2Roster.some(p => p.isCaptain)
-            console.log('[MatchSetup] team2 has captain:', hasCaptain)
             if (!hasCaptain) {
               validationErrors.push(t('matchSetup.validation.noCaptain'))
             }
@@ -4587,14 +4527,12 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             const numbers = team2Roster.filter(p => p.number != null && p.number !== '').map(p => p.number)
             const duplicateNumbers = numbers.filter((num, idx) => numbers.indexOf(num) !== idx)
             if (duplicateNumbers.length > 0) {
-              console.log('[MatchSetup] team2 duplicate numbers:', duplicateNumbers)
               validationErrors.push(t('matchSetup.validation.duplicateNumbers', { numbers: [...new Set(duplicateNumbers)].join(', ') }))
             }
 
             // 4. Check for invalid numbers (must be 1-99 if provided)
             const invalidNumbers = team2Roster.filter(p => p.number != null && p.number !== '' && (p.number < 1 || p.number > 99))
             if (invalidNumbers.length > 0) {
-              console.log('[MatchSetup] team2 invalid numbers:', invalidNumbers.map(p => p.number))
               validationErrors.push(t('matchSetup.validation.invalidNumbers', { numbers: invalidNumbers.map(p => p.number).join(', ') }))
             }
 
@@ -4602,12 +4540,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
             // Show validation errors if any
             if (validationErrors.length > 0) {
-              console.log('[MatchSetup] team2 roster validation errors:', validationErrors)
               setNoticeModal({ message: t('matchSetup.validation.fixIssues', { issues: validationErrors.join('\n• ') }) })
               return
             }
 
-            console.log('[MatchSetup] team2 roster validation passed, saving...')
 
             // Auto-set team name from player last names if both players have last names
             if (team2Roster.length === 2 && team2Roster[0]?.lastName && team2Roster[1]?.lastName) {
@@ -4736,7 +4672,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                         updated_at: new Date().toISOString()
                       })
                       .eq('match_id', supabaseMatch.id)
-                    console.log('[MatchSetup] Synced team2 team to match_live_state')
                   }
                 } catch (err) {
                   console.debug('[MatchSetup] Could not sync team2 team to match_live_state:', err.message)
@@ -6035,7 +5970,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                         if (match?.id) {
                           const colorField = isHome ? 'team1Color' : 'team2Color'
                           await db.matches.update(match.id, { [colorField]: color })
-                          console.log(`[MatchSetup] Updated local match ${colorField}:`, color)
                         }
 
                         // Sync to Supabase if match exists
@@ -6059,7 +5993,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                             .maybeSingle()
 
                           if (supabaseMatch) {
-                            console.log(`[MatchSetup] Synced ${teamKey} color to Supabase:`, color)
                           }
 
                           // Also update match_live_state if it exists (for Referee app)
@@ -6075,7 +6008,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                               .from('match_live_state')
                               .update({ [liveStateColorKey]: color, updated_at: new Date().toISOString() })
                               .eq('match_id', supabaseMatch.id)
-                            console.log(`[MatchSetup] Synced ${liveStateColorKey} to match_live_state:`, color)
                           }
                         }
                       } catch (err) {

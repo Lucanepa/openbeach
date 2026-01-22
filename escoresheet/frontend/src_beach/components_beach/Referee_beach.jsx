@@ -249,10 +249,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             try { await wakeLockRef.current.release() } catch (e) { }
           }
           wakeLockRef.current = await navigator.wakeLock.request('screen')
-          console.log('[WakeLock] Screen wake lock acquired (Referee)')
           setWakeLockActive(true)
           wakeLockRef.current.addEventListener('release', () => {
-            console.log('[WakeLock] Screen wake lock released (Referee)')
             // Only set inactive if we're not re-acquiring
             if (!wakeLockRef.current) {
               setWakeLockActive(false)
@@ -261,7 +259,6 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           return true
         }
       } catch (err) {
-        console.log('[WakeLock] Native wake lock failed:', err.message)
       }
       return false
     }
@@ -269,7 +266,6 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     const handleInteraction = async () => {
       const success = await enableNativeWakeLock()
       if (success) {
-        console.log('[WakeLock] Enabled on user interaction')
       }
     }
 
@@ -453,22 +449,18 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
   // Force fetch fresh data from server
   const fetchFreshData = useCallback(async () => {
-    console.log('[Referee] fetchFreshData called', { isMasterMode, matchId })
     if (isMasterMode) {
-      console.log('[Referee] fetchFreshData: Skipping - in test/master mode (data is local)')
       return
     }
     if (!matchId) {
-      console.log('[Referee] fetchFreshData: Skipping - no matchId')
       return
     }
     try {
-      console.log('[Referee] Fetching fresh data from server...')
       const result = await getMatchData(matchId)
       if (result && result.success) {
         fetchFailureCountRef.current = 0 // Reset on success
         updateMatchDataState(result)
-        console.log('[Referee] Fresh data received:', {
+        console.debug('[Referee] Updated match data:', {
           currentSet: result.sets?.find(s => !s.finished)?.index,
           team1Points: result.sets?.find(s => !s.finished)?.team1Points,
           team2Points: result.sets?.find(s => !s.finished)?.team2Points
@@ -478,7 +470,6 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         fetchFailureCountRef.current++
         console.warn(`[Referee] Fetch failed (${fetchFailureCountRef.current}/${MAX_FETCH_FAILURES})`)
         if (fetchFailureCountRef.current >= MAX_FETCH_FAILURES) {
-          console.log('[Referee] Match appears to be deleted, navigating to home')
           if (onExit) onExit()
         }
       }
@@ -486,7 +477,6 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       fetchFailureCountRef.current++
       console.error(`[Referee] Error fetching fresh data (${fetchFailureCountRef.current}/${MAX_FETCH_FAILURES}):`, err)
       if (fetchFailureCountRef.current >= MAX_FETCH_FAILURES) {
-        console.log('[Referee] Match appears to be deleted, navigating to home')
         if (onExit) onExit()
       }
     }
@@ -497,7 +487,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     if (!result || !result.success) return
 
     const receiveTimestamp = Date.now()
-    console.log(`[Referee] 📥 Received match-data-update at ${new Date(receiveTimestamp).toISOString()}:`, {
+    console.debug('[Referee] Received realtime data:', {
       hasHomeTeam: !!result.team1,
       hasteam2Team: !!result.team2,
       setsCount: result.sets?.length,
@@ -515,10 +505,9 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   // Handle realtime actions (timeout, set_end)
   const handleRealtimeAction = useCallback((action, actionData) => {
     const receiveTimestamp = Date.now()
-    console.log(`[Referee] 📥 Received action '${action}' at ${new Date(receiveTimestamp).toISOString()}:`, actionData)
 
     if (action === 'timeout') {
-      console.log('[REF_TO_DEBUG] Received timeout action', {
+      console.debug('[Referee] Received timeout action:', {
         team: actionData.team,
         countdown: actionData.countdown,
         startTimestamp: actionData.startTimestamp,
@@ -532,14 +521,10 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         initialCountdown: actionData.countdown || 30,
         started: true
       }
-      console.log('[REF_TO_DEBUG] Setting timeoutModal state', newTimeoutModal)
       setTimeoutModal(newTimeoutModal)
       setShowTimeoutModal(true) // Show the modal overlay
     } else if (action === 'set_end') {
-      console.log('═══════════════════════════════════════════════════════════════')
-      console.log('[Referee] 🏁 SET_END Action Received (WebSocket):')
-      console.log('═══════════════════════════════════════════════════════════════')
-      console.log('[Referee] 📊 Action Data:', {
+      console.debug('[Referee] Received set_end action:', {
         setIndex: actionData.setIndex,
         winner: actionData.winner,
         team1Points: actionData.team1Points,
@@ -552,7 +537,6 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       // Check if match is finished (one team won 3 sets) - don't show interval
       const isMatchFinishedNow = actionData.homeSetsWon >= 3 || actionData.team2SetsWon >= 3
       if (isMatchFinishedNow) {
-        console.log('[Referee] 🏆 Match is finished! Not showing interval countdown.')
         // Clear any existing interval state - full-screen match ended view will show
         setBetweenSetsCountdown(null)
         setShowIntervalModal(false)
@@ -582,7 +566,6 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
   // Handle match deletion - navigate back to home
   const handleMatchDeleted = useCallback(() => {
-    console.log('[Referee] Match deleted, navigating to home')
     if (onExit) {
       onExit()
     }
@@ -616,7 +599,6 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        console.log('[Referee] Page became visible, fetching fresh data...')
         fetchFreshData()
       }
     }
@@ -643,7 +625,6 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         .maybeSingle()
 
       if (!error && data?.id) {
-        console.log('[Referee] Found Supabase UUID:', data.id, 'for matchId:', matchId)
         setSupabaseMatchUuid(data.id)
       } else {
         console.warn('[Referee] Could not find Supabase UUID for matchId:', matchId, error)
@@ -657,7 +638,6 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   useEffect(() => {
     if (!supabase || !supabaseMatchUuid || isMasterMode) return
 
-    console.log('[Referee] Setting up realtime subscription for UUID:', supabaseMatchUuid)
 
     // Add unique ID to prevent StrictMode double-mount conflicts
     const channelId = `match_live_state:${supabaseMatchUuid}-${Date.now()}`
@@ -679,14 +659,12 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           const now = Date.now()
           const lastProcessed = lastProcessedEventRef.current
           if (lastProcessed && state.updated_at === lastProcessed.updatedAt && (now - lastProcessed.time) < 50) {
-            console.log('[Referee] 📡 Skipping duplicate (same updated_at within 50ms)')
             return
           }
           lastProcessedEventRef.current = { time: now, updatedAt: state.updated_at }
 
           // Check for scorer attention trigger
           if (state.scorer_attention_trigger && state.scorer_attention_trigger !== lastAttentionTriggerRef.current) {
-            console.log('[Referee] 🔔 Scorer attention triggered!', state.scorer_attention_trigger)
             setAttentionModalOpen(true)
             lastAttentionTriggerRef.current = state.scorer_attention_trigger
             try {
@@ -697,7 +675,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             } catch (e) { /* ignore */ }
           }
 
-          console.log(`[Referee] 📡 Supabase realtime: ${state.last_event_type || 'update'}`, {
+          console.debug('[Referee] Live state update:', {
             event: state.last_event_type,
             points: `${state.points_a || 0}-${state.points_b || 0}`,
             set: state.current_set,
@@ -735,7 +713,6 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             }
           } else if (timeoutActiveRef.current) {
             // Timeout was active but is now not active - clear modal
-            console.log('[Referee] 📡 Timeout ended via timeout_active=false, clearing modal')
             timeoutActiveRef.current = false
             setTimeoutModal(null)
             setShowTimeoutModal(false)
@@ -743,10 +720,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
           // Handle set end (3-minute interval)
           if (state.last_event_type === 'set_end' || state.set_interval_active) {
-            console.log('═══════════════════════════════════════════════════════════════')
-            console.log('[Referee] 🏁 SET_END Received from Supabase Realtime:')
-            console.log('═══════════════════════════════════════════════════════════════')
-            console.log('[Referee] 📊 Live State Data:', {
+            console.debug('[Referee] Set end detected from live state:', {
               current_set: state.current_set,
               sets_won_a: state.sets_won_a,
               sets_won_b: state.sets_won_b,
@@ -763,7 +737,6 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             // Check if match is finished (one team won 3 sets) - don't show interval
             const isMatchFinishedNow = state.sets_won_a >= 3 || state.sets_won_b >= 3
             if (isMatchFinishedNow) {
-              console.log('[Referee] 🏆 Match is finished! Not showing interval countdown.')
               // Clear any existing interval state - full-screen match ended view will show
               setBetweenSetsCountdown(null)
               setShowIntervalModal(false)
@@ -797,7 +770,6 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           }
 
           // ALWAYS refetch data on ANY change - handles points, lineups, sanctions, undoes, replays, etc.
-          console.log('[Referee] 📡 Realtime change detected, refetching data...')
           fetchFreshData()
         }
       )
@@ -966,14 +938,13 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
   // Determine who has serve
   const getCurrentServe = useMemo(() => {
-    console.log('[Referee] getCurrentServe - data:', {
+    console.debug('[Referee] Calculating serve:', {
       currentSetServingTeam: data?.currentSet?.servingTeam,
       matchFirstServe: data?.match?.firstServe,
       setIndex: data?.currentSet?.index
     })
     // First priority: use servingTeam from Supabase live state (most accurate)
     if (data?.currentSet?.servingTeam) {
-      console.log('[Referee] Using currentSet.servingTeam:', data.currentSet.servingTeam)
       return data.currentSet.servingTeam
     }
 
@@ -1211,15 +1182,12 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           try { await wakeLockRef.current.release() } catch (e) { }
         }
         wakeLockRef.current = await navigator.wakeLock.request('screen')
-        console.log('[WakeLock] Re-acquired wake lock')
         setWakeLockActive(true)
         wakeLockRef.current.addEventListener('release', () => {
-          console.log('[WakeLock] Released')
         })
         return true
       }
     } catch (err) {
-      console.log('[WakeLock] Failed to re-acquire:', err.message)
     }
     return false
   }, [])
@@ -1235,14 +1203,11 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         } catch (e) { }
       }
       setWakeLockActive(false)
-      console.log('[WakeLock] Manually disabled')
     } else {
       // Enable wake lock
       const success = await reEnableWakeLock()
       if (success) {
-        console.log('[WakeLock] Manually enabled')
       } else {
-        console.log('[WakeLock] Failed to enable manually - Wake Lock API may not be supported')
         // Show visual feedback that it's "on" even if API failed
         setWakeLockActive(true)
       }
@@ -2988,7 +2953,6 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           <TestModeControls
             matchId={matchId}
             onRefresh={async () => {
-              console.log('[TestModeControls] onRefresh called', { matchId, isMasterMode })
               // In test mode, reload from local IndexedDB
               try {
                 const match = await db.matches.get(matchId)
@@ -2997,7 +2961,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                 const team1 = await db.teams.get(match?.team1Id)
                 const team2 = await db.teams.get(match?.team2Id)
 
-                console.log('[TestModeControls] Reloaded from IndexedDB:', {
+                console.debug('[Referee] Reloaded from IndexedDB:', {
                   matchId,
                   sets: sets.length,
                   events: events.length,

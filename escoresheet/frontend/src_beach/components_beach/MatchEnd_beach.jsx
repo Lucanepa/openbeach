@@ -865,7 +865,6 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
           if (uploadError) {
             console.warn('Failed to upload PDF to cloud:', uploadError)
           } else {
-            console.log('PDF uploaded to cloud:', pdfStoragePath)
           }
 
           // Upload final JSON (with _final suffix for approved matches)
@@ -880,7 +879,6 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
             final: true
           })
           if (jsonResult.success) {
-            console.log('Final JSON uploaded to cloud:', jsonResult.path)
           } else {
             console.warn('Failed to upload final JSON:', jsonResult.error)
           }
@@ -1030,7 +1028,6 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       }
       const lastSet = allSets.reduce((a, b) => (a.index > b.index ? a : b))
 
-      console.log('[MatchEnd] Reopening last set:', { id: lastSet.id, index: lastSet.index })
 
       // Mark the last set as not finished
       await db.sets.update(lastSet.id, { finished: false })
@@ -1057,7 +1054,6 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         .first()
 
       if (setEndEvent) {
-        console.log('[MatchEnd] Deleting set_end event:', setEndEvent.id)
         await db.events.delete(setEndEvent.id)
 
         // Also queue deletion for Supabase

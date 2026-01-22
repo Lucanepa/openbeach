@@ -116,16 +116,13 @@ export default function UploadRosterApp() {
         if ('wakeLock' in navigator) {
           if (wakeLockRef.current) { try { await wakeLockRef.current.release() } catch (e) {} }
           wakeLockRef.current = await navigator.wakeLock.request('screen')
-          console.log('[WakeLock] Screen wake lock acquired (UploadRoster)')
           setWakeLockActive(true)
           wakeLockRef.current.addEventListener('release', () => {
-            console.log('[WakeLock] Screen wake lock released (UploadRoster)')
             if (!wakeLockRef.current) {
               setWakeLockActive(false)
             }
           })
         }
-      } catch (err) { console.log('[WakeLock] Native wake lock failed:', err.message) }
       try {
         if (!noSleepVideoRef.current) {
           const video = document.createElement('video')
@@ -138,8 +135,6 @@ export default function UploadRosterApp() {
           noSleepVideoRef.current = video
         }
         await noSleepVideoRef.current.play()
-        console.log('[NoSleep] Video playing for keep-awake (UploadRoster)')
-      } catch (err) { console.log('[NoSleep] Video fallback failed:', err.message) }
     }
     const handleInteraction = async () => { await enableNoSleep() }
     enableNoSleep()
@@ -170,20 +165,17 @@ export default function UploadRosterApp() {
         noSleepVideoRef.current.pause()
       }
       setWakeLockActive(false)
-      console.log('[WakeLock] Manually disabled')
     } else {
       // Enable wake lock
       try {
         if ('wakeLock' in navigator) {
           wakeLockRef.current = await navigator.wakeLock.request('screen')
           setWakeLockActive(true)
-          console.log('[WakeLock] Manually enabled')
         }
         if (noSleepVideoRef.current) {
           await noSleepVideoRef.current.play()
         }
       } catch (err) {
-        console.log('[WakeLock] Failed to enable:', err.message)
         setWakeLockActive(true) // Visual feedback even if API failed
       }
     }
@@ -193,36 +185,27 @@ export default function UploadRosterApp() {
   useEffect(() => {
     const loadMatches = async () => {
       setLoadingMatches(true)
-      console.log('[Roster DEBUG] ========== LOADING MATCHES ==========')
-      console.log('[Roster DEBUG] Connection mode:', connectionMode)
-      console.log('[Roster DEBUG] Supabase client exists:', !!supabase)
 
       try {
         // Try Supabase first if in AUTO or SUPABASE mode
         const useSupabase = connectionMode === CONNECTION_MODES.SUPABASE ||
           (connectionMode === CONNECTION_MODES.AUTO && supabase)
 
-        console.log('[Roster DEBUG] Will try Supabase:', useSupabase)
 
         if (useSupabase && supabase) {
-          console.log('[Roster DEBUG] Attempting Supabase connection...')
           try {
             const result = await listAvailableMatchesSupabase()
-            console.log('[Roster DEBUG] Supabase result:', JSON.stringify(result, null, 2))
 
             if (result.success && result.matches && result.matches.length > 0) {
-              console.log('[Roster DEBUG] Supabase SUCCESS - found', result.matches.length, 'matches')
               setAvailableMatches(result.matches)
               setConnectionStatuses(prev => {
                 const newStatus = { ...prev, supabase: 'connected' }
-                console.log('[Roster DEBUG] New connection statuses:', newStatus)
                 return newStatus
               })
               setActiveConnection('supabase')
               setLoadingMatches(false)
               return
             } else {
-              console.log('[Roster DEBUG] Supabase returned no matches or failed:', result)
             }
           } catch (supabaseErr) {
             console.error('[Roster DEBUG] Supabase error:', supabaseErr)
@@ -231,17 +214,13 @@ export default function UploadRosterApp() {
         }
 
         // Fall back to WebSocket/server
-        console.log('[Roster DEBUG] Falling back to WebSocket/server...')
         try {
           const result = await listAvailableMatches()
-          console.log('[Roster DEBUG] WebSocket/server result:', JSON.stringify(result, null, 2))
 
           if (result.success && result.matches) {
-            console.log('[Roster DEBUG] WebSocket SUCCESS - found', result.matches.length, 'matches')
             setAvailableMatches(result.matches)
             setActiveConnection('websocket')
           } else {
-            console.log('[Roster DEBUG] WebSocket returned no matches or failed')
           }
         } catch (wsErr) {
           console.error('[Roster DEBUG] WebSocket/server error:', wsErr)
@@ -252,7 +231,6 @@ export default function UploadRosterApp() {
         console.error('[Roster DEBUG] Error stack:', err.stack)
       } finally {
         setLoadingMatches(false)
-        console.log('[Roster DEBUG] ========== DONE LOADING MATCHES ==========')
       }
     }
 
@@ -272,18 +250,10 @@ export default function UploadRosterApp() {
     )
     const hasBackendUrl = !!import.meta.env.VITE_BACKEND_URL
 
-    console.log('[Roster DEBUG] Connection status check setup:')
-    console.log('[Roster DEBUG]   - hostname:', window.location.hostname)
-    console.log('[Roster DEBUG]   - isStaticDeployment:', isStaticDeployment)
-    console.log('[Roster DEBUG]   - hasBackendUrl:', hasBackendUrl)
-    console.log('[Roster DEBUG]   - VITE_BACKEND_URL:', import.meta.env.VITE_BACKEND_URL)
-    console.log('[Roster DEBUG]   - DEV mode:', import.meta.env.DEV)
-    console.log('[Roster DEBUG]   - connectionMode:', connectionMode)
 
     // For static deployments without a backend URL, server/WS are not available
     // The Upload Roster app uses Supabase for cloud, but can use WebSocket if backend is configured
     if (isStaticDeployment && !hasBackendUrl) {
-      console.log('[Roster DEBUG] Static deployment without backend - server/WS not available')
       setConnectionStatuses(prev => ({
         ...prev, // Preserve supabase status
         server: 'not_available',
@@ -302,7 +272,6 @@ export default function UploadRosterApp() {
     // For static deployments WITH backend URL or local dev, check connection based on mode
     // In Supabase mode, we don't need server/WS polling - connection is already tracked in loadMatches
     if (connectionMode === CONNECTION_MODES.SUPABASE) {
-      console.log('[Roster DEBUG] Supabase mode - server/WS not needed')
       setConnectionStatuses(prev => ({
         ...prev,
         server: 'not_applicable',
@@ -315,13 +284,10 @@ export default function UploadRosterApp() {
     // This is more reliable than getServerStatus() as it tests actual API functionality
     const checkConnections = async () => {
       try {
-        console.log('[Roster DEBUG] Checking server status via listAvailableMatches...')
         const result = await listAvailableMatches()
-        console.log('[Roster DEBUG] listAvailableMatches result:', result?.success)
 
         const serverConnected = result?.success
         const wsStatus = matchId ? getWebSocketStatus(matchId) : 'not_applicable'
-        console.log('[Roster DEBUG] WebSocket status for matchId', matchId, ':', wsStatus)
 
         setConnectionStatuses(prev => {
           const newStatus = {
@@ -329,7 +295,6 @@ export default function UploadRosterApp() {
             server: serverConnected ? 'connected' : 'disconnected',
             websocket: wsStatus
           }
-          console.log('[Roster DEBUG] Updated connection statuses:', newStatus)
           return newStatus
         })
 
@@ -370,7 +335,6 @@ export default function UploadRosterApp() {
 
   // Handle match selection
   const handleMatchSelect = async (match) => {
-    console.log('[UploadRoster] Match selected:', match)
     setSelectedMatch(match)
     setGameNumber(String(match.gameNumber || match.id))
 
@@ -388,7 +352,6 @@ export default function UploadRosterApp() {
     if (match.status === 'live') {
       // For live matches, roster upload is still allowed until coin toss is confirmed
       // We'll allow it but warn the user
-      console.log('[UploadRoster] Match is live, checking if roster can still be uploaded')
     }
 
     // Match is valid for roster upload (status is 'setup' or early 'live')
@@ -707,7 +670,6 @@ export default function UploadRosterApp() {
 
       // Try Supabase first if connected
       if (activeConnection === 'supabase' && supabase && selectedMatch?.external_id) {
-        console.log('[Roster] Writing roster to Supabase for match:', selectedMatch.external_id)
 
         // JSONB signature keys
         const coachSigJsonKey = team === 'team1' ? 'team1_coach' : 'team2_coach'
@@ -760,7 +722,6 @@ export default function UploadRosterApp() {
           console.error('[Roster] Supabase write error:', error)
           // Fall back to server
         } else {
-          console.log('[Roster] Successfully wrote roster to Supabase with signatures:', signaturesUpdate)
         }
       }
 
@@ -771,7 +732,6 @@ export default function UploadRosterApp() {
         await updateMatchData(matchId, {
           [serverPendingField]: rosterData
         })
-        console.log('[Roster] Server update also succeeded')
       } catch (serverError) {
         console.warn('[Roster] Server update failed (non-blocking):', serverError)
         // Don't fail - Supabase already has the data
@@ -866,7 +826,6 @@ export default function UploadRosterApp() {
         setTeam2Data({ name: 'Test Team 2', color: '#3b82f6' })
         setMatchStatusCheck('valid')
         setValidationError('')
-        console.log('[Test Mode] Activated with mock data')
         return 0
       }
       return newCount

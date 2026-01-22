@@ -50,13 +50,11 @@ export function getBackendUrl() {
   // On static deployments (*.openvolley.app), always use cloud relay
   // These deployments have no backend server
   if (isStaticDeployment()) {
-    console.log('[BackendConfig] Static deployment detected, using cloud relay:', CLOUD_RELAY_URL)
     return CLOUD_RELAY_URL
   }
 
   // On tablets/mobile in production, use cloud relay automatically
   if (!import.meta.env.DEV && isTabletOrMobile()) {
-    console.log('[BackendConfig] Tablet/mobile detected, using cloud relay:', CLOUD_RELAY_URL)
     return CLOUD_RELAY_URL
   }
 

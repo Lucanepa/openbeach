@@ -87,7 +87,6 @@ export function useServiceWorker() {
         await Promise.all(
           cacheNames.map((cacheName) => caches.delete(cacheName))
         )
-        console.log('[SW] Cleared all caches')
       }
 
       // Unregister all service workers (same as Options > Clear Cache)
@@ -96,7 +95,6 @@ export function useServiceWorker() {
         await Promise.all(
           registrations.map((reg) => reg.unregister())
         )
-        console.log('[SW] Unregistered all service workers')
       }
 
       // Optionally clear IndexedDB
@@ -107,7 +105,6 @@ export function useServiceWorker() {
             return new Promise((resolve, reject) => {
               const req = indexedDB.deleteDatabase(db.name)
               req.onsuccess = () => {
-                console.log(`[SW] Deleted IndexedDB: ${db.name}`)
                 resolve()
               }
               req.onerror = () => reject(req.error)
@@ -118,7 +115,6 @@ export function useServiceWorker() {
             })
           })
         )
-        console.log('[SW] Cleared IndexedDB')
       }
 
       // Tell waiting service worker to skip waiting and activate

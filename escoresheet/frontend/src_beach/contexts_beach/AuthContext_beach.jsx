@@ -13,22 +13,18 @@ export function AuthProvider({ children }) {
 
   // Fetch user profile from profiles table
   const fetchProfile = useCallback(async (userId) => {
-    console.log('[AuthContext] fetchProfile called with userId:', userId)
     if (!supabase || !userId) {
-      console.log('[AuthContext] No supabase or userId, setting profile to null')
       setProfile(null)
       return null
     }
 
     // Prevent duplicate concurrent fetches
     if (fetchingProfile.current) {
-      console.log('[AuthContext] Already fetching profile, skipping duplicate request')
       return null
     }
 
     try {
       fetchingProfile.current = true
-      console.log('[AuthContext] Fetching profile from Supabase...')
 
       // Add timeout to detect hanging queries (15s to allow for Supabase cold starts)
       const timeoutPromise = new Promise((_, reject) =>
@@ -43,7 +39,6 @@ export function AuthProvider({ children }) {
 
       const { data, error } = await Promise.race([queryPromise, timeoutPromise])
 
-      console.log('[AuthContext] Profile query result:', { data, error })
 
       if (error) {
         console.warn('[AuthContext] Failed to fetch profile:', error.message, error)
@@ -52,7 +47,6 @@ export function AuthProvider({ children }) {
       }
 
       setProfile(data)
-      console.log('[AuthContext] Profile set successfully:', data)
       // Cache profile in localStorage for offline auto-fill
       localStorage.setItem('cachedProfile', JSON.stringify(data))
       return data
@@ -80,7 +74,6 @@ export function AuthProvider({ children }) {
     // Listen for auth changes FIRST (this is the reliable way to get auth state)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('[AuthContext] onAuthStateChange:', event, session?.user?.id)
         clearTimeout(loadingTimeout)
         setUser(session?.user ?? null)
 
@@ -98,7 +91,6 @@ export function AuthProvider({ children }) {
 
     // Get initial session (triggers onAuthStateChange with INITIAL_SESSION event)
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('[AuthContext] getSession result:', session?.user?.id)
       // Don't call fetchProfile here - let onAuthStateChange handle it
       // This prevents duplicate fetches
     }).catch((err) => {

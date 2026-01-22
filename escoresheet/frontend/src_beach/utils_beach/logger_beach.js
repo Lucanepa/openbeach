@@ -80,7 +80,6 @@ export function initLogger() {
     originalConsole.debug(...args)
   }
 
-  console.log('[Logger] Initialized - capturing console output')
 }
 
 /**
@@ -176,7 +175,6 @@ export async function uploadLogsToCloud(matchId = null, gameNumber = null) {
       return null
     }
 
-    console.log('[Logger] Logs appended to cloud:', filename)
     return data?.path || filename
   } catch (err) {
     console.error('[Logger] Error uploading logs:', err)
@@ -231,7 +229,6 @@ export async function uploadBackupToCloud(matchId, backupData) {
       return null
     }
 
-    console.log('[Logger] Backup uploaded to cloud:', filename)
     return data?.path || filename
   } catch (err) {
     console.error('[Logger] Error uploading backup:', err)

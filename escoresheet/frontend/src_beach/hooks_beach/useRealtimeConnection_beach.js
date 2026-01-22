@@ -99,13 +99,11 @@ export function useRealtimeConnection({
   // Connect to Supabase Realtime
   const connectSupabase = useCallback(async () => {
     if (!supabase || !matchId) {
-      console.log('[RealtimeConnection] Supabase not available or no matchId')
       return false
     }
 
     try {
       setStatus(CONNECTION_STATUS.CONNECTING)
-      console.log('[RealtimeConnection] Connecting to Supabase Realtime for match:', matchId)
 
       // First, look up the Supabase UUID from external_id (seed_key)
       // This is needed because events/sets tables use match_id (UUID), not external_id
@@ -118,7 +116,6 @@ export function useRealtimeConnection({
 
       if (matchData?.id) {
         supabaseMatchUuid = matchData.id
-        console.log('[RealtimeConnection] Found Supabase UUID:', supabaseMatchUuid)
       }
 
       // Build channel subscriptions
@@ -140,7 +137,6 @@ export function useRealtimeConnection({
             },
             (payload) => {
               if (!isMountedRef.current) return
-              console.log('[RealtimeConnection] Supabase event received:', payload)
               setLastUpdate(Date.now())
 
               // Fetch fresh data when events change
@@ -163,7 +159,6 @@ export function useRealtimeConnection({
             },
             (payload) => {
               if (!isMountedRef.current) return
-              console.log('[RealtimeConnection] Supabase set update:', payload)
               setLastUpdate(Date.now())
 
               // Fetch fresh data when sets change
@@ -186,7 +181,6 @@ export function useRealtimeConnection({
             },
             (payload) => {
               if (!isMountedRef.current) return
-              console.log('[RealtimeConnection] Supabase match_live_state update:', payload)
               setLastUpdate(Date.now())
 
               // Fetch fresh data when live state changes (scores, lineups, etc.)
@@ -215,12 +209,10 @@ export function useRealtimeConnection({
           },
           (payload) => {
             if (!isMountedRef.current) return
-            console.log('[RealtimeConnection] Supabase match update:', payload.eventType, payload)
             setLastUpdate(Date.now())
 
             // Handle match deletion
             if (payload.eventType === 'DELETE') {
-              console.log('[RealtimeConnection] Match deleted, calling onDeleted callback')
               if (onDeletedRef.current) {
                 onDeletedRef.current()
               }
@@ -239,13 +231,11 @@ export function useRealtimeConnection({
         )
         .subscribe((status) => {
           if (!isMountedRef.current) return
-          console.log('[RealtimeConnection] Supabase channel status:', status)
 
           if (status === 'SUBSCRIBED') {
             setStatus(CONNECTION_STATUS.CONNECTED)
             setActiveConnection('supabase')
             setError(null)
-            console.log('[RealtimeConnection] Connected to Supabase Realtime')
           } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
             console.warn('[RealtimeConnection] Supabase channel error/timeout, status:', status)
             // Don't set error state, just log - the connection may still work
@@ -268,7 +258,6 @@ export function useRealtimeConnection({
 
     try {
       setStatus(CONNECTION_STATUS.CONNECTING)
-      console.log('[RealtimeConnection] Connecting to WebSocket for match:', matchId)
 
       const unsubscribe = subscribeToMatchData(matchId, (data) => {
         if (!isMountedRef.current) return
@@ -290,7 +279,6 @@ export function useRealtimeConnection({
       setStatus(CONNECTION_STATUS.CONNECTED)
       setActiveConnection('websocket')
       setError(null)
-      console.log('[RealtimeConnection] Connected to WebSocket')
       return true
     } catch (err) {
       console.error('[RealtimeConnection] WebSocket connection error:', err)
@@ -301,7 +289,6 @@ export function useRealtimeConnection({
 
   // Switch connection type
   const switchConnection = useCallback((newType) => {
-    console.log('[RealtimeConnection] Switching connection to:', newType)
     setConnectionType(newType)
     // Save preference to localStorage
     try {
@@ -311,7 +298,6 @@ export function useRealtimeConnection({
 
   // Force reconnect - will trigger effect by changing a state
   const reconnect = useCallback(() => {
-    console.log('[RealtimeConnection] Force reconnecting...')
     // Reset connecting flag and trigger reconnection
     isConnectingRef.current = false
     cleanup()
@@ -386,7 +372,6 @@ export function useRealtimeConnection({
           // Auto mode: Try Supabase first, fall back to WebSocket
           const supabaseSuccess = await connectSupabase()
           if (!supabaseSuccess) {
-            console.log('[RealtimeConnection] Supabase failed, falling back to WebSocket')
             const wsSuccess = connectWebSocket()
             if (wsSuccess) {
               setStatus(CONNECTION_STATUS.FALLBACK)

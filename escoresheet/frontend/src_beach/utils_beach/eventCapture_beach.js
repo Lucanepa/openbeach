@@ -334,7 +334,6 @@ function buildEventPayload(eventType, event, target) {
 export function installGlobalEventCapture() {
   // Don't install twice
   if (activeListeners.size > 0) {
-    console.log('[EventCapture] Already installed')
     return
   }
 
@@ -354,7 +353,6 @@ export function installGlobalEventCapture() {
   window.addEventListener('error', handleGlobalError)
   window.addEventListener('unhandledrejection', handleUnhandledRejection)
 
-  console.log('[EventCapture] Global event capture installed')
 }
 
 /**
@@ -369,7 +367,6 @@ export function uninstallGlobalEventCapture() {
   window.removeEventListener('error', handleGlobalError)
   window.removeEventListener('unhandledrejection', handleUnhandledRejection)
 
-  console.log('[EventCapture] Global event capture uninstalled')
 }
 
 /**

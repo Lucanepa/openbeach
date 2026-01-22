@@ -78,7 +78,6 @@ export default function LivescoreApp() {
           table: 'match_live_state'
         },
         (payload) => {
-          console.log('[Livescore] Realtime update:', payload.eventType)
 
           if (payload.eventType === 'INSERT') {
             setLiveGames(prev => [payload.new, ...prev])
@@ -94,7 +93,6 @@ export default function LivescoreApp() {
         }
       )
       .subscribe((status) => {
-        console.log('[Livescore] Subscription status:', status)
       })
 
     channelRef.current = channel

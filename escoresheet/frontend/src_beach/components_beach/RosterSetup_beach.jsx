@@ -62,7 +62,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
 
   // Handle match deletion - navigate back
   const handleMatchDeleted = useCallback(() => {
-    console.log('[RosterSetup] Match deleted, navigating back')
     if (onBack) {
       onBack()
     }
@@ -118,7 +117,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
     if (match) {
       const pendingData = match[pendingRosterField] || match[pendingRosterFieldSnake]
       if (pendingData) {
-        console.log('[RosterSetup] Found pending roster in match data:', pendingData)
         setPendingRoster(pendingData)
       } else {
         setPendingRoster(null)
@@ -136,7 +134,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
             .single()
 
           if (!error && data && data[pendingRosterFieldSnake]) {
-            console.log('[RosterSetup] Found pending roster in Supabase:', data[pendingRosterFieldSnake])
             setPendingRoster(data[pendingRosterFieldSnake])
           }
         } catch (err) {
@@ -155,7 +152,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
           filter: `external_id=eq.${matchData.external_id}`
         }, (payload) => {
           const pendingData = payload.new?.[pendingRosterFieldSnake]
-          console.log('[RosterSetup] Supabase update received, pending roster:', pendingData)
           setPendingRoster(pendingData || null)
         })
         .subscribe()
@@ -236,7 +232,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
         }
 
         await db.matches.update(matchId, matchUpdate)
-        console.log('[RosterSetup] Saved signatures to local match:', { coachSigKey, captainSigKey, hasCoach: !!importedCoachSignature, hasCaptain: !!importedCaptainSignature })
       }
 
       // Clear pending roster and save signatures in Supabase if connected
@@ -280,11 +275,9 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
           .update(supabaseUpdate)
           .eq('external_id', matchData.external_id)
 
-        console.log('[RosterSetup] Saved signatures to Supabase:', { hasCoach: !!importedCoachSignature, hasCaptain: !!importedCaptainSignature })
       }
 
       setPendingRoster(null)
-      console.log('[RosterSetup] Pending roster accepted and imported')
     } catch (err) {
       console.error('[RosterSetup] Error accepting pending roster:', err)
       setError(t('rosterSetup.errorAcceptingRoster'))
@@ -312,7 +305,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
       }
 
       setPendingRoster(null)
-      console.log('[RosterSetup] Pending roster rejected')
     } catch (err) {
       console.error('[RosterSetup] Error rejecting pending roster:', err)
     } finally {
@@ -354,7 +346,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
 
 
   const handlePdfUpload = async (file) => {
-    // Removed console.log('[RosterSetup] handlePdfUpload called with file:', file)
     if (!file) {
       return
     }
@@ -451,7 +442,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
 
     // Skip database operations in test mode
     if (matchId === -1 || teamId === -1) {
-      console.log('[Test Mode] Skipping database save')
       return
     }
 
@@ -592,7 +582,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
           console.error('[RosterSetup] Failed to sync roster to Supabase:', supabaseError)
           showAlert(t('rosterSetup.rosterSaved'), 'success')
         } else {
-          console.log('[RosterSetup] Roster synced to Supabase with signatures:', signaturesUpdate)
           setShowSuccessModal(true)
         }
       } else {

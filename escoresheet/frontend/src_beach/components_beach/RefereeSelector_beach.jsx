@@ -29,7 +29,6 @@ export default function RefereeSelector({ open, onClose, onSelect, position = {}
     setLoading(true)
     try {
       if (!supabase) {
-        console.log('[RefereeSelector] Supabase not available')
         setReferees([])
         return
       }
@@ -55,7 +54,6 @@ export default function RefereeSelector({ open, onClose, onSelect, position = {}
         dob: ref.dob || ''
       }))
 
-      console.log(`[RefereeSelector] Loaded ${uniqueReferees.length} unique referees from history`)
       setReferees(uniqueReferees)
     } catch (error) {
       console.error('Error loading referees:', error)
