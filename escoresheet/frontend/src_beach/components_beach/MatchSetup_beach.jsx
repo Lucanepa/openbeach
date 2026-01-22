@@ -2409,8 +2409,14 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     const team1WithCountry = team1Data ? { ...team1Data, country: matchData.team1Country || team1Country || '' } : { name: team1Name, country: matchData.team1Country || team1Country || '' }
     const team2WithCountry = team2Data ? { ...team2Data, country: matchData.team2Country || team2Country || '' } : { name: team2Name, country: matchData.team2Country || team2Country || '' }
 
-    // Normalize team keys for scoresheet (team1 -> team_1)
-    const normalizeTeamKey = (key) => key ? key.replace('team1', 'team_1').replace('team2', 'team_2') : key
+    // Keep team keys as team1/team2 (scoresheet uses team1/team2 format)
+    const normalizeTeamKey = (key) => {
+      // Convert team_1/team_2 back to team1/team2 if needed, otherwise keep as is
+      if (!key) return key;
+      if (key === 'team_1') return 'team1';
+      if (key === 'team_2') return 'team2';
+      return key; // Already team1/team2 or other format
+    }
     const scoresheetData = {
       match: {
         ...matchData,
@@ -2426,6 +2432,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           teamB: normalizeTeamKey(matchData.coinTossTeamB)
         }
       },
+      team1Team: team1WithCountry,
+      team2Team: team2WithCountry,
+      team1Players: team1PlayersData,
+      team2Players: team2PlayersData,
+      // Also include underscore versions for backward compatibility
       team_1Team: team1WithCountry,
       team_2Team: team2WithCountry,
       team_1Players: team1PlayersData,
@@ -2434,6 +2445,42 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       events: allEvents,
       sanctions: []
     }
+
+    console.log('[MatchSetup] Saving scoresheet data to sessionStorage:', {
+      source: 'MatchSetup Component',
+      match: {
+        id: scoresheetData.match.id,
+        coinTossTeamA: scoresheetData.match.coinTossTeamA,
+        coinTossTeamB: scoresheetData.match.coinTossTeamB,
+        coinTossData: scoresheetData.match.coinTossData,
+        team1Country: scoresheetData.match.team1Country,
+        team2Country: scoresheetData.match.team2Country,
+        team_1Country: scoresheetData.match.team_1Country,
+        team_2Country: scoresheetData.match.team_2Country
+      },
+      team1Team: {
+        name: scoresheetData.team_1Team?.name,
+        country: scoresheetData.team_1Team?.country
+      },
+      team2Team: {
+        name: scoresheetData.team_2Team?.name,
+        country: scoresheetData.team_2Team?.country
+      },
+      team1Players: scoresheetData.team_1Players?.map(p => ({
+        number: p.number,
+        firstName: p.firstName,
+        lastName: p.lastName,
+        isCaptain: p.isCaptain
+      })),
+      team2Players: scoresheetData.team_2Players?.map(p => ({
+        number: p.number,
+        firstName: p.firstName,
+        lastName: p.lastName,
+        isCaptain: p.isCaptain
+      })),
+      setsCount: scoresheetData.sets?.length || 0,
+      eventsCount: scoresheetData.events?.length || 0
+    });
 
     // Store data in sessionStorage to pass to new window
     sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))

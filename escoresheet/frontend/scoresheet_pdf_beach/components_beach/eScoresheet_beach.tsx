@@ -181,7 +181,54 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
       // Reset dataRef
       dataRef.current = {};
 
-      const { match, team1Team, team2Team, sets, events, team1Players, team2Players } = matchData;
+      // Handle both team1Players/team2Players and team_1Players/team_2Players formats
+      const team1Players = matchData.team1Players || matchData.team_1Players || [];
+      const team2Players = matchData.team2Players || matchData.team_2Players || [];
+      const team1Team = matchData.team1Team || matchData.team_1Team;
+      const team2Team = matchData.team2Team || matchData.team_2Team;
+      const { match, sets, events } = matchData;
+      
+      console.log('[Scoresheet Component] Received matchData:', {
+        hasMatch: !!match,
+        hasTeam1Team: !!team1Team,
+        hasTeam2Team: !!team2Team,
+        team1PlayersCount: team1Players?.length || 0,
+        team2PlayersCount: team2Players?.length || 0,
+        setsCount: sets?.length || 0,
+        eventsCount: events?.length || 0,
+        matchDataKeys: Object.keys(matchData || {}),
+        match: match ? {
+          id: match.id,
+          coinTossTeamA: match.coinTossTeamA,
+          coinTossTeamB: match.coinTossTeamB,
+          coinTossData: match.coinTossData,
+          team1Country: match.team1Country,
+          team2Country: match.team2Country,
+          team_1Country: match.team_1Country,
+          team_2Country: match.team_2Country
+        } : null,
+        team1Team: team1Team ? {
+          name: team1Team.name,
+          country: team1Team.country
+        } : null,
+        team2Team: team2Team ? {
+          name: team2Team.name,
+          country: team2Team.country
+        } : null,
+        team1Players: team1Players?.map(p => ({
+          number: p.number,
+          firstName: p.firstName,
+          lastName: p.lastName,
+          isCaptain: p.isCaptain
+        })) || [],
+        team2Players: team2Players?.map(p => ({
+          number: p.number,
+          firstName: p.firstName,
+          lastName: p.lastName,
+          isCaptain: p.isCaptain
+        })) || [],
+        rawMatchData: matchData // Include full raw data for inspection
+      });
 
       if (match) {
         // Match header info - use match setup fields
@@ -1108,6 +1155,14 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           const team1FirstServe = match?.team1FirstServe || match?.coinTossData?.team1FirstServe;
           const team2FirstServe = match?.team2FirstServe || match?.coinTossData?.team2FirstServe;
           
+          // Helper to extract number from formatted strings like "(1)*" or "1*" or "1"
+          const extractNumber = (value: string | undefined): string | undefined => {
+            if (!value) return undefined;
+            // Remove parentheses, asterisks, and extract just the number
+            const match = value.toString().match(/(\d+)/);
+            return match ? match[1] : undefined;
+          };
+          
           // Helper to check if a player has firstServe
           const hasFirstServe = (playerNumber: any, teamKey: string): boolean => {
             if (teamKey === 'team1') {
@@ -1188,20 +1243,137 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           
           // Fallback: try coin toss data if player arrays are empty
           if ((!teamAData?.player1 && !teamAData?.player2) || (!teamBData?.player1 && !teamBData?.player2)) {
+            console.log(`[DEBUG Set ${setNum}] Trying coin toss data fallback`);
             const coinTossData = match?.coinTossData?.players;
+            console.log(`[DEBUG Set ${setNum}] Coin toss data available:`, {
+              hasCoinTossData: !!coinTossData,
+              coinTossDataKeys: coinTossData ? Object.keys(coinTossData) : [],
+              coinTossData
+            });
             if (coinTossData?.teamA && (!teamAData?.player1 || !teamAData?.player2)) {
               teamAData = coinTossData.teamA;
+              console.log(`[DEBUG Set ${setNum}] Using coinTossData.teamA for teamAData`);
             }
             if (coinTossData?.teamB && (!teamBData?.player1 || !teamBData?.player2)) {
               teamBData = coinTossData.teamB;
+              console.log(`[DEBUG Set ${setNum}] Using coinTossData.teamB for teamBData`);
             }
             // Try team1/team2 format
             if (coinTossData?.team1 && (!teamAData?.player1 || !teamAData?.player2) && teamAKey === 'team1') {
               teamAData = coinTossData.team1;
+              console.log(`[DEBUG Set ${setNum}] Using coinTossData.team1 for teamAData`);
             }
             if (coinTossData?.team2 && (!teamBData?.player1 || !teamBData?.player2) && teamBKey === 'team2') {
               teamBData = coinTossData.team2;
+              console.log(`[DEBUG Set ${setNum}] Using coinTossData.team2 for teamBData`);
             }
+          }
+          
+          // Additional fallback: get player numbers from TEAMS table fields (b_t1_p1_no, b_t1_p2_no, etc.)
+          // Always check TEAMS table values (for debugging)
+          const teamsTableRaw = {
+            t1p1: get('b_t1_p1_no'),
+            t1p2: get('b_t1_p2_no'),
+            t2p1: get('b_t2_p1_no'),
+            t2p2: get('b_t2_p2_no')
+          };
+          
+          // Check if we need to extract from TEAMS table
+          const needsTeamAData = !teamAData?.player1?.number || !teamAData?.player2?.number;
+          const needsTeamBData = !teamBData?.player1?.number || !teamBData?.player2?.number;
+          
+          console.log(`[DEBUG Set ${setNum}] Checking TEAMS table fallback:`, {
+            needsTeamAData,
+            needsTeamBData,
+            teamAData,
+            teamBData,
+            teamsTableRaw,
+            extractedNumbers: {
+              t1p1: extractNumber(teamsTableRaw.t1p1),
+              t1p2: extractNumber(teamsTableRaw.t1p2),
+              t2p1: extractNumber(teamsTableRaw.t2p1),
+              t2p2: extractNumber(teamsTableRaw.t2p2)
+            }
+          });
+          
+          if (needsTeamAData || needsTeamBData) {
+            // Get from TEAMS table fields
+            const t1p1No = extractNumber(teamsTableRaw.t1p1);
+            const t1p2No = extractNumber(teamsTableRaw.t1p2);
+            const t2p1No = extractNumber(teamsTableRaw.t2p1);
+            const t2p2No = extractNumber(teamsTableRaw.t2p2);
+            
+            console.log(`[DEBUG Set ${setNum}] Extracting player numbers from TEAMS table:`, {
+              t1p1No,
+              t1p2No,
+              t2p1No,
+              t2p2No,
+              teamAKey,
+              teamBKey,
+              currentTeamAData: teamAData,
+              currentTeamBData: teamBData
+            });
+            
+            if (teamAKey === 'team1') {
+              // Team A is team1
+              if (!teamAData?.player1?.number && t1p1No) {
+                teamAData = teamAData || {};
+                teamAData.player1 = teamAData.player1 || {};
+                teamAData.player1.number = t1p1No;
+                console.log(`[DEBUG Set ${setNum}] Set teamAData.player1.number = ${t1p1No} from TEAMS table`);
+              }
+              if (!teamAData?.player2?.number && t1p2No) {
+                teamAData = teamAData || {};
+                teamAData.player2 = teamAData.player2 || {};
+                teamAData.player2.number = t1p2No;
+                console.log(`[DEBUG Set ${setNum}] Set teamAData.player2.number = ${t1p2No} from TEAMS table`);
+              }
+              // Team B is team2
+              if (!teamBData?.player1?.number && t2p1No) {
+                teamBData = teamBData || {};
+                teamBData.player1 = teamBData.player1 || {};
+                teamBData.player1.number = t2p1No;
+                console.log(`[DEBUG Set ${setNum}] Set teamBData.player1.number = ${t2p1No} from TEAMS table`);
+              }
+              if (!teamBData?.player2?.number && t2p2No) {
+                teamBData = teamBData || {};
+                teamBData.player2 = teamBData.player2 || {};
+                teamBData.player2.number = t2p2No;
+                console.log(`[DEBUG Set ${setNum}] Set teamBData.player2.number = ${t2p2No} from TEAMS table`);
+              }
+            } else {
+              // Team A is team2
+              if (!teamAData?.player1?.number && t2p1No) {
+                teamAData = teamAData || {};
+                teamAData.player1 = teamAData.player1 || {};
+                teamAData.player1.number = t2p1No;
+                console.log(`[DEBUG Set ${setNum}] Set teamAData.player1.number = ${t2p1No} from TEAMS table`);
+              }
+              if (!teamAData?.player2?.number && t2p2No) {
+                teamAData = teamAData || {};
+                teamAData.player2 = teamAData.player2 || {};
+                teamAData.player2.number = t2p2No;
+                console.log(`[DEBUG Set ${setNum}] Set teamAData.player2.number = ${t2p2No} from TEAMS table`);
+              }
+              // Team B is team1
+              if (!teamBData?.player1?.number && t1p1No) {
+                teamBData = teamBData || {};
+                teamBData.player1 = teamBData.player1 || {};
+                teamBData.player1.number = t1p1No;
+                console.log(`[DEBUG Set ${setNum}] Set teamBData.player1.number = ${t1p1No} from TEAMS table`);
+              }
+              if (!teamBData?.player2?.number && t1p2No) {
+                teamBData = teamBData || {};
+                teamBData.player2 = teamBData.player2 || {};
+                teamBData.player2.number = t1p2No;
+                console.log(`[DEBUG Set ${setNum}] Set teamBData.player2.number = ${t1p2No} from TEAMS table`);
+              }
+            }
+            
+            console.log(`[DEBUG Set ${setNum}] After TEAMS table extraction:`, {
+              teamAData,
+              teamBData
+            });
           }
           
           console.log(`[DEBUG Set ${setNum}] Player data:`, {
@@ -1210,7 +1382,21 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
             teamAData,
             teamBData,
             team1PlayersArray: team1PlayersArray.map(p => ({ number: p.number, firstName: p.firstName, lastName: p.lastName })),
-            team2PlayersArray: team2PlayersArray.map(p => ({ number: p.number, firstName: p.firstName, lastName: p.lastName }))
+            team2PlayersArray: team2PlayersArray.map(p => ({ number: p.number, firstName: p.firstName, lastName: p.lastName })),
+            team1PlayersRaw: team1Players,
+            team2PlayersRaw: team2Players,
+            teamsTableData: {
+              t1p1: get('b_t1_p1_no'),
+              t1p2: get('b_t1_p2_no'),
+              t2p1: get('b_t2_p1_no'),
+              t2p2: get('b_t2_p2_no')
+            },
+            extractedNumbers: {
+              t1p1: extractNumber(get('b_t1_p1_no')),
+              t1p2: extractNumber(get('b_t1_p2_no')),
+              t2p1: extractNumber(get('b_t2_p1_no')),
+              t2p2: extractNumber(get('b_t2_p2_no'))
+            }
           });
 
           // Get team_up and team_down for this set to ensure correct row assignment

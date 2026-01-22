@@ -33,16 +33,53 @@ window.addEventListener('unhandledrejection', (event) => {
 const loadMatchData = () => {
   try {
     const dataStr = sessionStorage.getItem('scoresheetData');
-    console.log('Loading scoresheet data from sessionStorage:', dataStr ? 'Data found' : 'No data');
+    console.log('[Scoresheet Load] Loading scoresheet data from sessionStorage:', dataStr ? 'Data found' : 'No data');
     
     if (!dataStr) {
       // No data available - show empty scoresheet
-      console.warn('No scoresheet data in sessionStorage');
+      console.warn('[Scoresheet Load] No scoresheet data in sessionStorage');
       return null;
     }
     
     const data = JSON.parse(dataStr);
-    console.log('Parsed scoresheet data:', data ? 'Data parsed successfully' : 'Data is null');
+    console.log('[Scoresheet Load] Parsed scoresheet data:', {
+      hasData: !!data,
+      match: data?.match ? {
+        id: data.match.id,
+        coinTossTeamA: data.match.coinTossTeamA,
+        coinTossTeamB: data.match.coinTossTeamB,
+        coinTossData: data.match.coinTossData,
+        team1Country: data.match.team1Country,
+        team2Country: data.match.team2Country,
+        team_1Country: data.match.team_1Country,
+        team_2Country: data.match.team_2Country
+      } : null,
+      team1Team: data?.team_1Team ? {
+        name: data.team_1Team.name,
+        country: data.team_1Team.country
+      } : null,
+      team2Team: data?.team_2Team ? {
+        name: data.team_2Team.name,
+        country: data.team_2Team.country
+      } : null,
+      team1Players: (data?.team1Players || data?.team_1Players)?.map(p => ({
+        number: p.number,
+        firstName: p.firstName,
+        lastName: p.lastName,
+        isCaptain: p.isCaptain
+      })) || [],
+      team2Players: (data?.team2Players || data?.team_2Players)?.map(p => ({
+        number: p.number,
+        firstName: p.firstName,
+        lastName: p.lastName,
+        isCaptain: p.isCaptain
+      })) || [],
+      team1TeamData: data?.team1Team || data?.team_1Team,
+      team2TeamData: data?.team2Team || data?.team_2Team,
+      setsCount: data?.sets?.length || 0,
+      eventsCount: data?.events?.length || 0,
+      fullData: data // Include full data for deep inspection
+    });
     
     // Don't remove sessionStorage immediately - let the component use it first
     // It will be cleaned up after PDF generation
@@ -50,7 +87,7 @@ const loadMatchData = () => {
     // Return data (including test matches for now to allow debugging)
     return data;
   } catch (error) {
-    console.error('Error loading scoresheet data:', error);
+    console.error('[Scoresheet Load] Error loading scoresheet data:', error);
     sendErrorToParent(error instanceof Error ? error : new Error(String(error)));
     return null; // Return null on error - show empty scoresheet
   }

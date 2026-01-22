@@ -1432,8 +1432,14 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                   const team1PlayersData = team1Roster.length > 0 ? team1Roster : team1PlayersRaw || []
                   const team2PlayersData = team2Roster.length > 0 ? team2Roster : team2PlayersRaw || []
 
-                  // Normalize team keys for scoresheet (team1 -> team_1)
-                  const normalizeTeamKey = (key) => key ? key.replace('team1', 'team_1').replace('team2', 'team_2') : key
+                  // Keep team keys as team1/team2 (no normalization needed - scoresheet uses team1/team2)
+                  const normalizeTeamKey = (key) => {
+                    // Convert team_1/team_2 back to team1/team2 if needed, otherwise keep as is
+                    if (!key) return key;
+                    if (key === 'team_1') return 'team1';
+                    if (key === 'team_2') return 'team2';
+                    return key; // Already team1/team2 or other format
+                  }
                   const scoresheetData = {
                     match: {
                       ...match,
@@ -1450,6 +1456,11 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                         teamB: normalizeTeamKey(match.coinTossTeamB || teamB)
                       }
                     },
+                    team1Team: team1Data,
+                    team2Team: team2Data,
+                    team1Players: team1PlayersData,
+                    team2Players: team2PlayersData,
+                    // Also include underscore versions for backward compatibility
                     team_1Team: team1Data,
                     team_2Team: team2Data,
                     team_1Players: team1PlayersData,
@@ -1458,6 +1469,42 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                     events: [],
                     sanctions: []
                   }
+
+                  console.log('[CoinToss] Saving scoresheet data to sessionStorage:', {
+                    source: 'CoinToss Component',
+                    match: {
+                      id: scoresheetData.match.id,
+                      coinTossTeamA: scoresheetData.match.coinTossTeamA,
+                      coinTossTeamB: scoresheetData.match.coinTossTeamB,
+                      coinTossData: scoresheetData.match.coinTossData,
+                      team1Country: scoresheetData.match.team1Country,
+                      team2Country: scoresheetData.match.team2Country,
+                      team_1Country: scoresheetData.match.team_1Country,
+                      team_2Country: scoresheetData.match.team_2Country
+                    },
+                    team1Team: {
+                      name: scoresheetData.team_1Team?.name,
+                      country: scoresheetData.team_1Team?.country
+                    },
+                    team2Team: {
+                      name: scoresheetData.team_2Team?.name,
+                      country: scoresheetData.team_2Team?.country
+                    },
+                    team1Players: scoresheetData.team_1Players?.map(p => ({
+                      number: p.number,
+                      firstName: p.firstName,
+                      lastName: p.lastName,
+                      isCaptain: p.isCaptain
+                    })),
+                    team2Players: scoresheetData.team_2Players?.map(p => ({
+                      number: p.number,
+                      firstName: p.firstName,
+                      lastName: p.lastName,
+                      isCaptain: p.isCaptain
+                    })),
+                    setsCount: scoresheetData.sets?.length || 0,
+                    eventsCount: scoresheetData.events?.length || 0
+                  });
 
                   sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
                   const scoresheetWindow = window.open('/scoresheet_beach.html', '_blank', 'width=1200,height=900')

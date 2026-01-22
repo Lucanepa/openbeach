@@ -686,8 +686,14 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     const team1WithCountry = team1 ? { ...team1, country: match?.team1Country || '' } : { name: '', country: match?.team1Country || '' }
     const team2WithCountry = team2 ? { ...team2, country: match?.team2Country || '' } : { name: '', country: match?.team2Country || '' }
 
-    // Normalize team keys for scoresheet (team1 -> team_1)
-    const normalizeTeamKey = (key) => key ? key.replace('team1', 'team_1').replace('team2', 'team_2') : key
+    // Keep team keys as team1/team2 (scoresheet uses team1/team2 format)
+    const normalizeTeamKey = (key) => {
+      // Convert team_1/team_2 back to team1/team2 if needed, otherwise keep as is
+      if (!key) return key;
+      if (key === 'team_1') return 'team1';
+      if (key === 'team_2') return 'team2';
+      return key; // Already team1/team2 or other format
+    }
     const scoresheetData = {
       match: {
         ...match,
