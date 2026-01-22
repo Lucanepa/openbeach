@@ -766,8 +766,8 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           const setNum = setIndex;
           if (setNum <= 3) {
             // Set scores - use current scores even if set not finished
-            // IMPORTANT: Use the actual set data, not accumulated values
-            const team1Points = Number(setItem.team1Points) || 0;
+            // IMPORTANT: Use homePoints (team1) and team2Points from actual set data
+            const team1Points = Number(setItem.homePoints) || 0;
             const team2Points = Number(setItem.team2Points) || 0;
 
             // Determine which team is A and which is B
@@ -801,11 +801,11 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         const teamBKey = match?.coinTossTeamB || 'team2';
 
         const totalTeamA = sortedSets.reduce((sum: number, s: any) => {
-          const points = teamAKey === 'team1' ? (Number(s.team1Points) || 0) : (Number(s.team2Points) || 0);
+          const points = teamAKey === 'team1' ? (Number(s.homePoints) || 0) : (Number(s.team2Points) || 0);
           return sum + points;
         }, 0);
         const totalTeamB = sortedSets.reduce((sum: number, s: any) => {
-          const points = teamBKey === 'team1' ? (Number(s.team1Points) || 0) : (Number(s.team2Points) || 0);
+          const points = teamBKey === 'team1' ? (Number(s.homePoints) || 0) : (Number(s.team2Points) || 0);
           return sum + points;
         }, 0);
 
@@ -813,13 +813,13 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
 
         const finishedSets = sortedSets.filter((s: any) => s.finished);
         const totalTeamAWins = finishedSets.filter((s: any) => {
-          const teamAPoints = teamAKey === 'team1' ? (s.team1Points || 0) : (s.team2Points || 0);
-          const teamBPoints = teamBKey === 'team1' ? (s.team1Points || 0) : (s.team2Points || 0);
+          const teamAPoints = teamAKey === 'team1' ? (s.homePoints || 0) : (s.team2Points || 0);
+          const teamBPoints = teamBKey === 'team1' ? (s.homePoints || 0) : (s.team2Points || 0);
           return teamAPoints > teamBPoints;
         }).length;
         const totalTeamBWins = finishedSets.filter((s: any) => {
-          const teamAPoints = teamAKey === 'team1' ? (s.team1Points || 0) : (s.team2Points || 0);
-          const teamBPoints = teamBKey === 'team1' ? (s.team1Points || 0) : (s.team2Points || 0);
+          const teamAPoints = teamAKey === 'team1' ? (s.homePoints || 0) : (s.team2Points || 0);
+          const teamBPoints = teamBKey === 'team1' ? (s.homePoints || 0) : (s.team2Points || 0);
           return teamBPoints > teamAPoints;
         }).length;
 
@@ -866,8 +866,8 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         // Winner - only if match is finished
         // Always show "2": X format (winner always has 2 wins)
         if (finishedSets.length >= 2 && finishedSets.some((s: any) => {
-          const teamAPoints = teamAKey === 'team1' ? (s.team1Points || 0) : (s.team2Points || 0);
-          const teamBPoints = teamBKey === 'team1' ? (s.team1Points || 0) : (s.team2Points || 0);
+          const teamAPoints = teamAKey === 'team1' ? (s.homePoints || 0) : (s.team2Points || 0);
+          const teamBPoints = teamBKey === 'team1' ? (s.homePoints || 0) : (s.team2Points || 0);
           return teamAPoints > teamBPoints;
         })) {
           if (totalTeamAWins > totalTeamBWins) {
@@ -935,45 +935,37 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
       } else {
       }
 
-      // Coin toss data
-      if (match?.coinTossData) {
-        const coinTossData = match.coinTossData;
-        // Determine which team is A and which is B
-        const teamAKey = match.coinTossTeamA || 'team1';
-        const teamBKey = match.coinTossTeamB || (teamAKey === 'team1' ? 'team2' : 'team1');
+      // Coin toss winner - use coinTossData if available, otherwise use match properties
+      // Set 1 coin toss winner - By definition, Team A is the coin toss winner
+      if (coinTossData?.coinTossWinner) {
+        // Handle both 'team1'/'team2' formats
+        let winnerKey = coinTossData.coinTossWinner;
+        if (winnerKey === 'team1') winnerKey = 'team1';
+        else if (winnerKey === 'team2') winnerKey = 'team2';
+        else if (winnerKey === 'home') winnerKey = 'team1';
 
-        // Set 1 coin toss winner
-        // coinTossWinner can be teamAKey or teamBKey, or it might be stored as 'team1'/'team2' format
-        if (coinTossData.coinTossWinner) {
-          // Handle both 'team1'/'team2' and 'team1'/'team2' formats
-          let winnerKey = coinTossData.coinTossWinner;
-          if (winnerKey === 'team1') winnerKey = 'team1';
-          else if (winnerKey === 'team2') winnerKey = 'team2';
-          else if (winnerKey === 'home') winnerKey = 'team1';
-          
-          // Determine if winner is Team A or Team B
-          const set1Winner = (winnerKey === teamAKey) ? 'A' : 'B';
-          set('coin_s1', set1Winner);
-        } else if (match?.coinTossConfirmed && teamAKey) {
-          // If coin toss is confirmed but coinTossWinner is not set, default to Team A (coin toss winner)
-          set('coin_s1', 'A');
-        }
-
-        // Set 3 coin toss winner
-        if (coinTossData.set3CoinTossWinner) {
-          let set3WinnerKey = coinTossData.set3CoinTossWinner;
-          if (set3WinnerKey === 'team1') set3WinnerKey = 'team1';
-          else if (set3WinnerKey === 'team2') set3WinnerKey = 'team2';
-          else if (set3WinnerKey === 'home') set3WinnerKey = 'team1';
-          
-          // Determine if winner is Team A or Team B
-          const set3Winner = (set3WinnerKey === teamAKey) ? 'A' : 'B';
-          set('coin_s3', set3Winner);
-        }
-
-        // Service order and player numbers - will be filled per set based on serviceOrder
-        // This is now handled in the set processing loop below
+        // Determine if winner is Team A or Team B
+        const set1Winner = (winnerKey === teamAKey) ? 'A' : 'B';
+        set('coin_s1', set1Winner);
+      } else if (isCoinTossConfirmed && teamAKey) {
+        // If coin toss is confirmed, Team A is the winner (by definition)
+        set('coin_s1', 'A');
       }
+
+      // Set 3 coin toss winner
+      if (coinTossData?.set3CoinTossWinner) {
+        let set3WinnerKey = coinTossData.set3CoinTossWinner;
+        if (set3WinnerKey === 'team1') set3WinnerKey = 'team1';
+        else if (set3WinnerKey === 'team2') set3WinnerKey = 'team2';
+        else if (set3WinnerKey === 'home') set3WinnerKey = 'team1';
+
+        // Determine if winner is Team A or Team B
+        const set3Winner = (set3WinnerKey === teamAKey) ? 'A' : 'B';
+        set('coin_s3', set3Winner);
+      }
+
+      // Service order and player numbers - will be filled per set based on serviceOrder
+      // This is now handled in the set processing loop below
 
       // Process events to fill points, timeouts, sanctions, court switches, medical assistance
       if (events && Array.isArray(events)) {
@@ -1873,6 +1865,17 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
                   currentServiceOrder = serviceOrder[playerKey];
                 }
               }
+
+              // Mark tick on current service box when rally starts (server is serving)
+              if (currentServiceOrder !== null) {
+                const currentRowKey = orderToRow[currentServiceOrder];
+                if (currentRowKey && serviceRotationColumn[currentRowKey] !== undefined) {
+                  const currentColumn = serviceRotationColumn[currentRowKey] + 1;
+                  if (currentColumn <= 21) {
+                    set(`${prefix}_${currentRowKey}_pt_${currentColumn}_ticked`, 'true');
+                  }
+                }
+              }
             } else if (event.type === 'timeout') {
               const timeoutTeam = event.payload?.team;
               // Record timeout with current score (left = requesting team, right = other team)
@@ -2123,13 +2126,13 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           // After processing all events, if set is finished, circle final scores in service rotation boxes
           if (setData?.finished) {
             if (setNum === 1) {
-              console.log(`[DEBUG] Set 1 - setData.finished: true, team1Points: ${setData.team1Points}, team2Points: ${setData.team2Points}`);
+              console.log(`[DEBUG] Set 1 - setData.finished: true, homePoints: ${setData.homePoints}, team2Points: ${setData.team2Points}`);
               console.log(`[DEBUG] Set 1 - teamUp: ${teamUp}, teamDown: ${teamDown}`);
             }
 
-            // Get final scores using team_up/team_down
-            const finalTeamUpPoints = teamUp === 'team1' ? (setData.team1Points || 0) : (setData.team2Points || 0);
-            const finalTeamDownPoints = teamDown === 'team1' ? (setData.team1Points || 0) : (setData.team2Points || 0);
+            // Get final scores using team_up/team_down (homePoints = team1)
+            const finalTeamUpPoints = teamUp === 'team1' ? (setData.homePoints || 0) : (setData.team2Points || 0);
+            const finalTeamDownPoints = teamDown === 'team1' ? (setData.homePoints || 0) : (setData.team2Points || 0);
 
             if (setNum === 1) {
               console.log(`[DEBUG] Set 1 - finalTeamUpPoints: ${finalTeamUpPoints}, finalTeamDownPoints: ${finalTeamDownPoints}`);
@@ -3305,9 +3308,16 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         {Array.from({ length: 21 }).map((_, i) => {
           const value = get(`${setPrefix}_${rowKeySuffix}_pt_${i + 1}`);
           const isCircled = get(`${setPrefix}_${rowKeySuffix}_pt_${i + 1}_circled`) === 'true';
+          const isTicked = get(`${setPrefix}_${rowKeySuffix}_pt_${i + 1}_ticked`) === 'true';
           return (
             <div key={i} className="flex-1 border-r border-black relative group last:border-r-0">
+              {/* Box number with tick/slash overlay when serving */}
               <span className="absolute top-[1px] right-[1px] text-[5px] leading-none select-none text-gray-500">{i + 1}</span>
+              {isTicked && (
+                <div className="absolute top-[0px] right-[0px] w-[7px] h-[7px] pointer-events-none z-10">
+                  <div className="absolute top-[3px] right-[1px] w-[5px] h-[0.5px] bg-black -rotate-45 transform origin-center"></div>
+                </div>
+              )}
               <div className="relative w-full h-full">
                 <Input
                   value={value}
@@ -3821,8 +3831,13 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
                 <div className="text-[4px]" style={{ height: '30px' }}>Captain's pre-match signature:</div>
                 {/* Signature image for Team 1 */}
                 {matchData?.match?.team1CaptainSignature && (
-                  <div className="flex-1 border-white">
-                    <img src={matchData.match.team1CaptainSignature} alt="Team 1 Captain Signature" style={{ width: '40%', height: '40%', objectFit: 'contain' }} />
+                  <div className="flex-1 border-white" style={{ maxHeight: '25px', overflow: 'hidden' }}>
+                    <img
+                      src={matchData.match.team1CaptainSignature}
+                      alt=""
+                      style={{ width: '60px', height: '20px', objectFit: 'contain' }}
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
                   </div>
                 )}
               </div>
@@ -3851,11 +3866,13 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
                 <div className="text-[4px]" style={{ height: '30px' }}>Captain's pre-match signature:</div>
                 {/* Signature image for Team 2 */}
                 {matchData?.match?.team2CaptainSignature && (
-                  <div className="flex-1 border-white">
+                  <div className="flex-1 border-white" style={{ maxHeight: '25px', overflow: 'hidden' }}>
                     <img
                       src={matchData.match.team2CaptainSignature}
-                      alt="Team 2 Captain Signature"
-                      style={{ width: '40%', height: '40%', objectFit: 'contain' }} />
+                      alt=""
+                      style={{ width: '60px', height: '20px', objectFit: 'contain' }}
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
                   </div>
                 )}
               </div>

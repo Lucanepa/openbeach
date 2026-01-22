@@ -199,7 +199,8 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   const [lineupModal, setLineupModal] = useState(null) // { team: 'team1'|'team2', mode?: 'initial'|'manual' } | null
   const [peekingLineup, setPeekingLineup] = useState({ left: false, right: false }) // Track which team's lineup is being peeked
   const [bmpModal, setBmpModal] = useState(null) // { type: 'team'|'referee', team?: 'team1'|'team2' } | null - Ball Mark Protocol modal
-  const [bmpOutcomeModal, setBmpOutcomeModal] = useState(null) // { type: 'team'|'referee', team?: 'team1'|'team2', requestEventId: number } | null
+  const [bmpOutcomeModal, setBmpOutcomeModal] = useState(null) // { type: 'team'|'referee', team?: 'team1'|'team2', requestSeq: number } | null - requestSeq links outcome as sub-event
+  const [bmpSelectedOutcome, setBmpSelectedOutcome] = useState(null) // 'successful'|'unsuccessful'|'judgment_impossible'|'in'|'out' - selected outcome awaiting confirmation
 
   // Reset peeking state on any mouseup/touchend (since overlay disappears when peeking)
   useEffect(() => {
@@ -2491,8 +2492,8 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
 
     const homePoints = data.set.homePoints || 0
     const team2Points = data.set.team2Points || 0
-    const is5thSet = data.set.index === 5
-    const pointsToWin = is5thSet ? 15 : 25
+    const is3rdSet = data.set.index === 3
+    const pointsToWin = is3rdSet ? 15 : 21
 
     // Check if score indicates set should have ended
     const homeWon = homePoints >= pointsToWin && homePoints - team2Points >= 2
@@ -2502,11 +2503,11 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       // Set should have ended - show modal
       const winner = homeWon ? 'team1' : 'team2'
 
-      // Calculate if this is match end
+      // Calculate if this is match end (beach volleyball: best of 3, first to 2 sets)
       const finishedSets = data.sets?.filter(s => s.finished) || []
       const homeSetsWon = finishedSets.filter(s => s.homePoints > s.team2Points).length
       const team2SetsWon = finishedSets.filter(s => s.team2Points > s.homePoints).length
-      const isMatchEnd = winner === 'team1' ? (homeSetsWon + 1) >= 3 : (team2SetsWon + 1) >= 3
+      const isMatchEnd = winner === 'team1' ? (homeSetsWon + 1) >= 2 : (team2SetsWon + 1) >= 2
 
       setSetEndTimeModal({
         setIndex: data.set.index,
@@ -2800,7 +2801,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     const country = leftisTeam1 ? data.match?.team1Country : data.match?.team2Country
     const beachName = buildBeachTeamName(players, team?.name, country)
     return {
-      name: beachName || team?.name || (leftisTeam1 ? 'Home' : 'team2'),
+      name: beachName || team?.name || (leftisTeam1 ? 'team1' : 'team2'),
       color: team?.color || (leftisTeam1 ? '#ef4444' : '#3b82f6'),
       playersOnCourt: buildOnCourt(players, true, teamKey),
       isTeamA
@@ -2816,7 +2817,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     const country = leftisTeam1 ? data.match?.team2Country : data.match?.team1Country
     const beachName = buildBeachTeamName(players, team?.name, country)
     return {
-      name: beachName || team?.name || (leftisTeam1 ? 'team2' : 'Home'),
+      name: beachName || team?.name || (leftisTeam1 ? 'team2' : 'team1'),
       color: team?.color || (leftisTeam1 ? '#3b82f6' : '#ef4444'),
       playersOnCourt: buildOnCourt(players, false, teamKey),
       isTeamA
@@ -3928,42 +3929,62 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       const currentSetIndex = data.set.index
       const is3rdSet = currentSetIndex === 3
       const courtChangeInterval = is3rdSet ? 5 : 7
+      const pointsToWin = is3rdSet ? 15 : 21
 
-      // "One point to..." notifications
-      const pointsUntilSwitch = courtChangeInterval - (totalScore % courtChangeInterval)
+      // Check if this point ends the set (don't show court switch/TTO if set is ending)
+      const setIsEnding = (homePoints >= pointsToWin && homePoints - team2Points >= 2) ||
+                          (team2Points >= pointsToWin && team2Points - homePoints >= 2)
 
-      // One point to TTO: at 20 in sets 1-2 only
-      if (totalScore === 20 && currentSetIndex >= 1 && currentSetIndex <= 2) {
-        setPreEventPopup({ message: 'One point to TTO' })
-      }
-      // One point to switch (but not at 20 since that shows TTO message)
-      else if (pointsUntilSwitch === 1 && totalScore > 0) {
-        setPreEventPopup({ message: 'One point to switch' })
-      }
+      // Only show court switch/TTO messages if set is NOT ending
+      if (!setIsEnding) {
+        // "One point to..." notifications
+        const pointsUntilSwitch = courtChangeInterval - (totalScore % courtChangeInterval)
 
-      // At 21 points in Sets 1-2: BOTH court switch AND TTO
-      if (totalScore === 21 && currentSetIndex >= 1 && currentSetIndex <= 2) {
-        // Show court switch modal first, TTO will fire after court switch is confirmed
-        setCourtSwitchModal({
-          set: data.set,
-          homePoints,
-          team2Points,
-          teamThatScored: teamKey,
-          triggerTtoAfter: true  // Flag to trigger TTO after switch
-        })
-        return // Don't check for set end yet, wait for court switch + TTO
-      }
+        // One point to TTO: at 20 in sets 1-2 only
+        if (totalScore === 20 && currentSetIndex >= 1 && currentSetIndex <= 2) {
+          setPreEventPopup({ message: 'One point to TTO' })
+        }
+        // One point to switch (but not at 20 since that shows TTO message)
+        else if (pointsUntilSwitch === 1 && totalScore > 0) {
+          setPreEventPopup({ message: 'One point to switch' })
+        }
 
-      // Regular court change: every 7 pts in S1/S2, every 5 pts in S3
-      if (totalScore > 0 && totalScore % courtChangeInterval === 0) {
-        // Show court switch modal
-        setCourtSwitchModal({
-          set: data.set,
-          homePoints,
-          team2Points,
-          teamThatScored: teamKey
-        })
-        return // Don't check for set end yet, wait for court switch confirmation
+        // At 21 points in Sets 1-2: TTO modal that triggers court switch when dismissed
+        if (totalScore === 21 && currentSetIndex >= 1 && currentSetIndex <= 2) {
+          // Log technical_to event for PDF scoresheet
+          const ttoSeq = await getNextSeq()
+          await db.events.add({
+            matchId,
+            setIndex: currentSetIndex,
+            type: 'technical_to',
+            payload: {},
+            ts: new Date().toISOString(),
+            seq: ttoSeq
+          })
+
+          // Show TTO modal directly - court switch will happen when TTO ends
+          setTtoModal({
+            set: data.set,
+            homePoints,
+            team2Points,
+            countdown: 60,
+            started: false,
+            triggerCourtSwitchAfter: true  // Flag to trigger court switch when TTO ends
+          })
+          return // Don't check for set end yet, wait for TTO + court switch
+        }
+
+        // Regular court change: every 7 pts in S1/S2, every 5 pts in S3
+        if (totalScore > 0 && totalScore % courtChangeInterval === 0) {
+          // Show court switch modal
+          setCourtSwitchModal({
+            set: data.set,
+            homePoints,
+            team2Points,
+            teamThatScored: teamKey
+          })
+          return // Don't check for set end yet, wait for court switch confirmation
+        }
       }
 
       const setEnded = checkSetEnd(freshCurrentSet, homePoints, team2Points)
@@ -4015,7 +4036,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       return
     }
 
-    await logEvent('rally_start')
+    await logEvent('rally_start', {
+      servingTeam: data.servingTeam,
+      servingPlayerNumber: data.serverNumber
+    })
     // Track when rally started (for accidental point award check)
     rallyStartTimeRef.current = Date.now()
 
@@ -4024,7 +4048,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       clearTimeout(recentSubFlashTimeoutRef.current)
     }
     setRecentlySubstitutedPlayers([])
-  }, [logEvent, isFirstRally, data?.team1Players, data?.team2Players, data?.events, data?.set, data?.match, matchId, getNextSubSeq, syncToReferee, checkAccidentalRallyStart, accidentalRallyStartDuration])
+  }, [logEvent, isFirstRally, data?.team1Players, data?.team2Players, data?.events, data?.set, data?.match, matchId, getNextSubSeq, syncToReferee, checkAccidentalRallyStart, accidentalRallyStartDuration, data?.servingTeam, data?.serverNumber])
 
   const handleReplay = useCallback(async () => {
     // During rally: just log replay event (no point to undo)
@@ -4066,7 +4090,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       if (pointEvent) {
         // Simple description for decision change confirmation
         const teamName = pointEvent.payload?.team === 'team1'
-          ? (data?.homeTeam?.name || 'Home')
+          ? (data?.homeTeam?.name || 'team1')
           : (data?.team2Team?.name || 'team2')
         const description = `Point for ${teamName}`
         setReplayRallyConfirm({ event: pointEvent, description, selectedOption: 'swap' }) // Default to swap
@@ -4107,7 +4131,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
 
     const { side, type } = sanctionConfirm
     const teamKey = mapSideToTeamKey(side)
-    const teamKeyCapitalized = teamKey === 'team1' ? 'Home' : 'team2'
+    const teamKeyCapitalized = teamKey === 'team1' ? 'team1' : 'team2'
 
     // Update match sanctions for improper request and delay warning
     // Store by team key (Home/team2) so sanctions follow the team when sides switch
@@ -4217,7 +4241,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       matchId,
       setIndex: data.set.index,
       type: 'rally_start',
-      payload: {},
+      payload: {
+        servingTeam: data.servingTeam,
+        servingPlayerNumber: data.serverNumber
+      },
       ts: new Date().toISOString(),
       seq: nextSeq2,
       stateBefore: rallyStartStateBefore
@@ -4230,7 +4257,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     if (timeDifferent) {
       setShowRemarks(true)
     }
-  }, [setStartTimeModal, data?.set, matchId, onTriggerEventBackup, syncToReferee])
+  }, [setStartTimeModal, data?.set, data?.servingTeam, data?.serverNumber, matchId, onTriggerEventBackup, syncToReferee])
 
   // Confirm set end time
   const confirmSetEndTime = useCallback(async (time) => {
@@ -4805,7 +4832,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     if (!event || !data) return 'Unknown action'
 
     const teamName = event.payload?.team === 'team1'
-      ? (data.homeTeam?.name || 'Home')
+      ? (data.homeTeam?.name || 'team1')
       : event.payload?.team === 'team2'
         ? (data.team2Team?.name || 'team2')
         : null
@@ -4837,10 +4864,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     let eventDescription = ''
     if (event.type === 'coin_toss') {
       const teamAName = event.payload?.teamA === 'team1'
-        ? (data?.homeTeam?.shortName || data?.homeTeam?.name || 'Home')
+        ? (data?.homeTeam?.shortName || data?.homeTeam?.name || 'team1')
         : (data?.team2Team?.shortName || data?.team2Team?.name || 'team2')
       const teamBName = event.payload?.teamB === 'team1'
-        ? (data?.homeTeam?.shortName || data?.homeTeam?.name || 'Home')
+        ? (data?.homeTeam?.shortName || data?.homeTeam?.name || 'team1')
         : (data?.team2Team?.shortName || data?.team2Team?.name || 'team2')
       // Determine if first serve is Team A or Team B
       const firstServeLabel = event.payload?.firstServe === event.payload?.teamA ? 'A' : 'B'
@@ -4881,8 +4908,8 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         eventDescription = 'Rally replayed'
       }
     } else if (event.type === 'decision_change') {
-      const fromTeam = event.payload?.fromTeam === 'team1' ? (data?.homeTeam?.name || 'Home') : (data?.team2Team?.name || 'team2')
-      const toTeam = event.payload?.toTeam === 'team1' ? (data?.homeTeam?.name || 'Home') : (data?.team2Team?.name || 'team2')
+      const fromTeam = event.payload?.fromTeam === 'team1' ? (data?.homeTeam?.name || 'team1') : (data?.team2Team?.name || 'team2')
+      const toTeam = event.payload?.toTeam === 'team1' ? (data?.homeTeam?.name || 'team1') : (data?.team2Team?.name || 'team2')
       eventDescription = `Decision change — Point swapped from ${fromTeam} to ${toTeam}`
     } else if (event.type === 'lineup') {
       // Only show initial lineups, not rotation lineups
@@ -4958,6 +4985,44 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     } else if (event.type === 'court_captain_designation') {
       const playerNumber = event.payload?.playerNumber || '?'
       eventDescription = `${t('scoreboard.courtCaptainDesignation', 'Court captain designation')} — ${teamName} (#${playerNumber})`
+    } else if (event.type === 'challenge') {
+      // Team BMP request
+      eventDescription = `Team BMP request — ${teamName}`
+    } else if (event.type === 'challenge_outcome') {
+      // Team BMP outcome
+      const result = event.payload?.result
+      const resultLabel = result === 'successful' ? 'Successful' :
+        result === 'unsuccessful' ? 'Unsuccessful' :
+          result === 'judgment_impossible' ? 'Judgment impossible' : result
+      const pointAwarded = event.payload?.pointAwarded
+      const pointToTeam = event.payload?.pointToTeam
+      let pointInfo = ''
+      if (pointAwarded && pointToTeam) {
+        const pointTeamName = pointToTeam === 'team1'
+          ? (data?.homeTeam?.name || 'team1')
+          : (data?.team2Team?.name || 'team2')
+        pointInfo = ` → Point to ${pointTeamName}`
+      }
+      eventDescription = `Team BMP outcome — ${teamName}: ${resultLabel}${pointInfo}`
+    } else if (event.type === 'referee_bmp_request') {
+      // Referee BMP request
+      eventDescription = `Referee BMP request`
+    } else if (event.type === 'referee_bmp_outcome') {
+      // Referee BMP outcome
+      const result = event.payload?.result
+      const resultLabel = result === 'in' ? 'IN' :
+        result === 'out' ? 'OUT' :
+          result === 'judgment_impossible' ? 'Judgment impossible' : result
+      const pointAwarded = event.payload?.pointAwarded
+      const pointToTeam = event.payload?.pointToTeam
+      let pointInfo = ''
+      if (pointAwarded && pointToTeam) {
+        const pointTeamName = pointToTeam === 'team1'
+          ? (data?.homeTeam?.name || 'team1')
+          : (data?.team2Team?.name || 'team2')
+        pointInfo = ` → Point to ${pointTeamName}`
+      }
+      eventDescription = `Referee BMP outcome: ${resultLabel}${pointInfo}`
     } else {
       eventDescription = event.type
       if (teamName) {
@@ -5533,7 +5598,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     debugLogger.log('TO_CANCEL', { team: timeoutModal?.team })
     // Reset refs in case they were set (safety measure)
     timeoutStartTimestampRef.current = null
-    timeoutInitialCountdownRef.current = 30
+    timeoutInitialCountdownRef.current = 60
     setTimeoutModal(null)
   }, [timeoutModal])
 
@@ -5543,7 +5608,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     debugLogger.log('TO_STOP', { wasTimestamp: timeoutStartTimestampRef.current })
     // Reset refs so next timeout starts fresh (fixes intermittent countdown failure)
     timeoutStartTimestampRef.current = null
-    timeoutInitialCountdownRef.current = 30
+    timeoutInitialCountdownRef.current = 60
     setTimeoutModal(null)
   }, [])
 
@@ -5557,17 +5622,18 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     const servingTeam = getCurrentServe()
 
     // Log the BMP request event (challenge type for team requests)
-    const eventId = await logEvent('challenge', {
+    const requestSeq = await logEvent('challenge', {
       team: teamKey,
       score: { team1: homePoints, team2: team2Points },
       servingTeam
     })
 
     // Show outcome modal with score/serve info for display
+    setBmpSelectedOutcome(null) // Reset any previous selection
     setBmpOutcomeModal({
       type: 'team',
       team: teamKey,
-      requestEventId: eventId,
+      requestSeq, // Store sequence number to link outcome as sub-event
       currentScore: { team1: homePoints, team2: team2Points },
       currentServe: servingTeam
     })
@@ -5582,37 +5648,85 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     const servingTeam = getCurrentServe()
 
     // Log the referee BMP request event
-    const eventId = await logEvent('referee_bmp_request', {
+    const requestSeq = await logEvent('referee_bmp_request', {
       score: { team1: homePoints, team2: team2Points },
       servingTeam
     })
 
     // Show outcome modal with score/serve info for display
+    setBmpSelectedOutcome(null) // Reset any previous selection
     setBmpOutcomeModal({
       type: 'referee',
-      requestEventId: eventId,
+      requestSeq, // Store sequence number to link outcome as sub-event
       currentScore: { team1: homePoints, team2: team2Points },
       currentServe: servingTeam
     })
   }, [data?.set, getCurrentServe, logEvent])
 
-  const handleBMPOutcome = useCallback(async (result) => {
-    if (!bmpOutcomeModal) return
+  const handleBMPOutcome = useCallback(async (result, pointToTeam = null) => {
+    if (!bmpOutcomeModal || !data?.set) return
+
+    const requestingTeam = bmpOutcomeModal.team
+    const isTeamBMP = bmpOutcomeModal.type === 'team'
+    const isRefereeBMP = bmpOutcomeModal.type === 'referee'
+    const currentSetId = data.set.id
 
     // Get current score
-    const homePoints = data?.set?.homePoints || 0
-    const team2Points = data?.set?.team2Points || 0
+    let homePoints = data.set.homePoints || 0
+    let team2Points = data.set.team2Points || 0
 
-    // Log the outcome event
-    const eventType = bmpOutcomeModal.type === 'team' ? 'challenge_outcome' : 'referee_bmp_outcome'
-    await logEvent(eventType, {
-      team: bmpOutcomeModal.team,
-      result, // 'successful', 'unsuccessful', 'judgment_impossible'
-      newScore: { team1: homePoints, team2: team2Points }
-    })
+    // Determine if we need to award a point
+    const shouldAwardPoint = (isTeamBMP && result === 'successful') ||
+                             (isRefereeBMP && pointToTeam && (result === 'in' || result === 'out'))
 
+    if (shouldAwardPoint) {
+      // Determine which team gets the point
+      const scoringTeam = isTeamBMP ? requestingTeam : pointToTeam
+
+      // Award point
+      if (scoringTeam === 'team1') {
+        homePoints += 1
+        await db.sets.update(currentSetId, { homePoints })
+      } else {
+        team2Points += 1
+        await db.sets.update(currentSetId, { team2Points })
+      }
+
+      // Log the outcome event as a sub-event of the request (uses decimal seq like 7.1)
+      const eventType = isTeamBMP ? 'challenge_outcome' : 'referee_bmp_outcome'
+      await logEvent(eventType, {
+        team: requestingTeam || scoringTeam,
+        result,
+        pointAwarded: true,
+        pointToTeam: scoringTeam,
+        newScore: { team1: homePoints, team2: team2Points }
+      }, { parentSeq: bmpOutcomeModal.requestSeq })
+
+      // Note: In beach volleyball, serve changes based on who scores, not rotation
+      // The serve logic is handled automatically by getCurrentServe() based on point events
+
+      // Check if this point ends the set
+      const freshSet = await db.sets.get(currentSetId)
+      if (freshSet) {
+        await checkSetEnd(freshSet, homePoints, team2Points)
+      }
+    } else {
+      // Unsuccessful, judgment_impossible - no score change
+      const eventType = isTeamBMP ? 'challenge_outcome' : 'referee_bmp_outcome'
+      await logEvent(eventType, {
+        team: requestingTeam,
+        result,
+        pointAwarded: false,
+        newScore: { team1: homePoints, team2: team2Points }
+      }, { parentSeq: bmpOutcomeModal.requestSeq })
+    }
+
+    // Sync live state
+    syncLiveStateToSupabase('bmp_outcome', requestingTeam || pointToTeam, { result })
+
+    setBmpSelectedOutcome(null)
     setBmpOutcomeModal(null)
-  }, [bmpOutcomeModal, data?.set, logEvent])
+  }, [bmpOutcomeModal, data?.set, logEvent, checkSetEnd, syncLiveStateToSupabase])
 
   // Count unsuccessful BMPs per team in current set (each team has 2 unsuccessful per set)
   const getUnsuccessfulBMPsUsed = useCallback((teamKey) => {
@@ -5650,7 +5764,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
 
     // Use startedAt from state if available, otherwise fallback to ref or Date.now()
     const startTimestamp = timeoutModal.startedAt ? new Date(timeoutModal.startedAt).getTime() : (timeoutStartTimestampRef.current || Date.now())
-    const initialCountdown = timeoutInitialCountdownRef.current || 30
+    const initialCountdown = timeoutInitialCountdownRef.current || 60
 
     // Sync refs for legacy support/internal tracking
     if (!timeoutStartTimestampRef.current) timeoutStartTimestampRef.current = startTimestamp
@@ -5680,23 +5794,67 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     return () => clearInterval(timer)
   }, [timeoutModal?.started, timeoutModal?.startedAt])
 
+  // Track if TTO countdown just finished (for triggering court switch)
+  const ttoCountdownFinishedRef = useRef(false)
+
   // TTO countdown timer
   useEffect(() => {
     if (!ttoModal || !ttoModal.started) return
     if (ttoModal.countdown <= 0) {
-      setTtoModal(null)
+      // Mark that countdown finished so we can trigger court switch
+      ttoCountdownFinishedRef.current = true
       return
     }
     const timer = setInterval(() => {
       setTtoModal(prev => {
         if (!prev || !prev.started) return null
         const newCountdown = prev.countdown - 1
-        if (newCountdown <= 0) return null
+        if (newCountdown <= 0) {
+          // Mark that countdown finished
+          ttoCountdownFinishedRef.current = true
+          return { ...prev, countdown: 0 } // Keep modal open briefly to trigger effect
+        }
         return { ...prev, countdown: newCountdown }
       })
     }, 1000)
     return () => clearInterval(timer)
   }, [ttoModal?.started, ttoModal?.countdown])
+
+  // Handle TTO countdown finish - trigger court switch if needed
+  useEffect(() => {
+    if (ttoCountdownFinishedRef.current && ttoModal?.countdown === 0) {
+      ttoCountdownFinishedRef.current = false
+      // Call handleTtoEnd after a small delay to show "0:00" briefly
+      const timeout = setTimeout(() => {
+        if (ttoModal?.triggerCourtSwitchAfter && data?.match && data?.set) {
+          const setIndex = ttoModal.set.index
+          if (setIndex >= 1 && setIndex <= 4) {
+            const currentOverrides = data.match.setLeftTeamOverrides || {}
+            let currentLeftTeam
+            if (currentOverrides[setIndex]) {
+              currentLeftTeam = currentOverrides[setIndex]
+            } else {
+              currentLeftTeam = setIndex % 2 === 1 ? 'A' : 'B'
+            }
+            const newLeftTeam = currentLeftTeam === 'A' ? 'B' : 'A'
+            const updatedOverrides = { ...currentOverrides, [setIndex]: newLeftTeam }
+            db.matches.update(matchId, { setLeftTeamOverrides: updatedOverrides })
+            if (data.match?.seed_key) {
+              db.sync_queue.add({
+                resource: 'match',
+                action: 'update',
+                payload: { id: data.match.seed_key, setLeftTeamOverrides: updatedOverrides },
+                createdAt: new Date().toISOString()
+              })
+            }
+            syncLiveStateToSupabase('court_switch', null, { reason: `set${setIndex}_tto_court_switch` }, null)
+          }
+        }
+        setTtoModal(null)
+      }, 500)
+      return () => clearTimeout(timeout)
+    }
+  }, [ttoModal?.countdown, ttoModal?.triggerCourtSwitchAfter, ttoModal?.set, matchId, data?.match, data?.set, syncLiveStateToSupabase])
 
   const getTimeoutsUsed = useCallback(
     side => {
@@ -7303,6 +7461,17 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       }
     }
 
+    // Log court_switch event for PDF scoresheet
+    const nextSeq = await getNextSeq()
+    await db.events.add({
+      matchId,
+      setIndex: setIndex,
+      type: 'court_switch',
+      payload: {},
+      ts: new Date().toISOString(),
+      seq: nextSeq
+    })
+
     // Check if TTO should be triggered after court switch (at 21 points in sets 1-2)
     const shouldTriggerTto = courtSwitchModal?.triggerTtoAfter
     const ttoData = shouldTriggerTto ? {
@@ -7324,7 +7493,54 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     // Sync to Supabase with fresh snapshot to update side_a and serving_team after court switch
     const reason = setIndex === 5 ? 'set5_8points' : `set${setIndex}_court_switch`
     syncLiveStateToSupabase('court_switch', null, { reason }, null)
-  }, [courtSwitchModal, matchId, data?.match, data?.set, syncLiveStateToSupabase])
+  }, [courtSwitchModal, matchId, data?.match, data?.set, syncLiveStateToSupabase, getNextSeq])
+
+  // Handle TTO end - performs court switch if needed (at 21 points in sets 1-2)
+  const handleTtoEnd = useCallback(async () => {
+    if (!ttoModal) return
+
+    const shouldSwitchCourts = ttoModal.triggerCourtSwitchAfter
+
+    if (shouldSwitchCourts && data?.match && data?.set) {
+      const setIndex = ttoModal.set.index
+
+      if (setIndex >= 1 && setIndex <= 4) {
+        // Sets 1-4: Update setLeftTeamOverrides to swap teams
+        const currentOverrides = data.match.setLeftTeamOverrides || {}
+
+        // Determine current left team (from override or default pattern)
+        let currentLeftTeam
+        if (currentOverrides[setIndex]) {
+          currentLeftTeam = currentOverrides[setIndex] // 'A' or 'B'
+        } else {
+          // Default pattern: Set 1 = A left, Set 2 = B left, Set 3 = A left, Set 4 = B left
+          currentLeftTeam = setIndex % 2 === 1 ? 'A' : 'B'
+        }
+
+        // Toggle: if A is on left, make B on left (and vice versa)
+        const newLeftTeam = currentLeftTeam === 'A' ? 'B' : 'A'
+        const updatedOverrides = { ...currentOverrides, [setIndex]: newLeftTeam }
+
+        await db.matches.update(matchId, { setLeftTeamOverrides: updatedOverrides })
+
+        // Sync to Supabase
+        if (data.match?.seed_key) {
+          await db.sync_queue.add({
+            resource: 'match',
+            action: 'update',
+            payload: { id: data.match.seed_key, setLeftTeamOverrides: updatedOverrides },
+            createdAt: new Date().toISOString()
+          })
+        }
+
+        // Sync live state after court switch
+        syncLiveStateToSupabase('court_switch', null, { reason: `set${setIndex}_tto_court_switch` }, null)
+      }
+    }
+
+    // Close the TTO modal
+    setTtoModal(null)
+  }, [ttoModal, matchId, data?.match, data?.set, syncLiveStateToSupabase])
 
   const cancelCourtSwitch = useCallback(async () => {
     if (!courtSwitchModal || !data?.events) return
@@ -7886,7 +8102,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap'
               }}>
-                {leftTeam.name || (leftisTeam1 ? 'Home' : 'team2')}
+                {leftTeam.name || (leftisTeam1 ? 'team1' : 'team2')}
               </span>
               <div style={{
                 padding: '2px 6px',
@@ -8089,7 +8305,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap'
               }}>
-                {rightTeam.name || (leftisTeam1 ? 'team2' : 'Home')}
+                {rightTeam.name || (leftisTeam1 ? 'team2' : 'team1')}
               </span>
             </div>
           )}
@@ -9070,9 +9286,9 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                       let bg, borderColor, textColor
                       if (toUsed >= 1) {
                         // Timeout taken - red
-                        bg = '#ef4444'
+                        bg = 'transparent'
                         borderColor = '#ef4444'
-                        textColor = '#fff'
+                        textColor = '#ef4444'
                       } else if (isRallyOngoing) {
                         // Rally ongoing - gray
                         bg = 'rgba(156, 163, 175, 0.3)'
@@ -9102,7 +9318,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               padding: '6px'
                             }}
                             title="Time-out"
-                          >{toUsed >= 1 ? '1' : 'TO'}</button>
+                          >{toUsed >= 1 ? 'TO' : 'TO'}</button>
                           {(() => {
                             const bmpUsed = getUnsuccessfulBMPsUsed(leftTeamKey)
                             const bmpRemaining = 2 - bmpUsed
@@ -10204,9 +10420,9 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                       let bg, borderColor, textColor
                       if (toUsed >= 1) {
                         // Timeout taken - red
-                        bg = '#ef4444'
+                        bg = 'transparent'
                         borderColor = '#ef4444'
-                        textColor = '#fff'
+                        textColor = '#ef4444'
                       } else if (isRallyOngoing) {
                         // Rally ongoing - gray
                         bg = 'rgba(156, 163, 175, 0.3)'
@@ -10236,7 +10452,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               padding: '6px'
                             }}
                             title="Time-out"
-                          >{toUsed >= 1 ? '1' : 'TO'}</button>
+                          >{toUsed >= 1 ? 'TO' : 'TO'}</button>
                           {(() => {
                             const bmpUsed = getUnsuccessfulBMPsUsed(rightTeamKey)
                             const bmpRemaining = 2 - bmpUsed
@@ -10418,7 +10634,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                       textAlign: 'center',
                       marginBottom: '8px'
                     }}>
-                      Time-out — {timeoutModal.team === 'team1' ? (data?.homeTeam?.name || 'Home') : (data?.team2Team?.name || 'team2')}
+                      Time-out — {timeoutModal.team === 'team1' ? (data?.homeTeam?.name || 'team1') : (data?.team2Team?.name || 'team2')}
                     </div>
                     <div style={{
                       fontSize: '48px',
@@ -10685,7 +10901,9 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                       <div
                         style={{
                           marginTop: '8px',
-                          textAlign: 'center'
+                          textAlign: 'center',
+                          maxHeight: '80px',
+                          overflowY: 'auto'
                         }}
                       >
                         <div style={{ fontSize: '12px' }}>
@@ -11379,7 +11597,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                         minWidth: 0
                       }}>
                         <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>
-                          {data?.homeTeam?.name || 'Home Team'} Bench PIN
+                          {data?.homeTeam?.name || 'team1'} Bench PIN
                         </div>
                         <div style={{ fontSize: '20px', fontWeight: 600, fontFamily: 'monospace', letterSpacing: '2px', wordBreak: 'break-all' }}>
                           {String(data.match.homeTeamPin).padStart(6, '0')}
@@ -11707,7 +11925,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                 const getTeamShortName = (teamKey) => {
                   if (!teamKey) return ''
                   if (teamKey === 'team1') {
-                    return data?.homeTeam?.shortName || data?.homeTeam?.name || 'Home'
+                    return data?.homeTeam?.shortName || data?.homeTeam?.name || 'team1'
                   } else {
                     return data?.team2Team?.shortName || data?.team2Team?.name || 'team2'
                   }
@@ -12084,8 +12302,8 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                     const servingTeam = data.match.firstServe || 'team1'
                     const leftTeamKey = leftisTeam1 ? 'team1' : 'team2'
                     const rightTeamKey = leftisTeam1 ? 'team2' : 'team1'
-                    const leftTeamName = leftisTeam1 ? (data.homeTeam?.shortName || data.homeTeam?.name || 'Home') : (data.team2Team?.shortName || data.team2Team?.name || 'team2')
-                    const rightTeamName = leftisTeam1 ? (data.team2Team?.shortName || data.team2Team?.name || 'team2') : (data.homeTeam?.shortName || data.homeTeam?.name || 'Home')
+                    const leftTeamName = leftisTeam1 ? (data.homeTeam?.shortName || data.homeTeam?.name || 'team1') : (data.team2Team?.shortName || data.team2Team?.name || 'team2')
+                    const rightTeamName = leftisTeam1 ? (data.team2Team?.shortName || data.team2Team?.name || 'team2') : (data.homeTeam?.shortName || data.homeTeam?.name || 'team1')
                     const leftTeamColor = leftisTeam1 ? (data.homeTeam?.color || '#3b82f6') : (data.team2Team?.color || '#ef4444')
                     const rightTeamColor = leftisTeam1 ? (data.team2Team?.color || '#ef4444') : (data.homeTeam?.color || '#3b82f6')
                     const leftIsServing = servingTeam === leftTeamKey
@@ -12175,7 +12393,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                 const setIdx = data.set?.index || 1
 
                                 // Helper to convert A/B to Home/team2 for logging
-                                const getTeamLabel = (ab) => ab === 'A' ? (teamAKey === 'team1' ? 'Home' : 'team2') : (teamAKey === 'team1' ? 'team2' : 'Home')
+                                const getTeamLabel = (ab) => ab === 'A' ? (teamAKey === 'team1' ? 'team1' : 'team2') : (teamAKey === 'team1' ? 'team2' : 'team1')
 
                                 if (setIdx === 5) {
                                   const automatic5 = teamAKey === 'team1' ? 'A' : 'B'
@@ -12202,8 +12420,8 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                   const currentTeamA = data.match.coinTossTeamA || 'team1'
                                   const newTeamA = currentTeamA === 'team1' ? 'team2' : 'team1'
                                   const newTeamB = newTeamA === 'team1' ? 'team2' : 'team1'
-                                  const oldLeft = leftisTeam1 ? 'Home' : 'team2'
-                                  const newLeft = leftisTeam1 ? 'team2' : 'Home'
+                                  const oldLeft = leftisTeam1 ? 'team1' : 'team2'
+                                  const newLeft = leftisTeam1 ? 'team2' : 'team1'
 
                                   // Update local IndexedDB
                                   await db.matches.update(matchId, { coinTossTeamA: newTeamA })
@@ -12247,9 +12465,9 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                             <button
                               className="secondary"
                               onClick={async () => {
-                                const oldServing = servingTeam === 'team1' ? 'Home' : 'team2'
+                                const oldServing = servingTeam === 'team1' ? 'team1' : 'team2'
                                 const newServe = servingTeam === 'team1' ? 'team2' : 'team1'
-                                const newServing = newServe === 'team1' ? 'Home' : 'team2'
+                                const newServing = newServe === 'team1' ? 'team1' : 'team2'
 
                                 if (data.set?.index === 5) {
                                   const currentSet5Serve = data.match.set5FirstServe || 'A'
@@ -12302,6 +12520,91 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               }}
                             >
                               🏐 Switch Serve
+                            </button>
+                          </div>
+
+                          {/* Switch Serving Player within each team */}
+                          <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '12px', marginBottom: '8px' }}>
+                            Switch which player serves first within each team:
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            {/* Team 1 (Home) - Switch Server */}
+                            <button
+                              className="secondary"
+                              onClick={async () => {
+                                const team1Players = data?.teams?.find(t => t.id === data?.match?.team1Id)?.players || []
+                                const currentFirstServe = data?.match?.team1FirstServe
+                                const playerNumbers = team1Players.map(p => p.number).sort((a, b) => a - b)
+
+                                if (playerNumbers.length >= 2) {
+                                  // Toggle to the other player
+                                  const newFirstServe = String(currentFirstServe) === String(playerNumbers[0])
+                                    ? playerNumbers[1]
+                                    : playerNumbers[0]
+
+                                  await db.matches.update(matchId, { team1FirstServe: newFirstServe })
+
+                                  if (data.match?.seed_key) {
+                                    db.sync_queue.add({
+                                      resource: 'match',
+                                      action: 'update',
+                                      payload: { id: data.match.seed_key, team1FirstServe: newFirstServe },
+                                      createdAt: new Date().toISOString()
+                                    })
+                                  }
+
+                                  logManualChange('Teams Setup', 'Team 1 Server', `Player ${currentFirstServe}`, `Player ${newFirstServe}`, 'Switched first serving player for Team 1')
+                                  syncLiveStateToSupabase('manual_server_change', 'team1', { oldServer: currentFirstServe, newServer: newFirstServe })
+                                }
+                              }}
+                              style={{
+                                flex: 1,
+                                padding: '10px 16px',
+                                fontSize: '12px',
+                                borderRadius: '8px',
+                                fontWeight: 600
+                              }}
+                            >
+                              🔄 {data?.homeTeam?.shortName || data?.homeTeam?.name || 'team1'} Server: #{data?.match?.team1FirstServe || '?'}
+                            </button>
+                            {/* Team 2 (Away) - Switch Server */}
+                            <button
+                              className="secondary"
+                              onClick={async () => {
+                                const team2Players = data?.teams?.find(t => t.id === data?.match?.team2Id)?.players || []
+                                const currentFirstServe = data?.match?.team2FirstServe
+                                const playerNumbers = team2Players.map(p => p.number).sort((a, b) => a - b)
+
+                                if (playerNumbers.length >= 2) {
+                                  // Toggle to the other player
+                                  const newFirstServe = String(currentFirstServe) === String(playerNumbers[0])
+                                    ? playerNumbers[1]
+                                    : playerNumbers[0]
+
+                                  await db.matches.update(matchId, { team2FirstServe: newFirstServe })
+
+                                  if (data.match?.seed_key) {
+                                    db.sync_queue.add({
+                                      resource: 'match',
+                                      action: 'update',
+                                      payload: { id: data.match.seed_key, team2FirstServe: newFirstServe },
+                                      createdAt: new Date().toISOString()
+                                    })
+                                  }
+
+                                  logManualChange('Teams Setup', 'Team 2 Server', `Player ${currentFirstServe}`, `Player ${newFirstServe}`, 'Switched first serving player for Team 2')
+                                  syncLiveStateToSupabase('manual_server_change', 'team2', { oldServer: currentFirstServe, newServer: newFirstServe })
+                                }
+                              }}
+                              style={{
+                                flex: 1,
+                                padding: '10px 16px',
+                                fontSize: '12px',
+                                borderRadius: '8px',
+                                fontWeight: 600
+                              }}
+                            >
+                              🔄 {data?.team2Team?.shortName || data?.team2Team?.name || 'team2'} Server: #{data?.match?.team2FirstServe || '?'}
                             </button>
                           </div>
                         </div>
@@ -14493,7 +14796,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                 cursor: 'pointer'
               }}
             >
-              {data?.homeTeam?.name || t('common.home', 'Home')} ({homeLabel})
+              {data?.homeTeam?.name || t('common.team1', 'team1')} ({homeLabel})
             </button>
             <button
               onClick={() => {
@@ -14533,7 +14836,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                   {t('scoreboard.stopMatch.confirmForfeitMessage',
                     '{{team}} will forfeit. The opponent will be awarded all remaining points and sets to win the match.', {
                     team: stopMatchConfirm.team === 'team1'
-                      ? (data?.homeTeam?.name || t('common.home', 'Home'))
+                      ? (data?.homeTeam?.name || t('common.team1', 'team1'))
                       : (data?.team2Team?.name || t('common.team2', 'team2'))
                   })}
                 </div>
@@ -14586,7 +14889,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                 ? t('scoreboard.stopMatch.finalConfirmForfeit', 'End match with {{winner}} as winner?', {
                   winner: stopMatchRemarksStep.team === 'team1'
                     ? (data?.team2Team?.name || t('common.team2', 'team2'))
-                    : (data?.homeTeam?.name || t('common.home', 'Home'))
+                    : (data?.homeTeam?.name || t('common.team1', 'team1'))
                 })
                 : t('scoreboard.stopMatch.finalConfirmImpossibility', 'End match without a winner?')}
             </div>
@@ -14625,7 +14928,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                     <div style={{ display: 'flex', gap: '8px' }}>
                       {['A', 'B'].map(team => {
                         const teamKey = team === 'A' ? teamAKey : teamBKey
-                        const teamKeyCapitalized = teamKey === 'team1' ? 'Home' : 'team2'
+                        const teamKeyCapitalized = teamKey === 'team1' ? 'team1' : 'team2'
                         const hasImproperRequest = data?.match?.sanctions?.[`improperRequest${teamKeyCapitalized}`]
 
                         return (
@@ -14853,7 +15156,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                       // Determine winner
                       const winnerTeamKey = leftTotalWins > rightTotalWins ? currentLeftTeamKey : currentRightTeamKey
                       const winnerTeamData = winnerTeamKey === 'team1' ? data?.homeTeam : data?.team2Team
-                      const winnerTeamName = winnerTeamData?.name || (winnerTeamKey === 'team1' ? 'Home' : 'team2')
+                      const winnerTeamName = winnerTeamData?.name || (winnerTeamKey === 'team1' ? 'team1' : 'team2')
                       const winnerScore = `${leftTotalWins}-${rightTotalWins}`
 
                       // Get captain signatures
@@ -14946,7 +15249,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           <div style={{ marginTop: '16px', display: 'flex', gap: '16px', justifyContent: 'space-around' }}>
                             <div style={{ flex: 1 }}>
                               <div style={{ fontSize: '9px', fontWeight: 600, marginBottom: '4px' }}>
-                                {data?.homeTeam?.name || 'Home'} Captain
+                                {data?.homeTeam?.name || 'team1'} Captain
                               </div>
                               {homeCaptainSignature ? (
                                 <div style={{ border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', padding: '4px', minHeight: '40px', background: 'rgba(255,255,255,0.05)' }}>
@@ -15129,7 +15432,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       {/* Timeout confirmation modal - only show before timeout starts, not during countdown */}
       {timeoutModal && !timeoutModal.started && (
         <Modal
-          title={`Time-out — ${timeoutModal.team === 'team1' ? (data?.homeTeam?.name || 'Home') : (data?.team2Team?.name || 'team2')}`}
+          title={`Time-out — ${timeoutModal.team === 'team1' ? (data?.homeTeam?.name || 'team1') : (data?.team2Team?.name || 'team2')}`}
           open={true}
           onClose={cancelTimeout}
           width={400}
@@ -15769,7 +16072,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         }
 
         const teamData = injuryDropdown.team === 'team1' ? data?.homeTeam : data?.team2Team
-        const teamName = teamData?.name || (injuryDropdown.team === 'team1' ? 'Home' : 'team2')
+        const teamName = teamData?.name || (injuryDropdown.team === 'team1' ? 'team1' : 'team2')
         const playerNumber = injuryDropdown.playerNumber
 
         return (
@@ -16109,7 +16412,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
               {t('scoreboard.confirm.pointAwardedQuickly')}
             </p>
             <p style={{ marginBottom: '24px', fontSize: '12px', color: 'var(--muted)' }}>
-              {t('scoreboard.confirm.areYouSureAwardPoint', { team: accidentalPointConfirmModal.team === 'team1' ? (data?.homeTeam?.name || 'Home') : (data?.team2Team?.name || 'team2') })}
+              {t('scoreboard.confirm.areYouSureAwardPoint', { team: accidentalPointConfirmModal.team === 'team1' ? (data?.homeTeam?.name || 'team1') : (data?.team2Team?.name || 'team2') })}
             </p>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
               <button
@@ -16163,8 +16466,8 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
             </p>
             <p style={{ marginBottom: '24px', fontSize: '12px', color: 'var(--muted)' }}>
               {t('scoreboard.confirm.areYouSureAnotherTimeout', {
-                team: duplicateTimeoutConfirm.team === 'team1' ? (data?.homeTeam?.name || 'Home') : (data?.team2Team?.name || 'team2'),
-                defaultValue: `${duplicateTimeoutConfirm.team === 'team1' ? (data?.homeTeam?.name || 'Home') : (data?.team2Team?.name || 'team2')} already has a timeout with no points since. Are you sure you want another timeout?`
+                team: duplicateTimeoutConfirm.team === 'team1' ? (data?.homeTeam?.name || 'team1') : (data?.team2Team?.name || 'team2'),
+                defaultValue: `${duplicateTimeoutConfirm.team === 'team1' ? (data?.homeTeam?.name || 'team1') : (data?.team2Team?.name || 'team2')} already has a timeout with no points since. Are you sure you want another timeout?`
               })}
             </p>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
@@ -16211,7 +16514,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         const teamData = sanctionConfirmModal.team === 'team1' ? data?.homeTeam : data?.team2Team
         const teamColor = teamData?.color || (sanctionConfirmModal.team === 'team1' ? '#ef4444' : '#3b82f6')
         const teamLabel = sanctionConfirmModal.team === teamAKey ? 'A' : 'B'
-        const teamName = teamData?.name || (sanctionConfirmModal.team === 'team1' ? 'Home' : 'team2')
+        const teamName = teamData?.name || (sanctionConfirmModal.team === 'team1' ? 'team1' : 'team2')
         const isBright = isBrightColor(teamColor)
 
         return (
@@ -16389,8 +16692,20 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
           teamAKey={teamAKey}
           leftisTeam1={leftisTeam1}
           isMatchEnd={setEndTimeModal.isMatchEnd}
-          homeTeamName={data?.homeTeam?.shortName || data?.homeTeam?.name || 'Home'}
-          team2TeamName={data?.team2Team?.shortName || data?.team2Team?.name || 'team2'}
+          homeTeamName={leftisTeam1 ? leftTeam.name : rightTeam.name}
+          team2TeamName={leftisTeam1 ? rightTeam.name : leftTeam.name}
+          homeTeamColor={data?.homeTeam?.color || '#ef4444'}
+          team2TeamColor={data?.team2Team?.color || '#3b82f6'}
+          losingTeamBmpRemaining={(() => {
+            const losingTeam = setEndTimeModal.winner === 'team1' ? 'team2' : 'team1'
+            const unsuccessfulUsed = getUnsuccessfulBMPsUsed(losingTeam)
+            return Math.max(0, 2 - unsuccessfulUsed)
+          })()}
+          onBmpRequest={(teamKey) => {
+            // Close set end modal and open BMP modal
+            setSetEndTimeModal(null)
+            handleTeamBMP(teamKey)
+          }}
           onConfirm={confirmSetEndTime}
           onDecisionChange={async () => {
             // Track that user dismissed via undo to prevent re-showing
@@ -16794,11 +17109,16 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
             </p>
             <div style={{ marginBottom: '16px', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
               <span style={{ background: data?.homeTeam?.color || '#ef4444', color: isBrightColor(data?.homeTeam?.color || '#ef4444') ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>{teamAKey === 'team1' ? 'A' : 'B'}</span>
-              <span>{data?.homeTeam?.shortName || data?.homeTeam?.name || 'Home'}</span>
+              <span>{data?.homeTeam?.shortName || data?.homeTeam?.name || 'team1'}</span>
               <strong style={{ fontSize: '20px' }}>{ttoModal.homePoints} : {ttoModal.team2Points}</strong>
               <span>{data?.team2Team?.shortName || data?.team2Team?.name || 'team2'}</span>
               <span style={{ background: data?.team2Team?.color || '#3b82f6', color: isBrightColor(data?.team2Team?.color || '#3b82f6') ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>{teamAKey === 'team2' ? 'A' : 'B'}</span>
             </div>
+            {ttoModal.triggerCourtSwitchAfter && (
+              <p style={{ marginBottom: '16px', fontSize: '13px', color: '#facc15', fontWeight: 500 }}>
+                Courts will switch when TTO ends
+              </p>
+            )}
             {ttoModal.started ? (
               <>
                 <div style={{
@@ -16828,7 +17148,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                   }} />
                 </div>
                 <button
-                  onClick={() => setTtoModal(null)}
+                  onClick={handleTtoEnd}
                   style={{
                     padding: '12px 32px',
                     fontSize: '16px',
@@ -16840,7 +17160,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                     cursor: 'pointer'
                   }}
                 >
-                  Stop TTO
+                  {ttoModal.triggerCourtSwitchAfter ? 'End TTO & Switch Courts' : 'End TTO'}
                 </button>
               </>
             ) : (
@@ -16884,7 +17204,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
           fontWeight: 'bold',
           zIndex: 1500,
           pointerEvents: 'none',
-          animation: 'pulse 1s ease-in-out infinite'
+          animation: 'preEventPulse 1s ease-in-out infinite'
         }}>
           {preEventPopup.message}
         </div>
@@ -16931,144 +17251,372 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                 )}
               </p>
 
-              {/* Current score and serve display */}
-              <div style={{
-                padding: '16px',
-                marginBottom: '20px',
-                background: 'rgba(249, 115, 22, 0.1)',
-                border: '1px solid rgba(249, 115, 22, 0.3)',
-                borderRadius: '8px'
-              }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', fontSize: '13px', color: 'var(--muted)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ width: '55px', textAlign: 'right' }}>Current:</span>
-                    <div style={{ background: 'rgba(255, 255, 255, 0.1)', padding: '6px 12px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.2)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ background: team1Color, color: isBrightColor(team1Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{team1Label}</span>
-                      <strong>{team1Name} {currentScore.team1} : {currentScore.team2} {team2Name}</strong>
-                      <span style={{ background: team2Color, color: isBrightColor(team2Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{team2Label}</span>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ width: '55px', textAlign: 'right' }}>Serve:</span>
-                    <span style={{ fontSize: '16px' }}>🏐</span>
-                    <span style={{ background: currentServe === 'team1' ? team1Color : team2Color, color: isBrightColor(currentServe === 'team1' ? team1Color : team2Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>
-                      {currentServe === 'team1' ? team1Label : team2Label}
-                    </span>
-                    <strong>{currentServe === 'team1' ? team1Name : team2Name}</strong>
-                  </div>
-                  {!isReferee && (
-                    <>
-                      <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.1)', width: '100%', margin: '4px 0' }} />
-                      <div style={{ fontSize: '11px', color: 'var(--muted)' }}>If successful:</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ width: '55px', textAlign: 'right' }}>New:</span>
-                        <div style={{ background: 'rgba(34, 197, 94, 0.15)', padding: '6px 12px', borderRadius: '6px', border: '1px solid rgba(34, 197, 94, 0.4)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ background: team1Color, color: isBrightColor(team1Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{team1Label}</span>
-                          <strong style={{ color: '#22c55e' }}>{team1Name} {successScore.team1} : {successScore.team2} {team2Name}</strong>
-                          <span style={{ background: team2Color, color: isBrightColor(team2Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{team2Label}</span>
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ width: '55px', textAlign: 'right' }}>Serve:</span>
-                        <span style={{ fontSize: '16px' }}>🏐</span>
-                        <span style={{ background: successServe === 'team1' ? team1Color : team2Color, color: isBrightColor(successServe === 'team1' ? team1Color : team2Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>
-                          {successServe === 'team1' ? team1Label : team2Label}
-                        </span>
-                        <strong>{successServe === 'team1' ? team1Name : team2Name}</strong>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
 
               {/* Outcome buttons */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {isReferee ? (
                   <>
-                    {/* Referee BMP: IN/OUT buttons in yellow */}
-                    <button
-                      onClick={() => handleBMPOutcome('in')}
-                      style={{
-                        padding: '12px 24px',
-                        fontSize: '16px',
-                        fontWeight: 600,
-                        background: '#eab308',
-                        color: '#000',
-                        border: 'none',
-                        borderRadius: '8px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      IN
-                    </button>
-                    <button
-                      onClick={() => handleBMPOutcome('out')}
-                      style={{
-                        padding: '12px 24px',
-                        fontSize: '16px',
-                        fontWeight: 600,
-                        background: '#eab308',
-                        color: '#000',
-                        border: 'none',
-                        borderRadius: '8px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      OUT
-                    </button>
+                    {/* Referee BMP: Point A / Point B buttons */}
+                    {(() => {
+                      // Get team A and team B keys
+                      const teamATeamKey = teamAKey // 'team1' or 'team2'
+                      const teamBTeamKey = teamBKey // 'team1' or 'team2'
+                      const teamAName = teamATeamKey === 'team1' ? team1Name : team2Name
+                      const teamBName = teamBTeamKey === 'team1' ? team1Name : team2Name
+                      const teamAColor = teamATeamKey === 'team1' ? team1Color : team2Color
+                      const teamBColor = teamBTeamKey === 'team1' ? team1Color : team2Color
+
+                      // Calculate scores if point is awarded
+                      const getScoreForTeam = (awardToTeam) => {
+                        const newTeam1 = awardToTeam === 'team1' ? currentScore.team1 + 1 : currentScore.team1
+                        const newTeam2 = awardToTeam === 'team2' ? currentScore.team2 + 1 : currentScore.team2
+                        const newServe = awardToTeam // Point winner gets serve
+                        return {
+                          team1: newTeam1,
+                          team2: newTeam2,
+                          serve: newServe
+                        }
+                      }
+
+                      const teamAScore = getScoreForTeam(teamATeamKey)
+                      const teamBScore = getScoreForTeam(teamBTeamKey)
+
+                      return (
+                        <>
+                          {/* Point A Button */}
+                          <div style={{
+                            background: bmpSelectedOutcome?.startsWith?.('teamA_') ? 'rgba(234, 179, 8, 0.15)' : 'transparent',
+                            border: bmpSelectedOutcome?.startsWith?.('teamA_') ? '2px solid #eab308' : '2px solid transparent',
+                            borderRadius: '10px',
+                            padding: bmpSelectedOutcome?.startsWith?.('teamA_') ? '12px' : '0',
+                            transition: 'all 0.2s ease'
+                          }}>
+                            <button
+                              onClick={() => setBmpSelectedOutcome(bmpSelectedOutcome?.startsWith?.('teamA_') ? null : 'teamA_')}
+                              style={{
+                                width: '100%',
+                                padding: '12px 24px',
+                                fontSize: '16px',
+                                fontWeight: 600,
+                                background: '#eab308',
+                                color: '#000',
+                                border: 'none',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px'
+                              }}
+                            >
+                              Point A
+                              <span style={{ background: teamAColor, color: isBrightColor(teamAColor) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>A</span>
+                              <span style={{ fontSize: '14px' }}>{teamAName}</span>
+                            </button>
+                            {bmpSelectedOutcome?.startsWith?.('teamA_') && (
+                              <div style={{ marginTop: '12px' }}>
+                                <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', padding: '6px 10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>
+                                    <span>Current:</span>
+                                    <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · 🏐 {currentServe === 'team1' ? team1Name : team2Name}</span>
+                                  </div>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(234, 179, 8, 0.15)', borderRadius: '6px', border: '1px solid rgba(234, 179, 8, 0.3)' }}>
+                                    <span style={{ color: '#eab308' }}>New:</span>
+                                    <span><strong style={{ color: '#eab308' }}>{teamAScore.team1} : {teamAScore.team2}</strong> · 🏐 {teamAScore.serve === 'team1' ? team1Name : team2Name}</span>
+                                  </div>
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                  <button
+                                    onClick={() => handleBMPOutcome('in', teamATeamKey)}
+                                    style={{
+                                      flex: 1,
+                                      padding: '10px 16px',
+                                      fontSize: '14px',
+                                      fontWeight: 600,
+                                      background: bmpSelectedOutcome === 'teamA_in' ? 'var(--accent)' : '#374151',
+                                      color: bmpSelectedOutcome === 'teamA_in' ? '#000' : '#fff',
+                                      border: 'none',
+                                      borderRadius: '6px',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    IN
+                                  </button>
+                                  <button
+                                    onClick={() => handleBMPOutcome('out', teamATeamKey)}
+                                    style={{
+                                      flex: 1,
+                                      padding: '10px 16px',
+                                      fontSize: '14px',
+                                      fontWeight: 600,
+                                      background: bmpSelectedOutcome === 'teamA_out' ? 'var(--accent)' : '#374151',
+                                      color: bmpSelectedOutcome === 'teamA_out' ? '#000' : '#fff',
+                                      border: 'none',
+                                      borderRadius: '6px',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    OUT
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          {/* Point B Button */}
+                          <div style={{
+                            background: bmpSelectedOutcome?.startsWith?.('teamB_') ? 'rgba(234, 179, 8, 0.15)' : 'transparent',
+                            border: bmpSelectedOutcome?.startsWith?.('teamB_') ? '2px solid #eab308' : '2px solid transparent',
+                            borderRadius: '10px',
+                            padding: bmpSelectedOutcome?.startsWith?.('teamB_') ? '12px' : '0',
+                            transition: 'all 0.2s ease'
+                          }}>
+                            <button
+                              onClick={() => setBmpSelectedOutcome(bmpSelectedOutcome?.startsWith?.('teamB_') ? null : 'teamB_')}
+                              style={{
+                                width: '100%',
+                                padding: '12px 24px',
+                                fontSize: '16px',
+                                fontWeight: 600,
+                                background: '#eab308',
+                                color: '#000',
+                                border: 'none',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px'
+                              }}
+                            >
+                              Point B
+                              <span style={{ background: teamBColor, color: isBrightColor(teamBColor) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>B</span>
+                              <span style={{ fontSize: '14px' }}>{teamBName}</span>
+                            </button>
+                            {bmpSelectedOutcome?.startsWith?.('teamB_') && (
+                              <div style={{ marginTop: '12px' }}>
+                                <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', padding: '6px 10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>
+                                    <span>Current:</span>
+                                    <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · 🏐 {currentServe === 'team1' ? team1Name : team2Name}</span>
+                                  </div>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(234, 179, 8, 0.15)', borderRadius: '6px', border: '1px solid rgba(234, 179, 8, 0.3)' }}>
+                                    <span style={{ color: '#eab308' }}>New:</span>
+                                    <span><strong style={{ color: '#eab308' }}>{teamBScore.team1} : {teamBScore.team2}</strong> · 🏐 {teamBScore.serve === 'team1' ? team1Name : team2Name}</span>
+                                  </div>
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                  <button
+                                    onClick={() => handleBMPOutcome('in', teamBTeamKey)}
+                                    style={{
+                                      flex: 1,
+                                      padding: '10px 16px',
+                                      fontSize: '14px',
+                                      fontWeight: 600,
+                                      background: bmpSelectedOutcome === 'teamB_in' ? 'var(--accent)' : '#374151',
+                                      color: bmpSelectedOutcome === 'teamB_in' ? '#000' : '#fff',
+                                      border: 'none',
+                                      borderRadius: '6px',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    IN
+                                  </button>
+                                  <button
+                                    onClick={() => handleBMPOutcome('out', teamBTeamKey)}
+                                    style={{
+                                      flex: 1,
+                                      padding: '10px 16px',
+                                      fontSize: '14px',
+                                      fontWeight: 600,
+                                      background: bmpSelectedOutcome === 'teamB_out' ? 'var(--accent)' : '#374151',
+                                      color: bmpSelectedOutcome === 'teamB_out' ? '#000' : '#fff',
+                                      border: 'none',
+                                      borderRadius: '6px',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    OUT
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )
+                    })()}
                   </>
                 ) : (
                   <>
                     {/* Team BMP: Successful/Unsuccessful */}
-                    <button
-                      onClick={() => handleBMPOutcome('successful')}
-                      style={{
-                        padding: '12px 24px',
-                        fontSize: '16px',
-                        fontWeight: 600,
-                        background: '#22c55e',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '8px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Successful
-                    </button>
-                    <button
-                      onClick={() => handleBMPOutcome('unsuccessful')}
-                      style={{
-                        padding: '12px 24px',
-                        fontSize: '16px',
-                        fontWeight: 600,
-                        background: '#ef4444',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '8px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Unsuccessful
-                    </button>
+                    {/* Successful Button */}
+                    <div style={{
+                      background: bmpSelectedOutcome === 'successful' ? 'rgba(34, 197, 94, 0.15)' : 'transparent',
+                      border: bmpSelectedOutcome === 'successful' ? '2px solid #22c55e' : '2px solid transparent',
+                      borderRadius: '10px',
+                      padding: bmpSelectedOutcome === 'successful' ? '12px' : '0',
+                      transition: 'all 0.2s ease'
+                    }}>
+                      <button
+                        onClick={() => setBmpSelectedOutcome(bmpSelectedOutcome === 'successful' ? null : 'successful')}
+                        style={{
+                          width: '100%',
+                          padding: '12px 24px',
+                          fontSize: '16px',
+                          fontWeight: 600,
+                          background: '#22c55e',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '8px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Successful
+                      </button>
+                      {bmpSelectedOutcome === 'successful' && (
+                        <div style={{ marginTop: '12px' }}>
+                          <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', padding: '6px 10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>
+                              <span>Current:</span>
+                              <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · 🏐 {currentServe === 'team1' ? team1Name : team2Name}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(34, 197, 94, 0.15)', borderRadius: '6px', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
+                              <span style={{ color: '#22c55e' }}>New:</span>
+                              <span><strong style={{ color: '#22c55e' }}>{successScore.team1} : {successScore.team2}</strong> · 🏐 {successServe === 'team1' ? team1Name : team2Name}</span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleBMPOutcome('successful')}
+                            style={{
+                              width: '100%',
+                              padding: '10px 20px',
+                              fontSize: '14px',
+                              fontWeight: 600,
+                              background: 'var(--accent)',
+                              color: '#000',
+                              border: 'none',
+                              borderRadius: '6px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Confirm Successful
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    {/* Unsuccessful Button */}
+                    <div style={{
+                      background: bmpSelectedOutcome === 'unsuccessful' ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
+                      border: bmpSelectedOutcome === 'unsuccessful' ? '2px solid #ef4444' : '2px solid transparent',
+                      borderRadius: '10px',
+                      padding: bmpSelectedOutcome === 'unsuccessful' ? '12px' : '0',
+                      transition: 'all 0.2s ease'
+                    }}>
+                      <button
+                        onClick={() => setBmpSelectedOutcome(bmpSelectedOutcome === 'unsuccessful' ? null : 'unsuccessful')}
+                        style={{
+                          width: '100%',
+                          padding: '12px 24px',
+                          fontSize: '16px',
+                          fontWeight: 600,
+                          background: '#ef4444',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '8px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Unsuccessful
+                      </button>
+                      {bmpSelectedOutcome === 'unsuccessful' && (
+                        <div style={{ marginTop: '12px' }}>
+                          <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', padding: '6px 10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>
+                              <span>Current:</span>
+                              <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · 🏐 {currentServe === 'team1' ? team1Name : team2Name}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(239, 68, 68, 0.15)', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                              <span style={{ color: '#ef4444' }}>No change:</span>
+                              <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · 🏐 {currentServe === 'team1' ? team1Name : team2Name}</span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleBMPOutcome('unsuccessful')}
+                            style={{
+                              width: '100%',
+                              padding: '10px 20px',
+                              fontSize: '14px',
+                              fontWeight: 600,
+                              background: 'var(--accent)',
+                              color: '#000',
+                              border: 'none',
+                              borderRadius: '6px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Confirm Unsuccessful
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </>
                 )}
+                {/* Mark Unavailable Button */}
+                <div style={{
+                  background: bmpSelectedOutcome === 'judgment_impossible' ? 'rgba(156, 163, 175, 0.15)' : 'transparent',
+                  border: bmpSelectedOutcome === 'judgment_impossible' ? '2px solid #9ca3af' : '2px solid transparent',
+                  borderRadius: '10px',
+                  padding: bmpSelectedOutcome === 'judgment_impossible' ? '12px' : '0',
+                  transition: 'all 0.2s ease'
+                }}>
+                  <button
+                    onClick={() => setBmpSelectedOutcome(bmpSelectedOutcome === 'judgment_impossible' ? null : 'judgment_impossible')}
+                    style={{
+                      width: '100%',
+                      padding: '12px 24px',
+                      fontSize: '16px',
+                      fontWeight: 600,
+                      background: '#9ca3af',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Mark Unavailable
+                  </button>
+                  {bmpSelectedOutcome === 'judgment_impossible' && (
+                    <div style={{ marginTop: '12px' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', padding: '6px 10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>
+                          <span>Current:</span>
+                          <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · 🏐 {currentServe === 'team1' ? team1Name : team2Name}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(156, 163, 175, 0.15)', borderRadius: '6px', border: '1px solid rgba(156, 163, 175, 0.3)' }}>
+                          <span style={{ color: '#9ca3af' }}>No change:</span>
+                          <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · 🏐 {currentServe === 'team1' ? team1Name : team2Name}</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleBMPOutcome('judgment_impossible')}
+                        style={{
+                          width: '100%',
+                          padding: '10px 20px',
+                          fontSize: '14px',
+                          fontWeight: 600,
+                          background: 'var(--accent)',
+                          color: '#000',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Confirm Unavailable
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <button
-                  onClick={() => handleBMPOutcome('judgment_impossible')}
-                  style={{
-                    padding: '12px 24px',
-                    fontSize: '16px',
-                    fontWeight: 600,
-                    background: '#9ca3af',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Mark Unavailable
-                </button>
-                <button
-                  onClick={() => setBmpOutcomeModal(null)}
+                  onClick={() => { setBmpSelectedOutcome(null); setBmpOutcomeModal(null) }}
                   className="secondary"
                   style={{
                     padding: '12px 24px',
@@ -17100,7 +17648,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
             </p>
             <div style={{ marginBottom: '16px', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
               <span style={{ background: data?.homeTeam?.color || '#ef4444', color: isBrightColor(data?.homeTeam?.color || '#ef4444') ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>{teamAKey === 'team1' ? 'A' : 'B'}</span>
-              <span>{data?.homeTeam?.shortName || data?.homeTeam?.name || 'Home'}</span>
+              <span>{data?.homeTeam?.shortName || data?.homeTeam?.name || 'team1'}</span>
               <strong style={{ fontSize: '20px' }}>{courtSwitchModal.homePoints} : {courtSwitchModal.team2Points}</strong>
               <span>{data?.team2Team?.shortName || data?.team2Team?.name || 'team2'}</span>
               <span style={{ background: data?.team2Team?.color || '#3b82f6', color: isBrightColor(data?.team2Team?.color || '#3b82f6') ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>{teamAKey === 'team2' ? 'A' : 'B'}</span>
@@ -17408,7 +17956,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         const replayteam2Points = oldTeam === 'team2' ? currentteam2Points - 1 : currentteam2Points
 
         // Get team names for display
-        const homeTeamName = data?.homeTeam?.shortName || data?.homeTeam?.name || 'Home'
+        const homeTeamName = data?.homeTeam?.shortName || data?.homeTeam?.name || 'team1'
         const team2TeamName = data?.team2Team?.shortName || data?.team2Team?.name || 'team2'
         const oldTeamName = oldTeam === 'team1' ? homeTeamName : team2TeamName
         const newTeamName = newTeam === 'team1' ? homeTeamName : team2TeamName
@@ -17593,7 +18141,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
 
       {postMatchSignature && (
         <Modal
-          title={`${postMatchSignature === 'home-captain' ? (data?.homeTeam?.name || 'Home') : (data?.team2Team?.name || 'team2')} Captain Signature`}
+          title={`${postMatchSignature === 'home-captain' ? (data?.homeTeam?.name || 'team1') : (data?.team2Team?.name || 'team2')} Captain Signature`}
           open={true}
           onClose={() => setPostMatchSignature(null)}
           width={500}
@@ -18077,7 +18625,7 @@ function LineupModal({ team, teamData, players, matchId, setIndex, mode = 'initi
     <Modal
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span>{teamData?.name || (team === 'team1' ? 'Home' : 'team2')}</span>
+          <span>{teamData?.name || (team === 'team1' ? 'team1' : 'team2')}</span>
           <span
             style={{
               padding: '4px 12px',
@@ -18889,7 +19437,7 @@ function ToSubDetailsModal({ type, side, timeoutDetails, substitutionDetails, te
   )
 }
 
-function SetEndTimeModal({ setIndex, winner, homePoints, team2Points, defaultTime, teamAKey, leftisTeam1, isMatchEnd, homeTeamName, team2TeamName, onConfirm, onDecisionChange }) {
+function SetEndTimeModal({ setIndex, winner, homePoints, team2Points, defaultTime, teamAKey, leftisTeam1, isMatchEnd, homeTeamName, team2TeamName, homeTeamColor, team2TeamColor, losingTeamBmpRemaining, onBmpRequest, onConfirm, onDecisionChange }) {
   const [time, setTime] = useState(() => {
     // Extract local time from UTC ISO string
     const { time: localTime } = splitLocalDateTime(defaultTime)
@@ -18897,14 +19445,29 @@ function SetEndTimeModal({ setIndex, winner, homePoints, team2Points, defaultTim
   })
   const [isConfirming, setIsConfirming] = useState(false) // Prevent double-clicks
 
-  // Get winner team name
+  // Get winner and loser team info
   const winnerTeamName = winner === 'team1' ? homeTeamName : team2TeamName
+  const loserTeam = winner === 'team1' ? 'team2' : 'team1'
+  const loserTeamName = winner === 'team1' ? team2TeamName : homeTeamName
+  const loserTeamColor = winner === 'team1' ? team2TeamColor : homeTeamColor
+  const loserTeamLabel = (winner === 'team1' ? 'team2' : 'team1') === (leftisTeam1 ? 'team1' : 'team2') ? 'A' : 'B'
 
   // Calculate left and right team names and scores
   const leftTeamName = leftisTeam1 ? homeTeamName : team2TeamName
   const rightTeamName = leftisTeam1 ? team2TeamName : homeTeamName
   const leftScore = leftisTeam1 ? homePoints : team2Points
   const rightScore = leftisTeam1 ? team2Points : homePoints
+
+  // Helper to check if color is bright
+  const isBrightColor = (color) => {
+    if (!color) return false
+    const hex = color.replace('#', '')
+    const r = parseInt(hex.substr(0, 2), 16)
+    const g = parseInt(hex.substr(2, 2), 16)
+    const b = parseInt(hex.substr(4, 2), 16)
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    return luminance > 0.5
+  }
 
   const handleTimeChange = (e) => {
     let value = e.target.value
@@ -18946,9 +19509,6 @@ function SetEndTimeModal({ setIndex, winner, homePoints, team2Points, defaultTim
       hideCloseButton={true}
     >
       <div style={{ padding: '24px', textAlign: 'center' }}>
-        <p style={{ marginBottom: '8px', fontSize: '14px', color: 'var(--muted)' }}>
-          {leftTeamName} vs {rightTeamName}
-        </p>
         <p style={{ marginBottom: '16px', fontSize: '36px', fontWeight: 700 }}>
           {leftScore} : {rightScore}
         </p>
@@ -18974,16 +19534,13 @@ function SetEndTimeModal({ setIndex, winner, homePoints, team2Points, defaultTim
             border: `2px solid rgba(255,255,255,0.2)`,
             borderRadius: '8px',
             color: 'var(--text)',
-            marginBottom: '8px',
+            marginBottom: '16px',
             width: '150px',
             fontFamily: 'monospace',
             letterSpacing: '2px'
           }}
         />
-        <p style={{ marginBottom: '24px', fontSize: '12px', color: 'var(--muted)' }}>
-          24-hour format (00:00 - 23:59)
-        </p>
-        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginBottom: '16px' }}>
           <button
             onClick={handleConfirm}
             disabled={isConfirming}
@@ -19019,6 +19576,43 @@ function SetEndTimeModal({ setIndex, winner, homePoints, team2Points, defaultTim
             Decision Change
           </button>
         </div>
+        {/* BMP Request button for losing team */}
+        {losingTeamBmpRemaining > 0 && (
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '16px' }}>
+            <button
+              onClick={() => onBmpRequest(loserTeam)}
+              disabled={isConfirming}
+              style={{
+                padding: '10px 20px',
+                fontSize: '13px',
+                fontWeight: 600,
+                background: '#f97316',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: isConfirming ? 'not-allowed' : 'pointer',
+                opacity: isConfirming ? 0.7 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                margin: '0 auto'
+              }}
+            >
+              <span style={{
+                background: loserTeamColor,
+                color: isBrightColor(loserTeamColor) ? '#000' : '#fff',
+                padding: '2px 6px',
+                borderRadius: '4px',
+                fontSize: '10px',
+                fontWeight: 700
+              }}>
+                {loserTeamLabel}
+              </span>
+              BMP Request ({losingTeamBmpRemaining} remaining)
+            </button>
+          </div>
+        )}
       </div>
     </Modal>
   )

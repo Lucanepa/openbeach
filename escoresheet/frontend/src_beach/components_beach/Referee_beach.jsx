@@ -759,7 +759,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           }
 
           // Store last event for footer display (only specific event types)
-          const displayableEvents = ['point', 'timeout', 'set_end', 'sanction', 'court_captain_designation', 'challenge']
+          const displayableEvents = ['point', 'timeout', 'set_end', 'sanction', 'court_captain_designation', 'challenge', 'challenge_outcome', 'referee_bmp_request', 'referee_bmp_outcome']
           if (state.last_event_type && displayableEvents.includes(state.last_event_type)) {
             setLastEvent({
               type: state.last_event_type,
@@ -2905,7 +2905,28 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
                     if (lastEvent.type === 'point') return `${t('refereeDashboard.events.point')} ${teamInfo}`
                     if (lastEvent.type === 'timeout') return `${t('refereeDashboard.events.timeout')} ${teamInfo}`
-                    if (lastEvent.type === 'challenge') return `${t('refereeDashboard.events.challenge', 'Challenge')} ${teamInfo}`
+                    if (lastEvent.type === 'challenge') return `${t('refereeDashboard.events.challenge', 'Team BMP')} ${teamInfo}`
+                    if (lastEvent.type === 'challenge_outcome') {
+                      const result = lastEvent.data?.result
+                      const resultLabel = result === 'successful' ? 'Successful' :
+                        result === 'unsuccessful' ? 'Unsuccessful' :
+                          result === 'judgment_impossible' ? 'Judgment impossible' : result
+                      return `Team BMP: ${resultLabel} ${teamInfo}`
+                    }
+                    if (lastEvent.type === 'referee_bmp_request') return 'Referee BMP'
+                    if (lastEvent.type === 'referee_bmp_outcome') {
+                      const result = lastEvent.data?.result
+                      const resultLabel = result === 'in' ? 'IN' :
+                        result === 'out' ? 'OUT' :
+                          result === 'judgment_impossible' ? 'Judgment impossible' : result
+                      const pointToTeam = lastEvent.data?.pointToTeam
+                      let pointInfo = ''
+                      if (lastEvent.data?.pointAwarded && pointToTeam) {
+                        const pointTeamLbl = pointToTeam === 'team1' ? team1Label : team2Label
+                        pointInfo = ` → ${pointTeamLbl}`
+                      }
+                      return `Referee BMP: ${resultLabel}${pointInfo}`
+                    }
                     if (lastEvent.type === 'set_end') return t('refereeDashboard.events.setEnd', { set: lastEvent.data?.setIndex || '' })
                     if (lastEvent.type === 'sanction') {
                       const sanctionData = lastEvent.data || {}
