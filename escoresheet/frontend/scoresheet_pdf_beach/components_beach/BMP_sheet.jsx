@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 // Basic text input
 const Input = ({ value, onChange, className = "", placeholder, readOnly = false }) => (
@@ -33,7 +33,7 @@ const OutcomeSelector = ({ value, onChange, isRefRequest = false }) => {
   const teamOutcomes = ['', 'UNSUC', 'SUC', 'MUNAV'];
   const refOutcomes = ['', 'IN', 'OUT', 'MUNAV'];
   const outcomes = isRefRequest ? refOutcomes : teamOutcomes;
-  
+
   return (
     <div
       onClick={() => {
@@ -49,11 +49,72 @@ const OutcomeSelector = ({ value, onChange, isRefRequest = false }) => {
   );
 };
 
-export default function BMPSheet() {
+export default function BMPSheet({ matchData }) {
   const [data, setData] = useState({});
-  
+  const [dataInitialized, setDataInitialized] = useState(false);
+
   const set = (k, v) => setData(p => ({ ...p, [k]: v }));
   const get = (k) => data[k];
+
+  // Initialize data from matchData
+  useEffect(() => {
+    if (matchData && !dataInitialized) {
+      const { match } = matchData;
+      const team1Team = matchData.team1Team || matchData.team_1Team;
+      const team2Team = matchData.team2Team || matchData.team_2Team;
+      const team1Players = matchData.team1Players || matchData.team_1Players || [];
+      const team2Players = matchData.team2Players || matchData.team_2Players || [];
+
+      if (match) {
+        // Event/Competition name
+        if (match.eventName) set('event', match.eventName);
+        else if (match.league) set('event', match.league);
+
+        // Match number
+        if (match.matchNumber) set('match_no', String(match.matchNumber));
+
+        // Date
+        if (match.date) {
+          const d = new Date(match.date);
+          set('date', d.toLocaleDateString('en-GB')); // DD/MM/YYYY format
+        }
+
+        // Phase - format nicely
+        const phaseValue = match.matchPhase || match.phase || '';
+        const formattedPhase = phaseValue
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, c => c.toUpperCase());
+        set('phase', formattedPhase);
+
+        // Gender
+        const genderValue = match.matchGender || match.gender;
+        if (genderValue === 'men') set('gender', 'Men');
+        else if (genderValue === 'women') set('gender', 'Women');
+      }
+
+      // Team names with country codes
+      const formatTeamName = (team, players) => {
+        if (!team && (!players || players.length === 0)) return '';
+
+        const countryCode = team?.countryCode || players?.[0]?.countryCode || '';
+        const playerNames = players?.map(p => p.lastName || p.name || '').filter(Boolean).join('/') || '';
+
+        if (playerNames && countryCode) {
+          return `${playerNames} (${countryCode})`;
+        } else if (playerNames) {
+          return playerNames;
+        } else if (team?.name) {
+          return countryCode ? `${team.name} (${countryCode})` : team.name;
+        }
+        return '';
+      };
+
+      set('team_a', formatTeamName(team1Team, team1Players));
+      set('team_b', formatTeamName(team2Team, team2Players));
+
+      setDataInitialized(true);
+    }
+  }, [matchData, dataInitialized]);
 
   const NUM_BMP_ROWS = 16;
   
@@ -143,7 +204,7 @@ export default function BMPSheet() {
               <div className="text-center leading-tight">Score at time<br/>of BMP request</div>
             </div>
             <div style={cellStyle} className="border-r border-black py-2">
-              <div className="text-center leading-tight">Team<br/>serving</div>
+              <div className="text-center leading-tight">Team<br/>serving (at time of request)</div>
             </div>
             <div style={cellStyle} className="border-r border-black py-2">
               <div className="text-center leading-tight">Request by<br/>(A / B / Ref)</div>
@@ -152,7 +213,7 @@ export default function BMPSheet() {
               <div className="text-center leading-tight">BMP request<br/>Outcome</div>
             </div>
             <div style={cellStyle} className="border-r border-black py-2">
-              <div className="text-center leading-tight">Team<br/>serving</div>
+              <div className="text-center leading-tight">Team<br/>serving (after decision)</div>
             </div>
             <div style={cellStyle} className="border-r border-black py-2">
               <div className="text-center leading-tight">Score after<br/>decision</div>

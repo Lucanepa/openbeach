@@ -4042,12 +4042,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     })
     // Track when rally started (for accidental point award check)
     rallyStartTimeRef.current = Date.now()
-
-    // Clear the recently substituted players flash (rally starting clears it)
-    if (recentSubFlashTimeoutRef.current) {
-      clearTimeout(recentSubFlashTimeoutRef.current)
-    }
-    setRecentlySubstitutedPlayers([])
   }, [logEvent, isFirstRally, data?.team1Players, data?.team2Players, data?.events, data?.set, data?.match, matchId, getNextSubSeq, syncToReferee, checkAccidentalRallyStart, accidentalRallyStartDuration, data?.servingTeam, data?.serverNumber])
 
   const handleReplay = useCallback(async () => {
@@ -4299,9 +4293,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     }
 
     try {
-      // Reset libero suggestion dismissed state for new set
-      setLiberoSuggestionDismissedForExit({ home: null, team2: null })
-
       // Determine team labels (A or B) based on coin toss
       const teamAKey = data.match.coinTossTeamA || 'team1'
       const teamBKey = teamAKey === 'team1' ? 'team2' : 'team1'
@@ -5675,21 +5666,41 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     let homePoints = data.set.homePoints || 0
     let team2Points = data.set.team2Points || 0
 
-    // Determine if we need to award a point
-    const shouldAwardPoint = (isTeamBMP && result === 'successful') ||
-                             (isRefereeBMP && pointToTeam && (result === 'in' || result === 'out'))
+    // Determine if we need to change score
+    const shouldChangeScore = (isTeamBMP && result === 'successful') ||
+                              (isRefereeBMP && pointToTeam && (result === 'in' || result === 'out'))
 
-    if (shouldAwardPoint) {
+    if (shouldChangeScore) {
       // Determine which team gets the point
       const scoringTeam = isTeamBMP ? requestingTeam : pointToTeam
 
-      // Award point
-      if (scoringTeam === 'team1') {
-        homePoints += 1
-        await db.sets.update(currentSetId, { homePoints })
+      if (isTeamBMP && result === 'successful') {
+        // For successful team BMP: REVERSE the point
+        // The opponent scored the disputed point, so:
+        // 1. Remove 1 from opponent
+        // 2. Add 1 to requesting team
+        const opponent = requestingTeam === 'team1' ? 'team2' : 'team1'
+        if (opponent === 'team1') {
+          homePoints = Math.max(0, homePoints - 1)
+        } else {
+          team2Points = Math.max(0, team2Points - 1)
+        }
+        // Add point to requesting team
+        if (requestingTeam === 'team1') {
+          homePoints += 1
+        } else {
+          team2Points += 1
+        }
+        await db.sets.update(currentSetId, { homePoints, team2Points })
       } else {
-        team2Points += 1
-        await db.sets.update(currentSetId, { team2Points })
+        // For referee BMP: just award point to the specified team
+        if (scoringTeam === 'team1') {
+          homePoints += 1
+          await db.sets.update(currentSetId, { homePoints })
+        } else {
+          team2Points += 1
+          await db.sets.update(currentSetId, { team2Points })
+        }
       }
 
       // Log the outcome event as a sub-event of the request (uses decimal seq like 7.1)
@@ -5702,8 +5713,12 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         newScore: { team1: homePoints, team2: team2Points }
       }, { parentSeq: bmpOutcomeModal.requestSeq })
 
-      // Note: In beach volleyball, serve changes based on who scores, not rotation
-      // The serve logic is handled automatically by getCurrentServe() based on point events
+      // Also log a point event so getCurrentServe() picks up the serve change
+      // In beach volleyball, the team that wins the point gets the serve
+      await logEvent('point', {
+        team: scoringTeam,
+        fromBMP: true  // Mark that this point came from BMP
+      })
 
       // Check if this point ends the set
       const freshSet = await db.sets.get(currentSetId)
@@ -11090,56 +11105,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                 }}>{getSubstitutionsUsed('right')}</div>
               </div>
             </div>
-            {(() => {
-              const teamKey = leftisTeam1 ? 'team2' : 'team1'
-              const teamPlayers = leftisTeam1 ? data?.team2Players : data?.team1Players
-              // Get ALL liberos from player list (including on court), excluding already-unable ones
-              const liberos = teamPlayers?.filter(p => p.libero && p.libero !== '' && p.libero !== 'unable') || []
-              const activeLiberos = liberos.filter(p => !isLiberoUnable(teamKey, p.number))
-              const unableLiberos = liberos.filter(p => isLiberoUnable(teamKey, p.number))
-
-              // Check if already redesignated
-              const alreadyRedesignated = data?.events?.some(e =>
-                e.type === 'libero_redesignation' &&
-                e.payload?.team === teamKey
-              )
-
-              // Show redesignation when ALL liberos are unable (whether 1 or 2)
-              const needsRedesignation = liberos.length > 0 && activeLiberos.length === 0 && !alreadyRedesignated
-
-              if (needsRedesignation) {
-                const lastUnable = unableLiberos[unableLiberos.length - 1]
-                return (
-                  <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', width: '100%' }}>
-                    <button
-                      onClick={() => {
-                        setLiberoRedesignationModal({
-                          team: teamKey,
-                          unableLiberoNumber: lastUnable.number
-                        })
-                      }}
-                      disabled={rallyStatus === 'in_play' || isRallyReplayed}
-                      style={{
-                        flex: 1,
-                        fontSize: '10px',
-                        padding: '8px 4px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        background: 'rgba(239, 68, 68, 0.2)',
-                        borderColor: 'rgba(239, 68, 68, 0.4)',
-                        color: '#f87171'
-                      }}
-                    >
-                      Redesignate Libero
-                    </button>
-                  </div>
-                )
-              }
-
-              // Libero out/exchange controls moved to player action menu when clicking libero on court
-              return null
-            })()}
 
             {/* Sanctions: Improper Request, Delay Warning, Delay Penalty */}
             {isNarrowMode ? (
@@ -15594,7 +15559,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                 zIndex: 999,
                 background: 'transparent'
               }}
-              onClick={() => { setPlayerActionMenu(null); setCourtSubExpanded(false); setCourtLiberoExpanded(false); setCourtSanctionExpanded(false); setCourtLiberoUnableExpanded(false) }}
+              onClick={() => { setPlayerActionMenu(null); setCourtSanctionExpanded(false) }}
             />
             {/* Action Menu */}
             <div style={menuStyle} className="modal-wrapper-roll-down">
@@ -17225,12 +17190,17 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         const team1Name = leftisTeam1 ? leftTeam?.name : rightTeam?.name
         const team2Name = leftisTeam1 ? rightTeam?.name : leftTeam?.name
 
-        // Calculate what score/serve would be if BMP is successful (point goes to requesting team)
-        // For referee BMP (IN), it confirms the original call - no score change typically
-        // For team BMP (successful), the requesting team gets the point
+        // Calculate what score/serve would be if BMP is successful
+        // For team BMP: REVERSE the point - remove from opponent, give to requesting team
+        // For referee BMP: no change to current score (ref BMP awards point via separate UI)
         const successScore = isReferee ? currentScore : {
-          team1: requestingTeam === 'team1' ? currentScore.team1 + 1 : currentScore.team1,
-          team2: requestingTeam === 'team2' ? currentScore.team2 + 1 : currentScore.team2
+          // Remove 1 from opponent, add 1 to requesting team
+          team1: requestingTeam === 'team1'
+            ? currentScore.team1 + 1  // Requesting team gets +1
+            : Math.max(0, currentScore.team1 - 1),  // Opponent loses 1
+          team2: requestingTeam === 'team2'
+            ? currentScore.team2 + 1  // Requesting team gets +1
+            : Math.max(0, currentScore.team2 - 1)   // Opponent loses 1
         }
         const successServe = isReferee ? currentServe : requestingTeam
 
@@ -17256,7 +17226,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {isReferee ? (
                   <>
-                    {/* Referee BMP: Point A / Point B buttons */}
+                    {/* Referee BMP: Point Left | Mark Unavailable | Point Right in a row */}
                     {(() => {
                       // Get team A and team B keys
                       const teamATeamKey = teamAKey // 'team1' or 'team2'
@@ -17265,6 +17235,17 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                       const teamBName = teamBTeamKey === 'team1' ? team1Name : team2Name
                       const teamAColor = teamATeamKey === 'team1' ? team1Color : team2Color
                       const teamBColor = teamBTeamKey === 'team1' ? team1Color : team2Color
+
+                      // Determine left/right team based on court position
+                      // leftTeam = team that's on the left side of the court
+                      const leftTeamKey = leftisTeam1 ? 'team1' : 'team2'
+                      const rightTeamKey = leftisTeam1 ? 'team2' : 'team1'
+                      const leftLabel = leftTeamKey === teamATeamKey ? 'A' : 'B'
+                      const rightLabel = rightTeamKey === teamATeamKey ? 'A' : 'B'
+                      const leftTeamName = leftTeamKey === 'team1' ? team1Name : team2Name
+                      const rightTeamName = rightTeamKey === 'team1' ? team1Name : team2Name
+                      const leftTeamColor = leftTeamKey === 'team1' ? team1Color : team2Color
+                      const rightTeamColor = rightTeamKey === 'team1' ? team1Color : team2Color
 
                       // Calculate scores if point is awarded
                       const getScoreForTeam = (awardToTeam) => {
@@ -17278,63 +17259,138 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                         }
                       }
 
-                      const teamAScore = getScoreForTeam(teamATeamKey)
-                      const teamBScore = getScoreForTeam(teamBTeamKey)
+                      const leftTeamScore = getScoreForTeam(leftTeamKey)
+                      const rightTeamScore = getScoreForTeam(rightTeamKey)
+
+                      // Determine which team is selected (if any)
+                      const selectedTeam = bmpSelectedOutcome === 'left' ? 'left'
+                        : bmpSelectedOutcome === 'right' ? 'right'
+                        : bmpSelectedOutcome === 'judgment_impossible' ? 'unavailable'
+                        : null
 
                       return (
                         <>
-                          {/* Point A Button */}
-                          <div style={{
-                            background: bmpSelectedOutcome?.startsWith?.('teamA_') ? 'rgba(234, 179, 8, 0.15)' : 'transparent',
-                            border: bmpSelectedOutcome?.startsWith?.('teamA_') ? '2px solid #eab308' : '2px solid transparent',
-                            borderRadius: '10px',
-                            padding: bmpSelectedOutcome?.startsWith?.('teamA_') ? '12px' : '0',
-                            transition: 'all 0.2s ease'
-                          }}>
+                          {/* Button row: Point Left | Mark Unavailable | Point Right */}
+                          <div style={{ display: 'flex', flexDirection: 'row', gap: '8px' }}>
+                            {/* Point Left Button */}
                             <button
-                              onClick={() => setBmpSelectedOutcome(bmpSelectedOutcome?.startsWith?.('teamA_') ? null : 'teamA_')}
+                              onClick={() => setBmpSelectedOutcome(bmpSelectedOutcome === 'left' ? null : 'left')}
                               style={{
-                                width: '100%',
-                                padding: '12px 24px',
-                                fontSize: '16px',
+                                flex: 1,
+                                padding: '10px 8px',
+                                fontSize: '13px',
                                 fontWeight: 600,
-                                background: '#eab308',
+                                background: selectedTeam === 'left' ? '#ca8a04' : '#eab308',
                                 color: '#000',
-                                border: 'none',
+                                border: selectedTeam === 'left' ? '2px solid #fde047' : '2px solid transparent',
                                 borderRadius: '8px',
                                 cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                gap: '8px'
+                                gap: '4px'
                               }}
                             >
-                              Point A
-                              <span style={{ background: teamAColor, color: isBrightColor(teamAColor) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>A</span>
-                              <span style={{ fontSize: '14px' }}>{teamAName}</span>
+                              <span style={{ background: leftTeamColor, color: isBrightColor(leftTeamColor) ? '#000' : '#fff', padding: '2px 5px', borderRadius: '4px', fontSize: '11px', fontWeight: 700 }}>{leftLabel}</span>
+                              <span style={{ fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{leftTeamName}</span>
                             </button>
-                            {bmpSelectedOutcome?.startsWith?.('teamA_') && (
-                              <div style={{ marginTop: '12px' }}>
-                                <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', padding: '6px 10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>
-                                    <span>Current:</span>
+                            {/* Mark Unavailable Button */}
+                            <button
+                              onClick={() => setBmpSelectedOutcome(bmpSelectedOutcome === 'judgment_impossible' ? null : 'judgment_impossible')}
+                              style={{
+                                flex: 1,
+                                padding: '10px 8px',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                background: selectedTeam === 'unavailable' ? '#6b7280' : '#9ca3af',
+                                color: '#fff',
+                                border: selectedTeam === 'unavailable' ? '2px solid #d1d5db' : '2px solid transparent',
+                                borderRadius: '8px',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              Unavailable
+                            </button>
+                            {/* Point Right Button */}
+                            <button
+                              onClick={() => setBmpSelectedOutcome(bmpSelectedOutcome === 'right' ? null : 'right')}
+                              style={{
+                                flex: 1,
+                                padding: '10px 8px',
+                                fontSize: '13px',
+                                fontWeight: 600,
+                                background: selectedTeam === 'right' ? '#ca8a04' : '#eab308',
+                                color: '#000',
+                                border: selectedTeam === 'right' ? '2px solid #fde047' : '2px solid transparent',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              <span style={{ background: rightTeamColor, color: isBrightColor(rightTeamColor) ? '#000' : '#fff', padding: '2px 5px', borderRadius: '4px', fontSize: '11px', fontWeight: 700 }}>{rightLabel}</span>
+                              <span style={{ fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rightTeamName}</span>
+                            </button>
+                          </div>
+
+                          {/* Shared expansion area */}
+                          {selectedTeam && (
+                            <div style={{
+                              background: selectedTeam === 'unavailable' ? 'rgba(156, 163, 175, 0.15)' : 'rgba(234, 179, 8, 0.15)',
+                              border: selectedTeam === 'unavailable' ? '2px solid #9ca3af' : '2px solid #eab308',
+                              borderRadius: '10px',
+                              padding: '12px',
+                              transition: 'all 0.2s ease'
+                            }}>
+                              <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', padding: '6px 10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>
+                                  <span>Current:</span>
+                                  <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · 🏐 {currentServe === 'team1' ? team1Name : team2Name}</span>
+                                </div>
+                                {selectedTeam === 'unavailable' ? (
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(156, 163, 175, 0.15)', borderRadius: '6px', border: '1px solid rgba(156, 163, 175, 0.3)' }}>
+                                    <span style={{ color: '#9ca3af' }}>No change:</span>
                                     <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · 🏐 {currentServe === 'team1' ? team1Name : team2Name}</span>
                                   </div>
+                                ) : (
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(234, 179, 8, 0.15)', borderRadius: '6px', border: '1px solid rgba(234, 179, 8, 0.3)' }}>
                                     <span style={{ color: '#eab308' }}>New:</span>
-                                    <span><strong style={{ color: '#eab308' }}>{teamAScore.team1} : {teamAScore.team2}</strong> · 🏐 {teamAScore.serve === 'team1' ? team1Name : team2Name}</span>
+                                    <span><strong style={{ color: '#eab308' }}>
+                                      {selectedTeam === 'left' ? leftTeamScore.team1 : rightTeamScore.team1} : {selectedTeam === 'left' ? leftTeamScore.team2 : rightTeamScore.team2}
+                                    </strong> · 🏐 {(selectedTeam === 'left' ? leftTeamScore.serve : rightTeamScore.serve) === 'team1' ? team1Name : team2Name}</span>
                                   </div>
-                                </div>
+                                )}
+                              </div>
+                              {selectedTeam === 'unavailable' ? (
+                                <button
+                                  onClick={() => handleBMPOutcome('judgment_impossible')}
+                                  style={{
+                                    width: '100%',
+                                    padding: '10px 20px',
+                                    fontSize: '14px',
+                                    fontWeight: 600,
+                                    background: 'var(--accent)',
+                                    color: '#000',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  Confirm Unavailable
+                                </button>
+                              ) : (
                                 <div style={{ display: 'flex', gap: '8px' }}>
                                   <button
-                                    onClick={() => handleBMPOutcome('in', teamATeamKey)}
+                                    onClick={() => handleBMPOutcome('in', selectedTeam === 'left' ? leftTeamKey : rightTeamKey)}
                                     style={{
                                       flex: 1,
                                       padding: '10px 16px',
                                       fontSize: '14px',
                                       fontWeight: 600,
-                                      background: bmpSelectedOutcome === 'teamA_in' ? 'var(--accent)' : '#374151',
-                                      color: bmpSelectedOutcome === 'teamA_in' ? '#000' : '#fff',
+                                      background: '#374151',
+                                      color: '#fff',
                                       border: 'none',
                                       borderRadius: '6px',
                                       cursor: 'pointer'
@@ -17343,14 +17399,14 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                     IN
                                   </button>
                                   <button
-                                    onClick={() => handleBMPOutcome('out', teamATeamKey)}
+                                    onClick={() => handleBMPOutcome('out', selectedTeam === 'left' ? leftTeamKey : rightTeamKey)}
                                     style={{
                                       flex: 1,
                                       padding: '10px 16px',
                                       fontSize: '14px',
                                       fontWeight: 600,
-                                      background: bmpSelectedOutcome === 'teamA_out' ? 'var(--accent)' : '#374151',
-                                      color: bmpSelectedOutcome === 'teamA_out' ? '#000' : '#fff',
+                                      background: '#374151',
+                                      color: '#fff',
                                       border: 'none',
                                       borderRadius: '6px',
                                       cursor: 'pointer'
@@ -17359,262 +17415,123 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                     OUT
                                   </button>
                                 </div>
-                              </div>
-                            )}
-                          </div>
-                          {/* Point B Button */}
-                          <div style={{
-                            background: bmpSelectedOutcome?.startsWith?.('teamB_') ? 'rgba(234, 179, 8, 0.15)' : 'transparent',
-                            border: bmpSelectedOutcome?.startsWith?.('teamB_') ? '2px solid #eab308' : '2px solid transparent',
-                            borderRadius: '10px',
-                            padding: bmpSelectedOutcome?.startsWith?.('teamB_') ? '12px' : '0',
-                            transition: 'all 0.2s ease'
-                          }}>
-                            <button
-                              onClick={() => setBmpSelectedOutcome(bmpSelectedOutcome?.startsWith?.('teamB_') ? null : 'teamB_')}
-                              style={{
-                                width: '100%',
-                                padding: '12px 24px',
-                                fontSize: '16px',
-                                fontWeight: 600,
-                                background: '#eab308',
-                                color: '#000',
-                                border: 'none',
-                                borderRadius: '8px',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '8px'
-                              }}
-                            >
-                              Point B
-                              <span style={{ background: teamBColor, color: isBrightColor(teamBColor) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>B</span>
-                              <span style={{ fontSize: '14px' }}>{teamBName}</span>
-                            </button>
-                            {bmpSelectedOutcome?.startsWith?.('teamB_') && (
-                              <div style={{ marginTop: '12px' }}>
-                                <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', padding: '6px 10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>
-                                    <span>Current:</span>
-                                    <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · 🏐 {currentServe === 'team1' ? team1Name : team2Name}</span>
-                                  </div>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(234, 179, 8, 0.15)', borderRadius: '6px', border: '1px solid rgba(234, 179, 8, 0.3)' }}>
-                                    <span style={{ color: '#eab308' }}>New:</span>
-                                    <span><strong style={{ color: '#eab308' }}>{teamBScore.team1} : {teamBScore.team2}</strong> · 🏐 {teamBScore.serve === 'team1' ? team1Name : team2Name}</span>
-                                  </div>
-                                </div>
-                                <div style={{ display: 'flex', gap: '8px' }}>
-                                  <button
-                                    onClick={() => handleBMPOutcome('in', teamBTeamKey)}
-                                    style={{
-                                      flex: 1,
-                                      padding: '10px 16px',
-                                      fontSize: '14px',
-                                      fontWeight: 600,
-                                      background: bmpSelectedOutcome === 'teamB_in' ? 'var(--accent)' : '#374151',
-                                      color: bmpSelectedOutcome === 'teamB_in' ? '#000' : '#fff',
-                                      border: 'none',
-                                      borderRadius: '6px',
-                                      cursor: 'pointer'
-                                    }}
-                                  >
-                                    IN
-                                  </button>
-                                  <button
-                                    onClick={() => handleBMPOutcome('out', teamBTeamKey)}
-                                    style={{
-                                      flex: 1,
-                                      padding: '10px 16px',
-                                      fontSize: '14px',
-                                      fontWeight: 600,
-                                      background: bmpSelectedOutcome === 'teamB_out' ? 'var(--accent)' : '#374151',
-                                      color: bmpSelectedOutcome === 'teamB_out' ? '#000' : '#fff',
-                                      border: 'none',
-                                      borderRadius: '6px',
-                                      cursor: 'pointer'
-                                    }}
-                                  >
-                                    OUT
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
+                              )}
+                            </div>
+                          )}
                         </>
                       )
                     })()}
                   </>
                 ) : (
                   <>
-                    {/* Team BMP: Successful/Unsuccessful */}
-                    {/* Successful Button */}
-                    <div style={{
-                      background: bmpSelectedOutcome === 'successful' ? 'rgba(34, 197, 94, 0.15)' : 'transparent',
-                      border: bmpSelectedOutcome === 'successful' ? '2px solid #22c55e' : '2px solid transparent',
-                      borderRadius: '10px',
-                      padding: bmpSelectedOutcome === 'successful' ? '12px' : '0',
-                      transition: 'all 0.2s ease'
-                    }}>
+                    {/* Team BMP: Successful | Unsuccessful | Mark Unavailable in a row */}
+                    {/* Button row */}
+                    <div style={{ display: 'flex', flexDirection: 'row', gap: '8px' }}>
                       <button
                         onClick={() => setBmpSelectedOutcome(bmpSelectedOutcome === 'successful' ? null : 'successful')}
                         style={{
-                          width: '100%',
-                          padding: '12px 24px',
-                          fontSize: '16px',
+                          flex: 1,
+                          padding: '12px 8px',
+                          fontSize: '13px',
                           fontWeight: 600,
-                          background: '#22c55e',
+                          background: bmpSelectedOutcome === 'successful' ? '#16a34a' : '#22c55e',
                           color: '#fff',
-                          border: 'none',
+                          border: bmpSelectedOutcome === 'successful' ? '2px solid #86efac' : '2px solid transparent',
                           borderRadius: '8px',
                           cursor: 'pointer'
                         }}
                       >
                         Successful
                       </button>
-                      {bmpSelectedOutcome === 'successful' && (
-                        <div style={{ marginTop: '12px' }}>
-                          <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', padding: '6px 10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>
-                              <span>Current:</span>
-                              <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · 🏐 {currentServe === 'team1' ? team1Name : team2Name}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(34, 197, 94, 0.15)', borderRadius: '6px', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
-                              <span style={{ color: '#22c55e' }}>New:</span>
-                              <span><strong style={{ color: '#22c55e' }}>{successScore.team1} : {successScore.team2}</strong> · 🏐 {successServe === 'team1' ? team1Name : team2Name}</span>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleBMPOutcome('successful')}
-                            style={{
-                              width: '100%',
-                              padding: '10px 20px',
-                              fontSize: '14px',
-                              fontWeight: 600,
-                              background: 'var(--accent)',
-                              color: '#000',
-                              border: 'none',
-                              borderRadius: '6px',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            Confirm Successful
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    {/* Unsuccessful Button */}
-                    <div style={{
-                      background: bmpSelectedOutcome === 'unsuccessful' ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
-                      border: bmpSelectedOutcome === 'unsuccessful' ? '2px solid #ef4444' : '2px solid transparent',
-                      borderRadius: '10px',
-                      padding: bmpSelectedOutcome === 'unsuccessful' ? '12px' : '0',
-                      transition: 'all 0.2s ease'
-                    }}>
                       <button
                         onClick={() => setBmpSelectedOutcome(bmpSelectedOutcome === 'unsuccessful' ? null : 'unsuccessful')}
                         style={{
-                          width: '100%',
-                          padding: '12px 24px',
-                          fontSize: '16px',
+                          flex: 1,
+                          padding: '12px 8px',
+                          fontSize: '13px',
                           fontWeight: 600,
-                          background: '#ef4444',
+                          background: bmpSelectedOutcome === 'unsuccessful' ? '#dc2626' : '#ef4444',
                           color: '#fff',
-                          border: 'none',
+                          border: bmpSelectedOutcome === 'unsuccessful' ? '2px solid #fca5a5' : '2px solid transparent',
                           borderRadius: '8px',
                           cursor: 'pointer'
                         }}
                       >
                         Unsuccessful
                       </button>
-                      {bmpSelectedOutcome === 'unsuccessful' && (
-                        <div style={{ marginTop: '12px' }}>
-                          <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', padding: '6px 10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>
-                              <span>Current:</span>
-                              <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · 🏐 {currentServe === 'team1' ? team1Name : team2Name}</span>
+                      <button
+                        onClick={() => setBmpSelectedOutcome(bmpSelectedOutcome === 'judgment_impossible' ? null : 'judgment_impossible')}
+                        style={{
+                          flex: 1,
+                          padding: '12px 8px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          background: bmpSelectedOutcome === 'judgment_impossible' ? '#6b7280' : '#9ca3af',
+                          color: '#fff',
+                          border: bmpSelectedOutcome === 'judgment_impossible' ? '2px solid #d1d5db' : '2px solid transparent',
+                          borderRadius: '8px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Unavailable
+                      </button>
+                    </div>
+
+                    {/* Shared expansion area */}
+                    {(bmpSelectedOutcome === 'successful' || bmpSelectedOutcome === 'unsuccessful' || bmpSelectedOutcome === 'judgment_impossible') && (
+                      <div style={{
+                        background: bmpSelectedOutcome === 'successful' ? 'rgba(34, 197, 94, 0.15)'
+                          : bmpSelectedOutcome === 'unsuccessful' ? 'rgba(239, 68, 68, 0.15)'
+                          : 'rgba(156, 163, 175, 0.15)',
+                        border: bmpSelectedOutcome === 'successful' ? '2px solid #22c55e'
+                          : bmpSelectedOutcome === 'unsuccessful' ? '2px solid #ef4444'
+                          : '2px solid #9ca3af',
+                        borderRadius: '10px',
+                        padding: '12px',
+                        transition: 'all 0.2s ease'
+                      }}>
+                        <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', padding: '6px 10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>
+                            <span>Current:</span>
+                            <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · 🏐 {currentServe === 'team1' ? team1Name : team2Name}</span>
+                          </div>
+                          {bmpSelectedOutcome === 'successful' ? (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(34, 197, 94, 0.15)', borderRadius: '6px', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
+                              <span style={{ color: '#22c55e' }}>New:</span>
+                              <span><strong style={{ color: '#22c55e' }}>{successScore.team1} : {successScore.team2}</strong> · 🏐 {successServe === 'team1' ? team1Name : team2Name}</span>
                             </div>
+                          ) : bmpSelectedOutcome === 'unsuccessful' ? (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(239, 68, 68, 0.15)', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
                               <span style={{ color: '#ef4444' }}>No change:</span>
                               <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · 🏐 {currentServe === 'team1' ? team1Name : team2Name}</span>
                             </div>
-                          </div>
-                          <button
-                            onClick={() => handleBMPOutcome('unsuccessful')}
-                            style={{
-                              width: '100%',
-                              padding: '10px 20px',
-                              fontSize: '14px',
-                              fontWeight: 600,
-                              background: 'var(--accent)',
-                              color: '#000',
-                              border: 'none',
-                              borderRadius: '6px',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            Confirm Unsuccessful
-                          </button>
+                          ) : (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(156, 163, 175, 0.15)', borderRadius: '6px', border: '1px solid rgba(156, 163, 175, 0.3)' }}>
+                              <span style={{ color: '#9ca3af' }}>No change:</span>
+                              <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · 🏐 {currentServe === 'team1' ? team1Name : team2Name}</span>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
+                        <button
+                          onClick={() => handleBMPOutcome(bmpSelectedOutcome)}
+                          style={{
+                            width: '100%',
+                            padding: '10px 20px',
+                            fontSize: '14px',
+                            fontWeight: 600,
+                            background: 'var(--accent)',
+                            color: '#000',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Confirm {bmpSelectedOutcome === 'successful' ? 'Successful' : bmpSelectedOutcome === 'unsuccessful' ? 'Unsuccessful' : 'Unavailable'}
+                        </button>
+                      </div>
+                    )}
                   </>
                 )}
-                {/* Mark Unavailable Button */}
-                <div style={{
-                  background: bmpSelectedOutcome === 'judgment_impossible' ? 'rgba(156, 163, 175, 0.15)' : 'transparent',
-                  border: bmpSelectedOutcome === 'judgment_impossible' ? '2px solid #9ca3af' : '2px solid transparent',
-                  borderRadius: '10px',
-                  padding: bmpSelectedOutcome === 'judgment_impossible' ? '12px' : '0',
-                  transition: 'all 0.2s ease'
-                }}>
-                  <button
-                    onClick={() => setBmpSelectedOutcome(bmpSelectedOutcome === 'judgment_impossible' ? null : 'judgment_impossible')}
-                    style={{
-                      width: '100%',
-                      padding: '12px 24px',
-                      fontSize: '16px',
-                      fontWeight: 600,
-                      background: '#9ca3af',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Mark Unavailable
-                  </button>
-                  {bmpSelectedOutcome === 'judgment_impossible' && (
-                    <div style={{ marginTop: '12px' }}>
-                      <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', padding: '6px 10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>
-                          <span>Current:</span>
-                          <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · 🏐 {currentServe === 'team1' ? team1Name : team2Name}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(156, 163, 175, 0.15)', borderRadius: '6px', border: '1px solid rgba(156, 163, 175, 0.3)' }}>
-                          <span style={{ color: '#9ca3af' }}>No change:</span>
-                          <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · 🏐 {currentServe === 'team1' ? team1Name : team2Name}</span>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleBMPOutcome('judgment_impossible')}
-                        style={{
-                          width: '100%',
-                          padding: '10px 20px',
-                          fontSize: '14px',
-                          fontWeight: 600,
-                          background: 'var(--accent)',
-                          color: '#000',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        Confirm Unavailable
-                      </button>
-                    </div>
-                  )}
-                </div>
                 <button
                   onClick={() => { setBmpSelectedOutcome(null); setBmpOutcomeModal(null) }}
                   className="secondary"

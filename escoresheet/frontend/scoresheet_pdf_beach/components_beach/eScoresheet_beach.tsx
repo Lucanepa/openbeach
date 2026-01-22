@@ -1691,8 +1691,34 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           // Track service rotation: columns used for each player row (1-21)
           const serviceRotationColumn: Record<string, number> = { r1: 0, r2: 0, r3: 0, r4: 0 }; // Next column to use for each row
 
-          // Map service order to row keys (global rotation: I=1, II=2, III=3, IV=4)
-          const orderToRow: Record<number, string> = { 1: 'r1', 2: 'r2', 3: 'r3', 4: 'r4' };
+          // Build dynamic orderToRow mapping from serviceOrder
+          // Maps service position (1-4) to the correct row based on which player has that position
+          // Rows are fixed by team position: r1=team_up p1, r2=team_down p1, r3=team_up p2, r4=team_down p2
+          const orderToRow: Record<number, string> = {};
+          if (serviceOrder && Object.keys(serviceOrder).length > 0) {
+            Object.entries(serviceOrder).forEach(([playerKey, position]) => {
+              const match = playerKey.match(/^(team[12])_player([12])$/);
+              if (match) {
+                const teamKey = match[1];
+                const playerNum = match[2];
+                // Map to row based on team (teamUp/teamDown) and player number
+                if (teamKey === teamUp) {
+                  // team_up players go to r1 (player1) and r3 (player2)
+                  orderToRow[position as number] = playerNum === '1' ? 'r1' : 'r3';
+                } else if (teamKey === teamDown) {
+                  // team_down players go to r2 (player1) and r4 (player2)
+                  orderToRow[position as number] = playerNum === '1' ? 'r2' : 'r4';
+                }
+              }
+            });
+          }
+          // Fallback if serviceOrder is empty or mapping incomplete
+          if (Object.keys(orderToRow).length < 4) {
+            if (!orderToRow[1]) orderToRow[1] = 'r1';
+            if (!orderToRow[2]) orderToRow[2] = 'r2';
+            if (!orderToRow[3]) orderToRow[3] = 'r3';
+            if (!orderToRow[4]) orderToRow[4] = 'r4';
+          }
 
           // Determine initial serving player from first rally_start event
           // Service rotation order is global: I (1) -> II (2) -> III (3) -> IV (4) -> I (1) -> ...
@@ -2692,7 +2718,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
       // Process BMP (Ball Mark Protocol) events
       const bmpEvents: any[] = [];
       events.forEach((event: any) => {
-        if (event.type === 'challenge_request' || event.type === 'challenge_outcome' ||
+        if (event.type === 'challenge' || event.type === 'challenge_outcome' ||
           event.type === 'referee_bmp_request' || event.type === 'referee_bmp_outcome' ||
           event.type === 'bmp') {
           bmpEvents.push(event);
@@ -2708,21 +2734,25 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
 
       // Populate BMP header
       if (match) {
-        set('bmp_event', match.eventName || '');
+        // Event/Competition name - use same fallback logic as main scoresheet
+        set('bmp_event', match.eventName || match.league || '');
         if (match.scheduledAt) {
           const date = new Date(match.scheduledAt);
           set('bmp_date', date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }));
         }
         set('bmp_match_no', String(match.game_n || ''));
         // Convert phase to capitalize (replace underscores with spaces and capitalize)
-        const phaseStr = match.matchPhase || '';
+        // Use fallback to match.phase like main scoresheet
+        const phaseStr = match.matchPhase || match.phase || '';
         const formattedPhase = phaseStr
           .replace(/_/g, ' ')
           .split(' ')
           .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
           .join(' ');
         set('bmp_phase', formattedPhase);
-        set('bmp_gender', match.matchGender === 'men' ? 'Men' : match.matchGender === 'women' ? 'Women' : '');
+        // Use fallback to match.gender like main scoresheet
+        const genderValue = match.matchGender || match.gender;
+        set('bmp_gender', genderValue === 'men' ? 'Men' : genderValue === 'women' ? 'Women' : '');
 
         // Only set team A/B names if coin toss is confirmed
         if (match.coinTossConfirmed) {
@@ -2743,8 +2773,6 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
       bmpEvents.forEach((event: any, idx: number) => {
         if (processedBMPs.has(idx)) return;
 
-        if (bmpRowIndex >= 16) return; // Max 16 rows
-
         const setIndex = event.setIndex || 1;
         const eventTime = event.ts ? (typeof event.ts === 'number' ? new Date(event.ts) : new Date(event.ts)) : new Date();
         const hours = String(eventTime.getHours()).padStart(2, '0');
@@ -2763,7 +2791,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         let timeResumed = '';
         let duration = '';
 
-        if (event.type === 'challenge_request') {
+        if (event.type === 'challenge') {
           // Team-initiated challenge
           const teamKey = event.payload?.team;
           const teamLabel = teamKey === teamAKey ? 'A' : teamKey === teamBKey ? 'B' : '';
@@ -2772,93 +2800,62 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           // Get score at time of request
           scoreAtRequest = event.payload?.score || { team1: setData?.team1Points || 0, team2: setData?.team2Points || 0 };
 
-          // Determine serving team before challenge using scoreboard logic:
-          // 1. Get the last rally_start event before this challenge
-          // 2. Check score changes: if A increased → A serving, if B increased → B serving, if no increase (replay) → same as last server
-          const previousEvents = events
-            .filter((e: any) =>
-              e.setIndex === setIndex &&
-              e.ts
-            )
-            .sort((a: any, b: any) => {
-              const aTime = typeof a.ts === 'number' ? a.ts : new Date(a.ts).getTime();
-              const bTime = typeof b.ts === 'number' ? b.ts : new Date(b.ts).getTime();
-              return bTime - aTime; // Most recent first
-            });
+          // Get serving team from the event payload (stored when BMP was requested)
+          const servingTeamKey = event.payload?.servingTeam;
+          servingTeamBefore = servingTeamKey === teamAKey ? 'A' : servingTeamKey === teamBKey ? 'B' : '';
 
-          // Find last rally_start before challenge
-          const lastRallyStart = previousEvents.find((e: any) => {
-            if (e.type !== 'rally_start') return false;
-            const eTime = typeof e.ts === 'number' ? new Date(e.ts) : new Date(e.ts);
-            return eTime.getTime() < eventTime.getTime();
-          });
-
-          if (lastRallyStart && lastRallyStart.payload?.servingTeam) {
-            const lastServingTeam = lastRallyStart.payload.servingTeam;
-            const rallyTime = typeof lastRallyStart.ts === 'number' ? new Date(lastRallyStart.ts) : new Date(lastRallyStart.ts);
-
-            // Find last point event after this rally_start and before the challenge
-            const lastPointAfterRally = previousEvents.find((e: any) => {
-              if (e.type !== 'point') return false;
-              const eTime = typeof e.ts === 'number' ? new Date(e.ts) : new Date(e.ts);
-              return eTime.getTime() > rallyTime.getTime() && eTime.getTime() < eventTime.getTime();
-            });
-
-            if (lastPointAfterRally && lastPointAfterRally.payload?.team) {
-              // Team that scored the last point is now serving
-              const scoringTeam = lastPointAfterRally.payload.team;
-              servingTeamBefore = scoringTeam === teamAKey ? 'A' : scoringTeam === teamBKey ? 'B' : '';
-            } else {
-              // No point scored (replay scenario) - serving team unchanged from rally_start
-              servingTeamBefore = lastServingTeam === teamAKey ? 'A' : lastServingTeam === teamBKey ? 'B' : '';
-            }
-          }
-
-          // Find corresponding outcome
+          // Find corresponding outcome by matching sequence (outcome seq is decimal like 7.1 for request seq 7)
+          const requestSeq = event.seq;
           const outcomeEvent = bmpEvents.find((e: any, i: number) =>
             i > idx &&
             e.type === 'challenge_outcome' &&
             e.setIndex === setIndex &&
-            e.payload?.team === teamKey
+            e.payload?.team === teamKey &&
+            (requestSeq === undefined || Math.floor(e.seq) === Math.floor(requestSeq))
           );
 
-          if (outcomeEvent) {
-            processedBMPs.add(bmpEvents.indexOf(outcomeEvent));
-            const result = outcomeEvent.payload?.result || '';
-            if (result === 'successful') outcome = 'SUC';
-            else if (result === 'unsuccessful') outcome = 'UNSUC';
-            else if (result === 'judgment_impossible') outcome = 'MUNAV';
-            else if (result === 'cancelled') outcome = 'MUNAV';
-
-            scoreAfterDecision = outcomeEvent.payload?.newScore || scoreAtRequest;
-
-            // Determine serving team after BMP outcome
-            // Check for rally_start event after the outcome to see if service changed
-            const outcomeTime = outcomeEvent.ts ? (typeof outcomeEvent.ts === 'number' ? new Date(outcomeEvent.ts) : new Date(outcomeEvent.ts)) : new Date();
-            const nextRallyStart = events.find((e: any) =>
-              e.type === 'rally_start' &&
-              e.setIndex === setIndex &&
-              e.ts &&
-              (typeof e.ts === 'number' ? new Date(e.ts) : new Date(e.ts)).getTime() > outcomeTime.getTime()
-            );
-
-            if (nextRallyStart && nextRallyStart.payload?.servingTeam) {
-              // Service team from next rally_start event
-              servingTeamAfter = nextRallyStart.payload.servingTeam === teamAKey ? 'A' : nextRallyStart.payload.servingTeam === teamBKey ? 'B' : servingTeamBefore;
-            } else {
-              // If no rally_start found, service usually doesn't change (same as before)
-              servingTeamAfter = servingTeamBefore;
-            }
-
-            const resumedHours = String(outcomeTime.getHours()).padStart(2, '0');
-            const resumedMinutes = String(outcomeTime.getMinutes()).padStart(2, '0');
-            const resumedSeconds = String(outcomeTime.getSeconds()).padStart(2, '0');
-            timeResumed = `${resumedHours}:${resumedMinutes}:${resumedSeconds}`;
-
-            const durationMs = outcomeTime.getTime() - eventTime.getTime();
-            const durationSec = Math.round(durationMs / 1000);
-            duration = `${durationSec}s`;
+          // Skip if no outcome (canceled BMP)
+          if (!outcomeEvent) {
+            return;
           }
+
+          processedBMPs.add(bmpEvents.indexOf(outcomeEvent));
+          const result = outcomeEvent.payload?.result || '';
+          if (result === 'successful') outcome = 'SUC';
+          else if (result === 'unsuccessful') outcome = 'UNSUC';
+          else if (result === 'judgment_impossible') outcome = 'MUNAV';
+          else if (result === 'cancelled') outcome = 'MUNAV';
+
+          scoreAfterDecision = outcomeEvent.payload?.newScore || scoreAtRequest;
+
+          // Determine serving team after BMP outcome
+          // Check for rally_start event after the outcome to see if service changed
+          const outcomeTime = outcomeEvent.ts ? (typeof outcomeEvent.ts === 'number' ? new Date(outcomeEvent.ts) : new Date(outcomeEvent.ts)) : new Date();
+          const nextRallyStart = events.find((e: any) =>
+            e.type === 'rally_start' &&
+            e.setIndex === setIndex &&
+            e.ts &&
+            (typeof e.ts === 'number' ? new Date(e.ts) : new Date(e.ts)).getTime() > outcomeTime.getTime()
+          );
+
+          if (nextRallyStart && nextRallyStart.payload?.servingTeam) {
+            // Service team from next rally_start event
+            servingTeamAfter = nextRallyStart.payload.servingTeam === teamAKey ? 'A' : nextRallyStart.payload.servingTeam === teamBKey ? 'B' : servingTeamBefore;
+          } else {
+            // If no rally_start found, service usually doesn't change (same as before)
+            servingTeamAfter = servingTeamBefore;
+          }
+
+          const resumedHours = String(outcomeTime.getHours()).padStart(2, '0');
+          const resumedMinutes = String(outcomeTime.getMinutes()).padStart(2, '0');
+          const resumedSeconds = String(outcomeTime.getSeconds()).padStart(2, '0');
+          timeResumed = `${resumedHours}:${resumedMinutes}:${resumedSeconds}`;
+
+          const durationMs = outcomeTime.getTime() - eventTime.getTime();
+          const durationSec = Math.round(durationMs / 1000);
+          const durationMin = Math.floor(durationSec / 60);
+          const durationSecRemainder = durationSec % 60;
+          duration = `${durationMin}:${String(durationSecRemainder).padStart(2, '0')}`;
         } else if (event.type === 'referee_bmp_request') {
           // Referee-initiated BMP
           requestBy = 'Ref';
@@ -2866,72 +2863,88 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           scoreAtRequest = event.payload?.score || { team1: setData?.team1Points || 0, team2: setData?.team2Points || 0 };
           servingTeamBefore = event.payload?.servingTeam === teamAKey ? 'A' : event.payload?.servingTeam === teamBKey ? 'B' : '';
 
-          // Find corresponding outcome
+          // Find corresponding outcome by matching sequence (outcome seq is decimal like 7.1 for request seq 7)
+          const requestSeq = event.seq;
           const outcomeEvent = bmpEvents.find((e: any, i: number) =>
             i > idx &&
             (e.type === 'referee_bmp_outcome' || e.type === 'bmp') &&
-            e.setIndex === setIndex
+            e.setIndex === setIndex &&
+            (requestSeq === undefined || Math.floor(e.seq) === Math.floor(requestSeq))
           );
 
-          if (outcomeEvent) {
-            processedBMPs.add(bmpEvents.indexOf(outcomeEvent));
-            const result = outcomeEvent.payload?.result || '';
-            // For referee-requested BMPs, map to A/B instead of IN/OUT
-            if (result === 'left') outcome = 'A';
-            else if (result === 'right') outcome = 'B';
-            else outcome = ''; // Empty if no clear result
-
-            scoreAfterDecision = outcomeEvent.payload?.newScore || scoreAtRequest;
-
-            // Determine serving team after BMP outcome
-            // Check for rally_start event after the outcome to see if service changed
-            const outcomeTime = outcomeEvent.ts ? (typeof outcomeEvent.ts === 'number' ? new Date(outcomeEvent.ts) : new Date(outcomeEvent.ts)) : new Date();
-            const nextRallyStart = events.find((e: any) =>
-              e.type === 'rally_start' &&
-              e.setIndex === setIndex &&
-              e.ts &&
-              (typeof e.ts === 'number' ? new Date(e.ts) : new Date(e.ts)).getTime() > outcomeTime.getTime()
-            );
-
-            if (nextRallyStart && nextRallyStart.payload?.servingTeam) {
-              // Service team from next rally_start event
-              servingTeamAfter = nextRallyStart.payload.servingTeam === teamAKey ? 'A' : nextRallyStart.payload.servingTeam === teamBKey ? 'B' : servingTeamBefore;
-            } else {
-              // If no rally_start found, service usually doesn't change (same as before)
-              servingTeamAfter = servingTeamBefore;
-            }
-
-            const resumedHours = String(outcomeTime.getHours()).padStart(2, '0');
-            const resumedMinutes = String(outcomeTime.getMinutes()).padStart(2, '0');
-            const resumedSeconds = String(outcomeTime.getSeconds()).padStart(2, '0');
-            timeResumed = `${resumedHours}:${resumedMinutes}:${resumedSeconds}`;
-
-            const durationMs = outcomeTime.getTime() - eventTime.getTime();
-            const durationSec = Math.round(durationMs / 1000);
-            duration = `${durationSec}s`;
+          // Skip if no outcome (canceled BMP)
+          if (!outcomeEvent) {
+            return;
           }
+
+          processedBMPs.add(bmpEvents.indexOf(outcomeEvent));
+          const result = outcomeEvent.payload?.result || '';
+          // For referee-requested BMPs, show IN or OUT
+          if (result === 'in') outcome = 'IN';
+          else if (result === 'out') outcome = 'OUT';
+          else outcome = ''; // Empty if no clear result
+
+          scoreAfterDecision = outcomeEvent.payload?.newScore || scoreAtRequest;
+
+          // Determine serving team after BMP outcome
+          // Check for rally_start event after the outcome to see if service changed
+          const outcomeTime = outcomeEvent.ts ? (typeof outcomeEvent.ts === 'number' ? new Date(outcomeEvent.ts) : new Date(outcomeEvent.ts)) : new Date();
+          const nextRallyStart = events.find((e: any) =>
+            e.type === 'rally_start' &&
+            e.setIndex === setIndex &&
+            e.ts &&
+            (typeof e.ts === 'number' ? new Date(e.ts) : new Date(e.ts)).getTime() > outcomeTime.getTime()
+          );
+
+          if (nextRallyStart && nextRallyStart.payload?.servingTeam) {
+            // Service team from next rally_start event
+            servingTeamAfter = nextRallyStart.payload.servingTeam === teamAKey ? 'A' : nextRallyStart.payload.servingTeam === teamBKey ? 'B' : servingTeamBefore;
+          } else {
+            // If no rally_start found, service usually doesn't change (same as before)
+            servingTeamAfter = servingTeamBefore;
+          }
+
+          const resumedHours = String(outcomeTime.getHours()).padStart(2, '0');
+          const resumedMinutes = String(outcomeTime.getMinutes()).padStart(2, '0');
+          const resumedSeconds = String(outcomeTime.getSeconds()).padStart(2, '0');
+          timeResumed = `${resumedHours}:${resumedMinutes}:${resumedSeconds}`;
+
+          const durationMs = outcomeTime.getTime() - eventTime.getTime();
+          const durationSec = Math.round(durationMs / 1000);
+          const durationMin = Math.floor(durationSec / 60);
+          const durationSecRemainder = durationSec % 60;
+          duration = `${durationMin}:${String(durationSecRemainder).padStart(2, '0')}`;
         } else if (event.type === 'challenge_outcome' || event.type === 'referee_bmp_outcome' || event.type === 'bmp') {
           // Skip if this is an outcome without a corresponding request (shouldn't happen, but handle gracefully)
           return;
         }
 
         // Fill BMP row
+        // Map team1/team2 scores to A/B based on teamAKey
+        const scoreARequest = teamAKey === 'team1' ? scoreAtRequest.team1 : scoreAtRequest.team2;
+        const scoreBRequest = teamAKey === 'team1' ? scoreAtRequest.team2 : scoreAtRequest.team1;
+        const scoreAAfter = teamAKey === 'team1' ? scoreAfterDecision.team1 : scoreAfterDecision.team2;
+        const scoreBAfter = teamAKey === 'team1' ? scoreAfterDecision.team2 : scoreAfterDecision.team1;
+
         set(`bmp_${bmpRowIndex}_start`, timeStr);
         set(`bmp_${bmpRowIndex}_set`, String(setIndex));
-        set(`bmp_${bmpRowIndex}_score_a`, String(scoreAtRequest.team1));
-        set(`bmp_${bmpRowIndex}_score_b`, String(scoreAtRequest.team2));
+        set(`bmp_${bmpRowIndex}_score_a`, String(scoreARequest));
+        set(`bmp_${bmpRowIndex}_score_b`, String(scoreBRequest));
         // Ensure serving team values are set (A or B, not empty)
         set(`bmp_${bmpRowIndex}_serving_before`, servingTeamBefore || '');
         set(`bmp_${bmpRowIndex}_request`, requestBy);
         set(`bmp_${bmpRowIndex}_outcome`, outcome);
         set(`bmp_${bmpRowIndex}_serving_after`, servingTeamAfter || servingTeamBefore || '');
-        set(`bmp_${bmpRowIndex}_score2_a`, String(scoreAfterDecision.team1));
-        set(`bmp_${bmpRowIndex}_score2_b`, String(scoreAfterDecision.team2));
+        set(`bmp_${bmpRowIndex}_score2_a`, String(scoreAAfter));
+        set(`bmp_${bmpRowIndex}_score2_b`, String(scoreBAfter));
         set(`bmp_${bmpRowIndex}_resumed`, timeResumed);
         set(`bmp_${bmpRowIndex}_duration`, duration);
 
         bmpRowIndex++;
       });
+
+      // Store total BMP count for pagination
+      set('bmp_total_count', bmpRowIndex);
 
       // Process MTO/RIT events for remarks section
       const mtoRitRemarks: string[] = [];
@@ -4206,189 +4219,206 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         </div>
       </div>
 
-      {/* Gap between page 2 and page 3 */}
-      <div style={{ height: '20mm', width: '100%' }}></div>
+      {/* ================= BMP SHEET PAGES (Page 3+) ================= */}
+      {(() => {
+        const totalBMPs = Number(get('bmp_total_count')) || 0;
+        const bmpPagesNeeded = Math.max(1, Math.ceil(totalBMPs / 16));
 
-      {/* ================= PAGE 3 - BMP SHEET ================= */}
-      <div
-        ref={page3Ref}
-        id="page-3"
-        className="page-boundary page-3 flex flex-col bg-white mx-auto"
-        style={{
-          width: '297mm',
-          height: '210mm',
-          padding: '6mm',
-          boxSizing: 'border-box',
-          overflow: 'hidden',
-          fontFamily: 'Arial, sans-serif'
-        }}
-      >
-        {/* TITLE */}
-        <div className="text-center mb-2">
-          <h1 className="text-lg font-bold text-black">Ball Mark Protocol Remark Form</h1>
-          <div className="text-[9px] text-gray-600">(complementary to Scoresheet)</div>
-        </div>
+        return Array.from({ length: bmpPagesNeeded }).map((_, pageIndex) => {
+          const startRow = pageIndex * 16;
+          const isLastPage = pageIndex === bmpPagesNeeded - 1;
 
-        {/* EVENT INFO */}
-        <div className="border-2 border-black mb-2">
-          <div className="flex border-b border-black">
-            <div className="flex items-center px-2 py-1 flex-1 border-r border-black">
-              <span className="font-bold mr-2 text-[10px]">EVENT:</span>
-              <Input value={get('bmp_event')} onChange={v => set('bmp_event', v)} className="flex-1 text-left text-[10px]" />
-            </div>
-            <div className="flex items-center px-2 py-1 w-36">
-              <span className="font-bold mr-2 text-[10px]">DATE:</span>
-              <Input value={get('bmp_date')} onChange={v => set('bmp_date', v)} className="flex-1 text-center text-[10px]" />
-            </div>
-          </div>
+          return (
+            <React.Fragment key={`bmp-page-${pageIndex}`}>
+              {/* Gap between pages */}
+              <div style={{ height: '20mm', width: '100%' }}></div>
 
-          <div className="flex text-[10px]">
-            <div className="flex items-center px-2 py-1 border-r border-black">
-              <span className="font-bold mr-1">MATCH NO:</span>
-              <Input value={get('bmp_match_no')} onChange={v => set('bmp_match_no', v)} className="w-12 text-center text-[10px]" />
-            </div>
-            <div className="flex items-center px-2 py-1 border-r border-black">
-              <span className="font-bold mr-1">PHASE:</span>
-              <Input value={get('bmp_phase')} onChange={v => set('bmp_phase', v)} className="w-16 text-center text-[10px]" />
-            </div>
-            <div className="flex items-center px-2 py-1 border-r border-black">
-              <span className="font-bold mr-1">GENDER:</span>
-              <Input value={get('bmp_gender')} onChange={v => set('bmp_gender', v)} className="w-10 text-center text-[10px]" />
-            </div>
-            <div className="flex items-center px-2 py-1 border-r border-black flex-1">
-              <span className="font-bold mr-1">TEAM A:</span>
-              <Input value={get('bmp_team_a')} onChange={v => set('bmp_team_a', v)} className="flex-1 text-center text-[10px]" />
-            </div>
-            <div className="flex items-center px-2 py-1 flex-1">
-              <span className="font-bold mr-1">TEAM B:</span>
-              <Input value={get('bmp_team_b')} onChange={v => set('bmp_team_b', v)} className="flex-1 text-center text-[10px]" />
-            </div>
-          </div>
-        </div>
+              <div
+                ref={pageIndex === 0 ? page3Ref : undefined}
+                id={`page-${3 + pageIndex}`}
+                className={`page-boundary page-${3 + pageIndex} flex flex-col bg-white mx-auto`}
+                style={{
+                  width: '297mm',
+                  height: '210mm',
+                  padding: '6mm',
+                  boxSizing: 'border-box',
+                  overflow: 'hidden',
+                  fontFamily: 'Arial, sans-serif'
+                }}
+              >
+                {/* TITLE */}
+                <div className="text-center mb-2">
+                  <h1 className="text-lg font-bold text-black">Ball Mark Protocol Remark Form{bmpPagesNeeded > 1 ? ` (${pageIndex + 1}/${bmpPagesNeeded})` : ''}</h1>
+                  <div className="text-[9px] text-gray-600">(complementary to Scoresheet)</div>
+                </div>
 
-        {/* SECTION TITLE */}
-        <div className="bg-gray-100 border-2 border-black px-2 py-1 text-center font-bold text-[10px]">
-          During the match
-        </div>
-
-        {/* BMP TABLE - Takes remaining space */}
-        <div className="border-2 border-t-0 border-black flex-1 flex flex-col" style={{ minHeight: 0 }}>
-          {/* Header - 10 equal columns */}
-          <div className="flex bg-gray-50 border-b-2 border-black text-[8px] font-bold" style={{ flexShrink: 0 }}>
-            <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
-              <div className="text-center leading-tight">Start<br />time</div>
-            </div>
-            <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
-              Set
-            </div>
-            <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
-              <div className="text-center leading-tight">Score at time<br />of BMP request</div>
-            </div>
-            <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
-              <div className="text-center leading-tight">Team<br />serving</div>
-            </div>
-            <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
-              <div className="text-center leading-tight">Request by<br />(A / B / Ref)</div>
-            </div>
-            <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
-              <div className="text-center leading-tight">BMP request<br />Outcome</div>
-            </div>
-            <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
-              <div className="text-center leading-tight">Team<br />serving</div>
-            </div>
-            <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
-              <div className="text-center leading-tight">Score after<br />decision</div>
-            </div>
-            <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
-              <div className="text-center leading-tight">Time match<br />resumed</div>
-            </div>
-            <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="py-2">
-              Duration
-            </div>
-          </div>
-
-          {/* Rows - 16 rows */}
-          <div className="flex-1 flex flex-col" style={{ minHeight: 0, overflow: 'hidden' }}>
-            {Array.from({ length: 16 }).map((_, i) => {
-              const cellStyle = { width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' };
-              const outcomeValue = get(`bmp_${i}_outcome`);
-              const requestBy = get(`bmp_${i}_request`);
-              const isRefRequest = requestBy?.toLowerCase()?.includes('ref');
-
-              // Outcome selector values
-              // Team-requested BMPs: SUC, UNSUC, MUNAV
-              // Referee-requested BMPs: A, B
-              const teamOutcomes = ['', 'UNSUC', 'SUC', 'MUNAV'];
-              const refOutcomes = ['', 'A', 'B'];
-              const outcomes = isRefRequest ? refOutcomes : teamOutcomes;
-
-              return (
-                <div key={i} className={`flex text-[9px] flex-1 min-h-0 ${i < 15 ? 'border-b border-black' : ''}`}>
-                  <div style={cellStyle} className="border-r border-black">
-                    <Input value={get(`bmp_${i}_start`)} onChange={v => set(`bmp_${i}_start`, v)} className="w-full h-full text-[9px]" />
-                  </div>
-                  <div style={cellStyle} className="border-r border-black">
-                    <Input value={get(`bmp_${i}_set`)} onChange={v => set(`bmp_${i}_set`, v)} className="w-full h-full text-[9px]" />
-                  </div>
-                  <div style={cellStyle} className="border-r border-black">
-                    <Input value={get(`bmp_${i}_score_a`)} onChange={v => set(`bmp_${i}_score_a`, v)} className="w-8 text-[9px] text-center" />
-                    <span className="mx-0.5 text-[9px]">:</span>
-                    <Input value={get(`bmp_${i}_score_b`)} onChange={v => set(`bmp_${i}_score_b`, v)} className="w-8 text-[9px] text-center" />
-                  </div>
-                  <div style={cellStyle} className="border-r border-black">
-                    <Input value={get(`bmp_${i}_serving_before`)} onChange={v => set(`bmp_${i}_serving_before`, v)} className="w-full h-full text-[9px] text-center" />
-                  </div>
-                  <div style={cellStyle} className="border-r border-black">
-                    <Input value={get(`bmp_${i}_request`)} onChange={v => set(`bmp_${i}_request`, v)} className="w-full h-full text-[9px]" />
-                  </div>
-                  <div style={cellStyle} className="border-r border-black px-1">
-                    <div
-                      onClick={() => {
-                        const currentIndex = outcomes.indexOf(outcomeValue || '');
-                        const nextIndex = (currentIndex + 1) % outcomes.length;
-                        set(`bmp_${i}_outcome`, outcomes[nextIndex]);
-                      }}
-                      className="border border-black flex items-center justify-center cursor-pointer bg-white hover:bg-gray-50 select-none text-black font-mono text-[9px] w-full h-5 px-0.5"
-                    >
-                      {outcomeValue || '-'}
+                {/* EVENT INFO */}
+                <div className="border-2 border-black mb-2">
+                  <div className="flex border-b border-black">
+                    <div className="flex items-center px-2 py-1 flex-1 border-r border-black">
+                      <span className="font-bold mr-2 text-[10px]">EVENT:</span>
+                      <Input value={get('bmp_event')} onChange={v => set('bmp_event', v)} className="flex-1 text-left text-[10px]" />
+                    </div>
+                    <div className="flex items-center px-2 py-1 w-36">
+                      <span className="font-bold mr-2 text-[10px]">DATE:</span>
+                      <Input value={get('bmp_date')} onChange={v => set('bmp_date', v)} className="flex-1 text-center text-[10px]" />
                     </div>
                   </div>
-                  <div style={cellStyle} className="border-r border-black">
-                    <Input value={get(`bmp_${i}_serving_after`)} onChange={v => set(`bmp_${i}_serving_after`, v)} className="w-full h-full text-[9px] text-center" />
-                  </div>
-                  <div style={cellStyle} className="border-r border-black">
-                    <Input value={get(`bmp_${i}_score2_a`)} onChange={v => set(`bmp_${i}_score2_a`, v)} className="w-8 text-[9px] text-center" />
-                    <span className="mx-0.5 text-[9px]">:</span>
-                    <Input value={get(`bmp_${i}_score2_b`)} onChange={v => set(`bmp_${i}_score2_b`, v)} className="w-8 text-[9px] text-center" />
-                  </div>
-                  <div style={cellStyle} className="border-r border-black">
-                    <Input value={get(`bmp_${i}_resumed`)} onChange={v => set(`bmp_${i}_resumed`, v)} className="w-full h-full text-[9px]" />
-                  </div>
-                  <div style={cellStyle}>
-                    <Input value={get(`bmp_${i}_duration`)} onChange={v => set(`bmp_${i}_duration`, v)} className="w-full h-full text-[9px]" />
+
+                  <div className="flex text-[10px]">
+                    <div className="flex items-center px-2 py-1 border-r border-black">
+                      <span className="font-bold mr-1">MATCH NO:</span>
+                      <Input value={get('bmp_match_no')} onChange={v => set('bmp_match_no', v)} className="w-12 text-center text-[10px]" />
+                    </div>
+                    <div className="flex items-center px-2 py-1 border-r border-black">
+                      <span className="font-bold mr-1">PHASE:</span>
+                      <Input value={get('bmp_phase')} onChange={v => set('bmp_phase', v)} className="w-16 text-center text-[10px]" />
+                    </div>
+                    <div className="flex items-center px-2 py-1 border-r border-black">
+                      <span className="font-bold mr-1">GENDER:</span>
+                      <Input value={get('bmp_gender')} onChange={v => set('bmp_gender', v)} className="w-10 text-center text-[10px]" />
+                    </div>
+                    <div className="flex items-center px-2 py-1 border-r border-black flex-1">
+                      <span className="font-bold mr-1">TEAM A:</span>
+                      <Input value={get('bmp_team_a')} onChange={v => set('bmp_team_a', v)} className="flex-1 text-center text-[10px]" />
+                    </div>
+                    <div className="flex items-center px-2 py-1 flex-1">
+                      <span className="font-bold mr-1">TEAM B:</span>
+                      <Input value={get('bmp_team_b')} onChange={v => set('bmp_team_b', v)} className="flex-1 text-center text-[10px]" />
+                    </div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
 
-        {/* SIGNATURES */}
-        <div className="flex gap-4 mt-2" style={{ flexShrink: 0 }}>
-          <div className="flex-1 border-2 border-black">
-            <div className="bg-gray-100 border-b border-black px-2 py-1 font-bold text-[9px]">Scorer's signature</div>
-            <div className="h-8 p-1">
-              <Input value={get('bmp_scorer_sig')} onChange={v => set('bmp_scorer_sig', v)} className="w-full h-full text-left text-[10px]" />
-            </div>
-          </div>
-          <div className="flex-1 border-2 border-black">
-            <div className="bg-gray-100 border-b border-black px-2 py-1 font-bold text-[9px]">First Referee's signature</div>
-            <div className="h-8 p-1">
-              <Input value={get('bmp_ref_sig')} onChange={v => set('bmp_ref_sig', v)} className="w-full h-full text-left text-[10px]" />
-            </div>
-          </div>
-        </div>
-      </div>
+                {/* SECTION TITLE */}
+                <div className="bg-gray-100 border-2 border-black px-2 py-1 text-center font-bold text-[10px]">
+                  During the match
+                </div>
+
+                {/* BMP TABLE - Takes remaining space */}
+                <div className="border-2 border-t-0 border-black flex-1 flex flex-col" style={{ minHeight: 0 }}>
+                  {/* Header - 10 equal columns */}
+                  <div className="flex bg-gray-50 border-b-2 border-black text-[8px] font-bold" style={{ flexShrink: 0 }}>
+                    <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
+                      <div className="text-center leading-tight">Start<br />time</div>
+                    </div>
+                    <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
+                      Set
+                    </div>
+                    <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
+                      <div className="text-center leading-tight">Score at time<br />of BMP request</div>
+                    </div>
+                    <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
+                      <div className="text-center leading-tight">Team serving<br />(at time of request)</div>
+                    </div>
+                    <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
+                      <div className="text-center leading-tight">Request by<br />(A / B / Ref)</div>
+                    </div>
+                    <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
+                      <div className="text-center leading-tight">BMP request<br />Outcome</div>
+                    </div>
+                    <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
+                      <div className="text-center leading-tight">Team serving<br />(after decision)</div>
+                    </div>
+                    <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
+                      <div className="text-center leading-tight">Score after<br />decision</div>
+                    </div>
+                    <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="border-r border-black py-2">
+                      <div className="text-center leading-tight">Time match<br />resumed</div>
+                    </div>
+                    <div style={{ width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="py-2">
+                      Duration
+                    </div>
+                  </div>
+
+                  {/* Rows - 16 rows per page */}
+                  <div className="flex-1 flex flex-col" style={{ minHeight: 0, overflow: 'hidden' }}>
+                    {Array.from({ length: 16 }).map((_, rowIndex) => {
+                      const i = startRow + rowIndex;
+                      const cellStyle = { width: '10%', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+                      const outcomeValue = get(`bmp_${i}_outcome`);
+                      const requestBy = get(`bmp_${i}_request`);
+                      const isRefRequest = requestBy?.toLowerCase()?.includes('ref');
+
+                      // Outcome selector values
+                      // Team-requested BMPs: SUC, UNSUC, MUNAV
+                      // Referee-requested BMPs: IN, OUT
+                      const teamOutcomes = ['', 'UNSUC', 'SUC', 'MUNAV'];
+                      const refOutcomes = ['', 'IN', 'OUT'];
+                      const outcomes = isRefRequest ? refOutcomes : teamOutcomes;
+
+                      return (
+                        <div key={i} className={`flex text-[9px] flex-1 min-h-0 ${rowIndex < 15 ? 'border-b border-black' : ''}`}>
+                          <div style={cellStyle} className="border-r border-black">
+                            <Input value={get(`bmp_${i}_start`)} onChange={v => set(`bmp_${i}_start`, v)} className="w-full h-full text-[9px]" />
+                          </div>
+                          <div style={cellStyle} className="border-r border-black">
+                            <Input value={get(`bmp_${i}_set`)} onChange={v => set(`bmp_${i}_set`, v)} className="w-full h-full text-[9px]" />
+                          </div>
+                          <div style={cellStyle} className="border-r border-black">
+                            <Input value={get(`bmp_${i}_score_a`)} onChange={v => set(`bmp_${i}_score_a`, v)} className="w-8 text-[9px] text-center" />
+                            <span className="mx-0.5 text-[9px]">:</span>
+                            <Input value={get(`bmp_${i}_score_b`)} onChange={v => set(`bmp_${i}_score_b`, v)} className="w-8 text-[9px] text-center" />
+                          </div>
+                          <div style={cellStyle} className="border-r border-black">
+                            <Input value={get(`bmp_${i}_serving_before`)} onChange={v => set(`bmp_${i}_serving_before`, v)} className="w-full h-full text-[9px] text-center" />
+                          </div>
+                          <div style={cellStyle} className="border-r border-black">
+                            <Input value={get(`bmp_${i}_request`)} onChange={v => set(`bmp_${i}_request`, v)} className="w-full h-full text-[9px]" />
+                          </div>
+                          <div style={cellStyle} className="border-r border-black px-1">
+                            <div
+                              onClick={() => {
+                                const currentIndex = outcomes.indexOf(outcomeValue || '');
+                                const nextIndex = (currentIndex + 1) % outcomes.length;
+                                set(`bmp_${i}_outcome`, outcomes[nextIndex]);
+                              }}
+                              className="border border-black flex items-center justify-center cursor-pointer bg-white hover:bg-gray-50 select-none text-black font-mono text-[9px] w-full h-5 px-0.5"
+                            >
+                              {outcomeValue || '-'}
+                            </div>
+                          </div>
+                          <div style={cellStyle} className="border-r border-black">
+                            <Input value={get(`bmp_${i}_serving_after`)} onChange={v => set(`bmp_${i}_serving_after`, v)} className="w-full h-full text-[9px] text-center" />
+                          </div>
+                          <div style={cellStyle} className="border-r border-black">
+                            <Input value={get(`bmp_${i}_score2_a`)} onChange={v => set(`bmp_${i}_score2_a`, v)} className="w-8 text-[9px] text-center" />
+                            <span className="mx-0.5 text-[9px]">:</span>
+                            <Input value={get(`bmp_${i}_score2_b`)} onChange={v => set(`bmp_${i}_score2_b`, v)} className="w-8 text-[9px] text-center" />
+                          </div>
+                          <div style={cellStyle} className="border-r border-black">
+                            <Input value={get(`bmp_${i}_resumed`)} onChange={v => set(`bmp_${i}_resumed`, v)} className="w-full h-full text-[9px]" />
+                          </div>
+                          <div style={cellStyle}>
+                            <Input value={get(`bmp_${i}_duration`)} onChange={v => set(`bmp_${i}_duration`, v)} className="w-full h-full text-[9px]" />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* SIGNATURES - only on last page */}
+                {isLastPage && (
+                  <div className="flex gap-4 mt-2" style={{ flexShrink: 0 }}>
+                    <div className="flex-1 border-2 border-black">
+                      <div className="bg-gray-100 border-b border-black px-2 py-1 font-bold text-[9px]">Scorer's signature</div>
+                      <div className="h-8 p-1">
+                        <Input value={get('bmp_scorer_sig')} onChange={v => set('bmp_scorer_sig', v)} className="w-full h-full text-left text-[10px]" />
+                      </div>
+                    </div>
+                    <div className="flex-1 border-2 border-black">
+                      <div className="bg-gray-100 border-b border-black px-2 py-1 font-bold text-[9px]">First Referee's signature</div>
+                      <div className="h-8 p-1">
+                        <Input value={get('bmp_ref_sig')} onChange={v => set('bmp_ref_sig', v)} className="w-full h-full text-left text-[10px]" />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </React.Fragment>
+          );
+        });
+      })()}
     </div>
   );
 }
