@@ -10201,12 +10201,12 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           textAlign: 'center',
                           color: isBrightColor(leftTeamColor) ? '#000' : '#fff'
                         }}>
-                          <div style={{ fontSize: '18px', fontWeight: 700, lineHeight: 1.2 }}>{leftTeamLabel}</div>
+                          <div style={{ fontSize: '4vmin', fontWeight: 700, lineHeight: 1.2 }}>{leftTeamLabel}</div>
                           {playerNames && (
-                            <div style={{ fontSize: '10px', fontWeight: 600, marginTop: '2px', lineHeight: 1.2, wordBreak: 'break-word' }}>{playerNames}</div>
+                            <div style={{ fontSize: '2vmin', fontWeight: 600, marginTop: '2px', lineHeight: 1.2, wordBreak: 'break-word' }}>{playerNames}</div>
                           )}
                           {leftCountry && (
-                            <div style={{ fontSize: '9px', fontWeight: 500, marginTop: '2px', opacity: 0.9 }}>{leftCountry}</div>
+                            <div style={{ fontSize: '2vmin', fontWeight: 500, marginTop: '2px', opacity: 0.9 }}>{leftCountry}</div>
                           )}
                         </div>
                       )
@@ -10239,7 +10239,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           onClick={() => handleTimeout(leftTeamKey)}
                           disabled={isRallyOngoing || toUsed >= 1}
                           style={{
-                            width: '48px',
+                            width: 'auto',
                             height: '48px',
                             fontSize: '14px',
                             fontWeight: 700,
@@ -10248,10 +10248,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                             border: `2px solid ${borderColor}`,
                             borderRadius: '6px',
                             cursor: (isRallyOngoing || toUsed >= 1) ? 'not-allowed' : 'pointer',
-                            padding: 0
+                            padding: '6px'
                           }}
                           title="Time-out"
-                        >{toUsed >= 1 ? '1' : 'TO'}</button>
+                        >{toUsed >= 1 ? '1' : 'Time-Out'}</button>
                       )
                     })()}
                     {/* Improper Request - gray, full width */}
@@ -10260,7 +10260,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                       style={{
                         width: '100%',
                         height: '28px',
-                        fontSize: '9px',
+                        fontSize: '2vmin',
                         fontWeight: 600,
                         background: 'rgba(156, 163, 175, 0.2)',
                         color: '#9ca3af',
@@ -10283,7 +10283,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                             style={{
                               width: '100%',
                               height: '28px',
-                              fontSize: '9px',
+                              fontSize: '2vmin',
                               fontWeight: 600,
                               background: 'rgba(239, 68, 68, 0.2)',
                               color: '#ef4444',
@@ -10303,7 +10303,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                             style={{
                               width: '100%',
                               height: '28px',
-                              fontSize: '9px',
+                              fontSize: '2vmin',
                               fontWeight: 600,
                               background: 'rgba(234, 179, 8, 0.2)',
                               color: '#eab308',
@@ -10332,13 +10332,13 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
 
                       return (
                         <div style={{ width: '100%' }}>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '2vmin' }}>
                             <thead>
                               <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
-                                <th style={{ padding: '2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>Set</th>
-                                <th style={{ padding: '2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>P</th>
-                                <th style={{ padding: '2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>W</th>
-                                <th style={{ padding: '2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>T</th>
+                                <th style={{ padding: '2px', textAlign: 'center', fontWeight: 600, fontSize: '2vmin' }}>Set</th>
+                                <th style={{ padding: '2px', textAlign: 'center', fontWeight: 600, fontSize: '2vmin' }}>P</th>
+                                <th style={{ padding: '2px', textAlign: 'center', fontWeight: 600, fontSize: '2vmin' }}>W</th>
+                                <th style={{ padding: '2px', textAlign: 'center', fontWeight: 600, fontSize: '2vmin' }}>T</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -11214,12 +11214,12 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           textAlign: 'center',
                           color: isBrightColor(rightTeamColor) ? '#000' : '#fff'
                         }}>
-                          <div style={{ fontSize: '18px', fontWeight: 700, lineHeight: 1.2 }}>{rightTeamLabel}</div>
+                          <div style={{ fontSize: '4vmin', fontWeight: 700, lineHeight: 1.2 }}>{rightTeamLabel}</div>
                           {playerNames && (
-                            <div style={{ fontSize: '10px', fontWeight: 600, marginTop: '2px', lineHeight: 1.2, wordBreak: 'break-word' }}>{playerNames}</div>
+                            <div style={{ fontSize: '2vmin', fontWeight: 600, marginTop: '2px', lineHeight: 1.2, wordBreak: 'break-word' }}>{playerNames}</div>
                           )}
                           {rightCountry && (
-                            <div style={{ fontSize: '9px', fontWeight: 500, marginTop: '2px', opacity: 0.9 }}>{rightCountry}</div>
+                            <div style={{ fontSize: '2vmin', fontWeight: 500, marginTop: '2px', opacity: 0.9 }}>{rightCountry}</div>
                           )}
                         </div>
                       )
@@ -11252,7 +11252,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           onClick={() => handleTimeout(rightTeamKey)}
                           disabled={isRallyOngoing || toUsed >= 1}
                           style={{
-                            width: '48px',
+                            width: 'auto',
                             height: '48px',
                             fontSize: '14px',
                             fontWeight: 700,
@@ -11261,10 +11261,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                             border: `2px solid ${borderColor}`,
                             borderRadius: '6px',
                             cursor: (isRallyOngoing || toUsed >= 1) ? 'not-allowed' : 'pointer',
-                            padding: 0
+                            padding: '6px'
                           }}
                           title="Time-out"
-                        >{toUsed >= 1 ? '1' : 'TO'}</button>
+                        >{toUsed >= 1 ? '1' : 'Time-Out'}</button>
                       )
                     })()}
                     {/* Improper Request - gray, full width */}
@@ -11273,7 +11273,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                       style={{
                         width: '100%',
                         height: '28px',
-                        fontSize: '9px',
+                        fontSize: '2vmin',
                         fontWeight: 600,
                         background: 'rgba(156, 163, 175, 0.2)',
                         color: '#9ca3af',
@@ -11296,7 +11296,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                             style={{
                               width: '100%',
                               height: '28px',
-                              fontSize: '9px',
+                              fontSize: '2vmin',
                               fontWeight: 600,
                               background: 'rgba(239, 68, 68, 0.2)',
                               color: '#ef4444',
@@ -11316,7 +11316,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                             style={{
                               width: '100%',
                               height: '28px',
-                              fontSize: '9px',
+                              fontSize: '2vmin',
                               fontWeight: 600,
                               background: 'rgba(234, 179, 8, 0.2)',
                               color: '#eab308',
@@ -11345,13 +11345,13 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
 
                       return (
                         <div style={{ width: '100%' }}>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '2vmin' }}>
                             <thead>
                               <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
-                                <th style={{ padding: '2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>Set</th>
-                                <th style={{ padding: '2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>P</th>
-                                <th style={{ padding: '2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>W</th>
-                                <th style={{ padding: '2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>T</th>
+                                <th style={{ padding: '2px', textAlign: 'center', fontWeight: 600, fontSize: '2vmin' }}>Set</th>
+                                <th style={{ padding: '2px', textAlign: 'center', fontWeight: 600, fontSize: '2vmin' }}>P</th>
+                                <th style={{ padding: '2px', textAlign: 'center', fontWeight: 600, fontSize: '2vmin' }}>W</th>
+                                <th style={{ padding: '2px', textAlign: 'center', fontWeight: 600, fontSize: '2vmin' }}>T</th>
                               </tr>
                             </thead>
                             <tbody>
