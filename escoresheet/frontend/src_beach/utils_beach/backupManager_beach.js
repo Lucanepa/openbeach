@@ -947,7 +947,6 @@ export async function importMatchFromSupabase(cloudData) {
           firstName: p.first_name,
           lastName: p.last_name,
           dob: p.dob,
-          libero: p.libero,
           isCaptain: p.is_captain,
           createdAt: new Date().toISOString()
         })
@@ -963,7 +962,6 @@ export async function importMatchFromSupabase(cloudData) {
           firstName: p.first_name,
           lastName: p.last_name,
           dob: p.dob,
-          libero: p.libero,
           isCaptain: p.is_captain,
           createdAt: new Date().toISOString()
         })

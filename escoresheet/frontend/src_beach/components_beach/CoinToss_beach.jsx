@@ -1184,7 +1184,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
             onClick={() => setCoinTossWinner(teamA)}
             style={{
               padding: '6px 12px',
-              marginBottom: isCompact ? 8 : 12,
+              marginBottom: '40px',
               fontSize: '13px',
               fontWeight: 600,
               background: coinTossWinner === teamA ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255, 255, 255, 0.1)',
@@ -1194,7 +1194,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               cursor: 'pointer'
             }}
           >
-            {coinTossWinner === teamA ? 'Toss Won ✓' : 'Toss Won'}
+            {coinTossWinner === teamA ? 'Won Coin Toss ✓' : 'Won Coin Toss'}
           </button>
 
           <div style={{ marginBottom: isCompact ? 12 : 16, display: 'flex', justifyContent: 'center', height: sizes.volleyballSize, alignItems: 'center' }}>
@@ -1252,7 +1252,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
             onClick={() => setCoinTossWinner(teamB)}
             style={{
               padding: '6px 12px',
-              marginBottom: isCompact ? 8 : 12,
+              marginBottom: '40px',
               fontSize: '13px',
               fontWeight: 600,
               background: coinTossWinner === teamB ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255, 255, 255, 0.1)',
@@ -1262,7 +1262,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               cursor: 'pointer'
             }}
           >
-            {coinTossWinner === teamB ? 'Toss Won ✓' : 'Toss Won'}
+            {coinTossWinner === teamB ? 'Won Coin Toss ✓' : 'Won Coin Toss'}
           </button>
 
           <div style={{ marginBottom: isCompact ? 12 : 16, display: 'flex', justifyContent: 'center', height: sizes.volleyballSize, alignItems: 'center' }}>
@@ -1988,7 +1988,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                             cursor: 'pointer'
                           }}
                         >
-                          {p.isCaptain ? '© Captain ✓' : '© Captain'}
+                          {p.isCaptain ? 'Captain ✓' : 'Captain'}
                         </button>
                         <button
                           onClick={() => handleFirstServeToggle(p.number)}

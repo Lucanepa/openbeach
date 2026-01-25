@@ -143,15 +143,11 @@ function DemoButton({ label, color = '#3b82f6', onClick, small = false, disabled
   )
 }
 
-// Interactive Court Visualization
-function CourtDemo({ showLiberoZones = false, animateRotation = false, highlightPosition = null, t }) {
+// Interactive Court Visualization for Beach Volleyball (2v2)
+function CourtDemo({ animateRotation = false, highlightPosition = null, t }) {
   const [positions, setPositions] = useState([
-    { pos: 'IV', number: 4, row: 'front' },
-    { pos: 'III', number: 8, row: 'front' },
-    { pos: 'II', number: 12, row: 'front' },
-    { pos: 'V', number: 6, row: 'back', liberoZone: true },
-    { pos: 'VI', number: 1, row: 'back', liberoZone: true },
-    { pos: 'I', number: 10, row: 'back', liberoZone: true, serve: true }
+    { pos: 'left', number: 1, serve: true },
+    { pos: 'right', number: 2 }
   ])
 
   const [isRotating, setIsRotating] = useState(false)
@@ -162,13 +158,12 @@ function CourtDemo({ showLiberoZones = false, animateRotation = false, highlight
     setTimeout(() => {
       setPositions(prev => {
         const newPositions = [...prev]
+        // Swap positions and toggle serve
         const temp = newPositions[0].number
-        newPositions[0].number = newPositions[3].number
-        newPositions[3].number = newPositions[4].number
-        newPositions[4].number = newPositions[5].number
-        newPositions[5].number = newPositions[2].number
-        newPositions[2].number = newPositions[1].number
+        newPositions[0].number = newPositions[1].number
         newPositions[1].number = temp
+        newPositions[0].serve = !newPositions[0].serve
+        newPositions[1].serve = !newPositions[1].serve
         return newPositions
       })
       setIsRotating(false)
@@ -188,18 +183,16 @@ function CourtDemo({ showLiberoZones = false, animateRotation = false, highlight
       <div style={{ width: 200, height: 4, background: 'linear-gradient(90deg, transparent, #fff, transparent)', borderRadius: 2, opacity: 0.3 }} />
       <div style={{ fontSize: 10, opacity: 0.5, marginBottom: 4 }}>{t('interactiveGuide.demos.net')}</div>
 
-      {/* Court */}
+      {/* Court - 2 players side by side */}
       <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, 60px)',
-        gap: 8,
+        display: 'flex',
+        gap: 16,
         padding: 16,
         background: 'rgba(34, 197, 94, 0.1)',
         border: '2px solid rgba(34, 197, 94, 0.3)',
         borderRadius: 8
       }}>
-        {/* Front row */}
-        {positions.slice(0, 3).map((p, i) => (
+        {positions.map((p) => (
           <div
             key={p.pos}
             style={{
@@ -213,35 +206,7 @@ function CourtDemo({ showLiberoZones = false, animateRotation = false, highlight
               justifyContent: 'center',
               border: '2px solid rgba(255,255,255,0.3)',
               transition: 'all 0.3s',
-              transform: isRotating ? 'scale(0.9)' : 'scale(1)'
-            }}
-          >
-            <span style={{ fontSize: 18, fontWeight: 700 }}>{p.number}</span>
-            <span style={{ fontSize: 10, opacity: 0.6 }}>{p.pos}</span>
-          </div>
-        ))}
-
-        {/* Back row */}
-        {positions.slice(3).map((p, i) => (
-          <div
-            key={p.pos}
-            style={{
-              width: 60,
-              height: 60,
-              borderRadius: '50%',
-              background: showLiberoZones && p.liberoZone
-                ? 'rgba(234, 179, 8, 0.3)'
-                : highlightPosition === p.pos ? '#3b82f6' : 'rgba(255,255,255,0.15)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: showLiberoZones && p.liberoZone
-                ? '2px solid #eab308'
-                : '2px solid rgba(255,255,255,0.3)',
-              transition: 'all 0.3s',
               transform: isRotating ? 'scale(0.9)' : 'scale(1)',
-              animation: showLiberoZones && p.liberoZone ? 'glow 2s infinite' : 'none',
               position: 'relative'
             }}
           >
@@ -268,26 +233,6 @@ function CourtDemo({ showLiberoZones = false, animateRotation = false, highlight
           </div>
         ))}
       </div>
-
-      {/* Labels */}
-      <div style={{ display: 'flex', gap: 20, fontSize: 11, opacity: 0.7, marginTop: 4 }}>
-        <span>{t('interactiveGuide.demos.frontRow')}: II, III, IV</span>
-        <span>|</span>
-        <span>{t('interactiveGuide.demos.backRow')}: I, V, VI</span>
-      </div>
-
-      {showLiberoZones && (
-        <div style={{
-          marginTop: 8,
-          padding: '6px 12px',
-          background: 'rgba(234, 179, 8, 0.2)',
-          borderRadius: 4,
-          fontSize: 12,
-          border: '1px solid rgba(234, 179, 8, 0.3)'
-        }}>
-          {t('interactiveGuide.demos.liberoZoneHint')}
-        </div>
-      )}
 
       {animateRotation && (
         <div style={{ fontSize: 11, opacity: 0.6, marginTop: 4 }}>

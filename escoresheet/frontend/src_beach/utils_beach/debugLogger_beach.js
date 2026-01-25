@@ -147,12 +147,6 @@ export function createStateSnapshot(data) {
     team1OnCourt: currentSet?.team1OnCourt,
     team2OnCourt: currentSet?.team2OnCourt,
 
-    // Libero tracking
-    team1LiberoIn: currentSet?.team1LiberoIn,
-    team2LiberoIn: currentSet?.team2LiberoIn,
-    team1LiberoFor: currentSet?.team1LiberoFor,
-    team2LiberoFor: currentSet?.team2LiberoFor,
-
     // Timeouts
     team1Timeouts: currentSet?.team1Timeouts,
     team2Timeouts: currentSet?.team2Timeouts,

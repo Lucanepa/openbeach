@@ -786,7 +786,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       const subsA = teamAKey === 'team1' ? subsDetails.team1 : subsDetails.team2
       const subsB = teamAKey === 'team1' ? subsDetails.team2 : subsDetails.team1
 
-      // Get lineups - check ALL events that have lineup data (lineup, rotation, libero, substitution, etc.)
+      // Get lineups - check ALL events that have lineup data (lineup, rotation, substitution, etc.)
       const getLineupForTeam = (teamKey) => {
         // Find all events for this team in current set that have lineup data
         const eventsWithLineup = allEvents
@@ -2895,7 +2895,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   // Track which lineups we've already validated (to prevent infinite modal loops)
   const validatedLineupRef = useRef({ team1: null, team2: null })
 
-  // Get players for each team (beach volleyball: no liberos)
+  // Get players for each team
  
   const formatTimestamp = useCallback(date => {
     return date.toLocaleString(undefined, {
@@ -3430,7 +3430,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
               seq: nextSeq,
               test: false,
               created_at: new Date().toISOString(),
-              // Rich lineup format (same as match_live_state) with libero, sub, captain info
+              // Rich lineup format (same as match_live_state) with captain info
               lineup_left: getRichLineupForTeamFresh(leftTeamKey, servingTeam === leftTeamKey),
               lineup_right: getRichLineupForTeamFresh(rightTeamKey, servingTeam === rightTeamKey),
               serve_team: servingTeam,
@@ -5558,7 +5558,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   // OLD UNDO LOGIC REMOVED - The following complex per-event-type logic has been replaced
   // by the snapshot-based undo system above. Keeping this comment for reference.
   // Previously there were ~600 lines of event-specific undo handlers for:
-  // - libero_entry, libero_exit, libero_exchange, libero_redesignation
   // - substitution, timeout, sanction, set_end, rally_start, etc.
   // Now all handled by simply restoring the previous event's stateSnapshot.
 
@@ -5767,7 +5766,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
           e.setIndex === data.set.index &&
           !e.payload?.isInitial &&
           !e.payload?.fromSubstitution &&
-          !e.payload?.liberoSubstitution &&
           (e.seq || 0) > lastEventSeq
         ).sort((a, b) => (a.seq || 0) - (b.seq || 0))
 
@@ -9397,7 +9395,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                   )}
                                 </div>
                               )}
-                              {/* Captain indicator - show C for captain (including libero-captain) */}
+                              {/* Captain indicator */}
                               {player.isCaptain && (() => {
 
                                 return <span className="court-player-captain" style={{
@@ -9529,7 +9527,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                 />
                               )}
                               <span className="court-player-position">{player.position}</span>
-                              {/* Captain indicator - show C for captain (including libero-captain) */}
+                              {/* Captain indicator */}
                               {player.isCaptain && (() => {
                                 return <span className="court-player-captain">C</span>
                               })()}
@@ -9708,7 +9706,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                   )}
                                 </div>
                               )}
-                              {/* Bottom-left indicators: Captain C (including libero-captain) */}
+                              {/* Captain indicator */}
                               {player.isCaptain && (() => {
                                 return <span className="court-player-captain" style={{
                                   bottom: `${-positionOffset}px`,
@@ -12991,8 +12989,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                         if (lineupEvents.length > 1) {
                                           // Delete the most recent lineup (created by the substitution)
                                           const mostRecentLineup = lineupEvents[0]
-                                          // Preserve liberoSubstitution from the lineup we're deleting
-                                          const existingLiberoSub = mostRecentLineup.payload?.liberoSubstitution || null
                                           await db.events.delete(mostRecentLineup.id)
 
                                           // Get the previous lineup and restore it with the original player
@@ -13006,9 +13002,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
 
                                           // Create restored lineup event
                                           const restoredPayload = { team: subTeam, lineup: restoredLineup, fromSubstitution: true }
-                                          if (existingLiberoSub) {
-                                            restoredPayload.liberoSubstitution = existingLiberoSub
-                                          }
                                           await db.events.add({
                                             matchId,
                                             setIndex: subSetIndex,
@@ -13492,10 +13485,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           <option value="substitution" style={{ background: '#1e293b', color: 'var(--text)' }}>Substitution</option>
                           <option value="sanction" style={{ background: '#1e293b', color: 'var(--text)' }}>Sanction</option>
                           <option value="lineup" style={{ background: '#1e293b', color: 'var(--text)' }}>Lineup</option>
-                          <option value="libero_entry" style={{ background: '#1e293b', color: 'var(--text)' }}>Libero Entry</option>
-                          <option value="libero_exit" style={{ background: '#1e293b', color: 'var(--text)' }}>Libero Exit</option>
-                          <option value="libero_substitution" style={{ background: '#1e293b', color: 'var(--text)' }}>Libero Substitution</option>
-                          <option value="libero_unable" style={{ background: '#1e293b', color: 'var(--text)' }}>Libero Unable</option>
                           <option value="replay" style={{ background: '#1e293b', color: 'var(--text)' }}>Replay</option>
                           <option value="rally_start" style={{ background: '#1e293b', color: 'var(--text)' }}>Rally Start</option>
                           <option value="set_start" style={{ background: '#1e293b', color: 'var(--text)' }}>Set Start</option>
@@ -13567,15 +13556,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           } else if (eventType === 'lineup') {
                             payload.lineup = { I: null, II: null, III: null, IV: null, V: null, VI: null }
                             payload.isInitial = true
-                          } else if (eventType === 'libero_entry') {
-                            payload.liberoIn = null
-                            payload.playerOut = null
-                          } else if (eventType === 'libero_exit') {
-                            payload.liberoOut = null
-                            payload.playerIn = null
-                          } else if (eventType === 'libero_unable') {
-                            payload.liberoNumber = null
-                            payload.reason = 'injury'
                           }
 
                           const debugSeq = maxSeq + 1
@@ -13640,11 +13620,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                 eventType === 'substitution' ? `Substitution ${teamLabel}` :
                                   eventType === 'lineup' ? `Lineup ${teamLabel}` :
                                     eventType === 'sanction' ? `Sanction ${teamLabel}` :
-                                      eventType === 'libero_entry' ? `Libero Entry ${teamLabel}` :
-                                        eventType === 'libero_exit' ? `Libero Exit ${teamLabel}` :
-                                          eventType === 'libero_substitution' ? `Libero Sub ${teamLabel}` :
-                                            eventType === 'libero_unable' ? `Libero Unable ${teamLabel}` :
-                                              eventType
+                                      eventType
 
                             return (
                               <div key={event.id} style={{
@@ -17313,8 +17289,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         )
       })()}
 
-{/* REMOVED: liberoRotationModal - beach volleyball doesn't use liberos */}
-
       {undoConfirm && (
         <Modal
           title={t('scoreboard.modals.confirmUndo')}
@@ -18327,7 +18301,7 @@ function LineupModal({ team, teamData, players, matchId, setIndex, mode = 'initi
           </div>
         </div>
 
-        {/* Available players (excluding liberos and disqualified) */}
+        {/* Available players (excluding disqualified) */}
         <div style={{
           marginBottom: '16px',
           padding: '12px',
@@ -18348,9 +18322,6 @@ function LineupModal({ team, teamData, players, matchId, setIndex, mode = 'initi
             gap: '8px'
           }}>
             {players?.filter(p => {
-              // Exclude liberos
-              if (p.libero && p.libero !== '') return false
-
               // Exclude players already in the lineup
               if (lineup.includes(String(p.number))) return false
 
@@ -18605,7 +18576,7 @@ function LineupModal({ team, teamData, players, matchId, setIndex, mode = 'initi
             color: '#ef4444',
             fontSize: '14px'
           }}>
-            {t('scoreboard.lineupModal.validationError', 'Please check: All numbers must exist in roster, not be liberos, and not be duplicated.')}
+            {t('scoreboard.lineupModal.validationError', 'Please check: All numbers must exist in roster and not be duplicated.')}
           </div>
         )}
 

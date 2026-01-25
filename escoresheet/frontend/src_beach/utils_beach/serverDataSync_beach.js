@@ -285,7 +285,7 @@ export async function getMatchData(matchId) {
       let events = []
 
       if (liveState) {
-        // Lineup events contain rich data (captain, libero, subs, sanctions embedded per position)
+        // Lineup events contain rich data (captain, sanctions embedded per position)
         if (liveState.lineup_a) {
           events.push({
             type: 'lineup',
