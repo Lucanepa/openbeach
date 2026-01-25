@@ -2018,7 +2018,7 @@ export default function App() {
       matchToDelete.team1Id ? db.teams.get(matchToDelete.team1Id) : null,
       matchToDelete.team2Id ? db.teams.get(matchToDelete.team2Id) : null
     ])
-    const matchName = `${team1?.name || 'Home'} vs ${team2?.name || 'team2'}`
+    const matchName = `${team1?.name || 'Team 1'} vs ${team2?.name || 'Team 2'}`
 
     setDeletePinInput('')
     setDeletePinError('')
@@ -3413,11 +3413,11 @@ export default function App() {
                     const isDbFormat = d.match?.team1_team || d.liveState
 
                     const team1Name = isDbFormat
-                      ? (d.match?.team1_team?.name || d.match?.team1Name || 'Home')
-                      : (d.team1?.name || d.match?.team1Name || 'Home')
+                      ? (d.match?.team1_team?.name || d.match?.team1Name || 'Team 1')
+                      : (d.team1?.name || d.match?.team1Name || 'Team 1')
                     const team2Name = isDbFormat
-                      ? (d.match?.team2_team?.name || d.match?.team2Name || 'team2')
-                      : (d.team2?.name || d.match?.team2Name || 'team2')
+                      ? (d.match?.team2_team?.name || d.match?.team2Name || 'Team 2')
+                      : (d.team2?.name || d.match?.team2Name || 'Team 2')
 
                     const events = d.events || []
                     const sets = d.sets || []
@@ -3522,7 +3522,7 @@ export default function App() {
                         }}>
                           <div style={{ textAlign: 'center', flex: 1 }}>
                             <div style={{ fontSize: '18px', fontWeight: 700 }}>{team1Name}</div>
-                            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>Home</div>
+                            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>Team 1</div>
                           </div>
                           <div style={{ textAlign: 'center', padding: '0 16px' }}>
                             <div style={{ fontSize: '24px', fontWeight: 700 }}>{team1Points} - {team2Points}</div>
@@ -3530,7 +3530,7 @@ export default function App() {
                           </div>
                           <div style={{ textAlign: 'center', flex: 1 }}>
                             <div style={{ fontSize: '18px', fontWeight: 700 }}>{team2Name}</div>
-                            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>team2</div>
+                            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>Team 2</div>
                           </div>
                         </div>
 

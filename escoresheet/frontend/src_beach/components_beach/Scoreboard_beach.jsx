@@ -296,6 +296,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   const syncFunctionRef = useRef(null) // Store sync function for use in action handlers
   const noSleepVideoRef = useRef(null) // Video element for NoSleep fallback
   const logEventRef = useRef(null) // Store latest logEvent function to avoid circular dependencies
+  const scoresheetWindowRef = useRef(null) // Reference to opened eScoresheet window
 
   // Request wake lock to prevent screen from sleeping
   useEffect(() => {
@@ -3187,6 +3188,47 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     return change
   }, [matchId, data?.match, supabase])
 
+  // Refresh the eScoresheet window with latest data
+  const refreshScoresheet = useCallback(async () => {
+    // Check if scoresheet window is still open
+    if (!scoresheetWindowRef.current || scoresheetWindowRef.current.closed) {
+      return
+    }
+
+    try {
+      // Fetch fresh data from IndexedDB
+      const match = await db.matches.get(matchId)
+      if (!match) return
+
+      const team1TeamId = match?.team1Id || match?.team1TeamId
+      const team2TeamId = match?.team2Id || match?.team2TeamId
+      const [team1Team, team2Team, team1Players, team2Players, sets, events] = await Promise.all([
+        team1TeamId ? db.teams.get(team1TeamId) : null,
+        team2TeamId ? db.teams.get(team2TeamId) : null,
+        team1TeamId ? db.players.where('teamId').equals(team1TeamId).toArray() : [],
+        team2TeamId ? db.players.where('teamId').equals(team2TeamId).toArray() : [],
+        db.sets.where('matchId').equals(matchId).toArray(),
+        db.events.where('matchId').equals(matchId).toArray()
+      ])
+
+      const scoresheetData = {
+        match,
+        team1Team,
+        team2Team,
+        team1Players,
+        team2Players,
+        sets,
+        events
+      }
+
+      // Update sessionStorage and send refresh message
+      sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
+      scoresheetWindowRef.current.postMessage({ type: 'REFRESH_SCORESHEET' }, '*')
+    } catch (err) {
+      console.error('[refreshScoresheet] Error:', err)
+    }
+  }, [matchId])
+
   const logEvent = useCallback(
     async (type, payload = {}, options = {}) => {
       const _t0 = performance.now()
@@ -3484,6 +3526,9 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
           triggerContinuousBackup(matchId, () => exportMatchData(matchId), gameNum)
         }
 
+        // Refresh eScoresheet if open
+        refreshScoresheet()
+
         // Return the sequence number so it can be used for related events
         return nextSeq
       } finally {
@@ -3493,7 +3538,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         }
       }
     },
-    [data?.set, matchId, getNextSeq, getNextSubSeq, captureFullStateSnapshot, syncToReferee, syncLiveStateToSupabase]
+    [data?.set, matchId, getNextSeq, getNextSubSeq, captureFullStateSnapshot, syncToReferee, syncLiveStateToSupabase, refreshScoresheet]
   )
 
   // Keep logEventRef updated with latest function to avoid circular dependencies
@@ -4139,13 +4184,22 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       return
     }
 
+    // Get current serving team and player
+    const servingTeam = getCurrentServe()
+    const servingTeamKey = servingTeam
+    const teamLineup = servingTeamKey === 'team1'
+      ? (leftisTeam1 ? leftTeam : rightTeam)
+      : (leftisTeam1 ? rightTeam : leftTeam)
+    const servingPlayer = getServingPlayer(servingTeamKey, teamLineup)
+    const serverNumber = servingPlayer?.number || null
+
     await logEvent('rally_start', {
-      servingTeam: data.servingTeam,
-      servingPlayerNumber: data.serverNumber
+      servingTeam: servingTeam,
+      servingPlayerNumber: serverNumber
     })
     // Track when rally started (for accidental point award check)
     rallyStartTimeRef.current = Date.now()
-  }, [logEvent, isFirstRally, data?.team1Players, data?.team2Players, data?.events, data?.set, data?.match, matchId, getNextSubSeq, syncToReferee, checkAccidentalRallyStart, accidentalRallyStartDuration, data?.servingTeam, data?.serverNumber])
+  }, [logEvent, isFirstRally, data?.team1Players, data?.team2Players, data?.events, data?.set, data?.match, matchId, getNextSubSeq, syncToReferee, checkAccidentalRallyStart, accidentalRallyStartDuration, getCurrentServe, getServingPlayer, leftisTeam1, leftTeam, rightTeam])
 
   const handleReplay = useCallback(async () => {
     // During rally: just log replay event (no point to undo)
@@ -4333,14 +4387,23 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     onTriggerEventBackup?.('set_start')
 
     // Now actually start the rally
+    // Get current serving team and player
+    const servingTeam = getCurrentServe()
+    const servingTeamKey = servingTeam
+    const teamLineup = servingTeamKey === 'team1'
+      ? (leftisTeam1 ? leftTeam : rightTeam)
+      : (leftisTeam1 ? rightTeam : leftTeam)
+    const servingPlayer = getServingPlayer(servingTeamKey, teamLineup)
+    const serverNumber = servingPlayer?.number || null
+
     const rallyStartStateBefore = getStateSnapshot()
     await db.events.add({
       matchId,
       setIndex: data.set.index,
       type: 'rally_start',
       payload: {
-        servingTeam: data.servingTeam,
-        servingPlayerNumber: data.serverNumber
+        servingTeam: servingTeam,
+        servingPlayerNumber: serverNumber
       },
       ts: new Date().toISOString(),
       seq: nextSeq2,
@@ -4354,7 +4417,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     if (timeDifferent) {
       setShowRemarks(true)
     }
-  }, [setStartTimeModal, data?.set, data?.servingTeam, data?.serverNumber, matchId, onTriggerEventBackup, syncToReferee])
+  }, [setStartTimeModal, data?.set, matchId, onTriggerEventBackup, syncToReferee, getCurrentServe, getServingPlayer, leftisTeam1, leftTeam, rightTeam])
 
   // Confirm set end time
   const confirmSetEndTime = useCallback(async (time) => {
@@ -5552,8 +5615,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       // Sync to Referee and Supabase after undo
       syncToReferee()
       syncLiveStateToSupabase('undo', null, null)
+      // Refresh eScoresheet if open
+      refreshScoresheet()
     }
-  }, [undoConfirm, data?.set, matchId, restoreStateFromSnapshot, syncToReferee, syncLiveStateToSupabase])
+  }, [undoConfirm, data?.set, matchId, restoreStateFromSnapshot, syncToReferee, syncLiveStateToSupabase, refreshScoresheet])
 
   // OLD UNDO LOGIC REMOVED - The following complex per-event-type logic has been replaced
   // by the snapshot-based undo system above. Keeping this comment for reference.
@@ -5693,8 +5758,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       // Error during replay - silently handle
     } finally {
       setReplayRallyConfirm(null)
+      // Refresh eScoresheet if open
+      refreshScoresheet()
     }
-  }, [replayRallyConfirm, data?.events, data?.set, data?.match, matchId, getNextSeq, syncLiveStateToSupabase])
+  }, [replayRallyConfirm, data?.events, data?.set, data?.match, matchId, getNextSeq, syncLiveStateToSupabase, refreshScoresheet])
 
   const cancelReplayRally = useCallback(() => {
     setReplayRallyConfirm(null)
@@ -7874,6 +7941,9 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                       showAlert(t('header.allowPopups'), 'warning')
                       return
                     }
+
+                    // Store reference for live updates
+                    scoresheetWindowRef.current = scoresheetWindow
 
                     const errorListener = (event) => {
                       if (event.data && event.data.type === 'SCORESHEET_ERROR') {

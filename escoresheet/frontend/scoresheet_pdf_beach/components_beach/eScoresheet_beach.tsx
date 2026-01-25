@@ -132,10 +132,11 @@ const PointCell = ({ num, value, onClick }: { num: number, value: string, onClic
   </div>
 );
 
-export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) {
+export default function OpenbeachScoresheet({ matchData: initialMatchData }: { matchData?: any }) {
   const [data, setData] = useState<Record<string, any>>({});
   const dataRef = useRef<Record<string, any>>({});
-  const [dataInitialized, setDataInitialized] = useState(false);
+  const [currentMatchData, setCurrentMatchData] = useState<any>(initialMatchData);
+  const [dataVersion, setDataVersion] = useState(0); // Increment to trigger re-initialization
   const page1Ref = useRef<HTMLDivElement>(null);
   const page2Ref = useRef<HTMLDivElement>(null);
   const page3Ref = useRef<HTMLDivElement>(null);
@@ -155,11 +156,11 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           const dataStr = sessionStorage.getItem('scoresheetData');
           if (dataStr) {
             const newMatchData = JSON.parse(dataStr);
-            // Reset initialization flag to allow re-initialization
-            setDataInitialized(false);
-            // Force re-render by updating matchData prop (we'll use a key or state)
-            // Since we can't change props, we'll reload the page instead
-            window.location.reload();
+            // Reset data and update matchData to trigger re-initialization
+            dataRef.current = {};
+            setData({});
+            setCurrentMatchData(newMatchData);
+            setDataVersion(v => v + 1); // Trigger re-initialization
           }
         } catch (error) {
           console.error('Error refreshing scoresheet data:', error);
@@ -173,21 +174,18 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
     };
   }, []);
 
-  // Initialize data from matchData
+  // Initialize data from currentMatchData (updates on refresh)
   useEffect(() => {
 
-    // Initialize if matchData exists
-    if (matchData && !dataInitialized) {
-      // Reset dataRef
-      dataRef.current = {};
-
+    // Initialize if currentMatchData exists
+    if (currentMatchData) {
       // Handle both team1Players/team2Players and team_1Players/team_2Players formats
-      const team1Players = matchData.team1Players || matchData.team_1Players || [];
-      const team2Players = matchData.team2Players || matchData.team_2Players || [];
-      const team1Team = matchData.team1Team || matchData.team_1Team;
-      const team2Team = matchData.team2Team || matchData.team_2Team;
-      const { match, sets, events } = matchData;
-      
+      const team1Players = currentMatchData.team1Players || currentMatchData.team_1Players || [];
+      const team2Players = currentMatchData.team2Players || currentMatchData.team_2Players || [];
+      const team1Team = currentMatchData.team1Team || currentMatchData.team_1Team;
+      const team2Team = currentMatchData.team2Team || currentMatchData.team_2Team;
+      const { match, sets, events } = currentMatchData;
+
       console.log('[Scoresheet Component] Received matchData:', {
         hasMatch: !!match,
         hasTeam1Team: !!team1Team,
@@ -196,7 +194,8 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         team2PlayersCount: team2Players?.length || 0,
         setsCount: sets?.length || 0,
         eventsCount: events?.length || 0,
-        matchDataKeys: Object.keys(matchData || {}),
+        matchDataKeys: Object.keys(currentMatchData || {}),
+        dataVersion,
         match: match ? {
           id: match.id,
           coinTossTeamA: match.coinTossTeamA,
@@ -227,7 +226,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           lastName: p.lastName,
           isCaptain: p.isCaptain
         })) || [],
-        rawMatchData: matchData // Include full raw data for inspection
+        rawMatchData: currentMatchData // Include full raw data for inspection
       });
 
       if (match) {
@@ -1726,10 +1725,9 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
 
           // Find first rally_start to determine initial service order
           const firstRallyStart = setEvents.find((e: any) => e.type === 'rally_start');
-          if (firstRallyStart && setData?.serviceOrder) {
+          if (firstRallyStart && serviceOrder && Object.keys(serviceOrder).length > 0) {
             const servingTeamFromEvent = firstRallyStart.payload?.servingTeam;
             const servingPlayerNumber = firstRallyStart.payload?.servingPlayerNumber;
-            const serviceOrder = setData.serviceOrder;
             const teamKey = servingTeamFromEvent === teamAKey ? teamAKey : teamBKey;
 
             // Determine which player this is (player1 or player2)
@@ -1842,7 +1840,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
 
               // Service rotation tracking: when serving team loses point, record score and rotate
               // currentServiceOrder is already updated from rally_start events, so use it directly
-              if (servingTeamLostPoint && servingTeam && setData?.serviceOrder && currentServiceOrder !== null) {
+              if (servingTeamLostPoint && servingTeam && serviceOrder && Object.keys(serviceOrder).length > 0 && currentServiceOrder !== null) {
                 const currentRowKey = orderToRow[currentServiceOrder];
                 if (currentRowKey && serviceRotationColumn[currentRowKey] !== undefined) {
                   // Record the score of the team that lost service (at the time they lost it)
@@ -1865,9 +1863,8 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
               const servingTeamFromEvent = event.payload?.servingTeam;
               const servingPlayerNumber = event.payload?.servingPlayerNumber;
 
-              if (servingPlayerNumber && setData?.serviceOrder) {
+              if (servingPlayerNumber && serviceOrder && Object.keys(serviceOrder).length > 0) {
                 // Find which service order this player has
-                const serviceOrder = setData.serviceOrder;
                 const teamKey = servingTeamFromEvent === teamAKey ? teamAKey : teamBKey;
 
                 // Determine which player this is (player1 or player2)
@@ -2176,10 +2173,10 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
             if (setNum === 1) {
               console.log(`[DEBUG] Set 1 - lastRallyStart:`, lastRallyStart);
               console.log(`[DEBUG] Set 1 - lastRallyStart?.payload?.servingTeam:`, lastRallyStart?.payload?.servingTeam);
-              console.log(`[DEBUG] Set 1 - setData?.serviceOrder:`, setData?.serviceOrder);
+              console.log(`[DEBUG] Set 1 - serviceOrder:`, serviceOrder);
             }
 
-            if (lastRallyStart && lastRallyStart.payload?.servingTeam && setData?.serviceOrder) {
+            if (lastRallyStart && lastRallyStart.payload?.servingTeam && serviceOrder && Object.keys(serviceOrder).length > 0) {
               const servingTeamAtEnd = lastRallyStart.payload.servingTeam;
               // Check both servingPlayer and servingPlayerNumber (payload might use either)
               const servingPlayerNumber = lastRallyStart.payload.servingPlayerNumber || lastRallyStart.payload.servingPlayer;
@@ -2195,8 +2192,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
               let servingTeamRowKey: string | null = null;
               let receivingTeamRowKey: string | null = null;
 
-              if (servingPlayerNumber && setData.serviceOrder) {
-                const serviceOrder = setData.serviceOrder;
+              if (servingPlayerNumber && serviceOrder && Object.keys(serviceOrder).length > 0) {
                 // Use team_up/team_down data to find player
                 const teamKey = servingTeamAtEnd;
 
@@ -2244,7 +2240,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
                   }
                 }
               } else if (setNum === 1) {
-                console.log(`[DEBUG] Set 1 - Missing servingPlayerNumber or serviceOrder: servingPlayerNumber=${servingPlayerNumber}, serviceOrder=${!!setData.serviceOrder}`);
+                console.log(`[DEBUG] Set 1 - Missing servingPlayerNumber or serviceOrder: servingPlayerNumber=${servingPlayerNumber}, serviceOrder=${!!(serviceOrder && Object.keys(serviceOrder).length > 0)}`);
               }
 
               if (setNum === 1) {
@@ -2358,7 +2354,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
                 console.log(`[DEBUG] Set 1 - Conditions not met for circling final scores: servingOrderAtEnd=${servingOrderAtEnd}, servingTeamRowKey=${servingTeamRowKey}, receivingTeamRowKey=${receivingTeamRowKey}`);
               }
             } else if (setNum === 1) {
-              console.log(`[DEBUG] Set 1 - Missing lastRallyStart or serviceOrder: lastRallyStart=${!!lastRallyStart}, servingTeam=${!!lastRallyStart?.payload?.servingTeam}, serviceOrder=${!!setData?.serviceOrder}`);
+              console.log(`[DEBUG] Set 1 - Missing lastRallyStart or serviceOrder: lastRallyStart=${!!lastRallyStart}, servingTeam=${!!lastRallyStart?.payload?.servingTeam}, serviceOrder=${!!(serviceOrder && Object.keys(serviceOrder).length > 0)}`);
             }
           }
 
@@ -3089,8 +3085,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         set('remarks', remarksText);
       }
 
-      setDataInitialized(true);
-    } else if (!matchData) {
+    } else if (!currentMatchData) {
       // Try to load from sessionStorage as fallback
       try {
         const dataStr = sessionStorage.getItem('scoresheetData');
@@ -3098,14 +3093,14 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           const fallbackData = JSON.parse(dataStr);
           // Retry initialization with fallback data
           if (fallbackData && fallbackData.match) {
-            // This will be handled by the next render cycle
+            setCurrentMatchData(fallbackData);
           }
         }
       } catch (e) {
         // Error loading fallback data
       }
     }
-  }, [matchData, dataInitialized, data]);
+  }, [currentMatchData, dataVersion]);
 
 
   // Disabled auto-PDF generation - just render HTML for now
@@ -3843,10 +3838,10 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
                 </div>
                 <div className="text-[4px]" style={{ height: '30px' }}>Captain's pre-match signature:</div>
                 {/* Signature image for Team 1 */}
-                {matchData?.match?.team1CaptainSignature && (
+                {currentMatchData?.match?.team1CaptainSignature && (
                   <div className="flex-1 border-white" style={{ maxHeight: '25px', overflow: 'hidden' }}>
                     <img
-                      src={matchData.match.team1CaptainSignature}
+                      src={currentMatchData.match.team1CaptainSignature}
                       alt=""
                       style={{ width: '60px', height: '20px', objectFit: 'contain' }}
                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
@@ -3878,10 +3873,10 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
                 </div>
                 <div className="text-[4px]" style={{ height: '30px' }}>Captain's pre-match signature:</div>
                 {/* Signature image for Team 2 */}
-                {matchData?.match?.team2CaptainSignature && (
+                {currentMatchData?.match?.team2CaptainSignature && (
                   <div className="flex-1 border-white" style={{ maxHeight: '25px', overflow: 'hidden' }}>
                     <img
-                      src={matchData.match.team2CaptainSignature}
+                      src={currentMatchData.match.team2CaptainSignature}
                       alt=""
                       style={{ width: '60px', height: '20px', objectFit: 'contain' }}
                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
