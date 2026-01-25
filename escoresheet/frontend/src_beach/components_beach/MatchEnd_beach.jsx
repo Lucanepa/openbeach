@@ -15,6 +15,7 @@ import { exportLogsAsNDJSON } from '../utils_beach/comprehensiveLogger_beach'
 
 import { sanitizeForFilename } from '../utils_beach/stringUtils_beach'
 import { formatTimeLocal } from '../utils_beach/timeUtils_beach'
+import CountryFlag from './CountryFlag_beach'
 
 // Helper to format duration as hh:mm
 const formatDurationHHMM = (durationStr) => {
@@ -31,7 +32,7 @@ const formatDurationHHMM = (durationStr) => {
 }
 
 // Standard Results component for MatchEnd page
-const ResultsTable = ({ teamAName, teamBName, setResults, matchStart, matchEnd, matchDuration }) => {
+const ResultsTable = ({ teamAName, teamBName, teamACountry, teamBCountry, setResults, matchStart, matchEnd, matchDuration }) => {
   // Calculate winner
   const teamAWins = setResults?.reduce((sum, r) => sum + (r.teamAWon ?? 0), 0) || 0
   const teamBWins = setResults?.reduce((sum, r) => sum + (r.teamBWon ?? 0), 0) || 0
@@ -43,10 +44,12 @@ const ResultsTable = ({ teamAName, teamBName, setResults, matchStart, matchEnd, 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', marginBottom: '4px', flex: 1, minHeight: '40px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px', background: '#f0f0f0', borderRadius: '4px' }}>
           <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: '2px solid #000', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, color: '#000', flexShrink: 0 }}>A</div>
+          {teamACountry && <CountryFlag countryCode={teamACountry} size="sm" />}
           <span style={{ fontWeight: 600, fontSize: '14px', color: '#000' }}>{teamAName}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', padding: '8px', background: '#f0f0f0', borderRadius: '4px' }}>
           <span style={{ fontWeight: 600, fontSize: '14px', color: '#000', textAlign: 'right' }}>{teamBName}</span>
+          {teamBCountry && <CountryFlag countryCode={teamBCountry} size="sm" />}
           <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: '2px solid #000', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, color: '#000', flexShrink: 0 }}>B</div>
         </div>
       </div>
@@ -475,17 +478,6 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
 
         if (payload.playerNumber) {
           playerNr = String(payload.playerNumber)
-        } else if (payload.role) {
-          const roleMap = {
-            'Coach': 'C',
-            'Assistant Coach 1': 'AC1',
-            'Assistant Coach 2': 'AC2',
-            'Physiotherapist': 'P',
-            'Medic': 'M'
-          }
-          playerNr = roleMap[payload.role] || payload.role.charAt(0).toUpperCase()
-        } else if (payload.playerType === 'official') {
-          playerNr = 'C'
         }
 
         if (playerNr) {
@@ -1180,6 +1172,8 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
             <ResultsTable
               teamAName={team1Label === 'A' ? (team1?.name || 'Team A') : (team2?.name || 'Team A')}
               teamBName={team1Label === 'B' ? (team1?.name || 'Team B') : (team2?.name || 'Team B')}
+              teamACountry={team1Label === 'A' ? match?.team1Country : match?.team2Country}
+              teamBCountry={team1Label === 'B' ? match?.team1Country : match?.team2Country}
               setResults={calculateSetResults}
               matchStart={matchStart}
               matchEnd={matchEndTime}
@@ -1482,6 +1476,8 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
               <ResultsTable
                 teamAName={team1Label === 'A' ? (team1?.name || 'Team A') : (team2?.name || 'Team A')}
                 teamBName={team1Label === 'B' ? (team1?.name || 'Team B') : (team2?.name || 'Team B')}
+                teamACountry={team1Label === 'A' ? match?.team1Country : match?.team2Country}
+                teamBCountry={team1Label === 'B' ? match?.team1Country : match?.team2Country}
                 setResults={calculateSetResults}
                 matchStart={matchStart}
                 matchEnd={matchEndTime}

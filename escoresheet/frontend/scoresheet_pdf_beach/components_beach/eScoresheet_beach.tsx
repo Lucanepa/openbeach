@@ -766,8 +766,8 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           const setNum = setIndex;
           if (setNum <= 3) {
             // Set scores - use current scores even if set not finished
-            // IMPORTANT: Use homePoints (team1) and team2Points from actual set data
-            const team1Points = Number(setItem.homePoints) || 0;
+            // IMPORTANT: Use team1Points (team1) and team2Points from actual set data
+            const team1Points = Number(setItem.team1Points) || 0;
             const team2Points = Number(setItem.team2Points) || 0;
 
             // Determine which team is A and which is B
@@ -801,11 +801,11 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         const teamBKey = match?.coinTossTeamB || 'team2';
 
         const totalTeamA = sortedSets.reduce((sum: number, s: any) => {
-          const points = teamAKey === 'team1' ? (Number(s.homePoints) || 0) : (Number(s.team2Points) || 0);
+          const points = teamAKey === 'team1' ? (Number(s.team1Points) || 0) : (Number(s.team2Points) || 0);
           return sum + points;
         }, 0);
         const totalTeamB = sortedSets.reduce((sum: number, s: any) => {
-          const points = teamBKey === 'team1' ? (Number(s.homePoints) || 0) : (Number(s.team2Points) || 0);
+          const points = teamBKey === 'team1' ? (Number(s.team1Points) || 0) : (Number(s.team2Points) || 0);
           return sum + points;
         }, 0);
 
@@ -813,13 +813,13 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
 
         const finishedSets = sortedSets.filter((s: any) => s.finished);
         const totalTeamAWins = finishedSets.filter((s: any) => {
-          const teamAPoints = teamAKey === 'team1' ? (s.homePoints || 0) : (s.team2Points || 0);
-          const teamBPoints = teamBKey === 'team1' ? (s.homePoints || 0) : (s.team2Points || 0);
+          const teamAPoints = teamAKey === 'team1' ? (s.team1Points || 0) : (s.team2Points || 0);
+          const teamBPoints = teamBKey === 'team1' ? (s.team1Points || 0) : (s.team2Points || 0);
           return teamAPoints > teamBPoints;
         }).length;
         const totalTeamBWins = finishedSets.filter((s: any) => {
-          const teamAPoints = teamAKey === 'team1' ? (s.homePoints || 0) : (s.team2Points || 0);
-          const teamBPoints = teamBKey === 'team1' ? (s.homePoints || 0) : (s.team2Points || 0);
+          const teamAPoints = teamAKey === 'team1' ? (s.team1Points || 0) : (s.team2Points || 0);
+          const teamBPoints = teamBKey === 'team1' ? (s.team1Points || 0) : (s.team2Points || 0);
           return teamBPoints > teamAPoints;
         }).length;
 
@@ -866,8 +866,8 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         // Winner - only if match is finished
         // Always show "2": X format (winner always has 2 wins)
         if (finishedSets.length >= 2 && finishedSets.some((s: any) => {
-          const teamAPoints = teamAKey === 'team1' ? (s.homePoints || 0) : (s.team2Points || 0);
-          const teamBPoints = teamBKey === 'team1' ? (s.homePoints || 0) : (s.team2Points || 0);
+          const teamAPoints = teamAKey === 'team1' ? (s.team1Points || 0) : (s.team2Points || 0);
+          const teamBPoints = teamBKey === 'team1' ? (s.team1Points || 0) : (s.team2Points || 0);
           return teamAPoints > teamBPoints;
         })) {
           if (totalTeamAWins > totalTeamBWins) {
@@ -942,7 +942,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         let winnerKey = coinTossData.coinTossWinner;
         if (winnerKey === 'team1') winnerKey = 'team1';
         else if (winnerKey === 'team2') winnerKey = 'team2';
-        else if (winnerKey === 'home') winnerKey = 'team1';
+        else if (winnerKey === 'team1') winnerKey = 'team1';
 
         // Determine if winner is Team A or Team B
         const set1Winner = (winnerKey === teamAKey) ? 'A' : 'B';
@@ -957,7 +957,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
         let set3WinnerKey = coinTossData.set3CoinTossWinner;
         if (set3WinnerKey === 'team1') set3WinnerKey = 'team1';
         else if (set3WinnerKey === 'team2') set3WinnerKey = 'team2';
-        else if (set3WinnerKey === 'home') set3WinnerKey = 'team1';
+        else if (set3WinnerKey === 'team1') set3WinnerKey = 'team1';
 
         // Determine if winner is Team A or Team B
         const set3Winner = (set3WinnerKey === teamAKey) ? 'A' : 'B';
@@ -1117,12 +1117,12 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           let teamAKey = match?.coinTossTeamA || 'team1';
           if (teamAKey === 'team1') teamAKey = 'team1';
           else if (teamAKey === 'team2') teamAKey = 'team2';
-          else if (teamAKey === 'home') teamAKey = 'team1';
+          else if (teamAKey === 'team1') teamAKey = 'team1';
           
           let teamBKey = match?.coinTossTeamB || (teamAKey === 'team1' ? 'team2' : 'team1');
           if (teamBKey === 'team1') teamBKey = 'team1';
           else if (teamBKey === 'team2') teamBKey = 'team2';
-          else if (teamBKey === 'home') teamBKey = 'team1';
+          else if (teamBKey === 'team1') teamBKey = 'team1';
           
           // Ensure teamBKey is the opposite of teamAKey
           if (!teamBKey || teamBKey === teamAKey) {
@@ -1414,7 +1414,7 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
             
             // Helper function to normalize team keys
             const normalizeTeamKey = (key: string): string => {
-              if (key === 'team1' || key === 'home') return 'team1';
+              if (key === 'team1' || key === '') return 'team1';
               if (key === 'team2') return 'team2';
               return key; // Already in correct format or unknown
             };
@@ -2152,13 +2152,13 @@ export default function OpenbeachScoresheet({ matchData }: { matchData?: any }) 
           // After processing all events, if set is finished, circle final scores in service rotation boxes
           if (setData?.finished) {
             if (setNum === 1) {
-              console.log(`[DEBUG] Set 1 - setData.finished: true, homePoints: ${setData.homePoints}, team2Points: ${setData.team2Points}`);
+              console.log(`[DEBUG] Set 1 - setData.finished: true, team1Points: ${setData.team1Points}, team2Points: ${setData.team2Points}`);
               console.log(`[DEBUG] Set 1 - teamUp: ${teamUp}, teamDown: ${teamDown}`);
             }
 
-            // Get final scores using team_up/team_down (homePoints = team1)
-            const finalTeamUpPoints = teamUp === 'team1' ? (setData.homePoints || 0) : (setData.team2Points || 0);
-            const finalTeamDownPoints = teamDown === 'team1' ? (setData.homePoints || 0) : (setData.team2Points || 0);
+            // Get final scores using team_up/team_down (team1Points = team1)
+            const finalTeamUpPoints = teamUp === 'team1' ? (setData.team1Points || 0) : (setData.team2Points || 0);
+            const finalTeamDownPoints = teamDown === 'team1' ? (setData.team1Points || 0) : (setData.team2Points || 0);
 
             if (setNum === 1) {
               console.log(`[DEBUG] Set 1 - finalTeamUpPoints: ${finalTeamUpPoints}, finalTeamDownPoints: ${finalTeamDownPoints}`);

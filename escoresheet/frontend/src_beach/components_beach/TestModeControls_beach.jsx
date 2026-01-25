@@ -100,7 +100,7 @@ export default function TestModeControls({ matchId, onRefresh }) {
 
       // Find current serve from lineup events
       const lineupEvents = currentSetEvents.filter(e => e.type === 'lineup')
-      const lastHomeLineup = lineupEvents.filter(e => e.payload?.team === 'team1').pop()
+      const lastteam1Lineup = lineupEvents.filter(e => e.payload?.team === 'team1').pop()
       const lastteam2Lineup = lineupEvents.filter(e => e.payload?.team === 'team2').pop()
 
       // Rotate serve between teams

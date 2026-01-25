@@ -1,9 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAlert } from '../contexts_beach/AlertContext_beach'
 import { getMatchData } from '../utils_beach/serverDataSync_beach'
 import { useRealtimeConnection } from '../hooks_beach/useRealtimeConnection_beach'
-import { parseRosterPdf } from '../utils_beach/parseRosterPdf_beach'
 import { db } from '../db_beach/db_beach'
 import { supabase } from '../lib_beach/supabaseClient_beach'
 import SignaturePad from './SignaturePad_beach'
@@ -14,23 +13,13 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
   const [players, setPlayers] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [pdfFile, setPdfFile] = useState(null)
-  const [pendingRoster, setPendingRoster] = useState(null) // The actual pending roster data
-  const [showPreview, setShowPreview] = useState(false)
   const [syncing, setSyncing] = useState(false)
-  const [showSuccessModal, setShowSuccessModal] = useState(false)
-  const fileInputRef = useRef(null)
 
-  // Signature states (beach volleyball: captain only, no coach)
-  const [coachSignature, setCoachSignature] = useState(null) // Stub for legacy compatibility
+  // Signature states (beach volleyball: captain only)
   const [captainSignature, setCaptainSignature] = useState(null)
   const [openSignature, setOpenSignature] = useState(null) // 'captain' | null
 
   const [match, setMatch] = useState(matchData)
-
-  // Get pending roster from match data
-  const pendingRosterField = team === 'team1' ? 'pendingTeam1Roster' : 'pendingTeam2Roster'
-  const pendingRosterFieldSnake = team === 'team1' ? 'pending_team1_roster' : 'pending_team2_roster'
   const [teamId, setTeamId] = useState(null)
 
   // Helper to update state from match data result
@@ -111,207 +100,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
     fetchData()
   }, [matchId, updateFromMatchData])
 
-  // Check for pending roster from match data or Supabase
-  useEffect(() => {
-    // Check local match data first
-    if (match) {
-      const pendingData = match[pendingRosterField] || match[pendingRosterFieldSnake]
-      if (pendingData) {
-        setPendingRoster(pendingData)
-      } else {
-        setPendingRoster(null)
-      }
-    }
-
-    // If using Supabase connection, also check Supabase directly
-    if (useSupabaseConnection && supabase && matchData?.external_id) {
-      const checkSupabasePendingRoster = async () => {
-        try {
-          const { data, error } = await supabase
-            .from('matches')
-            .select(pendingRosterFieldSnake)
-            .eq('external_id', matchData.external_id)
-            .single()
-
-          if (!error && data && data[pendingRosterFieldSnake]) {
-            setPendingRoster(data[pendingRosterFieldSnake])
-          }
-        } catch (err) {
-          console.error('[RosterSetup] Error checking Supabase for pending roster:', err)
-        }
-      }
-      checkSupabasePendingRoster()
-
-      // Subscribe to changes
-      const channel = supabase
-        .channel(`roster-${matchData.external_id}-${team}`)
-        .on('postgres_changes', {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'matches',
-          filter: `external_id=eq.${matchData.external_id}`
-        }, (payload) => {
-          const pendingData = payload.new?.[pendingRosterFieldSnake]
-          setPendingRoster(pendingData || null)
-        })
-        .subscribe()
-
-      return () => {
-        supabase.removeChannel(channel)
-      }
-    }
-  }, [match, matchData, useSupabaseConnection, pendingRosterField, pendingRosterFieldSnake, team])
-
-  // Accept pending roster - import players and bench officials
-  const handleAcceptPendingRoster = async () => {
-    if (!pendingRoster) return
-
-    setLoading(true)
-    setError('')
-
-    try {
-      const importedPlayers = pendingRoster.players || []
-      const importedBench = pendingRoster.bench || []
-
-      // Update local state
-      setPlayers(importedPlayers.map(p => ({
-        id: null,
-        number: p.number,
-        firstName: p.firstName || '',
-        lastName: p.lastName || '',
-        dob: p.dob || '',
-        isCaptain: p.isCaptain || false
-      })))
-     
-
-      // Extract signatures from pending roster
-      const importedCoachSignature = pendingRoster.coachSignature || null
-      const importedCaptainSignature = pendingRoster.captainSignature || null
-
-      // Save to database
-      if (teamId && matchId && matchId !== -1 && teamId !== -1) {
-        // Delete existing players
-        const existingPlayers = await db.players.where('teamId').equals(teamId).toArray()
-        for (const ep of existingPlayers) {
-          await db.players.delete(ep.id)
-        }
-
-        // Add imported players
-        if (importedPlayers.length) {
-          await db.players.bulkAdd(
-            importedPlayers.map(p => ({
-              teamId,
-              number: p.number,
-              name: `${p.lastName || ''} ${p.firstName || ''}`.trim(),
-              lastName: p.lastName || '',
-              firstName: p.firstName || '',
-              dob: p.dob || null,
-              isCaptain: !!p.isCaptain,
-              role: null,
-              createdAt: new Date().toISOString()
-            }))
-          )
-        }
-
-        // Update match with bench officials, signatures, and clear pending roster
-        const benchKey = team === 'team1' ? 'bench_team1' : 'bench_team2'
-        const coachSigKey = team === 'team1' ? 'team1CoachSignature' : 'team2CoachSignature'
-        const captainSigKey = team === 'team1' ? 'team1CaptainSignature' : 'team2CaptainSignature'
-
-        const matchUpdate = {
-          [benchKey]: importedBench,
-          [pendingRosterField]: null
-        }
-
-        // Only update signatures if they were provided
-        if (importedCoachSignature) {
-          matchUpdate[coachSigKey] = importedCoachSignature
-        }
-        if (importedCaptainSignature) {
-          matchUpdate[captainSigKey] = importedCaptainSignature
-        }
-
-        await db.matches.update(matchId, matchUpdate)
-      }
-
-      // Clear pending roster and save signatures in Supabase if connected
-      if (useSupabaseConnection && supabase && matchData?.external_id) {
-        // JSONB signature keys
-        const coachSigJsonKey = team === 'team1' ? 'team1_coach' : 'team2_coach'
-        const captainSigJsonKey = team === 'team1' ? 'team1_captain' : 'team2_captain'
-
-        const supabaseUpdate = {
-          [pendingRosterFieldSnake]: null
-        }
-
-        // Build signatures JSONB partial update
-        const signaturesUpdate = {}
-
-        // Only update signatures if they were provided
-        if (importedCoachSignature) {
-          signaturesUpdate[coachSigJsonKey] = importedCoachSignature
-        }
-        if (importedCaptainSignature) {
-          signaturesUpdate[captainSigJsonKey] = importedCaptainSignature
-        }
-
-        // If we have signature updates, merge with existing signatures JSONB
-        if (Object.keys(signaturesUpdate).length > 0) {
-          // First get existing signatures to merge
-          const { data: existingMatch } = await supabase
-            .from('matches')
-            .select('signatures')
-            .eq('external_id', matchData.external_id)
-            .maybeSingle()
-
-          supabaseUpdate.signatures = {
-            ...(existingMatch?.signatures || {}),
-            ...signaturesUpdate
-          }
-        }
-
-        await supabase
-          .from('matches')
-          .update(supabaseUpdate)
-          .eq('external_id', matchData.external_id)
-
-      }
-
-      setPendingRoster(null)
-    } catch (err) {
-      console.error('[RosterSetup] Error accepting pending roster:', err)
-      setError(t('rosterSetup.errorAcceptingRoster'))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Reject pending roster - just clear it
-  const handleRejectPendingRoster = async () => {
-    setLoading(true)
-
-    try {
-      // Clear pending roster locally
-      if (matchId && matchId !== -1) {
-        await db.matches.update(matchId, { [pendingRosterField]: null })
-      }
-
-      // Clear pending roster in Supabase if connected
-      if (useSupabaseConnection && supabase && matchData?.external_id) {
-        await supabase
-          .from('matches')
-          .update({ [pendingRosterFieldSnake]: null })
-          .eq('external_id', matchData.external_id)
-      }
-
-      setPendingRoster(null)
-    } catch (err) {
-      console.error('[RosterSetup] Error rejecting pending roster:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handleAddPlayer = () => {
     const newNumber = players.length > 0 
       ? Math.max(...players.map(p => p.number || 0)) + 1 
@@ -342,96 +130,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
     const updated = [...players]
     updated[index] = { ...updated[index], [field]: value }
     setPlayers(updated)
-  }
-
-
-  const handlePdfUpload = async (file) => {
-    if (!file) {
-      return
-    }
-
-    setLoading(true)
-    setError('')
-    setPdfFile(file)
-
-    try {
-      const parsedData = await parseRosterPdf(file)
-      
-      // Replace all players with imported ones (overwrite mode)
-      const mergedPlayers = parsedData.players.map(parsedPlayer => ({
-        id: null, // New players, will be assigned when saved
-        number: parsedPlayer.number || null,
-        firstName: parsedPlayer.firstName || '',
-        lastName: parsedPlayer.lastName || '',
-        dob: parsedPlayer.dob || '',
-        isCaptain: false
-      }))
-      
-
-      // Replace all players with imported data
-      setPlayers(mergedPlayers)
-      
-      // Prepare bench officials from imported data (will be saved to DB below)
-   
-      // Auto-save to database with overwrite mode (skip in test mode)
-      if (teamId && matchId && matchId !== -1 && teamId !== -1) {
-        // Save immediately with overwrite flag
-        const existingPlayers = await db.players.where('teamId').equals(teamId).toArray()
-        for (const ep of existingPlayers) {
-          await db.players.delete(ep.id)
-        }
-        
-        await db.players.bulkAdd(
-          mergedPlayers.map(p => ({
-            teamId,
-            number: p.number,
-            firstName: p.firstName,
-            lastName: p.lastName,
-            name: `${p.lastName} ${p.firstName}`,
-            dob: p.dob || null,
-            isCaptain: !!p.isCaptain,
-            role: null,
-            createdAt: new Date().toISOString()
-          }))
-        )
-        
-        // Overwrite bench officials in database with imported data
-
-
-      }
-      
-      // Reset file input to allow re-uploading the same file
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
-    } catch (err) {
-      console.error('Error parsing PDF:', err)
-      setError(`Failed to parse PDF: ${err.message}`)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleFileSelect = (e) => {
-    const file = e.target.files[0]
-    if (file) {
-      setPdfFile(file)
-      setError('') // Clear any previous errors
-    }
-  }
-
-  const handleChooseFileClick = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click()
-    }
-  }
-
-  const handleImportClick = async () => {
-    if (pdfFile) {
-      await handlePdfUpload(pdfFile)
-    } else {
-      setError('Please select a PDF file first')
-    }
   }
 
   const handleSave = async (overwrite = false) => {
@@ -512,63 +210,35 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
         )
       }
 
-      // If connected to Supabase, also send roster as pending for scorer approval
+      // If connected to Supabase, also sync roster
       if (useSupabaseConnection && supabase && matchData?.external_id) {
         setSyncing(true)
 
-        const pendingRosterData = {
-          players: players.map(p => ({
-            number: p.number,
-            firstName: p.firstName,
-            lastName: p.lastName,
-            dob: p.dob || '',
-            isCaptain: !!p.isCaptain
-          })),
-          captainSignature: captainSignature || null,
-          timestamp: new Date().toISOString()
-        }
-
-        // Build update object with pending roster and signatures
         // JSONB signature keys
-        const coachSigJsonKey = team === 'team1' ? 'team1_coach' : 'team2_coach'
         const captainSigJsonKey = team === 'team1' ? 'team1_captain' : 'team2_captain'
 
-        const supabaseUpdate = {
-          [pendingRosterFieldSnake]: pendingRosterData
-        }
+        const supabaseUpdate = {}
 
         // Build signatures JSONB partial update
         const signaturesUpdate = {}
-        // Build connections JSONB partial update for pending roster
-        const pendingRosterJsonKey = team === 'team1' ? 'pending_team1_roster' : 'pending_team2_roster'
 
         // Save signatures to JSONB
-        if (coachSignature) {
-          signaturesUpdate[coachSigJsonKey] = coachSignature
-        }
         if (captainSignature) {
           signaturesUpdate[captainSigJsonKey] = captainSignature
         }
 
-        // Merge with existing signatures and connections JSONB
-        const { data: existingMatch } = await supabase
-          .from('matches')
-          .select('signatures, connections')
-          .eq('external_id', matchData.external_id)
-          .maybeSingle()
-
-        // Update signatures JSONB if we have signature updates
+        // Merge with existing signatures JSONB
         if (Object.keys(signaturesUpdate).length > 0) {
+          const { data: existingMatch } = await supabase
+            .from('matches')
+            .select('signatures')
+            .eq('external_id', matchData.external_id)
+            .maybeSingle()
+
           supabaseUpdate.signatures = {
             ...(existingMatch?.signatures || {}),
             ...signaturesUpdate
           }
-        }
-
-        // Always update connections JSONB with pending roster
-        supabaseUpdate.connections = {
-          ...(existingMatch?.connections || {}),
-          [pendingRosterJsonKey]: pendingRosterData
         }
 
         const { error: supabaseError } = await supabase
@@ -580,10 +250,8 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
 
         if (supabaseError) {
           console.error('[RosterSetup] Failed to sync roster to Supabase:', supabaseError)
-          showAlert(t('rosterSetup.rosterSaved'), 'success')
-        } else {
-          setShowSuccessModal(true)
         }
+        showAlert(t('rosterSetup.rosterSaved'), 'success')
       } else {
         showAlert(t('rosterSetup.rosterSaved'), 'success')
       }
@@ -617,7 +285,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
           marginBottom: '30px'
         }}>
           <h1 style={{ fontSize: '28px', fontWeight: 700, margin: 0 }}>
-            {t('rosterSetup.title')} — {team === 'team1' ? (match?.team1Name || t('Home')) : (match?.team2Name || t('common.team2'))}
+            {t('rosterSetup.title')} — {team === 'team1' ? (match?.team1Name || t('Team 1')) : (match?.team2Name || t('Team 2'))}
           </h1>
           <button
             onClick={onBack}
@@ -647,181 +315,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
             marginBottom: '20px'
           }}>
             {error}
-          </div>
-        )}
-
-        {/* PDF Upload Section */}
-        <div style={{
-          marginBottom: '30px',
-          padding: '20px',
-          background: 'var(--bg)',
-          borderRadius: '8px',
-          border: '1px solid rgba(255,255,255,0.1)'
-        }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '12px' }}>
-            {t('rosterSetup.loadRosterFromPdf')}
-          </h2>
-          <p style={{ fontSize: '14px', color: 'var(--muted)', marginBottom: '16px' }}>
-            {t('rosterSetup.loadRosterFromPdfDescription')}
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf"
-                onChange={handleFileSelect}
-                disabled={loading}
-                style={{ display: 'none' }}
-              />
-              <button
-                type="button"
-                onClick={handleChooseFileClick}
-                disabled={loading}
-                style={{
-                  padding: '12px 24px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  background: loading ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.1)',
-                  color: loading ? 'var(--muted)' : 'var(--text)',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  borderRadius: '6px',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  transition: 'opacity 0.2s'
-                }}
-                onMouseOver={(e) => !loading && (e.target.style.opacity = '0.9')}
-                onMouseOut={(e) => !loading && (e.target.style.opacity = '1')}
-              >
-                {t('rosterSetup.choosePdfFile')}
-              </button>
-              {pdfFile && !loading && (
-                <span style={{ fontSize: '14px', color: 'var(--text)', flex: 1 }}>
-                  {t('rosterSetup.selectedFile')}: {pdfFile.name}
-                </span>
-              )}
-            </div>
-            {pdfFile && !loading && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  handleImportClick()
-                }}
-                disabled={loading}
-                style={{
-                  padding: '12px 24px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  background: 'var(--accent)',
-                  color: '#000',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  transition: 'opacity 0.2s',
-                  width: 'fit-content'
-                }}
-                onMouseOver={(e) => !loading && (e.target.style.opacity = '0.9')}
-                onMouseOut={(e) => !loading && (e.target.style.opacity = '1')}
-              >
-                {t('rosterSetup.import')}
-              </button>
-            )}
-          </div>
-          {loading && (
-            <p style={{ fontSize: '14px', color: 'var(--accent)', marginTop: '10px' }}>
-              {t('rosterSetup.parsingPdf')}
-            </p>
-          )}
-          {error && (
-            <p style={{ fontSize: '14px', color: '#ef4444', marginTop: '10px' }}>
-              {error}
-            </p>
-          )}
-        </div>
-
-        {/* Pending Roster Section */}
-        {pendingRoster && (
-          <div style={{
-            marginBottom: '30px',
-            padding: '20px',
-            background: 'rgba(34, 197, 94, 0.1)',
-            borderRadius: '8px',
-            border: '1px solid rgba(34, 197, 94, 0.3)'
-          }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '12px', color: '#22c55e' }}>
-              {t('rosterSetup.rosterUploaded')}
-            </h2>
-            <p style={{ fontSize: '14px', color: 'var(--muted)', marginBottom: '16px' }}>
-              {t('rosterSetup.rosterUploadedDescription')}
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
-              <div style={{ fontSize: '14px' }}>
-                {t('rosterSetup.playersCount')}: {pendingRoster.players?.length || 0}
-              </div>
-              {pendingRoster.timestamp && (
-                <div style={{ fontSize: '12px', color: 'var(--muted)' }}>
-                  {t('rosterSetup.uploadedAt')}: {new Date(pendingRoster.timestamp).toLocaleString()}
-                </div>
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
-              <button
-                type="button"
-                onClick={() => setShowPreview(true)}
-                style={{
-                  padding: '12px 24px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  background: 'rgba(59, 130, 246, 0.2)',
-                  color: '#3b82f6',
-                  border: '1px solid #3b82f6',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  flex: 1
-                }}
-              >
-                {t('rosterSetup.previewRoster')}
-              </button>
-            </div>
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <button
-                type="button"
-                onClick={handleAcceptPendingRoster}
-                disabled={loading}
-                style={{
-                  padding: '12px 24px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  background: loading ? 'rgba(34, 197, 94, 0.5)' : '#22c55e',
-                  color: '#000',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  flex: 1
-                }}
-              >
-                {loading ? t('common.loading') : t('rosterSetup.acceptRoster')}
-              </button>
-              <button
-                type="button"
-                onClick={handleRejectPendingRoster}
-                disabled={loading}
-                style={{
-                  padding: '12px 24px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  background: loading ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.2)',
-                  color: '#ef4444',
-                  border: '1px solid #ef4444',
-                  borderRadius: '6px',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  flex: 1
-                }}
-              >
-                {t('rosterSetup.rejectRoster')}
-              </button>
-            </div>
           </div>
         )}
 
@@ -987,8 +480,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
           </div>
         </div>
 
-        {/* Beach volleyball: No bench officials section (2v2 sport with no coaches on bench) */}
-
         {/* Signatures Section */}
         <div style={{
           marginBottom: '30px',
@@ -1004,8 +495,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
             {t('rosterSetup.signaturesDescription', 'Optional: Captain can sign the roster before submitting.')}
           </p>
           <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-            {/* Beach volleyball: No coach signature (2v2 sport) */}
-
             {/* Captain Signature */}
             <div style={{ flex: 1, minWidth: '200px' }}>
               <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '8px' }}>
@@ -1095,72 +584,6 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
           </button>
         </div>
 
-        {/* Roster Preview Modal */}
-        {showPreview && pendingRoster && (
-          <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.8)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000
-          }}>
-            <div style={{
-              background: 'var(--bg-secondary)',
-              borderRadius: '12px',
-              padding: '24px',
-              maxWidth: '700px',
-              width: '90%',
-              maxHeight: '80vh',
-              overflow: 'auto'
-            }}>
-              <h2 style={{ marginTop: 0, marginBottom: '20px', fontSize: '20px', fontWeight: 600 }}>
-                {t('rosterSetup.rosterPreviewTitle')}
-              </h2>
-
-              <h3 style={{ marginTop: 0, marginBottom: '12px', fontSize: '16px' }}>
-                {t('rosterSetup.playersCount')}: {pendingRoster.players?.length || 0}
-              </h3>
-              <div style={{ marginBottom: '20px', overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
-                      <th style={{ padding: '8px', textAlign: 'left' }}>#</th>
-                      <th style={{ padding: '8px', textAlign: 'left' }}>{t('rosterSetup.lastName')}</th>
-                      <th style={{ padding: '8px', textAlign: 'left' }}>{t('rosterSetup.firstName')}</th>
-                      <th style={{ padding: '8px', textAlign: 'center' }}>{t('rosterSetup.captain')}</th>
-                    </tr>
-                  </thead>
-                </table>
-              </div>
-
-            
-
-              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
-                <button
-                  onClick={() => setShowPreview(false)}
-                  style={{
-                    padding: '12px 32px',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    background: 'var(--accent)',
-                    color: '#000',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {t('common.close')}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Syncing Modal */}
         {syncing && (
           <div style={{
@@ -1207,80 +630,17 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
           </div>
         )}
 
-        {/* Success Modal */}
-        {showSuccessModal && (
-          <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.8)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1001
-          }}>
-            <div style={{
-              background: 'var(--bg-secondary)',
-              borderRadius: '12px',
-              padding: '32px',
-              textAlign: 'center',
-              maxWidth: '400px',
-              width: '90%'
-            }}>
-              <div style={{
-                width: '64px',
-                height: '64px',
-                background: 'rgba(34, 197, 94, 0.2)',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 20px'
-              }}>
-                <span style={{ fontSize: '32px', color: '#22c55e' }}>✓</span>
-              </div>
-              <h3 style={{ margin: '0 0 8px', fontSize: '18px', fontWeight: 600, color: '#22c55e' }}>
-                {t('rosterSetup.sentToDatabase', 'Sent to Database')}
-              </h3>
-              <p style={{ margin: '0 0 24px', fontSize: '14px', color: 'var(--muted)' }}>
-                {t('rosterSetup.rosterSentMessage', 'The roster has been sent to the scoresheet. The scorer will review and accept or reject the roster.')}
-              </p>
-              <button
-                onClick={() => setShowSuccessModal(false)}
-                style={{
-                  padding: '12px 32px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  background: 'var(--accent)',
-                  color: '#000',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
-                {t('common.ok', 'OK')}
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Signature Pad */}
         <SignaturePad
           open={openSignature !== null}
           onClose={() => setOpenSignature(null)}
           onSave={(signature) => {
-            if (openSignature === 'coach') {
-              setCoachSignature(signature)
-            } else if (openSignature === 'captain') {
+            if (openSignature === 'captain') {
               setCaptainSignature(signature)
             }
             setOpenSignature(null)
           }}
-          title={openSignature === 'coach'
-            ? t('rosterSetup.coachSignature', 'Coach Signature')
-            : t('rosterSetup.captainSignature', 'Captain Signature')}
+          title={t('rosterSetup.captainSignature', 'Captain Signature')}
         />
       </div>
     </div>

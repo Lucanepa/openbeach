@@ -214,7 +214,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   const intervalDismissedRef = useRef(false) // Track when interval was manually dismissed
   const setIntervalDuration = useMemo(() => {
     const saved = localStorage.getItem('setIntervalDuration')
-    return saved ? parseInt(saved, 10) : 180 // default 3 minutes = 180 seconds
+    return saved ? parseInt(saved, 10) : 60 // default 1 minute = 60 seconds
   }, [])
   const [peekingLineup, setPeekingLineup] = useState({ left: false, right: false }) // Track which team's lineup is being peeked
 
@@ -488,7 +488,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
     const receiveTimestamp = Date.now()
     console.debug('[Referee] Received realtime data:', {
-      hasHomeTeam: !!result.team1,
+      hasteam1Team: !!result.team1,
       hasteam2Team: !!result.team2,
       setsCount: result.sets?.length,
       eventsCount: result.events?.length
@@ -530,21 +530,21 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         team1Points: actionData.team1Points,
         team2Points: actionData.team2Points,
         countdown: actionData.countdown,
-        homeSetsWon: actionData.homeSetsWon,
+        team1SetsWon: actionData.team1SetsWon,
         team2SetsWon: actionData.team2SetsWon
       })
 
-      // Check if match is finished (one team won 3 sets) - don't show interval
-      const isMatchFinishedNow = actionData.homeSetsWon >= 3 || actionData.team2SetsWon >= 3
+      // Check if match is finished (one team won 2 sets) - don't show interval
+      const isMatchFinishedNow = actionData.team1SetsWon >= 2 || actionData.team2SetsWon >= 2
       if (isMatchFinishedNow) {
         // Clear any existing interval state - full-screen match ended view will show
         setBetweenSetsCountdown(null)
         setShowIntervalModal(false)
       } else {
         setBetweenSetsCountdown({
-          countdown: actionData.countdown || 180,
+          countdown: actionData.countdown || 60,
           startTimestamp: actionData.startTimestamp || Date.now(), // Fallback for backward compat
-          initialCountdown: actionData.countdown || 180,
+          initialCountdown: actionData.countdown || 60,
           started: true,
           setIndex: actionData.setIndex,
           winner: actionData.winner
@@ -746,9 +746,9 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
               // Only update if not already tracking this interval
               if (!betweenSetsCountdown || Math.abs(betweenSetsCountdown.startTimestamp - serverStartTs) > 2000) {
                 setBetweenSetsCountdown({
-                  countdown: 180,
+                  countdown: 60,
                   startTimestamp: serverStartTs,
-                  initialCountdown: 180,
+                  initialCountdown: 60,
                   started: true,
                   setIndex: state.last_event_data?.setIndex || state.current_set,
                   winner: state.last_event_data?.winner
@@ -875,7 +875,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   // Legacy format: lineup positions just contain player number
   const lineup = useMemo(() => {
     if (!data || !data.events || !data.currentSet) {
-      return { home: null, team2: null, isRichFormat: false }
+      return { team1: null, team2: null, isRichFormat: false }
     }
 
     const currentSetIndex = data.currentSet?.index || 1
@@ -958,13 +958,14 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     const teamBKey = data.match.coinTossTeamB || 'team2'
 
     // Calculate first serve for current set based on alternation pattern
+    // Beach volleyball is best-of-3: Set 3 is the tie break
     let currentSetFirstServe
-    if (setIndex === 5 && data.match?.set5FirstServe) {
-      currentSetFirstServe = data.match.set5FirstServe === 'A' ? teamAKey : teamBKey
-    } else if (setIndex === 5) {
+    if (setIndex === 3 && data.match?.set3FirstServe) {
+      currentSetFirstServe = data.match.set3FirstServe === 'A' ? teamAKey : teamBKey
+    } else if (setIndex === 3) {
       currentSetFirstServe = set1FirstServe
     } else {
-      // Sets 1-4: odd sets (1, 3) same as Set 1, even sets (2, 4) opposite
+      // Sets 1-2: odd sets (1) same as Set 1, even sets (2) opposite
       currentSetFirstServe = setIndex % 2 === 1 ? set1FirstServe : (set1FirstServe === 'team1' ? 'team2' : 'team1')
     }
 
@@ -1006,18 +1007,19 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
     const setIndex = data.currentSet.index
     const setLeftTeamOverrides = data?.match?.setLeftTeamOverrides || {}
-    const is5thSet = setIndex === 5
-    const set5CourtSwitched = data?.match?.set5CourtSwitched
-    const set5LeftTeam = data?.match?.set5LeftTeam
+    // Beach volleyball is best-of-3: Set 3 is the tie break
+    const is3rdSet = setIndex === 3
+    const set3CourtSwitched = data?.match?.set3CourtSwitched
+    const set3LeftTeam = data?.match?.set3LeftTeam
 
     // Determine which side Team A is on this set
     let sideA
     if (setLeftTeamOverrides[setIndex] !== undefined) {
       // Manual override for this set
       sideA = setLeftTeamOverrides[setIndex] === teamAKey ? 'left' : 'right'
-    } else if (is5thSet && set5CourtSwitched && set5LeftTeam) {
-      // Set 5 special configuration (after 8-point switch)
-      sideA = set5LeftTeam === teamAKey ? 'left' : 'right'
+    } else if (is3rdSet && set3CourtSwitched && set3LeftTeam) {
+      // Set 3 (tie break) special configuration (after 8-point switch)
+      sideA = set3LeftTeam === teamAKey ? 'left' : 'right'
     } else {
       // Default alternating pattern: odd sets = Team A on left, even sets = Team A on right
       sideA = setIndex % 2 === 1 ? 'left' : 'right'
@@ -1027,7 +1029,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     // If sideA='left' (Team A on left), then team1 is on left only if teamAKey='team1'
     // If sideA='right' (Team A on right), then team1 is on left only if teamAKey!='team1' (i.e., Team B is on left)
     return sideA === 'left' ? (teamAKey === 'team1') : (teamAKey !== 'team1')
-  }, [data?.currentSet, data?.match?.setLeftTeamOverrides, data?.match?.set5CourtSwitched, data?.match?.set5LeftTeam, teamAKey, data?.liveState?.side_a])
+  }, [data?.currentSet, data?.match?.setLeftTeamOverrides, data?.match?.set3CourtSwitched, data?.match?.set3LeftTeam, teamAKey, data?.liveState?.side_a])
 
   const team1OnLeft = refereeView === '1st' ? !team1OnLeftFor2ndRef : team1OnLeftFor2ndRef
 
@@ -1066,7 +1068,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
   // Get team-level sanctions (formal warning, improper request, delay warning)
   // Also returns player-level sanctions (warnings, penalties, expulsions, disqualifications)
-  // Beach volleyball: no bench sanctions (only 2 players per team, no bench staff)
+
   const getTeamSanctions = useCallback((teamKey) => {
     if (!data?.events) return {
       formalWarning: false, improperRequest: false, delayWarning: false, delayPenalty: false,
@@ -1303,8 +1305,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
   // Check if match has ended (from liveState status or sets won)
   const isMatchEnded = data?.liveState?.match_status === 'ended' ||
-    (data?.liveState?.sets_won_a >= 3 || data?.liveState?.sets_won_b >= 3) ||
-    (setsWon.home >= 3 || setsWon.team2 >= 3)
+    (data?.liveState?.sets_won_a >= 2 || data?.liveState?.sets_won_b >= 2) ||
+    (setsWon.team1 >= 2 || setsWon.team2 >= 2)
 
   // Check if we're in set interval (from liveState or local detection)
   // But NOT if match is already finished
@@ -1354,10 +1356,10 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   // During interval, show sets won; during play, show current set points
   const leftDisplayScore = leftPoints
   const rightDisplayScore = rightPoints
-  // Display set index - during interval show the NEXT set, but never show more than Set 5
+  // Display set index - during interval show the NEXT set, but never show more than Set 3 (beach is best-of-3)
   const displaySetIndex = Math.min(
     isInSetInterval ? nextSetIndex : (data?.currentSet?.index || 1),
-    5
+    3
   )
 
   // Check if this is the first rally of the set (no points scored yet)
@@ -1373,10 +1375,10 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     // AND it wasn't manually dismissed
     if (isBetweenSets && betweenSetsCountdown === null && !intervalDismissedRef.current) {
       setBetweenSetsCountdown({
-        countdown: 180,
+        countdown: 60,
         started: true,
         startTimestamp: Date.now(),
-        initialCountdown: 180
+        initialCountdown: 60
       })
       setShowIntervalModal(true)
     } else if (!isBetweenSets) {
@@ -1392,7 +1394,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     if (!betweenSetsCountdown || !betweenSetsCountdown.started) return
 
     const startTimestamp = betweenSetsCountdown.startTimestamp || Date.now()
-    const initialCountdown = betweenSetsCountdown.initialCountdown || 180
+    const initialCountdown = betweenSetsCountdown.initialCountdown || 60
 
     // Update every 100ms for smooth visuals
     const timer = setInterval(() => {
@@ -1907,13 +1909,13 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
   // Match finished info - use liveState sets won for accurate data
   const matchWinner = isMatchFinished && data
-    ? (liveStateSetsWonHome > liveStateSetsWonteam2
-      ? (data.team1?.name || 'Home')
-      : (data.team2?.name || 'team2'))
+    ? (liveStateSetsWonTeam1 > liveStateSetsWonTeam2
+      ? (data.team1?.name || 'Team 1')
+      : (data.team2?.name || 'Team 2'))
     : ''
 
   const matchResult = isMatchFinished
-    ? `${Math.max(liveStateSetsWonHome, liveStateSetsWonteam2)}:${Math.min(liveStateSetsWonHome, liveStateSetsWonteam2)}`
+    ? `${Math.max(liveStateSetsWonTeam1, liveStateSetsWonTeam2)}:${Math.min(liveStateSetsWonTeam1, liveStateSetsWonTeam2)}`
     : ''
 
   // Show results when match is finished

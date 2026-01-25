@@ -167,9 +167,7 @@ export function buildAppUrls(localIP, port, protocol = 'http') {
   return {
     main: baseUrl,
     referee: `${baseUrl}/referee`,
-    bench: `${baseUrl}/bench`,
-    livescore: `${baseUrl}/livescore`,
-    uploadRoster: `${baseUrl}/upload_roster`
+    livescore: `${baseUrl}/livescore`
   }
 }
 
@@ -207,8 +205,6 @@ export function buildCloudUrls(backendUrl) {
   return {
     main: baseUrl,
     referee: `${baseUrl}/referee`,
-    bench: `${baseUrl}/bench`,
-    livescore: `${baseUrl}/livescore`,
-    uploadRoster: `${baseUrl}/upload_roster`
+    livescore: `${baseUrl}/livescore`
   }
 }

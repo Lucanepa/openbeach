@@ -187,7 +187,7 @@ export async function getMatchData(matchId) {
         .maybeSingle()
 
       // Build team info from matches table (prefer JSONB, fallback to old columns for transition)
-      const team1Name = match.home_team?.name || match.home_team_name || 'Team 1'
+      const team1Name = match.team1_team?.name || match.team1_team_name || 'Team 1'
       const team2Name = match.team2_team?.name || match.team2_team_name || 'Team 2'
 
       // A/B Model: Team A = coin toss winner (constant), side_a = which side they're on
@@ -202,8 +202,8 @@ export async function getMatchData(matchId) {
       } else {
         // Fallback to coin_toss if live state doesn't have A/B data (prefer JSONB, fallback to old columns)
         const rawTeamA = match.coin_toss?.team_a || match.coin_toss_team_a || 'team1'
-        // Normalize legacy 'home'/'team2' to 'team1'/'team2'
-        coinTossTeamA = rawTeamA === 'home' ? 'team1' : rawTeamA === 'team2' ? 'team2' : rawTeamA
+        // Normalize legacy 'team1'/'team2' to 'team1'/'team2'
+        coinTossTeamA = rawTeamA === 'team1' ? 'team1' : rawTeamA === 'team2' ? 'team2' : rawTeamA
         teamAIsTeam1 = coinTossTeamA === 'team1'
       }
 
@@ -218,8 +218,8 @@ export async function getMatchData(matchId) {
 
       const team1 = {
         name: team1Name,
-        shortName: match.home_team?.short_name || match.home_short_name || 'T1',
-        color: team1ColorFromLive || match.home_team?.color || '#ef4444'
+        shortName: match.team1_team?.short_name || match.team1_short_name || 'T1',
+        color: team1ColorFromLive || match.team1_team?.color || '#ef4444'
       }
       const team2 = {
         name: team2Name,
@@ -322,7 +322,7 @@ export async function getMatchData(matchId) {
                 team: teamAIsTeam1 ? 'team1' : 'team2',
                 playerNumber: sanction.player,
                 type: sanction.type,
-                playerType: sanction.playerType, // 'player', 'bench', 'libero', 'official'
+                playerType: sanction.playerType, // 'player'
                 position: sanction.position,
                 role: sanction.role
               }
@@ -397,7 +397,7 @@ export async function getMatchData(matchId) {
       }
 
       // Build players from matches table JSONB columns
-      const team1Players = match.players_home || []
+      const team1Players = match.players_team1 || []
       const team2Players = match.players_team2 || []
 
       // Extract captain info from rich lineup format
@@ -430,7 +430,7 @@ export async function getMatchData(matchId) {
           // coin_toss_confirmed = true if we have liveState with team names (means coin toss happened)
           coin_toss_confirmed: !!(liveState?.team_a_name),
           // Get short names from JSONB, or fallback to old columns
-          team1ShortName: match.home_team?.short_name || match.home_short_name || team1.shortName,
+          team1ShortName: match.team1_team?.short_name || match.team1_short_name || team1.shortName,
           team2ShortName: match.team2_team?.short_name || match.team2_short_name || team2.shortName,
           team1Name: team1.name,
           team2Name: team2.name,
@@ -927,7 +927,7 @@ export async function listAvailableMatchesSupabase() {
         game_n,
         status,
         scheduled_at,
-        home_team,
+        team1_team,
         team2_team,
         connections,
         connection_pins
@@ -967,7 +967,7 @@ export async function listAvailableMatchesSupabase() {
       }
 
       // Read from JSONB columns only (clean schema)
-      const team1Name = m.home_team?.name || 'Team 1'
+      const team1Name = m.team1_team?.name || 'Team 1'
       const team2Name = m.team2_team?.name || 'Team 2'
       const connections = m.connections || {}
       const connectionPins = m.connection_pins || {}
@@ -985,7 +985,7 @@ export async function listAvailableMatchesSupabase() {
         status: m.status,
         refereeConnectionEnabled: connections.referee_enabled === true,
         // Include upload PINs for roster upload app
-        team1UploadPin: connectionPins.upload_home,
+        team1UploadPin: connectionPins.upload_team1,
         team2UploadPin: connectionPins.upload_team2
       }
     })
@@ -997,97 +997,6 @@ export async function listAvailableMatchesSupabase() {
   }
 }
 
-/**
- * List available matches from Supabase for Bench apps
- * Filters by bench_connection_enabled = true
- */
-export async function listAvailableMatchesForBenchSupabase() {
-  if (!supabase) {
-    return { success: false, matches: [], error: 'Supabase client not initialized' }
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from('matches')
-      .select(`
-        id,
-        external_id,
-        game_n,
-        status,
-        scheduled_at,
-        home_team,
-        team2_team,
-        connections,
-        connection_pins
-      `)
-      .in('status', ['setup', 'live'])
-      .order('scheduled_at', { ascending: true })
-
-    if (error) {
-      console.error('[listAvailableMatchesForBenchSupabase] Error:', error)
-      return { success: false, matches: [], error: error.message }
-    }
-
-    // Filter to only show matches where at least one bench connection is enabled
-    const filteredData = (data || []).filter(m => {
-      const connections = m.connections || {}
-      return connections.home_bench_enabled === true || connections.team2_bench_enabled === true
-    })
-
-    // Format to match the WebSocket server format
-    const formattedMatches = filteredData.map(m => {
-      let dateTime = 'TBD'
-      if (m.scheduled_at) {
-        try {
-          let scheduledStr = m.scheduled_at
-          if (!scheduledStr.endsWith('Z') && !scheduledStr.includes('+')) {
-            scheduledStr = scheduledStr + 'Z'
-          }
-          const scheduledDate = new Date(scheduledStr)
-          // Display in local timezone
-          const dateStr = scheduledDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-          const timeStr = formatTimeLocal(scheduledStr)
-          dateTime = `${dateStr} ${timeStr}`
-        } catch (e) {
-          dateTime = 'TBD'
-        }
-      }
-
-      // Read from JSONB columns only (clean schema)
-      const team1Name = m.home_team?.name || 'Team 1'
-      const team2Name = m.team2_team?.name || 'Team 2'
-      const connections = m.connections || {}
-      const connectionPins = m.connection_pins || {}
-
-      return {
-        id: m.external_id || m.id,
-        external_id: m.external_id,
-        gameNumber: m.game_n || m.external_id,
-        team1: team1Name,
-        team2: team2Name,
-        team1Name: team1Name,
-        team2Name: team2Name,
-        scheduledAt: m.scheduled_at,
-        dateTime,
-        homeBenchEnabled: connections.home_bench_enabled,
-        team2BenchEnabled: connections.team2_bench_enabled,
-        team1Pin: connectionPins.bench_home,
-        team2Pin: connectionPins.bench_team2,
-        status: m.status
-      }
-    })
-
-    return { success: true, matches: formattedMatches }
-  } catch (error) {
-    console.error('[listAvailableMatchesForBenchSupabase] Exception:', error)
-    return { success: false, matches: [], error: error.message }
-  }
-}
-
-/**
- * Validate PIN against Supabase database
- * Returns match data if PIN is valid
- */
 export async function validatePinSupabase(pin, type = 'referee') {
   try {
     const pinStr = String(pin).trim()
@@ -1105,7 +1014,7 @@ export async function validatePinSupabase(pin, type = 'referee') {
         game_n,
         status,
         scheduled_at,
-        home_team,
+        team1_team,
         team2_team,
         connections,
         connection_pins
@@ -1124,10 +1033,6 @@ export async function validatePinSupabase(pin, type = 'referee') {
 
       if (type === 'referee') {
         return connectionPins.referee === pinStr && connections.referee_enabled
-      } else if (type === 'bench_home') {
-        return connectionPins.bench_home === pinStr && connections.home_bench_enabled
-      } else if (type === 'bench_team2') {
-        return connectionPins.bench_team2 === pinStr && connections.team2_bench_enabled
       }
       return false
     })
@@ -1145,9 +1050,9 @@ export async function validatePinSupabase(pin, type = 'referee') {
       status: matchData.status,
       scheduledAt: matchData.scheduled_at,
       refereeConnectionEnabled: connections.referee_enabled,
-      team1: matchData.home_team?.name || 'Team 1',
+      team1: matchData.team1_team?.name || 'Team 1',
       team2: matchData.team2_team?.name || 'Team 2',
-      team1Color: matchData.home_team?.color,
+      team1Color: matchData.team1_team?.color,
       team2Color: matchData.team2_team?.color
     }
 

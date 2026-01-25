@@ -300,15 +300,15 @@ function CourtDemo({ showLiberoZones = false, animateRotation = false, highlight
 
 // Interactive Score Demo
 function ScoreDemo({ t }) {
-  const [homeScore, setHomeScore] = useState(12)
+  const [team1Score, setteam1Score] = useState(12)
   const [team2Score, setteam2Score] = useState(10)
-  const [homeFlash, setHomeFlash] = useState(false)
+  const [team1Flash, setteam1Flash] = useState(false)
   const [team2Flash, setteam2Flash] = useState(false)
 
-  const addHomePoint = () => {
-    setHomeScore(s => Math.min(s + 1, 25))
-    setHomeFlash(true)
-    setTimeout(() => setHomeFlash(false), 300)
+  const addteam1Point = () => {
+    setteam1Score(s => Math.min(s + 1, 25))
+    setteam1Flash(true)
+    setTimeout(() => setteam1Flash(false), 300)
   }
 
   const addteam2Point = () => {
@@ -328,9 +328,9 @@ function ScoreDemo({ t }) {
             fontWeight: 700,
             color: '#3b82f6',
             transition: 'all 0.2s',
-            transform: homeFlash ? 'scale(1.2)' : 'scale(1)'
+            transform: team1Flash ? 'scale(1.2)' : 'scale(1)'
           }}>
-            {homeScore}
+            {team1Score}
           </div>
         </div>
         <div style={{ fontSize: 24, opacity: 0.5 }}>:</div>
@@ -978,7 +978,6 @@ function MatchSetupMockup({ t }) {
           </div>
           <div style={{ display: 'flex', gap: 12, fontSize: 11 }}>
             <div style={{ flex: 1, textAlign: 'center' }}>
-              <div style={{ opacity: 0.6, marginBottom: 4 }}>{t('interactiveGuide.mockups.coachA')}</div>
               <div style={{ background: 'rgba(255,255,255,0.1)', padding: 8, borderRadius: 4, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ fontStyle: 'italic', opacity: 0.5 }}>✓ {t('interactiveGuide.mockups.signed')}</span>
               </div>
@@ -990,7 +989,6 @@ function MatchSetupMockup({ t }) {
               </div>
             </div>
             <div style={{ flex: 1, textAlign: 'center' }}>
-              <div style={{ opacity: 0.6, marginBottom: 4 }}>{t('interactiveGuide.mockups.coachB')}</div>
               <div style={{ background: 'rgba(255,255,255,0.05)', padding: 8, borderRadius: 4, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed rgba(255,255,255,0.2)' }}>
                 <span style={{ opacity: 0.4 }}>{t('interactiveGuide.mockups.tapToSign')}</span>
               </div>
@@ -1152,7 +1150,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
 
         {/* Main Score Display */}
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16 }}>
-          {/* Home Team */}
+          {/* Team 1 Team */}
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>VBC Zürich</div>
             <div style={{
@@ -1379,11 +1377,11 @@ function MatchEndMockup({ t }) {
           <div style={{ fontSize: 24, fontWeight: 700, color: '#22c55e' }}>VBC Zürich</div>
         </div>
 
-        {/* Final Score */}
+        {/* Final Score - Beach volleyball is best-of-3 */}
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 24 }}>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>VBC Zürich</div>
-            <div style={{ fontSize: 48, fontWeight: 700, color: '#3b82f6' }}>3</div>
+            <div style={{ fontSize: 48, fontWeight: 700, color: '#3b82f6' }}>2</div>
           </div>
           <div style={{ fontSize: 20, opacity: 0.3 }}>:</div>
           <div style={{ textAlign: 'center' }}>
@@ -1392,14 +1390,13 @@ function MatchEndMockup({ t }) {
           </div>
         </div>
 
-        {/* Set Scores */}
+        {/* Set Scores - Beach volleyball is best-of-3 */}
         <div style={{ width: '100%', background: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: 12 }}>
           <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, opacity: 0.7 }}>{t('interactiveGuide.mockups.setScores')}</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, textAlign: 'center', fontSize: 14 }}>
-            <div><span style={{ opacity: 0.5 }}>Set 1:</span> <strong style={{ color: '#3b82f6' }}>25</strong>-20</div>
-            <div><span style={{ opacity: 0.5 }}>Set 2:</span> 22-<strong style={{ color: '#ef4444' }}>25</strong></div>
-            <div><span style={{ opacity: 0.5 }}>Set 3:</span> <strong style={{ color: '#3b82f6' }}>25</strong>-18</div>
-            <div><span style={{ opacity: 0.5 }}>Set 4:</span> <strong style={{ color: '#3b82f6' }}>25</strong>-23</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, textAlign: 'center', fontSize: 14 }}>
+            <div><span style={{ opacity: 0.5 }}>Set 1:</span> <strong style={{ color: '#3b82f6' }}>21</strong>-18</div>
+            <div><span style={{ opacity: 0.5 }}>Set 2:</span> 19-<strong style={{ color: '#ef4444' }}>21</strong></div>
+            <div><span style={{ opacity: 0.5 }}>Set 3:</span> <strong style={{ color: '#3b82f6' }}>15</strong>-12</div>
           </div>
         </div>
 
@@ -1876,7 +1873,7 @@ export default function InteractiveGuide({ open, onClose }) {
             </Section>
 
             <TipBox type="tip">
-              {t('interactiveGuide.cointoss.set5Tip')}
+              {t('interactiveGuide.cointoss.set3Tip')}
             </TipBox>
           </div>
 
@@ -2048,12 +2045,12 @@ export default function InteractiveGuide({ open, onClose }) {
               <CourtDemo animateRotation t={t} />
             </Section>
 
-            <Section title={t('interactiveGuide.scoreboard.set5')} icon="5️⃣">
-              <p>{t('interactiveGuide.scoreboard.set5Desc')}</p>
+            <Section title={t('interactiveGuide.scoreboard.set3')} icon="3️⃣">
+              <p>{t('interactiveGuide.scoreboard.set3Desc')}</p>
               <ul style={{ paddingLeft: 20 }}>
-                <li>{t('interactiveGuide.scoreboard.set5Rule1')}</li>
-                <li>{t('interactiveGuide.scoreboard.set5Rule2')}</li>
-                <li>{t('interactiveGuide.scoreboard.set5Rule3')}</li>
+                <li>{t('interactiveGuide.scoreboard.set3Rule1')}</li>
+                <li>{t('interactiveGuide.scoreboard.set3Rule2')}</li>
+                <li>{t('interactiveGuide.scoreboard.set3Rule3')}</li>
               </ul>
             </Section>
           </div>
@@ -2247,15 +2244,6 @@ export default function InteractiveGuide({ open, onClose }) {
               <TipBox type="tip">
                 {t('interactiveGuide.dashboards.refTip')}
               </TipBox>
-            </Section>
-
-            <Section title={t('interactiveGuide.dashboards.bench')} icon="🪑">
-              <p>{t('interactiveGuide.dashboards.benchDesc')}</p>
-              <ul style={{ paddingLeft: 20 }}>
-                <li>{t('interactiveGuide.dashboards.bench1')}</li>
-                <li>{t('interactiveGuide.dashboards.bench2')}</li>
-                <li>{t('interactiveGuide.dashboards.bench3')}</li>
-              </ul>
             </Section>
 
             <Section title={t('interactiveGuide.dashboards.connection')} icon="🔗">

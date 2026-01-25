@@ -2,14 +2,14 @@
  * Team Key Utilities
  *
  * This module provides utilities for normalizing team keys between
- * legacy 'home'/'team2' format and the new 'team1'/'team2' format.
+ * legacy 'team1'/'team2' format and the new 'team1'/'team2' format.
  *
- * Beach volleyball uses Team 1/Team 2 terminology, not Home/team2.
+ * Beach volleyball uses Team 1/Team 2 terminology, not Team 1/Team 2.
  */
 
 /**
  * Normalize a team key from legacy format to new format.
- * - 'home' → 'team1'
+ * - 'team1' → 'team1'
  * - 'team2' → 'team2'
  * - Other values pass through unchanged
  *
@@ -17,7 +17,7 @@
  * @returns {string} The normalized team key
  */
 export function normalizeTeamKey(teamKey) {
-  if (teamKey === 'home') return 'team1'
+  if (teamKey === 'team1') return 'team1'
   if (teamKey === 'team2') return 'team2'
   return teamKey
 }
@@ -29,7 +29,7 @@ export function normalizeTeamKey(teamKey) {
  * @returns {boolean} True if the team key refers to Team 1
  */
 export function isTeam1(teamKey) {
-  return teamKey === 'home' || teamKey === 'team1'
+  return teamKey === 'team1' || teamKey === 'team1'
 }
 
 /**

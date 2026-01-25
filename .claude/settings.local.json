@@ -20,7 +20,8 @@
       "Bash(node -e:*)",
       "Bash(awk:*)",
       "Read(//home/luca-canepa/Desktop/Github/openbeach/escoresheet/frontend/**)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(pkill:*)"
     ]
   },
   "outputStyle": "default"

@@ -797,7 +797,7 @@ export default function HomeOptionsModal({
                       </div>
                       {dashboardServer.dashboardCount > 0 && (
                         <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>
-                          {t('options.refereeBenchCount', { refereeCount: dashboardServer.refereeCount || 0, benchCount: dashboardServer.benchCount || 0 })}
+                          {t('options.refereeCount', { refereeCount: dashboardServer.refereeCount || 0 })}
                         </div>
                       )}
                     </div>

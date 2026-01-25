@@ -8,9 +8,9 @@ import SignaturePad from './SignaturePad_beach'
 import Modal from './Modal_beach'
 import RefereeSelector from './RefereeSelector_beach'
 import CountrySelect from './CountrySelect_beach'
+import CountryFlag from './CountryFlag_beach'
 // Beach volleyball ball image
 const ballImage = '/beachball.png'
-import { parseRosterPdf } from '../utils_beach/parseRosterPdf_beach'
 import { getWebSocketUrl } from '../utils_beach/backendConfig_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { uploadBackupToCloud, uploadLogsToCloud } from '../utils_beach/logger_beach'
@@ -192,9 +192,9 @@ function hasOfficialsChanged(original, current) {
 }
 
 // Helper to check if roster has changed
-function hasRosterChanged(originalRoster, currentRoster, originalBench, currentBench) {
-  if (!originalRoster || !originalBench) return true
-  return !isEqual(originalRoster, currentRoster) || !isEqual(originalBench, currentBench)
+function hasRosterChanged(originalRoster, currentRoster) {
+  if (!originalRoster) return true
+  return !isEqual(originalRoster, currentRoster)
 }
 
 // Get test team data from testSeeds.js
@@ -437,7 +437,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   const canConfirmMatchInfo = Boolean(
     team1Name?.trim() &&
     team2Name?.trim() &&
-    team1Country?.trim() &&  // Home country must be filled
+    team1Country?.trim() &&  // Team 1 country must be filled
     team2Country?.trim() &&  // team2 country must be filled
     date?.trim() &&      // Date must be filled
     !dateError &&        // Date must be valid
@@ -452,8 +452,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   // Generate dynamic tooltip showing which fields are missing
   const getMissingFieldsTooltip = () => {
     const missing = []
-    if (!team1Name?.trim()) missing.push(t('matchSetup.team1Name') || 'Home team')
-    if (!team2Name?.trim()) missing.push(t('matchSetup.team2Name') || 'team2 team')
+    if (!team1Name?.trim()) missing.push(t('matchSetup.team1Name') || 'Team 1')
+    if (!team2Name?.trim()) missing.push(t('matchSetup.team2Name') || 'Team 2')
     if (!team1Country?.trim()) missing.push(t('matchSetup.country') || 'Country')
     if (!team2Country?.trim()) missing.push(t('matchSetup.country') || 'Country')
     if (!date?.trim()) missing.push(t('matchSetup.date') || 'Date')
@@ -486,8 +486,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     return t(`matchSetup.${fallbackKey}`)
   }
 
-  const [team1Bench, setTeam1Bench] = useState([{ role: 'Coach', firstName: '', lastName: '', dob: '' }])
-  const [team2Bench, setTeam2Bench] = useState([{ role: 'Coach', firstName: '', lastName: '', dob: '' }])
   const rosterLoadedFromDraft = useRef({ team1: false, team2: false })
   const [team1Num, setTeam1Num] = useState('')
   const [team1First, setTeam1First] = useState('')
@@ -551,24 +549,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   const [editPinType, setEditPinType] = useState(null) // 'referee'
   const [newPin, setNewPin] = useState('')
   const [pinError, setPinError] = useState('')
-
-
-  // PDF upload state for each team
-  const [team1PdfFile, setTeam1PdfFile] = useState(null)
-  const [team2PdfFile, setTeam2PdfFile] = useState(null)
-  const [team1PdfLoading, setTeam1PdfLoading] = useState(false)
-  const [team2PdfLoading, setTeam2PdfLoading] = useState(false)
-  const [team1PdfError, setTeam1PdfError] = useState('')
-  const [team2PdfError, setTeam2PdfError] = useState('')
-  const team1FileInputRef = useRef(null)
-  const team2FileInputRef = useRef(null)
-
-  // PDF import summary modal state
-  const [importSummaryModal, setImportSummaryModal] = useState(null) // { team: 'team1'|'team2', players: number, errors: string[] }
-
-  // Upload mode toggle state (local or remote)
-  const [team1UploadMode, setTeam1UploadMode] = useState('local') // 'local' | 'remote'
-  const [team2UploadMode, setTeam2UploadMode] = useState('local') // 'local' | 'remote'
 
   // Remote roster search state
   const [team1RosterSearching, setTeam1RosterSearching] = useState(false)
@@ -674,11 +654,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     players: team2Roster.length
   }
 
-  // Coach signatures kept for compatibility but not used in beach volleyball
-  const [team1CoachSignature, setTeam1CoachSignature] = useState(null)
-  const [team2CoachSignature, setTeam2CoachSignature] = useState(null)
-  const [savedSignatures, setSavedSignatures] = useState({ homeCoach: null, team2Coach: null })
-
   // Load match data if matchId is provided
   const match = useLiveQuery(async () => {
     if (!matchId) return null
@@ -726,14 +701,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           .where('status')
           .equals('error')
           .toArray()
-
-        // Legacy columns that no longer exist in Supabase
-        const legacyColumns = [
-          'team2_data_name', 'team1_data_name', 'team2_data_short_name', 'team1_data_short_name',
-          'home_short_name', 'team2_short_name', 'coin_toss_confirmed', 'coin_toss_team_a',
-          'coin_toss_team_b', 'coin_toss_serve_a', 'first_serve', 'referee_pin',
-          'referee_connection_enabled', 'team1_data_connection_enabled', 'team2_data_connection_enabled'
-        ]
 
         for (const job of errorJobs) {
           const payload = job.payload || {}
@@ -898,13 +865,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 round: match.round || 'pool'
               },
               team1_data: {
-                name: team1?.name || team1Name || 'Home',
-                short_name: team1?.shortName || match.team1ShortName || generateShortName(team1?.name || team1Name || 'Home'),
+                name: team1?.name || team1Name || 'Team 1',
+                short_name: team1?.shortName || match.team1ShortName || generateShortName(team1?.name || team1Name || 'Team 1'),
                 color: team1?.color || team1Color
               },
               team2_data: {
-                name: team2?.name || team2Name || 'team2',
-                short_name: team2?.shortName || match.team2ShortName || generateShortName(team2?.name || team2Name || 'team2'),
+                name: team2?.name || team2Name || 'Team 2',
+                short_name: team2?.shortName || match.team2ShortName || generateShortName(team2?.name || team2Name || 'Team 2'),
                 color: team2?.color || team2Color
               },
             },
@@ -1001,13 +968,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         // Update input widths when teams are loaded - use the actual loaded team names
         setTimeout(() => {
           if (team1MeasureRef.current && team1InputRef.current) {
-            const currentValue = team1?.name || team1Name || 'Home team name'
+            const currentValue = team1?.name || team1Name || 'Team 1 team name'
             team1MeasureRef.current.textContent = currentValue
             const measuredWidth = team1MeasureRef.current.offsetWidth
             team1InputRef.current.style.width = `${Math.max(80, measuredWidth + 24)}px`
           }
           if (team2MeasureRef.current && team2InputRef.current) {
-            const currentValue = team2?.name || team2Name || 'team2 team name'
+            const currentValue = team2?.name || team2Name || 'Team 2 team name'
             team2MeasureRef.current.textContent = currentValue
             const measuredWidth = team2MeasureRef.current.offsetWidth
             team2InputRef.current.style.width = `${Math.max(80, measuredWidth + 24)}px`
@@ -1127,8 +1094,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               if (existingMatch) {
                 const connectionPinsUpdate = {
                   ...(existingMatch.connection_pins || {}),
-                  ...(team1UploadPin ? { upload_home: team1UploadPin } : {}),
-                  ...(team2UploadPin ? { upload_team2: team2UploadPin } : {})
+                  ...(team1UploadPin ? { team1_upload: team1UploadPin } : {}),
+                  ...(team2UploadPin ? { team2_upload: team2UploadPin } : {})
                 }
 
                 await supabase
@@ -1412,7 +1379,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       try {
         const draft = await db.match_setup.orderBy('updatedAt').last()
         if (draft) {
-          if (draft.home !== undefined) setTeam1Name(draft.home)
+          if (draft.team1 !== undefined) setTeam1Name(draft.team1)
           if (draft.team2 !== undefined) setTeam2Name(draft.team2)
           if (draft.date !== undefined) setDate(draft.date)
           if (draft.time !== undefined) setTime(draft.time)
@@ -1463,7 +1430,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   async function saveDraft(silent = false) {
     try {
       const draft = {
-        home: team1Name,
+        team1: team1Name,
         team2: team2Name,
         date,
         time,
@@ -1558,9 +1525,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             { firstName: scorerFirst, lastName: scorerLast, country: scorerCountry, dob: scorerDob },
             { firstName: asstFirst, lastName: asstLast, country: asstCountry, dob: asstDob },
             { lj1: lineJudge1, lj2: lineJudge2, lj3: lineJudge3, lj4: lineJudge4 }
-          ),
-          bench_home: team1Bench,
-          bench_team2: team2Bench
+          )
         }
 
         // Only save match type fields if explicitly saving OR match was previously confirmed
@@ -1582,7 +1547,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               name: team1Name.trim(),
               color: team1Color,
               shortName: team1ShortName || team1Name.trim().substring(0, 8).toUpperCase(),
-              benchStaff: team1Bench
             })
           } else {
             // Create new team if it doesn't exist
@@ -1590,7 +1554,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               name: team1Name.trim(),
               color: team1Color,
               shortName: team1ShortName || team1Name.trim().substring(0, 8).toUpperCase(),
-              benchStaff: team1Bench,
               createdAt: new Date().toISOString()
             })
             // Update match with new team ID
@@ -1604,8 +1567,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             await db.teams.update(team2Id, {
               name: team2Name.trim(),
               color: team2Color,
-              shortName: team2ShortName || team2Name.trim().substring(0, 8).toUpperCase(),
-              benchStaff: team2Bench
+              shortName: team2ShortName || team2Name.trim().substring(0, 8).toUpperCase()
             })
           } else {
             // Create new team if it doesn't exist
@@ -1613,7 +1575,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               name: team2Name.trim(),
               color: team2Color,
               shortName: team2ShortName || team2Name.trim().substring(0, 8).toUpperCase(),
-              benchStaff: team2Bench,
               createdAt: new Date().toISOString()
             })
             // Update match with new team ID
@@ -1641,12 +1602,12 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
       return () => clearTimeout(timeoutId)
     }
-  }, [date, time, hall, city, type2, gameN, league, team1Name, team2Name, team1Color, team2Color, team1Country, team2Country, team1ShortName, team2ShortName, team1Roster, team2Roster, team1Bench, team2Bench, ref1First, ref1Last, ref1Country, ref1Dob, ref2First, ref2Last, ref2Country, ref2Dob, scorerFirst, scorerLast, scorerCountry, scorerDob, asstFirst, asstLast, asstCountry, asstDob, team1CoachSignature, team2CoachSignature, currentView])
+  }, [date, time, hall, city, type2, gameN, league, team1Name, team2Name, team1Color, team2Color, team1Country, team2Country, team1ShortName, team2ShortName, team1Roster, team2Roster, ref1First, ref1Last, ref1Country, ref1Dob, ref2First, ref2Last, ref2Country, ref2Dob, scorerFirst, scorerLast, scorerCountry, scorerDob, asstFirst, asstLast, asstCountry, asstDob, currentView])
 
-  // Update input widths when home/team2 values change - set default width based on content
+  // Update input widths when team1/team2 values change - set default width based on content
   useEffect(() => {
     if (team1MeasureRef.current && team1InputRef.current) {
-      const currentValue = team1Name || 'Home team name'
+      const currentValue = team1Name || 'Team 1 name'
       team1MeasureRef.current.textContent = currentValue
       const measuredWidth = team1MeasureRef.current.offsetWidth
       // Always set width based on content, not just on focus
@@ -1670,13 +1631,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       // Small delay to ensure refs are available after view change
       const timeoutId = setTimeout(() => {
         if (team1MeasureRef.current && team1InputRef.current) {
-          const currentValue = team1Name || 'Home team name'
+          const currentValue = team1Name || 'Team 1 team name'
           team1MeasureRef.current.textContent = currentValue
           const measuredWidth = team1MeasureRef.current.offsetWidth
           team1InputRef.current.style.width = `${Math.max(80, measuredWidth + 24)}px`
         }
         if (team2MeasureRef.current && team2InputRef.current) {
-          const currentValue = team2Name || 'team2 team name'
+          const currentValue = team2Name || 'Team 2 team name'
           team2MeasureRef.current.textContent = currentValue
           const measuredWidth = team2MeasureRef.current.offsetWidth
           team2InputRef.current.style.width = `${Math.max(80, measuredWidth + 24)}px`
@@ -1686,7 +1647,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     }
   }, [currentView, team1Name, team2Name])
 
-  // Update input widths when home/team2 values change (e.g., when loaded from match)
+  // Update input widths when team1/team2 values change (e.g., when loaded from match)
   useEffect(() => {
     if (currentView === 'main') {
       const timeoutId = setTimeout(() => {
@@ -1793,11 +1754,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
     // Validate required fields
     if (!team1Name || !team1Name.trim()) {
-      setNoticeModal({ message: 'Home team name is required' })
+      setNoticeModal({ message: 'Team 1 team name is required' })
       return
     }
     if (!team2Name || !team2Name.trim()) {
-      setNoticeModal({ message: 'team2 team name is required' })
+      setNoticeModal({ message: 'Team 2 team name is required' })
       return
     }
     if (!team1Country || !team1Country.trim()) {
@@ -1840,7 +1801,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           name: team1Name.trim(),
           color: team1Color,
           shortName: team1ShortName || team1Name.trim().substring(0, 8).toUpperCase(),
-          benchStaff: team1Bench,
           createdAt: new Date().toISOString()
         })
       } else {
@@ -1849,7 +1809,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           name: team1Name.trim(),
           color: team1Color,
           shortName: team1ShortName || team1Name.trim().substring(0, 8).toUpperCase(),
-          benchStaff: team1Bench
         })
       }
 
@@ -1858,7 +1817,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           name: team2Name.trim(),
           color: team2Color,
           shortName: team2ShortName || team2Name.trim().substring(0, 8).toUpperCase(),
-          benchStaff: team2Bench,
           createdAt: new Date().toISOString()
         })
       } else {
@@ -1866,8 +1824,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         await db.teams.update(team2Id, {
           name: team2Name.trim(),
           color: team2Color,
-          shortName: team2ShortName || team2Name.trim().substring(0, 8).toUpperCase(),
-          benchStaff: team2Bench
+          shortName: team2ShortName || team2Name.trim().substring(0, 8).toUpperCase()
         })
       }
 
@@ -1909,8 +1866,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         match_type_2: type2 || null,
         game_n: gameN ? parseInt(gameN, 10) : null,
         seed_key: matchSeedKey, // Ensure seed_key is set
-        bench_home: team1Bench,
-        bench_team2: team2Bench,
         matchInfoConfirmedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       })
@@ -1933,8 +1888,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         },
         team1_data: { name: team1Name.trim(), short_name: team1ShortName || generateShortName(team1Name.trim()), color: team1Color, country: team1Country || '' },
         team2_data: { name: team2Name.trim(), short_name: team2ShortName || generateShortName(team2Name.trim()), color: team2Color, country: team2Country || '' },
-        bench_home: team1Bench || [],
-        bench_team2: team2Bench || []
       }
 
       // Only set status to 'setup' when creating a new match
@@ -1965,7 +1918,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           email: notificationEmail.trim(),
           gameN: gameN || 'N/A',
           gamePin: match.gamePin,
-          home: team1Name.trim(),
+          team1: team1Name.trim(),
           team2: team2Name.trim(),
           team1ShortName: team1ShortName || '',
           team2ShortName: team2ShortName || '',
@@ -2078,12 +2031,12 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     const team2HasCaptain = team2Roster.some(p => p.isCaptain)
 
     if (!team1HasCaptain) {
-      setNoticeModal({ message: 'Home team must have at least one captain.' })
+      setNoticeModal({ message: 'Team 1 team must have at least one captain.' })
       return
     }
 
     if (!team2HasCaptain) {
-      setNoticeModal({ message: 'team2 team must have at least one captain.' })
+      setNoticeModal({ message: 'Team 2 team must have at least one captain.' })
       return
     }
 
@@ -2094,7 +2047,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     if (team1Duplicates.length > 0) {
       const dupNumbers = [...new Set(team1Duplicates.map(p => p.number))].join(', ')
       setNoticeModal({
-        message: `${team1Name || 'Home'} team has duplicate player numbers: #${dupNumbers}\n\nPlease fix duplicate numbers before proceeding.`
+        message: `${team1Name || 'Team 1'} has duplicate player numbers: #${dupNumbers}\n\nPlease fix duplicate numbers before proceeding.`
       })
       return
     }
@@ -2105,7 +2058,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     if (team2Duplicates.length > 0) {
       const dupNumbers = [...new Set(team2Duplicates.map(p => p.number))].join(', ')
       setNoticeModal({
-        message: `${team2Name || 'team2'} team has duplicate player numbers: #${dupNumbers}\n\nPlease fix duplicate numbers before proceeding.`
+        message: `${team2Name || 'Team 2'} has duplicate player numbers: #${dupNumbers}\n\nPlease fix duplicate numbers before proceeding.`
       })
       return
     }
@@ -2251,7 +2204,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           },
           team1_data: { name: team1Name.trim(), short_name: team1ShortName || generateShortName(team1Name.trim()), color: team1Color || '#ef4444', country: team1Country || '' },
           team2_data: { name: team2Name.trim(), short_name: team2ShortName || generateShortName(team2Name.trim()), color: team2Color || '#3b82f6', country: team2Country || '' },
-          players_home: team1Roster.map(p => ({
+          players_team1: team1Roster.map(p => ({
             number: p.number,
             first_name: p.firstName,
             last_name: p.lastName,
@@ -2533,7 +2486,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             // Captain signatures synced from CoinToss component
             team1_data: { name: team1Name?.trim() || '', short_name: team1ShortName || '', color: team1Color, country: team1Country || '' },
             team2_data: { name: team2Name?.trim() || '', short_name: team2ShortName || '', color: team2Color, country: team2Country || '' },
-            players_home: team1Roster.filter(p => p.firstName || p.lastName).map(p => ({
+            players_team1: team1Roster.filter(p => p.firstName || p.lastName).map(p => ({
               number: p.number || null,
               first_name: p.firstName || '',
               last_name: p.lastName || '',
@@ -2654,7 +2607,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           external_id: String(firstSetId),
           match_id: matchForSet.seed_key, // Use seed_key (external_id) for Supabase lookup
           index: 1,
-          home_points: 0,
+          team1_points: 0,
           team2_points: 0,
           finished: false,
           start_time: roundToMinute(new Date().toISOString())
@@ -2671,7 +2624,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     // Force a small delay to ensure database updates are fully committed
     await new Promise(resolve => setTimeout(resolve, 100))
 
-    // Sync to server immediately so referee/bench dashboards receive data before Scoreboard mounts
+    // Sync to server immediately so referee dashboards receive data before Scoreboard mounts
     const finalMatchData = await db.matches.get(matchId)
     if (finalMatchData) {
       await syncMatchToServer(finalMatchData, true) // Full sync with teams, players, sets, events
@@ -2680,39 +2633,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     // Start the match - directly navigate to scoreboard
     // onStart (continueMatch) will now allow test matches when status is 'live' and coin toss is confirmed
     onStart(matchId)
-  }
-
-  // PDF file handlers - must be defined before conditional returns
-  const handleTeam1FileSelect = (e) => {
-    const file = e.target.files[0]
-    if (file) {
-      setTeam1PdfFile(file)
-      setTeam1PdfError('')
-    }
-  }
-
-  const handleTeam2FileSelect = (e) => {
-    const file = e.target.files[0]
-    if (file) {
-      setTeam2PdfFile(file)
-      setTeam2PdfError('')
-    }
-  }
-
-  const handleTeam1ImportClick = async () => {
-    if (team1PdfFile) {
-      await handleTeam1PdfUpload(team1PdfFile)
-    } else {
-      setTeam1PdfError('Please select a PDF file first')
-    }
-  }
-
-  const handleTeam2ImportClick = async () => {
-    if (team2PdfFile) {
-      await handleTeam2PdfUpload(team2PdfFile)
-    } else {
-      setTeam2PdfError('Please select a PDF file first')
-    }
   }
 
   // Search for pending roster in Supabase
@@ -2729,22 +2649,22 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       // Search for pending roster in Supabase
       const { data, error } = await supabase
         .from('matches')
-        .select('pending_home_roster, external_id')
+        .select('pending_team1_roster, external_id')
         .eq('game_n', gameNumber)
-        .not('pending_home_roster', 'is', null)
+        .not('pending_team1_roster', 'is', null)
         .limit(1)
         .single()
 
-      if (error || !data?.pending_home_roster) {
+      if (error || !data?.pending_team1_roster) {
         setNoticeModal({ message: t('matchSetup.noRosterFound') })
         return
       }
 
 
       // Store in local match data to trigger the pending roster UI
-      await db.matches.update(matchId, { pendingHomeRoster: data.pending_home_roster })
+      await db.matches.update(matchId, { pendingTeam1Roster: data.pending_team1_roster })
     } catch (err) {
-      console.error('[MatchSetup] Error searching for home roster:', err)
+      console.error('[MatchSetup] Error searching for Team 1 roster:', err)
       setNoticeModal({ message: t('matchSetup.errorSearchingRoster') })
     } finally {
       setTeam1RosterSearching(false)
@@ -2783,141 +2703,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       setNoticeModal({ message: t('matchSetup.errorSearchingRoster') })
     } finally {
       setTeam2RosterSearching(false)
-    }
-  }
-
-  // PDF upload handlers - must be defined before conditional returns
-  const handleTeam1PdfUpload = async (file) => {
-    if (!file) return
-    setTeam1PdfLoading(true)
-    setTeam1PdfError('')
-
-    try {
-      const parsedData = await parseRosterPdf(file)
-
-      // Replace all players with imported ones (overwrite mode)
-      const mergedPlayers = parsedData.players.map(parsedPlayer => ({
-        id: null,
-        number: parsedPlayer.number || null,
-        firstName: parsedPlayer.firstName || '',
-        lastName: parsedPlayer.lastName || '',
-        dob: parsedPlayer.dob || '',
-        isCaptain: false
-      }))
-
-      setTeam1Roster(mergedPlayers)
-
-      // Save to database if match exists
-      if (matchId && match?.team1Id) {
-        const existingPlayers = await db.players.where('teamId').equals(match.team1Id).toArray()
-        for (const ep of existingPlayers) {
-          await db.players.delete(ep.id)
-        }
-
-        await db.players.bulkAdd(
-          mergedPlayers.map(p => ({
-            teamId: match.team1Id,
-            number: p.number,
-            firstName: p.firstName,
-            lastName: p.lastName,
-            name: `${p.lastName} ${p.firstName}`,
-            dob: p.dob || null,
-            isCaptain: !!p.isCaptain,
-            role: null,
-            createdAt: new Date().toISOString()
-          }))
-        )
-      }
-
-      // Clear file input and state
-      if (team1FileInputRef.current) {
-        team1FileInputRef.current.value = ''
-      }
-      setTeam1PdfFile(null)
-
-      // Show import summary modal
-      setImportSummaryModal({
-        team: 'team1',
-        players: mergedPlayers.length,
-        errors: []
-      })
-    } catch (err) {
-      console.error('Error parsing PDF:', err)
-      setTeam1PdfError(`Failed to parse PDF: ${err.message}`)
-      // Clear file state on error too
-      setTeam1PdfFile(null)
-      if (team1FileInputRef.current) {
-        team1FileInputRef.current.value = ''
-      }
-    } finally {
-      setTeam1PdfLoading(false)
-    }
-  }
-
-  const handleTeam2PdfUpload = async (file) => {
-    if (!file) return
-    setTeam2PdfLoading(true)
-    setTeam2PdfError('')
-
-    try {
-      const parsedData = await parseRosterPdf(file)
-
-      // Replace all players with imported ones (overwrite mode)
-      const mergedPlayers = parsedData.players.map(parsedPlayer => ({
-        id: null,
-        number: parsedPlayer.number || null,
-        firstName: parsedPlayer.firstName || '',
-        lastName: parsedPlayer.lastName || '',
-        dob: parsedPlayer.dob || '',
-        isCaptain: false
-      }))
-
-      setTeam2Roster(mergedPlayers)
-
-      // Save to database if match exists
-      if (matchId && match?.team2Id) {
-        const existingPlayers = await db.players.where('teamId').equals(match.team2Id).toArray()
-        for (const ep of existingPlayers) {
-          await db.players.delete(ep.id)
-        }
-
-        await db.players.bulkAdd(
-          mergedPlayers.map(p => ({
-            teamId: match.team2Id,
-            number: p.number,
-            firstName: p.firstName,
-            lastName: p.lastName,
-            name: `${p.lastName} ${p.firstName}`,
-            dob: p.dob || null,
-            isCaptain: !!p.isCaptain,
-            role: null,
-            createdAt: new Date().toISOString()
-          }))
-        )
-      }
-
-      // Clear file input and state
-      if (team2FileInputRef.current) {
-        team2FileInputRef.current.value = ''
-      }
-      setTeam2PdfFile(null)
-
-      // Show import summary modal
-      setImportSummaryModal({
-        team: 'team2',
-        players: mergedPlayers.length,
-        errors: []
-      })
-    } catch (err) {
-      console.error('Error parsing PDF:', err)
-      setTeam2PdfError(`Failed to parse PDF: ${err.message}`)
-      // Clear file state on error too
-      setTeam2PdfFile(null)
-      if (team2FileInputRef.current) {
-        team2FileInputRef.current.value = ''
-      }
-    } finally {
-      setTeam2PdfLoading(false)
     }
   }
 
@@ -3096,7 +2881,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                                 email: notificationEmail,
                                 gameN: gameN,
                                 gamePin: match.gamePin,
-                                home: team1Name,
+                                team1: team1Name,
                                 team1ShortName: team1ShortName,
                                 team2: team2Name,
                                 team2ShortName: team2ShortName,
@@ -3458,8 +3243,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             <button
               onClick={() => {
                 setTeam1Roster([])
-                setTeam1Bench([{ role: 'Coach', firstName: '', lastName: '', dob: '' }])
-                setTeam1CoachSignature(null)
               }}
               style={{
                 padding: '6px 12px',
@@ -3491,18 +3274,18 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             </button>
           </div>
         </div>
-        {/* Player Stats for Home Team */}
+        {/* Player Stats for Team 1 Team */}
         <div style={{ marginBottom: '12px', display: 'flex', gap: '12px' }}>
           {/* Player Stats */}
           {(() => {
             const team1CaptainForm = team1Roster.find(p => p.isCaptain)
-            const homeHasError = !team1CaptainForm || team1Roster.length !== 2
+            const team1HasError = !team1CaptainForm || team1Roster.length !== 2
             return (
               <div style={{
-                border: homeHasError ? '1px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.2)',
+                border: team1HasError ? '1px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.2)',
                 borderRadius: '8px',
                 padding: '12px',
-                background: homeHasError ? 'rgba(239, 68, 68, 0.15)' : 'rgba(15, 23, 42, 0.2)',
+                background: team1HasError ? 'rgba(239, 68, 68, 0.15)' : 'rgba(15, 23, 42, 0.2)',
                 flex: 1,
                 display: 'flex',
                 alignItems: 'center',
@@ -3767,8 +3550,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             const hasChanges = hasRosterChanged(
               originalTeam1Ref.current?.team1Roster,
               team1Roster,
-              originalTeam1Ref.current?.team1Bench,
-              team1Bench
             )
 
             // If no changes, just go back to main view
@@ -3819,7 +3600,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               setTeam1Name(newTeamName)
             }
 
-            // Save home team data to database if matchId exists
+            // Save Team 1 team data to database if matchId exists
             if (matchId && match?.team1Id) {
               const finalTeam1Name = team1Roster.length === 2 && team1Roster[0]?.lastName && team1Roster[1]?.lastName
                 ? getTeamDisplayName(team1Roster, 'team1', team1Country)
@@ -3871,29 +3652,18 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 }
               }
 
-              // Update match with short name, country, bench officials, and restore signatures (re-lock)
+              // Update match with short name and country
               const updateData = {
                 team1ShortName: team1ShortName || team1Name.substring(0, 3).toUpperCase(),
                 team1Country: team1Country || '',
-                bench_home: team1Bench  // Save bench officials to match record
               }
 
-              // Save current signatures (new or existing) to database
-              if (team1CoachSignature) {
-                updateData.team1CoachSignature = team1CoachSignature
-                setSavedSignatures(prev => ({ ...prev, homeCoach: team1CoachSignature }))
-              } else if (savedSignatures.homeCoach) {
-                // Restore previously saved signature if current is empty (re-lock the team)
-                updateData.team1CoachSignature = savedSignatures.homeCoach
-                setTeam1CoachSignature(savedSignatures.homeCoach)
-              }
               // Captain signatures are collected at coin toss
 
               await db.matches.update(matchId, updateData)
 
-              // Sync home team data to Supabase as JSONB
+              // Sync Team 1 team data to Supabase as JSONB
               if (match?.seed_key) {
-                const homeCoachSig = team1CoachSignature || savedSignatures.homeCoach || null
                 await db.sync_queue.add({
                   resource: 'match',
                   action: 'update',
@@ -3902,14 +3672,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     // JSONB columns
                     team1_data: { name: finalTeam1Name?.trim() || '', short_name: team1ShortName || generateShortName(finalTeam1Name), color: team1Color, country: team1Country || '' },
                     // Captain signatures synced from CoinToss component
-                    players_home: team1Roster.filter(p => p.firstName || p.lastName).map(p => ({
+                    players_team1: team1Roster.filter(p => p.firstName || p.lastName).map(p => ({
                       number: p.number || null,
                       first_name: p.firstName || '',
                       last_name: p.lastName || '',
                       dob: formatDobForSync(p.dob),
                       is_captain: !!p.isCaptain
                     })),
-                    bench_home: team1Bench || []
                   },
                   ts: new Date().toISOString(),
                   status: 'queued'
@@ -3925,10 +3694,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
                   if (supabaseMatch?.id) {
                     const coinTossTeamA = match.coinTossTeamA || 'team1'
-                    const homeIsTeamA = coinTossTeamA === 'team1'
-                    const colorKey = homeIsTeamA ? 'team_a_color' : 'team_b_color'
-                    const shortKey = homeIsTeamA ? 'team_a_short' : 'team_b_short'
-                    const nameKey = homeIsTeamA ? 'team_a_name' : 'team_b_name'
+                    const team1IsTeamA = coinTossTeamA === 'team1'
+                    const colorKey = team1IsTeamA ? 'team_a_color' : 'team_b_color'
+                    const shortKey = team1IsTeamA ? 'team_a_short' : 'team_b_short'
+                    const nameKey = team1IsTeamA ? 'team_a_name' : 'team_b_name'
 
                     await supabase
                       .from('match_live_state')
@@ -3941,11 +3710,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                       .eq('match_id', supabaseMatch.id)
                   }
                 } catch (err) {
-                  console.debug('[MatchSetup] Could not sync home team to match_live_state:', err.message)
+                  console.debug('[MatchSetup] Could not sync Team 1 to Live Match:', err.message)
                 }
               }
 
-              setNoticeModal({ message: t('matchSetup.homeSaved'), type: 'success', syncing: true })
+              setNoticeModal({ message: t('matchSetup.team1Saved'), type: 'success', syncing: true })
 
               // Poll to check when sync completes
               const checkSyncStatus = async () => {
@@ -3957,10 +3726,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     const queued = await db.sync_queue.where('status').equals('queued').count()
                     if (queued === 0) {
                       clearInterval(interval)
-                      setNoticeModal({ message: t('matchSetup.homeSynced'), type: 'success' })
+                      setNoticeModal({ message: t('matchSetup.team1Synced'), type: 'success' })
                     } else if (attempts >= maxAttempts) {
                       clearInterval(interval)
-                      setNoticeModal({ message: t('matchSetup.homeSavedLocal'), type: 'success' })
+                      setNoticeModal({ message: t('matchSetup.team1SavedLocal'), type: 'success' })
                     }
                   } catch (err) {
                     clearInterval(interval)
@@ -3972,56 +3741,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             setCurrentView('main')
           }}>{t('common.confirm')}</button>
         </div>
-        {/* PDF Import Summary Modal - shown immediately after import */}
-        {
-          importSummaryModal && importSummaryModal.team === 'team1' && (
-            <Modal
-              title={t('matchSetup.modals.team1ImportComplete')}
-              open={true}
-              onClose={() => setImportSummaryModal(null)}
-              width={400}
-            >
-              <div style={{ padding: '20px' }}>
-                <div style={{
-                  background: 'rgba(34, 197, 94, 0.1)',
-                  border: '1px solid rgba(34, 197, 94, 0.3)',
-                  borderRadius: '8px',
-                  padding: '16px',
-                  marginBottom: '16px'
-                }}>
-                  <div style={{ fontSize: '24px', fontWeight: 700, color: '#22c55e', marginBottom: '8px' }}>
-                    {t('matchSetup.modals.playersCount', { count: importSummaryModal.players })}
-                  </div>
-                  <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)' }}>
-                    {t('matchSetup.modals.successfullyImported')}
-                  </div>
-
-                </div>
-                <div style={{
-                  background: 'rgba(234, 179, 8, 0.1)',
-                  border: '1px solid rgba(234, 179, 8, 0.3)',
-                  borderRadius: '8px',
-                  padding: '12px',
-                  marginBottom: '20px'
-                }}>
-                  <div style={{ fontSize: '13px', color: '#eab308', fontWeight: 500, marginBottom: '4px' }}>
-                    {t('matchSetup.modals.reviewImportedData')}
-                  </div>
-                  <ul style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', margin: '8px 0 0 0', paddingLeft: '20px', lineHeight: '1.6' }}>
-                    <li>{t('matchSetup.modals.reviewVerifyDob')}</li>
-                    <li>{t('matchSetup.modals.reviewSetCaptain')}</li>
-                  </ul>
-                </div>
-                <button
-                  onClick={() => setImportSummaryModal(null)}
-                  style={{ width: '100%', padding: '12px', background: 'var(--accent)', border: 'none', borderRadius: '8px', color: '#000', fontWeight: 600, cursor: 'pointer' }}
-                >
-                  {t('common.ok')}
-                </button>
-              </div>
-            </Modal>
-          )
-        }
         {/* Notice Modal - must be rendered in this view since early return prevents main render */}
         {
           noticeModal && (
@@ -4080,7 +3799,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             >
               <div style={{ padding: '16px', maxHeight: '70vh', overflowY: 'auto' }}>
                 {(() => {
-                  const roster = rosterPreview === 'team1' ? match?.pendingHomeRoster : match?.pendingteam2Roster
+                  const roster = rosterPreview === 'team1' ? match?.pendingTeam1Roster : match?.pendingTeam2Roster
                   if (!roster) return <p>{t('matchSetup.noRosterFound')}</p>
                   return (
                     <>
@@ -4153,8 +3872,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     onClick={() => {
                       if (!TEST_TEAM_1) return
                       setTeam1Roster([...TEST_TEAM_1.players])
-                      setTeam1Bench([])
-                      if (!team1Name || team1Name === 'Home') setTeam1Name(TEST_TEAM_1.name)
+                      if (!team1Name || team1Name === 'Team 1') setTeam1Name(TEST_TEAM_1.name)
                       if (!team1ShortName) setTeam1ShortName(TEST_TEAM_1.shortName)
                       setTeam1Country(TEST_TEAM_1.country || '')
                       setTestRosterConfirm(null)
@@ -4185,7 +3903,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           )
         }
 
-        {/* SignaturePad for home team view */}
+        {/* SignaturePad for Team 1 team view */}
         <SignaturePad
           open={openSignature !== null}
           onClose={() => setOpenSignature(null)}
@@ -4211,8 +3929,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             <button
               onClick={() => {
                 setTeam2Roster([])
-                setTeam2Bench([{ role: 'Coach', firstName: '', lastName: '', dob: '' }])
-                setTeam2CoachSignature(null)
               }}
               style={{
                 padding: '6px 12px',
@@ -4499,8 +4215,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             const hasChanges = hasRosterChanged(
               originalTeam2Ref.current?.team2Roster,
               team2Roster,
-              originalTeam2Ref.current?.team2Bench,
-              team2Bench
             )
 
             // If no changes, just go back to main view
@@ -4603,29 +4317,18 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 }
               }
 
-              // Update match with short name, country, bench officials, and restore signatures (re-lock)
+              // Update match with short name and country
               const updateData = {
                 team2ShortName: team2ShortName || team2Name.substring(0, 3).toUpperCase(),
-                team2Country: team2Country || '',
-                bench_team2: team2Bench  // Save bench officials to match record
+                team2Country: team2Country || ''
               }
 
-              // Save current signatures (new or existing) to database
-              if (team2CoachSignature) {
-                updateData.team2CoachSignature = team2CoachSignature
-                setSavedSignatures(prev => ({ ...prev, team2Coach: team2CoachSignature }))
-              } else if (savedSignatures.team2Coach) {
-                // Restore previously saved signature if current is empty (re-lock the team)
-                updateData.team2CoachSignature = savedSignatures.team2Coach
-                setTeam2CoachSignature(savedSignatures.team2Coach)
-              }
               // Captain signatures are collected at coin toss
 
               await db.matches.update(matchId, updateData)
 
               // Sync team2 team data to Supabase as JSONB
               if (match?.seed_key) {
-                const team2CoachSig = team2CoachSignature || savedSignatures.team2Coach || null
                 await db.sync_queue.add({
                   resource: 'match',
                   action: 'update',
@@ -4640,8 +4343,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                       last_name: p.lastName || '',
                       dob: formatDobForSync(p.dob),
                       is_captain: !!p.isCaptain
-                    })),
-                    bench_team2: team2Bench || []
+                    }))
                   },
                   ts: new Date().toISOString(),
                   status: 'queued'
@@ -4657,11 +4359,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
                   if (supabaseMatch?.id) {
                     const coinTossTeamA = match.coinTossTeamA || 'team1'
-                    const homeIsTeamA = coinTossTeamA === 'team1'
-                    // team2 is Team B if home is Team A, and vice versa
-                    const colorKey = homeIsTeamA ? 'team_b_color' : 'team_a_color'
-                    const shortKey = homeIsTeamA ? 'team_b_short' : 'team_a_short'
-                    const nameKey = homeIsTeamA ? 'team_b_name' : 'team_a_name'
+                    const team1IsTeamA = coinTossTeamA === 'team1'
+                    // team2 is Team B if Team 1 is Team A, and vice versa
+                    const colorKey = team1IsTeamA ? 'team_b_color' : 'team_a_color'
+                    const shortKey = team1IsTeamA ? 'team_b_short' : 'team_a_short'
+                    const nameKey = team1IsTeamA ? 'team_b_name' : 'team_a_name'
 
                     await supabase
                       .from('match_live_state')
@@ -4705,54 +4407,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             setCurrentView('main')
           }}>{t('common.confirm')}</button>
         </div>
-        {/* PDF Import Summary Modal - shown immediately after import */}
-        {importSummaryModal && importSummaryModal.team === 'team2' && (
-          <Modal
-            title={t('matchSetup.modals.team2ImportComplete')}
-            open={true}
-            onClose={() => setImportSummaryModal(null)}
-            width={400}
-          >
-            <div style={{ padding: '20px' }}>
-              <div style={{
-                background: 'rgba(34, 197, 94, 0.1)',
-                border: '1px solid rgba(34, 197, 94, 0.3)',
-                borderRadius: '8px',
-                padding: '16px',
-                marginBottom: '16px'
-              }}>
-                <div style={{ fontSize: '24px', fontWeight: 700, color: '#22c55e', marginBottom: '8px' }}>
-                  {t('matchSetup.modals.playersCount', { count: importSummaryModal.players })}
-                </div>
-                <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)' }}>
-                  {t('matchSetup.modals.successfullyImported')}
-                </div>
-              
-              </div>
-              <div style={{
-                background: 'rgba(234, 179, 8, 0.1)',
-                border: '1px solid rgba(234, 179, 8, 0.3)',
-                borderRadius: '8px',
-                padding: '12px',
-                marginBottom: '20px'
-              }}>
-                <div style={{ fontSize: '13px', color: '#eab308', fontWeight: 500, marginBottom: '4px' }}>
-                  {t('matchSetup.modals.reviewImportedData')}
-                </div>
-                <ul style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', margin: '8px 0 0 0', paddingLeft: '20px', lineHeight: '1.6' }}>
-                  <li>{t('matchSetup.modals.reviewVerifyDob')}</li>
-                  <li>{t('matchSetup.modals.reviewSetCaptain')}</li>
-                </ul>
-              </div>
-              <button
-                onClick={() => setImportSummaryModal(null)}
-                style={{ width: '100%', padding: '12px', background: 'var(--accent)', border: 'none', borderRadius: '8px', color: '#000', fontWeight: 600, cursor: 'pointer' }}
-              >
-                {t('common.ok')}
-              </button>
-            </div>
-          </Modal>
-        )}
         {/* Notice Modal - must be rendered in this view since early return prevents main render */}
         {noticeModal && (
           <Modal
@@ -4808,7 +4462,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           >
             <div style={{ padding: '16px', maxHeight: '70vh', overflowY: 'auto' }}>
               {(() => {
-                const roster = rosterPreview === 'team1' ? match?.pendingHomeRoster : match?.pendingteam2Roster
+                const roster = rosterPreview === 'team1' ? match?.pendingTeam1Roster : match?.pendingTeam2Roster
                 if (!roster) return <p>{t('matchSetup.noRosterFound')}</p>
                 return (
                   <>
@@ -4879,11 +4533,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                   onClick={() => {
                     if (!TEST_TEAM_2) return
                     setTeam2Roster([...TEST_TEAM_2.players])
-                    setTeam2Bench([])
-                    if (!team2Name || team2Name === 'team2') setTeam2Name(TEST_TEAM_2.name)
-                    if (!team2ShortName) setTeam2ShortName(TEST_TEAM_2.shortName)
-                    setTeam2Country(TEST_TEAM_2.country || '')
-                    setTestRosterConfirm(null)
                   }}
                   style={{
                     padding: '12px 24px',
@@ -4930,12 +4579,14 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         justifyContent: 'center',
         width: 18,
         height: 18,
+        minWidth: 18,
+        minHeight: 18,
+        flexShrink: 0,
         borderRadius: '50%',
         backgroundColor: ready ? '#22c55e' : pending ? '#3b82f6' : '#f97316',
         color: ready || pending ? '#fff' : '#0b1120',
         fontWeight: 700,
-        fontSize: 12,
-        marginRight: 8
+        fontSize: 12
       }}
       aria-label={ready ? 'Complete' : pending ? 'Ready to confirm' : 'Incomplete'}
       title={ready ? 'Complete' : pending ? 'Ready to confirm' : 'Incomplete'}
@@ -5265,10 +4916,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     let currentPin = ''
     if (type === 'referee') {
       currentPin = String(match?.refereePin || '').trim()
-    } else if (type === 'team1Bench') {
-      currentPin = String(match?.team1Pin || '').trim()
-    } else if (type === 'team2Bench') {
-      currentPin = String(match?.team2Pin || '').trim()
     }
     setNewPin(currentPin)
     setPinError('')
@@ -5295,10 +4942,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       let updateField = {}
       if (editPinType === 'referee') {
         updateField = { refereePin: pinValue }
-      } else if (editPinType === 'team1Bench') {
-        updateField = { team1Pin: pinValue }
-      } else if (editPinType === 'team2Bench') {
-        updateField = { team2Pin: pinValue }
       }
       await db.matches.update(matchId, updateField)
       setEditPinModal(false)
@@ -5444,21 +5087,38 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
       <div className="grid-4 setup-section" style={!matchInfoConfirmed ? { opacity: 0.5, pointerEvents: 'none' } : {}}>
         <div className="card" style={{ order: 1 }}>
-          {/* Row 1: Status + Team Name + Sync Indicator */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <StatusBadge ready={team1Configured} />
-              <h1 style={{
-                margin: 0,
-                background: team1Color,
-                color: getContrastColor(team1Color),
-                padding: '6px 16px',
-                borderRadius: '8px'
-              }}>
-                {getTeamDisplayName(team1Roster, 'team1', team1Country).toUpperCase()}
-              </h1>
-            </div>
+          {/* Row 0: Status + Sync Indicator */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <StatusBadge ready={team1Configured} />
             <SyncStatusIndicator status={team1SyncStatus} onRetry={() => retrySyncForCard('team1')} />
+          </div>
+          {/* Row 1: Team Name Box with names on one line, country below */}
+          <div style={{
+            background: team1Color,
+            color: getContrastColor(team1Color),
+            padding: '12px 16px',
+            borderRadius: '8px',
+            textAlign: 'center'
+          }}>
+            {/* Player names on same line */}
+            <div style={{
+              fontSize: 'clamp(16px, 4vw, 24px)',
+              fontWeight: 700,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}>
+              {team1Roster.length === 2 && team1Roster[0]?.lastName && team1Roster[1]?.lastName
+                ? `${team1Roster[0].lastName.toUpperCase()} - ${team1Roster[1].lastName.toUpperCase()}`
+                : t('matchSetup.team1').toUpperCase()}
+            </div>
+            {/* Country with flag centered below */}
+            {team1Country && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 6 }}>
+                <CountryFlag countryCode={team1Country} size="md" />
+                <span style={{ fontSize: '14px', fontWeight: 600 }}>{team1Country.toUpperCase()}</span>
+              </div>
+            )}
           </div>
 
           {/* Row 2: Color selector + Shirt + Roster */}
@@ -5485,21 +5145,38 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         </div>
 
         <div className="card" style={{ order: 2 }}>
-          {/* Row 1: Status + Team Name + Sync Indicator */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <StatusBadge ready={team2Configured} />
-              <h1 style={{
-                margin: 0,
-                background: team2Color,
-                color: getContrastColor(team2Color),
-                padding: '6px 16px',
-                borderRadius: '8px'
-              }}>
-                {getTeamDisplayName(team2Roster, 'team2', team2Country).toUpperCase()}
-              </h1>
-            </div>
+          {/* Row 0: Status + Sync Indicator */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <StatusBadge ready={team2Configured} />
             <SyncStatusIndicator status={team2SyncStatus} onRetry={() => retrySyncForCard('team2')} />
+          </div>
+          {/* Row 1: Team Name Box with names on one line, country below */}
+          <div style={{
+            background: team2Color,
+            color: getContrastColor(team2Color),
+            padding: '12px 16px',
+            borderRadius: '8px',
+            textAlign: 'center'
+          }}>
+            {/* Player names on same line */}
+            <div style={{
+              fontSize: 'clamp(16px, 4vw, 24px)',
+              fontWeight: 700,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}>
+              {team2Roster.length === 2 && team2Roster[0]?.lastName && team2Roster[1]?.lastName
+                ? `${team2Roster[0].lastName.toUpperCase()} - ${team2Roster[1].lastName.toUpperCase()}`
+                : t('matchSetup.team2').toUpperCase()}
+            </div>
+            {/* Country with flag centered below */}
+            {team2Country && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 6 }}>
+                <CountryFlag countryCode={team2Country} size="md" />
+                <span style={{ fontSize: '14px', fontWeight: 600 }}>{team2Country.toUpperCase()}</span>
+              </div>
+            )}
           </div>
 
           {/* Row 2: Color selector + Shirt + Roster */}
@@ -5649,7 +5326,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               // Check if match has no data (no sets, no signatures)
               if (matchId && match) {
                 const sets = await db.sets.where('matchId').equals(matchId).toArray()
-                const hasNoData = sets.length === 0 && !match.team1CoachSignature && !match.team2CoachSignature
+                const hasNoData = sets.length === 0
 
                 if (hasNoData) {
                   // Check for existing validation errors
@@ -5697,8 +5374,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                       { firstName: asstFirst, lastName: asstLast, country: asstCountry, dob: asstDob },
                       { lj1: lineJudge1, lj2: lineJudge2, lj3: lineJudge3, lj4: lineJudge4 }
                     ),
-                    bench_home: team1Bench,
-                    bench_team2: team2Bench
                   })
 
                   // Update teams if needed
@@ -5808,15 +5483,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         // Pad arrays to same length for alignment
         const maxPlayers = Math.max(team1Players.length, team2Players.length)
 
-        const paddedHomePlayers = [...team1Players, ...Array(maxPlayers - team1Players.length).fill(null)]
+        const paddedteam1Players = [...team1Players, ...Array(maxPlayers - team1Players.length).fill(null)]
         const paddedteam2Players = [...team2Players, ...Array(maxPlayers - team2Players.length).fill(null)]
-
-        // Bench officials
-        const homeBench = (team1Bench || []).filter(b => b.firstName || b.lastName || b.dob)
-        const team2Bench = (team2Bench || []).filter(b => b.firstName || b.lastName || b.dob)
-        const maxBench = Math.max(homeBench.length, team2Bench.length)
-        const paddedHomeBench = [...homeBench, ...Array(maxBench - homeBench.length).fill(null)]
-        const paddedteam2Bench = [...team2Bench, ...Array(maxBench - team2Bench.length).fill(null)]
 
         return (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginTop: 24 }}>
@@ -5834,7 +5502,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     </tr>
                   </thead>
                   <tbody>
-                    {paddedHomePlayers.map((player, idx) => (
+                    {paddedteam1Players.map((player, idx) => (
                       <tr key={player ? `p-${idx}` : `empty-${idx}`}>
                         {player ? (
                           <>
@@ -5950,8 +5618,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     key={color}
                     type="button"
                     onClick={async () => {
-                      const isHome = colorPickerModal.team === 'team1'
-                      if (isHome) {
+                      const isTeam1 = colorPickerModal.team === 'team1'
+                      if (isTeam1) {
                         setTeam1Color(color)
                       } else {
                         setTeam2Color(color)
@@ -5961,22 +5629,22 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                       // Sync color to local DB and Supabase
                       try {
                         // Update local team in IndexedDB
-                        const teamId = isHome ? match?.team1Id : match?.team2Id
+                        const teamId = isTeam1 ? match?.team1Id : match?.team2Id
                         if (teamId) {
                           await db.teams.update(teamId, { color })
                         }
 
                         // Update local match record in IndexedDB
                         if (match?.id) {
-                          const colorField = isHome ? 'team1Color' : 'team2Color'
+                          const colorField = isTeam1 ? 'team1Color' : 'team2Color'
                           await db.matches.update(match.id, { [colorField]: color })
                         }
 
                         // Sync to Supabase if match exists
                         if (supabase && match?.seed_key) {
-                          const teamKey = isHome ? 'team1_data' : 'team2_data'
-                          const teamName = isHome ? team1Name : team2Name
-                          const shortName = isHome ? team1ShortName : team2ShortName
+                          const teamKey = isTeam1 ? 'team1_data' : 'team2_data'
+                          const teamName = isTeam1 ? team1Name : team2Name
+                          const shortName = isTeam1 ? team1ShortName : team2ShortName
 
                           // Update matches table
                           const { data: supabaseMatch } = await supabase
@@ -5997,12 +5665,12 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
                           // Also update match_live_state if it exists (for Referee app)
                           if (supabaseMatch?.id) {
-                            // Team A = coin toss winner, determine if home is Team A
+                            // Team A = coin toss winner, determine if Team 1 is Team A
                             const coinTossTeamA = match.coinTossTeamA || 'team1'
-                            const homeIsTeamA = coinTossTeamA === 'team1'
-                            // If changing home color and home is Team A -> update team_a_color
-                            // If changing home color and home is Team B -> update team_b_color
-                            const liveStateColorKey = (isHome === homeIsTeamA) ? 'team_a_color' : 'team_b_color'
+                            const team1IsTeamA = coinTossTeamA === 'team1'
+                            // If changing Team 1 color and Team 1 is Team A -> update team_a_color
+                            // If changing Team 1 color and Team 1 is Team B -> update team_b_color
+                            const liveStateColorKey = (isTeam1 === team1IsTeamA) ? 'team_a_color' : 'team_b_color'
 
                             await supabase
                               .from('match_live_state')
@@ -6096,93 +5764,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         </Modal>
       )}
 
-      {/* PDF Import Summary Modal */}
-      {importSummaryModal && (
-        <Modal
-          title={importSummaryModal.team === 'team1' ? t('matchSetup.modals.team1ImportComplete') : t('matchSetup.modals.team2ImportComplete')}
-          open={true}
-          onClose={() => setImportSummaryModal(null)}
-          width={400}
-        >
-          <div style={{ padding: '20px' }}>
-            {/* Success summary */}
-            <div style={{
-              background: 'rgba(34, 197, 94, 0.1)',
-              border: '1px solid rgba(34, 197, 94, 0.3)',
-              borderRadius: '8px',
-              padding: '16px',
-              marginBottom: '16px'
-            }}>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: '#22c55e', marginBottom: '8px' }}>
-                {t('matchSetup.modals.playersCount', { count: importSummaryModal.players })}
-              </div>
-              <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)' }}>
-                {t('matchSetup.modals.successfullyImported')}
-              </div>
-            
-            </div>
-
-            {/* Errors if any */}
-            {importSummaryModal.errors && importSummaryModal.errors.length > 0 && (
-              <div style={{
-                background: 'rgba(239, 68, 68, 0.1)',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
-                borderRadius: '8px',
-                padding: '12px',
-                marginBottom: '16px'
-              }}>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: '#ef4444', marginBottom: '8px' }}>
-                  {importSummaryModal.errors.length} {importSummaryModal.errors.length > 1 ? t('common.error') + 's' : t('common.error')}
-                </div>
-                {importSummaryModal.errors.map((err, i) => (
-                  <div key={i} style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)' }}>{err}</div>
-                ))}
-              </div>
-            )}
-
-            {/* Warning */}
-            <div style={{
-              background: 'rgba(234, 179, 8, 0.1)',
-              border: '1px solid rgba(234, 179, 8, 0.3)',
-              borderRadius: '8px',
-              padding: '12px',
-              marginBottom: '20px'
-            }}>
-              <div style={{ fontSize: '13px', color: '#eab308', fontWeight: 500, marginBottom: '4px' }}>
-                {t('matchSetup.modals.reviewImportedData')}
-              </div>
-              <ul style={{
-                fontSize: '12px',
-                color: 'rgba(255,255,255,0.7)',
-                margin: '8px 0 0 0',
-                paddingLeft: '20px',
-                lineHeight: '1.6'
-              }}>
-                <li>{t('matchSetup.modals.reviewVerifyDob')}</li>
-                <li>{t('matchSetup.modals.reviewSetCaptain')}</li>
-              </ul>
-            </div>
-
-            <button
-              onClick={() => setImportSummaryModal(null)}
-              style={{
-                width: '100%',
-                padding: '12px',
-                background: 'var(--accent)',
-                border: 'none',
-                borderRadius: '8px',
-                color: '#fff',
-                fontSize: '14px',
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
-            >
-              {t('common.ok')}
-            </button>
-          </div>
-        </Modal>
-      )}
-
       {/* Match Created Modal - shows Match ID and all PINs for recovery */}
       {matchCreatedModal && (
         <Modal
@@ -6262,7 +5843,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 </div>
                 <div style={{ textAlign: 'center' }}>
                   <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '4px' }}>
-                    {t('matchSetup.homeBenchPinLabel')}
+                    {t('matchSetup.team1PinLabel')}
                   </span>
                   <span style={{
                     fontSize: '18px',
@@ -6276,7 +5857,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 </div>
                 <div style={{ textAlign: 'center' }}>
                   <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '4px' }}>
-                    {t('matchSetup.team2BenchPinLabel')}
+                    {t('matchSetup.team2PinLabel')}
                   </span>
                   <span style={{
                     fontSize: '18px',
@@ -6324,7 +5905,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       {/* Edit PIN Modal */}
       {editPinModal && (
         <Modal
-          title={editPinType === 'referee' ? t('matchSetup.modals.editRefereePin') : editPinType === 'team1Bench' ? t('matchSetup.modals.editHomeBenchPin') : t('matchSetup.modals.editteam2BenchPin')}
+          title={editPinType === 'referee' ? t('matchSetup.modals.editRefereePin') : editPinType === 'team1' ? t('matchSetup.modals.editTeam1Pin') : t('matchSetup.modals.editTeam2Pin')}
           open={true}
           onClose={() => {
             setEditPinModal(false)
@@ -6416,8 +5997,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         open={openSignature !== null}
         onClose={() => setOpenSignature(null)}
         onSave={handleSignatureSave}
-        title={openSignature === 'team1-captain' ? 'Home Captain Signature' :
-              openSignature === 'team2-captain' ? 'team2 Captain Signature' : 'Sign'}
+        title={openSignature === 'team1-captain' ? 'Team 1 Captain Signature' :
+              openSignature === 'team2-captain' ? 'Team 2 Captain Signature' : 'Sign'}
       />
     </MatchSetupMainView>
   )

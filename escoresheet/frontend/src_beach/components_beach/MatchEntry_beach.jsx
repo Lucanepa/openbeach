@@ -36,7 +36,7 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
             [heartbeatField]: new Date().toISOString()
           })
         } catch (error) {
-          console.error('Failed to update bench heartbeat:', error)
+          console.error('Failed to update heartbeat:', error)
         }
       }
       
@@ -53,7 +53,6 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
     return () => {
       if (interval) clearInterval(interval)
       // Clear heartbeat on unmount (skip in test mode)
-      // Use local DB instead of server API since this runs in bench context
       if (matchId !== -1) {
         const heartbeatField = team === 'team1'
           ? 'lastTeam1Heartbeat'
@@ -113,42 +112,6 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
       return
     }
 
-    // Test mode: use mock data
-    if (matchId === -1) {
-      setData({
-        match: {
-          id: -1,
-          gameNumber: 999,
-          status: 'live',
-          firstServe: 'team1',
-          coinTossTeamA: 'team1',
-          coinTossTeamB: 'team2'
-        },
-        team1: { name: 'Test Home', color: '#ef4444' },
-        team2: { name: 'Test team2', color: '#3b82f6' },
-        set: { index: 1, team1Points: 12, team2Points: 10, finished: false },
-        allSets: [{ index: 1, team1Points: 12, team2Points: 10, finished: false }],
-        events: [],
-        team1Players: [
-          { id: 1, number: 1, firstName: 'Test', lastName: 'Player 1' },
-          { id: 2, number: 5, firstName: 'Test', lastName: 'Player 2' },
-          { id: 3, number: 7, firstName: 'Test', lastName: 'Player 3' },
-          { id: 4, number: 10, firstName: 'Test', lastName: 'Player 4' },
-          { id: 5, number: 12, firstName: 'Test', lastName: 'Player 5' },
-          { id: 6, number: 15, firstName: 'Test', lastName: 'Player 6' }
-        ],
-        team2Players: [
-          { id: 7, number: 2, firstName: 'Test', lastName: 'team2 1' },
-          { id: 8, number: 4, firstName: 'Test', lastName: 'team2 2' },
-          { id: 9, number: 8, firstName: 'Test', lastName: 'team2 3' },
-          { id: 10, number: 11, firstName: 'Test', lastName: 'team2 4' },
-          { id: 11, number: 13, firstName: 'Test', lastName: 'team2 5' },
-          { id: 12, number: 16, firstName: 'Test', lastName: 'team2 6' }
-        ]
-      })
-      return
-    }
-
     // Fetch initial match data
     const fetchData = async () => {
       try {
@@ -175,33 +138,34 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
       return team === teamAKey ? 'left' : 'right'
     }
     
-    // Set 5: Special case with court switch at 8 points
-    if (data.set.index === 5) {
-      // Use set5LeftTeam if specified
-      if (data.match.set5LeftTeam) {
-        const leftTeamKey = data.match.set5LeftTeam === 'A' ? teamAKey : teamBKey
+    // Set 3 (tie break): Special case with court switch at 8 points
+    // Beach volleyball is best-of-3
+    if (data.set.index === 3) {
+      // Use set3LeftTeam if specified
+      if (data.match.set3LeftTeam) {
+        const leftTeamKey = data.match.set3LeftTeam === 'A' ? teamAKey : teamBKey
         let isLeft = team === leftTeamKey
-        
+
         // If court switch has happened at 8 points, switch again
-        if (data.match.set5CourtSwitched) {
+        if (data.match.set3CourtSwitched) {
           isLeft = !isLeft
         }
-        
+
         return isLeft ? 'left' : 'right'
       }
-      
-      // Fallback: Set 5 starts with teams switched (like set 2+)
+
+      // Fallback: Set 3 starts with teams switched (like set 2)
       let isLeft = team !== teamAKey
-      
+
       // If court switch has happened at 8 points, switch again
-      if (data.match.set5CourtSwitched) {
+      if (data.match.set3CourtSwitched) {
         isLeft = !isLeft
       }
-      
+
       return isLeft ? 'left' : 'right'
     }
-    
-    // Set 2, 3, 4: Teams switch sides (Team A goes right, Team B goes left)
+
+    // Set 2: Teams switch sides (Team A goes right, Team B goes left)
     return team === teamAKey ? 'right' : 'left'
   }, [data?.set, data?.match, team])
 
@@ -213,7 +177,6 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
       name: isTeam1 ? data.team1?.name : data.team2?.name,
       color: isTeam1 ? data.team1?.color : data.team2?.color,
       players: isTeam1 ? data.team1Players : data.team2Players,
-      bench: isTeam1 ? (data.match?.bench_home || []) : (data.match?.bench_team2 || [])
     }
   }, [data, team])
 
@@ -225,7 +188,6 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
       name: isTeam1 ? data.team2?.name : data.team1?.name,
       color: isTeam1 ? data.team2?.color : data.team1?.color,
       players: isTeam1 ? data.team2Players : data.team1Players,
-      bench: isTeam1 ? (data.match?.bench_team2 || []) : (data.match?.bench_home || [])
     }
   }, [data, team])
 
@@ -876,7 +838,8 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
                         style={{
                           position: 'relative',
                           aspectRatio: '1 / 1',
-                          fontSize: 'clamp(25px, 10vw, 40px)'
+                          fontSize: 'clamp(25px, 10vw, 40px)',
+                          background: teamInfo?.color
                         }}
                       >
                         {shouldShowBall && (
@@ -935,7 +898,8 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
                           position: 'relative',
                           width: 'clamp(44px, 10vw, 72px)',
                           height: 'clamp(44px, 10vw, 72px)',
-                          fontSize: 'clamp(18px, 4vw, 28px)'
+                          fontSize: 'clamp(18px, 4vw, 28px)',
+                          background: teamInfo?.color
                         }}
                       >
                         {shouldShowBall && (

@@ -209,7 +209,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
   // ==================== TEAM FUNCTIONS ====================
   const updateTeam = useCallback((field, value, isTeam1) => {
     const setter = isTeam1 ? setEditedTeam1 : setEditedTeam2
-    const teamLabel = isTeam1 ? 'Home' : 'team2'
+    const teamLabel = isTeam1 ? 'team1' : 'team2'
     setter(prev => {
       if (!prev) return prev
       const oldValue = prev[field]
@@ -221,7 +221,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
   }, [recordChange])
 
   const swapTeamDesignation = useCallback(() => {
-    // Swap home and team2 teams entirely
+    // Swap Team 1 and Team 2 teams entirely
     recordChange('match', 'teamDesignation', 'original', 'swapped', 'Swapped team A/B designation')
 
     // Swap teams
@@ -272,7 +272,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
   const addPlayer = useCallback((isTeam1) => {
     const setter = isTeam1 ? setEditedTeam1Players : setEditedTeam2Players
     const team = isTeam1 ? editedTeam1 : editedTeam2
-    const teamLabel = isTeam1 ? 'Home' : 'team2'
+    const teamLabel = isTeam1 ? 'team1' : 'team2'
     const newPlayer = {
       id: `new_${Date.now()}`,
       teamId: team?.id,
@@ -783,7 +783,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                   <div style={{ fontWeight: 600 }}>Set {set.index}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ color: 'rgba(255,255,255,0.6)', minWidth: '80px' }}>
-                      {editedTeam1?.name || 'Home'}:
+                      {editedTeam1?.name || 'Team 1'}:
                     </span>
                     <input
                       type="number"
@@ -834,13 +834,13 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
         {activeTab === 'teams' && (
           <div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-              {/* Home Team */}
+              {/* Team 1 Team */}
               <div>
                 {/* Team Info */}
                 <div style={cardStyle}>
                   <h2 style={{ fontSize: '16px', marginBottom: '16px', color: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: editedTeam1?.color || '#888', display: 'inline-block' }} />
-                    {t('manualAdjustmentsEditor.teamAHome', 'Team A (Home)')}
+                    {t('manualAdjustmentsEditor.teamATeam1', 'Team A (Team 1)')}
                   </h2>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     <div>
@@ -1095,7 +1095,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                 {timeoutEvents.map(event => (
                   <div key={event.id} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 100px 40px', gap: '8px', alignItems: 'center', padding: '8px', background: 'rgba(251, 191, 36, 0.1)', borderRadius: '4px' }}>
                     <span style={{ fontSize: '13px' }}>Set {event.setIndex}</span>
-                    <span style={{ fontSize: '13px', fontWeight: 500 }}>{event.payload?.team === 'team1' ? editedTeam1?.name || 'Home' : editedTeam2?.name || 'team2'}</span>
+                    <span style={{ fontSize: '13px', fontWeight: 500 }}>{event.payload?.team === 'team1' ? editedTeam1?.name || 'Team 1' : editedTeam2?.name || 'team2'}</span>
                     <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>
                       {event.stateSnapshot?.pointsA ?? event.stateSnapshot?.scoreA ?? 0}-{event.stateSnapshot?.pointsB ?? event.stateSnapshot?.scoreB ?? 0}
                     </span>
@@ -1123,7 +1123,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                     onClick={() => setEditingSanction({ ...event, type: event.payload?.sanctionType || event.payload?.type, scoreA: event.stateSnapshot?.pointsA ?? event.stateSnapshot?.scoreA ?? 0, scoreB: event.stateSnapshot?.pointsB ?? event.stateSnapshot?.scoreB ?? 0 })}
                   >
                     <span style={{ fontSize: '13px' }}>Set {event.setIndex}</span>
-                    <span style={{ fontSize: '13px', fontWeight: 500 }}>{event.payload?.team === 'team1' ? editedTeam1?.name || 'Home' : editedTeam2?.name || 'team2'}</span>
+                    <span style={{ fontSize: '13px', fontWeight: 500 }}>{event.payload?.team === 'team1' ? editedTeam1?.name || 'Team 1' : editedTeam2?.name || 'team2'}</span>
                     <span style={{ fontSize: '13px', textTransform: 'capitalize', color: '#ef4444' }}>
                       {event.payload?.sanctionType || event.payload?.type}
                     </span>

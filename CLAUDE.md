@@ -1,3 +1,8 @@
+---
+description: 
+alwaysApply: true
+---
+
 # OpenBeach - Beach Volleyball eScoresheet
 
 Offline-first beach volleyball scoring application with multi-platform support (Web PWA, Windows, macOS, Linux).

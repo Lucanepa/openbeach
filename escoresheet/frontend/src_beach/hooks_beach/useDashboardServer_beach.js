@@ -68,7 +68,6 @@ export function useDashboardServer({ enabled = true, pollInterval = 5000, matchI
   const [dashboardCounts, setDashboardCounts] = useState({
     total: 0,
     referees: 0,
-    benches: 0
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -102,8 +101,7 @@ export function useDashboardServer({ enabled = true, pollInterval = 5000, matchI
         setConnectedDashboards(connectionsData.clients || [])
         setDashboardCounts({
           total: connectionsData.dashboardClients || 0,
-          referees: connectionsData.referees || 0,
-          benches: connectionsData.benches || 0
+          referees: connectionsData.referees || 0
         })
         setError(null)
       } else {
@@ -164,7 +162,6 @@ export function useDashboardServer({ enabled = true, pollInterval = 5000, matchI
     connectedDashboards,
     dashboardCount: dashboardCounts.total,
     refereeCount: dashboardCounts.referees,
-    benchCount: dashboardCounts.benches,
 
     // State
     loading,

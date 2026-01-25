@@ -48,8 +48,8 @@ export const db = new Dexie('escoresheet')
 db.version(1).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,homeTeamId,team2TeamId,scheduledAt,status,createdAt',
-  sets: '++id,matchId,index,homePoints,team2Points,finished',
+  matches: '++id,team1TeamId,team2TeamId,scheduledAt,status,createdAt',
+  sets: '++id,matchId,index,team1Points,team2Points,finished',
   events: '++id,matchId,setIndex,ts,type,payload',
   sync_queue: '++id,resource,action,payload,ts,status' // status: queued|sent|error
 })
@@ -58,16 +58,14 @@ db.version(1).stores({
 db.version(2).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,homeTeamId,team2TeamId,scheduledAt,status,createdAt',
-  sets: '++id,matchId,index,homePoints,team2Points,finished',
+  matches: '++id,team1TeamId,team2TeamId,scheduledAt,status,createdAt',
+  sets: '++id,matchId,index,team1Points,team2Points,finished',
   events: '++id,matchId,setIndex,ts,type,payload',
   sync_queue: '++id,resource,action,payload,ts,status'
 }).upgrade(tx => {
   // Migration: add signature fields to existing matches
   return tx.table('matches').toCollection().modify(match => {
-    if (!match.homeCoachSignature) match.homeCoachSignature = null
-    if (!match.homeCaptainSignature) match.homeCaptainSignature = null
-    if (!match.team2CoachSignature) match.team2CoachSignature = null
+    if (!match.team1CaptainSignature) match.team1CaptainSignature = null
     if (!match.team2CaptainSignature) match.team2CaptainSignature = null
   })
 })
@@ -76,8 +74,8 @@ db.version(2).stores({
 db.version(3).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,homeTeamId,team2TeamId,scheduledAt,status,createdAt',
-  sets: '++id,matchId,index,homePoints,team2Points,finished',
+  matches: '++id,team1TeamId,team2TeamId,scheduledAt,status,createdAt',
+  sets: '++id,matchId,index,team1Points,team2Points,finished',
   events: '++id,matchId,setIndex,ts,type,payload',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt' // Single record to store current draft
@@ -87,8 +85,8 @@ db.version(3).stores({
 db.version(4).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,homeTeamId,team2TeamId,scheduledAt,status,createdAt,externalId',
-  sets: '++id,matchId,index,homePoints,team2Points,finished',
+  matches: '++id,team1TeamId,team2TeamId,scheduledAt,status,createdAt,externalId',
+  sets: '++id,matchId,index,team1Points,team2Points,finished',
   events: '++id,matchId,setIndex,ts,type,payload',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt'
@@ -98,8 +96,8 @@ db.version(4).stores({
 db.version(5).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,homeTeamId,team2TeamId,scheduledAt,status,createdAt,externalId',
-  sets: '++id,matchId,index,homePoints,team2Points,finished',
+  matches: '++id,team1TeamId,team2TeamId,scheduledAt,status,createdAt,externalId',
+  sets: '++id,matchId,index,team1Points,team2Points,finished',
   events: '++id,matchId,setIndex,ts,type,payload',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt',
@@ -111,8 +109,8 @@ db.version(5).stores({
 db.version(6).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,homeTeamId,team2TeamId,scheduledAt,status,createdAt,externalId',
-  sets: '++id,matchId,index,homePoints,team2Points,finished,startTime,endTime',
+  matches: '++id,team1TeamId,team2TeamId,scheduledAt,status,createdAt,externalId',
+  sets: '++id,matchId,index,team1Points,team2Points,finished,startTime,endTime',
   events: '++id,matchId,setIndex,ts,type,payload',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt',
@@ -124,8 +122,8 @@ db.version(6).stores({
 db.version(7).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,homeTeamId,team2TeamId,scheduledAt,status,createdAt,externalId,test',
-  sets: '++id,matchId,index,homePoints,team2Points,finished,startTime,endTime',
+  matches: '++id,team1TeamId,team2TeamId,scheduledAt,status,createdAt,externalId,test',
+  sets: '++id,matchId,index,team1Points,team2Points,finished,startTime,endTime',
   events: '++id,matchId,setIndex,ts,type,payload',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt',
@@ -137,8 +135,8 @@ db.version(7).stores({
 db.version(8).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,homeTeamId,team2TeamId,scheduledAt,status,createdAt,externalId,test',
-  sets: '++id,matchId,index,homePoints,team2Points,finished,startTime,endTime',
+  matches: '++id,team1TeamId,team2TeamId,scheduledAt,status,createdAt,externalId,test',
+  sets: '++id,matchId,index,team1Points,team2Points,finished,startTime,endTime',
   events: '++id,matchId,setIndex,ts,type,payload,seq',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt',
@@ -146,12 +144,12 @@ db.version(8).stores({
   scorers: '++id,seedKey,lastName,createdAt'
 })
 
-// Version 9: Add homeTeamPin and team2TeamPin to matches
+// Version 9: Add team1TeamPin and team2TeamPin to matches
 db.version(9).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,homeTeamId,team2TeamId,scheduledAt,status,createdAt,externalId,test',
-  sets: '++id,matchId,index,homePoints,team2Points,finished,startTime,endTime',
+  matches: '++id,team1TeamId,team2TeamId,scheduledAt,status,createdAt,externalId,test',
+  sets: '++id,matchId,index,team1Points,team2Points,finished,startTime,endTime',
   events: '++id,matchId,setIndex,ts,type,payload,seq',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt',
@@ -160,7 +158,7 @@ db.version(9).stores({
 }).upgrade(tx => {
   // Migration: add team PIN fields to existing matches
   return tx.table('matches').toCollection().modify(match => {
-    if (!match.homeTeamPin) match.homeTeamPin = null
+    if (!match.team1TeamPin) match.team1TeamPin = null
     if (!match.team2TeamPin) match.team2TeamPin = null
   })
 })
@@ -169,8 +167,8 @@ db.version(9).stores({
 db.version(10).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,homeTeamId,team2TeamId,scheduledAt,status,createdAt,externalId,test',
-  sets: '++id,matchId,index,homePoints,team2Points,finished,startTime,endTime',
+  matches: '++id,team1TeamId,team2TeamId,scheduledAt,status,createdAt,externalId,test',
+  sets: '++id,matchId,index,team1Points,team2Points,finished,startTime,endTime',
   events: '++id,matchId,setIndex,ts,type,payload,seq',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt',
@@ -188,8 +186,8 @@ db.version(10).stores({
 db.version(11).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,homeTeamId,team2TeamId,scheduledAt,status,createdAt,externalId,test',
-  sets: '++id,matchId,index,homePoints,team2Points,finished,startTime,endTime',
+  matches: '++id,team1TeamId,team2TeamId,scheduledAt,status,createdAt,externalId,test',
+  sets: '++id,matchId,index,team1Points,team2Points,finished,startTime,endTime',
   events: '++id,matchId,setIndex,ts,type,payload,seq',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt',
@@ -198,9 +196,9 @@ db.version(11).stores({
 }).upgrade(tx => {
   // Migration: add upload pin and pending roster fields to existing matches
   return tx.table('matches').toCollection().modify(match => {
-    if (!match.homeTeamUploadPin) match.homeTeamUploadPin = null
+    if (!match.team1TeamUploadPin) match.team1TeamUploadPin = null
     if (!match.team2TeamUploadPin) match.team2TeamUploadPin = null
-    if (!match.pendingHomeRoster) match.pendingHomeRoster = null
+    if (!match.pendingteam1Roster) match.pendingteam1Roster = null
     if (!match.pendingteam2Roster) match.pendingteam2Roster = null
   })
 })
@@ -209,8 +207,8 @@ db.version(11).stores({
 db.version(12).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,homeTeamId,team2TeamId,scheduledAt,status,createdAt,externalId,test',
-  sets: '++id,matchId,index,homePoints,team2Points,finished,startTime,endTime',
+  matches: '++id,team1TeamId,team2TeamId,scheduledAt,status,createdAt,externalId,test',
+  sets: '++id,matchId,index,team1Points,team2Points,finished,startTime,endTime',
   events: '++id,matchId,setIndex,ts,type,payload,seq',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt',
@@ -219,7 +217,7 @@ db.version(12).stores({
 }).upgrade(tx => {
   // Migration: add post-game captain signature fields to existing matches
   return tx.table('matches').toCollection().modify(match => {
-    if (!match.homePostGameCaptainSignature) match.homePostGameCaptainSignature = null
+    if (!match.team1PostGameCaptainSignature) match.team1PostGameCaptainSignature = null
     if (!match.team2PostGameCaptainSignature) match.team2PostGameCaptainSignature = null
   })
 })
@@ -230,8 +228,8 @@ db.version(12).stores({
 db.version(13).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,homeTeamId,team2TeamId,scheduledAt,status,createdAt,externalId,test',
-  sets: '++id,matchId,index,homePoints,team2Points,finished,startTime,endTime',
+  matches: '++id,team1TeamId,team2TeamId,scheduledAt,status,createdAt,externalId,test',
+  sets: '++id,matchId,index,team1Points,team2Points,finished,startTime,endTime',
   events: '++id,matchId,setIndex,ts,type,payload,seq,stateSnapshot',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt',
@@ -245,8 +243,8 @@ db.version(13).stores({
 db.version(14).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,homeTeamId,team2TeamId,scheduledAt,status,createdAt,externalId,test',
-  sets: '++id,matchId,index,homePoints,team2Points,finished,startTime,endTime',
+  matches: '++id,team1TeamId,team2TeamId,scheduledAt,status,createdAt,externalId,test',
+  sets: '++id,matchId,index,team1Points,team2Points,finished,startTime,endTime',
   events: '++id,matchId,setIndex,ts,type,payload,seq,stateSnapshot,[matchId+seq],[matchId+setIndex]',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt',
@@ -260,8 +258,8 @@ db.version(14).stores({
 db.version(15).stores({
   teams: '++id,name,createdAt',
   players: '++id,teamId,number,name,role,createdAt',
-  matches: '++id,homeTeamId,team2TeamId,scheduledAt,status,createdAt,externalId,test',
-  sets: '++id,matchId,index,homePoints,team2Points,finished,startTime,endTime',
+  matches: '++id,team1TeamId,team2TeamId,scheduledAt,status,createdAt,externalId,test',
+  sets: '++id,matchId,index,team1Points,team2Points,finished,startTime,endTime',
   events: '++id,matchId,setIndex,ts,type,payload,seq,stateSnapshot,[matchId+seq],[matchId+setIndex]',
   sync_queue: '++id,resource,action,payload,ts,status',
   match_setup: '++id,updatedAt',
@@ -284,47 +282,43 @@ db.version(16).stores({
   scorers: '++id,seedKey,lastName,createdAt',
   interaction_logs: 'id,ts,gameNumber,category,sessionId'
 }).upgrade(tx => {
-  // Migrate matches: homeTeamId → team1Id, team2TeamId → team2Id
+  // Migrate matches: team1TeamId → team1Id, team2TeamId → team2Id
   tx.table('matches').toCollection().modify(match => {
-    match.team1Id = match.homeTeamId
+    match.team1Id = match.team1TeamId
     match.team2Id = match.team2TeamId
-    delete match.homeTeamId
+    delete match.team1TeamId
     delete match.team2TeamId
     // Rename signature fields
-    match.team1CaptainSignature = match.homeCaptainSignature
+    match.team1CaptainSignature = match.team1CaptainSignature
     match.team2CaptainSignature = match.team2CaptainSignature
-    match.team1CoachSignature = match.homeCoachSignature
-    match.team2CoachSignature = match.team2CoachSignature
-    delete match.homeCaptainSignature
+    delete match.team1CaptainSignature
     delete match.team2CaptainSignature
-    delete match.homeCoachSignature
-    delete match.team2CoachSignature
     // Rename PIN fields
-    match.team1Pin = match.homeTeamPin
+    match.team1Pin = match.team1TeamPin
     match.team2Pin = match.team2TeamPin
-    delete match.homeTeamPin
+    delete match.team1TeamPin
     delete match.team2TeamPin
     // Rename upload PIN fields
-    match.team1UploadPin = match.homeTeamUploadPin
+    match.team1UploadPin = match.team1TeamUploadPin
     match.team2UploadPin = match.team2TeamUploadPin
-    delete match.homeTeamUploadPin
+    delete match.team1TeamUploadPin
     delete match.team2TeamUploadPin
     // Rename pending roster fields
-    match.pendingTeam1Roster = match.pendingHomeRoster
+    match.pendingteam1Roster = match.pendingteam1Roster
     match.pendingTeam2Roster = match.pendingteam2Roster
-    delete match.pendingHomeRoster
+    delete match.pendingteam1Roster
     delete match.pendingteam2Roster
     // Rename post-game signature fields
-    match.team1PostGameCaptainSignature = match.homePostGameCaptainSignature
+    match.team1PostGameCaptainSignature = match.team1PostGameCaptainSignature
     match.team2PostGameCaptainSignature = match.team2PostGameCaptainSignature
-    delete match.homePostGameCaptainSignature
+    delete match.team1PostGameCaptainSignature
     delete match.team2PostGameCaptainSignature
   })
-  // Migrate sets: homePoints → team1Points, team2Points → team2Points
+  // Migrate sets: team1Points → team1Points, team2Points → team2Points
   tx.table('sets').toCollection().modify(set => {
-    set.team1Points = set.homePoints
+    set.team1Points = set.team1Points
     set.team2Points = set.team2Points
-    delete set.homePoints
+    delete set.team1Points
     delete set.team2Points
   })
 })

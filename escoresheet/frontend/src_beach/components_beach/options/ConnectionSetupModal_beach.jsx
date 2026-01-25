@@ -18,8 +18,6 @@ export default function ConnectionSetupModal({
   onClose,
   matchId,
   refereePin,
-  team1Pin,
-  team2Pin,
   gameNumber
 }) {
   const { t } = useTranslation()
@@ -89,7 +87,6 @@ export default function ConnectionSetupModal({
   // Current URLs based on mode
   const currentUrls = connectionMode === 'lan' ? lanUrls : cloudUrls
   const refereeUrl = currentUrls?.referee || ''
-  const benchUrl = currentUrls?.bench || ''
 
   const renderModeSelector = () => (
     <div style={{ marginBottom: 24 }}>
@@ -265,109 +262,6 @@ export default function ConnectionSetupModal({
             <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 8 }}>
               {t('connection.scanToOpenReferee')}
             </p>
-          </div>
-        </div>
-      )}
-
-      {/* Bench Connection */}
-      {localIP && (team1Pin || team2Pin) && (
-        <div style={{
-          background: 'rgba(255,255,255,0.05)',
-          borderRadius: 8,
-          padding: 16,
-          marginBottom: 20
-        }}>
-          <h4 style={{ margin: '0 0 12px 0', fontSize: 14, fontWeight: 600 }}>
-            {t('connection.connectBenchDevices')}
-          </h4>
-          <ol style={{ margin: 0, paddingLeft: 20, fontSize: 14, lineHeight: 1.8 }}>
-            <li>{t('connection.openBrowserBench')}</li>
-            <li>
-              {t('connection.goTo')}: <code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: 4 }}>
-                {benchUrl}
-              </code>
-              <button
-                onClick={() => handleCopy(benchUrl, 'Bench URL')}
-                style={{
-                  marginLeft: 8,
-                  padding: '2px 8px',
-                  fontSize: 12,
-                  background: copyFeedback === 'Bench URL' ? '#22c55e' : 'rgba(255,255,255,0.1)',
-                  border: 'none',
-                  borderRadius: 4,
-                  color: '#fff',
-                  cursor: 'pointer'
-                }}
-              >
-                {copyFeedback === 'Bench URL' ? t('options.copied') : t('options.copy')}
-              </button>
-            </li>
-            <li>{t('connection.selectTeamEnterPin')}</li>
-          </ol>
-
-          <div style={{ display: 'flex', gap: 16, marginTop: 12 }}>
-            {team1Pin && (
-              <div style={{ flex: 1, textAlign: 'center' }}>
-                <div style={{ fontSize: 12, marginBottom: 4 }}>{t('connection.team1Pin', 'Team 1 PIN')}</div>
-                <code style={{
-                  display: 'block',
-                  background: 'rgba(59, 130, 246, 0.2)',
-                  padding: '8px 12px',
-                  borderRadius: 6,
-                  color: '#3b82f6',
-                  fontWeight: 600,
-                  fontSize: 18
-                }}>
-                  {team1Pin}
-                </code>
-                <button
-                  onClick={() => handleCopy(team1Pin, 'Team 1 PIN')}
-                  style={{
-                    marginTop: 8,
-                    padding: '4px 12px',
-                    fontSize: 12,
-                    background: copyFeedback === 'Team 1 PIN' ? '#22c55e' : 'rgba(255,255,255,0.1)',
-                    border: 'none',
-                    borderRadius: 4,
-                    color: '#fff',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {copyFeedback === 'Team 1 PIN' ? t('options.copied') : t('options.copy')}
-                </button>
-              </div>
-            )}
-            {team2Pin && (
-              <div style={{ flex: 1, textAlign: 'center' }}>
-                <div style={{ fontSize: 12, marginBottom: 4 }}>{t('connection.team2Pin', 'Team 2 PIN')}</div>
-                <code style={{
-                  display: 'block',
-                  background: 'rgba(239, 68, 68, 0.2)',
-                  padding: '8px 12px',
-                  borderRadius: 6,
-                  color: '#ef4444',
-                  fontWeight: 600,
-                  fontSize: 18
-                }}>
-                  {team2Pin}
-                </code>
-                <button
-                  onClick={() => handleCopy(team2Pin, 'Team 2 PIN')}
-                  style={{
-                    marginTop: 8,
-                    padding: '4px 12px',
-                    fontSize: 12,
-                    background: copyFeedback === 'Team 2 PIN' ? '#22c55e' : 'rgba(255,255,255,0.1)',
-                    border: 'none',
-                    borderRadius: 4,
-                    color: '#fff',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {copyFeedback === 'Team 2 PIN' ? t('options.copied') : t('options.copy')}
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}

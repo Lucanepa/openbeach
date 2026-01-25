@@ -149,7 +149,7 @@ export default function App() {
   })
   const [setIntervalDuration, setSetIntervalDuration] = useState(() => {
     const saved = localStorage.getItem('setIntervalDuration')
-    return saved ? parseInt(saved, 10) : 180 // default 3 minutes = 180 seconds
+    return saved ? parseInt(saved, 10) : 60 // default 1 minute = 60 seconds
   })
   const [keybindingsEnabled, setKeybindingsEnabled] = useState(() => {
     const saved = localStorage.getItem('keybindingsEnabled')
@@ -722,9 +722,7 @@ export default function App() {
 
     // For test matches that have been restarted (no signatures, only initial set, no events), don't show status
     if (currentMatch.test === true) {
-      const hasSignatures = currentMatch.team1CoachSignature ||
-        currentMatch.team1CaptainSignature ||
-        currentMatch.team2CoachSignature ||
+      const hasSignatures = currentMatch.team1CaptainSignature ||
         currentMatch.team2CaptainSignature
 
       if (!hasSignatures) {
@@ -759,9 +757,7 @@ export default function App() {
     ])
 
     const signaturesComplete = Boolean(
-      currentMatch.team1CoachSignature &&
       currentMatch.team1CaptainSignature &&
-      currentMatch.team2CoachSignature &&
       currentMatch.team2CaptainSignature
     )
 
@@ -793,7 +789,7 @@ export default function App() {
       status = 'Match ended'
     } else if ((currentMatch.status === 'live' || hasActiveSet || hasEventActivity) && matchReadyForPlay) {
       status = 'Match recording'
-    } else if (team1Players > 0 || team2Players > 0 || currentMatch.team1CoachSignature || currentMatch.team2CoachSignature) {
+    } else if (team1Players > 0 || team2Players > 0) {
       if (signaturesComplete) {
         status = 'Coin toss'
       } else {
@@ -1902,7 +1898,7 @@ export default function App() {
       gameNumber: matchData.game_number || TEST_MATCH_DEFAULTS.gameNumber,
       // Connection PINs: prefer JSONB, fallback to legacy
       refereePin: connectionPins.referee || matchData.referee_pin || generateRefereePin(),
-      team1UploadPin: connectionPins.upload_home || matchData.home_team_upload_pin || null,
+      team1UploadPin: connectionPins.upload_team1 || matchData.team1_team_upload_pin || null,
       team2UploadPin: connectionPins.upload_team2 || matchData.team2_team_upload_pin || null,
       team1Id,
       team2Id,
@@ -1914,9 +1910,7 @@ export default function App() {
       seedKey: TEST_MATCH_SEED_KEY,
       supabaseId: matchData.id,
       // Signatures: prefer JSONB, fallback to legacy
-      team1CoachSignature: signatures.home_coach || matchData.home_coach_signature || null,
-      team1CaptainSignature: signatures.home_captain || matchData.home_captain_signature || null,
-      team2CoachSignature: signatures.team2_coach || matchData.team2_coach_signature || null,
+      team1CaptainSignature: signatures.team1_captain || matchData.team1_captain_signature || null,
       team2CaptainSignature: signatures.team2_captain || matchData.team2_captain_signature || null,
       // Coin toss: prefer JSONB, fallback to legacy
       coinTossTeamA: coinToss.team_a || matchData.coin_toss_team_a || null,
@@ -2647,9 +2641,7 @@ export default function App() {
       // PIN check removed - no longer required
 
       // Check match state to determine where to continue
-      const isMatchSetupComplete = existing.team1CoachSignature &&
-        existing.team1CaptainSignature &&
-        existing.team2CoachSignature &&
+      const isMatchSetupComplete = existing.team1CaptainSignature &&
         existing.team2CaptainSignature
 
       setMatchId(existing.id)
@@ -3418,10 +3410,10 @@ export default function App() {
                   {(() => {
                     // Normalize data from different sources
                     const d = restorePreviewData.data
-                    const isDbFormat = d.match?.home_team || d.liveState
+                    const isDbFormat = d.match?.team1_team || d.liveState
 
                     const team1Name = isDbFormat
-                      ? (d.match?.home_team?.name || d.match?.team1Name || 'Home')
+                      ? (d.match?.team1_team?.name || d.match?.team1Name || 'Home')
                       : (d.team1?.name || d.match?.team1Name || 'Home')
                     const team2Name = isDbFormat
                       ? (d.match?.team2_team?.name || d.match?.team2Name || 'team2')
@@ -3587,7 +3579,7 @@ export default function App() {
                             textAlign: 'center'
                           }}>
                             <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>Timeouts</div>
-                            <div style={{ fontSize: '20px', fontWeight: 700 }}>{homeTimeouts}/2</div>
+                            <div style={{ fontSize: '20px', fontWeight: 700 }}>{team1Timeouts}/2</div>
                           </div>
                           <div style={{
                             padding: '12px',
@@ -3961,8 +3953,6 @@ export default function App() {
               onClose={() => setConnectionSetupModal(false)}
               matchId={matchId}
               refereePin={currentMatch?.refereePin}
-              team1Pin={currentMatch?.team1Pin}
-              team2Pin={currentMatch?.team2Pin}
               gameNumber={currentMatch?.gameNumber}
             />
 

@@ -15,9 +15,7 @@ const AREAS = [
   'approval',
   'escoresheet',
   'refereeDashboard',
-  'benchDashboard',
-  'livescore',
-  'uploadRoster'
+  'livescore'
 ]
 
 const SUPPORT_TYPES = ['bug', 'help']

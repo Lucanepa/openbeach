@@ -202,7 +202,7 @@ export async function uploadBackupToCloud(matchId, backupData) {
     const latestSet = backupData.sets.sort((a, b) => (b.index || 0) - (a.index || 0))[0]
     if (latestSet) {
       setIndex = latestSet.index || 1
-      leftScore = latestSet.homePoints || 0
+      leftScore = latestSet.team1Points || 0
       rightScore = latestSet.team2Points || 0
     }
   }

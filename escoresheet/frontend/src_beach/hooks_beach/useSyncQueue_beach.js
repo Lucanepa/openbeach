@@ -59,8 +59,8 @@ const SPORT_TYPE = 'beach'
 // Valid Supabase matches table columns - filters out invalid columns from old backup formats
 const VALID_MATCH_COLUMNS = [
   'external_id', 'game_n', 'game_pin', 'status', 'connections', 'connection_pins',
-  'scheduled_at', 'match_info', 'officials', 'home_team', 'players_home', 'bench_home',
-  'team2_team', 'players_team2', 'bench_team2', 'coin_toss', 'results', 'signatures',
+  'scheduled_at', 'match_info', 'officials', 'team1_team', 'players_team1', 
+  'team2_team', 'players_team2', 'coin_toss', 'results', 'signatures',
   'approval', 'test', 'created_at', 'updated_at', 'manual_changes', 'current_set',
   'set_results', 'final_score', 'sanctions', 'winner', 'sport_type'
 ]

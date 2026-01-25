@@ -63,14 +63,6 @@ const subdomains = {
     mainEntry: 'scoresheet-main_beach',
     themeColor: '#0891b2',
     customHtml: true
-  },
-  'beach-roster': {
-    name: 'Beach Roster Upload',
-    shortName: 'Roster',
-    description: 'Upload roster PDF for beach volleyball match',
-    title: 'Beach Roster Upload - OpenBeach',
-    mainEntry: 'upload-roster-main_beach',
-    themeColor: '#ea580c'
   }
 }
 

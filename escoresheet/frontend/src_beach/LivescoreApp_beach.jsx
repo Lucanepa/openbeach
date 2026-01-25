@@ -122,13 +122,13 @@ export default function LivescoreApp() {
     const rightPoints = isALeft ? (game.points_b || 0) : (game.points_a || 0)
 
     // Get set results from joined matches table and transform to left/right
-    // Format from DB: [{set: 1, home: 25, team2: 20}, ...]
-    // Team A is always home in our system
+    // Format from DB: [{set: 1, team1: 25, team2: 20}, ...]
+    // Team A is always Team 1 in our system
     const rawSetResults = game.matches?.set_results || []
     const setResults = rawSetResults.map(s => ({
       set: s.set,
-      left: isALeft ? s.home : s.team2,
-      right: isALeft ? s.team2 : s.home
+      left: isALeft ? s.team1 : s.team2,
+      right: isALeft ? s.team2 : s.team1
     }))
 
     return {

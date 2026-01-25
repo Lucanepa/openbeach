@@ -387,10 +387,6 @@ export default function ScoreboardOptionsModal({
                       {serverStatus.urls?.refereeIP || `${serverStatus.protocol}://${serverStatus.localIP}:${serverStatus.port}/referee`}
                     </div>
                     <div style={{ wordBreak: 'break-all' }}>
-                      <span style={{ color: 'rgba(255,255,255,0.6)' }}>{t('header.bench')}: </span>
-                      {serverStatus.urls?.benchIP || `${serverStatus.protocol}://${serverStatus.localIP}:${serverStatus.port}/bench`}
-                    </div>
-                    <div style={{ wordBreak: 'break-all' }}>
                       <span style={{ color: 'rgba(255,255,255,0.6)' }}>{t('options.websocket')}: </span>
                       {serverStatus.urls?.websocketIP || `${serverStatus.wsProtocol}://${serverStatus.localIP}:${serverStatus.wsPort}`}
                     </div>
