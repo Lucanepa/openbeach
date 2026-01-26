@@ -174,6 +174,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     return defaultKeyBindings
   })
   const [editingKey, setEditingKey] = useState(null) // Which key binding is being edited
+  const [showEndRallyOptions, setShowEndRallyOptions] = useState(false) // Show point award buttons when ending rally
 
   const [serverRunning, setServerRunning] = useState(false)
   const [serverStatus, setServerStatus] = useState(null)
@@ -2334,6 +2335,13 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     // For lineup events after points, the rally is idle (waiting for next rally_start)
     return 'idle'
   }, [data?.events, data?.set])
+
+  // Reset showEndRallyOptions when rally becomes idle
+  useEffect(() => {
+    if (rallyStatus === 'idle') {
+      setShowEndRallyOptions(false)
+    }
+  }, [rallyStatus])
 
   // Check if the rally is replayed (last event is a replay)
   const isRallyReplayed = useMemo(() => {
@@ -8993,8 +9001,9 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                             <div style={{
                               display: 'flex',
                               flexDirection: 'column',
-                              gap: `${2 * scaleFactor}px`,
-                              width: '100%'
+                              gap: `${6 * scaleFactor}px`,
+                              width: '100%',
+                              marginTop: `${6 * scaleFactor}px`
                             }}>
                               {hasPlayerWarning && (
                                 <div style={{
@@ -9056,7 +9065,8 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               borderCollapse: 'collapse',
                               color: 'var(--text)',
                               tableLayout: 'fixed',
-                              border: borderStyle
+                              border: borderStyle,
+                              marginTop: `${6 * scaleFactor}px`
                             }}>
                               <thead>
                                 <tr>
@@ -10356,7 +10366,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                   )
                                 }
 
-                                // Normal Start Rally button
+                                // Normal Start Rally/Set button
                                 return (
                                   <button
                                     className="rally-btn start"
@@ -10367,13 +10377,15 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                       ? t('scoreboard.startMatch', 'Start Match')
                                       : data?.match?.status === 'complete'
                                         ? t('scoreboard.matchComplete', 'Match Complete')
-                                        : t('scoreboard.startRally', 'Start Rally')}
+                                        : isFirstRally
+                                          ? t('scoreboard.startSet', 'Start Set')
+                                          : t('scoreboard.startRally', 'Start Rally')}
                                   </button>
                                 )
                               })()
                             ) : (
                               <>
-                                {/* Rally in progress - only show End Rally button and replay row */}
+                                {/* Rally in progress - show replay button and end rally options */}
                                 <div className="rally-controls-row" style={{ gap: '5px' }}>
                                   <button
                                     className={`replay-btn ${isRallyReplayed ? 'active' : ''}`}
@@ -10390,18 +10402,53 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                   >
                                     {isRallyReplayed ? t('scoreboard.replayed', 'Replayed') : t('scoreboard.replay', 'Replay')}
                                   </button>
-                                  <button
-                                    className="end-rally-btn"
-                                    onClick={handleEndRally}
-                                    style={{
-                                      background: isRallyReplayed ? '#eab308' : 'var(--danger)',
-                                      padding: '12px 24px',
-                                      minWidth: '140px',
-                                      fontWeight: 600
-                                    }}
-                                  >
-                                    {isRallyReplayed ? t('scoreboard.replayRally', 'Replay Rally') : t('scoreboard.endRally', 'End Rally')}
-                                  </button>
+                                  {showEndRallyOptions ? (
+                                    <>
+                                      <button
+                                        className="rally-point-button"
+                                        onClick={() => { handlePoint('left'); setShowEndRallyOptions(false) }}
+                                        style={{
+                                          background: leftTeam.color || 'var(--danger)',
+                                          color: isBrightColor(leftTeam.color || '#ef4444') ? '#000' : '#fff',
+                                          padding: '12px 16px',
+                                          fontWeight: 600,
+                                          borderRadius: '8px',
+                                          border: 'none',
+                                          cursor: 'pointer'
+                                        }}
+                                      >
+                                        {teamAShortName}
+                                      </button>
+                                      <button
+                                        className="rally-point-button"
+                                        onClick={() => { handlePoint('right'); setShowEndRallyOptions(false) }}
+                                        style={{
+                                          background: rightTeam.color || '#3b82f6',
+                                          color: isBrightColor(rightTeam.color || '#3b82f6') ? '#000' : '#fff',
+                                          padding: '12px 16px',
+                                          fontWeight: 600,
+                                          borderRadius: '8px',
+                                          border: 'none',
+                                          cursor: 'pointer'
+                                        }}
+                                      >
+                                        {teamBShortName}
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <button
+                                      className="end-rally-btn"
+                                      onClick={() => setShowEndRallyOptions(true)}
+                                      style={{
+                                        background: isRallyReplayed ? '#eab308' : 'var(--danger)',
+                                        padding: '12px 24px',
+                                        minWidth: '140px',
+                                        fontWeight: 600
+                                      }}
+                                    >
+                                      {isRallyReplayed ? t('scoreboard.replayRally', 'Replay Rally') : t('scoreboard.endRally', 'End Rally')}
+                                    </button>
+                                  )}
                                 </div>
                               </>
                             )}
@@ -10750,8 +10797,9 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                             <div style={{
                               display: 'flex',
                               flexDirection: 'column',
-                              gap: `${2 * scaleFactor}px`,
-                              width: '100%'
+                              gap: `${6 * scaleFactor}px`,
+                              width: '100%',
+                              marginTop: `${6 * scaleFactor}px`
                             }}>
                               {hasPlayerWarning && (
                                 <div style={{
@@ -10813,7 +10861,8 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               borderCollapse: 'collapse',
                               color: 'var(--text)',
                               tableLayout: 'fixed',
-                              border: borderStyle
+                              border: borderStyle,
+                              marginTop: `${6 * scaleFactor}px`
                             }}>
                               <thead>
                                 <tr>
