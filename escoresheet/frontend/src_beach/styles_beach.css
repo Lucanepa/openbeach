@@ -1778,6 +1778,7 @@ button.start-rally-button {
   width: calc(var(--base) * 4);
   height: calc(var(--base) * 5.5);
   border-radius: var(--radius-sm);
+  border: 1px solid #000;
 }
 
 .sanction-card.yellow {

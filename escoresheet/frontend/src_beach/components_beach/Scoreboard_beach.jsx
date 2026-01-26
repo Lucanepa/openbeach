@@ -198,22 +198,9 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   const timeoutInitialCountdownRef = useRef(60) // Initial timeout duration (60s for beach volleyball)
   const betweenSetsStartTimestampRef = useRef(null) // Timestamp when between-sets interval started
   const betweenSetsInitialCountdownRef = useRef(60) // Initial between-sets duration
-  const [lineupModal, setLineupModal] = useState(null) // { team: 'team1'|'team2', mode?: 'initial'|'manual' } | null
-  const [peekingLineup, setPeekingLineup] = useState({ left: false, right: false }) // Track which team's lineup is being peeked
   const [bmpModal, setBmpModal] = useState(null) // { type: 'team'|'referee', team?: 'team1'|'team2' } | null - Ball Mark Protocol modal
   const [bmpOutcomeModal, setBmpOutcomeModal] = useState(null) // { type: 'team'|'referee', team?: 'team1'|'team2', requestSeq: number } | null - requestSeq links outcome as sub-event
   const [bmpSelectedOutcome, setBmpSelectedOutcome] = useState(null) // 'successful'|'unsuccessful'|'judgment_impossible'|'in'|'out' - selected outcome awaiting confirmation
-
-  // Reset peeking state on any mouseup/touchend (since overlay disappears when peeking)
-  useEffect(() => {
-    const resetPeeking = () => setPeekingLineup({ left: false, right: false })
-    document.addEventListener('mouseup', resetPeeking)
-    document.addEventListener('touchend', resetPeeking)
-    return () => {
-      document.removeEventListener('mouseup', resetPeeking)
-      document.removeEventListener('touchend', resetPeeking)
-    }
-  }, [])
 
   // Auto-dismiss preEventPopup after 3 seconds or on click
   useEffect(() => {
@@ -243,6 +230,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   const [sanctionConfirm, setSanctionConfirm] = useState(null) // { side: 'left'|'right', type: 'improper_request'|'delay_warning'|'delay_penalty' } | null
   const [sanctionDropdown, setSanctionDropdown] = useState(null) // { team: 'team1'|'team2', type: 'player'|'official', playerNumber?: number, position?: string, role?: string, element: HTMLElement, x?: number, y?: number } | null
   const [sanctionConfirmModal, setSanctionConfirmModal] = useState(null) // { team: 'team1'|'team2', type: 'player'|'official', playerNumber?: number, position?: string, role?: string, sanctionType: 'warning'|'penalty'|'expulsion'|'disqualification' } | null
+  const [expulsionConfirmModal, setExpulsionConfirmModal] = useState(null) // { team, type, playerNumber, position, role, sanctionType, endsMatch: boolean } | null - Secondary confirmation for expulsion/disqualification
   const [courtSanctionExpanded, setCourtSanctionExpanded] = useState(false) // Toggle court sanction dropdown
 
   const [playerActionMenu, setPlayerActionMenu] = useState(null) // { team: 'team1'|'team2', position: 'I'|'II', playerNumber: number, element: HTMLElement, x?: number, y?: number } | null
@@ -2876,26 +2864,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     }
   }, [buildOnCourt, buildBeachTeamName, data, leftisTeam1, teamAKey])
 
-  // Check if lineups are set for each team in the current set
-  // Beach volleyball: No lineup submission needed - both players are always on court
-  // Just check that we have players for each team
-  const leftTeamLineupSet = useMemo(() => {
-    if (!data?.set) return false
-    // Beach volleyball: lineup is always set if team has players
-    const players = leftisTeam1 ? data.team1Players : data.team2Players
-    return players && players.length >= 2
-  }, [data?.set, data?.team1Players, data?.team2Players, leftisTeam1])
-
-  const rightTeamLineupSet = useMemo(() => {
-    if (!data?.set) return false
-    // Beach volleyball: lineup is always set if team has players
-    const players = leftisTeam1 ? data.team2Players : data.team1Players
-    return players && players.length >= 2
-  }, [data?.set, data?.team1Players, data?.team2Players, leftisTeam1])
-
-  // Track which lineups we've already validated (to prevent infinite modal loops)
-  const validatedLineupRef = useRef({ team1: null, team2: null })
-
   // Get players for each team
  
   const formatTimestamp = useCallback(date => {
@@ -3190,8 +3158,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
 
   // Refresh the eScoresheet window with latest data
   const refreshScoresheet = useCallback(async () => {
+    console.log('[Scoreboard] refreshScoresheet called, window exists:', !!scoresheetWindowRef.current, 'closed:', scoresheetWindowRef.current?.closed)
     // Check if scoresheet window is still open
     if (!scoresheetWindowRef.current || scoresheetWindowRef.current.closed) {
+      console.log('[Scoreboard] Scoresheet window not available, skipping refresh')
       return
     }
 
@@ -3211,19 +3181,33 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         db.events.where('matchId').equals(matchId).toArray()
       ])
 
+      // Format data the same way as the original scoresheet opening code
+      const team1WithCountry = team1Team ? { ...team1Team, country: match?.team1Country || '' } : { name: '', country: match?.team1Country || '' }
+      const team2WithCountry = team2Team ? { ...team2Team, country: match?.team2Country || '' } : { name: '', country: match?.team2Country || '' }
+
       const scoresheetData = {
-        match,
-        team1Team,
-        team2Team,
+        match: {
+          ...match,
+          team_1Country: match?.team1Country || '',
+          team_2Country: match?.team2Country || ''
+        },
+        team1Team: team1WithCountry,
+        team2Team: team2WithCountry,
+        team_1Team: team1WithCountry,
+        team_2Team: team2WithCountry,
         team1Players,
         team2Players,
+        team_1Players: team1Players,
+        team_2Players: team2Players,
         sets,
-        events
+        events,
+        sanctions: []
       }
 
-      // Update sessionStorage and send refresh message
-      sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
-      scoresheetWindowRef.current.postMessage({ type: 'REFRESH_SCORESHEET' }, '*')
+      console.log('[Scoreboard] Sending refresh with events count:', events?.length)
+      // Send data directly in the message (sessionStorage is per-window, not shared)
+      scoresheetWindowRef.current.postMessage({ type: 'REFRESH_SCORESHEET', data: scoresheetData }, '*')
+      console.log('[Scoreboard] Message sent with data')
     } catch (err) {
       console.error('[refreshScoresheet] Error:', err)
     }
@@ -3865,34 +3849,9 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     [pointsBySide.left, pointsBySide.right, isCompactMode, isLaptopMode]
   )
 
-  const openManualLineup = useCallback(
-    teamKey => {
-      if (!data?.set) return
-      const existingLineup = getCurrentLineup(teamKey)
-      setLineupModal({ team: teamKey, mode: 'manual', lineup: existingLineup })
-    },
-    [data?.set, getCurrentLineup]
-  )
-
-  // Rotate lineup: II→I, III→II, IV→III, V→IV, VI→V, I→VI
-  const rotateLineup = useCallback((lineup) => {
-    if (!lineup) return null
-
-    const newLineup = {
-      I: lineup.II || '',
-      II: lineup.III || '',
-      III: lineup.IV || '',
-      IV: lineup.V || '',
-      V: lineup.VI || '',
-      VI: lineup.I || ''
-    }
-
-    return newLineup
-  }, [])
-
   const handlePoint = useCallback(
-    async (side, skipConfirmation = false) => {
-      cLogger.logHandler('handlePoint', { side, skipConfirmation })
+    async (side, skipConfirmation = false, fromPenalty = false) => {
+      cLogger.logHandler('handlePoint', { side, skipConfirmation, fromPenalty })
       if (!data?.set) return
       const teamKey = mapSideToTeamKey(side)
 
@@ -3904,7 +3863,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
             team: teamKey,
             onConfirm: () => {
               setAccidentalPointConfirmModal(null)
-              handlePoint(side, true) // Call with skipConfirmation = true
+              handlePoint(side, true, fromPenalty) // Call with skipConfirmation = true, preserve fromPenalty
             }
           })
           return
@@ -3978,7 +3937,11 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       await db.sets.update(freshCurrentSet.id, {
         [field]: newPoints
       })
-      const pointSeq = await logEvent('point', { team: teamKey, score: { team1: team1Points, team2: team2Points } }, { setIndexOverride: setIndex })
+      const pointPayload = { team: teamKey, score: { team1: team1Points, team2: team2Points } }
+      if (fromPenalty) {
+        pointPayload.fromPenalty = true
+      }
+      const pointSeq = await logEvent('point', pointPayload, { setIndexOverride: setIndex })
 
       // Debug log: point awarded
       debugLogger.log('POINT_AWARDED', {
@@ -3988,88 +3951,14 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         serveBeforePoint,
         scoringTeamHadServe,
         setIndex: setIndex,
-        pointSeq
+        pointSeq,
+        fromPenalty
       }, getStateSnapshot())
 
       // Track when point was awarded (for accidental rally start check)
       lastPointAwardedTimeRef.current = Date.now()
       // Reset rally start time since rally ended
       rallyStartTimeRef.current = null
-
-      // If scoring team didn't have serve, they rotate their lineup AFTER the point
-      if (!scoringTeamHadServe) {
-        // Query database directly for the most recent lineup (data.events might be stale)
-        const allLineupEvents = await db.events
-          .where('matchId')
-          .equals(matchId)
-          .toArray()
-        const teamLineupEvents = allLineupEvents
-          .filter(e => e.type === 'lineup' && e.payload?.team === teamKey && e.setIndex === setIndex)
-          .sort((a, b) => new Date(b.ts) - new Date(a.ts)) // Most recent first
-
-        let currentLineup = null
-
-        if (teamLineupEvents.length > 0) {
-          // Use the most recent lineup
-          const lastLineupEvent = teamLineupEvents[0]
-          currentLineup = lastLineupEvent.payload?.lineup
-        }
-
-        if (currentLineup) {
-          // Rotate the lineup
-          const rotatedLineup = rotateLineup(currentLineup)
-          if (rotatedLineup) {
-            // Ensure rotated lineup only has exactly 6 positions (defensive check)
-            const validPositions = ['I', 'II', 'III', 'IV', 'V', 'VI']
-            const cleanedRotatedLineup = {}
-            for (const pos of validPositions) {
-              if (rotatedLineup[pos] !== undefined && rotatedLineup[pos] !== '' && rotatedLineup[pos] !== null) {
-                cleanedRotatedLineup[pos] = rotatedLineup[pos]
-              }
-            }
-
-            // CRITICAL: Validate all 6 positions have players - never allow empty positions
-            const missingPositions = validPositions.filter(pos => !cleanedRotatedLineup[pos])
-            if (missingPositions.length > 0) {
-              console.error('[Rotation] CRITICAL BUG: Missing players at positions:', missingPositions,
-                { rotatedLineup, cleanedRotatedLineup, currentLineup })
-              // Try to recover from current lineup (pre-rotation)
-              for (const pos of missingPositions) {
-                if (currentLineup[pos]) {
-                  cleanedRotatedLineup[pos] = currentLineup[pos]
-                }
-              }
-            }
-
-            // Save the rotated lineup as a new lineup event
-            const rotationSeq = await getNextSubSeq(pointSeq)
-            const rotationStateBefore = getStateSnapshot()
-            const rotationEventId = await db.events.add({
-              matchId,
-              setIndex: data.set.index,
-              type: 'lineup',
-              payload: {
-                team: teamKey,
-                lineup: cleanedRotatedLineup
-              },
-              ts: new Date().toISOString(),
-              seq: rotationSeq,
-              stateBefore: rotationStateBefore
-            })
-
-            // Debug log: rotation
-            debugLogger.log('ROTATION', {
-              team: teamKey,
-              newLineup: cleanedRotatedLineup,
-              rotationSeq
-            }, getStateSnapshot())
-
-            // Sync to referee and Supabase
-            syncToReferee()
-            syncLiveStateToSupabase('rotation', teamKey, { lineup: cleanedRotatedLineup })
-          }
-        }
-      }
 
       // Beach Volleyball: Court change and TTO logic
       const totalScore = team1Points + team2Points
@@ -4138,7 +4027,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       const setEnded = checkSetEnd(freshCurrentSet, team1Points, team2Points)
       // If set didn't end, we're done. If it did, checkSetEnd will show the confirmation modal
     },
-    [data?.set, data?.events, logEvent, mapSideToTeamKey, checkSetEnd, getCurrentServe, rotateLineup, matchId, syncToReferee]
+    [data?.set, data?.events, logEvent, mapSideToTeamKey, checkSetEnd, getCurrentServe, matchId, syncToReferee]
   )
 
   const handleStartRally = useCallback(async (skipConfirmation = false) => {
@@ -4309,32 +4198,12 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       side
     }, getStateSnapshot())
 
-    // If delay penalty, award point to the other team (but only if lineups are set)
+    // If delay penalty, award point to the other team immediately
+    // Beach volleyball has no lineups - always 2 players per team
     if (type === 'delay_penalty') {
-      // Check if both lineups are set before awarding point
-      const team1LineupSet = data.events?.some(e =>
-        e.type === 'lineup' &&
-        e.payload?.team === 'team1' &&
-        e.setIndex === data.set.index &&
-        e.payload?.isInitial
-      )
-      const team2LineupSet = data.events?.some(e =>
-        e.type === 'lineup' &&
-        e.payload?.team === 'team2' &&
-        e.setIndex === data.set.index &&
-        e.payload?.isInitial
-      )
-
       setSanctionConfirm(null)
-
-      if (team1LineupSet && team2LineupSet) {
-        // Both lineups are set - award point immediately
-        const otherSide = side === 'left' ? 'right' : 'left'
-        await handlePoint(otherSide)
-      } else {
-        // Lineups not set - show message
-        showAlert('Delay penalty recorded. Point will be awarded after both teams set their lineups.', 'info')
-      }
+      const otherSide = side === 'left' ? 'right' : 'left'
+      await handlePoint(otherSide, false, true)
     } else {
       setSanctionConfirm(null)
     }
@@ -4870,6 +4739,9 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
             })
           }
 
+          // Refresh eScoresheet to show the new set
+          refreshScoresheet()
+
         } finally {
           // Release lock and clear loading overlay
           setCreationInProgressRef.current = false
@@ -4889,7 +4761,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
 
       // Don't re-throw - the match can continue from local data
     }
-  }, [setEndTimeModal, data?.match, data?.set, matchId, logEvent, onFinishSet, getCurrentServe, teamAKey, onTriggerEventBackup, syncSetEnd, resetSyncState, setIntervalDuration, showAlert, t])
+  }, [setEndTimeModal, data?.match, data?.set, matchId, logEvent, onFinishSet, getCurrentServe, teamAKey, onTriggerEventBackup, syncSetEnd, resetSyncState, setIntervalDuration, showAlert, t, refreshScoresheet])
 
   // Confirm set 3 side and service choices (works with both modal and inline UI)
   const confirmSet3SideService = useCallback(async (leftTeam, firstServe, inlineMode = false) => {
@@ -6341,11 +6213,9 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   // Handle player click for sanction/injury (only when rally is not in play and lineup is set)
   // Beach volleyball: no substitutions
   const handlePlayerClick = useCallback((teamKey, position, playerNumber, event) => {
-    // Only allow when rally is not in play and lineup is set
+    // Only allow when rally is not in play
     if (rallyStatus !== 'idle') return
     if (isRallyReplayed) return // Don't allow actions when rally is replayed
-    if (!leftTeamLineupSet && teamKey === (leftisTeam1 ? 'team1' : 'team2')) return
-    if (!rightTeamLineupSet && teamKey === (leftisTeam1 ? 'team2' : 'team1')) return
     if (!playerNumber || playerNumber === '') return // Can't act on placeholder
 
     // Get the clicked element position (the circle)
@@ -6789,6 +6659,22 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     return hasSanction
   }, [data?.events])
 
+  // Count penalties for a player in the CURRENT SET only (per FIVB 20.3.1)
+  // A player can receive up to 2 penalties in the same set before being expelled
+  const getPlayerPenaltyCountInCurrentSet = useCallback((teamKey, playerNumber) => {
+    if (!data?.events || !data?.set) return 0
+
+    const currentSetIndex = data.set.index
+    return data.events.filter(e => {
+      return e.type === 'sanction' &&
+             e.setIndex === currentSetIndex &&
+             e.payload?.team === teamKey &&
+             (e.payload?.playerNumber === playerNumber ||
+              String(e.payload?.playerNumber) === String(playerNumber)) &&
+             e.payload?.type === 'penalty'
+    }).length
+  }, [data?.events, data?.set])
+
   // Get player's current highest sanction
   const getPlayerSanctionLevel = useCallback((teamKey, playerNumber) => {
     if (!data?.events) return null
@@ -6871,13 +6757,39 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
 
     const { team, type, playerNumber, position, role, sanctionType } = sanctionConfirmModal
 
-    // Validate that we're not giving the same sanction type again
+    // Validate sanction type rules
     if (playerNumber) {
       const hasThisSanction = playerHasSanctionType(team, playerNumber, sanctionType)
       const teamWarning = teamHasFormalWarning(team)
 
-      // Prevent giving the same sanction type again
-      if (hasThisSanction) {
+      // Special handling for penalties per FIVB 20.3.1:
+      // A player can receive up to 2 penalties in the same set (rude conduct)
+      // On the 3rd rude conduct in the same set, the player is expelled
+      if (sanctionType === 'penalty') {
+        const penaltyCountInSet = getPlayerPenaltyCountInCurrentSet(team, playerNumber)
+        if (penaltyCountInSet >= 2) {
+          // 3rd rude conduct in same set -> automatic expulsion per FIVB 20.3.1
+          showAlert(`Player ${playerNumber} already has 2 penalties in this set. Third rude conduct results in expulsion.`, 'info')
+          // Auto-escalate to expulsion
+          setSanctionConfirmModal(null)
+          const opponentKey = team === 'team1' ? 'team2' : 'team1'
+          const allSets = await db.sets.where({ matchId }).toArray()
+          const opponentSetsWon = allSets.filter(s => s.finished && s.winner === opponentKey).length
+          const endsMatch = opponentSetsWon >= 1
+          setExpulsionConfirmModal({
+            team,
+            type,
+            playerNumber,
+            position,
+            role,
+            sanctionType: 'expulsion',
+            endsMatch
+          })
+          return
+        }
+        // Allow penalty if < 2 in current set (don't block based on match-wide check)
+      } else if (hasThisSanction) {
+        // For non-penalty sanctions, prevent giving the same sanction type again
         showAlert(`Player ${playerNumber} already has a ${sanctionType}. A player cannot receive the same sanction type twice.`, 'warning')
         setSanctionConfirmModal(null)
         return
@@ -6892,14 +6804,36 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     }
 
     if (sanctionType === 'expulsion') {
-      // Expulsion: Incomplete set
-      await handleForfait(team, 'expulsion', 'set')
+      // Check if this expulsion would end the match (opponent wins their 2nd set)
+      const opponentKey = team === 'team1' ? 'team2' : 'team1'
+      const allSets = await db.sets.where({ matchId }).toArray()
+      const opponentSetsWon = allSets.filter(s => s.finished && s.winner === opponentKey).length
+      const endsMatch = opponentSetsWon >= 1 // If opponent already has 1 set, winning this one ends the match
+
+      // Show secondary confirmation modal
       setSanctionConfirmModal(null)
+      setExpulsionConfirmModal({
+        team,
+        type,
+        playerNumber,
+        position,
+        role,
+        sanctionType,
+        endsMatch
+      })
       return
     } else if (sanctionType === 'disqualification') {
-      // Disqualification: Incomplete match
-      await handleForfait(team, 'disqualification', 'match')
+      // Disqualification always ends the match
       setSanctionConfirmModal(null)
+      setExpulsionConfirmModal({
+        team,
+        type,
+        playerNumber,
+        position,
+        role,
+        sanctionType,
+        endsMatch: true
+      })
       return
     }
 
@@ -6913,31 +6847,51 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       role
     })
 
-    // If penalty, award point to the other team (but only if lineups are set)
+    // If penalty, award point to the other team immediately
+    // Beach volleyball has no lineups - always 2 players per team
     if (sanctionType === 'penalty') {
-      // Check if both lineups are set before awarding point
-      const team1TeamKey = leftisTeam1 ? 'team1' : 'team2'
-      const team2TeamKey = leftisTeam1 ? 'team2' : 'team1'
-
-      const team1LineupSet = data.events?.some(e =>
-        e.type === 'lineup' &&
-        e.payload?.team === team1TeamKey &&
-        e.setIndex === data.set.index &&
-        e.payload?.isInitial
-      )
-      const team2LineupSet = data.events?.some(e =>
-        e.type === 'lineup' &&
-        e.payload?.team === team2TeamKey &&
-        e.setIndex === data.set.index &&
-        e.payload?.isInitial
-      )
-
       setSanctionConfirmModal(null)
-
+      // Award point to the opposing team (marked as fromPenalty for circle display on scoresheet)
+      const otherTeam = team === 'team1' ? 'team2' : 'team1'
+      const otherSide = mapTeamKeyToSide(otherTeam)
+      await handlePoint(otherSide, false, true)
     } else {
       setSanctionConfirmModal(null)
     }
-  }, [sanctionConfirmModal, data?.set, data?.events, data?.team1Players, data?.team2Players, logEvent, mapTeamKeyToSide, handlePoint, leftisTeam1, getPlayerSanctionLevel, playerHasSanctionType, teamHasFormalWarning, handleForfait])
+  }, [sanctionConfirmModal, data?.set, data?.events, data?.team1Players, data?.team2Players, logEvent, mapTeamKeyToSide, handlePoint, leftisTeam1, getPlayerSanctionLevel, playerHasSanctionType, teamHasFormalWarning, handleForfait, matchId, getPlayerPenaltyCountInCurrentSet])
+
+  // Execute expulsion/disqualification after secondary confirmation
+  const executeExpulsionOrDisqualification = useCallback(async () => {
+    console.log('[executeExpulsionOrDisqualification] Called', { expulsionConfirmModal, hasSet: !!data?.set })
+    if (!expulsionConfirmModal || !data?.set) {
+      console.log('[executeExpulsionOrDisqualification] Early return - missing data', { expulsionConfirmModal, hasSet: !!data?.set })
+      return
+    }
+
+    const { team, type, playerNumber, position, role, sanctionType } = expulsionConfirmModal
+    console.log('[executeExpulsionOrDisqualification] Logging sanction', { team, sanctionType, playerNumber })
+
+    // Log the sanction event first (for PDF display)
+    const eventId = await logEvent('sanction', {
+      team,
+      type: sanctionType,
+      playerType: type,
+      playerNumber,
+      position,
+      role
+    })
+    console.log('[executeExpulsionOrDisqualification] Sanction logged', { eventId })
+
+    if (sanctionType === 'expulsion') {
+      // Expulsion: Incomplete set
+      await handleForfait(team, 'expulsion', 'set')
+    } else if (sanctionType === 'disqualification') {
+      // Disqualification: Incomplete match
+      await handleForfait(team, 'disqualification', 'match')
+    }
+
+    setExpulsionConfirmModal(null)
+  }, [expulsionConfirmModal, data?.set, logEvent, handleForfait])
 
   // Keyboard shortcuts handler
   useEffect(() => {
@@ -7008,7 +6962,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       }
 
       // Don't process other keys if a modal is open
-      if (hasDecisionModal || timeoutModal || lineupModal || menuModal) return
+      if (hasDecisionModal || timeoutModal || menuModal) return
 
       // Point keys
       if (key === keyBindings.pointLeft && rallyStatus === 'in_play') {
@@ -8386,7 +8340,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
       {/* Main Scoreboard Layout - Scaled proportionally to viewport */}
       <div style={{
         width: '100%',
-        height: '100vh',
+        flex: 1,
         overflow: 'hidden',
         display: 'flex',
         justifyContent: 'center',
@@ -8397,7 +8351,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
           style={{
             width: '100%',
             maxWidth: `${DESIGN_WIDTH * scaleFactor - 20}px`,
-            boxSizing: 'border-box'
+            boxSizing: 'border-box',
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column'
           }}
         >
           <div style={{ display: 'none' }}>
@@ -8695,10 +8652,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
               </div>
             </div>
 
-            {/* ===== SECTION 2: Court Row (15% Toolbar | 10% Serve | 50% Court | 10% Serve | 15% Toolbar) ===== */}
+            {/* ===== SECTION 2: Main Row (15% Toolbar | 70% Center | 15% Toolbar) - fills remaining vertical space ===== */}
             {(
               <>
-                <div style={{ display: 'flex', alignItems: 'stretch', width: '100%', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'stretch', width: '100%', flex: 1, overflow: 'hidden' }}>
                   {/* LEFT TEAM TOOLBOX - 15% */}
                   <div style={{
                     flex: '0 0 15%',
@@ -8713,7 +8670,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                     border: '1px solid rgba(255, 255, 255, 0.08)',
                     borderRadius: `${8 * scaleFactor}px`,
                     padding: `${6 * scaleFactor}px`,
-                    overflow: 'hidden',
+                    overflow: 'auto',
                     boxSizing: 'border-box'
                   }}>
                     {/* Team Header - A/B label, team name, country */}
@@ -8960,7 +8917,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                         </div>
                       )
                     })()}
-                    {/* Sanction Indicators - show IR, DW, DP if given */}
+                    {/* Combined Sanctions Section - Title, Team Sanctions, Player Sanctions */}
                     {(() => {
                       const leftTeamKey = leftisTeam1 ? 'team1' : 'team2'
                       const hasIR = data?.match?.sanctions?.[leftTeamKey === 'team1' ? 'improperRequestteam1' : 'improperRequestteam2']
@@ -8968,60 +8925,188 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                       const delayPenaltyCount = (data?.events || []).filter(e =>
                         e.type === 'sanction' && e.payload?.type === 'delay_penalty' && e.payload?.team === leftTeamKey
                       ).length
-                      if (!hasIR && !hasDW && delayPenaltyCount === 0) return null
+                      const playerSanctions = (data?.events || []).filter(e =>
+                        e.type === 'sanction' &&
+                        e.payload?.team === leftTeamKey &&
+                        e.payload?.playerNumber &&
+                        ['warning', 'penalty', 'expulsion', 'disqualification'].includes(e.payload?.type)
+                      )
+
+                      // Check if any player has a warning (yellow card) for Formal Warning display
+                      const hasPlayerWarning = playerSanctions.some(s => s.payload?.type === 'warning')
+
+                      const hasAnySanction = hasIR || hasDW || delayPenaltyCount > 0 || playerSanctions.length > 0
+                      if (!hasAnySanction) return null
+
+                      const teamPlayers = leftTeamKey === 'team1' ? data?.team1Players : data?.team2Players
+                      const player1 = teamPlayers?.[0]
+                      const player2 = teamPlayers?.[1]
+
+                      // Render sanction letter only (for alignment)
+                      const renderSanctionLetter = (sanctionType) => {
+                        if (sanctionType === 'warning') {
+                          return <span style={{ color: '#eab308', fontWeight: 700 }}>W</span>
+                        } else if (sanctionType === 'penalty') {
+                          return <span style={{ color: '#ef4444', fontWeight: 700 }}>P</span>
+                        } else if (sanctionType === 'expulsion') {
+                          return <span style={{ fontWeight: 700 }}><span style={{ color: '#eab308' }}>E</span><span style={{ color: '#ef4444' }}>x</span></span>
+                        } else if (sanctionType === 'disqualification') {
+                          return <span style={{ color: '#ef4444', fontWeight: 700 }}>D</span>
+                        }
+                        return null
+                      }
+
+                      const getScoreFromSanction = (sanction, teamKey) => {
+                        const snapshot = sanction.stateSnapshot
+                        if (!snapshot) return ''
+                        // Snapshot uses pointsA/pointsB relative to teamAKey
+                        const pointsA = snapshot.pointsA ?? 0
+                        const pointsB = snapshot.pointsB ?? 0
+                        const teamAKey = snapshot.teamAKey || 'team1'
+                        // Convert to team1/team2 scores
+                        const t1 = teamAKey === 'team1' ? pointsA : pointsB
+                        const t2 = teamAKey === 'team1' ? pointsB : pointsA
+                        // Show this team's score first
+                        return teamKey === 'team1' ? `${t1}:${t2}` : `${t2}:${t1}`
+                      }
+
+                      const borderStyle = `${1 * scaleFactor}px solid rgba(255,255,255,0.2)`
+                      const tableFontSize = `${DESIGN_VMIN * 0.018 * scaleFactor}px`
+                      const headerFontSize = `${DESIGN_VMIN * 0.016 * scaleFactor}px`
+
                       return (
-                        <div style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: `${2 * scaleFactor}px`,
-                          marginTop: `${4 * scaleFactor}px`,
-                          width: '100%'
-                        }}>
-                          {hasIR && (
+                        <div style={{ marginTop: `${4 * scaleFactor}px`, width: '100%', display: 'flex', flexDirection: 'column', gap: `${2 * scaleFactor}px` }}>
+                          {/* Sanctions Title */}
+                          <div style={{
+                            fontSize: headerFontSize,
+                            color: '#ffffff',
+                            textAlign: 'center',
+                            fontWeight: 600,
+                            background: '#000000',
+                            padding: `${4 * scaleFactor}px`,
+                            borderRadius: `${3 * scaleFactor}px`
+                          }}>
+                            Sanctions
+                          </div>
+                          {/* Team Sanctions */}
+                          {(hasIR || hasDW || delayPenaltyCount > 0 || hasPlayerWarning) && (
                             <div style={{
-                              fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
-                              color: '#9ca3af',
-                              textAlign: 'center',
-                              padding: `${2 * scaleFactor}px`,
-                              background: 'rgba(156, 163, 175, 0.15)',
-                              borderRadius: `${3 * scaleFactor}px`
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: `${2 * scaleFactor}px`,
+                              width: '100%'
                             }}>
-                              Improper Request
+                              {hasPlayerWarning && (
+                                <div style={{
+                                  fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
+                                  color: '#eab308',
+                                  textAlign: 'center',
+                                  padding: `${2 * scaleFactor}px`,
+                                  background: 'rgba(234, 179, 8, 0.15)',
+                                  borderRadius: `${3 * scaleFactor}px`
+                                }}>
+                                  Formal Warning
+                                </div>
+                              )}
+                              {hasIR && (
+                                <div style={{
+                                  fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
+                                  color: '#9ca3af',
+                                  textAlign: 'center',
+                                  padding: `${2 * scaleFactor}px`,
+                                  background: 'rgba(156, 163, 175, 0.15)',
+                                  borderRadius: `${3 * scaleFactor}px`
+                                }}>
+                                  Improper Request
+                                </div>
+                              )}
+                              {hasDW && (
+                                <div style={{
+                                  fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
+                                  color: '#eab308',
+                                  textAlign: 'center',
+                                  padding: `${2 * scaleFactor}px`,
+                                  background: 'rgba(234, 179, 8, 0.15)',
+                                  borderRadius: `${3 * scaleFactor}px`
+                                }}>
+                                  Delay Warning
+                                </div>
+                              )}
+                              {delayPenaltyCount > 0 && (
+                                [...Array(delayPenaltyCount)].map((_, i) => (
+                                  <div key={i} style={{
+                                    fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
+                                    color: '#ef4444',
+                                    textAlign: 'center',
+                                    padding: `${2 * scaleFactor}px`,
+                                    background: 'rgba(239, 68, 68, 0.15)',
+                                    borderRadius: `${3 * scaleFactor}px`
+                                  }}>
+                                    Delay Penalty
+                                  </div>
+                                ))
+                              )}
                             </div>
                           )}
-                          {hasDW && (
-                            <div style={{
-                              fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
-                              color: '#eab308',
-                              textAlign: 'center',
-                              padding: `${2 * scaleFactor}px`,
-                              background: 'rgba(234, 179, 8, 0.15)',
-                              borderRadius: `${3 * scaleFactor}px`
+                          {/* Player Sanctions Table */}
+                          {playerSanctions.length > 0 && (
+                            <table style={{
+                              width: '100%',
+                              fontSize: tableFontSize,
+                              borderCollapse: 'collapse',
+                              color: 'var(--text)',
+                              tableLayout: 'fixed',
+                              border: borderStyle
                             }}>
-                              Delay Warning
-                            </div>
-                          )}
-                          {delayPenaltyCount > 0 && (
-                            [...Array(delayPenaltyCount)].map((_, i) => (
-                              <div key={i} style={{
-                                fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
-                                color: '#ef4444',
-                                textAlign: 'center',
-                                padding: `${2 * scaleFactor}px`,
-                                background: 'rgba(239, 68, 68, 0.15)',
-                                borderRadius: `${3 * scaleFactor}px`
-                              }}>
-                                Delay Penalty
-                              </div>
-                            ))
+                              <thead>
+                                <tr>
+                                  <th style={{ width: '20%', padding: `${4 * scaleFactor}px`, textAlign: 'center', fontWeight: 600, fontSize: headerFontSize, borderRight: borderStyle, borderBottom: borderStyle }}>SET</th>
+                                  <th style={{ width: '40%', padding: `${4 * scaleFactor}px`, textAlign: 'center', fontWeight: 600, fontSize: headerFontSize, borderRight: borderStyle, borderBottom: borderStyle }}>{player1?.number || '1'}</th>
+                                  <th style={{ width: '40%', padding: `${4 * scaleFactor}px`, textAlign: 'center', fontWeight: 600, fontSize: headerFontSize, borderBottom: borderStyle }}>{player2?.number || '2'}</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {playerSanctions.map((sanction, idx) => {
+                                  const isPlayer1 = String(sanction.payload?.playerNumber) === String(player1?.number)
+                                  const isPlayer2 = String(sanction.payload?.playerNumber) === String(player2?.number)
+                                  const score = getScoreFromSanction(sanction, sanction.payload?.team)
+                                  const isLast = idx === playerSanctions.length - 1
+                                  return (
+                                    <tr key={idx}>
+                                      <td style={{ padding: `${4 * scaleFactor}px`, textAlign: 'center', borderRight: borderStyle, borderBottom: isLast ? 'none' : borderStyle }}>{sanction.setIndex}</td>
+                                      <td style={{ padding: `${4 * scaleFactor}px`, borderRight: borderStyle, borderBottom: isLast ? 'none' : borderStyle }}>
+                                        {isPlayer1 && (
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                                            {renderSanctionLetter(sanction.payload?.type)}
+                                            <span>{score}</span>
+                                          </div>
+                                        )}
+                                      </td>
+                                      <td style={{ padding: `${4 * scaleFactor}px`, borderBottom: isLast ? 'none' : borderStyle }}>
+                                        {isPlayer2 && (
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                                            {renderSanctionLetter(sanction.payload?.type)}
+                                            <span>{score}</span>
+                                          </div>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  )
+                                })}
+                              </tbody>
+                            </table>
                           )}
                         </div>
                       )
                     })()}
                   </div>
 
-                  {/* LEFT SERVE INDICATOR - 10% */}
-                  <div style={{ flex: '0 0 10%', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0, overflow: 'hidden' }}>
+                  {/* CENTER COLUMN - 70% (Court Row + Rally Controls) */}
+                  <div style={{ flex: '0 0 70%', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                    {/* Row 1: Serve Indicators + Court */}
+                    <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                      {/* LEFT SERVE INDICATOR - 10/70 = ~14.3% of center */}
+                      <div style={{ flex: '0 0 14.28%', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0, overflow: 'hidden' }}>
                     {leftServing && (() => {
                       const leftTeamKey = leftisTeam1 ? 'team1' : 'team2'
                       const servingPlayer = getServingPlayer(leftTeamKey, leftTeam)
@@ -9075,8 +9160,8 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                     })()}
                   </div>
 
-                  {/* CENTER COLUMN - Court - 50% */}
-                  <div style={{ flex: '0 0 50%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      {/* COURT - 50/70 = ~71.4% of center */}
+                      <div style={{ flex: '0 0 71.43%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     {/* 1R above court */}
                     {!isCompactMode && (() => {
                       const ref1 = data?.match?.officials?.find(o => o.role === '1st referee' || o.role === '1st Referee')
@@ -9379,13 +9464,16 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                             const servingPlayer = getServingPlayer(teamKey, leftTeam)
                             const shouldShowBall = servingPlayer && servingPlayer.number === player.number
 
-                          // Get sanctions for this player
+                          // Get sanctions for this player - show most severe only
+                          // Severity order: disqualification > expulsion > penalty > warning
                           const sanctions = getPlayerSanctions(teamKey, player.number)
-                          const hasWarning = sanctions.some(s => s.payload?.type === 'warning')
-                          const hasPenalty = sanctions.some(s => s.payload?.type === 'penalty')
-                          const hasExpulsion = sanctions.some(s => s.payload?.type === 'expulsion')
                           const hasDisqualification = sanctions.some(s => s.payload?.type === 'disqualification')
-
+                          const hasExpulsion = sanctions.some(s => s.payload?.type === 'expulsion')
+                          const hasWarning = sanctions.some(s => s.payload?.type === 'warning')
+                          // Count penalties in current set only (FIVB 20.3.1 - penalties reset each set)
+                          const penaltyCountInSet = getPlayerPenaltyCountInCurrentSet(teamKey, player.number)
+                          // Determine most severe sanction to display (penalty only shown if in current set)
+                          const mostSevere = hasDisqualification ? 'disqualification' : hasExpulsion ? 'expulsion' : penaltyCountInSet > 0 ? 'penalty' : hasWarning ? 'warning' : null
 
                           const playerSize = DESIGN_VMIN * 0.10 * scaleFactor
                           const positionSize = DESIGN_VMIN * 0.03 * scaleFactor
@@ -9477,50 +9565,58 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                 }}>C</span>
                               })()}
 
-                              {/* Sanction cards indicator */}
-                              {sanctions.length > 0 && (
+                              {/* Sanction cards indicator - shows most severe sanction, or 2 red cards for 2 penalties in set (FIVB 20.3.1) */}
+                              {mostSevere && (
                                 <div style={{
                                   position: 'absolute',
                                   bottom: `${-positionOffset}px`,
-                                  right: `${-positionOffset}px`,
+                                  right: `${-positionOffset * 0.5}px`,
                                   zIndex: 10
                                 }}>
-                                  {hasExpulsion ? (
-                                    // Expulsion: overlapping rotated cards
-                                    <div style={{ position: 'relative', width: `${DESIGN_VMIN * 0.02 * scaleFactor}px`, height: `${DESIGN_VMIN * 0.02 * scaleFactor}px` }}>
+                                  {mostSevere === 'penalty' && penaltyCountInSet >= 2 ? (
+                                    // Two penalties in current set: first card in same position, second added to its right (FIVB 20.3.1)
+                                    <>
+                                      <div className="sanction-card red" style={{ width: `${positionSize * 0.7}px`, height: `${positionSize}px`, boxShadow: '0 1px 2px rgba(0,0,0,0.6)', borderRadius: `${1 * scaleFactor}px` }}></div>
+                                      <div className="sanction-card red" style={{ position: 'absolute', top: 0, left: `${positionSize * 0.9}px`, width: `${positionSize * 0.7}px`, height: `${positionSize}px`, boxShadow: '0 1px 2px rgba(0,0,0,0.6)', borderRadius: `${1 * scaleFactor}px` }}></div>
+                                    </>
+                                  ) : mostSevere === 'expulsion' ? (
+                                    // Expulsion: yellow + red overlapping
+                                    <div style={{ position: 'relative', width: `${positionSize * 1.2}px`, height: `${positionSize}px` }}>
                                       <div className="sanction-card yellow" style={{
-                                        width: `${DESIGN_VMIN * 0.01 * scaleFactor}px`,
-                                        height: `${DESIGN_VMIN * 0.015 * scaleFactor}px`,
-                                        boxShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                                        width: `${positionSize * 0.65}px`,
+                                        height: `${positionSize}px`,
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.6)',
                                         position: 'absolute',
                                         left: '0',
-                                        top: `${DESIGN_VMIN * 0.0015 * scaleFactor}px`,
+                                        top: '0',
                                         transform: 'rotate(-8deg)',
                                         zIndex: 1,
                                         borderRadius: `${1 * scaleFactor}px`
                                       }}></div>
                                       <div className="sanction-card red" style={{
-                                        width: `${DESIGN_VMIN * 0.01 * scaleFactor}px`,
-                                        height: `${DESIGN_VMIN * 0.015 * scaleFactor}px`,
-                                        boxShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                                        width: `${positionSize * 0.65}px`,
+                                        height: `${positionSize}px`,
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.6)',
                                         position: 'absolute',
                                         right: '0',
-                                        top: `${DESIGN_VMIN * 0.0015 * scaleFactor}px`,
+                                        top: '0',
                                         transform: 'rotate(8deg)',
                                         zIndex: 2,
                                         borderRadius: `${1 * scaleFactor}px`
                                       }}></div>
                                     </div>
-                                  ) : (
-                                    // Other sanctions: separate cards
-                                    <div style={{ display: 'flex', gap: `${DESIGN_VMIN * 0.0015 * scaleFactor}px` }}>
-                                      {(hasWarning || hasDisqualification) && (
-                                        <div className="sanction-card yellow" style={{ width: `${DESIGN_VMIN * 0.013 * scaleFactor}px`, height: `${DESIGN_VMIN * 0.018 * scaleFactor}px`, boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: `${1 * scaleFactor}px` }}></div>
-                                      )}
-                                      {(hasPenalty || hasDisqualification) && (
-                                        <div className="sanction-card red" style={{ width: `${DESIGN_VMIN * 0.013 * scaleFactor}px`, height: `${DESIGN_VMIN * 0.018 * scaleFactor}px`, boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: `${1 * scaleFactor}px` }}></div>
-                                      )}
+                                  ) : mostSevere === 'disqualification' ? (
+                                    // Disqualification: yellow + red separated
+                                    <div style={{ display: 'flex', gap: `${positionSize * 0.15}px` }}>
+                                      <div className="sanction-card yellow" style={{ width: `${positionSize * 0.65}px`, height: `${positionSize}px`, boxShadow: '0 1px 2px rgba(0,0,0,0.6)', borderRadius: `${1 * scaleFactor}px` }}></div>
+                                      <div className="sanction-card red" style={{ width: `${positionSize * 0.65}px`, height: `${positionSize}px`, boxShadow: '0 1px 2px rgba(0,0,0,0.6)', borderRadius: `${1 * scaleFactor}px` }}></div>
                                     </div>
+                                  ) : mostSevere === 'penalty' ? (
+                                    // Penalty: red only
+                                    <div className="sanction-card red" style={{ width: `${positionSize * 0.7}px`, height: `${positionSize}px`, boxShadow: '0 1px 2px rgba(0,0,0,0.6)', borderRadius: `${1 * scaleFactor}px` }}></div>
+                                  ) : (
+                                    // Warning: yellow only
+                                    <div className="sanction-card yellow" style={{ width: `${positionSize * 0.7}px`, height: `${positionSize}px`, boxShadow: '0 1px 2px rgba(0,0,0,0.6)', borderRadius: `${1 * scaleFactor}px` }}></div>
                                   )}
                                 </div>
                               )}
@@ -9529,7 +9625,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                 <div
                                   style={{
                                     position: 'absolute',
-                                    bottom: `${-47 * scaleFactor}px`,
+                                    bottom: `${-62 * scaleFactor}px`,
                                     left: '50%',
                                     transform: 'translateX(-50%)',
                                     background: 'rgba(0, 0, 0, 0.85)',
@@ -9560,14 +9656,17 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           const leftTeamServes = currentServe === leftTeamKey
                           const servingPlayer = getServingPlayer(leftTeamKey, leftTeam)
                           const shouldShowBall = servingPlayer && servingPlayer.number === player.number
-                        
-                          // Get sanctions for this player
-                          const sanctions = getPlayerSanctions(leftTeamKey, player.number)
-                          const hasWarning = sanctions.some(s => s.payload?.type === 'warning')
-                          const hasPenalty = sanctions.some(s => s.payload?.type === 'penalty')
-                          const hasExpulsion = sanctions.some(s => s.payload?.type === 'expulsion')
-                          const hasDisqualification = sanctions.some(s => s.payload?.type === 'disqualification')
 
+                          // Get sanctions for this player - show most severe only
+                          // Severity order: disqualification > expulsion > penalty > warning
+                          const sanctions = getPlayerSanctions(leftTeamKey, player.number)
+                          const hasDisqualification = sanctions.some(s => s.payload?.type === 'disqualification')
+                          const hasExpulsion = sanctions.some(s => s.payload?.type === 'expulsion')
+                          const hasWarning = sanctions.some(s => s.payload?.type === 'warning')
+                          // Count penalties in current set only (FIVB 20.3.1 - penalties reset each set)
+                          const penaltyCountInSet = getPlayerPenaltyCountInCurrentSet(leftTeamKey, player.number)
+                          // Determine most severe sanction to display (penalty only shown if in current set)
+                          const mostSevere = hasDisqualification ? 'disqualification' : hasExpulsion ? 'expulsion' : penaltyCountInSet > 0 ? 'penalty' : hasWarning ? 'warning' : null
 
                           return (
                             <div
@@ -9601,53 +9700,59 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               {player.isCaptain && (() => {
                                 return <span className="court-player-captain">C</span>
                               })()}
-                              
-                    
 
-                              {/* Sanction cards indicator */}
-                              {sanctions.length > 0 && (
+                              {/* Sanction cards indicator - shows most severe sanction, or 2 red cards for 2 penalties in set (FIVB 20.3.1) */}
+                              {mostSevere && (
                                 <div style={{
                                   position: 'absolute',
-                                  bottom: '-1vmin',
-                                  right: '-1vmin',
+                                  bottom: '-1.5vmin',
+                                  right: '-0.75vmin',
                                   zIndex: 10
                                 }}>
-                                  {hasExpulsion ? (
-                                    // Expulsion: overlapping rotated cards
-                                    <div style={{ position: 'relative', width: '2vmin', height: '2vmin' }}>
+                                  {mostSevere === 'penalty' && penaltyCountInSet >= 2 ? (
+                                    // Two penalties in current set: first card in same position, second added to its right (FIVB 20.3.1)
+                                    <>
+                                      <div className="sanction-card red" style={{ width: '2.1vmin', height: '3vmin', boxShadow: '0 1px 2px rgba(0,0,0,0.6)', borderRadius: '1px' }}></div>
+                                      <div className="sanction-card red" style={{ position: 'absolute', top: 0, left: '2.7vmin', width: '2.1vmin', height: '3vmin', boxShadow: '0 1px 2px rgba(0,0,0,0.6)', borderRadius: '1px' }}></div>
+                                    </>
+                                  ) : mostSevere === 'expulsion' ? (
+                                    // Expulsion: yellow + red overlapping
+                                    <div style={{ position: 'relative', width: '3.6vmin', height: '3vmin' }}>
                                       <div className="sanction-card yellow" style={{
-                                        width: '1vmin',
-                                        height: '1.5vmin',
-                                        boxShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                                        width: '2vmin',
+                                        height: '3vmin',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.6)',
                                         position: 'absolute',
                                         left: '0',
-                                        top: '0.15vmin',
+                                        top: '0',
                                         transform: 'rotate(-8deg)',
                                         zIndex: 1,
                                         borderRadius: '1px'
                                       }}></div>
                                       <div className="sanction-card red" style={{
-                                        width: '1vmin',
-                                        height: '1.5vmin',
-                                        boxShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                                        width: '2vmin',
+                                        height: '3vmin',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.6)',
                                         position: 'absolute',
                                         right: '0',
-                                        top: '0.15vmin',
+                                        top: '0',
                                         transform: 'rotate(8deg)',
                                         zIndex: 2,
                                         borderRadius: '1px'
                                       }}></div>
                                     </div>
-                                  ) : (
-                                    // Other sanctions: separate cards
-                                    <div style={{ display: 'flex', gap: '0.15vmin' }}>
-                                      {(hasWarning || hasDisqualification) && (
-                                        <div className="sanction-card yellow" style={{ width: '1.3vmin', height: '1.8vmin', boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: '1px' }}></div>
-                                      )}
-                                      {(hasPenalty || hasDisqualification) && (
-                                        <div className="sanction-card red" style={{ width: '1.3vmin', height: '1.8vmin', boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: '1px' }}></div>
-                                      )}
+                                  ) : mostSevere === 'disqualification' ? (
+                                    // Disqualification: yellow + red separated
+                                    <div style={{ display: 'flex', gap: '0.5vmin' }}>
+                                      <div className="sanction-card yellow" style={{ width: '2vmin', height: '3vmin', boxShadow: '0 1px 2px rgba(0,0,0,0.6)', borderRadius: '1px' }}></div>
+                                      <div className="sanction-card red" style={{ width: '2vmin', height: '3vmin', boxShadow: '0 1px 2px rgba(0,0,0,0.6)', borderRadius: '1px' }}></div>
                                     </div>
+                                  ) : mostSevere === 'penalty' ? (
+                                    // Single penalty: red only
+                                    <div className="sanction-card red" style={{ width: '2.1vmin', height: '3vmin', boxShadow: '0 1px 2px rgba(0,0,0,0.6)', borderRadius: '1px' }}></div>
+                                  ) : (
+                                    // Warning: yellow only
+                                    <div className="sanction-card yellow" style={{ width: '2.1vmin', height: '3vmin', boxShadow: '0 1px 2px rgba(0,0,0,0.6)', borderRadius: '1px' }}></div>
                                   )}
                                 </div>
                               )}
@@ -9656,7 +9761,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                 <div
                                   style={{
                                     position: 'absolute',
-                                    bottom: '-47px',
+                                    bottom: '-62px',
                                     left: '50%',
                                     transform: 'translateX(-50%)',
                                     background: 'rgba(0, 0, 0, 0.85)',
@@ -9693,12 +9798,16 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           const servingPlayer = getServingPlayer(teamKey, rightTeam)
                           const shouldShowBall = servingPlayer && servingPlayer.number === player.number
 
-                          // Get sanctions for this player
+                          // Get sanctions for this player - show most severe only
+                          // Severity order: disqualification > expulsion > penalty > warning
                           const sanctions = getPlayerSanctions(teamKey, player.number)
-                          const hasWarning = sanctions.some(s => s.payload?.type === 'warning')
-                          const hasPenalty = sanctions.some(s => s.payload?.type === 'penalty')
-                          const hasExpulsion = sanctions.some(s => s.payload?.type === 'expulsion')
                           const hasDisqualification = sanctions.some(s => s.payload?.type === 'disqualification')
+                          const hasExpulsion = sanctions.some(s => s.payload?.type === 'expulsion')
+                          const hasWarning = sanctions.some(s => s.payload?.type === 'warning')
+                          // Count penalties in current set only (FIVB 20.3.1 - penalties reset each set)
+                          const penaltyCountInSet = getPlayerPenaltyCountInCurrentSet(teamKey, player.number)
+                          // Determine most severe sanction to display (penalty only shown if in current set)
+                          const mostSevere = hasDisqualification ? 'disqualification' : hasExpulsion ? 'expulsion' : penaltyCountInSet > 0 ? 'penalty' : hasWarning ? 'warning' : null
 
                           const playerSize = DESIGN_VMIN * 0.10 * scaleFactor
                           const positionSize = DESIGN_VMIN * 0.03 * scaleFactor
@@ -9787,50 +9896,58 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                 }}>C</span>
                               })()}
 
-                              {/* Sanction cards indicator */}
-                              {sanctions.length > 0 && (
+                              {/* Sanction cards indicator - shows most severe sanction, or 2 red cards for 2 penalties in set (FIVB 20.3.1) */}
+                              {mostSevere && (
                                 <div style={{
                                   position: 'absolute',
                                   bottom: `${-positionOffset}px`,
-                                  right: `${-positionOffset}px`,
+                                  right: `${-positionOffset * 0.5}px`,
                                   zIndex: 10
                                 }}>
-                                  {hasExpulsion ? (
-                                    // Expulsion: overlapping rotated cards
-                                    <div style={{ position: 'relative', width: `${DESIGN_VMIN * 0.02 * scaleFactor}px`, height: `${DESIGN_VMIN * 0.02 * scaleFactor}px` }}>
+                                  {mostSevere === 'penalty' && penaltyCountInSet >= 2 ? (
+                                    // Two penalties in current set: first card in same position, second added to its right (FIVB 20.3.1)
+                                    <>
+                                      <div className="sanction-card red" style={{ width: `${positionSize * 0.7}px`, height: `${positionSize}px`, boxShadow: '0 1px 2px rgba(0,0,0,0.6)', borderRadius: `${1 * scaleFactor}px` }}></div>
+                                      <div className="sanction-card red" style={{ position: 'absolute', top: 0, left: `${positionSize * 0.9}px`, width: `${positionSize * 0.7}px`, height: `${positionSize}px`, boxShadow: '0 1px 2px rgba(0,0,0,0.6)', borderRadius: `${1 * scaleFactor}px` }}></div>
+                                    </>
+                                  ) : mostSevere === 'expulsion' ? (
+                                    // Expulsion: yellow + red overlapping
+                                    <div style={{ position: 'relative', width: `${positionSize * 1.2}px`, height: `${positionSize}px` }}>
                                       <div className="sanction-card yellow" style={{
-                                        width: `${DESIGN_VMIN * 0.01 * scaleFactor}px`,
-                                        height: `${DESIGN_VMIN * 0.015 * scaleFactor}px`,
-                                        boxShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                                        width: `${positionSize * 0.65}px`,
+                                        height: `${positionSize}px`,
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.6)',
                                         position: 'absolute',
                                         left: '0',
-                                        top: `${DESIGN_VMIN * 0.0015 * scaleFactor}px`,
+                                        top: '0',
                                         transform: 'rotate(-8deg)',
                                         zIndex: 1,
                                         borderRadius: `${1 * scaleFactor}px`
                                       }}></div>
                                       <div className="sanction-card red" style={{
-                                        width: `${DESIGN_VMIN * 0.01 * scaleFactor}px`,
-                                        height: `${DESIGN_VMIN * 0.015 * scaleFactor}px`,
-                                        boxShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                                        width: `${positionSize * 0.65}px`,
+                                        height: `${positionSize}px`,
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.6)',
                                         position: 'absolute',
                                         right: '0',
-                                        top: `${DESIGN_VMIN * 0.0015 * scaleFactor}px`,
+                                        top: '0',
                                         transform: 'rotate(8deg)',
                                         zIndex: 2,
                                         borderRadius: `${1 * scaleFactor}px`
                                       }}></div>
                                     </div>
-                                  ) : (
-                                    // Other sanctions: separate cards
-                                    <div style={{ display: 'flex', gap: `${DESIGN_VMIN * 0.0015 * scaleFactor}px` }}>
-                                      {(hasWarning || hasDisqualification) && (
-                                        <div className="sanction-card yellow" style={{ width: `${DESIGN_VMIN * 0.013 * scaleFactor}px`, height: `${DESIGN_VMIN * 0.018 * scaleFactor}px`, boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: `${1 * scaleFactor}px` }}></div>
-                                      )}
-                                      {(hasPenalty || hasDisqualification) && (
-                                        <div className="sanction-card red" style={{ width: `${DESIGN_VMIN * 0.013 * scaleFactor}px`, height: `${DESIGN_VMIN * 0.018 * scaleFactor}px`, boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: `${1 * scaleFactor}px` }}></div>
-                                      )}
+                                  ) : mostSevere === 'disqualification' ? (
+                                    // Disqualification: yellow + red separated
+                                    <div style={{ display: 'flex', gap: `${positionSize * 0.15}px` }}>
+                                      <div className="sanction-card yellow" style={{ width: `${positionSize * 0.65}px`, height: `${positionSize}px`, boxShadow: '0 1px 2px rgba(0,0,0,0.6)', borderRadius: `${1 * scaleFactor}px` }}></div>
+                                      <div className="sanction-card red" style={{ width: `${positionSize * 0.65}px`, height: `${positionSize}px`, boxShadow: '0 1px 2px rgba(0,0,0,0.6)', borderRadius: `${1 * scaleFactor}px` }}></div>
                                     </div>
+                                  ) : mostSevere === 'penalty' ? (
+                                    // Single penalty: red only
+                                    <div className="sanction-card red" style={{ width: `${positionSize * 0.7}px`, height: `${positionSize}px`, boxShadow: '0 1px 2px rgba(0,0,0,0.6)', borderRadius: `${1 * scaleFactor}px` }}></div>
+                                  ) : (
+                                    // Warning: yellow only
+                                    <div className="sanction-card yellow" style={{ width: `${positionSize * 0.7}px`, height: `${positionSize}px`, boxShadow: '0 1px 2px rgba(0,0,0,0.6)', borderRadius: `${1 * scaleFactor}px` }}></div>
                                   )}
                                 </div>
                               )}
@@ -9839,7 +9956,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                 <div
                                   style={{
                                     position: 'absolute',
-                                    bottom: `${-47 * scaleFactor}px`,
+                                    bottom: `${-62 * scaleFactor}px`,
                                     left: '50%',
                                     transform: 'translateX(-50%)',
                                     background: 'rgba(0, 0, 0, 0.85)',
@@ -9871,12 +9988,16 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           const servingPlayer = getServingPlayer(rightTeamKey, rightTeam)
                           const shouldShowBall = servingPlayer && servingPlayer.number === player.number
 
-                          // Get sanctions for this player
+                          // Get sanctions for this player - show most severe only
+                          // Severity order: disqualification > expulsion > penalty > warning
                           const sanctions = getPlayerSanctions(rightTeamKey, player.number)
-                          const hasWarning = sanctions.some(s => s.payload?.type === 'warning')
-                          const hasPenalty = sanctions.some(s => s.payload?.type === 'penalty')
-                          const hasExpulsion = sanctions.some(s => s.payload?.type === 'expulsion')
                           const hasDisqualification = sanctions.some(s => s.payload?.type === 'disqualification')
+                          const hasExpulsion = sanctions.some(s => s.payload?.type === 'expulsion')
+                          const hasWarning = sanctions.some(s => s.payload?.type === 'warning')
+                          // Count penalties in current set only (FIVB 20.3.1 - penalties reset each set)
+                          const penaltyCountInSet = getPlayerPenaltyCountInCurrentSet(rightTeamKey, player.number)
+                          // Determine most severe sanction to display (penalty only shown if in current set)
+                          const mostSevere = hasDisqualification ? 'disqualification' : hasExpulsion ? 'expulsion' : penaltyCountInSet > 0 ? 'penalty' : hasWarning ? 'warning' : null
 
                           const playerSize = DESIGN_VMIN * 0.10 * scaleFactor
                           const positionSize = DESIGN_VMIN * 0.03 * scaleFactor
@@ -9920,50 +10041,60 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                 fontSize: `${DESIGN_VMIN * 0.018 * scaleFactor}px`
                               }}>{player.position}</span>
 
-                              {/* Sanction cards indicator */}
-                              {sanctions.length > 0 && (
+                              {/* Sanction cards indicator - shows most severe sanction, or 2 red cards for 2 penalties in set (FIVB 20.3.1) */}
+                              {mostSevere && (
                                 <div style={{
                                   position: 'absolute',
                                   bottom: `${-positionOffset}px`,
-                                  right: `${-positionOffset}px`,
+                                  right: `${-positionOffset * 0.5}px`,
                                   zIndex: 10
                                 }}>
-                                  {hasExpulsion ? (
-                                    // Expulsion: overlapping rotated cards
-                                    <div style={{ position: 'relative', width: `${DESIGN_VMIN * 0.02 * scaleFactor}px`, height: `${DESIGN_VMIN * 0.02 * scaleFactor}px` }}>
+                                  {mostSevere === 'penalty' && penaltyCountInSet >= 2 ? (
+                                    // Two penalties in current set: first card in same position, second added to its right (FIVB 20.3.1)
+                                    <>
+                                      <div className="sanction-card red" style={{ width: `${positionSize * 0.7}px`, height: `${positionSize}px`, boxShadow: '0 1px 2px rgba(0,0,0,0.6)', border: '1px solid #000', borderRadius: `${1 * scaleFactor}px` }}></div>
+                                      <div className="sanction-card red" style={{ position: 'absolute', top: 0, left: `${positionSize * 0.9}px`, width: `${positionSize * 0.7}px`, height: `${positionSize}px`, boxShadow: '0 1px 2px rgba(0,0,0,0.6)', border: '1px solid #000', borderRadius: `${1 * scaleFactor}px` }}></div>
+                                    </>
+                                  ) : mostSevere === 'expulsion' ? (
+                                    // Expulsion: yellow + red overlapping
+                                    <div style={{ position: 'relative', width: `${positionSize * 1.2}px`, height: `${positionSize}px` }}>
                                       <div className="sanction-card yellow" style={{
-                                        width: `${DESIGN_VMIN * 0.01 * scaleFactor}px`,
-                                        height: `${DESIGN_VMIN * 0.015 * scaleFactor}px`,
-                                        boxShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                                        width: `${positionSize * 0.65}px`,
+                                        height: `${positionSize}px`,
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.6)',
+                                        border: '1px solid #000',
                                         position: 'absolute',
                                         left: '0',
-                                        top: `${DESIGN_VMIN * 0.0015 * scaleFactor}px`,
+                                        top: '0',
                                         transform: 'rotate(-8deg)',
                                         zIndex: 1,
                                         borderRadius: `${1 * scaleFactor}px`
                                       }}></div>
                                       <div className="sanction-card red" style={{
-                                        width: `${DESIGN_VMIN * 0.01 * scaleFactor}px`,
-                                        height: `${DESIGN_VMIN * 0.015 * scaleFactor}px`,
-                                        boxShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                                        width: `${positionSize * 0.65}px`,
+                                        height: `${positionSize}px`,
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.6)',
+                                        border: '1px solid #000',
                                         position: 'absolute',
                                         right: '0',
-                                        top: `${DESIGN_VMIN * 0.0015 * scaleFactor}px`,
+                                        top: '0',
                                         transform: 'rotate(8deg)',
                                         zIndex: 2,
                                         borderRadius: `${1 * scaleFactor}px`
                                       }}></div>
                                     </div>
-                                  ) : (
-                                    // Other sanctions: separate cards
-                                    <div style={{ display: 'flex', gap: `${DESIGN_VMIN * 0.0015 * scaleFactor}px` }}>
-                                      {(hasWarning || hasDisqualification) && (
-                                        <div className="sanction-card yellow" style={{ width: `${DESIGN_VMIN * 0.013 * scaleFactor}px`, height: `${DESIGN_VMIN * 0.018 * scaleFactor}px`, boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: `${1 * scaleFactor}px` }}></div>
-                                      )}
-                                      {(hasPenalty || hasDisqualification) && (
-                                        <div className="sanction-card red" style={{ width: `${DESIGN_VMIN * 0.013 * scaleFactor}px`, height: `${DESIGN_VMIN * 0.018 * scaleFactor}px`, boxShadow: '0 1px 3px rgba(0,0,0,0.8)', borderRadius: `${1 * scaleFactor}px` }}></div>
-                                      )}
+                                  ) : mostSevere === 'disqualification' ? (
+                                    // Disqualification: yellow + red separated
+                                    <div style={{ display: 'flex', gap: `${positionSize * 0.15}px` }}>
+                                      <div className="sanction-card yellow" style={{ width: `${positionSize * 0.65}px`, height: `${positionSize}px`, boxShadow: '0 1px 2px rgba(0,0,0,0.6)', border: '1px solid #000', borderRadius: `${1 * scaleFactor}px` }}></div>
+                                      <div className="sanction-card red" style={{ width: `${positionSize * 0.65}px`, height: `${positionSize}px`, boxShadow: '0 1px 2px rgba(0,0,0,0.6)', border: '1px solid #000', borderRadius: `${1 * scaleFactor}px` }}></div>
                                     </div>
+                                  ) : mostSevere === 'penalty' ? (
+                                    // Single penalty: red only
+                                    <div className="sanction-card red" style={{ width: `${positionSize * 0.7}px`, height: `${positionSize}px`, boxShadow: '0 1px 2px rgba(0,0,0,0.6)', border: '1px solid #000', borderRadius: `${1 * scaleFactor}px` }}></div>
+                                  ) : (
+                                    // Warning: yellow only
+                                    <div className="sanction-card yellow" style={{ width: `${positionSize * 0.7}px`, height: `${positionSize}px`, boxShadow: '0 1px 2px rgba(0,0,0,0.6)', border: '1px solid #000', borderRadius: `${1 * scaleFactor}px` }}></div>
                                   )}
                                 </div>
                               )}
@@ -9972,7 +10103,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                 <div
                                   style={{
                                     position: 'absolute',
-                                    bottom: `${-47 * scaleFactor}px`,
+                                    bottom: `${-62 * scaleFactor}px`,
                                     left: '50%',
                                     transform: 'translateX(-50%)',
                                     background: 'rgba(0, 0, 0, 0.85)',
@@ -10018,10 +10149,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                       )
                     })()}
                   </div>
-                  {/* END CENTER COLUMN */}
+                      {/* END COURT */}
 
-                  {/* RIGHT SERVE INDICATOR - 10% */}
-                  <div style={{ flex: '0 0 10%', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0, overflow: 'hidden' }}>
+                      {/* RIGHT SERVE INDICATOR - 10/70 = ~14.3% of center */}
+                      <div style={{ flex: '0 0 14.28%', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0, overflow: 'hidden' }}>
                     {rightServing && (() => {
                       const rightTeamKey = leftisTeam1 ? 'team2' : 'team1'
                       const servingPlayer = getServingPlayer(rightTeamKey, rightTeam)
@@ -10073,7 +10204,214 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                         </div>
                       )
                     })()}
+                      </div>
+                    </div>
+                    {/* END Row 1: Serve Indicators + Court */}
+
+                    {/* Row 2: Rally Controls */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '100%',
+                      minHeight: `${(isCompactMode ? 80 : 120) * scaleFactor}px`
+                    }}>
+                      <div className="rally-controls" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', transform: `scale(${scaleFactor})`, transformOrigin: 'center center' }}>
+                        {/* Show timeout countdown if timeout is active */}
+                        {timeoutModal && timeoutModal.started ? (
+                          <div
+                            onClick={stopTimeout}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '16px',
+                              padding: '16px 20px',
+                              borderRadius: '12px',
+                              background: 'rgba(255, 255, 255, 0.05)',
+                              border: '1px solid rgba(255, 255, 255, 0.1)',
+                              cursor: 'pointer'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
+                          >
+                            {/* Stop sign icon - left side */}
+                            <svg viewBox="0 0 24 24" width="45" height="45" style={{ flexShrink: 0 }}>
+                              <polygon points="7.86,2 16.14,2 22,7.86 22,16.14 16.14,22 7.86,22 2,16.14 2,7.86" fill="#ef4444" />
+                              <text x="12" y="13" textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="5" fontWeight="bold">STOP</text>
+                            </svg>
+                            {/* Countdown content - center */}
+                            <div style={{ flex: 1, minWidth: '160px' }}>
+                              <div style={{
+                                fontSize: '14px',
+                                fontWeight: 600,
+                                color: 'var(--muted)',
+                                textAlign: 'center',
+                                marginBottom: '4px'
+                              }}>
+                                Time-out — {timeoutModal.team === 'team1' ? (data?.team1Team?.name || 'team1') : (data?.team2Team?.name || 'team2')}
+                              </div>
+                              <div style={{
+                                fontSize: '42px',
+                                fontWeight: 700,
+                                color: timeoutModal.countdown <= 10 ? '#ef4444' : 'var(--accent)',
+                                textAlign: 'center',
+                                fontFamily: getScoreFont(),
+                                lineHeight: 1
+                              }}>
+                                {formatTimeout(timeoutModal.countdown)}
+                              </div>
+                              {/* Progress bar */}
+                              <div style={{
+                                width: '100%',
+                                height: '6px',
+                                background: 'rgba(255, 255, 255, 0.15)',
+                                borderRadius: '3px',
+                                overflow: 'hidden',
+                                marginTop: '8px'
+                              }}>
+                                <div style={{
+                                  width: `${(timeoutModal.countdown / 60) * 100}%`,
+                                  height: '100%',
+                                  background: timeoutModal.countdown <= 10 ? '#ef4444' : 'var(--accent)',
+                                  borderRadius: '3px',
+                                  transition: 'width 1s linear, background 0.3s',
+                                  marginLeft: 'auto'
+                                }} />
+                              </div>
+                            </div>
+                            {/* Stop sign icon - right side */}
+                            <svg viewBox="0 0 24 24" width="45" height="45" style={{ flexShrink: 0 }}>
+                              <polygon points="7.86,2 16.14,2 22,7.86 22,16.14 16.14,22 7.86,22 2,16.14 2,7.86" fill="#ef4444" />
+                              <text x="12" y="13" textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="5" fontWeight="bold">STOP</text>
+                            </svg>
+                          </div>
+                        ) : (
+                          <>
+                            {rallyStatus === 'idle' ? (
+                              // Show countdown + End Set Interval during interval, or Start Set/Rally button otherwise
+                              (() => {
+                                const setupConfirmed = betweenSetsSetupConfirmed || (data?.set?.index === 3 && set3SetupConfirmed)
+                                const intervalEnded = !betweenSetsCountdown || betweenSetsCountdown.countdown <= 0
+
+                                if (betweenSetsCountdown && betweenSetsCountdown.isActive && (data?.match?.status === 'between_sets' || data?.match?.status === 'set_complete')) {
+                                  return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                                      {/* Countdown display */}
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <div style={{
+                                          fontSize: '14px',
+                                          fontWeight: 600,
+                                          color: 'var(--muted)'
+                                        }}>
+                                          {t('scoreboard.setInterval', 'Set Interval')}
+                                        </div>
+                                        <div style={{
+                                          fontSize: '28px',
+                                          fontWeight: 700,
+                                          color: betweenSetsCountdown.countdown <= 30 ? '#ef4444' : 'var(--accent)',
+                                          fontFamily: getScoreFont()
+                                        }}>
+                                          {formatTimeout(betweenSetsCountdown.countdown)}
+                                        </div>
+                                      </div>
+                                      {/* Progress bar */}
+                                      <div style={{
+                                        width: '200px',
+                                        height: '6px',
+                                        background: 'rgba(255, 255, 255, 0.15)',
+                                        borderRadius: '3px',
+                                        overflow: 'hidden'
+                                      }}>
+                                        <div style={{
+                                          width: `${(betweenSetsCountdown.countdown / 60) * 100}%`,
+                                          height: '100%',
+                                          background: betweenSetsCountdown.countdown <= 30 ? '#ef4444' : 'var(--accent)',
+                                          borderRadius: '3px',
+                                          transition: 'width 1s linear, background 0.3s'
+                                        }} />
+                                      </div>
+                                      {/* End Interval button - only show if setup confirmed */}
+                                      {setupConfirmed && (
+                                        <button
+                                          className="rally-btn start"
+                                          onClick={endSetInterval}
+                                          style={{ marginTop: '8px', padding: '8px 24px' }}
+                                        >
+                                          {t('scoreboard.endInterval', 'End Interval')}
+                                        </button>
+                                      )}
+                                    </div>
+                                  )
+                                }
+
+                                // Show Start Set button if interval has ended and setup is confirmed
+                                if (intervalEnded && setupConfirmed && (data?.match?.status === 'between_sets' || data?.match?.status === 'set_complete')) {
+                                  return (
+                                    <button
+                                      className="rally-btn start"
+                                      onClick={handleStartRally}
+                                    >
+                                      {t('scoreboard.startSet', 'Start Set')} {(data?.set?.index || 1)}
+                                    </button>
+                                  )
+                                }
+
+                                // Normal Start Rally button
+                                return (
+                                  <button
+                                    className="rally-btn start"
+                                    onClick={handleStartRally}
+                                    disabled={data?.match?.status === 'complete'}
+                                  >
+                                    {data?.match?.status === 'not_started'
+                                      ? t('scoreboard.startMatch', 'Start Match')
+                                      : data?.match?.status === 'complete'
+                                        ? t('scoreboard.matchComplete', 'Match Complete')
+                                        : t('scoreboard.startRally', 'Start Rally')}
+                                  </button>
+                                )
+                              })()
+                            ) : (
+                              <>
+                                {/* Rally in progress - only show End Rally button and replay row */}
+                                <div className="rally-controls-row" style={{ gap: '5px' }}>
+                                  <button
+                                    className={`replay-btn ${isRallyReplayed ? 'active' : ''}`}
+                                    onClick={() => {
+                                      if (!isRallyReplayed && rallyStatus === 'in_play') {
+                                        markRallyAsReplayed()
+                                      }
+                                    }}
+                                    disabled={isRallyReplayed || rallyStatus !== 'in_play'}
+                                    style={{
+                                      opacity: (isRallyReplayed || rallyStatus !== 'in_play') ? 0.5 : 1,
+                                      cursor: (isRallyReplayed || rallyStatus !== 'in_play') ? 'not-allowed' : 'pointer'
+                                    }}
+                                  >
+                                    {isRallyReplayed ? t('scoreboard.replayed', 'Replayed') : t('scoreboard.replay', 'Replay')}
+                                  </button>
+                                  <button
+                                    className="end-rally-btn"
+                                    onClick={handleEndRally}
+                                    style={{
+                                      background: isRallyReplayed ? '#eab308' : 'var(--danger)',
+                                      padding: '12px 24px',
+                                      minWidth: '140px',
+                                      fontWeight: 600
+                                    }}
+                                  >
+                                    {isRallyReplayed ? t('scoreboard.replayRally', 'Replay Rally') : t('scoreboard.endRally', 'End Rally')}
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    {/* END Row 2: Rally Controls */}
                   </div>
+                  {/* END CENTER COLUMN (70%) */}
 
                   {/* RIGHT TEAM TOOLBOX - 15% */}
                   <div style={{
@@ -10089,7 +10427,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                     border: '1px solid rgba(255, 255, 255, 0.08)',
                     borderRadius: `${8 * scaleFactor}px`,
                     padding: `${6 * scaleFactor}px`,
-                    overflow: 'hidden',
+                    overflow: 'auto',
                     boxSizing: 'border-box'
                   }}>
                     {/* Team Header - A/B label, team name, country */}
@@ -10336,7 +10674,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                         </div>
                       )
                     })()}
-                    {/* Sanction Indicators - show IR, DW, DP if given */}
+                    {/* Combined Sanctions Section - Title, Team Sanctions, Player Sanctions */}
                     {(() => {
                       const rightTeamKey = leftisTeam1 ? 'team2' : 'team1'
                       const hasIR = data?.match?.sanctions?.[rightTeamKey === 'team1' ? 'improperRequestteam1' : 'improperRequestteam2']
@@ -10344,335 +10682,187 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                       const delayPenaltyCount = (data?.events || []).filter(e =>
                         e.type === 'sanction' && e.payload?.type === 'delay_penalty' && e.payload?.team === rightTeamKey
                       ).length
-                      if (!hasIR && !hasDW && delayPenaltyCount === 0) return null
+                      const playerSanctions = (data?.events || []).filter(e =>
+                        e.type === 'sanction' &&
+                        e.payload?.team === rightTeamKey &&
+                        e.payload?.playerNumber &&
+                        ['warning', 'penalty', 'expulsion', 'disqualification'].includes(e.payload?.type)
+                      )
+
+                      // Check if any player has a warning (yellow card) for Formal Warning display
+                      const hasPlayerWarning = playerSanctions.some(s => s.payload?.type === 'warning')
+
+                      const hasAnySanction = hasIR || hasDW || delayPenaltyCount > 0 || playerSanctions.length > 0
+                      if (!hasAnySanction) return null
+
+                      const teamPlayers = rightTeamKey === 'team1' ? data?.team1Players : data?.team2Players
+                      const player1 = teamPlayers?.[0]
+                      const player2 = teamPlayers?.[1]
+
+                      // Render sanction letter only (for alignment)
+                      const renderSanctionLetter = (sanctionType) => {
+                        if (sanctionType === 'warning') {
+                          return <span style={{ color: '#eab308', fontWeight: 700 }}>W</span>
+                        } else if (sanctionType === 'penalty') {
+                          return <span style={{ color: '#ef4444', fontWeight: 700 }}>P</span>
+                        } else if (sanctionType === 'expulsion') {
+                          return <span style={{ fontWeight: 700 }}><span style={{ color: '#eab308' }}>E</span><span style={{ color: '#ef4444' }}>x</span></span>
+                        } else if (sanctionType === 'disqualification') {
+                          return <span style={{ color: '#ef4444', fontWeight: 700 }}>D</span>
+                        }
+                        return null
+                      }
+
+                      const getScoreFromSanction = (sanction, teamKey) => {
+                        const snapshot = sanction.stateSnapshot
+                        if (!snapshot) return ''
+                        // Snapshot uses pointsA/pointsB relative to teamAKey
+                        const pointsA = snapshot.pointsA ?? 0
+                        const pointsB = snapshot.pointsB ?? 0
+                        const teamAKey = snapshot.teamAKey || 'team1'
+                        // Convert to team1/team2 scores
+                        const t1 = teamAKey === 'team1' ? pointsA : pointsB
+                        const t2 = teamAKey === 'team1' ? pointsB : pointsA
+                        // Show this team's score first
+                        return teamKey === 'team1' ? `${t1}:${t2}` : `${t2}:${t1}`
+                      }
+
+                      const borderStyle = `${1 * scaleFactor}px solid rgba(255,255,255,0.2)`
+                      const tableFontSize = `${DESIGN_VMIN * 0.018 * scaleFactor}px`
+                      const headerFontSize = `${DESIGN_VMIN * 0.016 * scaleFactor}px`
+
                       return (
-                        <div style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: `${2 * scaleFactor}px`,
-                          marginTop: `${4 * scaleFactor}px`,
-                          width: '100%'
-                        }}>
-                          {hasIR && (
+                        <div style={{ marginTop: `${4 * scaleFactor}px`, width: '100%', display: 'flex', flexDirection: 'column', gap: `${2 * scaleFactor}px` }}>
+                          {/* Sanctions Title */}
+                          <div style={{
+                            fontSize: headerFontSize,
+                            color: '#ffffff',
+                            textAlign: 'center',
+                            fontWeight: 600,
+                            background: '#000000',
+                            padding: `${4 * scaleFactor}px`,
+                            borderRadius: `${3 * scaleFactor}px`
+                          }}>
+                            Sanctions
+                          </div>
+                          {/* Team Sanctions */}
+                          {(hasIR || hasDW || delayPenaltyCount > 0 || hasPlayerWarning) && (
                             <div style={{
-                              fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
-                              color: '#9ca3af',
-                              textAlign: 'center',
-                              padding: `${2 * scaleFactor}px`,
-                              background: 'rgba(156, 163, 175, 0.15)',
-                              borderRadius: `${3 * scaleFactor}px`
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: `${2 * scaleFactor}px`,
+                              width: '100%'
                             }}>
-                              Improper Request
+                              {hasPlayerWarning && (
+                                <div style={{
+                                  fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
+                                  color: '#eab308',
+                                  textAlign: 'center',
+                                  padding: `${2 * scaleFactor}px`,
+                                  background: 'rgba(234, 179, 8, 0.15)',
+                                  borderRadius: `${3 * scaleFactor}px`
+                                }}>
+                                  Formal Warning
+                                </div>
+                              )}
+                              {hasIR && (
+                                <div style={{
+                                  fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
+                                  color: '#9ca3af',
+                                  textAlign: 'center',
+                                  padding: `${2 * scaleFactor}px`,
+                                  background: 'rgba(156, 163, 175, 0.15)',
+                                  borderRadius: `${3 * scaleFactor}px`
+                                }}>
+                                  Improper Request
+                                </div>
+                              )}
+                              {hasDW && (
+                                <div style={{
+                                  fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
+                                  color: '#eab308',
+                                  textAlign: 'center',
+                                  padding: `${2 * scaleFactor}px`,
+                                  background: 'rgba(234, 179, 8, 0.15)',
+                                  borderRadius: `${3 * scaleFactor}px`
+                                }}>
+                                  Delay Warning
+                                </div>
+                              )}
+                              {delayPenaltyCount > 0 && (
+                                [...Array(delayPenaltyCount)].map((_, i) => (
+                                  <div key={i} style={{
+                                    fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
+                                    color: '#ef4444',
+                                    textAlign: 'center',
+                                    padding: `${2 * scaleFactor}px`,
+                                    background: 'rgba(239, 68, 68, 0.15)',
+                                    borderRadius: `${3 * scaleFactor}px`
+                                  }}>
+                                    Delay Penalty
+                                  </div>
+                                ))
+                              )}
                             </div>
                           )}
-                          {hasDW && (
-                            <div style={{
-                              fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
-                              color: '#eab308',
-                              textAlign: 'center',
-                              padding: `${2 * scaleFactor}px`,
-                              background: 'rgba(234, 179, 8, 0.15)',
-                              borderRadius: `${3 * scaleFactor}px`
+                          {/* Player Sanctions Table - 3 columns: SET, Player 1, Player 2 with flex layout */}
+                          {playerSanctions.length > 0 && (
+                            <table style={{
+                              width: '100%',
+                              fontSize: tableFontSize,
+                              borderCollapse: 'collapse',
+                              color: 'var(--text)',
+                              tableLayout: 'fixed',
+                              border: borderStyle
                             }}>
-                              Delay Warning
-                            </div>
-                          )}
-                          {delayPenaltyCount > 0 && (
-                            [...Array(delayPenaltyCount)].map((_, i) => (
-                              <div key={i} style={{
-                                fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
-                                color: '#ef4444',
-                                textAlign: 'center',
-                                padding: `${2 * scaleFactor}px`,
-                                background: 'rgba(239, 68, 68, 0.15)',
-                                borderRadius: `${3 * scaleFactor}px`
-                              }}>
-                                Delay Penalty
-                              </div>
-                            ))
+                              <thead>
+                                <tr>
+                                  <th style={{ width: '20%', padding: `${4 * scaleFactor}px`, textAlign: 'center', fontWeight: 600, fontSize: headerFontSize, borderRight: borderStyle, borderBottom: borderStyle }}>SET</th>
+                                  <th style={{ width: '40%', padding: `${4 * scaleFactor}px`, textAlign: 'center', fontWeight: 600, fontSize: headerFontSize, borderRight: borderStyle, borderBottom: borderStyle }}>{player1?.number || '1'}</th>
+                                  <th style={{ width: '40%', padding: `${4 * scaleFactor}px`, textAlign: 'center', fontWeight: 600, fontSize: headerFontSize, borderBottom: borderStyle }}>{player2?.number || '2'}</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {playerSanctions.map((sanction, idx) => {
+                                  const isPlayer1 = String(sanction.payload?.playerNumber) === String(player1?.number)
+                                  const isPlayer2 = String(sanction.payload?.playerNumber) === String(player2?.number)
+                                  const score = getScoreFromSanction(sanction, sanction.payload?.team)
+                                  const isLast = idx === playerSanctions.length - 1
+                                  return (
+                                    <tr key={idx}>
+                                      <td style={{ padding: `${4 * scaleFactor}px`, textAlign: 'center', borderRight: borderStyle, borderBottom: isLast ? 'none' : borderStyle }}>{sanction.setIndex}</td>
+                                      <td style={{ padding: `${4 * scaleFactor}px`, borderRight: borderStyle, borderBottom: isLast ? 'none' : borderStyle }}>
+                                        {isPlayer1 && (
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                                            {renderSanctionLetter(sanction.payload?.type)}
+                                            <span>{score}</span>
+                                          </div>
+                                        )}
+                                      </td>
+                                      <td style={{ padding: `${4 * scaleFactor}px`, borderBottom: isLast ? 'none' : borderStyle }}>
+                                        {isPlayer2 && (
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                                            {renderSanctionLetter(sanction.payload?.type)}
+                                            <span>{score}</span>
+                                          </div>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  )
+                                })}
+                              </tbody>
+                            </table>
                           )}
                         </div>
                       )
                     })()}
                   </div>
                 </div>
-                {/* END SECTION 2 - Court Row */}
+                {/* END SECTION 2 - Main Row with Toolbars and Center */}
               </>
             )}
-
-            {/* ===== SECTION 3: Rally Controls (100%) ===== */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '100%',
-              minHeight: `${(isCompactMode ? 80 : 120) * scaleFactor}px`
-            }}>
-              <div className="rally-controls" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', transform: `scale(${scaleFactor})`, transformOrigin: 'center center' }}>
-                {/* Show timeout countdown if timeout is active */}
-                {timeoutModal && timeoutModal.started ? (
-                  <div
-                    onClick={stopTimeout}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '16px',
-                      padding: '16px 20px',
-                      borderRadius: '12px',
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      cursor: 'pointer'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
-                  >
-                    {/* Stop sign icon - left side */}
-                    <svg viewBox="0 0 24 24" width="45" height="45" style={{ flexShrink: 0 }}>
-                      <polygon points="7.86,2 16.14,2 22,7.86 22,16.14 16.14,22 7.86,22 2,16.14 2,7.86" fill="#ef4444" />
-                      <text x="12" y="13" textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="5" fontWeight="bold">STOP</text>
-                    </svg>
-                    {/* Countdown content - center */}
-                    <div style={{ flex: 1, minWidth: '160px' }}>
-                      <div style={{
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        color: 'var(--muted)',
-                        textAlign: 'center',
-                        marginBottom: '4px'
-                      }}>
-                        Time-out — {timeoutModal.team === 'team1' ? (data?.team1Team?.name || 'team1') : (data?.team2Team?.name || 'team2')}
-                      </div>
-                      <div style={{
-                        fontSize: '42px',
-                        fontWeight: 700,
-                        color: timeoutModal.countdown <= 10 ? '#ef4444' : 'var(--accent)',
-                        textAlign: 'center',
-                        fontFamily: getScoreFont(),
-                        lineHeight: 1
-                      }}>
-                        {formatTimeout(timeoutModal.countdown)}
-                      </div>
-                      {/* Progress bar */}
-                      <div style={{
-                        width: '100%',
-                        height: '6px',
-                        background: 'rgba(255, 255, 255, 0.15)',
-                        borderRadius: '3px',
-                        overflow: 'hidden',
-                        marginTop: '8px'
-                      }}>
-                        <div style={{
-                          width: `${(timeoutModal.countdown / 60) * 100}%`,
-                          height: '100%',
-                          background: timeoutModal.countdown <= 10 ? '#ef4444' : 'var(--accent)',
-                          borderRadius: '3px',
-                          transition: 'width 1s linear, background 0.3s',
-                          marginLeft: 'auto'
-                        }} />
-                      </div>
-                    </div>
-                    {/* Stop sign icon - right side */}
-                    <svg viewBox="0 0 24 24" width="45" height="45" style={{ flexShrink: 0 }}>
-                      <polygon points="7.86,2 16.14,2 22,7.86 22,16.14 16.14,22 7.86,22 2,16.14 2,7.86" fill="#ef4444" />
-                      <text x="12" y="13" textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="5" fontWeight="bold">STOP</text>
-                    </svg>
-                  </div>
-                ) : (
-                  <>
-                    {rallyStatus === 'idle' ? (
-                      // Show countdown + End Set Interval during interval, or Start Set/Rally button otherwise
-                      (() => {
-                        const setupConfirmed = betweenSetsSetupConfirmed || (data?.set?.index === 3 && set3SetupConfirmed)
-                        const intervalEnded = !betweenSetsCountdown || betweenSetsCountdown.countdown <= 0
-                        const showIntervalControls = isBetweenSets && isFirstRally && setupConfirmed && !intervalEnded
-
-                        if (showIntervalControls) {
-                          // Show countdown in clickable box
-                          return (
-                            <div
-                              onClick={endSetInterval}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '16px',
-                                padding: '16px 20px',
-                                borderRadius: '12px',
-                                background: 'rgba(255, 255, 255, 0.05)',
-                                border: '1px solid rgba(255, 255, 255, 0.1)',
-                                cursor: 'pointer'
-                              }}
-                              onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'}
-                              onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
-                            >
-                              {/* Stop sign icon - left side */}
-                              <svg viewBox="0 0 24 24" width="45" height="45" style={{ flexShrink: 0 }}>
-                                <polygon points="7.86,2 16.14,2 22,7.86 22,16.14 16.14,22 7.86,22 2,16.14 2,7.86" fill="#ef4444" />
-                                <text x="12" y="13" textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="5" fontWeight="bold">STOP</text>
-                              </svg>
-                              {/* Countdown content - center */}
-                              <div style={{ flex: 1, minWidth: '140px' }}>
-                                <div style={{
-                                  fontSize: '14px',
-                                  fontWeight: 600,
-                                  color: 'var(--muted)',
-                                  textAlign: 'center',
-                                  marginBottom: '4px'
-                                }}>
-                                  {t('scoreboard.buttons.setInterval', 'Set Interval')}
-                                </div>
-                                <div style={{
-                                  fontSize: '36px',
-                                  fontWeight: 700,
-                                  color: betweenSetsCountdown.countdown <= 30 ? '#ef4444' : 'var(--accent)',
-                                  fontFamily: getScoreFont(),
-                                  textAlign: 'center',
-                                  lineHeight: 1
-                                }}>
-                                  {formatCountdown(betweenSetsCountdown.countdown)}
-                                </div>
-                                {/* Progress bar */}
-                                <div style={{
-                                  width: '100%',
-                                  height: '6px',
-                                  background: 'rgba(255, 255, 255, 0.15)',
-                                  borderRadius: '3px',
-                                  overflow: 'hidden',
-                                  marginTop: '8px'
-                                }}>
-                                  <div style={{
-                                    width: `${(betweenSetsCountdown.countdown / setIntervalDuration) * 100}%`,
-                                    height: '100%',
-                                    background: betweenSetsCountdown.countdown <= 30 ? '#ef4444' : 'var(--accent)',
-                                    borderRadius: '3px',
-                                    transition: 'width 1s linear, background 0.3s',
-                                    marginLeft: 'auto'
-                                  }} />
-                                </div>
-                              </div>
-                              {/* Stop sign icon - right side */}
-                              <svg viewBox="0 0 24 24" width="45" height="45" style={{ flexShrink: 0 }}>
-                                <polygon points="7.86,2 16.14,2 22,7.86 22,16.14 16.14,22 7.86,22 2,16.14 2,7.86" fill="#ef4444" />
-                                <text x="12" y="13" textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="5" fontWeight="bold">STOP</text>
-                              </svg>
-                            </div>
-                          )
-                        }
-
-                        // Normal case: show Start Set or Start Rally button
-                        // But show Confirm button if setup not confirmed yet
-                        if (isBetweenSets && isFirstRally && !setupConfirmed) {
-                          return (
-                            <button
-                              onClick={data?.set?.index === 3 ? () => confirmSet3SideService(data?.match?.set3LeftTeam || 'A', data?.match?.set3FirstServe || 'A', true) : confirmBetweenSetsSetup}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '8px',
-                                padding: '14px 32px',
-                                fontSize: '18px',
-                                fontWeight: 700,
-                                background: '#3b82f6',
-                                color: '#fff',
-                                border: 'none',
-                                borderRadius: '12px',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              ✓ Confirm
-                            </button>
-                          )
-                        }
-
-                        return (
-                          <button
-                            className="secondary start-rally-button"
-                            onClick={handleStartRally}
-                            disabled={isFirstRally && (!leftTeamLineupSet || !rightTeamLineupSet)}
-                          >
-                            {isFirstRally ? t('scoreboard.buttons.startSet') : t('scoreboard.buttons.startRally')}
-                          </button>
-                        )
-                      })()
-                    ) : (
-                      <>
-                        <div className="rally-controls-row" style={{ gap: '5px' }}>
-                          <button className="rally-point-button" onClick={() => handlePoint('left')}>
-                            {t('scoreboard.buttons.pointTeam', { team: teamALabel })}
-                          </button>
-                          <button className="rally-point-button" onClick={() => handlePoint('right')}>
-                            {t('scoreboard.buttons.pointTeam', { team: teamBLabel })}
-                          </button>
-                        </div>
-                      </>
-                    )}
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      {rallyStatus === 'in_play' && (
-                        <button
-                          className="secondary"
-                          onClick={handleReplay}
-                          style={{ flex: 1 }}
-                        >
-                          {t('scoreboard.buttons.replay')}
-                        </button>
-                      )}
-                      {rallyStatus === 'idle' && canReplayRally && (
-                        <button
-                          onClick={handleReplay}
-                          style={{
-                            flex: 1,
-                            background: '#eab308',
-                            color: '#000',
-                            border: 'none',
-                            borderRadius: '8px',
-                            padding: '8px 12px',
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            cursor: 'pointer'
-                          }}
-                        >
-                          {t('scoreboard.buttons.decisionChange')}
-                        </button>
-                      )}
-                      {rallyStatus !== 'idle' && (
-                        <button
-                          onClick={handleRefereeBMP}
-                          style={{
-                            flex: 1,
-                            background: 'transparent',
-                            color: '#f97316',
-                            border: '2px solid #f97316',
-                            borderRadius: '8px',
-                            padding: '8px 12px',
-                            fontSize: '13px',
-                            fontWeight: 700,
-                            cursor: 'pointer'
-                          }}
-                          title="Referee Ball Mark Protocol"
-                        >
-                          Referee
-                          BMP
-                        </button>
-                      )}
-                      <button
-                        className="danger"
-                        onClick={showUndoConfirm}
-                        disabled={!canUndo}
-                        style={{
-                          flex: (rallyStatus !== 'idle' || canReplayRally) ? 1 : 'none',
-                          padding: '8px 12px',
-                          fontSize: '13px',
-                          fontWeight: 600
-                        }}
-                      >
-                        {t('scoreboard.buttons.undo')}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
           </div>
+
 
           <div style={{ display: 'none' }}>
             <div className="team-info" style={{ overflow: 'hidden' }}>
@@ -12140,59 +12330,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           </div>
                         </div>
 
-                        {/* Edit Lineup */}
-                        <div
-                          className="manual-item"
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '8px',
-                            paddingTop: '16px',
-                            borderTop: '1px solid rgba(255,255,255,0.08)'
-                          }}
-                        >
-                          <div style={{ fontWeight: 600, marginBottom: '8px' }}>{t('scoreboard.edit.changeCurrentLineup')}</div>
-                          <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
-                            {t('scoreboard.edit.overrideLineupDesc')}
-                          </div>
-                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                            {/* LEFT BUTTON */}
-                            <button
-                              className="secondary"
-                              disabled={!data?.set}
-                              onClick={() => openManualLineup(leftTeamKey)}
-                              style={{
-                                flex: 1,
-                                minWidth: '120px',
-                                padding: '12px 16px',
-                                background: leftTeamColor,
-                                color: isBrightColor(leftTeamColor) ? '#000' : '#fff',
-                                borderRadius: '8px',
-                                fontWeight: 600
-                              }}
-                            >
-                              {t('scoreboard.edit.editTeamLeft', { team: leftTeamKey === teamAKey ? 'A' : 'B' })}
-                            </button>
-                            {/* RIGHT BUTTON */}
-                            <button
-                              className="secondary"
-                              disabled={!data?.set}
-                              onClick={() => openManualLineup(rightTeamKey)}
-                              style={{
-                                flex: 1,
-                                minWidth: '120px',
-                                padding: '12px 16px',
-                                background: rightTeamColor,
-                                color: isBrightColor(rightTeamColor) ? '#000' : '#fff',
-                                borderRadius: '8px',
-                                fontWeight: 600
-                              }}
-                            >
-                              {t('scoreboard.edit.editTeamRight', { team: rightTeamKey === teamAKey ? 'A' : 'B' })}
-                            </button>
-                          </div>
-                        </div>
-
                         {/* Edit Current Set Score */}
                         {data?.set && (
                           <div
@@ -13287,109 +13424,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                     )
                   })()}
 
-                  {/* Edit Lineups */}
-                  {data?.events && (() => {
-                    const lineupEvents = data.events.filter(e => e.type === 'lineup' && e.payload?.isInitial).sort((a, b) => (b.seq || 0) - (a.seq || 0)).slice(0, 10)
-                    if (lineupEvents.length === 0) return null
-
-                    return (
-                      <div
-                        className="manual-item"
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '8px',
-                          paddingTop: '16px',
-                          borderTop: '1px solid rgba(255,255,255,0.08)'
-                        }}
-                      >
-                        <div style={{ fontWeight: 600, marginBottom: '8px' }}>Edit Initial Lineups ({lineupEvents.length} most recent)</div>
-                        <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
-                          Edit or delete initial lineup events.
-                        </div>
-                        <div style={{
-                          maxHeight: '300px',
-                          overflowY: 'auto',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '6px'
-                        }}>
-                          {lineupEvents.map(event => {
-                            const setIndex = event.setIndex || 1
-                            const team = event.payload?.team
-                            const teamLabel = team === teamAKey ? 'A' : (team === teamBKey ? 'B' : '')
-                            const lineup = event.payload?.lineup || {}
-
-                            return (
-                              <div key={event.id} style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                padding: '8px',
-                                background: 'rgba(255,255,255,0.03)',
-                                borderRadius: '4px',
-                                fontSize: '11px',
-                                flexWrap: 'wrap'
-                              }}>
-                                <span style={{ minWidth: '40px' }}>Set {setIndex}</span>
-                                <select
-                                  value={team || 'team1'}
-                                  onChange={async (e) => {
-                                    await db.events.update(event.id, {
-                                      payload: { ...event.payload, team: e.target.value }
-                                    })
-                                  }}
-                                  style={{
-                                    padding: '4px 6px',
-                                    fontSize: '11px',
-                                    background: '#1e293b',
-                                    border: '1px solid rgba(255,255,255,0.2)',
-                                    borderRadius: '4px',
-                                    color: 'var(--text)',
-                                    minWidth: '70px'
-                                  }}
-                                >
-                                  <option value="team1" style={{ background: '#1e293b', color: '#fff' }}>Team 1</option>
-                                  <option value="team2" style={{ background: '#1e293b', color: '#fff' }}>Team 2</option>
-                                </select>
-                                <span style={{ fontSize: '10px', color: 'var(--muted)' }}>
-                                  {lineup.I || '-'}/{lineup.II || '-'}/{lineup.III || '-'}/{lineup.IV || '-'}/{lineup.V || '-'}/{lineup.VI || '-'}
-                                </span>
-                                <button
-                                  className="secondary"
-                                  onClick={() => {
-                                    setLineupModal({ team, mode: 'manual', lineup })
-                                    setShowManualPanel(false)
-                                  }}
-                                  style={{
-                                    padding: '4px 8px',
-                                    fontSize: '10px'
-                                  }}
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  className="danger"
-                                  onClick={async () => {
-                                    if (confirm(`Delete this lineup event?`)) {
-                                      await db.events.delete(event.id)
-                                    }
-                                  }}
-                                  style={{
-                                    padding: '4px 8px',
-                                    fontSize: '10px',
-                                    marginLeft: 'auto'
-                                  }}
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )
-                  })()}
                 </div>
               )}
             </div>
@@ -14710,35 +14744,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         </Modal>
       )}
 
-      {lineupModal && <LineupModal
-        team={lineupModal.team}
-        teamData={
-          lineupModal.team === 'team1'
-            ? data?.team1Team
-            : data?.team2Team
-        }
-        players={
-          lineupModal.team === 'team1'
-            ? data?.team1Players
-            : data?.team2Players
-        }
-        matchId={matchId}
-        setIndex={data?.set?.index}
-        mode={lineupModal.mode || 'initial'}
-        lineup={lineupModal.lineup}
-        teamAKey={teamAKey}
-        teamBKey={teamBKey}
-        onClose={() => setLineupModal(null)}
-        onSave={async () => {
-          setLineupModal(null)
-        }}
-        onLineupSaved={() => {
-          syncToReferee()
-          // Also sync to Supabase match_live_state
-          syncLiveStateToSupabase('lineup', lineupModal?.team || null, null)
-        }}
-      />}
-
       {playerActionMenu && (() => {
         // Get element position - use stored coordinates if available
         // For left side teams, menu opens to the right (use left CSS)
@@ -14779,15 +14784,15 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         // Get sanction availability
         const teamWarning = teamHasFormalWarning(team)
         const hasWarning = playerHasSanctionType(team, playerNumber, 'warning')
-        const hasPenalty = playerHasSanctionType(team, playerNumber, 'penalty')
         const hasExpulsion = playerHasSanctionType(team, playerNumber, 'expulsion')
+        // Per FIVB 20.3.1: player can receive up to 2 penalties per set
+        const penaltyCountInSet = getPlayerPenaltyCountInCurrentSet(team, playerNumber)
         const canGetWarning = !hasWarning && !teamWarning
-        const canGetPenalty = !hasPenalty
+        const canGetPenalty = penaltyCountInSet < 2
         const canGetExpulsion = !hasExpulsion
 
         const showSanctionConfirmFromMenu = (sanctionType) => {
           setPlayerActionMenu(null)
-          setCourtSubExpanded(false)
           setCourtSanctionExpanded(false)
           setSanctionConfirmModal({
             team,
@@ -15077,16 +15082,17 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
 
                     // Check if player has each specific sanction type (for back-sanctioning rules)
                     const hasWarning = playerNumber ? playerHasSanctionType(teamKey, playerNumber, 'warning') : false
-                    const hasPenalty = playerNumber ? playerHasSanctionType(teamKey, playerNumber, 'penalty') : false
                     const hasExpulsion = playerNumber ? playerHasSanctionType(teamKey, playerNumber, 'expulsion') : false
                     const hasDisqualification = playerNumber ? playerHasSanctionType(teamKey, playerNumber, 'disqualification') : false
+                    // Per FIVB 20.3.1: player can receive up to 2 penalties per set
+                    const penaltyCountInSet = playerNumber ? getPlayerPenaltyCountInCurrentSet(teamKey, playerNumber) : 0
 
                     // Determine which sanctions are available
                     // Rule: A player cannot get the same sanction type twice
                     // Exception: Warning can only be given if team hasn't been warned (player can have other sanctions)
                     const canGetWarning = !hasWarning && !teamWarning
-                    // Penalty: can be given if player doesn't already have a penalty (back-sanctioning allowed)
-                    const canGetPenalty = !hasPenalty
+                    // Penalty: can be given if player has < 2 penalties in current set (FIVB 20.3.1)
+                    const canGetPenalty = penaltyCountInSet < 2
                     // Expulsion: can be given if player doesn't already have an expulsion (back-sanctioning allowed)
                     const canGetExpulsion = !hasExpulsion
                     // Disqualification: can be given if player doesn't already have a disqualification (back-sanctioning allowed)
@@ -15911,20 +15917,28 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
 
       {sanctionConfirmModal && (() => {
         const teamData = sanctionConfirmModal.team === 'team1' ? data?.team1Team : data?.team2Team
+        const teamPlayers = sanctionConfirmModal.team === 'team1' ? data?.team1Players : data?.team2Players
         const teamColor = teamData?.color || (sanctionConfirmModal.team === 'team1' ? '#ef4444' : '#3b82f6')
         const teamLabel = sanctionConfirmModal.team === teamAKey ? 'A' : 'B'
-        const teamName = teamData?.name || (sanctionConfirmModal.team === 'team1' ? 'team1' : 'team2')
+        // Get team name without country (remove parentheses and content)
+        const fullTeamName = teamData?.name || (sanctionConfirmModal.team === 'team1' ? 'Team 1' : 'Team 2')
+        const teamName = fullTeamName.replace(/\s*\([^)]*\)\s*$/, '')
         const isBright = isBrightColor(teamColor)
+        // Find player name
+        const player = sanctionConfirmModal.type === 'player' && sanctionConfirmModal.playerNumber
+          ? teamPlayers?.find(p => p.number === sanctionConfirmModal.playerNumber || String(p.number) === String(sanctionConfirmModal.playerNumber))
+          : null
+        const playerName = player ? `${player.firstName || ''} ${player.lastName || ''}`.trim() : ''
 
         return (
           <Modal
             title={
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span>{teamName}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <span style={{ fontSize: '20px' }}>{teamName}</span>
                 <span style={{
-                  padding: '4px 12px',
+                  padding: '6px 14px',
                   borderRadius: '6px',
-                  fontSize: '14px',
+                  fontSize: '16px',
                   fontWeight: 700,
                   background: teamColor,
                   color: isBright ? '#000' : '#fff'
@@ -15933,37 +15947,41 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
             }
             open={true}
             onClose={cancelSanctionConfirm}
-            width={240}
+            width={300}
             hideCloseButton={true}
           >
-            <div style={{ padding: '16px', textAlign: 'center' }}>
-              <p style={{ marginBottom: '12px', fontSize: '12px', color: 'var(--muted)' }}>
+            <div style={{ padding: '20px', textAlign: 'center' }}>
+              <p style={{ marginBottom: '6px', fontSize: '18px', color: 'var(--muted)' }}>
                 {sanctionConfirmModal.type === 'player' && `#${sanctionConfirmModal.playerNumber}`}
                 {sanctionConfirmModal.type === 'official' && `${sanctionConfirmModal.role}`}
               </p>
-              <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
-                {sanctionConfirmModal.sanctionType === 'warning' && <div className="sanction-card yellow" style={{ width: '28px', height: '38px' }}></div>}
-                {sanctionConfirmModal.sanctionType === 'penalty' && <div className="sanction-card red" style={{ width: '28px', height: '38px' }}></div>}
-                {sanctionConfirmModal.sanctionType === 'expulsion' && <div className="sanction-card combo" style={{ width: '32px', height: '38px' }}></div>}
+              {playerName && (
+                <p style={{ marginBottom: '14px', fontSize: '15px', color: 'var(--muted)' }}>{playerName}</p>
+              )}
+              {!playerName && <div style={{ marginBottom: '14px' }} />}
+              <div style={{ marginBottom: '18px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
+                {sanctionConfirmModal.sanctionType === 'warning' && <div className="sanction-card yellow" style={{ width: '36px', height: '48px' }}></div>}
+                {sanctionConfirmModal.sanctionType === 'penalty' && <div className="sanction-card red" style={{ width: '36px', height: '48px' }}></div>}
+                {sanctionConfirmModal.sanctionType === 'expulsion' && <div className="sanction-card combo" style={{ width: '40px', height: '48px' }}></div>}
                 {sanctionConfirmModal.sanctionType === 'disqualification' && (
                   <div className="sanction-cards-separate">
-                    <div className="sanction-card yellow" style={{ width: '24px', height: '32px' }}></div>
-                    <div className="sanction-card red" style={{ width: '24px', height: '32px' }}></div>
+                    <div className="sanction-card yellow" style={{ width: '30px', height: '40px' }}></div>
+                    <div className="sanction-card red" style={{ width: '30px', height: '40px' }}></div>
                   </div>
                 )}
               </div>
-              <p style={{ marginBottom: '16px', fontSize: '13px', fontWeight: 600 }}>
+              <p style={{ marginBottom: '18px', fontSize: '16px', fontWeight: 600 }}>
                 {sanctionConfirmModal.sanctionType === 'warning' && 'Warning'}
                 {sanctionConfirmModal.sanctionType === 'penalty' && 'Penalty'}
                 {sanctionConfirmModal.sanctionType === 'expulsion' && 'Expulsion'}
                 {sanctionConfirmModal.sanctionType === 'disqualification' && 'Disqualification'}
               </p>
-              <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
                 <button
                   onClick={confirmPlayerSanction}
                   style={{
-                    padding: '8px 16px',
-                    fontSize: '12px',
+                    padding: '10px 20px',
+                    fontSize: '14px',
                     fontWeight: 600,
                     background: 'var(--accent)',
                     color: '#000',
@@ -15977,8 +15995,8 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                 <button
                   onClick={cancelSanctionConfirm}
                   style={{
-                    padding: '8px 16px',
-                    fontSize: '12px',
+                    padding: '10px 20px',
+                    fontSize: '14px',
                     fontWeight: 600,
                     background: 'rgba(255, 255, 255, 0.1)',
                     color: 'var(--text)',
@@ -15995,6 +16013,129 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
         )
       })()}
 
+      {/* Expulsion/Disqualification Secondary Confirmation Modal */}
+      {expulsionConfirmModal && (() => {
+        const teamData = expulsionConfirmModal.team === 'team1' ? data?.team1Team : data?.team2Team
+        const teamPlayers = expulsionConfirmModal.team === 'team1' ? data?.team1Players : data?.team2Players
+        const teamColor = teamData?.color || (expulsionConfirmModal.team === 'team1' ? '#ef4444' : '#3b82f6')
+        const teamLabel = expulsionConfirmModal.team === teamAKey ? 'A' : 'B'
+        const fullTeamName = teamData?.name || (expulsionConfirmModal.team === 'team1' ? 'Team 1' : 'Team 2')
+        const teamName = fullTeamName.replace(/\s*\([^)]*\)\s*$/, '')
+        const isBright = isBrightColor(teamColor)
+        const player = expulsionConfirmModal.type === 'player' && expulsionConfirmModal.playerNumber
+          ? teamPlayers?.find(p => p.number === expulsionConfirmModal.playerNumber || String(p.number) === String(expulsionConfirmModal.playerNumber))
+          : null
+        const playerName = player ? `${player.firstName || ''} ${player.lastName || ''}`.trim() : ''
+        const opponentTeamData = expulsionConfirmModal.team === 'team1' ? data?.team2Team : data?.team1Team
+        const opponentName = opponentTeamData?.name?.replace(/\s*\([^)]*\)\s*$/, '') || (expulsionConfirmModal.team === 'team1' ? 'Team 2' : 'Team 1')
+
+        const isExpulsion = expulsionConfirmModal.sanctionType === 'expulsion'
+        const endsMatch = expulsionConfirmModal.endsMatch
+
+        return (
+          <Modal
+            title={endsMatch ? 'Confirm Match End' : 'Confirm Set End'}
+            open={true}
+            onClose={() => setExpulsionConfirmModal(null)}
+            width={420}
+            hideCloseButton={true}
+          >
+            <div style={{ padding: '20px', textAlign: 'center' }}>
+              {/* Player info */}
+              <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
+                <span style={{
+                  padding: '4px 10px',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  background: teamColor,
+                  color: isBright ? '#000' : '#fff'
+                }}>{teamLabel}</span>
+                <span style={{ fontSize: '16px', color: 'var(--text)' }}>{teamName}</span>
+                {expulsionConfirmModal.type === 'player' && (
+                  <span style={{ fontSize: '14px', color: 'var(--muted)' }}>#{expulsionConfirmModal.playerNumber}</span>
+                )}
+              </div>
+              {playerName && (
+                <p style={{ marginBottom: '16px', fontSize: '14px', color: 'var(--muted)' }}>{playerName}</p>
+              )}
+
+              {/* Sanction card display */}
+              <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
+                {isExpulsion && <div className="sanction-card combo" style={{ width: '40px', height: '48px' }}></div>}
+                {!isExpulsion && (
+                  <div className="sanction-cards-separate">
+                    <div className="sanction-card yellow" style={{ width: '30px', height: '40px' }}></div>
+                    <div className="sanction-card red" style={{ width: '30px', height: '40px' }}></div>
+                  </div>
+                )}
+                <span style={{ fontSize: '16px', fontWeight: 600 }}>
+                  {isExpulsion ? 'Expulsion' : 'Disqualification'}
+                </span>
+              </div>
+
+              {/* Warning message */}
+              <div style={{
+                padding: '16px',
+                background: 'rgba(239, 68, 68, 0.15)',
+                borderRadius: '8px',
+                marginBottom: '20px',
+                border: '1px solid rgba(239, 68, 68, 0.3)'
+              }}>
+                {isExpulsion && !endsMatch && (
+                  <p style={{ fontSize: '15px', color: 'var(--text)', margin: 0 }}>
+                    This will <strong>end the current set</strong> and award it to <strong>{opponentName}</strong>.
+                  </p>
+                )}
+                {isExpulsion && endsMatch && (
+                  <p style={{ fontSize: '15px', color: 'var(--text)', margin: 0 }}>
+                    This will <strong>end the current set</strong> and <strong>end the match</strong>. <strong>{opponentName}</strong> wins.
+                  </p>
+                )}
+                {!isExpulsion && (
+                  <p style={{ fontSize: '15px', color: 'var(--text)', margin: 0 }}>
+                    This will <strong>end the match</strong>. <strong>{opponentName}</strong> wins all remaining sets.
+                  </p>
+                )}
+              </div>
+
+              {/* Buttons */}
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                <button
+                  onClick={executeExpulsionOrDisqualification}
+                  style={{
+                    padding: '12px 24px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    background: '#ef4444',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {endsMatch ? 'End Match' : 'End Set'}
+                </button>
+                <button
+                  onClick={() => setExpulsionConfirmModal(null)}
+                  style={{
+                    padding: '12px 24px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    color: 'var(--text)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )
+      })()}
 
       {reopenSetConfirm && (
         <Modal
@@ -17695,1017 +17836,6 @@ function ScoreboardTeamColumn({ side, children }) {
 
 function ScoreboardCourtColumn({ children }) {
   return <section className="court-wrapper">{children}</section>
-}
-
-function LineupModal({ team, teamData, players, matchId, setIndex, mode = 'initial', lineup: presetLineup = null, teamAKey, teamBKey, onClose, onSave, onLineupSaved }) {
-  const { t } = useTranslation()
-  const [lineup, setLineup] = useState(() => {
-    if (presetLineup) {
-      const positionMapping = ['IV', 'III', 'II', 'V', 'VI', 'I']
-      return positionMapping.map(pos => (presetLineup[pos] !== undefined ? String(presetLineup[pos] ?? '') : ''))
-    }
-    return ['', '', '', '', '', '']
-  }) // [IV, III, II, V, VI, I]
-  const [errors, setErrors] = useState({}) // Use an object for specific error messages
-  const [confirmMessage, setConfirmMessage] = useState(null)
-  const [editHistory, setEditHistory] = useState([]) // Track edit history: [{ index, previousValue }]
-
-  // Get all events to check for disqualifications
-  const events = useLiveQuery(async () => {
-    return await db.events.where('matchId').equals(matchId).toArray()
-  }, [matchId])
-
-  const handleInputChange = (index, value, skipHistory = false) => {
-    const numValue = value.replace(/[^0-9]/g, '')
-    const previousValue = lineup[index]
-
-    // Track edit history (only if the value actually changed and not skipping)
-    if (!skipHistory && numValue !== previousValue) {
-      setEditHistory(prev => [...prev, { index, previousValue }])
-    }
-
-    const newLineup = [...lineup]
-    newLineup[index] = numValue
-    setLineup(newLineup)
-
-    // Automatically validate the number as it's entered
-    if (numValue && numValue.trim() !== '') {
-      const num = Number(numValue)
-      const player = players?.find(p => String(p.number) === String(num))
-      const newErrors = { ...errors }
-
-      // Check if not on roster
-      if (!player) {
-        newErrors[index] = 'Not on roster'
-      }
-
-      // Check if disqualified
-      else if (events) {
-        const isDisqualified = events.some(e =>
-          e.type === 'sanction' &&
-          e.payload?.team === team &&
-          e.payload?.playerNumber === num &&
-          e.payload?.type === 'disqualification'
-        )
-        if (isDisqualified) {
-          newErrors[index] = 'Disqualified'
-        }
-
-      } else {
-        // Clear error if valid
-        delete newErrors[index]
-      }
-
-      setErrors(newErrors)
-    } else {
-      // Clear error when field is empty
-      const newErrors = { ...errors }
-      delete newErrors[index]
-      setErrors(newErrors)
-    }
-
-    setConfirmMessage(null)
-  }
-
-  // Handle click on available player - SINGLE click assigns to first available position
-  const handlePlayerClick = (playerNumber) => {
-    // Find first empty box (I to VI order: indices 5, 2, 1, 0, 3, 4 for I, II, III, IV, V, VI)
-    const positionOrder = [5, 2, 1, 0, 3, 4] // I, II, III, IV, V, VI
-    for (const idx of positionOrder) {
-      if (!lineup[idx] || lineup[idx].trim() === '') {
-        handleInputChange(idx, String(playerNumber))
-        break
-      }
-    }
-  }
-
-  // Drag and drop state
-  const [draggedPlayer, setDraggedPlayer] = useState(null)
-  const [dragOverPosition, setDragOverPosition] = useState(null)
-
-  // Handle drag start for available players
-  const handleDragStart = (e, playerNumber) => {
-    setDraggedPlayer(playerNumber)
-    e.dataTransfer.setData('text/plain', String(playerNumber))
-    e.dataTransfer.effectAllowed = 'move'
-
-    // Create custom drag image showing the player number
-    const dragImage = document.createElement('div')
-    dragImage.textContent = String(playerNumber)
-    dragImage.style.cssText = `
-      position: absolute;
-      top: -1000px;
-      left: -1000px;
-      width: 50px;
-      height: 50px;
-      border-radius: 50%;
-      background: #4ade80;
-      color: #000;
-      font-size: 20px;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    `
-    document.body.appendChild(dragImage)
-    e.dataTransfer.setDragImage(dragImage, 25, 25)
-
-    // Clean up drag image after a short delay
-    setTimeout(() => {
-      document.body.removeChild(dragImage)
-    }, 0)
-  }
-
-  const handleDragEnd = () => {
-    setDraggedPlayer(null)
-    setDragOverPosition(null)
-  }
-
-  // Handle drag over for position inputs
-  const handleDragOver = (e, positionIndex) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-    setDragOverPosition(positionIndex)
-  }
-
-  const handleDragLeave = () => {
-    setDragOverPosition(null)
-  }
-
-  // Handle drop on position input
-  const handleDrop = (e, positionIndex) => {
-    e.preventDefault()
-    const playerNumber = e.dataTransfer.getData('text/plain')
-    if (playerNumber) {
-      handleInputChange(positionIndex, playerNumber)
-    }
-    setDraggedPlayer(null)
-    setDragOverPosition(null)
-  }
-
-  // Undo the last edit
-  const handleUndoLastEdit = () => {
-    if (editHistory.length === 0) return
-
-    const lastEdit = editHistory[editHistory.length - 1]
-    // Restore the previous value (skip history tracking for undo)
-    handleInputChange(lastEdit.index, lastEdit.previousValue, true)
-    // Remove the last entry from history
-    setEditHistory(prev => prev.slice(0, -1))
-    setConfirmMessage(null)
-  }
-
-  // Clear all lineup entries
-  const handleClearLineup = () => {
-    // Save current state to history before clearing
-    lineup.forEach((value, index) => {
-      if (value && value.trim() !== '') {
-        setEditHistory(prev => [...prev, { index, previousValue: value }])
-      }
-    })
-    setLineup(['', '', '', '', '', ''])
-    setErrors({})
-    setConfirmMessage(null)
-  }
-
-  // Rotate lineup clockwise (forward): I->II, II->III, III->IV, IV->V, V->VI, VI->I
-  // Array indices: [IV=0, III=1, II=2, V=3, VI=4, I=5]
-  // Clockwise means each player moves to next position: 0->3, 1->0, 2->1, 3->4, 4->5, 5->2
-  const handleRotateClockwise = () => {
-    const newLineup = ['', '', '', '', '', '']
-    // IV(0) -> V(3), III(1) -> IV(0), II(2) -> III(1), V(3) -> VI(4), VI(4) -> I(5), I(5) -> II(2)
-    newLineup[3] = lineup[0]  // IV -> V
-    newLineup[0] = lineup[1]  // III -> IV
-    newLineup[1] = lineup[2]  // II -> III
-    newLineup[4] = lineup[3]  // V -> VI
-    newLineup[5] = lineup[4]  // VI -> I
-    newLineup[2] = lineup[5]  // I -> II
-    setLineup(newLineup)
-    setConfirmMessage(null)
-  }
-
-  // Rotate lineup counterclockwise (backward): I->VI, VI->V, V->IV, IV->III, III->II, II->I
-  const handleRotateCounterClockwise = () => {
-    const newLineup = ['', '', '', '', '', '']
-    // IV(0) -> III(1), III(1) -> II(2), II(2) -> I(5), V(3) -> IV(0), VI(4) -> V(3), I(5) -> VI(4)
-    newLineup[1] = lineup[0]  // IV -> III
-    newLineup[2] = lineup[1]  // III -> II
-    newLineup[5] = lineup[2]  // II -> I
-    newLineup[0] = lineup[3]  // V -> IV
-    newLineup[3] = lineup[4]  // VI -> V
-    newLineup[4] = lineup[5]  // I -> VI
-    setLineup(newLineup)
-    setConfirmMessage(null)
-  }
-
-  // Modify lineup (undo confirm and go back to editing)
-  const handleModify = () => {
-    setConfirmMessage(null)
-  }
-
-  const handleConfirm = () => {
-    const newErrors = {}
-    const lineupNumbers = lineup.map(n => (n ? Number(n) : null))
-
-    // Check for duplicates first, as it's a cross-field validation
-    const numberCounts = lineupNumbers.reduce((acc, num) => {
-      if (num !== null) acc[num] = (acc[num] || 0) + 1
-      return acc
-    }, {})
-
-    lineup.forEach((numStr, i) => {
-      // 1. Required
-      if (!numStr || numStr.trim() === '') {
-        newErrors[i] = 'Required'
-        return // Move to next input
-      }
-
-      const num = Number(numStr)
-
-      // 2. Duplicate
-      if (numberCounts[num] > 1) {
-        newErrors[i] = 'Duplicate'
-        // Don't return, so we can flag all duplicates
-      }
-
-      const player = players?.find(p => String(p.number) === String(num))
-
-      // 3. Not on roster
-      if (!player) {
-        newErrors[i] = 'Not on roster'
-        return
-      }
-
-
-
-      // 5. Is disqualified - cannot enter the game ever again
-      if (events) {
-        const isDisqualified = events.some(e =>
-          e.type === 'sanction' &&
-          e.payload?.team === team &&
-          e.payload?.playerNumber === num &&
-          e.payload?.type === 'disqualification'
-        )
-        if (isDisqualified) {
-          newErrors[i] = 'Disqualified'
-          return
-        }
-      }
-
-
-    })
-
-    // Re-check for duplicates to mark all of them
-    lineupNumbers.forEach((num, i) => {
-      if (num !== null && numberCounts[num] > 1) {
-        newErrors[i] = 'Duplicate'
-      }
-    })
-
-    setErrors(newErrors)
-
-    if (Object.keys(newErrors).length > 0) {
-      return
-    }
-
-    // Save lineup: Map positions I->I, II->II, III->III, IV->IV
-    // Lineup array indices: [0=IV, 1=III, 2=II, 3=V, 4=VI, 5=I]
-    const positionMapping = ['IV', 'III', 'II', 'V', 'VI', 'I']
-    const lineupData = {}
-    positionMapping.forEach((pos, idx) => {
-      lineupData[pos] = lineupNumbers[idx]
-    })
-
-    // Save lineup as an event (mark as initial lineup or manual override)
-    if (matchId && setIndex) {
-      // Save lineup with sequence number
-      (async () => {
-        // Get next sequence number
-        const allEvents = await db.events.where('matchId').equals(matchId).toArray()
-        const maxSeq = allEvents.reduce((max, e) => Math.max(max, e.seq || 0), 0)
-
-        const manualLineupSeq = maxSeq + 1
-        const manualLineupEventId = await db.events.add({
-          matchId,
-          setIndex,
-          ts: new Date().toISOString(),
-          type: 'lineup',
-          payload: {
-            team,
-            lineup: lineupData,
-            isInitial: mode === 'initial'
-          },
-          seq: manualLineupSeq
-        })
-
-        // Sync to referee immediately after lineup is saved
-        if (onLineupSaved) {
-          onLineupSaved()
-        }
-
-        // Check if both lineups are now set - if so, award any pending penalty points
-        // Reuse allEvents from above to avoid redeclaration
-        const team1LineupSet = allEvents.some(e =>
-          e.type === 'lineup' &&
-          e.payload?.team === 'team1' &&
-          e.setIndex === setIndex &&
-          e.payload?.isInitial
-        )
-        const team2LineupSet = allEvents.some(e =>
-          e.type === 'lineup' &&
-          e.payload?.team === 'team2' &&
-          e.setIndex === setIndex &&
-          e.payload?.isInitial
-        )
-
-        if (team1LineupSet && team2LineupSet) {
-          // Both lineups are set - check for pending penalty sanctions in this set
-          const pendingPenalties = allEvents.filter(e =>
-            e.type === 'sanction' &&
-            e.setIndex === setIndex &&
-            e.payload?.type === 'penalty'
-          )
-
-          // Check if points have already been awarded for these penalties
-          const pointEvents = allEvents.filter(e => e.type === 'point' && e.setIndex === setIndex)
-
-          if (pendingPenalties.length > 0 && pointEvents.length === 0) {
-            // Award points for each pending penalty
-            for (const penalty of pendingPenalties) {
-              const sanctionedTeam = penalty.payload?.team
-              const otherTeam = sanctionedTeam === 'team1' ? 'team2' : 'team1'
-
-              // Award point to the other team
-              const currentSet = await db.sets.where('matchId').equals(matchId).and(s => s.index === setIndex).first()
-              if (currentSet) {
-                const field = otherTeam === 'team1' ? 'team1Points' : 'team2Points'
-                const currentPoints = currentSet[field] || 0
-                await db.sets.update(currentSet.id, {
-                  [field]: currentPoints + 1
-                })
-
-                // Log point event
-                const penaltyPointSeq = maxSeq + 2 + pendingPenalties.indexOf(penalty)
-                await db.events.add({
-                  matchId,
-                  setIndex,
-                  ts: new Date().toISOString(),
-                  type: 'point',
-                  payload: { team: otherTeam, fromPenalty: true },
-                  seq: penaltyPointSeq
-                })
-
-              }
-            }
-          }
-        }
-
-        // Auto-close modal after successful save (skip confirmation step)
-        onSave()
-      })().catch(err => {
-        // Don't auto-close - let user close manually with close button
-        setErrors({ 0: 'Save failed', 1: 'Save failed', 2: 'Save failed', 3: 'Save failed', 4: 'Save failed', 5: 'Save failed' })
-      })
-    } else {
-      // Auto-close modal after successful save
-      onSave()
-    }
-  }
-
-  // Determine if this team is A or B
-  const isTeamA = team === teamAKey
-  const teamLabel = isTeamA ? 'A' : 'B'
-  const teamColor = teamData?.color || (isTeamA ? '#ef4444' : '#3b82f6')
-
-  // Helper function to determine if a color is bright
-  const isBrightColor = (color) => {
-    if (!color) return false
-    const hex = color.replace('#', '')
-    const r = parseInt(hex.substr(0, 2), 16)
-    const g = parseInt(hex.substr(2, 2), 16)
-    const b = parseInt(hex.substr(4, 2), 16)
-    const brightness = (r * 299 + g * 587 + b * 114) / 1000
-    return brightness > 155
-  }
-
-  return (
-    <Modal
-      title={
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span>{teamData?.name || (team === 'team1' ? 'team1' : 'team2')}</span>
-          <span
-            style={{
-              padding: '4px 12px',
-              borderRadius: '6px',
-              fontSize: '14px',
-              fontWeight: 700,
-              background: teamColor,
-              color: isBrightColor(teamColor) ? '#000' : '#fff'
-            }}
-          >
-            {teamLabel}
-          </span>
-        </div>
-      }
-      open={true}
-      onClose={onClose}
-      width={500}
-      hideCloseButton={true}
-    >
-      <div style={{ padding: '24px' }}>
-        {/* Centered container for position inputs */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'center',
-          marginBottom: '24px'
-        }}>
-          <div className="lineup-grid" style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '8px',
-            position: 'relative'
-          }}>
-            {/* Net indicator */}
-            <div style={{
-              position: 'absolute',
-              top: '-8px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              width: '100%',
-              height: '2px',
-              background: 'var(--accent)',
-              zIndex: 1
-            }} />
-            <div style={{
-              position: 'absolute',
-              top: '-20px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              fontSize: '12px',
-              fontWeight: 600,
-              color: 'var(--accent)',
-              zIndex: 2,
-              background: 'var(--bg)',
-              padding: '0 8px'
-            }}>
-            </div>
-
-            {/* Top row (closer to net) */}
-            {[
-              { idx: 0, pos: 'IV' },
-              { idx: 1, pos: 'III' },
-              { idx: 2, pos: 'II' }
-            ].map(({ idx, pos }) => (
-              <div key={`top-${idx}`} style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center'
-              }}>
-                {/* Position label rectangle */}
-                <div style={{
-                  width: '60px',
-                  height: '24px',
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: '4px 4px 0 0',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: 'var(--text)'
-                }}>
-                  {pos}
-                </div>
-                {/* Input square with captain indicator (circled number) - droppable */}
-                <div
-                  style={{ position: 'relative', width: '60px' }}
-                  onDragOver={(e) => handleDragOver(e, idx)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, idx)}
-                >
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    min="1"
-                    max="99"
-                    value={lineup[idx]}
-                    onChange={e => {
-                      const val = e.target.value.replace(/[^0-9]/g, '')
-                      if (val === '' || (Number(val) >= 1 && Number(val) <= 99)) {
-                        handleInputChange(idx, val)
-                      }
-                    }}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        // Counterclockwise order: I(5) → II(2) → III(1) → IV(0) → V(3) → VI(4) → I(5)
-                        const counterclockwiseOrder = [5, 2, 1, 0, 3, 4]
-                        const currentOrderIdx = counterclockwiseOrder.indexOf(idx)
-                        const inputs = e.target.closest('.lineup-grid')?.querySelectorAll('input')
-                        if (inputs) {
-                          for (let i = 1; i <= 6; i++) {
-                            const nextOrderIdx = (currentOrderIdx + i) % 6
-                            const nextIdx = counterclockwiseOrder[nextOrderIdx]
-                            if (!inputs[nextIdx]?.value) {
-                              inputs[nextIdx].focus()
-                              return
-                            }
-                          }
-                          e.target.blur()
-                        }
-                      }
-                    }}
-                    style={{
-                      width: '60px',
-                      height: '60px',
-                      padding: '0',
-                      fontSize: '18px',
-                      fontWeight: 700,
-                      textAlign: 'center',
-                      background: dragOverPosition === idx ? 'rgba(74, 222, 128, 0.2)' : 'var(--bg-secondary)',
-                      borderTop: 'none',
-                      borderLeft: `2px solid ${errors[idx] ? '#ef4444' : dragOverPosition === idx ? '#4ade80' : 'rgba(255,255,255,0.2)'}`,
-                      borderRight: `2px solid ${errors[idx] ? '#ef4444' : dragOverPosition === idx ? '#4ade80' : 'rgba(255,255,255,0.2)'}`,
-                      borderBottom: `2px solid ${errors[idx] ? '#ef4444' : dragOverPosition === idx ? '#4ade80' : 'rgba(255,255,255,0.2)'}`,
-                      borderRadius: '0 0 8px 8px',
-                      color: 'var(--text)',
-                      transition: 'background 0.15s, border-color 0.15s'
-                    }}
-                  />
-                  {lineup[idx] && players?.find(p => String(p.number) === String(lineup[idx]) && p.isCaptain) && (
-                    <div style={{
-                      position: 'absolute',
-                      top: '50%',
-                      left: '50%',
-                      transform: 'translate(-50%, -50%)',
-                      width: '36px',
-                      height: '36px',
-                      borderRadius: '50%',
-                      borderTop: '2px solid var(--accent)',
-                      borderLeft: '2px solid var(--accent)',
-                      borderRight: '2px solid var(--accent)',
-                      borderBottom: '2px solid var(--accent)',
-                      pointerEvents: 'none',
-                      zIndex: 1
-                    }} />
-                  )}
-                </div>
-                <div style={{ color: '#ef4444', fontSize: '11px', marginTop: '4px', height: '14px', textAlign: 'center' }}>
-                  {errors[idx] || ''}
-                </div>
-              </div>
-            ))}
-
-            {/* Bottom row (further from net) */}
-            {[
-              { idx: 3, pos: 'V' },
-              { idx: 4, pos: 'VI' },
-              { idx: 5, pos: 'I' }
-            ].map(({ idx, pos }) => (
-              <div
-                key={`bottom-${idx}`}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  marginTop: '8px'
-                }}
-              >
-                {/* Position label rectangle */}
-                <div style={{
-                  width: '60px',
-                  height: '24px',
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: '4px 4px 0 0',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: 'var(--text)'
-                }}>
-                  {pos}
-                </div>
-                {/* Input square with captain indicator (circled number) - droppable */}
-                <div
-                  style={{ position: 'relative', width: '60px' }}
-                  onDragOver={(e) => handleDragOver(e, idx)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, idx)}
-                >
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    min="1"
-                    max="99"
-                    value={lineup[idx]}
-                    onChange={e => {
-                      const val = e.target.value.replace(/[^0-9]/g, '')
-                      if (val === '' || (Number(val) >= 1 && Number(val) <= 99)) {
-                        handleInputChange(idx, val)
-                      }
-                    }}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        // Counterclockwise order: I(5) → II(2) → III(1) → IV(0) → V(3) → VI(4) → I(5)
-                        const counterclockwiseOrder = [5, 2, 1, 0, 3, 4]
-                        const currentOrderIdx = counterclockwiseOrder.indexOf(idx)
-                        const inputs = e.target.closest('.lineup-grid')?.querySelectorAll('input')
-                        if (inputs) {
-                          for (let i = 1; i <= 6; i++) {
-                            const nextOrderIdx = (currentOrderIdx + i) % 6
-                            const nextIdx = counterclockwiseOrder[nextOrderIdx]
-                            if (!inputs[nextIdx]?.value) {
-                              inputs[nextIdx].focus()
-                              return
-                            }
-                          }
-                          e.target.blur()
-                        }
-                      }
-                    }}
-                    style={{
-                      width: '60px',
-                      height: '60px',
-                      padding: '0',
-                      fontSize: '18px',
-                      fontWeight: 700,
-                      textAlign: 'center',
-                      background: dragOverPosition === idx ? 'rgba(74, 222, 128, 0.2)' : 'var(--bg-secondary)',
-                      borderTop: 'none',
-                      borderLeft: `2px solid ${errors[idx] ? '#ef4444' : dragOverPosition === idx ? '#4ade80' : 'rgba(255,255,255,0.2)'}`,
-                      borderRight: `2px solid ${errors[idx] ? '#ef4444' : dragOverPosition === idx ? '#4ade80' : 'rgba(255,255,255,0.2)'}`,
-                      borderBottom: `2px solid ${errors[idx] ? '#ef4444' : dragOverPosition === idx ? '#4ade80' : 'rgba(255,255,255,0.2)'}`,
-                      borderRadius: '0 0 8px 8px',
-                      color: 'var(--text)',
-                      transition: 'background 0.15s, border-color 0.15s'
-                    }}
-                  />
-                  {lineup[idx] && players?.find(p => String(p.number) === String(lineup[idx]) && p.isCaptain) && (
-                    <div style={{
-                      position: 'absolute',
-                      top: '50%',
-                      left: '50%',
-                      transform: 'translate(-50%, -50%)',
-                      width: '36px',
-                      height: '36px',
-                      borderRadius: '50%',
-                      borderTop: '2px solid var(--accent)',
-                      borderLeft: '2px solid var(--accent)',
-                      borderRight: '2px solid var(--accent)',
-                      borderBottom: '2px solid var(--accent)',
-                      pointerEvents: 'none',
-                      zIndex: 1
-                    }} />
-                  )}
-                </div>
-                <div style={{ color: '#ef4444', fontSize: '11px', marginTop: '4px', height: '14px', textAlign: 'center' }}>
-                  {errors[idx] || ''}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Available players (excluding disqualified) */}
-        <div style={{
-          marginBottom: '16px',
-          padding: '12px',
-          background: 'rgba(255, 255, 255, 0.05)',
-          borderRadius: '8px'
-        }}>
-          <div style={{
-            fontSize: '13px',
-            fontWeight: 600,
-            color: 'var(--muted)',
-            marginBottom: '8px'
-          }}>
-            {t('scoreboard.lineupModal.availablePlayers', 'Available Players:')}
-          </div>
-          <div style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '8px'
-          }}>
-            {players?.filter(p => {
-              // Exclude players already in the lineup
-              if (lineup.includes(String(p.number))) return false
-
-              if (events) {
-                // Exclude players substituted due to disqualification (cannot take part for rest of game)
-                const wasDisqualifiedSub = events.some(e =>
-                  e.type === 'substitution' &&
-                  e.payload?.team === team &&
-                  String(e.payload?.playerOut) === String(p.number) &&
-                  e.payload?.isDisqualified === true
-                )
-                if (wasDisqualifiedSub) {
-                  return false
-                }
-
-                // Exclude exceptionally substituted players (cannot take part for rest of game)
-                const wasExceptionallySubstituted = events.some(e =>
-                  e.type === 'substitution' &&
-                  e.payload?.team === team &&
-                  String(e.payload?.playerOut) === String(p.number) &&
-                  e.payload?.isExceptional === true
-                )
-                if (wasExceptionallySubstituted) {
-                  return false
-                }
-
-                // Exclude expelled players in the current set (cannot take part in this set)
-                if (setIndex) {
-                  // Check for substitution due to expulsion in current set
-                  const wasExpelledSub = events.some(e =>
-                    e.type === 'substitution' &&
-                    e.payload?.team === team &&
-                    String(e.payload?.playerOut) === String(p.number) &&
-                    e.payload?.isExpelled === true &&
-                    e.setIndex === setIndex
-                  )
-                  if (wasExpelledSub) {
-                    return false
-                  }
-
-                  // Also check for sanction-based expulsion in current set
-                  const isExpelledInSet = events.some(e =>
-                    e.type === 'sanction' &&
-                    e.payload?.team === team &&
-                    String(e.payload?.playerNumber) === String(p.number) &&
-                    e.payload?.type === 'expulsion' &&
-                    e.setIndex === setIndex
-                  )
-                  if (isExpelledInSet) {
-                    return false
-                  }
-                }
-
-                // Also check for sanction-based disqualification
-                const isDisqualified = events.some(e =>
-                  e.type === 'sanction' &&
-                  e.payload?.team === team &&
-                  String(e.payload?.playerNumber) === String(p.number) &&
-                  e.payload?.type === 'disqualification'
-                )
-                if (isDisqualified) {
-                  return false
-                }
-              }
-
-              return true
-            }).sort((a, b) => a.number - b.number).map(p => (
-              <div
-                key={p.number}
-                draggable
-                onClick={() => handlePlayerClick(p.number)}
-                onDragStart={(e) => handleDragStart(e, p.number)}
-                onDragEnd={handleDragEnd}
-                style={{
-                  position: 'relative',
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '50%',
-                  background: draggedPlayer === p.number ? 'rgba(74, 222, 128, 0.4)' : 'rgba(74, 222, 128, 0.2)',
-                  border: '2px solid #4ade80',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '14px',
-                  fontWeight: 700,
-                  color: '#4ade80',
-                  cursor: 'grab',
-                  transition: 'all 0.2s',
-                  userSelect: 'none',
-                  opacity: draggedPlayer === p.number ? 0.5 : 1
-                }}
-                onMouseEnter={(e) => {
-                  if (!draggedPlayer) {
-                    e.currentTarget.style.background = 'rgba(74, 222, 128, 0.3)'
-                    e.currentTarget.style.transform = 'scale(1.1)'
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!draggedPlayer) {
-                    e.currentTarget.style.background = 'rgba(74, 222, 128, 0.2)'
-                    e.currentTarget.style.transform = 'scale(1)'
-                  }
-                }}
-                title={t('scoreboard.lineupModal.clickOrDragTooltip', 'Click or drag to assign to a position')}
-              >
-                {p.isCaptain && (
-                  <span style={{
-                    position: 'absolute',
-                    top: '-4px',
-                    right: '-4px',
-                    width: '16px',
-                    height: '16px',
-                    borderRadius: '50%',
-                    background: '#4ade80',
-                    color: '#000',
-                    fontSize: '10px',
-                    fontWeight: 700,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    pointerEvents: 'none'
-                  }}>
-                    C
-                  </span>
-                )}
-                {p.number}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Instruction text */}
-        <div style={{
-          textAlign: 'center',
-          fontSize: '12px',
-          color: 'var(--muted)',
-          marginBottom: '16px',
-          fontStyle: 'italic'
-        }}>
-          {t('scoreboard.lineupModal.dragInstruction', 'Please write the number, drag and drop it, or click on available player to fill each of the available positions')}
-        </div>
-
-        {/* Undo, Clear, and Rotate buttons - hidden when lineup is confirmed */}
-        {!confirmMessage && (
-          <>
-            {/* Undo and Clear buttons row */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'center',
-              gap: '12px',
-              marginBottom: '12px'
-            }}>
-              {editHistory.length > 0 && (
-                <button
-                  className="secondary"
-                  onClick={handleUndoLastEdit}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '8px 16px',
-                    fontSize: '13px'
-                  }}
-                >
-                  <span style={{ fontSize: '16px' }}>↩</span>
-                  {t('scoreboard.lineupModal.undoLastEdit', 'Undo last edit')}
-                </button>
-              )}
-              {lineup.some(v => v && v.trim() !== '') && (
-                <button
-                  className="secondary"
-                  onClick={handleClearLineup}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '8px 16px',
-                    fontSize: '13px',
-                    color: '#ef4444',
-                    borderColor: 'rgba(239, 68, 68, 0.3)'
-                  }}
-                >
-                  <span style={{ fontSize: '16px' }}>✕</span>
-                  {t('scoreboard.lineupModal.clearLineup', 'Clear lineup')}
-                </button>
-              )}
-            </div>
-
-            {/* Rotate buttons row */}
-            {lineup.some(v => v && v.trim() !== '') && (
-              <div style={{
-                display: 'flex',
-                justifyContent: 'center',
-                gap: '16px',
-                marginBottom: '16px'
-              }}>
-                <button
-                  className="secondary"
-                  onClick={handleRotateClockwise}
-                  title={t('scoreboard.lineupModal.rotateClockwise', 'Rotate clockwise')}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: '44px',
-                    height: '44px',
-                    padding: '0',
-                    fontSize: '20px',
-                    borderRadius: '50%'
-                  }}
-                >
-                  ↻
-                </button>
-                <span style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  fontSize: '12px',
-                  color: 'var(--muted)'
-                }}>
-                  {t('scoreboard.lineupModal.rotate', 'Rotate')}
-                </span>
-
-                <button
-                  className="secondary"
-                  onClick={handleRotateCounterClockwise}
-                  title={t('scoreboard.lineupModal.rotateCounterclockwise', 'Rotate counterclockwise')}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: '44px',
-                    height: '44px',
-                    padding: '0',
-                    fontSize: '20px',
-                    borderRadius: '50%'
-                  }}
-                >
-                  ↺
-                </button>
-              </div>
-            )}
-          </>
-        )}
-
-        {errors.length > 0 && (
-          <div style={{
-            padding: '12px',
-            background: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid #ef4444',
-            borderRadius: '8px',
-            marginBottom: '16px',
-            color: '#ef4444',
-            fontSize: '14px'
-          }}>
-            {t('scoreboard.lineupModal.validationError', 'Please check: All numbers must exist in roster and not be duplicated.')}
-          </div>
-        )}
-
-        {confirmMessage && (
-          <div style={{
-            padding: '12px',
-            background: 'rgba(74, 222, 128, 0.1)',
-            border: '1px solid #4ade80',
-            borderRadius: '8px',
-            marginBottom: '16px',
-            color: '#4ade80',
-            fontSize: '14px',
-            fontWeight: 600,
-            textAlign: 'center'
-          }}>
-            {confirmMessage}
-          </div>
-        )}
-
-        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-
-          {confirmMessage === null && (
-            <button onClick={handleConfirm}>
-              {t('scoreboard.lineupModal.confirm', 'Confirm')}
-            </button>
-          )}
-
-          <button
-            className={confirmMessage === null ? 'secondary' : ''}
-            onClick={() => {
-              // If lineup was confirmed (confirmMessage exists), refresh state before closing
-              if (confirmMessage) {
-                onSave()
-              } else {
-                onClose()
-              }
-            }}
-          >
-            {t('scoreboard.lineupModal.close', 'Close')}
-          </button>
-          {confirmMessage !== null && (
-            <button
-              className="secondary"
-              onClick={handleModify}
-              style={{
-                background: 'rgba(0, 0, 0, 1)',
-                color: '#fff',
-                border: '1px solid rgba(0, 0, 0, 1)',
-                borderRadius: '10px',
-                cursor: 'point  er'
-              }}
-            >
-              {t('scoreboard.lineupModal.modify', 'Modify')}
-            </button>
-          )}
-        </div>
-      </div>
-    </Modal>
-  )
 }
 
 function SetStartTimeModal({ setIndex, defaultTime, onConfirm, onCancel }) {

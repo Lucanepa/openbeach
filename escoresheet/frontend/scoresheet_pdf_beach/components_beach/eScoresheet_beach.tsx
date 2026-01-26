@@ -126,7 +126,7 @@ const PointCell = ({ num, value, onClick }: { num: number, value: string, onClic
     {/* Circle: Perfect circle */}
     {value === 'circle' && (
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div className="h-[80%] aspect-square rounded-full border border-black"></div>
+        <div className="h-[88%] aspect-square rounded-full border border-black"></div>
       </div>
     )}
   </div>
@@ -150,17 +150,20 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
   // Listen for refresh messages from parent window
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
+      console.log('[eScoresheet] Received message:', event.data?.type);
       if (event.data?.type === 'REFRESH_SCORESHEET') {
-        // Reload data from sessionStorage
+        console.log('[eScoresheet] REFRESH_SCORESHEET received!');
+        // Get data directly from message (sessionStorage is per-window, not shared)
         try {
-          const dataStr = sessionStorage.getItem('scoresheetData');
-          if (dataStr) {
-            const newMatchData = JSON.parse(dataStr);
+          const newMatchData = event.data?.data;
+          console.log('[eScoresheet] Received data, events count:', newMatchData?.events?.length);
+          if (newMatchData) {
             // Reset data and update matchData to trigger re-initialization
             dataRef.current = {};
             setData({});
             setCurrentMatchData(newMatchData);
             setDataVersion(v => v + 1); // Trigger re-initialization
+            console.log('[eScoresheet] State updated, should re-render');
           }
         } catch (error) {
           console.error('Error refreshing scoresheet data:', error);
@@ -169,6 +172,7 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
     };
 
     window.addEventListener('message', handleMessage);
+    console.log('[eScoresheet] Message listener registered');
     return () => {
       window.removeEventListener('message', handleMessage);
     };
@@ -176,6 +180,7 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
 
   // Initialize data from currentMatchData (updates on refresh)
   useEffect(() => {
+    console.log('[eScoresheet] useEffect triggered, dataVersion:', dataVersion, 'hasMatchData:', !!currentMatchData);
 
     // Initialize if currentMatchData exists
     if (currentMatchData) {
@@ -586,18 +591,19 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
 
           // Only process sets that have started (have a startTime or are finished)
           // This prevents filling data for sets that haven't been played yet
-          // Exception: Set 1 should be initialized if coin toss is confirmed, even if not started
+          // Exception: Current set should be initialized even if startTime not yet recorded
           const setDataForFirstServe = sets?.find((s: any) => s.index === setNum);
           const setHasStarted = setDataForFirstServe?.startTime || setDataForFirstServe?.finished;
-          const shouldInitializeSet1 = setNum === 1 && isCoinTossConfirmed && !setHasStarted;
+          const isCurrentSet = setNum === currentSetNum;
+          const shouldInitializeCurrentSet = isCurrentSet && isCoinTossConfirmed && !setHasStarted;
 
-          if (!setHasStarted && !shouldInitializeSet1) {
-            // Skip sets that haven't started yet (except set 1 if coin toss confirmed)
+          if (!setHasStarted && !shouldInitializeCurrentSet) {
+            // Skip sets that haven't started yet (except current set if coin toss confirmed)
             return;
           }
 
-          // Skip A/B processing if coin toss not confirmed (except for set 1 initialization)
-          if (!isCoinTossConfirmed && !shouldInitializeSet1) {
+          // Skip A/B processing if coin toss not confirmed (except for current set initialization)
+          if (!isCoinTossConfirmed && !shouldInitializeCurrentSet) {
             return;
           }
 
@@ -2016,129 +2022,72 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
                 }
               }
 
-              // For misconduct and formal warnings, we still need to determine which side the team is on for player row assignment
+              // For misconduct and formal warnings, we need to determine the player row based on team identity
+              // Rows are assigned by team position: teamUp -> r1 (player1), r3 (player2); teamDown -> r2 (player1), r4 (player2)
               if ((isMisconduct || isFormalWarning) && event.payload?.playerNumber) {
-                if ((isMisconduct || isFormalWarning) && event.payload?.playerNumber) {
-                  // Misconduct sanctions and formal warnings go in player rows (r1, r2, r3, r4)
-                  // Find player row key based on player number and which team they're on
-                  const playerNumber = event.payload.playerNumber;
-                  const coinTossData = match?.coinTossData?.players;
-                  let rowKey: string | null = null;
+                const playerNumber = event.payload.playerNumber;
+                let rowKey: string | null = null;
 
-                  // Check if player is on left team (which could be A or B depending on court switches)
-                  if (leftTeamKey === teamAKey && coinTossData?.teamA) {
-                    if (coinTossData.teamA.player1?.number === playerNumber) {
-                      rowKey = 'r1';
-                    } else if (coinTossData.teamA.player2?.number === playerNumber) {
-                      rowKey = 'r3';
-                    }
-                  } else if (leftTeamKey === teamBKey && coinTossData?.teamB) {
-                    if (coinTossData.teamB.player1?.number === playerNumber) {
-                      rowKey = 'r2';
-                    } else if (coinTossData.teamB.player2?.number === playerNumber) {
-                      rowKey = 'r4';
-                    }
-                  }
+                // Determine which team the sanction is for (sanctionTeam is 'team1' or 'team2')
+                // Use teamAData/teamBData which are already populated with player numbers
+                const isSanctionForTeamA = sanctionTeam === teamAKey;
+                const sanctionedTeamData = isSanctionForTeamA ? teamAData : teamBData;
+                const isSanctionedTeamUp = sanctionTeam === teamUp;
 
-                  if (rowKey) {
-                    const leftTeamScore = leftTeamKey === teamAKey ? pointsBefore.teamA : pointsBefore.teamB;
-                    const rightTeamScore = rightTeamKey === teamAKey ? pointsBefore.teamA : pointsBefore.teamB;
+                // Find which player on the sanctioned team matches the playerNumber
+                // Player numbers might be strings or numbers, so compare as strings
+                const playerNumStr = String(playerNumber);
+                const isPlayer1 = String(sanctionedTeamData?.player1?.number) === playerNumStr;
+                const isPlayer2 = String(sanctionedTeamData?.player2?.number) === playerNumStr;
 
-                    if (isFormalWarning) {
-                      // Formal warning: use fw_a and fw_b with scores
-                      set(`${prefix}_${rowKey}_fw_a`, String(leftTeamScore));
-                      set(`${prefix}_${rowKey}_fw_b`, String(rightTeamScore));
-
-                      // Cross out the other player's formal warning box in the same set
-                      const otherRowKey = (rowKey === 'r1' ? 'r3' : rowKey === 'r3' ? 'r1' : rowKey === 'r2' ? 'r4' : 'r2');
-                      set(`${prefix}_${otherRowKey}_fw_crossed`, 'true');
-                    } else {
-                      // Count penalties (including rude_conduct) for this player in this set
-                      const playerPenalties = setEvents.filter((e: any, idx: number) =>
-                        idx <= eventIndex && e.type === 'sanction' &&
-                        e.payload?.team === leftTeamKey &&
-                        e.payload?.playerNumber === playerNumber &&
-                        (e.payload?.type === 'penalty' || e.payload?.type === 'rude_conduct')
-                      ).length;
-
-                      // Map to player row fields: s1/s2 for penalties, s3 for expulsion, s4 for disqualification
-                      if (sanctionType === 'penalty' || sanctionType === 'rude_conduct') {
-                        if (playerPenalties === 1) {
-                          set(`${prefix}_${rowKey}_s1_a`, String(leftTeamScore));
-                          set(`${prefix}_${rowKey}_s1_b`, String(rightTeamScore));
-                        } else if (playerPenalties === 2) {
-                          set(`${prefix}_${rowKey}_s2_a`, String(leftTeamScore));
-                          set(`${prefix}_${rowKey}_s2_b`, String(rightTeamScore));
-                        }
-                      } else if (sanctionType === 'expulsion') {
-                        set(`${prefix}_${rowKey}_s3_a`, String(leftTeamScore));
-                        set(`${prefix}_${rowKey}_s3_b`, String(rightTeamScore));
-                      } else if (sanctionType === 'disqualification') {
-                        set(`${prefix}_${rowKey}_s4_a`, String(leftTeamScore));
-                        set(`${prefix}_${rowKey}_s4_b`, String(rightTeamScore));
-                      }
-                    }
+                if (isPlayer1 || isPlayer2) {
+                  // Assign row based on team position (teamUp/teamDown) and player number
+                  if (isSanctionedTeamUp) {
+                    // teamUp players go to r1 (player1) and r3 (player2)
+                    rowKey = isPlayer1 ? 'r1' : 'r3';
+                  } else {
+                    // teamDown players go to r2 (player1) and r4 (player2)
+                    rowKey = isPlayer1 ? 'r2' : 'r4';
                   }
                 }
-                if ((isMisconduct || isFormalWarning) && event.payload?.playerNumber) {
-                  // Misconduct sanctions and formal warnings go in player rows (r1, r2, r3, r4)
-                  // Find player row key based on player number and which team they're on
-                  const playerNumber = event.payload.playerNumber;
-                  const coinTossData = match?.coinTossData?.players;
-                  let rowKey: string | null = null;
 
-                  // Check if player is on right team (which could be A or B depending on court switches)
-                  if (rightTeamKey === teamAKey && coinTossData?.teamA) {
-                    if (coinTossData.teamA.player1?.number === playerNumber) {
-                      rowKey = 'r1';
-                    } else if (coinTossData.teamA.player2?.number === playerNumber) {
-                      rowKey = 'r3';
-                    }
-                  } else if (rightTeamKey === teamBKey && coinTossData?.teamB) {
-                    if (coinTossData.teamB.player1?.number === playerNumber) {
-                      rowKey = 'r2';
-                    } else if (coinTossData.teamB.player2?.number === playerNumber) {
-                      rowKey = 'r4';
-                    }
-                  }
+                if (rowKey) {
+                  // Get scores: _a = penalized team's score, _b = other team's score
+                  const penalizedTeamScore = sanctionTeam === teamAKey ? pointsBefore.teamA : pointsBefore.teamB;
+                  const otherTeamScore = sanctionTeam === teamAKey ? pointsBefore.teamB : pointsBefore.teamA;
 
-                  if (rowKey) {
-                    const leftTeamScore = leftTeamKey === teamAKey ? pointsBefore.teamA : pointsBefore.teamB;
-                    const rightTeamScore = rightTeamKey === teamAKey ? pointsBefore.teamA : pointsBefore.teamB;
+                  if (isFormalWarning) {
+                    // Formal warning: use fw_a and fw_b with scores
+                    set(`${prefix}_${rowKey}_fw_a`, String(penalizedTeamScore));
+                    set(`${prefix}_${rowKey}_fw_b`, String(otherTeamScore));
 
-                    if (isFormalWarning) {
-                      // Formal warning: use fw_a and fw_b with scores
-                      set(`${prefix}_${rowKey}_fw_a`, String(rightTeamScore));
-                      set(`${prefix}_${rowKey}_fw_b`, String(leftTeamScore));
+                    // Cross out the other player's formal warning box in the same team
+                    const otherRowKey = (rowKey === 'r1' ? 'r3' : rowKey === 'r3' ? 'r1' : rowKey === 'r2' ? 'r4' : 'r2');
+                    set(`${prefix}_${otherRowKey}_fw_crossed`, 'true');
+                  } else {
+                    // Count penalties (including rude_conduct) for this player in this set
+                    const playerPenalties = setEvents.filter((e: any, idx: number) =>
+                      idx <= eventIndex && e.type === 'sanction' &&
+                      e.payload?.team === sanctionTeam &&
+                      e.payload?.playerNumber === playerNumber &&
+                      (e.payload?.type === 'penalty' || e.payload?.type === 'rude_conduct')
+                    ).length;
 
-                      // Cross out the other player's formal warning box in the same set
-                      const otherRowKey = (rowKey === 'r1' ? 'r3' : rowKey === 'r3' ? 'r1' : rowKey === 'r2' ? 'r4' : 'r2');
-                      set(`${prefix}_${otherRowKey}_fw_crossed`, 'true');
-                    } else {
-                      // Count penalties (including rude_conduct) for this player in this set
-                      const playerPenalties = setEvents.filter((e: any, idx: number) =>
-                        idx <= eventIndex && e.type === 'sanction' &&
-                        e.payload?.team === rightTeamKey &&
-                        e.payload?.playerNumber === playerNumber &&
-                        (e.payload?.type === 'penalty' || e.payload?.type === 'rude_conduct')
-                      ).length;
-
-                      // Map to player row fields: s1/s2 for penalties, s3 for expulsion, s4 for disqualification
-                      if (sanctionType === 'penalty' || sanctionType === 'rude_conduct') {
-                        if (playerPenalties === 1) {
-                          set(`${prefix}_${rowKey}_s1_a`, String(rightTeamScore));
-                          set(`${prefix}_${rowKey}_s1_b`, String(leftTeamScore));
-                        } else if (playerPenalties === 2) {
-                          set(`${prefix}_${rowKey}_s2_a`, String(rightTeamScore));
-                          set(`${prefix}_${rowKey}_s2_b`, String(leftTeamScore));
-                        }
-                      } else if (sanctionType === 'expulsion') {
-                        set(`${prefix}_${rowKey}_s3_a`, String(rightTeamScore));
-                        set(`${prefix}_${rowKey}_s3_b`, String(leftTeamScore));
-                      } else if (sanctionType === 'disqualification') {
-                        set(`${prefix}_${rowKey}_s4_a`, String(rightTeamScore));
-                        set(`${prefix}_${rowKey}_s4_b`, String(leftTeamScore));
+                    // Map to player row fields: s1/s2 for penalties, s3 for expulsion, s4 for disqualification
+                    if (sanctionType === 'penalty' || sanctionType === 'rude_conduct') {
+                      if (playerPenalties === 1) {
+                        set(`${prefix}_${rowKey}_s1_a`, String(penalizedTeamScore));
+                        set(`${prefix}_${rowKey}_s1_b`, String(otherTeamScore));
+                      } else if (playerPenalties === 2) {
+                        set(`${prefix}_${rowKey}_s2_a`, String(penalizedTeamScore));
+                        set(`${prefix}_${rowKey}_s2_b`, String(otherTeamScore));
                       }
+                    } else if (sanctionType === 'expulsion') {
+                      set(`${prefix}_${rowKey}_s3_a`, String(penalizedTeamScore));
+                      set(`${prefix}_${rowKey}_s3_b`, String(otherTeamScore));
+                    } else if (sanctionType === 'disqualification') {
+                      set(`${prefix}_${rowKey}_s4_a`, String(penalizedTeamScore));
+                      set(`${prefix}_${rowKey}_s4_b`, String(otherTeamScore));
                     }
                   }
                 }

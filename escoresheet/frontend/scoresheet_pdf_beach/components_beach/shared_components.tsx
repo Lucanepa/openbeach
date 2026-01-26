@@ -104,7 +104,7 @@ export const PointCell = ({ num, value, onClick }: { num: number, value: string,
     {/* Circle: Perfect circle */}
     {value === 'circle' && (
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-         <div className="h-[80%] aspect-square rounded-full border border-black"></div>
+         <div className="h-[98%] aspect-square rounded-full border border-black"></div>
       </div>
     )}
   </div>
