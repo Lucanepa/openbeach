@@ -18,6 +18,7 @@ import { supabase } from '../lib_beach/supabaseClient_beach'
 import { generateMatchSeedKey } from '../utils_beach/serverDataSync_beach'
 import { TEST_TEAM_SEED_DATA } from '../constants_beach/testSeeds_beach'
 import { splitLocalDateTime, parseLocalDateTimeToISO, roundToMinute } from '../utils_beach/timeUtils_beach'
+import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 
 // Date formatting helpers (outside component to avoid recreation)
 function formatDateToDDMMYYYY(dateStr) {
@@ -170,7 +171,7 @@ function isEqual(a, b) {
 // Helper to check if match info has changed
 function hasMatchInfoChanged(original, current) {
   if (!original) return true // No original, consider it changed
-  const keys = ['date', 'time', 'hall', 'city', 'type2', 'gameN', 'league', 'team1Name', 'team2Name', 'team1Color', 'team2Color', 'team1ShortName', 'team2ShortName']
+  const keys = ['date', 'time', 'hall', 'city', 'type2', 'gameN', 'league', 'team1Name', 'team2Name', 'team1Color', 'team2Color', 'team1ShortName', 'team2ShortName', 'hasCoach']
   for (const key of keys) {
     if (!isEqual(original[key], current[key])) return true
   }
@@ -400,6 +401,9 @@ function formatDobForSync(dob) {
 
 export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, onOpenCoinToss, offlineMode = false }) {
   const { t } = useTranslation()
+  const { scaleFactor: baseScaleFactor } = useScaledLayout()
+  const scaleFactor = baseScaleFactor * 1.25
+  const s = (px) => Math.round(px * scaleFactor)
   const { showAlert } = useAlert()
   const { user, profile, getCachedProfile } = useAuth()
   const [team1Name, setTeam1Name] = useState('')
@@ -418,6 +422,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   const [hall, setHall] = useState('') // Beach
   const [court, setCourt] = useState('') // Court
   const [type2, setType2] = useState('men') // Gender: men | women
+  const [hasCoach, setHasCoach] = useState(false) // Whether coaches are present
   const [phase, setPhase] = useState('main') // Phase: main (Main Draw) | qualification
   const [round, setRound] = useState('pool') // Round: pool | winner | class | semifinals | finals
   const [team1Color, setTeam1Color] = useState('#ef4444')
@@ -671,7 +676,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   useEffect(() => {
     if (currentView === 'info') {
       originalMatchInfoRef.current = {
-        date, time, hall, city, type2, gameN, league, team1Name, team2Name, team1Color, team2Color, team1ShortName, team2ShortName
+        date, time, hall, city, type2, gameN, league, team1Name, team2Name, team1Color, team2Color, team1ShortName, team2ShortName, hasCoach
       }
     } else if (currentView === 'officials') {
       originalOfficialsRef.current = {
@@ -862,7 +867,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 court: match.court || '',
                 gender: match.gender || match.match_type_2 || 'men',
                 phase: match.phase || 'main',
-                round: match.round || 'pool'
+                round: match.round || 'pool',
+                has_coach: match.hasCoach || false
               },
               team1_data: {
                 name: team1?.name || team1Name || 'Team 1',
@@ -915,6 +921,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     setType2(o.type2); setGameN(o.gameN); setLeague(o.league)
     setTeam1Name(o.team1Name); setTeam2Name(o.team2Name); setTeam1Color(o.team1Color); setTeam2Color(o.team2Color)
     setTeam1ShortName(o.team1ShortName); setTeam2ShortName(o.team2ShortName)
+    if (o.hasCoach !== undefined) setHasCoach(o.hasCoach)
   }
 
   const restoreOfficials = () => {
@@ -1002,6 +1009,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         else if (match.match_type_2) setType2(match.match_type_2) // Backwards compatibility
         if (match.phase) setPhase(match.phase)
         if (match.round) setRound(match.round)
+        if (match.hasCoach !== undefined) setHasCoach(!!match.hasCoach)
         // The placeholder will show a suggestion, but won't auto-fill a value
         if (match.team1ShortName && match.team1ShortName.trim()) {
           setTeam1ShortName(match.team1ShortName)
@@ -1386,6 +1394,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           if (draft.hall !== undefined) setHall(draft.hall)
           if (draft.city !== undefined) setCity(draft.city)
           if (draft.type2 !== undefined) setType2(draft.type2)
+          if (draft.hasCoach !== undefined) setHasCoach(draft.hasCoach)
           if (draft.team1ShortName !== undefined) setTeam1ShortName(draft.team1ShortName)
           if (draft.team2ShortName !== undefined) setTeam2ShortName(draft.team2ShortName)
           if (draft.gameN !== undefined) setGameN(draft.gameN)
@@ -1437,6 +1446,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         hall,
         city,
         type2,
+        hasCoach,
         gameN,
         league,
         team1Color,
@@ -1532,6 +1542,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         // This prevents scoresheet from showing default Xs before user confirms match info
         if (!silent || match?.matchInfoConfirmedAt) {
           matchUpdate.match_type_2 = type2
+          matchUpdate.hasCoach = hasCoach
         }
 
         await db.matches.update(matchId, matchUpdate)
@@ -1602,7 +1613,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
       return () => clearTimeout(timeoutId)
     }
-  }, [date, time, hall, city, type2, gameN, league, team1Name, team2Name, team1Color, team2Color, team1Country, team2Country, team1ShortName, team2ShortName, team1Roster, team2Roster, ref1First, ref1Last, ref1Country, ref1Dob, ref2First, ref2Last, ref2Country, ref2Dob, scorerFirst, scorerLast, scorerCountry, scorerDob, asstFirst, asstLast, asstCountry, asstDob, currentView])
+  }, [date, time, hall, city, type2, hasCoach, gameN, league, team1Name, team2Name, team1Color, team2Color, team1Country, team2Country, team1ShortName, team2ShortName, team1Roster, team2Roster, ref1First, ref1Last, ref1Country, ref1Dob, ref2First, ref2Last, ref2Country, ref2Dob, scorerFirst, scorerLast, scorerCountry, scorerDob, asstFirst, asstLast, asstCountry, asstDob, currentView])
 
   // Update input widths when team1/team2 values change - set default width based on content
   useEffect(() => {
@@ -1781,7 +1792,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
     // Check if any changes were made (skip sync if no changes)
     const currentMatchInfo = {
-      date, time, hall, city, type2, gameN, league, team1Name, team2Name, team1Color, team2Color, team1ShortName, team2ShortName
+      date, time, hall, city, type2, hasCoach, gameN, league, team1Name, team2Name, team1Color, team2Color, team1ShortName, team2ShortName
     }
     const hasChanges = isCreating || hasMatchInfoChanged(originalMatchInfoRef.current, currentMatchInfo)
 
@@ -1864,6 +1875,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         city: city || null,
         league: league || null,
         match_type_2: type2 || null,
+        hasCoach: hasCoach,
         game_n: gameN ? parseInt(gameN, 10) : null,
         seed_key: matchSeedKey, // Ensure seed_key is set
         matchInfoConfirmedAt: new Date().toISOString(),
@@ -1884,7 +1896,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           hall: hall || '',
           city: city || '',
           league: league || '',
-          match_type_2: type2 || ''
+          match_type_2: type2 || '',
+          has_coach: hasCoach
         },
         team1_data: { name: team1Name.trim(), short_name: team1ShortName || generateShortName(team1Name.trim()), color: team1Color, country: team1Country || '' },
         team2_data: { name: team2Name.trim(), short_name: team2ShortName || generateShortName(team2Name.trim()), color: team2Color, country: team2Country || '' },
@@ -2150,6 +2163,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         gender: type2, // men | women
         phase, // main | qualification
         round, // pool | winner | class | semifinals | finals
+        hasCoach, // Whether coaches are present
         // Team names and colors for local access
         team1Name: team1Name.trim(),
         team2Name: team2Name.trim(),
@@ -2200,7 +2214,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             court: court || '',
             gender: type2 || 'men',
             phase: phase || 'main',
-            round: round || 'pool'
+            round: round || 'pool',
+            has_coach: hasCoach
           },
           team1_data: { name: team1Name.trim(), short_name: team1ShortName || generateShortName(team1Name.trim()), color: team1Color || '#ef4444', country: team1Country || '' },
           team2_data: { name: team2Name.trim(), short_name: team2ShortName || generateShortName(team2Name.trim()), color: team2Color || '#3b82f6', country: team2Country || '' },
@@ -2807,7 +2822,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                   <option value="qualification">{t('matchSetup.qualification')}</option>
                 </select>
               </div>
-              <div className="field" style={{ gridColumn: 'span 2' }}>
+              <div className="field">
                 <label>{t('matchSetup.round')}</label>
                 <select style={{ width: '100%' }} value={round} onChange={e => setRound(e.target.value)}>
                   <option value="pool">{t('matchSetup.poolPlay')}</option>
@@ -2815,6 +2830,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                   <option value="class">{t('matchSetup.classificationRound')}</option>
                   <option value="semifinals">{t('matchSetup.semifinals')}</option>
                   <option value="finals">{t('matchSetup.finals')}</option>
+                </select>
+              </div>
+              <div className="field">
+                <label>Coach</label>
+                <select style={{ width: '100%' }} value={hasCoach ? 'yes' : 'no'} onChange={e => setHasCoach(e.target.value === 'yes')}>
+                  <option value="no">No</option>
+                  <option value="yes">Yes</option>
                 </select>
               </div>
             </div>
@@ -3377,7 +3399,25 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               <input className="w-name capitalize" placeholder={t('matchSetup.lastName')} value={team1Last} onChange={e => setTeam1Last(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }} />
               <input className="w-name capitalize" placeholder={t('matchSetup.firstName')} value={team1First} onChange={e => setTeam1First(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }} />
               <input className="w-dob" placeholder={t('matchSetup.dateOfBirthPlaceholder')} type="date" value={team1Dob ? formatDateToISO(team1Dob) : ''} onChange={e => setTeam1Dob(e.target.value ? formatDateToDDMMYYYY(e.target.value) : '')} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }} />
-              <label className="inline"><input type="radio" name="team1CaptainForm" checked={team1CaptainForm} onChange={() => setTeam1CaptainForm(true)} /> {t('matchSetup.captain')}</label>
+              <div
+                onClick={() => setTeam1CaptainForm(!team1CaptainForm)}
+                style={{
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '4px',
+                  border: team1CaptainForm ? '2px solid #22c55e' : '2px solid rgba(255,255,255,0.3)',
+                  background: team1CaptainForm ? 'rgba(34, 197, 94, 0.15)' : 'transparent',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  color: team1CaptainForm ? '#22c55e' : 'rgba(255,255,255,0.3)',
+                  userSelect: 'none',
+                  flexShrink: 0
+                }}
+              >C</div>
               <button type="button" className="secondary" onClick={() => {
                 if (!team1Last || !team1First) return
                 // Default number logic if not selected
@@ -3404,13 +3444,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {/* Roster Header Row */}
-          <div className="row" style={{ alignItems: 'center', fontWeight: 600, fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: 4, padding: '6px 8px', border: '2px solid transparent' }}>
+          <div className="row" style={{ alignItems: 'center', fontWeight: 600, fontSize: '16px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: 6, padding: '8px 8px', border: '2px solid transparent' }}>
             <div className="w-num" style={{ textAlign: 'center' }}>#</div>
             <div className="w-name">{t('matchSetup.lastName')}</div>
             <div className="w-name">{t('matchSetup.firstName')}</div>
             <div className="w-dob">{t('matchSetup.dateOfBirth')}</div>
-            <div style={{ width: '70px', textAlign: 'center' }}>{t('matchSetup.captain')}</div>
-            <div style={{ width: '80px' }}></div>
+            <div className="w-captain">C</div>
+            <div className="w-actions"></div>
           </div>
           {team1Roster.map((p, i) => {
             // Check if this player's number is a duplicate
@@ -3449,8 +3489,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                         style={{
                           padding: '0',
                           flex: 1,
-                          height: '24px',
-                          fontSize: '12px',
+                          height: '32px',
+                          fontSize: '16px',
                           fontWeight: 'bold',
                           borderRadius: '4px',
                           border: isSelected ? '1px solid #22c55e' : '1px solid rgba(255,255,255,0.2)',
@@ -3516,34 +3556,47 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     setTeam1Roster(updated)
                   }}
                 />
-                <label className="inline">
-                  <input
-                    type="radio"
-                    name="team1CaptainForm"
-                    checked={p.isCaptain || false}
-                    onChange={() => {
+                <div className="w-captain" style={{ display: 'flex', justifyContent: 'center' }}>
+                  <div
+                    onClick={() => {
                       const updated = team1Roster.map((player, idx) => ({
                         ...player,
-                        isCaptain: idx === i
+                        isCaptain: idx === i ? !player.isCaptain : false
                       }))
                       setTeam1Roster(updated)
                     }}
-                  />
-                  {t('matchSetup.captain')}
-                </label>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => setTeam1Roster(list => list.filter((_, idx) => idx !== i))}
-                >
-                  {t('common.delete')}
-                </button>
+                    style={{
+                      width: '30px',
+                      height: '30px',
+                      borderRadius: '4px',
+                      border: (p.isCaptain || false) ? '2px solid #22c55e' : '2px solid rgba(255,255,255,0.3)',
+                      background: (p.isCaptain || false) ? 'rgba(34, 197, 94, 0.15)' : 'transparent',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      fontSize: '16px',
+                      fontWeight: 700,
+                      color: (p.isCaptain || false) ? '#22c55e' : 'rgba(255,255,255,0.3)',
+                      userSelect: 'none'
+                    }}
+                  >C</div>
+                </div>
+                <div className="w-actions">
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => setTeam1Roster(list => list.filter((_, idx) => idx !== i))}
+                  >
+                    {t('common.delete')}
+                  </button>
+                </div>
               </div>
             )
           })}
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16, alignSelf: 'start' }}>
           <button onClick={async () => {
 
             // Check if any changes were made (skip sync if no changes)
@@ -4057,7 +4110,25 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               <input className="w-name capitalize" placeholder={t('matchSetup.lastName')} value={team2Last} onChange={e => setTeam2Last(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }} />
               <input className="w-name capitalize" placeholder={t('matchSetup.firstName')} value={team2First} onChange={e => setTeam2First(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }} />
               <input className="w-dob" placeholder={t('matchSetup.dateOfBirthPlaceholder')} type="date" value={team2Dob ? formatDateToISO(team2Dob) : ''} onChange={e => setTeam2Dob(e.target.value ? formatDateToDDMMYYYY(e.target.value) : '')} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }} />
-              <label className="inline"><input type="radio" name="team2CaptainForm" checked={team2CaptainForm} onChange={() => setTeam2CaptainForm(true)} /> {t('matchSetup.captain')}</label>
+              <div
+                onClick={() => setTeam2CaptainForm(!team2CaptainForm)}
+                style={{
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '4px',
+                  border: team2CaptainForm ? '2px solid #22c55e' : '2px solid rgba(255,255,255,0.3)',
+                  background: team2CaptainForm ? 'rgba(34, 197, 94, 0.15)' : 'transparent',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  color: team2CaptainForm ? '#22c55e' : 'rgba(255,255,255,0.3)',
+                  userSelect: 'none',
+                  flexShrink: 0
+                }}
+              >C</div>
               <button type="button" className="secondary" onClick={() => {
                 if (!team2Last || !team2First) return
                 // Default number logic if not selected
@@ -4084,13 +4155,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {/* Roster Header Row */}
-          <div className="row" style={{ alignItems: 'center', fontWeight: 600, fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: 4, padding: '6px 8px', border: '2px solid transparent' }}>
+          <div className="row" style={{ alignItems: 'center', fontWeight: 600, fontSize: '16px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: 6, padding: '8px 8px', border: '2px solid transparent' }}>
             <div className="w-num" style={{ textAlign: 'center' }}>#</div>
             <div className="w-name">{t('matchSetup.lastName')}</div>
             <div className="w-name">{t('matchSetup.firstName')}</div>
             <div className="w-dob">{t('matchSetup.dateOfBirth')}</div>
-            <div style={{ width: '70px', textAlign: 'center' }}>{t('matchSetup.captain')}</div>
-            <div style={{ width: '80px' }}></div>
+            <div className="w-captain">C</div>
+            <div className="w-actions"></div>
           </div>
           {team2Roster.map((p, i) => {
             // Check if this player's number is a duplicate
@@ -4182,33 +4253,46 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     setTeam2Roster(updated)
                   }}
                 />
-                <label className="inline">
-                  <input
-                    type="radio"
-                    name="team2CaptainForm"
-                    checked={p.isCaptain || false}
-                    onChange={() => {
+                <div className="w-captain" style={{ display: 'flex', justifyContent: 'center' }}>
+                  <div
+                    onClick={() => {
                       const updated = team2Roster.map((player, idx) => ({
                         ...player,
-                        isCaptain: idx === i
+                        isCaptain: idx === i ? !player.isCaptain : false
                       }))
                       setTeam2Roster(updated)
                     }}
-                  />
-                  {t('matchSetup.captain')}
-                </label>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => setTeam2Roster(list => list.filter((_, idx) => idx !== i))}
-                >
-                  {t('common.delete')}
-                </button>
+                    style={{
+                      width: '30px',
+                      height: '30px',
+                      borderRadius: '4px',
+                      border: (p.isCaptain || false) ? '2px solid #22c55e' : '2px solid rgba(255,255,255,0.3)',
+                      background: (p.isCaptain || false) ? 'rgba(34, 197, 94, 0.15)' : 'transparent',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      fontSize: '16px',
+                      fontWeight: 700,
+                      color: (p.isCaptain || false) ? '#22c55e' : 'rgba(255,255,255,0.3)',
+                      userSelect: 'none'
+                    }}
+                  >C</div>
+                </div>
+                <div className="w-actions">
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => setTeam2Roster(list => list.filter((_, idx) => idx !== i))}
+                  >
+                    {t('common.delete')}
+                  </button>
+                </div>
               </div>
             )
           })}
         </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16, alignSelf: 'start' }}>
           <button onClick={async () => {
 
             // Check if any changes were made (skip sync if no changes)
@@ -5004,6 +5088,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{court || t('common.notSet')}</span>
               <span>{t('matchSetup.gender')}:</span>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{type2 === 'men' ? t('matchSetup.men') : t('matchSetup.women')}</span>
+              <span>Coach:</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{hasCoach ? 'Yes' : 'No'}</span>
               <span>{t('matchSetup.phase')}:</span>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{phase === 'main' ? t('matchSetup.mainDraw') : t('matchSetup.qualification')}</span>
               <span>{t('matchSetup.round')}:</span>
@@ -5359,6 +5445,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     hall,
                     city,
                     match_type_2: type2,
+                    hasCoach,
                     team1ShortName: team1ShortName || team1Name.substring(0, 10).toUpperCase(),
                     team2ShortName: team2ShortName || team2Name.substring(0, 10).toUpperCase(),
                     team1Country: team1Country || '',
@@ -6024,9 +6111,9 @@ function MatchSetupOfficialsView({ children }) {
 }
 
 function MatchSetupTeam1View({ children }) {
-  return <div className="setup" style={setupViewStyle}>{children}</div>
+  return <div className="setup" style={{ ...setupViewStyle, minHeight: '75vh' }}>{children}</div>
 }
 
 function MatchSetupTeam2View({ children }) {
-  return <div className="setup" style={setupViewStyle}>{children}</div>
+  return <div className="setup" style={{ ...setupViewStyle, minHeight: '75vh' }}>{children}</div>
 }

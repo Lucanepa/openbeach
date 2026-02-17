@@ -12,6 +12,7 @@ import { supabase } from '../lib_beach/supabaseClient_beach'
 import { uploadScoresheet } from '../utils_beach/scoresheetUploader_beach'
 import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { exportLogsAsNDJSON } from '../utils_beach/comprehensiveLogger_beach'
+import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 
 import { sanitizeForFilename } from '../utils_beach/stringUtils_beach'
 import { formatTimeLocal } from '../utils_beach/timeUtils_beach'
@@ -257,6 +258,7 @@ function MatchEndPageView({ children }) {
 }
 
 export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualAdjustments }) {
+  const { vmin } = useScaledLayout()
   const cLogger = useComponentLogging('MatchEnd')
   const data = useLiveQuery(async () => {
     const match = await db.matches.get(matchId)

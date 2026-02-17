@@ -16,6 +16,7 @@ import SimpleHeader from './SimpleHeader_beach'
 import DonutCountdown from './DonutCountdown_beach'
 import { supabase } from '../lib_beach/supabaseClient_beach'
 import { useSyncQueue } from '../hooks_beach/useSyncQueue_beach'
+import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 
 // Get current version from package.json (injected by Vite at build time)
 const currentVersion = __APP_VERSION__
@@ -155,6 +156,7 @@ function useSyncedFontSize(texts, containerWidth, baseFontSize, minFontSize, isS
 
 export default function Referee({ matchId, onExit, isMasterMode }) {
   const { t } = useTranslation()
+  const { vmin } = useScaledLayout()
   const { showAlert } = useAlert()
   const { syncStatus, retryErrors } = useSyncQueue()
   const [refereeView, setRefereeView] = useState('2nd') // '1st' or '2nd'

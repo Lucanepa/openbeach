@@ -572,6 +572,12 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
         }
       }
 
+      // Coach names - populate if hasCoach is enabled
+      if (match?.hasCoach) {
+        set('b_t1_coach_name', match?.team1CoachName || '');
+        set('b_t2_coach_name', match?.team2CoachName || '');
+      }
+
       // Sets data - process ALL sets (including current unfinished set)
       // Determine current set number first (needed in multiple places)
       let currentSetNum = 1;
@@ -2022,6 +2028,41 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
                 }
               }
 
+              // Coach sanctions (role: 'coach', no playerNumber)
+              if ((isMisconduct || isFormalWarning) && event.payload?.role === 'coach' && match?.hasCoach) {
+                const isSanctionedTeamUp = sanctionTeam === teamUp;
+                const rowKey = isSanctionedTeamUp ? 'rc_up' : 'rc_down';
+
+                if (isFormalWarning) {
+                  set(`${prefix}_${rowKey}_fw_a`, String(penalizedTeamScore));
+                  set(`${prefix}_${rowKey}_fw_b`, String(otherTeamScore));
+                } else {
+                  // Count penalties for coach in this set
+                  const coachPenalties = setEvents.filter((e: any, idx: number) =>
+                    idx <= eventIndex && e.type === 'sanction' &&
+                    e.payload?.team === sanctionTeam &&
+                    e.payload?.role === 'coach' &&
+                    (e.payload?.type === 'penalty' || e.payload?.type === 'rude_conduct')
+                  ).length;
+
+                  if (sanctionType === 'penalty' || sanctionType === 'rude_conduct') {
+                    if (coachPenalties === 1) {
+                      set(`${prefix}_${rowKey}_s1_a`, String(penalizedTeamScore));
+                      set(`${prefix}_${rowKey}_s1_b`, String(otherTeamScore));
+                    } else if (coachPenalties === 2) {
+                      set(`${prefix}_${rowKey}_s2_a`, String(penalizedTeamScore));
+                      set(`${prefix}_${rowKey}_s2_b`, String(otherTeamScore));
+                    }
+                  } else if (sanctionType === 'expulsion') {
+                    set(`${prefix}_${rowKey}_s3_a`, String(penalizedTeamScore));
+                    set(`${prefix}_${rowKey}_s3_b`, String(otherTeamScore));
+                  } else if (sanctionType === 'disqualification') {
+                    set(`${prefix}_${rowKey}_s4_a`, String(penalizedTeamScore));
+                    set(`${prefix}_${rowKey}_s4_b`, String(otherTeamScore));
+                  }
+                }
+              }
+
               // For misconduct and formal warnings, we need to determine the player row based on team identity
               // Rows are assigned by team position: teamUp -> r1 (player1), r3 (player2); teamDown -> r2 (player1), r4 (player2)
               if ((isMisconduct || isFormalWarning) && event.payload?.playerNumber) {
@@ -2400,6 +2441,11 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
               // Cross out both Team A players' formal warning boxes in current set
               set(`${prefix}_r1_fw_crossed`, 'true');
               set(`${prefix}_r3_fw_crossed`, 'true');
+              // Cross out coach row formal warning too (Team A is teamUp -> rc_up, teamDown -> rc_down)
+              if (match?.hasCoach) {
+                const teamAIsUp = prevTeamAKey === teamUp;
+                set(`${prefix}_${teamAIsUp ? 'rc_up' : 'rc_down'}_fw_crossed`, 'true');
+              }
             }
 
             // Check if Team B got formal warning in previous set
@@ -2407,6 +2453,11 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
               // Cross out both Team B players' formal warning boxes in current set
               set(`${prefix}_r2_fw_crossed`, 'true');
               set(`${prefix}_r4_fw_crossed`, 'true');
+              // Cross out coach row formal warning too
+              if (match?.hasCoach) {
+                const teamBIsUp = prevTeamBKey === teamUp;
+                set(`${prefix}_${teamBIsUp ? 'rc_up' : 'rc_down'}_fw_crossed`, 'true');
+              }
             }
 
             // Check if Team A got delay warning in previous set
@@ -3209,7 +3260,58 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
     );
   };
 
-  // 3. Player Row
+  // 3a. Coach Row (no 21-point grid, only sanction columns)
+  const renderCoachRow = (setPrefix: string, rowKeySuffix: string) => (
+    <div className="flex h-5 border-b border-black text-black">
+      {/* Label */}
+      <div className={`${W_COL1} border-r border-black font-bold text-xs bg-gray-50`} style={centerStyle}>
+        C
+      </div>
+      {/* Player No (empty for coach) */}
+      <div className={`${W_COL2} border-r border-black p-0.5`} style={centerStyle}>
+      </div>
+      {/* Formal Warn */}
+      <div className={`${W_COL3} border-r border-black`} style={centerStyle}>
+        <ScoreInputPair
+          valA={get(`${setPrefix}_${rowKeySuffix}_fw_a`)}
+          onChangeA={v => set(`${setPrefix}_${rowKeySuffix}_fw_a`, v)}
+          valB={get(`${setPrefix}_${rowKeySuffix}_fw_b`)}
+          onChangeB={v => set(`${setPrefix}_${rowKeySuffix}_fw_b`, v)}
+          crossed={get(`${setPrefix}_${rowKeySuffix}_fw_crossed`) === 'true' || get(`${setPrefix}_${rowKeySuffix}_fw_crossed`) === true}
+        />
+      </div>
+      {/* Sanctions */}
+      <div className={`${W_COL4} border-r border-black`} style={centerStyle}>
+        <ScoreInputPair
+          valA={get(`${setPrefix}_${rowKeySuffix}_s1_a`)} onChangeA={v => set(`${setPrefix}_${rowKeySuffix}_s1_a`, v)}
+          valB={get(`${setPrefix}_${rowKeySuffix}_s1_b`)} onChangeB={v => set(`${setPrefix}_${rowKeySuffix}_s1_b`, v)}
+        />
+      </div>
+      <div className={`${W_COL5} border-r border-black`} style={centerStyle}>
+        <ScoreInputPair
+          valA={get(`${setPrefix}_${rowKeySuffix}_s2_a`)} onChangeA={v => set(`${setPrefix}_${rowKeySuffix}_s2_a`, v)}
+          valB={get(`${setPrefix}_${rowKeySuffix}_s2_b`)} onChangeB={v => set(`${setPrefix}_${rowKeySuffix}_s2_b`, v)}
+        />
+      </div>
+      <div className={`${W_COL6} border-r border-black`} style={centerStyle}>
+        <ScoreInputPair
+          valA={get(`${setPrefix}_${rowKeySuffix}_s3_a`)} onChangeA={v => set(`${setPrefix}_${rowKeySuffix}_s3_a`, v)}
+          valB={get(`${setPrefix}_${rowKeySuffix}_s3_b`)} onChangeB={v => set(`${setPrefix}_${rowKeySuffix}_s3_b`, v)}
+        />
+      </div>
+      <div className={`${W_COL7} border-r border-black`} style={centerStyle}>
+        <ScoreInputPair
+          valA={get(`${setPrefix}_${rowKeySuffix}_s4_a`)} onChangeA={v => set(`${setPrefix}_${rowKeySuffix}_s4_a`, v)}
+          valB={get(`${setPrefix}_${rowKeySuffix}_s4_b`)} onChangeB={v => set(`${setPrefix}_${rowKeySuffix}_s4_b`, v)}
+        />
+      </div>
+
+      {/* Empty space where 21-point grid would be */}
+      <div className="flex-1 bg-white"></div>
+    </div>
+  );
+
+  // 3b. Player Row
   const renderPlayerRow = (setPrefix: string, rowLabel: string, rowKeySuffix: string) => (
     <div className="flex h-5 border-b border-black text-black">
       {/* Label */}
@@ -3515,10 +3617,11 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
           {/* SET HEADER */}
           {renderHeaderRow(setNum, prefix)}
 
-          {/* TEAM UP (Top) Service Order - rows I and III */}
+          {/* TEAM UP (Top) Service Order - rows I and III (+ C for coach) */}
           <div className="border-r border-black border-r">
             {renderPlayerRow(prefix, 'I', 'r1')}
             {renderPlayerRow(prefix, 'III', 'r3')}
+            {currentMatchData?.match?.hasCoach && renderCoachRow(prefix, 'rc_up')}
           </div>
           {/* GAP (Whitespace) */}
           <div className="h-0.5 w-full bg-white border-b border-white border-r"></div>
@@ -3541,10 +3644,11 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
           {/* GAP (Whitespace) */}
           <div className="h-0.5 w-full bg-white"></div>
 
-          {/* TEAM DOWN (Bottom) Service Order (With Top Border) - rows II and IV */}
+          {/* TEAM DOWN (Bottom) Service Order (With Top Border) - rows II and IV (+ C for coach) */}
           <div className="border-t border-black border-r">
             {renderPlayerRow(prefix, 'II', 'r2')}
             {renderPlayerRow(prefix, 'IV', 'r4')}
+            {currentMatchData?.match?.hasCoach && renderCoachRow(prefix, 'rc_down')}
           </div>
 
           {/* SET FOOTER */}
@@ -3752,8 +3856,8 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
           <div className="flex-1 flex flex-col gap-1 w-1/2">
 
             {/* TEAMS BOX - Side by Side */}
-            {/* Height calculation: country/side ~20px + header 16px + player1 20px + player2 20px + signature 30px + padding = ~106px */}
-            <div className="border-2 border-black flex h-[106px]">
+            {/* Height: 106px without coach, ~148px with coach (extra row + signature) */}
+            <div className={`border-2 border-black flex ${currentMatchData?.match?.hasCoach ? 'h-[148px]' : 'h-[106px]'}`}>
               <div className="w-8 font-bold text-sm border-r border-black bg-gray-50 text-black relative overflow-hidden">
                 <span style={{
                   position: 'absolute',
@@ -3785,17 +3889,40 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
                   <div className="w-6 border border-t-0 border-black" style={centerStyle}><Input value={get('b_t1_p2_no')} onChange={v => set('b_t1_p2_no', v)} className="w-full text-center" /></div>
                   <div className="flex-1 border border-l-0 border-t-0 border-black"><Input value={get('b_t1_p2_name')} onChange={v => set('b_t1_p2_name', v)} className="w-full px-1" style={{ textAlign: 'left' }} /></div>
                 </div>
-                <div className="text-[4px]" style={{ height: '30px' }}>Captain's pre-match signature:</div>
-                {/* Signature image for Team 1 */}
+                {/* Coach row - only when hasCoach */}
+                {currentMatchData?.match?.hasCoach && (
+                  <div className="flex text-[9px] h-5">
+                    <div className="w-6 border border-t-0 border-black" style={centerStyle}><span className="text-[8px] font-bold">C</span></div>
+                    <div className="flex-1 border border-l-0 border-t-0 border-black"><Input value={get('b_t1_coach_name')} onChange={v => set('b_t1_coach_name', v)} className="w-full px-1" style={{ textAlign: 'left' }} /></div>
+                  </div>
+                )}
+                <div className="text-[4px]" style={{ height: currentMatchData?.match?.hasCoach ? '20px' : '30px' }}>Captain's pre-match signature:</div>
+                {/* Signature image for Team 1 Captain */}
                 {currentMatchData?.match?.team1CaptainSignature && (
-                  <div className="flex-1 border-white" style={{ maxHeight: '25px', overflow: 'hidden' }}>
+                  <div className="flex-1 border-white" style={{ maxHeight: currentMatchData?.match?.hasCoach ? '15px' : '25px', overflow: 'hidden' }}>
                     <img
                       src={currentMatchData.match.team1CaptainSignature}
                       alt=""
-                      style={{ width: '60px', height: '20px', objectFit: 'contain' }}
+                      style={{ width: '60px', height: currentMatchData?.match?.hasCoach ? '12px' : '20px', objectFit: 'contain' }}
                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                     />
                   </div>
+                )}
+                {/* Coach signature - only when hasCoach */}
+                {currentMatchData?.match?.hasCoach && (
+                  <>
+                    <div className="text-[4px]" style={{ height: '20px' }}>Coach's pre-match signature:</div>
+                    {currentMatchData?.match?.team1CoachSignature && (
+                      <div className="flex-1 border-white" style={{ maxHeight: '15px', overflow: 'hidden' }}>
+                        <img
+                          src={currentMatchData.match.team1CoachSignature}
+                          alt=""
+                          style={{ width: '60px', height: '12px', objectFit: 'contain' }}
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -3820,17 +3947,40 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
                   <div className="w-6 border border-t-0 border-black" style={centerStyle}><Input value={get('b_t2_p2_no')} onChange={v => set('b_t2_p2_no', v)} className="w-full text-center" /></div>
                   <div className="flex-1 border border-l-0 border-t-0 border-black"><Input value={get('b_t2_p2_name')} onChange={v => set('b_t2_p2_name', v)} className="w-full px-1" style={{ textAlign: 'left' }} /></div>
                 </div>
-                <div className="text-[4px]" style={{ height: '30px' }}>Captain's pre-match signature:</div>
-                {/* Signature image for Team 2 */}
+                {/* Coach row - only when hasCoach */}
+                {currentMatchData?.match?.hasCoach && (
+                  <div className="flex text-[9px] h-5">
+                    <div className="w-6 border border-t-0 border-black" style={centerStyle}><span className="text-[8px] font-bold">C</span></div>
+                    <div className="flex-1 border border-l-0 border-t-0 border-black"><Input value={get('b_t2_coach_name')} onChange={v => set('b_t2_coach_name', v)} className="w-full px-1" style={{ textAlign: 'left' }} /></div>
+                  </div>
+                )}
+                <div className="text-[4px]" style={{ height: currentMatchData?.match?.hasCoach ? '20px' : '30px' }}>Captain's pre-match signature:</div>
+                {/* Signature image for Team 2 Captain */}
                 {currentMatchData?.match?.team2CaptainSignature && (
-                  <div className="flex-1 border-white" style={{ maxHeight: '25px', overflow: 'hidden' }}>
+                  <div className="flex-1 border-white" style={{ maxHeight: currentMatchData?.match?.hasCoach ? '15px' : '25px', overflow: 'hidden' }}>
                     <img
                       src={currentMatchData.match.team2CaptainSignature}
                       alt=""
-                      style={{ width: '60px', height: '20px', objectFit: 'contain' }}
+                      style={{ width: '60px', height: currentMatchData?.match?.hasCoach ? '12px' : '20px', objectFit: 'contain' }}
                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                     />
                   </div>
+                )}
+                {/* Coach signature - only when hasCoach */}
+                {currentMatchData?.match?.hasCoach && (
+                  <>
+                    <div className="text-[4px]" style={{ height: '20px' }}>Coach's pre-match signature:</div>
+                    {currentMatchData?.match?.team2CoachSignature && (
+                      <div className="flex-1 border-white" style={{ maxHeight: '15px', overflow: 'hidden' }}>
+                        <img
+                          src={currentMatchData.match.team2CoachSignature}
+                          alt=""
+                          style={{ width: '60px', height: '12px', objectFit: 'contain' }}
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

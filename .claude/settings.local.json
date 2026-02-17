@@ -21,7 +21,9 @@
       "Bash(awk:*)",
       "Read(//home/luca-canepa/Desktop/Github/openbeach/escoresheet/frontend/**)",
       "Bash(curl:*)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(grep:*)",
+      "Bash(python3:*)"
     ]
   },
   "outputStyle": "default"

@@ -323,4 +323,28 @@ db.version(16).stores({
   })
 })
 
+// Version 17: Add per-target sync status for dual-target sync (Supabase + Synology)
+// Each sync job now tracks status separately for each sync target
+// This enables syncing to both Supabase (cloud) and Synology (local NAS) independently
+db.version(17).stores({
+  teams: '++id,name,createdAt',
+  players: '++id,teamId,number,name,role,createdAt',
+  matches: '++id,team1Id,team2Id,scheduledAt,status,createdAt,externalId,test',
+  sets: '++id,matchId,index,team1Points,team2Points,finished,startTime,endTime',
+  events: '++id,matchId,setIndex,ts,type,payload,seq,stateSnapshot,[matchId+seq],[matchId+setIndex]',
+  sync_queue: '++id,resource,action,payload,ts,status,supabase_status,synology_status',
+  match_setup: '++id,updatedAt',
+  referees: '++id,seedKey,lastName,createdAt',
+  scorers: '++id,seedKey,lastName,createdAt',
+  interaction_logs: 'id,ts,gameNumber,category,sessionId'
+}).upgrade(tx => {
+  // Migrate existing sync_queue jobs: add per-target status fields
+  return tx.table('sync_queue').toCollection().modify(job => {
+    // Copy existing status to supabase_status (existing behavior)
+    job.supabase_status = job.status
+    // Queue all existing jobs for Synology sync (will be skipped if not configured)
+    job.synology_status = 'queued'
+  })
+})
+
 

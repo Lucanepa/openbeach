@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import Modal from './Modal_beach'
 import { getApiUrl } from '../utils_beach/backendConfig_beach'
+import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 
 const CONTACT_TYPES = ['support', 'feedback', 'request']
 
@@ -27,35 +28,35 @@ const SEVERITY_LEVELS = [
   { value: 4, label: 'severity4' }
 ]
 
-function Dropdown({ label, value, onChange, options, placeholder, t, translationPrefix, required = false }) {
+function Dropdown({ label, value, onChange, options, placeholder, t, translationPrefix, required = false, scaleFactor = 1 }) {
   return (
-    <div style={{ marginBottom: '16px' }}>
+    <div style={{ marginBottom: `${Math.round(16 * scaleFactor)}px` }}>
       <label style={{
         display: 'block',
-        marginBottom: '6px',
-        fontSize: '14px',
+        marginBottom: `${Math.round(6 * scaleFactor)}px`,
+        fontSize: `${Math.round(14 * scaleFactor)}px`,
         fontWeight: 600,
         color: 'rgba(255,255,255,0.9)'
       }}>
-        {label}{required && <span style={{ color: '#ef4444', marginLeft: '4px' }}>*</span>}
+        {label}{required && <span style={{ color: '#ef4444', marginLeft: `${Math.round(4 * scaleFactor)}px` }}>*</span>}
       </label>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
         style={{
           width: '100%',
-          padding: '10px 12px',
-          fontSize: '14px',
+          padding: `${Math.round(10 * scaleFactor)}px ${Math.round(12 * scaleFactor)}px`,
+          fontSize: `${Math.round(14 * scaleFactor)}px`,
           background: 'rgba(255,255,255,0.1)',
           border: '1px solid rgba(255,255,255,0.2)',
-          borderRadius: '8px',
+          borderRadius: `${Math.round(8 * scaleFactor)}px`,
           color: 'var(--text)',
           cursor: 'pointer',
           appearance: 'none',
           backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
           backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'right 10px center',
-          backgroundSize: '16px'
+          backgroundPosition: `right ${Math.round(10 * scaleFactor)}px center`,
+          backgroundSize: `${Math.round(16 * scaleFactor)}px`
         }}
       >
         <option value="" style={{ background: '#1f2937' }}>{placeholder}</option>
@@ -72,17 +73,17 @@ function Dropdown({ label, value, onChange, options, placeholder, t, translation
   )
 }
 
-function TextArea({ label, value, onChange, placeholder, rows = 4, required = false }) {
+function TextArea({ label, value, onChange, placeholder, rows = 4, required = false, scaleFactor = 1 }) {
   return (
-    <div style={{ marginBottom: '16px' }}>
+    <div style={{ marginBottom: `${Math.round(16 * scaleFactor)}px` }}>
       <label style={{
         display: 'block',
-        marginBottom: '6px',
-        fontSize: '14px',
+        marginBottom: `${Math.round(6 * scaleFactor)}px`,
+        fontSize: `${Math.round(14 * scaleFactor)}px`,
         fontWeight: 600,
         color: 'rgba(255,255,255,0.9)'
       }}>
-        {label}{required && <span style={{ color: '#ef4444', marginLeft: '4px' }}>*</span>}
+        {label}{required && <span style={{ color: '#ef4444', marginLeft: `${Math.round(4 * scaleFactor)}px` }}>*</span>}
       </label>
       <textarea
         value={value}
@@ -91,11 +92,11 @@ function TextArea({ label, value, onChange, placeholder, rows = 4, required = fa
         rows={rows}
         style={{
           width: '100%',
-          padding: '10px 12px',
-          fontSize: '14px',
+          padding: `${Math.round(10 * scaleFactor)}px ${Math.round(12 * scaleFactor)}px`,
+          fontSize: `${Math.round(14 * scaleFactor)}px`,
           background: 'rgba(255,255,255,0.1)',
           border: '1px solid rgba(255,255,255,0.2)',
-          borderRadius: '8px',
+          borderRadius: `${Math.round(8 * scaleFactor)}px`,
           color: 'var(--text)',
           resize: 'vertical',
           fontFamily: 'inherit',
@@ -230,6 +231,7 @@ function FileAttachment({ label, files, onFilesChange, t }) {
 
 export default function SupportFeedbackModal({ open, onClose, currentPage = 'mainPage' }) {
   const { t } = useTranslation()
+  const { scaleFactor } = useScaledLayout()
   const [contactType, setContactType] = useState('')
   const [area, setArea] = useState(currentPage)
   const [supportType, setSupportType] = useState('')
@@ -462,6 +464,7 @@ ${files.length > 0 ? `\nNote: ${files.length} file(s) were selected but cannot b
           t={t}
           translationPrefix="supportFeedback.types"
           required={true}
+          scaleFactor={scaleFactor}
         />
 
         {/* Area (only after type is selected) */}
@@ -475,6 +478,7 @@ ${files.length > 0 ? `\nNote: ${files.length} file(s) were selected but cannot b
             t={t}
             translationPrefix="supportFeedback.areas"
             required={true}
+            scaleFactor={scaleFactor}
           />
         )}
 
@@ -489,6 +493,7 @@ ${files.length > 0 ? `\nNote: ${files.length} file(s) were selected but cannot b
             t={t}
             translationPrefix="supportFeedback.supportTypes"
             required={true}
+            scaleFactor={scaleFactor}
           />
         )}
 
@@ -503,6 +508,7 @@ ${files.length > 0 ? `\nNote: ${files.length} file(s) were selected but cannot b
             t={t}
             translationPrefix="supportFeedback.severities"
             required={true}
+            scaleFactor={scaleFactor}
           />
         )}
 
@@ -515,6 +521,7 @@ ${files.length > 0 ? `\nNote: ${files.length} file(s) were selected but cannot b
             placeholder={t('supportFeedback.commentsPlaceholder')}
             rows={5}
             required={true}
+            scaleFactor={scaleFactor}
           />
         )}
 

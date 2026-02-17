@@ -19,12 +19,14 @@ const ballImage = '/beachball.png'
 import { debugLogger, createStateSnapshot } from '../utils_beach/debugLogger_beach'
 import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { supabase } from '../lib_beach/supabaseClient_beach'
+import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 
 // Sport type for beach volleyball
 const SPORT_TYPE = 'beach'
 import { uploadBackupToCloud, uploadLogsToCloud, triggerContinuousBackup } from '../utils_beach/logger_beach'
 import { splitLocalDateTime, parseLocalDateTimeToISO, roundToMinute } from '../utils_beach/timeUtils_beach'
+import { TimeInput24 } from './TimeInput24_beach'
 import { uploadScoresheetAsync } from '../utils_beach/scoresheetUploader_beach'
 
 /**
@@ -46,6 +48,7 @@ import { uploadScoresheetAsync } from '../utils_beach/scoresheetUploader_beach'
 
 export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onFinishSet, onOpenSetup, onOpenMatchSetup, onOpenCoinToss, onTriggerEventBackup }) {
   const { t } = useTranslation()
+  const { vmin } = useScaledLayout()
   const { showAlert } = useAlert()
   const { syncStatus, flush: flushSyncQueue } = useSyncQueue()
   const cLogger = useComponentLogging('Scoreboard')
@@ -174,7 +177,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     return defaultKeyBindings
   })
   const [editingKey, setEditingKey] = useState(null) // Which key binding is being edited
-  const [showEndRallyOptions, setShowEndRallyOptions] = useState(false) // Show point award buttons when ending rally
 
   const [serverRunning, setServerRunning] = useState(false)
   const [serverStatus, setServerStatus] = useState(null)
@@ -2335,13 +2337,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     // For lineup events after points, the rally is idle (waiting for next rally_start)
     return 'idle'
   }, [data?.events, data?.set])
-
-  // Reset showEndRallyOptions when rally becomes idle
-  useEffect(() => {
-    if (rallyStatus === 'idle') {
-      setShowEndRallyOptions(false)
-    }
-  }, [rallyStatus])
 
   // Check if the rally is replayed (last event is a replay)
   const isRallyReplayed = useMemo(() => {
@@ -6766,7 +6761,38 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     const { team, type, playerNumber, position, role, sanctionType } = sanctionConfirmModal
 
     // Validate sanction type rules
-    if (playerNumber) {
+    if (type === 'coach' || role === 'coach') {
+      // Coach sanction validation - use role-based checks
+      const coachHasSanction = data?.events?.some(e =>
+        e.type === 'sanction' && e.payload?.team === team && e.payload?.role === 'coach' && e.payload?.type === sanctionType
+      )
+      const teamWarning = teamHasFormalWarning(team)
+
+      if (sanctionType === 'penalty') {
+        const coachPenaltiesInSet = data?.events?.filter(e =>
+          e.type === 'sanction' && e.setIndex === data?.set?.index && e.payload?.team === team && e.payload?.role === 'coach' && e.payload?.type === 'penalty'
+        ).length || 0
+        if (coachPenaltiesInSet >= 2) {
+          showAlert('Coach already has 2 penalties in this set. Third rude conduct results in expulsion.', 'info')
+          setSanctionConfirmModal(null)
+          const opponentKey = team === 'team1' ? 'team2' : 'team1'
+          const allSets = await db.sets.where({ matchId }).toArray()
+          const opponentSetsWon = allSets.filter(s => s.finished && s.winner === opponentKey).length
+          setExpulsionConfirmModal({ team, type, role, sanctionType: 'expulsion', endsMatch: opponentSetsWon >= 1 })
+          return
+        }
+      } else if (coachHasSanction) {
+        showAlert(`Coach already has a ${sanctionType}. Cannot receive the same sanction type twice.`, 'warning')
+        setSanctionConfirmModal(null)
+        return
+      }
+
+      if (sanctionType === 'warning' && teamWarning) {
+        showAlert('Warning cannot be given because the team has already been warned.', 'warning')
+        setSanctionConfirmModal(null)
+        return
+      }
+    } else if (playerNumber) {
       const hasThisSanction = playerHasSanctionType(team, playerNumber, sanctionType)
       const teamWarning = teamHasFormalWarning(team)
 
@@ -8875,6 +8901,46 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                         )
                       }
                     })()}
+                    {/* Coach Sanction Button - only when hasCoach is enabled */}
+                    {data?.match?.hasCoach && (() => {
+                      const leftTeamKey = leftisTeam1 ? 'team1' : 'team2'
+                      const coachName = leftTeamKey === 'team1' ? data?.match?.team1CoachName : data?.match?.team2CoachName
+                      return (
+                        <button
+                          onClick={(e) => {
+                            const element = e.currentTarget
+                            const rect = element.getBoundingClientRect()
+                            setSanctionConfirmModal(null)
+                            setSanctionDropdown({
+                              team: leftTeamKey,
+                              type: 'coach',
+                              role: 'coach',
+                              element,
+                              x: rect.right + 10,
+                              y: rect.top + rect.height / 2,
+                              side: 'left'
+                            })
+                          }}
+                          style={{
+                            width: '100%',
+                            height: `${DESIGN_VMIN * 0.028 * scaleFactor}px`,
+                            fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px`,
+                            fontWeight: 600,
+                            background: 'rgba(168, 85, 247, 0.2)',
+                            color: '#a855f7',
+                            border: `${1 * scaleFactor}px solid rgba(168, 85, 247, 0.4)`,
+                            borderRadius: `${4 * scaleFactor}px`,
+                            cursor: 'pointer',
+                            padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            boxSizing: 'border-box'
+                          }}
+                          title={`Coach Sanction${coachName ? ` - ${coachName}` : ''}`}
+                        >Coach{coachName ? ` (${coachName})` : ''}</button>
+                      )
+                    })()}
                     {/* Summary Table */}
                     {(() => {
                       const currentLeftTeamKey = leftisTeam1 ? 'team1' : 'team2'
@@ -9123,7 +9189,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                       if (!servingPlayer || !servingPlayer.number) {
                         return (
                           <img
-                            src={ballImage} onError={(e) => e.target.src = ballimage}
+                            src={ballImage} onError={(e) => e.target.src = ballImage}
                             alt="Serving team"
                             style={{ ...serveBallBaseStyle, width: '100%', maxWidth: `${DESIGN_VMIN * 0.08 * scaleFactor}px`, height: 'auto', aspectRatio: '1' }}
                           />
@@ -9292,7 +9358,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <div style={{ width: 36, display: 'flex', justifyContent: 'center' }}>
                                       {leftServes && (
-                                        <img src={ballImage} onError={(e) => e.target.src = ballimage} alt="" style={{ width: 32, height: 32, objectFit: 'contain' }} />
+                                        <img src={ballImage} onError={(e) => e.target.src = ballImage} alt="" style={{ width: 32, height: 32, objectFit: 'contain' }} />
                                       )}
                                     </div>
                                     <div
@@ -9368,7 +9434,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                     cursor: 'pointer'
                                   }}
                                 >
-                                  <img src={ballImage} onError={(e) => e.target.src = ballimage} alt="" style={{ width: 24, height: 24, objectFit: 'contain' }} />
+                                  <img src={ballImage} onError={(e) => e.target.src = ballImage} alt="" style={{ width: 24, height: 24, objectFit: 'contain' }} />
                                   Switch Serve
                                 </button>
                               </div>
@@ -9417,7 +9483,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                     </div>
                                     <div style={{ width: 36, display: "flex", justifyContent: "center" }}>
                                       {rightServes && (
-                                        <img src={ballImage} onError={(e) => e.target.src = ballimage} alt="" style={{ width: 32, height: 32, objectFit: 'contain' }} />
+                                        <img src={ballImage} onError={(e) => e.target.src = ballImage} alt="" style={{ width: 32, height: 32, objectFit: 'contain' }} />
                                       )}
                                     </div>
                                   </div>
@@ -9507,7 +9573,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                             >
                               {shouldShowBall && (
                                 <img
-                                  src={ballImage} onError={(e) => e.target.src = ballimage}
+                                  src={ballImage} onError={(e) => e.target.src = ballImage}
                                   alt="Volleyball"
                                   style={{
                                     position: 'absolute',
@@ -9635,7 +9701,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                 <div
                                   style={{
                                     position: 'absolute',
-                                    bottom: `${-62 * scaleFactor}px`,
+                                    bottom: `${-50 * scaleFactor}px`,
                                     left: '50%',
                                     transform: 'translateX(-50%)',
                                     background: 'rgba(0, 0, 0, 0.85)',
@@ -9692,7 +9758,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                             >
                               {shouldShowBall && (
                                 <img
-                                  src={ballImage} onError={(e) => e.target.src = ballimage}
+                                  src={ballImage} onError={(e) => e.target.src = ballImage}
                                   alt="Volleyball"
                                   style={{
                                     position: 'absolute',
@@ -9771,7 +9837,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                 <div
                                   style={{
                                     position: 'absolute',
-                                    bottom: '-62px',
+                                    bottom: '-50px',
                                     left: '50%',
                                     transform: 'translateX(-50%)',
                                     background: 'rgba(0, 0, 0, 0.85)',
@@ -9839,7 +9905,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                             >
                               {shouldShowBall && (
                                 <img
-                                  src={ballImage} onError={(e) => e.target.src = ballimage}
+                                  src={ballImage} onError={(e) => e.target.src = ballImage}
                                   alt="Volleyball"
                                   style={{
                                     position: 'absolute',
@@ -9966,7 +10032,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                 <div
                                   style={{
                                     position: 'absolute',
-                                    bottom: `${-62 * scaleFactor}px`,
+                                    bottom: `${-50 * scaleFactor}px`,
                                     left: '50%',
                                     transform: 'translateX(-50%)',
                                     background: 'rgba(0, 0, 0, 0.85)',
@@ -10029,7 +10095,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                             >
                               {shouldShowBall && (
                                 <img
-                                  src={ballImage} onError={(e) => e.target.src = ballimage}
+                                  src={ballImage} onError={(e) => e.target.src = ballImage}
                                   alt="Volleyball"
                                   style={{
                                     position: 'absolute',
@@ -10113,7 +10179,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                 <div
                                   style={{
                                     position: 'absolute',
-                                    bottom: `${-62 * scaleFactor}px`,
+                                    bottom: `${-50 * scaleFactor}px`,
                                     left: '50%',
                                     transform: 'translateX(-50%)',
                                     background: 'rgba(0, 0, 0, 0.85)',
@@ -10169,7 +10235,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                       if (!servingPlayer || !servingPlayer.number) {
                         return (
                           <img
-                            src={ballImage} onError={(e) => e.target.src = ballimage}
+                            src={ballImage} onError={(e) => e.target.src = ballImage}
                             alt="Serving team"
                             style={{ ...serveBallBaseStyle, width: '100%', maxWidth: `${DESIGN_VMIN * 0.08 * scaleFactor}px`, height: 'auto', aspectRatio: '1' }}
                           />
@@ -10226,7 +10292,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                       width: '100%',
                       minHeight: `${(isCompactMode ? 80 : 120) * scaleFactor}px`
                     }}>
-                      <div className="rally-controls" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', transform: `scale(${scaleFactor})`, transformOrigin: 'center center' }}>
+                      <div className="rally-controls" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', transform: `scale(${scaleFactor})`, transformOrigin: 'center center', gap: '6px', marginTop: '12px' }}>
                         {/* Show timeout countdown if timeout is active */}
                         {timeoutModal && timeoutModal.started ? (
                           <div
@@ -10345,7 +10411,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                         <button
                                           className="rally-btn start"
                                           onClick={endSetInterval}
-                                          style={{ marginTop: '8px', padding: '8px 24px' }}
+                                          style={{ marginTop: '8px', padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'calc(92px * var(--scale-factor, 1))' }}
                                         >
                                           {t('scoreboard.endInterval', 'End Interval')}
                                         </button>
@@ -10360,6 +10426,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                     <button
                                       className="rally-btn start"
                                       onClick={handleStartRally}
+                                      style={{ padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'calc(92px * var(--scale-factor, 1))' }}
                                     >
                                       {t('scoreboard.startSet', 'Start Set')} {(data?.set?.index || 1)}
                                     </button>
@@ -10372,6 +10439,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                                     className="rally-btn start"
                                     onClick={handleStartRally}
                                     disabled={data?.match?.status === 'complete'}
+                                    style={{ padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'calc(92px * var(--scale-factor, 1))' }}
                                   >
                                     {data?.match?.status === 'not_started'
                                       ? t('scoreboard.startMatch', 'Start Match')
@@ -10385,73 +10453,100 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                               })()
                             ) : (
                               <>
-                                {/* Rally in progress - show replay button and end rally options */}
-                                <div className="rally-controls-row" style={{ gap: '5px' }}>
+                                {/* Row 1: Replay | Point A | Point B | Referee BMP */}
+                                <div className="rally-controls-row" style={{ gap: '5px', alignItems: 'stretch' }}>
+                                  {rallyStatus === 'in_play' ? (
+                                    <button
+                                      className="secondary"
+                                      onClick={handleReplay}
+                                      style={{ padding: '8px 15px', fontSize: '18px', minWidth: '105px' }}
+                                    >
+                                      {t('scoreboard.replay', 'Replay')}
+                                    </button>
+                                  ) : (
+                                    <div style={{ minWidth: '105px' }} />
+                                  )}
                                   <button
-                                    className={`replay-btn ${isRallyReplayed ? 'active' : ''}`}
-                                    onClick={() => {
-                                      if (!isRallyReplayed && rallyStatus === 'in_play') {
-                                        markRallyAsReplayed()
-                                      }
-                                    }}
-                                    disabled={isRallyReplayed || rallyStatus !== 'in_play'}
+                                    className="rally-point-button"
+                                    onClick={() => handlePoint('left')}
                                     style={{
-                                      opacity: (isRallyReplayed || rallyStatus !== 'in_play') ? 0.5 : 1,
-                                      cursor: (isRallyReplayed || rallyStatus !== 'in_play') ? 'not-allowed' : 'pointer'
+                                      background: '#22c55e',
+                                      color: '#000',
+                                      padding: '12px 16px',
+                                      fontWeight: 600,
+                                      borderRadius: '8px',
+                                      border: 'none',
+                                      cursor: 'pointer'
                                     }}
                                   >
-                                    {isRallyReplayed ? t('scoreboard.replayed', 'Replayed') : t('scoreboard.replay', 'Replay')}
+                                    {t('scoreboard.buttons.pointTeam', { team: teamALabel || teamAShortName })}
                                   </button>
-                                  {showEndRallyOptions ? (
-                                    <>
-                                      <button
-                                        className="rally-point-button"
-                                        onClick={() => { handlePoint('left'); setShowEndRallyOptions(false) }}
-                                        style={{
-                                          background: leftTeam.color || 'var(--danger)',
-                                          color: isBrightColor(leftTeam.color || '#ef4444') ? '#000' : '#fff',
-                                          padding: '12px 16px',
-                                          fontWeight: 600,
-                                          borderRadius: '8px',
-                                          border: 'none',
-                                          cursor: 'pointer'
-                                        }}
-                                      >
-                                        {teamAShortName}
-                                      </button>
-                                      <button
-                                        className="rally-point-button"
-                                        onClick={() => { handlePoint('right'); setShowEndRallyOptions(false) }}
-                                        style={{
-                                          background: rightTeam.color || '#3b82f6',
-                                          color: isBrightColor(rightTeam.color || '#3b82f6') ? '#000' : '#fff',
-                                          padding: '12px 16px',
-                                          fontWeight: 600,
-                                          borderRadius: '8px',
-                                          border: 'none',
-                                          cursor: 'pointer'
-                                        }}
-                                      >
-                                        {teamBShortName}
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <button
-                                      className="end-rally-btn"
-                                      onClick={() => setShowEndRallyOptions(true)}
-                                      style={{
-                                        background: isRallyReplayed ? '#eab308' : 'var(--danger)',
-                                        padding: '12px 24px',
-                                        minWidth: '140px',
-                                        fontWeight: 600
-                                      }}
-                                    >
-                                      {isRallyReplayed ? t('scoreboard.replayRally', 'Replay Rally') : t('scoreboard.endRally', 'End Rally')}
-                                    </button>
-                                  )}
+                                  <button
+                                    className="rally-point-button"
+                                    onClick={() => handlePoint('right')}
+                                    style={{
+                                      background: '#22c55e',
+                                      color: '#000',
+                                      padding: '12px 16px',
+                                      fontWeight: 600,
+                                      borderRadius: '8px',
+                                      border: 'none',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    {t('scoreboard.buttons.pointTeam', { team: teamBLabel || teamBShortName })}
+                                  </button>
+                                  <button
+                                    onClick={handleRefereeBMP}
+                                    style={{
+                                      padding: '8px 15px',
+                                      fontSize: '17px',
+                                      background: '#f97316',
+                                      color: '#000',
+                                      border: 'none',
+                                      borderRadius: '8px',
+                                      fontWeight: 600,
+                                      cursor: 'pointer',
+                                      minWidth: '105px'
+                                    }}
+                                  >
+                                    {t('scoreboard.refereeBMP', 'Ref BMP')}
+                                  </button>
                                 </div>
                               </>
                             )}
+                            {/* Undo + Decision Change - always visible below */}
+                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                              {rallyStatus === 'idle' && canReplayRally && (
+                                <button
+                                  onClick={handleReplay}
+                                  style={{
+                                    background: '#eab308',
+                                    color: '#000',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    padding: '8px 15px',
+                                    fontSize: '17px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    minWidth: '105px'
+                                  }}
+                                >
+                                  {t('scoreboard.decisionChange', 'Decision Change')}
+                                </button>
+                              )}
+                              <button
+                                className="danger"
+                                onClick={showUndoConfirm}
+                                disabled={!canUndo}
+                                style={{
+                                  padding: '8px 36px',
+                                  fontSize: '20px'
+                                }}
+                              >
+                                {t('scoreboard.undo', 'Undo')}
+                              </button>
+                            </div>
                           </>
                         )}
                       </div>
@@ -10670,6 +10765,46 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                           >Delay Warning</button>
                         )
                       }
+                    })()}
+                    {/* Coach Sanction Button - only when hasCoach is enabled (right team) */}
+                    {data?.match?.hasCoach && (() => {
+                      const rightTeamKey = leftisTeam1 ? 'team2' : 'team1'
+                      const coachName = rightTeamKey === 'team1' ? data?.match?.team1CoachName : data?.match?.team2CoachName
+                      return (
+                        <button
+                          onClick={(e) => {
+                            const element = e.currentTarget
+                            const rect = element.getBoundingClientRect()
+                            setSanctionConfirmModal(null)
+                            setSanctionDropdown({
+                              team: rightTeamKey,
+                              type: 'coach',
+                              role: 'coach',
+                              element,
+                              x: rect.left - 10,
+                              y: rect.top + rect.height / 2,
+                              side: 'right'
+                            })
+                          }}
+                          style={{
+                            width: '100%',
+                            height: `${DESIGN_VMIN * 0.028 * scaleFactor}px`,
+                            fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px`,
+                            fontWeight: 600,
+                            background: 'rgba(168, 85, 247, 0.2)',
+                            color: '#a855f7',
+                            border: `${1 * scaleFactor}px solid rgba(168, 85, 247, 0.4)`,
+                            borderRadius: `${4 * scaleFactor}px`,
+                            cursor: 'pointer',
+                            padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            boxSizing: 'border-box'
+                          }}
+                          title={`Coach Sanction${coachName ? ` - ${coachName}` : ''}`}
+                        >Coach{coachName ? ` (${coachName})` : ''}</button>
+                      )
                     })()}
                     {/* Summary Table */}
                     {(() => {
@@ -15121,20 +15256,32 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                 }}
               >
                 <div style={{ marginBottom: '8px', fontSize: '11px', fontWeight: 600, color: 'var(--text)', textAlign: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '6px' }}>
-                  {sanctionDropdown.playerNumber ? `Sanction for ${sanctionDropdown.playerNumber}` : 'Sanction'}
+                  {sanctionDropdown.role === 'coach' ? 'Sanction for Coach' : sanctionDropdown.playerNumber ? `Sanction for ${sanctionDropdown.playerNumber}` : 'Sanction'}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   {(() => {
                     const teamKey = sanctionDropdown.team
                     const playerNumber = sanctionDropdown.playerNumber
+                    const isCoach = sanctionDropdown.role === 'coach'
                     const teamWarning = teamHasFormalWarning(teamKey)
 
-                    // Check if player has each specific sanction type (for back-sanctioning rules)
-                    const hasWarning = playerNumber ? playerHasSanctionType(teamKey, playerNumber, 'warning') : false
-                    const hasExpulsion = playerNumber ? playerHasSanctionType(teamKey, playerNumber, 'expulsion') : false
-                    const hasDisqualification = playerNumber ? playerHasSanctionType(teamKey, playerNumber, 'disqualification') : false
-                    // Per FIVB 20.3.1: player can receive up to 2 penalties per set
-                    const penaltyCountInSet = playerNumber ? getPlayerPenaltyCountInCurrentSet(teamKey, playerNumber) : 0
+                    // Check if player/coach has each specific sanction type
+                    let hasWarning, hasExpulsion, hasDisqualification, penaltyCountInSet
+                    if (isCoach) {
+                      const coachSanctions = (data?.events || []).filter(e =>
+                        e.type === 'sanction' && e.payload?.team === teamKey && e.payload?.role === 'coach'
+                      )
+                      hasWarning = coachSanctions.some(e => e.payload?.type === 'warning')
+                      hasExpulsion = coachSanctions.some(e => e.payload?.type === 'expulsion')
+                      hasDisqualification = coachSanctions.some(e => e.payload?.type === 'disqualification')
+                      penaltyCountInSet = coachSanctions.filter(e => e.payload?.type === 'penalty' && e.setIndex === data?.set?.index).length
+                    } else {
+                      hasWarning = playerNumber ? playerHasSanctionType(teamKey, playerNumber, 'warning') : false
+                      hasExpulsion = playerNumber ? playerHasSanctionType(teamKey, playerNumber, 'expulsion') : false
+                      hasDisqualification = playerNumber ? playerHasSanctionType(teamKey, playerNumber, 'disqualification') : false
+                      // Per FIVB 20.3.1: player can receive up to 2 penalties per set
+                      penaltyCountInSet = playerNumber ? getPlayerPenaltyCountInCurrentSet(teamKey, playerNumber) : 0
+                    }
 
                     // Determine which sanctions are available
                     // Rule: A player cannot get the same sanction type twice
@@ -17436,7 +17583,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                     {/* Serve ball underneath if serving */}
                     {leftIsServing && (
                       <img
-                        src={ballImage} onError={(e) => e.target.src = ballimage}
+                        src={ballImage} onError={(e) => e.target.src = ballImage}
                         alt="Serving team"
                         style={{
                           width: '5vmin',
@@ -17468,7 +17615,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
                     {/* Serve ball underneath if serving */}
                     {rightIsServing && (
                       <img
-                        src={ballImage} onError={(e) => e.target.src = ballimage}
+                        src={ballImage} onError={(e) => e.target.src = ballImage}
                         alt="Serving team"
                         style={{
                           width: '5vmin',
@@ -17827,7 +17974,7 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
 
 function ScoreboardToolbar({ children, collapsed, onToggle }) {
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative', zIndex: 101 }}>
       <div
         className="match-toolbar"
         style={{
@@ -17837,40 +17984,46 @@ function ScoreboardToolbar({ children, collapsed, onToggle }) {
       >
         {children}
       </div>
-      {/* Collapse/Expand arrow button at bottom center */}
-      <div
-        onClick={onToggle}
-        onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-        onMouseLeave={(e) => e.currentTarget.style.opacity = '0.25'}
-        style={{
-          position: 'absolute',
-          top: collapsed ? '0' : '100%',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: '40px',
-          height: '24px',
-          background: '#22c55e',
-          borderRadius: '0 0 8px 8px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          zIndex: 100,
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
-          transition: 'all 0.2s ease',
-          opacity: 0.25
-        }}
-      >
-        <span style={{
-          fontSize: '14px',
-          color: '#000',
-          fontWeight: 700,
-          transform: collapsed ? 'rotate(180deg)' : 'rotate(0deg)',
-          transition: 'transform 0.2s ease'
-        }}>
-          ▲
-        </span>
-      </div>
+      {/* Thin collapse/expand bar at bottom center */}
+      {collapsed ? (
+        <div
+          onClick={onToggle}
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            width: '100%',
+            height: '16px',
+            cursor: 'pointer',
+            background: 'rgba(0, 0, 0, 0.3)',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+            transition: 'all 0.2s'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(34, 197, 94, 0.2)'}
+          onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.3)'}
+        >
+          <span style={{ fontSize: '10px', color: '#22c55e', fontWeight: 700 }}>▼</span>
+        </div>
+      ) : (
+        <div
+          onClick={onToggle}
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            width: '100%',
+            height: '16px',
+            cursor: 'pointer',
+            background: 'rgba(0, 0, 0, 0.3)',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+            transition: 'all 0.2s'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(34, 197, 94, 0.2)'}
+          onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.3)'}
+        >
+          <span style={{ fontSize: '10px', color: '#22c55e', fontWeight: 700 }}>▲</span>
+        </div>
+      )}
     </div>
   )
 }
@@ -17893,20 +18046,6 @@ function SetStartTimeModal({ setIndex, defaultTime, onConfirm, onCancel }) {
     const { time: localTime } = splitLocalDateTime(defaultTime)
     return localTime
   })
-
-  const handleTimeChange = (e) => {
-    let value = e.target.value
-    // Remove any non-digit characters except colon
-    value = value.replace(/[^\d:]/g, '')
-    // Ensure format is HH:MM (24-hour)
-    if (value.length <= 5) {
-      // Allow typing and auto-format
-      if (value.length === 2 && !value.includes(':')) {
-        value = value + ':'
-      }
-      setTime(value)
-    }
-  }
 
   const handleConfirm = () => {
     // Validate time format (HH:MM, 24-hour)
@@ -17934,22 +18073,13 @@ function SetStartTimeModal({ setIndex, defaultTime, onConfirm, onCancel }) {
         <p style={{ marginBottom: '24px', fontSize: '16px' }}>
           Confirm the start time for Set {setIndex}:
         </p>
-        <input
-          type="text"
+        <TimeInput24
           value={time}
-          onChange={handleTimeChange}
-          placeholder="HH:MM"
-          pattern="[0-2][0-9]:[0-5][0-9]"
-          maxLength={5}
+          onChange={setTime}
           style={{
             padding: '12px 16px',
             fontSize: '18px',
             fontWeight: 600,
-            textAlign: 'center',
-            background: 'var(--bg-secondary)',
-            border: `2px solid rgba(255,255,255,0.2)`,
-            borderRadius: '8px',
-            color: 'var(--text)',
             marginBottom: '8px',
             width: '150px',
             fontFamily: 'monospace',
@@ -18113,20 +18243,6 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
     return luminance > 0.5
   }
 
-  const handleTimeChange = (e) => {
-    let value = e.target.value
-    // Remove any non-digit characters except colon
-    value = value.replace(/[^\d:]/g, '')
-    // Ensure format is HH:MM (24-hour)
-    if (value.length <= 5) {
-      // Allow typing and auto-format
-      if (value.length === 2 && !value.includes(':')) {
-        value = value + ':'
-      }
-      setTime(value)
-    }
-  }
-
   const handleConfirm = () => {
     if (isConfirming) return // Prevent double-clicks
     // Validate time format (HH:MM, 24-hour)
@@ -18182,22 +18298,13 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
         <p style={{ marginBottom: '16px', fontSize: '16px' }}>
           Confirm the end time:
         </p>
-        <input
-          type="text"
+        <TimeInput24
           value={time}
-          onChange={handleTimeChange}
-          placeholder="HH:MM"
-          pattern="[0-2][0-9]:[0-5][0-9]"
-          maxLength={5}
+          onChange={setTime}
           style={{
             padding: '12px 16px',
             fontSize: '18px',
             fontWeight: 600,
-            textAlign: 'center',
-            background: 'var(--bg-secondary)',
-            border: `2px solid rgba(255,255,255,0.2)`,
-            borderRadius: '8px',
-            color: 'var(--text)',
             marginBottom: '16px',
             width: '150px',
             fontFamily: 'monospace',

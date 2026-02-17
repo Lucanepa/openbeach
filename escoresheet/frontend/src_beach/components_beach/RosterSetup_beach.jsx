@@ -18,6 +18,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
   // Signature states (beach volleyball: captain only)
   const [captainSignature, setCaptainSignature] = useState(null)
   const [openSignature, setOpenSignature] = useState(null) // 'captain' | null
+  const [coachName, setCoachName] = useState('') // Coach name (single field)
 
   const [match, setMatch] = useState(matchData)
   const [teamId, setTeamId] = useState(null)
@@ -46,7 +47,11 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
         isCaptain: p.isCaptain || false
       })))
 
-    
+    // Load coach name from match
+    const coachKey = team === 'team1' ? 'team1CoachName' : 'team2CoachName'
+    if (result.match?.[coachKey]) {
+      setCoachName(result.match[coachKey])
+    }
   }, [team])
 
   // Handle match deletion - navigate back
@@ -210,6 +215,12 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
         )
       }
 
+      // Save coach name to match record if coach is enabled
+      if (match?.hasCoach && matchId && matchId !== -1) {
+        const coachKey = team === 'team1' ? 'team1CoachName' : 'team2CoachName'
+        await db.matches.update(matchId, { [coachKey]: coachName || '' })
+      }
+
       // If connected to Supabase, also sync roster
       if (useSupabaseConnection && supabase && matchData?.external_id) {
         setSyncing(true)
@@ -360,7 +371,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
                   <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.firstName')}</th>
                   <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.lastName')}</th>
                   <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.dob')}</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.captain')}</th>
+                  <th style={{ padding: '12px', textAlign: 'center', fontSize: '14px', fontWeight: 600 }}>C</th>
                   <th style={{ padding: '12px', textAlign: 'center', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.actions')}</th>
                 </tr>
               </thead>
@@ -437,25 +448,33 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
                         }}
                       />
                     </td>
-                    <td style={{ padding: '12px' }}>
-                      <input
-                        type="radio"
-                        name={`captain-${team}`}
-                        checked={player.isCaptain || false}
-                        onChange={(e) => {
-                          // Unset all other captains, set this one
+                    <td style={{ padding: '12px', textAlign: 'center' }}>
+                      <div
+                        onClick={() => {
                           const updatedPlayers = players.map((p, idx) => ({
                             ...p,
-                            isCaptain: idx === index ? e.target.checked : false
+                            isCaptain: idx === index ? !p.isCaptain : false
                           }))
                           setPlayers(updatedPlayers)
                         }}
                         style={{
-                          width: '20px',
-                          height: '20px',
-                          cursor: 'pointer'
+                          width: '28px',
+                          height: '28px',
+                          borderRadius: '4px',
+                          border: player.isCaptain ? '2px solid #22c55e' : '2px solid rgba(255,255,255,0.3)',
+                          background: player.isCaptain ? 'rgba(34, 197, 94, 0.15)' : 'transparent',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          fontWeight: 700,
+                          color: player.isCaptain ? '#22c55e' : 'rgba(255,255,255,0.3)',
+                          userSelect: 'none'
                         }}
-                      />
+                      >
+                        C
+                      </div>
                     </td>
                     <td style={{ padding: '12px', textAlign: 'center' }}>
                       <button
@@ -479,6 +498,41 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
             </table>
           </div>
         </div>
+
+        {/* Coach Section - only shown when hasCoach is enabled */}
+        {match?.hasCoach && (
+          <div style={{
+            marginBottom: '30px',
+            padding: '20px',
+            background: 'var(--bg)',
+            borderRadius: '8px',
+            border: '1px solid rgba(255,255,255,0.1)'
+          }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '16px' }}>
+              Coach
+            </h2>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+              <label style={{ fontSize: '14px', fontWeight: 500, minWidth: '80px' }}>Name:</label>
+              <input
+                type="text"
+                value={coachName}
+                onChange={(e) => setCoachName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
+                placeholder="e.g. Martin, D."
+                style={{
+                  flex: 1,
+                  maxWidth: '300px',
+                  padding: '8px 12px',
+                  fontSize: '14px',
+                  background: 'var(--bg-secondary)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  borderRadius: '6px',
+                  color: 'var(--text)'
+                }}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Signatures Section */}
         <div style={{

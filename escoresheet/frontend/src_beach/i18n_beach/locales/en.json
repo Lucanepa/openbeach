@@ -1772,5 +1772,13 @@
       "teal": "Teal",
       "pink": "Pink"
     }
+  },
+  "startupConnectivity": {
+    "connecting": "Connecting...",
+    "allConnected": "All services connected!",
+    "serverUnavailable": "Scoring works fully offline. Referee and livescore sync via Supabase — server is only needed as fallback.",
+    "backgroundRetry": "Connection will keep retrying in the background.",
+    "dismiss": "Dismiss",
+    "goOffline": "Go Offline"
   }
 }

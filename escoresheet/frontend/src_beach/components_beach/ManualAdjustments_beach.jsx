@@ -957,6 +957,31 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                   </div>
                 </div>
 
+                {/* Coach Sanctions - Team 1 */}
+                {editedMatch?.hasCoach && (
+                  <div style={cardStyle}>
+                    <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: '#a855f7' }}>
+                      Coach {editedMatch?.team1CoachName ? `(${editedMatch.team1CoachName})` : ''}
+                    </h3>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+                      {(editedEvents || []).filter(e => e.type === 'sanction' && e.payload?.team === 'team1' && e.payload?.role === 'coach').map(s => (
+                        <span key={s.id} style={{ fontSize: '11px', color: '#ef4444', background: 'rgba(239,68,68,0.2)', padding: '2px 6px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
+                          onClick={() => setEditingSanction({ ...s, type: s.payload?.sanctionType || s.payload?.type, scoreA: s.stateSnapshot?.pointsA ?? s.stateSnapshot?.scoreA ?? 0, scoreB: s.stateSnapshot?.pointsB ?? s.stateSnapshot?.scoreB ?? 0 })}
+                        >
+                          {s.payload?.sanctionType || s.payload?.type} (Set {s.setIndex})
+                          <button onClick={(e) => { e.stopPropagation(); deleteEvent(s.id) }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0, fontSize: '10px' }}>×</button>
+                        </span>
+                      ))}
+                      <button
+                        onClick={() => setShowAddSanction({ team: 'team1', playerType: 'coach', role: 'coach' })}
+                        style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(168,85,247,0.1)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.3)', borderRadius: '4px', cursor: 'pointer' }}
+                      >
+                        + Coach Sanction
+                      </button>
+                    </div>
+                  </div>
+                )}
+
               </div>
 
               {/* team2 Team */}
@@ -1077,6 +1102,31 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                     })}
                   </div>
                 </div>
+
+                {/* Coach Sanctions - Team 2 */}
+                {editedMatch?.hasCoach && (
+                  <div style={cardStyle}>
+                    <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: '#a855f7' }}>
+                      Coach {editedMatch?.team2CoachName ? `(${editedMatch.team2CoachName})` : ''}
+                    </h3>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+                      {(editedEvents || []).filter(e => e.type === 'sanction' && e.payload?.team === 'team2' && e.payload?.role === 'coach').map(s => (
+                        <span key={s.id} style={{ fontSize: '11px', color: '#ef4444', background: 'rgba(239,68,68,0.2)', padding: '2px 6px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
+                          onClick={() => setEditingSanction({ ...s, type: s.payload?.sanctionType || s.payload?.type, scoreA: s.stateSnapshot?.pointsA ?? s.stateSnapshot?.scoreA ?? 0, scoreB: s.stateSnapshot?.pointsB ?? s.stateSnapshot?.scoreB ?? 0 })}
+                        >
+                          {s.payload?.sanctionType || s.payload?.type} (Set {s.setIndex})
+                          <button onClick={(e) => { e.stopPropagation(); deleteEvent(s.id) }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0, fontSize: '10px' }}>×</button>
+                        </span>
+                      ))}
+                      <button
+                        onClick={() => setShowAddSanction({ team: 'team2', playerType: 'coach', role: 'coach' })}
+                        style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(168,85,247,0.1)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.3)', borderRadius: '4px', cursor: 'pointer' }}
+                      >
+                        + Coach Sanction
+                      </button>
+                    </div>
+                  </div>
+                )}
 
               </div>
             </div>
@@ -1224,11 +1274,36 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                   </select>
                 </div>
                 <div>
-                  <label style={labelStyle}>{t('manualAdjustmentsEditor.scheduledDateTime', 'Scheduled Date/Time')}</label>
+                  <label style={labelStyle}>{t('manualAdjustmentsEditor.scheduledDate', 'Scheduled Date')}</label>
                   <input
-                    type="datetime-local"
-                    value={editedMatch.scheduledAt ? new Date(editedMatch.scheduledAt).toISOString().slice(0, 16) : ''}
-                    onChange={(e) => updateMatchInfo('scheduledAt', e.target.value ? new Date(e.target.value).toISOString() : null)}
+                    type="date"
+                    value={editedMatch.scheduledAt ? new Date(editedMatch.scheduledAt).toISOString().slice(0, 10) : ''}
+                    onChange={(e) => {
+                      const currentTime = editedMatch.scheduledAt ? new Date(editedMatch.scheduledAt).toISOString().slice(11, 16) : '00:00'
+                      if (e.target.value) {
+                        updateMatchInfo('scheduledAt', new Date(`${e.target.value}T${currentTime}:00`).toISOString())
+                      } else {
+                        updateMatchInfo('scheduledAt', null)
+                      }
+                    }}
+                    style={{ ...inputStyle, width: '100%' }}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>{t('manualAdjustmentsEditor.scheduledTime', 'Scheduled Time (24h)')}</label>
+                  <input
+                    type="text"
+                    placeholder="HH:MM"
+                    value={editedMatch.scheduledAt ? new Date(editedMatch.scheduledAt).toISOString().slice(11, 16) : ''}
+                    onChange={(e) => {
+                      let val = e.target.value.replace(/[^\d:]/g, '')
+                      if (val.length > 2 && val[2] !== ':') val = val.slice(0, 2) + ':' + val.slice(2)
+                      if (val.length > 5) val = val.slice(0, 5)
+                      const currentDate = editedMatch.scheduledAt ? new Date(editedMatch.scheduledAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)
+                      if (val && /^\d{2}:\d{2}$/.test(val)) {
+                        updateMatchInfo('scheduledAt', new Date(`${currentDate}T${val}:00`).toISOString())
+                      }
+                    }}
                     style={{ ...inputStyle, width: '100%' }}
                   />
                 </div>
@@ -1412,6 +1487,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
               <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', marginBottom: '4px' }}>
                 {t('manualAdjustmentsEditor.target', 'Target')}: {showAddSanction.team === 'team1' ? editedTeam1?.name : editedTeam2?.name}
                 {showAddSanction.playerType === 'player' && ` - ${t('manualAdjustmentsEditor.player', 'Player')} #${showAddSanction.playerNumber}`}
+                {showAddSanction.playerType === 'coach' && ' - Coach'}
               </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>

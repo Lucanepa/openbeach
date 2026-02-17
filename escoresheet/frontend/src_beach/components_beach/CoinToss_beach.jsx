@@ -12,6 +12,26 @@ const ballImage = '/beachball.png'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { uploadBackupToCloud, uploadLogsToCloud } from '../utils_beach/logger_beach'
 import { uploadScoresheetAsync } from '../utils_beach/scoresheetUploader_beach'
+import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
+
+// Generate a placeholder signature image (wavy line) for test matches
+function generatePlaceholderSignature() {
+  const canvas = document.createElement('canvas')
+  canvas.width = 200
+  canvas.height = 60
+  const ctx = canvas.getContext('2d')
+  ctx.strokeStyle = '#333'
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  const startX = 20
+  const startY = 35
+  ctx.moveTo(startX, startY)
+  for (let x = startX; x < 180; x += 5) {
+    ctx.lineTo(x, startY + Math.sin((x - startX) * 0.1) * 8 + (Math.random() - 0.5) * 4)
+  }
+  ctx.stroke()
+  return canvas.toDataURL('image/png')
+}
 
 // Helper to generate short name from team name (e.g., "VBC Zürich" -> "VBC")
 function generateShortName(name) {
@@ -86,6 +106,7 @@ function normalizeDob(dob) {
 
 export default function CoinToss({ matchId, onConfirm, onBack }) {
   const { showAlert } = useAlert()
+  const { vmin } = useScaledLayout()
 
   // Check if compact mode
   const isCompact = useCompactMode()
@@ -173,11 +194,13 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
   // Track original roster data when modal opens for change detection
   const originalRosterDataRef = useRef(null) // { roster: [] }
 
-  // Signatures (beach volleyball: captain only)
+  // Signatures (beach volleyball: captain only, plus coach when enabled)
   const [team1CaptainSignature, setTeam1CaptainSignature] = useState(null)
   const [team2CaptainSignature, setTeam2CaptainSignature] = useState(null)
+  const [team1CoachSignature, setTeam1CoachSignature] = useState(null)
+  const [team2CoachSignature, setTeam2CoachSignature] = useState(null)
   const [savedSignatures, setSavedSignatures] = useState({
-    team1Captain: null, team2Captain: null
+    team1Captain: null, team2Captain: null, team1Coach: null, team2Coach: null
   })
 
   // Helper function to compare roster for changes
@@ -433,6 +456,42 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           setTeam2CaptainSignature(match.team2CaptainSignature)
           setSavedSignatures(prev => ({ ...prev, team2Captain: match.team2CaptainSignature }))
         }
+        // Load coach signatures
+        if (match.team1CoachSignature) {
+          setTeam1CoachSignature(match.team1CoachSignature)
+          setSavedSignatures(prev => ({ ...prev, team1Coach: match.team1CoachSignature }))
+        }
+        if (match.team2CoachSignature) {
+          setTeam2CoachSignature(match.team2CoachSignature)
+          setSavedSignatures(prev => ({ ...prev, team2Coach: match.team2CoachSignature }))
+        }
+
+        // Pre-fill placeholder signatures for test matches
+        if (match.test) {
+          if (!match.team1CaptainSignature) {
+            const sig = generatePlaceholderSignature()
+            setTeam1CaptainSignature(sig)
+            setSavedSignatures(prev => ({ ...prev, team1Captain: sig }))
+          }
+          if (!match.team2CaptainSignature) {
+            const sig = generatePlaceholderSignature()
+            setTeam2CaptainSignature(sig)
+            setSavedSignatures(prev => ({ ...prev, team2Captain: sig }))
+          }
+          // Placeholder coach signatures for test matches
+          if (match.hasCoach) {
+            if (!match.team1CoachSignature) {
+              const sig = generatePlaceholderSignature()
+              setTeam1CoachSignature(sig)
+              setSavedSignatures(prev => ({ ...prev, team1Coach: sig }))
+            }
+            if (!match.team2CoachSignature) {
+              const sig = generatePlaceholderSignature()
+              setTeam2CoachSignature(sig)
+              setSavedSignatures(prev => ({ ...prev, team2Coach: sig }))
+            }
+          }
+        }
       } catch (error) {
         console.error('Error loading coin toss data:', error)
       }
@@ -457,6 +516,10 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
       setTeam1CaptainSignature(signatureImage)
     } else if (openSignature === 'team2-captain') {
       setTeam2CaptainSignature(signatureImage)
+    } else if (openSignature === 'team1-coach') {
+      setTeam1CoachSignature(signatureImage)
+    } else if (openSignature === 'team2-coach') {
+      setTeam2CoachSignature(signatureImage)
     }
     setOpenSignature(null)
   }
@@ -489,10 +552,21 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         coinTossConfirmed: true  // Mark coin toss as confirmed
       }
 
-      // Only save signatures for official matches
+      // Save signatures (use placeholders for test matches)
       if (!match?.test) {
         updateData.team1CaptainSignature = team1CaptainSignature
         updateData.team2CaptainSignature = team2CaptainSignature
+        if (match?.hasCoach) {
+          updateData.team1CoachSignature = team1CoachSignature
+          updateData.team2CoachSignature = team2CoachSignature
+        }
+      } else {
+        updateData.team1CaptainSignature = team1CaptainSignature || generatePlaceholderSignature()
+        updateData.team2CaptainSignature = team2CaptainSignature || generatePlaceholderSignature()
+        if (match?.hasCoach) {
+          updateData.team1CoachSignature = team1CoachSignature || generatePlaceholderSignature()
+          updateData.team2CoachSignature = team2CoachSignature || generatePlaceholderSignature()
+        }
       }
 
       await db.matches.update(matchId, updateData)
@@ -721,7 +795,11 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           // Signatures JSONB
           signatures: !match?.test ? {
             team1_captain: team1CaptainSignature || '',
-            team2_captain: team2CaptainSignature || ''
+            team2_captain: team2CaptainSignature || '',
+            ...(match?.hasCoach ? {
+              team1_coach: team1CoachSignature || '',
+              team2_coach: team2CoachSignature || ''
+            } : {})
           } : {}
         },
         ts: new Date().toISOString(),
@@ -803,7 +881,9 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
     // Update saved signatures
     setSavedSignatures({
       team1Captain: team1CaptainSignature,
-      team2Captain: team2CaptainSignature
+      team2Captain: team2CaptainSignature,
+      team1Coach: team1CoachSignature,
+      team2Coach: team2CoachSignature
     })
 
     // Show initialization modal and wait for sync
@@ -1036,9 +1116,13 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         return
       }
 
-      // Check signatures for official matches (beach volleyball: captain only)
+      // Check signatures for official matches (beach volleyball: captain + coach if enabled)
       if (!team1CaptainSignature || !team2CaptainSignature) {
         setNoticeModal({ message: 'Please complete all required signatures before confirming the coin toss.' })
+        return
+      }
+      if (match?.hasCoach && (!team1CoachSignature || !team2CoachSignature)) {
+        setNoticeModal({ message: 'Please complete all coach signatures before confirming the coin toss.' })
         return
       }
     }
@@ -1109,6 +1193,9 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
 
   const teamACaptainSig = teamA === 'team1' ? team1CaptainSignature : team2CaptainSignature
   const teamBCaptainSig = teamB === 'team1' ? team1CaptainSignature : team2CaptainSignature
+  const teamACoachSig = teamA === 'team1' ? team1CoachSignature : team2CoachSignature
+  const teamBCoachSig = teamB === 'team1' ? team1CoachSignature : team2CoachSignature
+  const hasCoach = match?.hasCoach
 
   const sortRosterEntries = roster =>
     (roster || [])
@@ -1208,7 +1295,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               className={`sign ${teamACaptainSig ? 'signed' : ''}`}
               style={{ fontSize: sizes.signButtonFont, padding: sizes.signButtonPadding, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
-              Order & Signature {teamACaptainSig ? '✓' : ''}
+              Order & Signature {teamACaptainSig ? (hasCoach && !teamACoachSig ? '½' : '✓') : ''}
             </button>
           </div>
         </div>
@@ -1276,7 +1363,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               className={`sign ${teamBCaptainSig ? 'signed' : ''}`}
               style={{ fontSize: sizes.signButtonFont, padding: sizes.signButtonPadding, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
-              Order & Signature {teamBCaptainSig ? '✓' : ''}
+              Order & Signature {teamBCaptainSig ? (hasCoach && !teamBCoachSig ? '½' : '✓') : ''}
             </button>
           </div>
         </div>
@@ -1605,22 +1692,33 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                             />
                           </td>
                           <td style={{ verticalAlign: 'middle', padding: '6px' }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '2px', cursor: 'pointer', justifyContent: 'center' }}>
-                              <input
-                                type="radio"
-                                name={`${currentTeam}-captain-modal`}
-                                checked={p.isCaptain || false}
-                                onChange={e => {
-                                  const updated = roster.map((player, idx) => ({
-                                    ...player,
-                                    isCaptain: idx === originalIdx ? e.target.checked : false
-                                  }))
-                                  setRoster(updated)
-                                }}
-                                style={{ width: '12px', height: '12px', margin: 0, accentColor: 'var(--accent)' }}
-                              />
-                              <span style={{ fontSize: '10px', fontWeight: 600 }}>C</span>
-                            </label>
+                            <div
+                              onClick={() => {
+                                const updated = roster.map((player, idx) => ({
+                                  ...player,
+                                  isCaptain: idx === originalIdx ? !player.isCaptain : false
+                                }))
+                                setRoster(updated)
+                              }}
+                              style={{
+                                width: '20px',
+                                height: '20px',
+                                borderRadius: '4px',
+                                border: p.isCaptain ? '2px solid #22c55e' : '2px solid rgba(255,255,255,0.3)',
+                                background: p.isCaptain ? 'rgba(34, 197, 94, 0.15)' : 'transparent',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                color: p.isCaptain ? '#22c55e' : 'rgba(255,255,255,0.3)',
+                                userSelect: 'none',
+                                margin: '0 auto'
+                              }}
+                            >
+                              C
+                            </div>
                           </td>
                           <td style={{ verticalAlign: 'middle', padding: '4px' }}>
                             <button
@@ -2053,6 +2151,35 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                 )}
               </div>
 
+              {/* Coach Signature - only when hasCoach is enabled */}
+              {hasCoach && (
+                <div style={{ marginBottom: '16px' }}>
+                  <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600, color: 'var(--muted)' }}>Coach Signature</h4>
+                  <button
+                    onClick={() => setOpenSignature(currentTeam === 'team1' ? 'team1-coach' : 'team2-coach')}
+                    className={`sign ${(currentTeam === 'team1' ? team1CoachSignature : team2CoachSignature) ? 'signed' : ''}`}
+                    style={{
+                      width: '100%',
+                      padding: '16px',
+                      fontSize: '16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    {(currentTeam === 'team1' ? team1CoachSignature : team2CoachSignature) ? (
+                      <>
+                        <span>Coach Signed</span>
+                        <span style={{ color: '#22c55e' }}>✓</span>
+                      </>
+                    ) : (
+                      <>Sign (Coach)</>
+                    )}
+                  </button>
+                </div>
+              )}
+
               {/* Close Button */}
               <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
                 <button
@@ -2291,14 +2418,20 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         onClose={() => setOpenSignature(null)}
         onSave={handleSignatureSave}
         title={openSignature === 'team1-captain' ? 'Team 1 Captain Signature' :
-              openSignature === 'team2-captain' ? 'Team 2 Captain Signature' : 'Sign'}
+              openSignature === 'team2-captain' ? 'Team 2 Captain Signature' :
+              openSignature === 'team1-coach' ? 'Team 1 Coach Signature' :
+              openSignature === 'team2-coach' ? 'Team 2 Coach Signature' : 'Sign'}
         existingSignature={
           openSignature === 'team1-captain' ? team1CaptainSignature :
-                openSignature === 'team2-captain' ? team2CaptainSignature : null
+          openSignature === 'team2-captain' ? team2CaptainSignature :
+          openSignature === 'team1-coach' ? team1CoachSignature :
+          openSignature === 'team2-coach' ? team2CoachSignature : null
         }
         readOnly={
           (openSignature === 'team1-captain' && !!team1CaptainSignature) ||
-          (openSignature === 'team2-captain' && !!team2CaptainSignature)
+          (openSignature === 'team2-captain' && !!team2CaptainSignature) ||
+          (openSignature === 'team1-coach' && !!team1CoachSignature) ||
+          (openSignature === 'team2-coach' && !!team2CoachSignature)
         }
       />
     </div>

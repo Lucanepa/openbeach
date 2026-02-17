@@ -14,6 +14,7 @@ import BackupTable from './components_beach/BackupTable_beach'
 import HomePage from './components_beach/pages/HomePage_beach'
 import HomeOptionsModal from './components_beach/options/HomeOptionsModal_beach'
 import ConnectionSetupModal from './components_beach/options/ConnectionSetupModal_beach'
+import StartupConnectivityModal from './components_beach/StartupConnectivityModal_beach'
 import { useSyncQueue } from './hooks_beach/useSyncQueue_beach'
 import useAutoBackup from './hooks_beach/useAutoBackup_beach'
 import { useDashboardServer } from './hooks_beach/useDashboardServer_beach'
@@ -120,6 +121,9 @@ export default function App() {
   const [offlineMode, setOfflineMode] = useState(() => {
     const saved = localStorage.getItem('offlineMode')
     return saved === 'true'
+  })
+  const [showStartupConnectivity, setShowStartupConnectivity] = useState(() => {
+    return localStorage.getItem('offlineMode') !== 'true'
   })
   // Display mode: 'desktop' | 'tablet' | 'smartphone' | 'auto'
   const [displayMode, setDisplayMode] = useState(() => {
@@ -703,6 +707,25 @@ export default function App() {
     return () => clearInterval(interval)
   }, [checkConnectionStatuses])
 
+  // Show startup connectivity popup when toggling from offline to online
+  const prevOfflineModeRef = useRef(offlineMode)
+  useEffect(() => {
+    if (prevOfflineModeRef.current === true && offlineMode === false) {
+      setShowStartupConnectivity(true)
+      checkConnectionStatuses()
+    }
+    prevOfflineModeRef.current = offlineMode
+  }, [offlineMode, checkConnectionStatuses])
+
+  const handleStartupGoOffline = useCallback(() => {
+    setOfflineMode(true)
+    localStorage.setItem('offlineMode', 'true')
+    setShowStartupConnectivity(false)
+  }, [])
+
+  const handleStartupDismiss = useCallback(() => {
+    setShowStartupConnectivity(false)
+  }, [])
 
   const currentTestMatch = useLiveQuery(async () => {
     try {
@@ -3954,6 +3977,13 @@ export default function App() {
               matchId={matchId}
               refereePin={currentMatch?.refereePin}
               gameNumber={currentMatch?.gameNumber}
+            />
+
+            <StartupConnectivityModal
+              open={showStartupConnectivity && !offlineMode}
+              connectionStatuses={connectionStatuses}
+              onDismiss={handleStartupDismiss}
+              onGoOffline={handleStartupGoOffline}
             />
 
           </div>

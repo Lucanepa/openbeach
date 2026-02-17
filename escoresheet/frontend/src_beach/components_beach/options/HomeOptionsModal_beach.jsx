@@ -1,9 +1,14 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAlert } from '../../contexts_beach/AlertContext_beach'
 import Modal from '../Modal_beach'
 import SupportFeedbackModal from '../SupportFeedbackModal_beach'
 import { copyToClipboard, generateQRCodeUrl } from '../../utils_beach/networkInfo_beach'
+import {
+  getSynologyUrl,
+  setSynologyUrl,
+  testSynologyConnection
+} from '../../lib_beach/synologyClient_beach'
 
 const currentVersion = __APP_VERSION__
 
@@ -125,6 +130,221 @@ function Section({ title, children, borderBottom = true }) {
       ) : null}
       {children}
     </div>
+  )
+}
+
+/**
+ * Synology PostgreSQL Sync Settings Section
+ * Allows users to configure syncing to a local Synology NAS via PostgREST
+ * Auto-enabled when URL is configured - no manual toggle needed
+ */
+function SynologySection({ t }) {
+  const [url, setUrl] = useState(getSynologyUrl() || '')
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState(null) // { success: boolean, error?: string }
+
+  const isConfigured = !!url.trim()
+
+  // Update localStorage when URL changes (debounced via blur)
+  const handleUrlBlur = () => {
+    setSynologyUrl(url.trim())
+    setTestResult(null)
+    // Dispatch storage event to notify useSyncQueue
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'synology_url',
+      newValue: url.trim()
+    }))
+  }
+
+  // Clear URL
+  const handleClear = () => {
+    setUrl('')
+    setSynologyUrl('')
+    setTestResult(null)
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'synology_url',
+      newValue: ''
+    }))
+  }
+
+  // Test connection
+  const handleTestConnection = async () => {
+    if (!url.trim()) {
+      setTestResult({ success: false, error: t('options.synology.enterUrl', 'Please enter a URL first') })
+      return
+    }
+
+    setTesting(true)
+    setTestResult(null)
+
+    const result = await testSynologyConnection(url.trim())
+    setTestResult(result)
+    setTesting(false)
+  }
+
+  return (
+    <Section title={t('options.synology.title', 'Synology Sync')}>
+      {/* Status indicator */}
+      <Row style={{ marginBottom: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{
+            width: '10px',
+            height: '10px',
+            borderRadius: '50%',
+            background: isConfigured ? '#22c55e' : 'rgba(255,255,255,0.3)'
+          }} />
+          <div style={{ fontWeight: 600, fontSize: '15px' }}>
+            {isConfigured
+              ? t('options.synology.configured', 'Configured')
+              : t('options.synology.notConfigured', 'Not configured')
+            }
+          </div>
+          <InfoDot title={t('options.synology.enableInfo', 'Sync match data to your Synology NAS for local backup and fast access. Just enter the URL and sync starts automatically.')} />
+        </div>
+        {isConfigured && (
+          <button
+            onClick={handleClear}
+            style={{
+              padding: '6px 12px',
+              fontSize: '12px',
+              fontWeight: 600,
+              background: 'rgba(239, 68, 68, 0.2)',
+              color: '#ef4444',
+              border: '1px solid rgba(239, 68, 68, 0.4)',
+              borderRadius: '6px',
+              cursor: 'pointer'
+            }}
+          >
+            {t('options.synology.disable', 'Disable')}
+          </button>
+        )}
+      </Row>
+
+      {/* URL Input */}
+      <div style={{
+        background: 'rgba(255,255,255,0.05)',
+        borderRadius: '8px',
+        padding: '16px',
+        marginBottom: '12px'
+      }}>
+        <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', marginBottom: '8px' }}>
+          {t('options.synology.urlLabel', 'PostgREST URL')}
+        </div>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onBlur={handleUrlBlur}
+            placeholder="https://openbeach-api.openvolley.app"
+            style={{
+              flex: 1,
+              padding: '10px 12px',
+              fontSize: '14px',
+              fontFamily: 'monospace',
+              background: 'rgba(0,0,0,0.3)',
+              border: `1px solid ${isConfigured ? 'rgba(34, 197, 94, 0.4)' : 'rgba(255,255,255,0.2)'}`,
+              borderRadius: '6px',
+              color: 'var(--text)'
+            }}
+          />
+          <button
+            onClick={handleTestConnection}
+            disabled={testing || !url.trim()}
+            style={{
+              padding: '10px 16px',
+              fontSize: '13px',
+              fontWeight: 600,
+              background: testing ? 'rgba(255,255,255,0.1)' : 'rgba(59, 130, 246, 0.2)',
+              color: testing ? 'rgba(255,255,255,0.5)' : '#3b82f6',
+              border: testing ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(59, 130, 246, 0.4)',
+              borderRadius: '6px',
+              cursor: testing || !url.trim() ? 'not-allowed' : 'pointer',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {testing ? t('options.synology.testing', 'Testing...') : t('options.synology.test', 'Test')}
+          </button>
+        </div>
+
+        {/* Test Result */}
+        {testResult && (
+          <div style={{
+            marginTop: '12px',
+            padding: '10px 12px',
+            background: testResult.success ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+            border: `1px solid ${testResult.success ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+            borderRadius: '6px',
+            fontSize: '13px',
+            color: testResult.success ? '#22c55e' : '#ef4444'
+          }}>
+            {testResult.success
+              ? t('options.synology.connectionSuccess', 'Connection successful! Sync is now active.')
+              : testResult.error
+            }
+          </div>
+        )}
+
+        {/* Auto-sync notice */}
+        {isConfigured && !testResult && (
+          <div style={{
+            marginTop: '12px',
+            padding: '10px 12px',
+            background: 'rgba(34, 197, 94, 0.1)',
+            border: '1px solid rgba(34, 197, 94, 0.2)',
+            borderRadius: '6px',
+            fontSize: '12px',
+            color: 'rgba(255,255,255,0.8)'
+          }}>
+            {t('options.synology.autoSyncActive', 'Sync is active. Data will be synced to both Supabase and Synology.')}
+          </div>
+        )}
+
+        {/* URL Examples */}
+        {!isConfigured && (
+          <div style={{ marginTop: '12px', fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>
+            <div style={{ marginBottom: '4px' }}>{t('options.synology.examples', 'Examples:')}</div>
+            <div style={{ fontFamily: 'monospace' }}>
+              <div>• http://192.168.1.100:3000 ({t('options.synology.localNetwork', 'local network')})</div>
+              <div>• https://openbeach-api.yourdomain.com ({t('options.synology.cloudflare', 'via Cloudflare Tunnel')})</div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Setup Instructions - only show when not configured */}
+      {!isConfigured && (
+        <div style={{
+          background: 'rgba(59, 130, 246, 0.1)',
+          border: '1px solid rgba(59, 130, 246, 0.2)',
+          borderRadius: '6px',
+          padding: '12px',
+          fontSize: '12px'
+        }}>
+          <div style={{ fontWeight: 600, color: '#3b82f6', marginBottom: '8px' }}>
+            {t('options.synology.setupTitle', 'Setup Instructions')}
+          </div>
+          <div style={{ color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
+            <ol style={{ margin: 0, paddingLeft: '16px' }}>
+              <li>{t('options.synology.step1', 'Install Container Manager on Synology')}</li>
+              <li>{t('options.synology.step2', 'Upload docker-compose.yml from /docker folder')}</li>
+              <li>{t('options.synology.step3', 'Run: docker-compose up -d')}</li>
+              <li>{t('options.synology.step4', 'Enter URL above - sync starts automatically')}</li>
+            </ol>
+          </div>
+          <div style={{ marginTop: '8px' }}>
+            <a
+              href="https://github.com/lucanepa/openbeach/tree/main/escoresheet/frontend/docker"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: '#3b82f6', textDecoration: 'none' }}
+            >
+              {t('options.synology.viewDocs', 'View setup documentation')} ↗
+            </a>
+          </div>
+        </div>
+      )}
+    </Section>
   )
 }
 
@@ -1127,6 +1347,8 @@ export default function HomeOptionsModal({
             </Row>
           </Section>
         )}
+
+        <SynologySection t={t} />
 
         <Section title={t('options.appVersion')}>
           <Row style={{ flexDirection: 'column', alignItems: 'stretch', gap: '12px' }}>
