@@ -232,6 +232,7 @@ export function useSyncQueue() {
       return true
     } catch (err) {
       supabaseConnectionVerified.current = false
+      console.warn('[SyncQueue] Supabase connection check failed:', err.message || err)
       if (err.message?.includes('fetch') || err.message?.includes('network')) {
         setSupabaseStatus('offline')
         return false

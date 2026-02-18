@@ -3,8 +3,6 @@ import { useTranslation } from 'react-i18next'
 
 // Primary services shown to the user — these are what matters
 const PRIMARY_KEYS = ['db', 'supabase']
-// Fallback services — only shown when they're connected (hidden otherwise)
-const FALLBACK_KEYS = ['api', 'server', 'websocket', 'scoreboard']
 
 const AUTO_DISMISS_SECONDS = 5
 
@@ -69,11 +67,8 @@ export default function StartupConnectivityModal({
 
   if (!open) return null
 
-  // Only show fallback services if they're connected — hide them otherwise
-  const visibleKeys = [
-    ...PRIMARY_KEYS,
-    ...FALLBACK_KEYS.filter(key => connectionStatuses[key] === 'connected')
-  ]
+  // Only show primary services (Database + Supabase)
+  const visibleKeys = PRIMARY_KEYS
 
   const labelMap = {
     api: t('connectionStatus.api', 'API'),
