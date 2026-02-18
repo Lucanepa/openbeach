@@ -18,7 +18,7 @@
 import { build } from 'vite'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync, renameSync, copyFileSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, rmSync, renameSync, copyFileSync, cpSync } from 'fs'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
@@ -283,10 +283,16 @@ async function buildSubdomain(subdomain) {
       renameSync(builtHtmlPath, finalHtmlPath)
     }
 
-    // Copy favicon to output
+    // Copy all public_beach assets to output (fonts, images, PWA icons, etc.)
+    const publicDir = resolve(frontendDir, 'public_beach')
+    if (existsSync(publicDir)) {
+      cpSync(publicDir, outDir, { recursive: true })
+    }
+
+    // Copy favicon from root if it exists (legacy path)
     const faviconSrc = resolve(frontendDir, 'favicon_beach.png')
     const faviconDest = resolve(outDir, 'favicon_beach.png')
-    if (existsSync(faviconSrc)) {
+    if (existsSync(faviconSrc) && !existsSync(faviconDest)) {
       copyFileSync(faviconSrc, faviconDest)
     }
 
