@@ -22,18 +22,40 @@
     <style>
       /* Global Font Setting */
       body {
-        font-family: 'Aptos Display', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        font-family: 'Inter', sans-serif;
       }
 
       /* Custom print styles to ensure background graphics/colors print */
       @media print {
-        body {
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
+        * {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
         }
         @page {
-          size: landscape;
-          margin: 0.2cm;
+          size: A4 landscape;
+          margin: 5mm;
+        }
+        /* All scoresheet pages share the same dimensions */
+        .page-boundary {
+          width: 287mm !important;
+          height: 200mm !important;
+          max-height: 200mm !important;
+          overflow: hidden !important;
+          margin: 0 !important;
+          padding: 2mm !important;
+          box-sizing: border-box !important;
+          display: block !important;
+          border: none !important;
+          box-shadow: none !important;
+          background: white !important;
+        }
+        #page-1 {
+          page-break-after: always !important;
+          break-after: page !important;
+        }
+        .page-boundary:not(#page-1) {
+          page-break-before: always !important;
+          break-before: page !important;
         }
       }
       /* Hide scrollbar for cleaner look in inputs */

@@ -61,8 +61,11 @@
     "allowPopups": "Bitte erlaubed Sie Popups zum s eMatchblatt aazeige",
     "noMatchData": "Kei Spiildate verfüegbar",
     "failedToOpenScoresheet": "eMatchblatt hät nöd chönne göffnet werde: {{error}}",
+    "captainSignatureTeam": "{{team}} Kapitän-Unterschrift",
+    "coachSignatureTeam": "{{team}} Trainer-Unterschrift",
     "validation": {
-      "completeSignatures": "Bitte alli Underschrifte vor Bestätigung vo de Sitewahl vervollständige."
+      "completeSignatures": "Bitte alli Underschrifte vor Bestätigung vo de Sitewahl vervollständige.",
+      "completeCoachSignatures": "Bitte alli Trainer-Unterschrifte vervollständige, bevor dr Münzwurf bestätigt wird."
     },
     "syncingMatch": "Spiildate wärde synchronisiert...",
     "verifyingStatus": "Spiilstatus wird überprüeft...",
@@ -120,7 +123,8 @@
   },
   "errors": {
     "databaseWriteError": "Datenbank-Schreibfehler",
-    "syncFailed": "Synchronisierung fehlgeschlagen"
+    "syncFailed": "Synchronisierung fehlgeschlagen",
+    "supabaseNotConfigured": "Supabase nöd konfiguriert"
   },
   "signature": {
     "title": "Underschrift",
@@ -165,7 +169,16 @@
     "mainDraw": "Main Draw",
     "qualification": "Qualification",
     "poolPlay": "Pool Play",
+    "winnerBracket": "Gewinner-Runde",
+    "classificationRound": "Klassierigssrunde",
+    "semifinals": "Halbfinale",
+    "finals": "Finale",
+    "coach": "Trainer",
     "matchNumber": "Spiilnummere",
+    "matchNumberPlaceholder": "z.B. M01",
+    "datePlaceholder": "TT.MM.JJJJ",
+    "timePlaceholder": "HH:MM",
+    "courtPlaceholder": "z.B. 1, Center",
     "date": "Datum",
     "time": "Uhrziit",
     "teams": "Teams",
@@ -299,7 +312,25 @@
       "invalidNumbers": "Invalid jersey numbers (must be 1-99): {{numbers}}",
       "playersWithoutNumbers": "{{count}} player(s) without jersey numbers",
       "fixIssues": "Please fix the following issues:\n\n• {{issues}}",
-      "completeBeforeCoinToss": "Please complete the following before proceeding to coin toss:\n\n• {{issues}}"
+      "completeBeforeCoinToss": "Please complete the following before proceeding to coin toss:\n\n• {{issues}}",
+      "team1NameRequired": "Teamname 1 isch erforderlich",
+      "team2NameRequired": "Teamname 2 isch erforderlich",
+      "team1CountryRequired": "Land vo Team 1 isch erforderlich",
+      "team2CountryRequired": "Land vo Team 2 isch erforderlich",
+      "invalidDatePrefix": "Ungültigs Datum: {{error}}",
+      "invalidTimePrefix": "Ungültigi Uhrzit: {{error}}",
+      "invalidDateTime": "Ungültigs Datum/Uhrzit: {{error}}",
+      "team1NeedsCaptain": "Team 1 muess mindestens eine Kapitän ha.",
+      "team2NeedsCaptain": "Team 2 muess mindestens eine Kapitän ha.",
+      "duplicatePlayerNumbers": "{{team}} het doppelti Trikotnummere: #{{numbers}}\n\nBitte Duplikat korrigiere.",
+      "matchPinRequired": "Match-PIN isch erforderlich. Bitte en PIN-Code iigee.",
+      "setBothTeamNames": "Bitte beidi Teamname festlege, bevor zum Münzwurf witerfahre.",
+      "setBothTeamCountries": "Bitte beidi Länder festlege, bevor zum Münzwurf witerfahre.",
+      "noMatchDataAvailable": "Kei Matchdate verfüegbar.",
+      "matchNotFound": "Match nöd gfunde.",
+      "allowPopups": "Bitte Popups erlaube, zum s Spiilprotokoll azeige.",
+      "errorSavingData": "Fehler bim Speichere. Bitte nomal versuche.",
+      "duplicateGameNumber": "Spiel #{{number}} git's scho. Bitte e anderi Nummer verwände."
     },
     "modals": {
       "syncing": "Synchronisierig",
@@ -440,7 +471,6 @@
       "scoresheetAlreadyOpen": "eMatchblatt bereits offe",
       "remarksRecording": "Bemerkigserfassig",
       "sanctionsAndResults": "Sanktione und Ergebnis",
-      "confirmSecondTimeout": "{{ordinal}} Timeout-Aafraag bestätige?",
       "forfait": "Forfait"
     },
     "sanctions": {
@@ -471,14 +501,19 @@
     "confirm": {
       "yesStartRally": "Ja, Ballwechsel starte",
       "yesAwardPoint": "Ja, Punkt vergäh",
-      "yesTimeout": "Ja, Zeitüberschreitung",
       "apply": "Aawende",
       "rallyStartedQuickly": "Ballwechsel sehr schnell gstartet",
       "areYouSureRallyStarted": "Sind Sie sicher, dass de Ballwechsel tatsächlich agfange hät?",
       "pointAwardedQuickly": "Punkt sehr schnell vergäh",
       "areYouSureAwardPoint": "Sind Sie sicher, dass de Punkt a {{team}} vergäh werde söll?",
-      "timeoutAlreadyTaken": "Dieses Team hat in diesem Satz bereits eine Auszeit genommen.",
-      "areYouSureAnotherTimeout": "Sind Sie sicher, dass Sie einen weiteren Timeout für {{team}} aufrufen wollen?"
+      "deletePointEvent": "Das Punkt-Ereignis lösche?",
+      "deleteTimeoutEvent": "Das Timeout-Ereignis lösche?",
+      "deleteSubstitutionEvent": "Das Uswächslig-Ereignis lösche?",
+      "deleteSanctionEvent": "Das Sanktions-Ereignis lösche?",
+      "deleteEventGeneric": "Das {{type}}-Ereignis lösche?",
+      "invalidTimeFormat": "Bitte gültigi Uhrzit im 24-Stunde-Format iigee (HH:MM)",
+      "deleteEventsQuick": "Ereigniss lösche (schnäll)",
+      "deleteEventsQuickDesc": "Schnälls Lösche vo beliebige Ereigniss. Mit Vorsicht verwände."
     },
     "menu": {
       "scoresheet": "eMatchblatt",
@@ -714,14 +749,13 @@
     "seconds": "Sekunde",
     "checkAccidentalPointAward": "Versehentlichi Punktvergab prüefe",
     "checkAccidentalPointAwardInfo": "Bestätigung aafordere, wenn en Punkt innerhalb vo {{duration}}s nach Ballwechsel-Start vergäh wird",
-    "setIntervalDuration": "Pause zwüsched Satz 2-3",
-    "setIntervalDurationInfo": "Duur vo de Pause zwüsched Satz 2 und 3",
-    "setIntervalDurationLabel": "intervalldauer einstellen",
     "scoreFont": "Spiilstand/Countdown-Schriftart",
     "scoreFontInfo": "Schriftart für Spiilstand und Countdown-Timer wähle",
     "fontDefault": "Standard",
     "keyboardShortcuts": "Tastaturchürzel",
     "keyboardShortcutsInfo": "Tastatur zur Stürig vo Punktestand und Aktione verwende",
+    "manageDob": "Geburtsdatum verwalte",
+    "manageDobInfo": "Geburtsdatumsfelder für Spieler und Offizielle aazeige",
     "displayMode": "Aazeigemodus",
     "screenMode": "Bildschirmmodus",
     "screenModeInfo": "Wähled Sie en für Ihre Bildschirm optimierte Aazeigemodus. Tablet- und Smartphone-Modi aktiviered Vollbild im Querformat.",
@@ -850,6 +884,8 @@
     "showNamesOnCourtInfo": "Spielernäme unter de Fäldpositione aazeige",
     "autoDownloadAtSetEnd": "Auto-Download bi Satzendi",
     "autoDownloadAtSetEndInfo": "Spiildate automatisch am Endi vo jedem Satz zur Sicherig abelade.",
+    "alwaysDownloadAtSetEnd": "Au bi erfolgricher Sync abelade",
+    "alwaysDownloadAtSetEndInfo": "Backup-Datei immer abelade, au wenn d Cloud-Sync erfolgrich gsi isch. Standardmässig wird s Backup nur abelade, wenn d Sync fählschlaat oder mer offline isch.",
     "configureKeys": "Taste konfiguriere",
     "cloudBackup": "Cloud-Backup",
     "restoreFromCloud": "Us Cloud wiederherstelle",
@@ -1053,7 +1089,10 @@
     "signaturesDescription": "Optional: Captain can sign the roster before submitting.",
     "signaturesAtCoinToss": "Captain signature will be collected at coin toss.",
     "captainSignature": "Captain-Underschrift",
-    "tapToSign": "Tippe zum unterschriibe"
+    "tapToSign": "Tippe zum unterschriibe",
+    "benchSide": "Teambank",
+    "benchLeft": "Links",
+    "benchRight": "Rechts"
   },
   "refereeDashboard": {
     "title": "Schiri",
@@ -1166,6 +1205,8 @@
     "changeGame": "Spiil wächsle",
     "enterDifferentGame": "Anderi Spiilnummere iigäh",
     "gameNotFound": "Spiil nöd gfunde oder nöd im Gang",
+    "gamesLive": "{{count}} Spiil live",
+    "gamesLive_other": "{{count}} Spiil live",
     "errors": {
       "enterGameNumber": "Bitte gänd Sie e Spiilnummere ii",
       "matchNotFound": "Spiil mit dere Nummere nöd gfunde",
@@ -1173,6 +1214,15 @@
       "failedToLoadData": "Date händ nöd chönne glade werde",
       "failedToLoadDataConnection": "Date händ nöd chönne glade werde. Stelled Sie sicher, dass de HaupteScoresheet lauft."
     }
+  },
+  "scoresheetApp": {
+    "loadingScoresheet": "Spiilprotokoll wird glade...",
+    "scoresheetNotFound": "Spiilprotokoll nöd gfunde",
+    "backToList": "Zrugg zur Lischte",
+    "loadingScoresheets": "Spiilprotokoll wärde glade...",
+    "errorLoadingScoresheets": "Fehler bim Lade vo de Spiilprotokoll",
+    "scoresheetArchive": "Spiilprotokoll-Archiv",
+    "noScoresheetsYet": "No kei Spiilprotokoll ueglade"
   },
   "auth": {
     "signIn": "Aamälde",
@@ -1464,7 +1514,7 @@
       "startRallyDesc": "Use for subsequent rallies",
       "lineupWarning": "Both teams must set their initial lineup before the first rally can start.",
       "timeouts": "Timeouts",
-      "timeoutsDesc": "Each team can call 2 timeouts per set, lasting 30 seconds each.",
+      "timeoutsDesc": "Each team can call 1 timeout per set, lasting 30 seconds.",
       "toStep1": "Click \"TO Left\" or \"TO Right\" button for the requesting team",
       "toStep2": "The 30-second countdown will start automatically",
       "toStep3": "Click \"Stop Timeout\" when ready to resume play",
@@ -1612,7 +1662,7 @@
       "instruction": "See when timeouts can/cannot be called.",
       "tryIt": "Try the Interactive Demo",
       "notDuringRally": "Cannot call timeout during a rally!",
-      "maxReached": "Maximum timeouts reached (2/2)!",
+      "maxReached": "Maximum timeouts reached (1/1)!",
       "alreadyActive": "A timeout is already in progress!",
       "timeoutCalled": "Timeout called!",
       "simulateRally": "Simulate Rally",

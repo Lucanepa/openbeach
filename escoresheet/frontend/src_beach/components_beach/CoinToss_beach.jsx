@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useAlert } from '../contexts_beach/AlertContext_beach'
 import { db } from '../db_beach/db_beach'
@@ -105,11 +106,13 @@ function normalizeDob(dob) {
 }
 
 export default function CoinToss({ matchId, onConfirm, onBack }) {
+  const { t } = useTranslation()
   const { showAlert } = useAlert()
   const { vmin } = useScaledLayout()
 
   // Check if compact mode
   const isCompact = useCompactMode()
+  const manageDob = localStorage.getItem('manageDob') === 'true'
 
   // Responsive sizing
   const sizes = isCompact ? {
@@ -388,13 +391,14 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         ])
 
         // Helper to generate beach volleyball team name from players: "LastName1/LastName2 (COUNTRY)"
+        const toTitleCase = (str) => str ? str.replace(/\b\w/g, c => c.toUpperCase()) : ''
         const generateBeachTeamName = (players, country) => {
           if (!players || players.length === 0) return null
           const sorted = [...players].sort((a, b) => (a.number || 999) - (b.number || 999))
-          const lastNames = sorted.map(p => p.lastName || '').filter(n => n)
+          const lastNames = sorted.map(p => toTitleCase(p.lastName || '')).filter(n => n)
           if (lastNames.length === 0) return null
-          const namesPart = lastNames.join('/')
-          return country ? `${namesPart} (${country})` : namesPart
+          const namesPart = lastNames.join(' / ')
+          return country ? `${namesPart} (${country.toUpperCase()})` : namesPart
         }
 
         if (team1Players.length) {
@@ -529,7 +533,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
 
     if (!matchId) {
       console.error('[CoinToss] No match ID available')
-      setNoticeModal({ message: 'Error: No match ID found. Please try again.' })
+      setNoticeModal({ message: t('validation.noMatchId') })
       return
     }
 
@@ -544,6 +548,8 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         firstServe: firstServeTeam,
         team1FirstServePlayer: team1FirstServe,
         team2FirstServePlayer: team2FirstServe,
+        team1FirstServe: team1FirstServe,
+        team2FirstServe: team2FirstServe,
         coinTossTeamA: teamA,
         coinTossTeamB: teamB,
         coinTossServeA: serveA,
@@ -765,7 +771,6 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           team1_points: 0,
           team2_points: 0,
           finished: false,
-          test: isTest,
           start_time: new Date().toISOString()
         },
         ts: new Date().toISOString(),
@@ -989,54 +994,54 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
 
       // 1. Check team names are set (not default "Team 1"/"Team 2" or empty)
       if (!team1Name || team1Name === 'Team 1' || team1Name.trim() === '') {
-        validationErrors.push('Team 1 name is not set')
+        validationErrors.push(t('validation.team1NotSet'))
       }
       if (!team2Name || team2Name === 'Team 2' || team2Name.trim() === '') {
-        validationErrors.push('Team 2 name is not set')
+        validationErrors.push(t('validation.team2NotSet'))
       }
 
       // 2. Check at least 1 referee and 1 scorer with names
       const ref1 = match?.officials?.find(o => o.role === '1st referee')
       const scorer = match?.officials?.find(o => o.role === 'scorer')
       if (!ref1?.lastName || !ref1?.firstName) {
-        validationErrors.push('1st Referee name is not set')
+        validationErrors.push(t('validation.refereeNotSet'))
       }
       if (!scorer?.lastName || !scorer?.firstName) {
-        validationErrors.push('Scorer name is not set')
+        validationErrors.push(t('validation.scorerNotSet'))
       }
 
       // 3. Check match info (hall, city, league, date)
       if (!match?.hall || match.hall.trim() === '') {
-        validationErrors.push('Hall is not set')
+        validationErrors.push(t('validation.hallNotSet'))
       }
       if (!match?.city || match.city.trim() === '') {
-        validationErrors.push('City is not set')
+        validationErrors.push(t('validation.cityNotSet'))
       }
       if (!match?.league || match.league.trim() === '') {
-        validationErrors.push('League is not set')
+        validationErrors.push(t('validation.leagueNotSet'))
       }
       if (!match?.scheduledAt) {
-        validationErrors.push('Match date/time is not set')
+        validationErrors.push(t('validation.dateNotSet'))
       }
 
       // 4. Check exactly 2 players per team with numbers (beach volleyball)
       const team1PlayersWithNumbers = team1Roster.filter(p => p.number != null && p.number !== '')
       const team2PlayersWithNumbers = team2Roster.filter(p => p.number != null && p.number !== '')
       if (team1PlayersWithNumbers.length !== 2) {
-        validationErrors.push(`Team 1 needs exactly 2 players with numbers. Currently: ${team1PlayersWithNumbers.length}`)
+        validationErrors.push(t('validation.needMorePlayers', { team: t('common.team1'), count: team1PlayersWithNumbers.length }))
       }
       if (team2PlayersWithNumbers.length !== 2) {
-        validationErrors.push(`Team 2 needs exactly 2 players with numbers. Currently: ${team2PlayersWithNumbers.length}`)
+        validationErrors.push(t('validation.needMorePlayers', { team: t('common.team2'), count: team2PlayersWithNumbers.length }))
       }
 
       // 5. Check captain is set for each team
       const team1CaptainPlayer = team1Roster.find(p => p.isCaptain)
       const team2CaptainPlayer = team2Roster.find(p => p.isCaptain)
       if (!team1CaptainPlayer) {
-        validationErrors.push('Team 1 captain is not set')
+        validationErrors.push(t('validation.captainNotSet', { team: t('common.team1') }))
       }
       if (!team2CaptainPlayer) {
-        validationErrors.push('Team 2 captain is not set')
+        validationErrors.push(t('validation.captainNotSet', { team: t('common.team2') }))
       }
 
       // 7. Check for duplicate jersey numbers
@@ -1065,9 +1070,11 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
 
       // 8. Check no birthdate is exactly 01.01.1900 (placeholder/error date)
       const allRosterPlayers = [...team1Roster, ...team2Roster]
-      const playersWithBadDate = allRosterPlayers.filter(p => p.dob === '01.01.1900' || p.dob === '01/01/1900')
-      if (playersWithBadDate.length > 0) {
-        validationErrors.push('Some players have invalid birthdate (01.01.1900). Please correct these dates.')
+      if (manageDob) {
+        const playersWithBadDate = allRosterPlayers.filter(p => p.dob === '01.01.1900' || p.dob === '01/01/1900')
+        if (playersWithBadDate.length > 0) {
+          validationErrors.push('Some players have invalid birthdate (01.01.1900). Please correct these dates.')
+        }
       }
 
       // 9. Check for invalid player numbers (must be 1-99)
@@ -1097,32 +1104,34 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
       }
 
       // 11. Check for dates that might be import errors (01.01.yyyy for any year) - ask for confirmation
-      const suspiciousDates = []
-      allRosterPlayers.forEach(p => {
-        if (p.dob && (p.dob.startsWith('01.01.') || p.dob.startsWith('01/01/'))) {
-          suspiciousDates.push(`${p.lastName || ''} ${p.firstName || ''}: ${p.dob}`)
-        }
-      })
-      if (suspiciousDates.length > 0) {
-        // Show modal and wait for user confirmation
-        setBirthdateConfirmModal({
-          suspiciousDates,
-          onConfirm: () => {
-            setBirthdateConfirmModal(null)
-            // Continue with coin toss after confirmation
-            proceedWithCoinToss()
+      if (manageDob) {
+        const suspiciousDates = []
+        allRosterPlayers.forEach(p => {
+          if (p.dob && (p.dob.startsWith('01.01.') || p.dob.startsWith('01/01/'))) {
+            suspiciousDates.push(`${p.lastName || ''} ${p.firstName || ''}: ${p.dob}`)
           }
         })
-        return
+        if (suspiciousDates.length > 0) {
+          // Show modal and wait for user confirmation
+          setBirthdateConfirmModal({
+            suspiciousDates,
+            onConfirm: () => {
+              setBirthdateConfirmModal(null)
+              // Continue with coin toss after confirmation
+              proceedWithCoinToss()
+            }
+          })
+          return
+        }
       }
 
       // Check signatures for official matches (beach volleyball: captain + coach if enabled)
       if (!team1CaptainSignature || !team2CaptainSignature) {
-        setNoticeModal({ message: 'Please complete all required signatures before confirming the coin toss.' })
+        setNoticeModal({ message: t('coinToss.validation.completeSignatures') })
         return
       }
       if (match?.hasCoach && (!team1CoachSignature || !team2CoachSignature)) {
-        setNoticeModal({ message: 'Please complete all coach signatures before confirming the coin toss.' })
+        setNoticeModal({ message: t('coinToss.validation.completeCoachSignatures') })
         return
       }
     }
@@ -1227,7 +1236,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
   )
 
   if (!match) {
-    return <div className="setup"><p>Loading...</p></div>
+    return <div className="setup"><p>{t('common.loading')}</p></div>
   }
 
   return (
@@ -1248,7 +1257,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)', gap: sizes.gap, marginBottom: sizes.marginBottom, alignItems: 'start' }}>
         {/* Team A */}
         <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-          <h1 style={{ margin: 2, fontSize: sizes.headerFont, fontWeight: 700, textAlign: 'center' }}>Team A</h1>
+          <h1 style={{ margin: 2, fontSize: sizes.headerFont, fontWeight: 700, textAlign: 'center' }}>{t('coinToss.teamA')}</h1>
           <div style={{ marginBottom: isCompact ? 12 : 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: isCompact ? '40px' : '80px', width: '100%' }}>
             <div
               style={{
@@ -1316,7 +1325,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
 
         {/* Team B */}
         <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-          <h1 style={{ margin: 2, fontSize: sizes.headerFont, fontWeight: 700, textAlign: 'center' }}>Team B</h1>
+          <h1 style={{ margin: 2, fontSize: sizes.headerFont, fontWeight: 700, textAlign: 'center' }}>{t('coinToss.teamB')}</h1>
           <div style={{ marginBottom: isCompact ? 12 : 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: isCompact ? '40px' : '80px', width: '100%' }}>
             <div
               style={{
@@ -1463,7 +1472,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               onClick: async () => {
                 try {
                   if (!match) {
-                    showAlert('No match data available', 'error')
+                    showAlert(t('coinToss.noMatchData'), 'error')
                     return
                   }
 
@@ -1531,10 +1540,10 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                   }
 
                   sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
-                  const scoresheetWindow = window.open('/scoresheet_beach.html', '_blank', 'width=1200,height=900')
+                  const scoresheetWindow = window.open('/scoresheet_beach.html', 'scoresheet_beach', 'width=1200,height=900')
 
                   if (!scoresheetWindow) {
-                    showAlert('Please allow popups to view scoresheet', 'warning')
+                    showAlert(t('coinToss.allowPopups'), 'warning')
                   }
                 } catch (error) {
                   console.error('Error opening scoresheet:', error)
@@ -1618,10 +1627,10 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                 <table className="roster-table" style={{ width: '100%' }}>
                   <thead>
                     <tr>
-                      <th>#</th>
-                      <th>Name</th>
-                      <th style={{ width: '90px' }}>DOB</th>
-                      <th>Captain</th>
+                      <th>{t('roster.number')}</th>
+                      <th>{t('roster.name')}</th>
+                      {manageDob && <th style={{ width: '90px' }}>{t('roster.dob')}</th>}
+                      <th>{t('coinToss.captain')}</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -1647,7 +1656,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                                 setRoster(updated)
                               }}
                               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
-                              title={isDuplicate ? 'Duplicate jersey number' : ''}
+                              title={isDuplicate ? t('roster.duplicateNumber') : ''}
                               style={{
                                 width: p.isCaptain ? '24px' : '28px',
                                 height: p.isCaptain ? '24px' : 'auto',
@@ -1676,7 +1685,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                               style={{ width: '100%', padding: '0', background: 'transparent', border: 'none', color: 'var(--text)', fontSize: '12px' }}
                             />
                           </td>
-                          <td style={{ verticalAlign: 'middle', padding: '6px', width: '90px' }}>
+                          {manageDob && <td style={{ verticalAlign: 'middle', padding: '6px', width: '90px' }}>
                             <input
                               type="date"
                               value={p.dob ? formatDateToISO(p.dob) : ''}
@@ -1690,7 +1699,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                               className="coin-toss-date-input"
                               style={{ width: '100%', padding: '0', background: 'transparent', border: 'none', color: 'var(--text)', fontSize: '12px' }}
                             />
-                          </td>
+                          </td>}
                           <td style={{ verticalAlign: 'middle', padding: '6px' }}>
                             <div
                               onClick={() => {
@@ -1739,7 +1748,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
 
               {/* Signatures Section - Beach volleyball: captain only */}
               <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 16, marginTop: 16 }}>
-                <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600 }}>Captain Signature</h4>
+                <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600 }}>{t('matchSetup.captainSignature')}</h4>
                 <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                   <button
                     type="button"
@@ -1763,7 +1772,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                     border: '1px solid rgba(255,255,255,0.1)', maxWidth: '90vw'
                   }}>
                     <h3 style={{ margin: '0 0 12px 0' }}>
-                      {`Captain Signature - ${teamInfo.name}`}
+                      {t('coinToss.captainSignatureTeam', { team: teamInfo.name })}
                     </h3>
                     <SignaturePad
                       onSave={(sig) => {
@@ -1771,7 +1780,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                         setRosterModalSignature(null)
                       }}
                       onCancel={() => setRosterModalSignature(null)}
-                      title="Captain Signature"
+                      title={t('matchSetup.captainSignature')}
                     />
                   </div>
                 </div>
@@ -1841,7 +1850,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                 />
               </div>
               <div>
-                <label style={{ display: 'block', marginBottom: 4 }}>Last Name</label>
+                <label style={{ display: 'block', marginBottom: 4 }}>{t('roster.lastName')}</label>
                 <input
                   type="text"
                   className="capitalize"
@@ -1852,7 +1861,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                 />
               </div>
               <div>
-                <label style={{ display: 'block', marginBottom: 4 }}>First Name</label>
+                <label style={{ display: 'block', marginBottom: 4 }}>{t('roster.firstName')}</label>
                 <input
                   type="text"
                   className="capitalize"
@@ -1862,8 +1871,8 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                   style={{ width: '100%', padding: '8px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', color: 'var(--text)' }}
                 />
               </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: 4 }}>Date of Birth</label>
+              {manageDob && <div>
+                <label style={{ display: 'block', marginBottom: 4 }}>{t('roster.dateOfBirth')}</label>
                 <input
                   type="date"
                   value={dob ? formatDateToISO(dob) : ''}
@@ -1874,7 +1883,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
                   style={{ width: '100%', padding: '8px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', color: 'var(--text)' }}
                 />
-              </div>
+              </div>}
               <div>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                   <input
@@ -1882,14 +1891,14 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                     checked={captain}
                     onChange={e => currentTeam === 'team1' ? setTeam1CaptainBool(e.target.checked) : setTeam2CaptainBool(e.target.checked)}
                   />
-                  <span>Captain</span>
+                  <span>{t('coinToss.captain')}</span>
                 </label>
               </div>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
-                <button className="secondary" onClick={() => setAddPlayerModal(null)}>Cancel</button>
+                <button className="secondary" onClick={() => setAddPlayerModal(null)}>{t('common.cancel')}</button>
                 <button onClick={() => {
                   if (!last || !first) {
-                    showAlert('Please enter both first and last name', 'warning')
+                    showAlert(t('roster.enterNames'), 'warning')
                     return
                   }
                   const newPlayer = { number: num ? Number(num) : null, lastName: last, firstName: first, dob, isCaptain: captain }
@@ -2112,7 +2121,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
 
               {/* Captain Signature */}
               <div style={{ marginBottom: '16px' }}>
-                <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600, color: 'var(--muted)' }}>Captain Signature</h4>
+                <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600, color: 'var(--muted)' }}>{t('matchSetup.captainSignature')}</h4>
                 {captain ? (
                   <button
                     onClick={handleOpenSignature}
@@ -2220,10 +2229,10 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           >
             <div style={{ padding: '16px 0' }}>
               <p style={{ marginBottom: 16 }}>
-                Are you sure you want to delete <strong>{playerName}</strong> from {isTeamA ? 'Team A' : 'Team B'}?
+                {t('modal.deletePlayerConfirm')}
               </p>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button className="secondary" onClick={() => setDeletePlayerModal(null)}>Cancel</button>
+                <button className="secondary" onClick={() => setDeletePlayerModal(null)}>{t('common.cancel')}</button>
                 <button onClick={() => {
                   if (currentTeam === 'team1') {
                     setTeam1Roster(list => list.filter((_, idx) => idx !== deletePlayerModal.index))
@@ -2231,7 +2240,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                     setTeam2Roster(list => list.filter((_, idx) => idx !== deletePlayerModal.index))
                   }
                   setDeletePlayerModal(null)
-                }}>Delete</button>
+                }}>{t('common.delete')}</button>
               </div>
             </div>
           </Modal>
@@ -2417,10 +2426,10 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         open={openSignature !== null}
         onClose={() => setOpenSignature(null)}
         onSave={handleSignatureSave}
-        title={openSignature === 'team1-captain' ? 'Team 1 Captain Signature' :
-              openSignature === 'team2-captain' ? 'Team 2 Captain Signature' :
-              openSignature === 'team1-coach' ? 'Team 1 Coach Signature' :
-              openSignature === 'team2-coach' ? 'Team 2 Coach Signature' : 'Sign'}
+        title={openSignature === 'team1-captain' ? t('coinToss.captainSignatureTeam', { team: t('common.team1') }) :
+              openSignature === 'team2-captain' ? t('coinToss.captainSignatureTeam', { team: t('common.team2') }) :
+              openSignature === 'team1-coach' ? t('coinToss.coachSignatureTeam', { team: t('common.team1') }) :
+              openSignature === 'team2-coach' ? t('coinToss.coachSignatureTeam', { team: t('common.team2') }) : t('signature.title')}
         existingSignature={
           openSignature === 'team1-captain' ? team1CaptainSignature :
           openSignature === 'team2-captain' ? team2CaptainSignature :

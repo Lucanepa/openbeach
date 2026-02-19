@@ -491,7 +491,7 @@ export default function RefereeApp() {
       color: '#fff',
       display: 'flex',
       flexDirection: 'column',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      fontFamily: "'Inter', sans-serif",
       boxSizing: 'border-box'
     }}>
       <UpdateBanner />

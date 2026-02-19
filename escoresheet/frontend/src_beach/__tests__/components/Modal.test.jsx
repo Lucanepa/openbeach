@@ -2,6 +2,16 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import Modal from '../../components_beach/Modal_beach'
 
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key) => {
+      const translations = { 'common.close': 'Close' }
+      return translations[key] || key
+    },
+    i18n: { language: 'en' }
+  })
+}))
+
 describe('Modal', () => {
   describe('rendering', () => {
     it('should not render when open is false', () => {

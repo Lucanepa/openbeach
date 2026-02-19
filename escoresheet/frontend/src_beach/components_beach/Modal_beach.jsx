@@ -1,4 +1,7 @@
+import { useTranslation } from 'react-i18next'
+
 export default function Modal({ title, open, onClose, children, width = 800, height, hideCloseButton = false, position = 'center', customStyle = {}, zIndex = 1000 }) {
+  const { t } = useTranslation()
   if (!open) return null
   const widthStyle = width === 'auto' ? 'auto' : (width === '100vw' ? '100vw' : `min(95vw,${width}px)`)
   const heightStyle = height ? height : '90vh'
@@ -33,7 +36,7 @@ export default function Modal({ title, open, onClose, children, width = 800, hei
           {(title || !hideCloseButton) && (
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
               <h3 style={{ margin:0 }}>{title}</h3>
-              {!hideCloseButton && <button className="secondary" onClick={onClose}>Close</button>}
+              {!hideCloseButton && <button className="secondary" onClick={onClose}>{t('common.close')}</button>}
             </div>
           )}
           {children}
@@ -60,7 +63,7 @@ export default function Modal({ title, open, onClose, children, width = 800, hei
         {(title || !hideCloseButton) && (
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
             <h3 style={{ margin:0 }}>{title}</h3>
-            {!hideCloseButton && <button className="secondary" onClick={onClose}>Close</button>}
+            {!hideCloseButton && <button className="secondary" onClick={onClose}>{t('common.close')}</button>}
           </div>
         )}
         {children}

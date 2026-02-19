@@ -10,6 +10,7 @@ import SignaturePad from './SignaturePad_beach'
 export default function RosterSetup({ matchId, team, onBack, embedded = false, useSupabaseConnection = false, matchData = null }) {
   const { t } = useTranslation()
   const { showAlert } = useAlert()
+  const manageDob = localStorage.getItem('manageDob') === 'true'
   const [players, setPlayers] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -19,6 +20,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
   const [captainSignature, setCaptainSignature] = useState(null)
   const [openSignature, setOpenSignature] = useState(null) // 'captain' | null
   const [coachName, setCoachName] = useState('') // Coach name (single field)
+  const [benchSide, setBenchSide] = useState('left') // This team's bench side ('left' | 'right')
 
   const [match, setMatch] = useState(matchData)
   const [teamId, setTeamId] = useState(null)
@@ -52,6 +54,10 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
     if (result.match?.[coachKey]) {
       setCoachName(result.match[coachKey])
     }
+
+    // Load bench side from match (stored as team1's perspective)
+    const team1Side = result.match?.team1BenchSide || 'left'
+    setBenchSide(team === 'team1' ? team1Side : (team1Side === 'left' ? 'right' : 'left'))
   }, [team])
 
   // Handle match deletion - navigate back
@@ -280,7 +286,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
       background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
       color: '#fff',
       padding: '20px',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+      fontFamily: "'Inter', sans-serif"
     }}>
       <div style={{
         maxWidth: '1200px',
@@ -370,7 +376,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
                   <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.number')}</th>
                   <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.firstName')}</th>
                   <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.lastName')}</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.dob')}</th>
+                  {manageDob && <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.dob')}</th>}
                   <th style={{ padding: '12px', textAlign: 'center', fontSize: '14px', fontWeight: 600 }}>C</th>
                   <th style={{ padding: '12px', textAlign: 'center', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.actions')}</th>
                 </tr>
@@ -430,7 +436,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
                         }}
                       />
                     </td>
-                    <td style={{ padding: '12px' }}>
+                    {manageDob && <td style={{ padding: '12px' }}>
                       <input
                         type="text"
                         value={player.dob}
@@ -447,7 +453,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
                           color: 'var(--text)'
                         }}
                       />
-                    </td>
+                    </td>}
                     <td style={{ padding: '12px', textAlign: 'center' }}>
                       <div
                         onClick={() => {
@@ -533,6 +539,65 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
             </div>
           </div>
         )}
+
+        {/* Bench Side Section */}
+        <div style={{
+          marginBottom: '30px',
+          padding: '20px',
+          background: 'var(--bg)',
+          borderRadius: '8px',
+          border: '1px solid rgba(255,255,255,0.1)'
+        }}>
+          <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '16px' }}>
+            {t('rosterSetup.benchSide', 'Team Bench')}
+          </h2>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button
+              onClick={async () => {
+                setBenchSide('left')
+                const team1Side = team === 'team1' ? 'left' : 'right'
+                if (matchId && matchId !== -1) {
+                  await db.matches.update(matchId, { team1BenchSide: team1Side })
+                }
+              }}
+              style={{
+                flex: 1,
+                padding: '12px',
+                fontSize: '16px',
+                fontWeight: 600,
+                background: benchSide === 'left' ? 'rgba(34, 197, 94, 0.2)' : 'transparent',
+                border: benchSide === 'left' ? '2px solid #22c55e' : '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                color: benchSide === 'left' ? '#22c55e' : 'var(--muted)'
+              }}
+            >
+              {t('rosterSetup.benchLeft', 'Left')}
+            </button>
+            <button
+              onClick={async () => {
+                setBenchSide('right')
+                const team1Side = team === 'team1' ? 'right' : 'left'
+                if (matchId && matchId !== -1) {
+                  await db.matches.update(matchId, { team1BenchSide: team1Side })
+                }
+              }}
+              style={{
+                flex: 1,
+                padding: '12px',
+                fontSize: '16px',
+                fontWeight: 600,
+                background: benchSide === 'right' ? 'rgba(34, 197, 94, 0.2)' : 'transparent',
+                border: benchSide === 'right' ? '2px solid #22c55e' : '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                color: benchSide === 'right' ? '#22c55e' : 'var(--muted)'
+              }}
+            >
+              {t('rosterSetup.benchRight', 'Right')}
+            </button>
+          </div>
+        </div>
 
         {/* Signatures Section */}
         <div style={{

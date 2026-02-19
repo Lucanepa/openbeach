@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { supabase } from './lib_beach/supabaseClient_beach'
 import App from '../scoresheet_pdf_beach/App'
 
@@ -137,6 +138,7 @@ const formatDate = (dateStr) => {
 
 // Scoresheet viewer component
 const ScoresheetViewer = ({ date, game, action }) => {
+  const { t } = useTranslation()
   const [matchData, setMatchData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -162,7 +164,7 @@ const ScoresheetViewer = ({ date, game, action }) => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="text-lg text-gray-600">Loading scoresheet...</div>
+        <div className="text-lg text-gray-600">{t('scoresheetApp.loadingScoresheet')}</div>
       </div>
     )
   }
@@ -170,13 +172,13 @@ const ScoresheetViewer = ({ date, game, action }) => {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-screen gap-5">
-        <div className="text-2xl font-bold text-red-500">Scoresheet Not Found</div>
+        <div className="text-2xl font-bold text-red-500">{t('scoresheetApp.scoresheetNotFound')}</div>
         <div className="text-gray-600">{error}</div>
         <button
           onClick={() => window.location.href = '/'}
           className="px-5 py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
         >
-          Back to List
+          {t('scoresheetApp.backToList')}
         </button>
       </div>
     )
@@ -187,6 +189,7 @@ const ScoresheetViewer = ({ date, game, action }) => {
 
 // Scoresheet list component
 const ScoresheetList = () => {
+  const { t } = useTranslation()
   const [scoresheets, setScoresheets] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -215,7 +218,7 @@ const ScoresheetList = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="text-lg text-gray-600">Loading scoresheets...</div>
+        <div className="text-lg text-gray-600">{t('scoresheetApp.loadingScoresheets')}</div>
       </div>
     )
   }
@@ -223,7 +226,7 @@ const ScoresheetList = () => {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-screen gap-5">
-        <div className="text-2xl font-bold text-red-500">Error Loading Scoresheets</div>
+        <div className="text-2xl font-bold text-red-500">{t('scoresheetApp.errorLoadingScoresheets')}</div>
         <div className="text-gray-600">{error}</div>
       </div>
     )
@@ -236,7 +239,7 @@ const ScoresheetList = () => {
         <div className="flex items-center gap-4 mb-6">
           <img src="/openbeach_no_bg.png" alt="openBeach" className="w-12 h-12" />
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">Scoresheet Archive</h1>
+            <h1 className="text-2xl font-bold text-gray-800">{t('scoresheetApp.scoresheetArchive')}</h1>
             <p className="text-gray-500">
               {scoresheets.length} scoresheet{scoresheets.length !== 1 ? 's' : ''} available
             </p>
@@ -246,7 +249,7 @@ const ScoresheetList = () => {
         {scoresheets.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
             <div className="text-5xl mb-4">📋</div>
-            <div className="text-lg text-gray-500">No scoresheets uploaded yet</div>
+            <div className="text-lg text-gray-500">{t('scoresheetApp.noScoresheetsYet')}</div>
           </div>
         ) : (
           Object.entries(groupedByDate)

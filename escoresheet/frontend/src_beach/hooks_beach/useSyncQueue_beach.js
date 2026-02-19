@@ -74,8 +74,8 @@ const SPORT_TYPE = 'beach'
 // Valid matches table columns - filters out invalid columns from old backup formats
 const VALID_MATCH_COLUMNS = [
   'external_id', 'game_n', 'game_pin', 'status', 'connections', 'connection_pins',
-  'scheduled_at', 'match_info', 'officials', 'team1_team', 'players_team1',
-  'team2_team', 'players_team2', 'coin_toss', 'results', 'signatures',
+  'scheduled_at', 'match_info', 'officials', 'players_team1',
+  'players_team2', 'team1_data', 'team2_data', 'coin_toss', 'results', 'signatures',
   'approval', 'test', 'created_at', 'updated_at', 'manual_changes', 'current_set',
   'set_results', 'final_score', 'sanctions', 'winner', 'sport_type'
 ]
@@ -84,6 +84,19 @@ const VALID_MATCH_COLUMNS = [
 function filterMatchPayload(payload) {
   return Object.fromEntries(
     Object.entries(payload).filter(([key]) => VALID_MATCH_COLUMNS.includes(key))
+  )
+}
+
+// Valid sets table columns - filters out invalid columns (e.g., 'test' from local DB)
+const VALID_SET_COLUMNS = [
+  'external_id', 'match_id', 'index', 'team1_points', 'team2_points',
+  'finished', 'start_time', 'end_time'
+]
+
+// Filter set payload to only include valid columns
+function filterSetPayload(payload) {
+  return Object.fromEntries(
+    Object.entries(payload).filter(([key]) => VALID_SET_COLUMNS.includes(key))
   )
 }
 
@@ -312,7 +325,7 @@ export function useSyncQueue() {
         const jsonbColumns = ['connections', 'connection_pins', 'team_a', 'team_b', 'officials', 'coin_toss', 'set_results', 'sanctions']
         const hasJsonbColumns = jsonbColumns.some(col => updateData[col] !== undefined)
 
-        let finalUpdateData = { ...updateData }
+        let finalUpdateData = filterMatchPayload(updateData)
 
         // If updating JSONB columns, fetch existing values and merge
         if (hasJsonbColumns) {
@@ -440,7 +453,7 @@ export function useSyncQueue() {
           // Insert sets
           if (sets?.length > 0) {
             for (const set of sets) {
-              const setPayload = { ...set, match_id: matchUuid }
+              const setPayload = filterSetPayload({ ...set, match_id: matchUuid })
               await client.from('sets').upsert(setPayload, { onConflict: 'external_id' })
             }
           }
@@ -466,7 +479,7 @@ export function useSyncQueue() {
 
       // ==================== SET ====================
       if (job.resource === 'set' && job.action === 'insert') {
-        let setPayload = { ...job.payload }
+        let setPayload = filterSetPayload(job.payload)
 
         if (setPayload.match_id && typeof setPayload.match_id === 'string') {
           const { data: matchData } = await client
@@ -493,7 +506,8 @@ export function useSyncQueue() {
       }
 
       if (job.resource === 'set' && job.action === 'update') {
-        const { external_id, ...updateData } = job.payload
+        const { external_id, ...rawUpdateData } = job.payload
+        const updateData = filterSetPayload(rawUpdateData)
         const { error } = await client
           .from('sets')
           .update(updateData)

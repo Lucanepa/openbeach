@@ -52,7 +52,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 13px;
   line-height: 1.3;
   -webkit-font-smoothing: antialiased;
@@ -335,7 +335,7 @@ p {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Inter', sans-serif;
   font-weight: 800;
   color: #ffffff;
   font-size: calc(18px * var(--scale-factor));
@@ -387,14 +387,15 @@ input[type=number] {
 
 select {
   width: 100%;
-  padding: calc(8px * var(--scale-factor)) calc(10px * var(--scale-factor));
+  padding: calc(10px * var(--scale-factor)) calc(12px * var(--scale-factor));
   background: #0f172a;
   color: var(--text);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: calc(8px * var(--scale-factor));
   text-transform: capitalize;
-  font-size: calc(13px * var(--scale-factor));
-  line-height: 1.2;
+  font-family: inherit;
+  font-size: calc(16px * var(--scale-factor));
+  line-height: 1.3;
 }
 
 button.sign {
@@ -828,13 +829,11 @@ button:disabled {
 @keyframes preEventPulse {
   0%,
   100% {
-    opacity: 1;
     transform: translate(-50%, -50%) scale(1);
   }
 
   50% {
-    opacity: 0.7;
-    transform: translate(-50%, -50%) scale(1.05);
+    transform: translate(-50%, -50%) scale(1.08);
   }
 }
 
@@ -2098,6 +2097,24 @@ button.start-rally-button {
 .modal-wrapper-roll-up>div {
   animation: rollUp 0.3s ease-out;
   transform-origin: center top;
+}
+
+@keyframes slideArrowLeft {
+  0%, 100% { transform: translateX(6px); opacity: 0.5; }
+  50% { transform: translateX(-6px); opacity: 1; }
+}
+
+@keyframes slideArrowRight {
+  0%, 100% { transform: translateX(-6px); opacity: 0.5; }
+  50% { transform: translateX(6px); opacity: 1; }
+}
+
+.between-sets-arrow-left {
+  animation: slideArrowLeft 1.5s ease-in-out infinite;
+}
+
+.between-sets-arrow-right {
+  animation: slideArrowRight 1.5s ease-in-out infinite;
 }
 
 /* Responsive text visibility */

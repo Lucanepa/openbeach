@@ -214,10 +214,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   const [showIntervalModal, setShowIntervalModal] = useState(false) // Modal visibility (separate from countdown state)
   const [lastEvent, setLastEvent] = useState(null) // { type, team, data, timestamp }
   const intervalDismissedRef = useRef(false) // Track when interval was manually dismissed
-  const setIntervalDuration = useMemo(() => {
-    const saved = localStorage.getItem('setIntervalDuration')
-    return saved ? parseInt(saved, 10) : 60 // default 1 minute = 60 seconds
-  }, [])
+  const setIntervalDuration = 60 // 1 minute for beach volleyball (FIVB standard)
   const [peekingLineup, setPeekingLineup] = useState({ left: false, right: false }) // Track which team's lineup is being peeked
 
   // Reset peeking state on any mouseup/touchend (since overlay disappears when peeking)
@@ -720,7 +717,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             setShowTimeoutModal(false)
           }
 
-          // Handle set end (3-minute interval)
+          // Handle set end (1-minute interval)
           if (state.last_event_type === 'set_end' || state.set_interval_active) {
             console.debug('[Referee] Set end detected from live state:', {
               current_set: state.current_set,
@@ -1441,7 +1438,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         margin: '0 auto',
         background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
         color: '#fff',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        fontFamily: "'Inter', sans-serif",
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden'
@@ -1931,7 +1928,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         margin: '0 auto',
         background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
         color: '#fff',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        fontFamily: "'Inter', sans-serif",
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -1999,7 +1996,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       margin: '0 auto',
       background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
       color: '#fff',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      fontFamily: "'Inter', sans-serif",
       display: 'flex',
       flexDirection: 'column',
       overflow: 'hidden'
@@ -2666,7 +2663,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
               {timeoutModal ? (
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: '20px', color: 'var(--muted)', fontWeight: 600, marginBottom: '4px' }}>TIMEOUT</div>
-                  <DonutCountdown current={timeoutModal.countdown} total={30} size={130} strokeWidth={6}>
+                  <DonutCountdown current={timeoutModal.countdown} total={45} size={130} strokeWidth={6}>
                     <div style={{ fontSize: 'clamp(24px, 8vw, 40px)', fontFamily: getScoreFont(), fontWeight: 600, color: timeoutModal.countdown <= 10 ? '#ef4444' : 'var(--accent)', lineHeight: 1 }}>
                       {timeoutModal.countdown}"
                     </div>

@@ -36,7 +36,7 @@ export default function RefereeSelector({ open, onClose, onSelect, position = {}
       const { data, error } = await supabase
         .from('referee_database')
         .select('first_name, last_name, country, dob, created_at')
-        .eq('sport_type', SPORT_TYPE)
+        .contains('sport_type', JSON.stringify([SPORT_TYPE]))
         .order('last_name', { ascending: true })
 
       if (error) {

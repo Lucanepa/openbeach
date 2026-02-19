@@ -9,18 +9,17 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "dexie": "^4.0.8",
+    "dexie": "^4.3.0",
+    "dexie-react-hooks": "^4.2.0",
+    "html-to-image": "^1.11.13",
     "html2canvas": "^1.4.1",
-    "jspdf": "^2.5.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "dexie-react-hooks": "^1.1.7"
+    "jspdf": "^4.1.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
   },
   "devDependencies": {
-    "vite": "^5.4.11",
-    "@vitejs/plugin-react": "^4.3.1",
-    "vite-plugin-pwa": "^0.17.5"
+    "@vitejs/plugin-react": "^5.1.4",
+    "vite": "^7.3.1",
+    "vite-plugin-pwa": "^1.2.0"
   }
 }
-
-

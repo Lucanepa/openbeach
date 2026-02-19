@@ -8,73 +8,10 @@
     <style>
       /* Global Font Setting */
       body {
-        font-family: 'Aptos Display', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        font-family: 'Inter', sans-serif;
       }
 
-      /* Custom print styles */
-      @media print {
-        @page {
-          size: A4 landscape;
-          margin: 5mm;
-        }
-        * {
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-        }
-        html, body {
-          margin: 0 !important;
-          padding: 0 !important;
-          width: auto !important;
-          height: auto !important;
-        }
-        #root, #root > div {
-          display: block !important;
-          width: auto !important;
-          height: auto !important;
-          overflow: visible !important;
-        }
-        /* Hide visual debugging elements */
-        .page-size-info,
-        .page-break-indicator,
-        .margin-label,
-        .print-corner {
-          display: none !important;
-        }
-        .page-boundary::before,
-        .page-boundary::after {
-          display: none !important;
-        }
-        /* Page boundaries */
-        .page-boundary {
-          display: block !important;
-          border: none !important;
-          box-shadow: none !important;
-          background: white !important;
-        }
-        #page-1 {
-          width: 287mm !important;
-          height: 200mm !important;
-          max-height: 200mm !important;
-          page-break-after: always !important;
-          break-after: page !important;
-          overflow: hidden !important;
-          margin: 0 !important;
-          padding: 2mm !important;
-          box-sizing: border-box !important;
-        }
-        #page-2 {
-          width: 287mm !important;
-          height: 200mm !important;
-          max-height: 200mm !important;
-          page-break-before: always !important;
-          break-before: page !important;
-          overflow: hidden !important;
-          margin: 0 !important;
-          padding: 2mm !important;
-          box-sizing: border-box !important;
-        }
-      }
-      /* Show page size info in screen view (hidden in print) */
+      /* Show page size info in screen view */
       .page-size-info {
         position: fixed;
         top: 10px;
@@ -86,7 +23,7 @@
         font-size: 12px;
         z-index: 9999;
       }
-      /* Page break indicators - visible on screen, hidden in print */
+      /* Page break indicators - visible on screen */
       .page-break-indicator {
         position: absolute;
         left: 0;
@@ -246,30 +183,7 @@
         width: fit-content;
       }
 
-      /* Print-specific overrides for zoom wrapper */
-      @media print {
-        .scoresheet-app {
-          height: auto !important;
-          min-height: auto !important;
-          overflow: visible !important;
-          background: white !important;
-        }
 
-        .scoresheet-toolbar {
-          display: none !important;
-        }
-
-        .scoresheet-content {
-          transform: none !important;
-          width: auto !important;
-        }
-
-        /* Reset any parent containers for print */
-        .scoresheet-app > div {
-          overflow: visible !important;
-          padding: 0 !important;
-        }
-      }
     </style>
   <script type="importmap">
 {
@@ -282,7 +196,7 @@
 </script>
 <link rel="stylesheet" href="/index.css">
 </head>
-  <body class="text-gray-900 antialiased print:bg-white text-[10px] m-0 p-0">
+  <body class="text-gray-900 antialiased text-[10px] m-0 p-0">
     <div id="root"></div>
   <script type="module" src="./index.tsx"></script>
 </body>

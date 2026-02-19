@@ -20,8 +20,8 @@ const SPORT_TYPE = 'beach'
 // to prevent sending invalid columns that don't exist in the schema
 const VALID_MATCH_COLUMNS = [
   'external_id', 'game_n', 'game_pin', 'status', 'connections', 'connection_pins',
-  'scheduled_at', 'match_info', 'officials', 'team1_team', 'players_team1',
-  'team2_team', 'players_team2', 'coin_toss', 'results', 'signatures',
+  'scheduled_at', 'match_info', 'officials', 'players_team1',
+  'players_team2', 'team1_data', 'team2_data', 'coin_toss', 'results', 'signatures',
   'approval', 'test', 'created_at', 'updated_at', 'manual_changes', 'current_set',
   'set_results', 'final_score', 'sanctions', 'winner', 'sport_type'
 ]
@@ -416,12 +416,12 @@ export async function restoreMatchFromJson(jsonData) {
         game_pin: match.gamePin || match.game_pin,
         game_n: match.gameN || match.game_n,
         status: match.status || 'live',
-        team1_team: team1 ? {
+        team1_data: team1 ? {
           name: team1.name,
           short_name: team1.shortName || team1.short_name,
           color: team1.color
         } : null,
-        team2_team: team2 ? {
+        team2_data: team2 ? {
           name: team2.name,
           short_name: team2.shortName || team2.short_name,
           color: team2.color
@@ -571,16 +571,16 @@ export async function restoreMatchInPlace(matchId, jsonData) {
         game_pin: match.gamePin || match.game_pin,
         game_n: match.gameN || match.game_n,
         status: match.status || 'live',
-        team1_team: team1 ? {
+        team1_data: team1 ? {
           name: team1.name,
           short_name: team1.shortName || team1.short_name,
           color: team1.color
-        } : (match.team1_team || null),
-        team2_team: team2 ? {
+        } : (match.team1_data || match.team1_team || null),
+        team2_data: team2 ? {
           name: team2.name,
           short_name: team2.shortName || team2.short_name,
           color: team2.color
-        } : (match.team2_team || null),
+        } : (match.team2_data || match.team2_team || null),
         players_team1: team1Players || match.players_team1 || [],
         players_team2: team2Players || match.players_team2 || [],
         // Include match_info fields (stored as JSONB)
@@ -822,7 +822,7 @@ export async function fetchMatchByPin(gamePin, gameN) {
 
   return {
     match: matchData,
-    // JSONB data is already in matchData: team1_team, team2_team, players_team1, players_team2, officials
+    // JSONB data is already in matchData: team1_data, team2_data, players_team1, players_team2, officials
     sets: setsResult.data || [],
     events,
     liveState // Include live state for additional data
@@ -840,8 +840,8 @@ export async function importMatchFromSupabase(cloudData) {
 
   await db.transaction('rw', db.matches, db.teams, db.players, db.sets, db.events, async () => {
     // Extract team data from JSONB columns
-    const team1Data = match.team1_team || {}
-    const team2Data = match.team2_team || {}
+    const team1Data = match.team1_data || match.team1_team || {}
+    const team2Data = match.team2_data || match.team2_team || {}
     const playersTeam1 = match.players_team1 || []
     const playersTeam2 = match.players_team2 || []
 

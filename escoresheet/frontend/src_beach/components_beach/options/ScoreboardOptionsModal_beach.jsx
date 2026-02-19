@@ -695,6 +695,18 @@ export default function ScoreboardOptionsModal({
               onToggle={() => displayOptions?.setAutoDownloadAtSetEnd?.(!displayOptions?.autoDownloadAtSetEnd)}
             />
           </Row>
+          {displayOptions?.autoDownloadAtSetEnd && (
+            <Row style={{ marginBottom: '12px', paddingLeft: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--muted)' }}>{t('options.alwaysDownloadAtSetEnd')}</div>
+                <InfoDot title={t('options.alwaysDownloadAtSetEndInfo')} />
+              </div>
+              <ToggleSwitch
+                value={displayOptions?.alwaysDownloadAtSetEnd ?? false}
+                onToggle={() => displayOptions?.setAlwaysDownloadAtSetEnd?.(!displayOptions?.alwaysDownloadAtSetEnd)}
+              />
+            </Row>
+          )}
         </Section>
 
         <Section title={t('options.displayMode')}>

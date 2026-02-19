@@ -30,6 +30,6 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
-    "vite-env.d.ts"
+    "vite-env_beach.d.ts"
   ]
 }

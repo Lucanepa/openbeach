@@ -151,12 +151,12 @@ export default function App() {
     const saved = localStorage.getItem('manageCaptainOnCourt')
     return saved === 'true' // default false
   })
-  const [setIntervalDuration, setSetIntervalDuration] = useState(() => {
-    const saved = localStorage.getItem('setIntervalDuration')
-    return saved ? parseInt(saved, 10) : 60 // default 1 minute = 60 seconds
-  })
   const [keybindingsEnabled, setKeybindingsEnabled] = useState(() => {
     const saved = localStorage.getItem('keybindingsEnabled')
+    return saved === 'true' // default false
+  })
+  const [manageDob, setManageDob] = useState(() => {
+    const saved = localStorage.getItem('manageDob')
     return saved === 'true' // default false
   })
 
@@ -524,6 +524,10 @@ export default function App() {
       // Reuse main WebSocket connection status - no need to create test connection
       statuses.websocket = 'connected'
       debugInfo.websocket = { status: 'connected', message: 'WebSocket server is reachable (active connection)' }
+    } else if (!import.meta.env.VITE_BACKEND_URL) {
+      // No backend configured — skip WebSocket check entirely
+      statuses.websocket = 'not_configured'
+      debugInfo.websocket = { status: 'not_configured', message: 'No VITE_BACKEND_URL configured' }
     } else {
       try {
         // Check if we have a configured backend URL (Railway/cloud backend)
@@ -1080,6 +1084,11 @@ export default function App() {
     const connectWebSocket = async () => {
       // Don't reconnect if intentionally closed or matchId changed
       if (isIntentionallyClosedRef.current || currentMatchIdRef.current !== activeMatchId) {
+        return
+      }
+
+      // Skip WebSocket if no backend URL configured (avoids console spam in dev)
+      if (!import.meta.env.VITE_BACKEND_URL) {
         return
       }
 
@@ -3433,13 +3442,13 @@ export default function App() {
                   {(() => {
                     // Normalize data from different sources
                     const d = restorePreviewData.data
-                    const isDbFormat = d.match?.team1_team || d.liveState
+                    const isDbFormat = d.match?.team1_data || d.match?.team1_team || d.liveState
 
                     const team1Name = isDbFormat
-                      ? (d.match?.team1_team?.name || d.match?.team1Name || 'Team 1')
+                      ? (d.match?.team1_data?.name || d.match?.team1_team?.name || d.match?.team1Name || 'Team 1')
                       : (d.team1?.name || d.match?.team1Name || 'Team 1')
                     const team2Name = isDbFormat
-                      ? (d.match?.team2_team?.name || d.match?.team2Name || 'Team 2')
+                      ? (d.match?.team2_data?.name || d.match?.team2_team?.name || d.match?.team2Name || 'Team 2')
                       : (d.team2?.name || d.match?.team2Name || 'Team 2')
 
                     const events = d.events || []
@@ -3602,7 +3611,7 @@ export default function App() {
                             textAlign: 'center'
                           }}>
                             <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>Timeouts</div>
-                            <div style={{ fontSize: '20px', fontWeight: 700 }}>{team1Timeouts}/2</div>
+                            <div style={{ fontSize: '20px', fontWeight: 700 }}>{team1Timeouts}/1</div>
                           </div>
                           <div style={{
                             padding: '12px',
@@ -3611,7 +3620,7 @@ export default function App() {
                             textAlign: 'center'
                           }}>
                             <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>Timeouts</div>
-                            <div style={{ fontSize: '20px', fontWeight: 700 }}>{team2Timeouts}/2</div>
+                            <div style={{ fontSize: '20px', fontWeight: 700 }}>{team2Timeouts}/1</div>
                           </div>
                         </div>
 
@@ -3661,6 +3670,21 @@ export default function App() {
                           </div>
                         )}
 
+                        {/* Error display */}
+                        {restoreError && (
+                          <div style={{
+                            padding: '12px',
+                            marginBottom: '16px',
+                            background: 'rgba(239, 68, 68, 0.15)',
+                            border: '1px solid rgba(239, 68, 68, 0.4)',
+                            borderRadius: '8px',
+                            color: '#ef4444',
+                            fontSize: '13px'
+                          }}>
+                            {restoreError}
+                          </div>
+                        )}
+
                         {/* Actions */}
                         <div style={{
                           display: 'flex',
@@ -3672,6 +3696,7 @@ export default function App() {
                           <button
                             onClick={async () => {
                               setRestoreLoading(true)
+                              setRestoreError('')
                               try {
                                 const cloudData = restorePreviewData.data
                                 let newMatchId
@@ -3700,7 +3725,7 @@ export default function App() {
                                 const finishedSets = (cloudData.sets || []).filter(s => s.finished)
                                 const team1SetsWon = finishedSets.filter(s => (s.team1Points ?? s.team1_points ?? 0) > (s.team2Points ?? s.team2_points ?? 0)).length
                                 const team2SetsWon = finishedSets.filter(s => (s.team2Points ?? s.team2_points ?? 0) > (s.team1Points ?? s.team1_points ?? 0)).length
-                                const isMatchFinished = team1SetsWon >= 3 || team2SetsWon >= 3
+                                const isMatchFinished = team1SetsWon >= 2 || team2SetsWon >= 2
 
                                 // Priority: finished match → MatchEnd, live with activity → Scoreboard, else → Setup
                                 if (isMatchFinished) {
@@ -3715,6 +3740,7 @@ export default function App() {
                                   setShowMatchSetup(true)
                                 }
                               } catch (err) {
+                                console.error('[Restore] Failed to restore match:', err)
                                 setRestoreError(err.message || 'Failed to restore match')
                               } finally {
                                 setRestoreLoading(false)
@@ -3930,10 +3956,10 @@ export default function App() {
                 setAccidentalPointAwardDuration,
                 manageCaptainOnCourt,
                 setManageCaptainOnCourt,
-                setIntervalDuration,
-                setSetIntervalDuration,
                 keybindingsEnabled,
-                setKeybindingsEnabled
+                setKeybindingsEnabled,
+                manageDob,
+                setManageDob
               }}
               displayOptions={{
                 displayMode,
@@ -3948,7 +3974,7 @@ export default function App() {
                 toggleWakeLock
               }}
               backup={backup}
-              dashboardServer={{
+              dashboardServer={window.electronAPI ? {
                 enabled: dashboardServerEnabled,
                 onToggle: () => {
                   const newValue = !dashboardServerEnabled
@@ -3961,7 +3987,7 @@ export default function App() {
                 dashboardCount: dashboardServerData.dashboardCount,
                 refereeCount: dashboardServerData.refereeCount,
                 connectedDashboards: dashboardServerData.connectedDashboards
-              }}
+              } : null}
             />
 
             {/* Interactive Guide Modal */}

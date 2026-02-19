@@ -35,7 +35,7 @@ export default function LivescoreApp() {
   // Fetch all live games from match_live_state
   const fetchLiveGames = useCallback(async () => {
     if (!supabase) {
-      setError('Supabase not configured')
+      setError(t('errors.supabaseNotConfigured'))
       setLoading(false)
       return
     }
@@ -43,14 +43,16 @@ export default function LivescoreApp() {
     try {
       const { data, error: fetchError } = await supabase
         .from('match_live_state')
-        .select('*, matches!match_live_state_match_id_fkey_cascade(set_results)')
+        .select('*, matches!match_live_state_match_id_fkey_cascade(set_results, sport_type)')
         .order('updated_at', { ascending: false })
 
       if (fetchError) {
         console.error('[Livescore] Error fetching games:', fetchError)
         setError(fetchError.message)
       } else {
-        setLiveGames(data || [])
+        // Filter to beach matches only
+        const beachGames = (data || []).filter(g => g.matches?.sport_type === 'beach')
+        setLiveGames(beachGames)
         setError(null)
       }
     } catch (err) {
@@ -67,7 +69,7 @@ export default function LivescoreApp() {
 
     if (!supabase) return
 
-    // Subscribe to ALL match_live_state changes (no filter = all games)
+    // Subscribe to match_live_state changes (filter beach matches only)
     const channel = supabase
       .channel('livescore-all-games')
       .on(
@@ -80,10 +82,12 @@ export default function LivescoreApp() {
         (payload) => {
 
           if (payload.eventType === 'INSERT') {
-            setLiveGames(prev => [payload.new, ...prev])
+            // Re-fetch to get joined match data and filter by sport_type
+            fetchLiveGames()
           } else if (payload.eventType === 'UPDATE') {
+            // Only update games already in our list (already filtered to beach)
             setLiveGames(prev => prev.map(g =>
-              g.match_id === payload.new.match_id ? payload.new : g
+              g.match_id === payload.new.match_id ? { ...payload.new, matches: g.matches } : g
             ))
           } else if (payload.eventType === 'DELETE') {
             setLiveGames(prev => prev.filter(g => g.match_id !== payload.old.match_id))
@@ -161,7 +165,7 @@ export default function LivescoreApp() {
         minHeight: '100vh',
         background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
         color: '#fff',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        fontFamily: "'Inter', sans-serif",
         display: 'flex',
         flexDirection: 'column'
       }}>
@@ -386,7 +390,7 @@ export default function LivescoreApp() {
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
       color: '#fff',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+      fontFamily: "'Inter', sans-serif"
     }}>
       {/* Narrow screen blocking overlay */}
       {(viewportWidth < 357 || viewportHeight < 650) && (
@@ -461,7 +465,7 @@ export default function LivescoreApp() {
       {/* Header */}
       <DashboardHeader
         title={t('livescore.title', 'Live Scores')}
-        subtitle={`${liveGames.length} ${liveGames.length === 1 ? 'game' : 'games'} live`}
+        subtitle={t('livescore.gamesLive', { count: liveGames.length })}
         onLoadGames={fetchLiveGames}
         loadingMatches={loading}
         matchCount={liveGames.length}

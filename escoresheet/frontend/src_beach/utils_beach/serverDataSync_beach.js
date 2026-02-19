@@ -6,6 +6,8 @@
 import { supabase } from '../lib_beach/supabaseClient_beach'
 import { formatTimeLocal } from './timeUtils'
 
+const SPORT_TYPE = 'beach'
+
 /**
  * Generate a unique seed_key for a match
  * This is the stable identifier used for Supabase sync (stored as external_id)
@@ -150,6 +152,7 @@ export async function getMatchData(matchId) {
         .from('matches')
         .select('*')
         .eq('external_id', matchId)
+        .eq('sport_type', SPORT_TYPE)
         .maybeSingle()
 
       if (matchByExtId) {
@@ -162,6 +165,7 @@ export async function getMatchData(matchId) {
             .from('matches')
             .select('*')
             .eq('id', matchId)
+            .eq('sport_type', SPORT_TYPE)
             .maybeSingle()
 
           if (matchById) {
@@ -187,8 +191,8 @@ export async function getMatchData(matchId) {
         .maybeSingle()
 
       // Build team info from matches table (prefer JSONB, fallback to old columns for transition)
-      const team1Name = match.team1_team?.name || match.team1_team_name || 'Team 1'
-      const team2Name = match.team2_team?.name || match.team2_team_name || 'Team 2'
+      const team1Name = match.team1_data?.name || match.team1_team?.name || match.team1_team_name || 'Team 1'
+      const team2Name = match.team2_data?.name || match.team2_team?.name || match.team2_team_name || 'Team 2'
 
       // A/B Model: Team A = coin toss winner (constant), side_a = which side they're on
       // Determine coinTossTeamA: is Team A team1 or team2?
@@ -218,13 +222,13 @@ export async function getMatchData(matchId) {
 
       const team1 = {
         name: team1Name,
-        shortName: match.team1_team?.short_name || match.team1_short_name || 'T1',
-        color: team1ColorFromLive || match.team1_team?.color || '#ef4444'
+        shortName: match.team1_data?.short_name || match.team1_team?.short_name || match.team1_short_name || 'T1',
+        color: team1ColorFromLive || match.team1_data?.color || match.team1_team?.color || '#ef4444'
       }
       const team2 = {
         name: team2Name,
-        shortName: match.team2_team?.short_name || match.team2_short_name || 'T2',
-        color: team2ColorFromLive || match.team2_team?.color || '#3b82f6'
+        shortName: match.team2_data?.short_name || match.team2_team?.short_name || match.team2_short_name || 'T2',
+        color: team2ColorFromLive || match.team2_data?.color || match.team2_team?.color || '#3b82f6'
       }
 
       // Build sets from live state using A/B model
@@ -430,8 +434,8 @@ export async function getMatchData(matchId) {
           // coin_toss_confirmed = true if we have liveState with team names (means coin toss happened)
           coin_toss_confirmed: !!(liveState?.team_a_name),
           // Get short names from JSONB, or fallback to old columns
-          team1ShortName: match.team1_team?.short_name || match.team1_short_name || team1.shortName,
-          team2ShortName: match.team2_team?.short_name || match.team2_short_name || team2.shortName,
+          team1ShortName: match.team1_data?.short_name || match.team1_team?.short_name || match.team1_short_name || team1.shortName,
+          team2ShortName: match.team2_data?.short_name || match.team2_team?.short_name || match.team2_short_name || team2.shortName,
           team1Name: team1.name,
           team2Name: team2.name,
           team1Color: team1.color,
@@ -927,12 +931,13 @@ export async function listAvailableMatchesSupabase() {
         game_n,
         status,
         scheduled_at,
-        team1_team,
-        team2_team,
+        team1_data,
+        team2_data,
         connections,
         connection_pins
       `)
       .in('status', ['setup', 'live'])
+      .eq('sport_type', SPORT_TYPE)
       .order('scheduled_at', { ascending: true })
 
     if (error) {
@@ -967,8 +972,8 @@ export async function listAvailableMatchesSupabase() {
       }
 
       // Read from JSONB columns only (clean schema)
-      const team1Name = m.team1_team?.name || 'Team 1'
-      const team2Name = m.team2_team?.name || 'Team 2'
+      const team1Name = m.team1_data?.name || m.team1_team?.name || 'Team 1'
+      const team2Name = m.team2_data?.name || m.team2_team?.name || 'Team 2'
       const connections = m.connections || {}
       const connectionPins = m.connection_pins || {}
 
@@ -1014,12 +1019,13 @@ export async function validatePinSupabase(pin, type = 'referee') {
         game_n,
         status,
         scheduled_at,
-        team1_team,
-        team2_team,
+        team1_data,
+        team2_data,
         connections,
         connection_pins
       `)
       .in('status', ['setup', 'live'])
+      .eq('sport_type', SPORT_TYPE)
 
     if (error) {
       console.error('[validatePinSupabase] Error:', error)
@@ -1050,10 +1056,10 @@ export async function validatePinSupabase(pin, type = 'referee') {
       status: matchData.status,
       scheduledAt: matchData.scheduled_at,
       refereeConnectionEnabled: connections.referee_enabled,
-      team1: matchData.team1_team?.name || 'Team 1',
-      team2: matchData.team2_team?.name || 'Team 2',
-      team1Color: matchData.team1_team?.color,
-      team2Color: matchData.team2_team?.color
+      team1: matchData.team1_data?.name || matchData.team1_team?.name || 'Team 1',
+      team2: matchData.team2_data?.name || matchData.team2_team?.name || 'Team 2',
+      team1Color: matchData.team1_data?.color || matchData.team1_team?.color,
+      team2Color: matchData.team2_data?.color || matchData.team2_team?.color
     }
 
     return { success: true, match }

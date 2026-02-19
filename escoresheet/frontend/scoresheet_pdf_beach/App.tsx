@@ -1,20 +1,30 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import OpenbeachScoresheet from './components_beach/eScoresheet_beach';
 
-// Page dimensions - using actual scoresheet page dimensions
-const TOTAL_PAGES = 3;
+// Count actual pages in the DOM
+const countPages = (): number => {
+  let count = 0;
+  while (document.getElementById(`page-${count + 1}`)) count++;
+  return Math.max(count, 2); // At least 2 pages
+};
 
 export default function App({ matchData }: { matchData?: any }) {
   const [zoom, setZoom] = useState(1);
   const [isAutoFit, setIsAutoFit] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(3);
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isPdfGenerating, setIsPdfGenerating] = useState(false);
   const [pdfProgress, setPdfProgress] = useState('');
+
+  // Update total pages after render
+  useEffect(() => {
+    const timer = setTimeout(() => setTotalPages(countPages()), 200);
+    return () => clearTimeout(timer);
+  }, [matchData]);
 
   // Get page element by number
   const getPageElement = useCallback((pageNum: number) => {
@@ -100,7 +110,7 @@ export default function App({ matchData }: { matchData?: any }) {
       let closestPage = 1;
       let closestDistance = Infinity;
 
-      for (let i = 1; i <= TOTAL_PAGES; i++) {
+      for (let i = 1; i <= totalPages; i++) {
         const pageEl = getPageElement(i);
         if (!pageEl) continue;
 
@@ -130,16 +140,8 @@ export default function App({ matchData }: { matchData?: any }) {
     const urlParams = new URLSearchParams(window.location.search);
     const action = urlParams.get('action');
 
-    if (action === 'print') {
-      // Wait for content to render, then print
-      setTimeout(() => {
-        window.print();
-      }, 1500);
-    } else if (action === 'save' || action === 'getBlob') {
-      // Wait for content to render, then generate PDF
-      setTimeout(() => {
-        handleSavePDF(action === 'getBlob');
-      }, 1500);
+    if (action === 'save' || action === 'getBlob' || action === 'print') {
+      setTimeout(() => { handleSavePDF(action === 'getBlob'); }, 1500);
     }
   }, []);
 
@@ -160,90 +162,147 @@ export default function App({ matchData }: { matchData?: any }) {
   };
 
   const handlePrevPage = () => {
-    if (currentPage > 1) {
-      scrollToPage(currentPage - 1);
-    }
+    if (currentPage > 1) scrollToPage(currentPage - 1);
   };
 
   const handleNextPage = () => {
-    if (currentPage < TOTAL_PAGES) {
-      scrollToPage(currentPage + 1);
+    if (currentPage < totalPages) scrollToPage(currentPage + 1);
+  };
+
+  // Generate PDF filename
+  const generateFilename = () => {
+    const match = matchData?.match;
+    const team1Team = matchData?.team1Team || matchData?.team_1Team;
+    const team2Team = matchData?.team2Team || matchData?.team_2Team;
+
+    let dateStr = '';
+    let timeStr = '';
+    if (match?.scheduledAt) {
+      const d = new Date(match.scheduledAt);
+      dateStr = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+      timeStr = `${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
+    } else {
+      const now = new Date();
+      dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+      timeStr = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+    }
+
+    const site = (match?.site || match?.city || '').replace(/[^a-zA-Z0-9]/g, '');
+    const matchNo = match?.game_n || match?.matchNumber || match?.externalId || '';
+    const country1 = (team1Team?.country || match?.team1Country || '').toUpperCase();
+    const country2 = (team2Team?.country || match?.team2Country || '').toUpperCase();
+
+    const parts = [dateStr, timeStr, site, matchNo ? `Match${matchNo}` : '', country1, country2].filter(Boolean);
+    return `${parts.join('_')}.pdf`;
+  };
+
+  // Shared: prepare DOM for capture (reset zoom, make overflow visible, strip debug decorations)
+  const prepareForCapture = async () => {
+    const contentEl = contentRef.current;
+    const scrollEl = scrollRef.current;
+    if (!contentEl || !scrollEl) throw new Error('Content not found');
+
+    const savedZoom = zoom;
+    const savedScrollCss = scrollEl.style.cssText;
+    const savedContentCss = contentEl.style.cssText;
+
+    setZoom(1);
+    await new Promise(resolve => setTimeout(resolve, 200));
+
+    contentEl.style.transform = 'none';
+    contentEl.style.transition = 'none';
+    scrollEl.style.overflow = 'visible';
+    scrollEl.style.scrollSnapType = 'none';
+
+    await new Promise(resolve => setTimeout(resolve, 200));
+    await document.fonts.ready;
+
+    // Find all page elements
+    const pages: HTMLElement[] = [];
+    let pageNum = 1;
+    while (document.getElementById(`page-${pageNum}`)) {
+      pages.push(document.getElementById(`page-${pageNum}`)!);
+      pageNum++;
+    }
+    if (pages.length === 0) throw new Error('No pages found');
+
+    // Strip debug decorations from all pages
+    const savedPageStyles: string[] = [];
+    for (const page of pages) {
+      savedPageStyles.push(page.style.cssText);
+      page.style.overflow = 'visible';
+      page.style.border = 'none';
+      page.style.boxShadow = 'none';
+      page.style.margin = '0';
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    return { contentEl, scrollEl, savedZoom, savedScrollCss, savedContentCss, pages, savedPageStyles };
+  };
+
+  // Shared: restore DOM after capture
+  const restoreAfterCapture = (state: Awaited<ReturnType<typeof prepareForCapture>>) => {
+    for (let i = 0; i < state.pages.length; i++) {
+      state.pages[i].style.cssText = state.savedPageStyles[i];
+    }
+    state.contentEl.style.cssText = state.savedContentCss;
+    state.scrollEl.style.cssText = state.savedScrollCss;
+    setZoom(state.savedZoom);
+  };
+
+  // Shared: finish PDF (save or send blob to parent)
+  const finishPDF = (pdf: any, returnBlob: boolean) => {
+    const filename = generateFilename();
+    if (returnBlob) {
+      const pdfBlob = pdf.output('arraybuffer');
+      if (window.opener && !window.opener.closed) {
+        window.opener.postMessage({ type: 'pdfBlob', arrayBuffer: pdfBlob, filename }, '*');
+      }
+      setTimeout(() => window.close(), 500);
+    } else {
+      pdf.save(filename);
     }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
-
+  // Generate PDF using html2canvas (direct pixel-by-pixel canvas rendering — no SVG intermediary)
   const handleSavePDF = async (returnBlob = false) => {
     setIsPdfGenerating(true);
-    setPdfProgress('Preparing pages...');
+    setPdfProgress('Preparing...');
 
     try {
-      const page1 = document.getElementById('page-1');
-      const page2 = document.getElementById('page-2');
+      const html2canvas = (await import('html2canvas')).default;
+      const state = await prepareForCapture();
 
-      if (!page1 || !page2) {
-        throw new Error('Could not find scoresheet pages');
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+      for (let i = 0; i < state.pages.length; i++) {
+        if (i > 0) pdf.addPage();
+        setPdfProgress(`Page ${i + 1} of ${state.pages.length}...`);
+
+        const canvas = await html2canvas(state.pages[i], {
+          scale: 2,
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          logging: false,
+        });
+
+        // Debug: save first page as PNG to inspect what html2canvas captures
+        if (i === 0) {
+          const debugUrl = canvas.toDataURL('image/png');
+          const a = document.createElement('a');
+          a.href = debugUrl;
+          a.download = 'debug_page1_html2canvas.png';
+          a.click();
+        }
+
+        const imgData = canvas.toDataURL('image/jpeg', 0.92);
+        pdf.addImage(imgData, 'JPEG', 0, 0, 297, 210, undefined, 'FAST');
       }
 
-      const pdf = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const options = {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        onclone: (clonedDoc: Document) => {
-          // Fix flex centering for html2canvas
-          const elements = clonedDoc.querySelectorAll('[style*="display: flex"]');
-          elements.forEach((el: Element) => {
-            const htmlEl = el as HTMLElement;
-            if (htmlEl.style.alignItems === 'center') {
-              htmlEl.style.display = 'flex';
-            }
-          });
-        }
-      };
-
-      // Generate page 1
-      setPdfProgress('Rendering page 1...');
-      const canvas1 = await html2canvas(page1, options);
-      const imgData1 = canvas1.toDataURL('image/png');
-      pdf.addImage(imgData1, 'PNG', 5, 5, 287, 200);
-
-      // Generate page 2
-      setPdfProgress('Rendering page 2...');
-      pdf.addPage();
-      const canvas2 = await html2canvas(page2, options);
-      const imgData2 = canvas2.toDataURL('image/png');
-      pdf.addImage(imgData2, 'PNG', 5, 5, 287, 200);
-
+      restoreAfterCapture(state);
       setPdfProgress('Finalizing...');
-
-      // Generate filename
-      const matchNo = matchData?.match?.matchNumber || matchData?.match?.externalId || 'scoresheet';
-      const filename = `beach_scoresheet_${matchNo}.pdf`;
-
-      if (returnBlob) {
-        // Return blob to parent window
-        const pdfBlob = pdf.output('arraybuffer');
-        if (window.opener && !window.opener.closed) {
-          window.opener.postMessage({
-            type: 'pdfBlob',
-            arrayBuffer: pdfBlob,
-            filename: filename
-          }, '*');
-        }
-        setTimeout(() => window.close(), 500);
-      } else {
-        // Download the PDF
-        pdf.save(filename);
-      }
+      finishPDF(pdf, returnBlob);
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('Error generating PDF: ' + (error instanceof Error ? error.message : 'Unknown error'));
@@ -253,125 +312,62 @@ export default function App({ matchData }: { matchData?: any }) {
     }
   };
 
-  const handleDownload = () => {
-    handleSavePDF(false);
-  };
-
   const zoomPercentage = Math.round(zoom * 100);
 
   return (
     <div ref={containerRef} className="scoresheet-app h-screen flex flex-col bg-gray-200 overflow-hidden">
-      {/* Toolbar - hidden in print */}
-      <div className="scoresheet-toolbar flex items-center justify-between px-4 py-2 bg-gray-800 text-white print:hidden">
+      {/* Toolbar */}
+      <div className="scoresheet-toolbar flex items-center justify-between px-4 py-2 bg-gray-800 text-white">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium mr-2">Beach Volleyball eScoresheet</span>
         </div>
 
         <div className="flex items-center gap-1">
-          {/* Page Navigation */}
-          <button
-            onClick={handlePrevPage}
-            disabled={currentPage <= 1}
-            className="px-2 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Previous page"
-          >
+          <button onClick={handlePrevPage} disabled={currentPage <= 1}
+            className="px-2 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Previous page">
             ◀
           </button>
-
-          <span className="px-2 py-1.5 text-sm font-mono min-w-[60px] text-center">
-            {currentPage} / {TOTAL_PAGES}
-          </span>
-
-          <button
-            onClick={handleNextPage}
-            disabled={currentPage >= TOTAL_PAGES}
-            className="px-2 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Next page"
-          >
+          <span className="px-2 py-1.5 text-sm font-mono min-w-[60px] text-center">{currentPage} / {totalPages}</span>
+          <button onClick={handleNextPage} disabled={currentPage >= totalPages}
+            className="px-2 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Next page">
             ▶
           </button>
 
           <div className="w-px h-6 bg-gray-600 mx-2" />
 
-          {/* Fit to Page */}
-          <button
-            onClick={handleFitToPage}
-            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-              isAutoFit
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
-            }`}
-            title="Fit to page"
-          >
+          <button onClick={handleFitToPage}
+            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${isAutoFit ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-200'}`}
+            title="Fit to page">
             Fit
           </button>
-
-          {/* Zoom Out */}
-          <button
-            onClick={handleZoomOut}
-            className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors"
-            title="Zoom out"
-            disabled={zoom <= 0.3}
-          >
+          <button onClick={handleZoomOut} disabled={zoom <= 0.3}
+            className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors" title="Zoom out">
             −
           </button>
-
-          {/* Zoom Level */}
-          <span className="px-3 py-1.5 text-sm font-mono min-w-[60px] text-center">
-            {zoomPercentage}%
-          </span>
-
-          {/* Zoom In */}
-          <button
-            onClick={handleZoomIn}
-            className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors"
-            title="Zoom in"
-            disabled={zoom >= 2}
-          >
+          <span className="px-3 py-1.5 text-sm font-mono min-w-[60px] text-center">{zoomPercentage}%</span>
+          <button onClick={handleZoomIn} disabled={zoom >= 2}
+            className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors" title="Zoom in">
             +
           </button>
 
           <div className="w-px h-6 bg-gray-600 mx-2" />
 
-          {/* Print */}
-          <button
-            onClick={handlePrint}
-            className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors flex items-center gap-1"
-            title="Print"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-            </svg>
-            Print
-          </button>
-
-          {/* Download PDF */}
-          <button
-            onClick={handleDownload}
-            disabled={isPdfGenerating}
-            className="px-3 py-1.5 rounded bg-green-600 hover:bg-green-500 text-white text-sm font-medium transition-colors flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Download PDF"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
+          <button onClick={() => handleSavePDF(false)} disabled={isPdfGenerating}
+            className="px-3 py-1.5 rounded bg-green-600 hover:bg-green-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Download PDF">
             {isPdfGenerating ? pdfProgress : 'Download PDF'}
           </button>
         </div>
       </div>
 
-      {/* Scrollable content area with snap scrolling */}
+      {/* Scrollable content area */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-auto p-4 print:p-0 print:overflow-visible"
-        style={{
-          scrollSnapType: 'y mandatory',
-          scrollBehavior: 'smooth'
-        }}
+        className="flex-1 overflow-auto p-4"
+        style={{ scrollSnapType: 'y mandatory', scrollBehavior: 'smooth' }}
       >
         <div
           ref={contentRef}
-          className="scoresheet-content mx-auto print:transform-none"
+          className="scoresheet-content mx-auto"
           style={{
             transform: `scale(${zoom})`,
             transformOrigin: 'top center',
@@ -381,6 +377,25 @@ export default function App({ matchData }: { matchData?: any }) {
           <OpenbeachScoresheet matchData={matchData} />
         </div>
       </div>
+
+      {/* PDF Generating overlay */}
+      {isPdfGenerating && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.85)', zIndex: 99998,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          padding: '24px', textAlign: 'center'
+        }}>
+          <div style={{ fontSize: '48px', marginBottom: '24px', animation: 'spin 1s linear infinite' }}>⏳</div>
+          <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+          <h2 style={{ color: 'white', fontSize: '24px', fontWeight: 'bold', marginBottom: '16px' }}>
+            Generating PDF...
+          </h2>
+          <p style={{ color: '#d1d5db', fontSize: '16px', maxWidth: '400px' }}>
+            {pdfProgress || 'Please wait while the scoresheet is being converted to PDF.'}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

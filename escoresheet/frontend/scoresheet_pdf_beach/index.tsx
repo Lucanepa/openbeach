@@ -133,7 +133,7 @@ class ErrorBoundary extends React.Component<
           height: '100vh',
           flexDirection: 'column',
           gap: '20px',
-          fontFamily: 'system-ui, sans-serif',
+          fontFamily: "'Inter', sans-serif",
           padding: '20px'
         }}>
           <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ef4444' }}>
@@ -200,7 +200,7 @@ try {
       height: '100vh',
       flexDirection: 'column',
       gap: '20px',
-      fontFamily: 'system-ui, sans-serif'
+      fontFamily: "'Inter', sans-serif"
     }}>
       <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ef4444' }}>
         Rendering Error

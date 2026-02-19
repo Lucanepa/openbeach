@@ -54,7 +54,7 @@ export default function StartupConnectivityModal({
           clearInterval(interval)
           if (!hasAutoDismissed.current) {
             hasAutoDismissed.current = true
-            onDismiss?.()
+            setTimeout(() => onDismiss?.(), 0)
           }
           return 0
         }

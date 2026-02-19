@@ -18,6 +18,16 @@ import { sanitizeForFilename } from '../utils_beach/stringUtils_beach'
 import { formatTimeLocal } from '../utils_beach/timeUtils_beach'
 import CountryFlag from './CountryFlag_beach'
 
+// Helper to determine if a color is bright (for text contrast)
+function isBrightColor(color) {
+  if (!color) return false
+  const hex = color.replace('#', '')
+  const r = parseInt(hex.substring(0, 2), 16)
+  const g = parseInt(hex.substring(2, 4), 16)
+  const b = parseInt(hex.substring(4, 6), 16)
+  return (r * 299 + g * 587 + b * 114) / 1000 > 150
+}
+
 // Helper to format duration as hh:mm
 const formatDurationHHMM = (durationStr) => {
   if (!durationStr) return ''
@@ -507,15 +517,28 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
   const team2SetsWon = finishedSets.filter(s => s.team2Points > s.team1Points).length
 
   // Find captains
-  const team1Captain = team1Players.find(p => p.captain)
-  const team2Captain = team2Players.find(p => p.captain)
+  const team1Captain = team1Players.find(p => p.isCaptain || p.captain)
+  const team2Captain = team2Players.find(p => p.isCaptain || p.captain)
 
   // Determine team labels (A or B)
   const teamAKey = match.coinTossTeamA || 'team1'
   const team1Label = teamAKey === 'team1' ? 'A' : 'B'
 
   // Winner info
-  const winner = team1SetsWon > team2SetsWon ? (team1?.name || 'Team 1') : (team2?.name || 'Team 2')
+  const winnerTeamKey = team1SetsWon > team2SetsWon ? 'team1' : 'team2'
+  const winner = winnerTeamKey === 'team1' ? (team1?.name || 'Team 1') : (team2?.name || 'Team 2')
+  const winnerColor = winnerTeamKey === 'team1' ? (match?.team1Color || '#22c55e') : (match?.team2Color || '#22c55e')
+  const winnerCountry = winnerTeamKey === 'team1' ? match?.team1Country : match?.team2Country
+  const winnerSetsWon = winnerTeamKey === 'team1' ? team1SetsWon : team2SetsWon
+  const loserSetsWon = winnerTeamKey === 'team1' ? team2SetsWon : team1SetsWon
+
+  // Team A/B info for set scores table
+  const teamBKey = teamAKey === 'team1' ? 'team2' : 'team1'
+  const team2Label = team1Label === 'A' ? 'B' : 'A'
+  const teamAColor = teamAKey === 'team1' ? (match?.team1Color || '#888') : (match?.team2Color || '#888')
+  const teamBColor = teamBKey === 'team1' ? (match?.team1Color || '#888') : (match?.team2Color || '#888')
+  const teamACountryCode = teamAKey === 'team1' ? match?.team1Country : match?.team2Country
+  const teamBCountryCode = teamBKey === 'team1' ? match?.team1Country : match?.team2Country
 
   // Match time info - duration is matchEnd - matchStart
   const matchStartDate = match?.scheduledAt ? new Date(match.scheduledAt) : null
@@ -607,12 +630,12 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     if (role === 'captain-a') {
       const team = team1Label === 'A' ? team1 : team2
       const captain = team1Label === 'A' ? team1Captain : team2Captain
-      return `Captain A - ${team?.shortName || team?.name || 'Team A'}${captain ? ` (#${captain.number})` : ''}`
+      return `Captain A - ${captain?.name || team?.shortName || team?.name || 'Team A'}${captain ? ` (#${captain.number})` : ''}`
     }
     if (role === 'captain-b') {
       const team = team1Label === 'B' ? team1 : team2
       const captain = team1Label === 'B' ? team1Captain : team2Captain
-      return `Captain B - ${team?.shortName || team?.name || 'Team B'}${captain ? ` (#${captain.number})` : ''}`
+      return `Captain B - ${captain?.name || team?.shortName || team?.name || 'Team B'}${captain ? ` (#${captain.number})` : ''}`
     }
     if (role === 'asst-scorer') return 'Assistant Scorer'
     if (role === 'scorer') return 'Scorer'
@@ -712,7 +735,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     }
     sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
     const url = action === 'preview' ? '/scoresheet_beach.html' : `/scoresheet_beach.html?action=${action}`
-    window.open(url, '_blank', 'width=1600,height=1200')
+    window.open(url, 'scoresheet_beach', 'width=1600,height=1200')
   }
 
   // Handle downloading comprehensive interaction logs
@@ -769,8 +792,13 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       const team1WithCountry = team1 ? { ...team1, country: match?.team1Country || '' } : { name: '', country: match?.team1Country || '' }
       const team2WithCountry = team2 ? { ...team2, country: match?.team2Country || '' } : { name: '', country: match?.team2Country || '' }
 
-      // Normalize team keys for scoresheet (team1 -> team_1)
-      const normalizeTeamKey = (key) => key ? key.replace('team1', 'team_1').replace('team2', 'team_2') : key
+      // Keep team keys as team1/team2 (scoresheet uses team1/team2 format)
+      const normalizeTeamKey = (key) => {
+        if (!key) return key;
+        if (key === 'team_1') return 'team1';
+        if (key === 'team_2') return 'team2';
+        return key;
+      }
       const scoresheetData = {
         match: {
           ...match,
@@ -1120,33 +1148,77 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       <div className="card" style={{ marginBottom: '16px', padding: '20px' }}>
         <h3 style={{ margin: 0, textAlign: 'center' }}>Winner</h3>
         {/* Team Name with background */}
-        <div style={{ background: 'var(--accent)', color: '#000', padding: '12px 20px', borderRadius: '8px', textAlign: 'center', fontSize: '26px', fontWeight: 700, marginBottom: '20px' }}>
-          {winner}
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
+          <div style={{ background: winnerColor, color: isBrightColor(winnerColor) ? '#000' : '#fff', padding: '12px 24px', borderRadius: '8px', textAlign: 'center', fontSize: '26px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '10px' }}>
+            {winnerCountry && <CountryFlag countryCode={winnerCountry} size="lg" />}
+            <span>{winner}</span>
+            {winnerCountry && <span style={{ fontSize: '14px', fontWeight: 500, opacity: 0.8 }}>({winnerCountry})</span>}
+          </div>
         </div>
         {/* Score and Set Results */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '32px' }}>
-          {/* Main Score */}
+          {/* Main Score - winner always on left */}
           <div style={{ fontSize: '10vmin', fontWeight: 800, color: 'var(--accent)' }}>
-            {team1SetsWon}<span style={{ color: 'var(--muted)' }}>:</span>{team2SetsWon}
+            {winnerSetsWon}<span style={{ color: 'var(--muted)' }}>:</span>{loserSetsWon}
           </div>
-          {/* Set Scores - Vertical List */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '1.5vmin' }}>
-            {finishedSets.map((set, idx) => {
-              const romanNumerals = ['I', 'II', 'III', 'IV', 'V']
-              return (
-                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '15px', color: 'var(--muted)'}}>
-                  <span style={{ width: '24px', fontSize: '1.5vmin', color: 'var(--muted)', marginRight: '15px', textAlign: 'center' }}>{romanNumerals[idx]}</span>
-                  <span style={{ fontWeight: set.team1Points > set.team2Points ? 700 : 400, color: set.team1Points > set.team2Points ? 'var(--foreground)' : 'var(--muted)',  }}>
-                    {set.team1Points}
+          {/* Set Scores Table */}
+          <table style={{ borderCollapse: 'collapse', fontSize: '2vmin', textAlign: 'center' }}>
+            <thead>
+              <tr>
+                <th style={{ padding: '4px 6px' }} />
+                <th style={{ padding: '4px 6px' }} />
+                {finishedSets.map((_, idx) => (
+                  <th key={idx} style={{ padding: '4px 8px', color: 'var(--muted)', fontWeight: 600, fontSize: '1.8vmin' }}>
+                    {['I', 'II', 'III', 'IV', 'V'][idx]}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {/* Team A Row */}
+              <tr>
+                <td style={{ padding: '4px 4px' }}>
+                  {teamACountryCode && <CountryFlag countryCode={teamACountryCode} size="sm" />}
+                </td>
+                <td style={{ padding: '4px 6px' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '2.4vmin', height: '2.4vmin', borderRadius: '4px', background: teamAColor, color: isBrightColor(teamAColor) ? '#000' : '#fff', fontWeight: 700, fontSize: '1.6vmin', lineHeight: 1 }}>
+                    A
                   </span>
-                  <span>:</span>
-                  <span style={{ fontWeight: set.team2Points > set.team1Points ? 700 : 400, color: set.team2Points > set.team1Points ? 'var(--foreground)' : 'var(--muted)' }}>
-                    {set.team2Points}
+                </td>
+                {finishedSets.map((set, idx) => {
+                  const aPoints = teamAKey === 'team1' ? set.team1Points : set.team2Points
+                  const bPoints = teamAKey === 'team1' ? set.team2Points : set.team1Points
+                  const aWon = aPoints > bPoints
+                  return (
+                    <td key={idx} style={{ padding: '4px 8px', fontWeight: aWon ? 700 : 400, color: aWon ? 'var(--accent)' : 'var(--muted)' }}>
+                      {aPoints}
+                    </td>
+                  )
+                })}
+              </tr>
+              {/* Team B Row */}
+              <tr>
+                <td style={{ padding: '4px 4px' }}>
+                  {teamBCountryCode && <CountryFlag countryCode={teamBCountryCode} size="sm" />}
+                </td>
+                <td style={{ padding: '4px 6px' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '2.4vmin', height: '2.4vmin', borderRadius: '4px', background: teamBColor, color: isBrightColor(teamBColor) ? '#000' : '#fff', fontWeight: 700, fontSize: '1.6vmin', lineHeight: 1 }}>
+                    B
                   </span>
-                </div>
-              )
-            })}
-          </div>
+                </td>
+                {finishedSets.map((set, idx) => {
+                  const aPoints = teamAKey === 'team1' ? set.team1Points : set.team2Points
+                  const bPoints = teamAKey === 'team1' ? set.team2Points : set.team1Points
+                  const bWon = bPoints > aPoints
+                  return (
+                    <td key={idx} style={{ padding: '4px 8px', fontWeight: bWon ? 700 : 400, color: bWon ? 'var(--accent)' : 'var(--muted)' }}>
+                      {bPoints}
+                    </td>
+                  )
+                })}
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -1344,7 +1416,6 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
               vertical="top"
               items={[
                 { key: 'preview', label: '🔍 Preview', onClick: () => handleShowScoresheet('preview') },
-                { key: 'print', label: '🖨️ Print', onClick: () => handleShowScoresheet('print') },
                 { key: 'save', label: '💾 Save PDF', onClick: () => handleShowScoresheet('save') },
                 { key: 'logs', label: '📊 Download Logs', onClick: handleDownloadLogs }
               ]}

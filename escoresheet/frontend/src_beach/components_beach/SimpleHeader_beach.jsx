@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 
 /**
  * SimpleHeader - 3-column header for all dashboard apps
@@ -14,6 +15,7 @@ export default function SimpleHeader({
   isFullscreen = false,
   toggleOptions // Optional: segmented toggle [{ label: '1 REF', active: false, onClick }, { label: '2 REF', active: true, onClick }]
 }) {
+  const { t } = useTranslation()
   const [menuOpen, setMenuOpen] = useState(false)
   const [versionExpanded, setVersionExpanded] = useState(false)
   const currentVersion = version || __APP_VERSION__
@@ -128,7 +130,7 @@ export default function SimpleHeader({
                 minWidth: '44px',
                 transition: 'all 0.15s'
               }}
-              title="Menu"
+              title={t('header.menu')}
             >
               {menuOpen ? '✕' : '☰'}
             </button>
@@ -358,7 +360,7 @@ export default function SimpleHeader({
               gap: '6px',
               transition: 'all 0.15s'
             }}
-            title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+            title={isFullscreen ? t('header.exitFullscreen') : t('header.fullscreen')}
           >
             {isFullscreen ? '⛶' : '⛶'}
           </button>

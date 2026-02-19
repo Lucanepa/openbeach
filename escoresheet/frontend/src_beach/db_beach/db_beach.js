@@ -288,11 +288,8 @@ db.version(16).stores({
     match.team2Id = match.team2TeamId
     delete match.team1TeamId
     delete match.team2TeamId
-    // Rename signature fields
-    match.team1CaptainSignature = match.team1CaptainSignature
-    match.team2CaptainSignature = match.team2CaptainSignature
-    delete match.team1CaptainSignature
-    delete match.team2CaptainSignature
+    // Signature fields keep the same name (team1CaptainSignature/team2CaptainSignature)
+    // No rename needed - they were already correctly named
     // Rename PIN fields
     match.team1Pin = match.team1TeamPin
     match.team2Pin = match.team2TeamPin
@@ -303,24 +300,10 @@ db.version(16).stores({
     match.team2UploadPin = match.team2TeamUploadPin
     delete match.team1TeamUploadPin
     delete match.team2TeamUploadPin
-    // Rename pending roster fields
-    match.pendingteam1Roster = match.pendingteam1Roster
-    match.pendingTeam2Roster = match.pendingteam2Roster
-    delete match.pendingteam1Roster
-    delete match.pendingteam2Roster
-    // Rename post-game signature fields
-    match.team1PostGameCaptainSignature = match.team1PostGameCaptainSignature
-    match.team2PostGameCaptainSignature = match.team2PostGameCaptainSignature
-    delete match.team1PostGameCaptainSignature
-    delete match.team2PostGameCaptainSignature
+    // Pending roster fields keep the same name - no rename needed
+    // Post-game signature fields keep the same name - no rename needed
   })
-  // Migrate sets: team1Points → team1Points, team2Points → team2Points
-  tx.table('sets').toCollection().modify(set => {
-    set.team1Points = set.team1Points
-    set.team2Points = set.team2Points
-    delete set.team1Points
-    delete set.team2Points
-  })
+  // Sets: team1Points/team2Points keep the same name - no rename needed
 })
 
 // Version 17: Add per-target sync status for dual-target sync (Supabase + Synology)

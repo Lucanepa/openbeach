@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { getMatchData, updateMatchData } from '../utils_beach/serverDataSync_beach'
 import { useRealtimeConnection } from '../hooks_beach/useRealtimeConnection_beach'
 import { db } from '../db_beach/db_beach'
@@ -8,6 +9,7 @@ import { Results } from '../../scoresheet_pdf_beach/components_beach/FooterSecti
 import TestModeControls from './TestModeControls_beach'
 
 export default function MatchEntry({ matchId, team, onBack, embedded = false }) {
+  const { t } = useTranslation()
   const [now, setNow] = useState(new Date())
 
   useEffect(() => {
@@ -471,7 +473,7 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
           justifyContent: 'center',
           padding: '20px'
         }}>
-          <div>Loading...</div>
+          <div>{t('matchEntry.loading')}</div>
         </div>
       )
     }
@@ -485,7 +487,7 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
         justifyContent: 'center',
         padding: '20px'
       }}>
-        <div>Loading...</div>
+        <div>{t('matchEntry.loading')}</div>
       </div>
     )
   }
@@ -536,7 +538,7 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
         background: embedded ? 'transparent' : 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
         color: '#fff',
         padding: embedded ? '12px' : '20px',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        fontFamily: "'Inter', sans-serif",
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -619,7 +621,7 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
       background: embedded ? 'transparent' : 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
       color: '#fff',
       padding: embedded ? '8px' : '12px',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      fontFamily: "'Inter', sans-serif",
       display: 'flex',
       flexDirection: 'column',
       flex: embedded ? 1 : 'none',
@@ -669,21 +671,21 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
         }}>
           {/* TO Counter */}
           <div style={{
-            background: timeoutsUsed >= 2 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255,255,255,0.05)',
+            background: timeoutsUsed >= 1 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255,255,255,0.05)',
             borderRadius: '8px',
             padding: '6px 12px',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            border: timeoutsUsed >= 2 ? '2px solid #ef4444' : '1px solid rgba(255,255,255,0.1)',
+            border: timeoutsUsed >= 1 ? '2px solid #ef4444' : '1px solid rgba(255,255,255,0.1)',
             minWidth: '50px'
           }}>
             <div style={{ fontSize: '10px', color: 'var(--muted)', marginBottom: '2px' }}>TO</div>
             <div style={{
               fontSize: '28px',
               fontWeight: 800,
-              color: timeoutsUsed >= 2 ? '#ef4444' : '#fff'
+              color: timeoutsUsed >= 1 ? '#ef4444' : '#fff'
             }}>
               {timeoutsUsed}
             </div>

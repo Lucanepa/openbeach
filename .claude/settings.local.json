@@ -23,7 +23,23 @@
       "Bash(curl:*)",
       "Bash(pkill:*)",
       "Bash(grep:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(npm outdated:*)",
+      "Bash(npm audit:*)",
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(npm view:*)",
+      "Bash(npm update:*)",
+      "Bash(npm test:*)",
+      "Bash(npm ls:*)",
+      "Bash(npx:*)",
+      "Bash(tr:*)",
+      "Bash(./node_modules/.bin/tsc:*)",
+      "mcp__plugin_context7_context7__resolve-library-id",
+      "mcp__plugin_context7_context7__query-docs",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:blog.yoniakabecky.com)",
+      "WebFetch(domain:engineering.monday.com)",
+      "WebFetch(domain:semisignal.com)"
     ]
   },
   "outputStyle": "default"

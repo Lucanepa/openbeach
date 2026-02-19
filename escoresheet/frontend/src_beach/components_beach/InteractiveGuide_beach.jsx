@@ -620,7 +620,7 @@ function TimeoutAvailabilityDemo({ t }) {
     }
 
     const currentTimeouts = team === 'team1' ? team1Timeouts : team2Timeouts
-    if (currentTimeouts >= 2) {
+    if (currentTimeouts >= 1) {
       showMessage(t('interactiveGuide.timeoutDemo.maxReached'), 'error')
       return
     }
@@ -648,8 +648,8 @@ function TimeoutAvailabilityDemo({ t }) {
     setMessage('')
   }
 
-  const team1CanCall = !rallyActive && team1Timeouts < 2 && !activeCountdown
-  const team2CanCall = !rallyActive && team2Timeouts < 2 && !activeCountdown
+  const team1CanCall = !rallyActive && team1Timeouts < 1 && !activeCountdown
+  const team2CanCall = !rallyActive && team2Timeouts < 1 && !activeCountdown
 
   return (
     <div style={{
@@ -727,7 +727,7 @@ function TimeoutAvailabilityDemo({ t }) {
           </button>
           <div style={{ fontSize: 11, marginTop: 6 }}>
             <span style={{ opacity: 0.6 }}>TO: </span>
-            <span style={{ fontWeight: 600 }}>{team1Timeouts}/2</span>
+            <span style={{ fontWeight: 600 }}>{team1Timeouts}/1</span>
           </div>
           <div style={{ fontSize: 10, opacity: 0.5, marginTop: 2 }}>
             {team1CanCall ? '✓ ' + t('interactiveGuide.buttonDemo.enabled') : '❌ ' + t('interactiveGuide.buttonDemo.disabled')}
@@ -754,7 +754,7 @@ function TimeoutAvailabilityDemo({ t }) {
           </button>
           <div style={{ fontSize: 11, marginTop: 6 }}>
             <span style={{ opacity: 0.6 }}>TO: </span>
-            <span style={{ fontWeight: 600 }}>{team2Timeouts}/2</span>
+            <span style={{ fontWeight: 600 }}>{team2Timeouts}/1</span>
           </div>
           <div style={{ fontSize: 10, opacity: 0.5, marginTop: 2 }}>
             {team2CanCall ? '✓ ' + t('interactiveGuide.buttonDemo.enabled') : '❌ ' + t('interactiveGuide.buttonDemo.disabled')}
@@ -1107,7 +1107,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
             }}>
               18
             </div>
-            <div style={{ fontSize: 11, opacity: 0.5, marginTop: 4 }}>TO: 1/2 | SUB: 3/6</div>
+            <div style={{ fontSize: 11, opacity: 0.5, marginTop: 4 }}>TO: 1/1</div>
           </div>
 
           {/* Serve Indicator & Set Score */}
@@ -1135,7 +1135,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
             }}>
               15
             </div>
-            <div style={{ fontSize: 11, opacity: 0.5, marginTop: 4 }}>TO: 0/2 | SUB: 2/6</div>
+            <div style={{ fontSize: 11, opacity: 0.5, marginTop: 4 }}>TO: 0/1</div>
           </div>
         </div>
 
@@ -1263,7 +1263,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
             textAlign: 'center'
           }}>
             <div style={{ fontSize: 40, fontWeight: 700, color: '#eab308' }}>0:25</div>
-            <div style={{ fontSize: 12, opacity: 0.7 }}>VBC Zürich - Timeout 1/2</div>
+            <div style={{ fontSize: 12, opacity: 0.7 }}>VBC Zürich - Timeout 1/1</div>
             <button style={{
               marginTop: 12,
               padding: '8px 24px',

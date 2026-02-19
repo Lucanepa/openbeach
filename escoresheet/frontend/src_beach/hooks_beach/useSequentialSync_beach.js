@@ -2,6 +2,18 @@ import { useState, useCallback } from 'react'
 import { db } from '../db_beach/db_beach'
 import { supabase } from '../lib_beach/supabaseClient_beach'
 
+// Valid sets table columns - filters out invalid columns (e.g., 'test' from local DB)
+const VALID_SET_COLUMNS = [
+  'external_id', 'match_id', 'index', 'team1_points', 'team2_points',
+  'finished', 'start_time', 'end_time'
+]
+
+function filterSetPayload(payload) {
+  return Object.fromEntries(
+    Object.entries(payload).filter(([key]) => VALID_SET_COLUMNS.includes(key))
+  )
+}
+
 /**
  * useSequentialSync - Hook for sequential sync operations at set end
  *
@@ -92,7 +104,8 @@ export function useSequentialSync() {
     try {
       // ==================== SET UPDATE ====================
       if (job.resource === 'set' && job.action === 'update') {
-        const { external_id, ...updateData } = job.payload
+        const { external_id, ...rawUpdateData } = job.payload
+        const updateData = filterSetPayload(rawUpdateData)
 
         const { error } = await supabase
           .from('sets')
@@ -107,7 +120,7 @@ export function useSequentialSync() {
 
       // ==================== SET INSERT ====================
       if (job.resource === 'set' && job.action === 'insert') {
-        let setPayload = { ...job.payload }
+        let setPayload = filterSetPayload(job.payload)
 
         // Resolve match_id from external_id if needed
         if (setPayload.match_id && typeof setPayload.match_id === 'string') {

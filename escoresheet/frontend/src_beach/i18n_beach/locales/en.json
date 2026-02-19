@@ -61,8 +61,11 @@
     "allowPopups": "Please allow popups to view the scoresheet",
     "noMatchData": "No match data available",
     "failedToOpenScoresheet": "Failed to open scoresheet: {{error}}",
+    "captainSignatureTeam": "{{team}} Captain Signature",
+    "coachSignatureTeam": "{{team}} Coach Signature",
     "validation": {
-      "completeSignatures": "Please complete all signatures before confirming the coin toss."
+      "completeSignatures": "Please complete all signatures before confirming the coin toss.",
+      "completeCoachSignatures": "Please complete all coach signatures before confirming the coin toss."
     },
     "syncingMatch": "Syncing match data...",
     "verifyingStatus": "Verifying match status...",
@@ -120,7 +123,8 @@
   },
   "errors": {
     "databaseWriteError": "Database write error",
-    "syncFailed": "Sync failed"
+    "syncFailed": "Sync failed",
+    "supabaseNotConfigured": "Supabase not configured"
   },
   "signature": {
     "title": "Signature",
@@ -165,7 +169,16 @@
     "mainDraw": "Main Draw",
     "qualification": "Qualification",
     "poolPlay": "Pool Play",
+    "winnerBracket": "Winner Bracket",
+    "classificationRound": "Classification Round",
+    "semifinals": "Semifinals",
+    "finals": "Finals",
+    "coach": "Coach",
     "matchNumber": "Match Number",
+    "matchNumberPlaceholder": "e.g. M01",
+    "datePlaceholder": "dd.mm.yyyy",
+    "timePlaceholder": "HH:MM",
+    "courtPlaceholder": "e.g. 1, Center",
     "date": "Date",
     "time": "Time",
     "teams": "Teams",
@@ -207,6 +220,10 @@
     "rosterPreviewTitle": "Roster Preview",
     "dateTime": "Date & Time",
     "location": "Location",
+    "category": "Category",
+    "teams": "Teams",
+    "enterTeamName": "Enter team name",
+    "selectCountry": "Select Country",
     "enterCity": "Enter city",
     "matchType": "Match Type",
     "championship": "Championship",
@@ -299,7 +316,25 @@
       "invalidNumbers": "Invalid jersey numbers (must be 1-99): {{numbers}}",
       "playersWithoutNumbers": "{{count}} player(s) without jersey numbers",
       "fixIssues": "Please fix the following issues:\n\n• {{issues}}",
-      "completeBeforeCoinToss": "Please complete the following before proceeding to coin toss:\n\n• {{issues}}"
+      "completeBeforeCoinToss": "Please complete the following before proceeding to coin toss:\n\n• {{issues}}",
+      "team1NameRequired": "Team 1 team name is required",
+      "team2NameRequired": "Team 2 team name is required",
+      "team1CountryRequired": "Team 1 country is required",
+      "team2CountryRequired": "Team 2 country is required",
+      "invalidDatePrefix": "Invalid date: {{error}}",
+      "invalidTimePrefix": "Invalid time: {{error}}",
+      "invalidDateTime": "Invalid date/time: {{error}}",
+      "team1NeedsCaptain": "Team 1 must have at least one captain.",
+      "team2NeedsCaptain": "Team 2 must have at least one captain.",
+      "duplicatePlayerNumbers": "{{team}} has duplicate player numbers: #{{numbers}}\n\nPlease fix duplicate numbers before proceeding.",
+      "matchPinRequired": "Match PIN code is required. Please enter a PIN code to create the match.",
+      "setBothTeamNames": "Please set both team names before proceeding to coin toss.",
+      "setBothTeamCountries": "Please set both team countries before proceeding to coin toss.",
+      "noMatchDataAvailable": "No match data available.",
+      "matchNotFound": "Match not found.",
+      "allowPopups": "Please allow popups to view the scoresheet.",
+      "errorSavingData": "Error saving data. Please try again.",
+      "duplicateGameNumber": "Game #{{number}} already exists. Please use a different number."
     },
     "modals": {
       "syncing": "Syncing",
@@ -440,7 +475,6 @@
       "scoresheetAlreadyOpen": "Scoresheet Already Open",
       "remarksRecording": "Remarks Recording",
       "sanctionsAndResults": "Sanctions and Results",
-      "confirmSecondTimeout": "Confirm {{ordinal}} time-out request?",
       "forfait": "Forfait"
     },
     "sanctions": {
@@ -471,14 +505,19 @@
     "confirm": {
       "yesStartRally": "Yes, Start Rally",
       "yesAwardPoint": "Yes, Award Point",
-      "yesTimeout": "Yes, Timeout",
       "apply": "Apply",
       "rallyStartedQuickly": "Rally started very quickly",
       "areYouSureRallyStarted": "Are you sure the rally has actually started?",
       "pointAwardedQuickly": "Point awarded very quickly",
       "areYouSureAwardPoint": "Are you sure the point should be awarded to {{team}}?",
-      "timeoutAlreadyTaken": "This team has already used a timeout this set.",
-      "areYouSureAnotherTimeout": "Are you sure you want to call another timeout for {{team}}?"
+      "deletePointEvent": "Delete this point event?",
+      "deleteTimeoutEvent": "Delete this timeout event?",
+      "deleteSubstitutionEvent": "Delete this substitution event?",
+      "deleteSanctionEvent": "Delete this sanction event?",
+      "deleteEventGeneric": "Delete this {{type}} event?",
+      "invalidTimeFormat": "Please enter a valid time in 24-hour format (HH:MM)",
+      "deleteEventsQuick": "Delete Events (Quick)",
+      "deleteEventsQuickDesc": "Quick delete for any event. Use with caution."
     },
     "menu": {
       "scoresheet": "Scoresheet",
@@ -714,14 +753,13 @@
     "seconds": "seconds",
     "checkAccidentalPointAward": "Check Accidental Point Award",
     "checkAccidentalPointAwardInfo": "Ask for confirmation if a point is awarded within {{duration}}s of starting the rally",
-    "setIntervalDuration": "Set 2-3 Interval Duration",
-    "setIntervalDurationInfo": "Duration of break between sets 2 and 3",
-    "setIntervalDurationLabel": "set interval duration",
     "scoreFont": "Score/Countdown Font",
     "scoreFontInfo": "Choose font style for score display and countdown timers",
     "fontDefault": "Default",
     "keyboardShortcuts": "Keyboard Shortcuts",
     "keyboardShortcutsInfo": "Use keyboard keys to control scoring and actions (configure in Scoreboard)",
+    "manageDob": "Manage Date of Birth",
+    "manageDobInfo": "Show date of birth fields for players and officials",
     "displayMode": "Display Mode",
     "screenMode": "Screen Mode",
     "screenModeInfo": "Choose a display mode optimized for your screen size. Tablet and smartphone modes will enter fullscreen and rotate to landscape.",
@@ -850,6 +888,8 @@
     "showNamesOnCourtInfo": "Display player last names below the court position circles",
     "autoDownloadAtSetEnd": "Auto-download Data at Set End",
     "autoDownloadAtSetEndInfo": "Automatically download game data when a set ends for backup. In case of emergencies, the local data can be used to restore the game.",
+    "alwaysDownloadAtSetEnd": "Download even if sync succeeded",
+    "alwaysDownloadAtSetEndInfo": "Always download the backup file, even when cloud sync was successful. By default, backup is only downloaded when sync fails or you are offline.",
     "configureKeys": "Configure Keys",
     "cloudBackup": "Cloud Backup",
     "restoreFromCloud": "Restore from Cloud",
@@ -1053,7 +1093,10 @@
     "signaturesDescription": "Optional: Captain can sign the roster before submitting.",
     "signaturesAtCoinToss": "Captain signature will be collected at coin toss.",
     "captainSignature": "Captain Signature",
-    "tapToSign": "Tap to sign"
+    "tapToSign": "Tap to sign",
+    "benchSide": "Team Bench",
+    "benchLeft": "Left",
+    "benchRight": "Right"
   },
   "refereeDashboard": {
     "title": "Referee",
@@ -1166,6 +1209,8 @@
     "changeGame": "Change Game",
     "enterDifferentGame": "Enter Different Game Number",
     "gameNotFound": "Game not in progress or not existing",
+    "gamesLive": "{{count}} game live",
+    "gamesLive_other": "{{count}} games live",
     "errors": {
       "enterGameNumber": "Please enter a game number",
       "matchNotFound": "Match not found with this game number",
@@ -1173,6 +1218,15 @@
       "failedToLoadData": "Failed to load match data",
       "failedToLoadDataConnection": "Failed to load match data. Make sure the main scoresheet is running."
     }
+  },
+  "scoresheetApp": {
+    "loadingScoresheet": "Loading scoresheet...",
+    "scoresheetNotFound": "Scoresheet Not Found",
+    "backToList": "Back to List",
+    "loadingScoresheets": "Loading scoresheets...",
+    "errorLoadingScoresheets": "Error Loading Scoresheets",
+    "scoresheetArchive": "Scoresheet Archive",
+    "noScoresheetsYet": "No scoresheets uploaded yet"
   },
   "auth": {
     "signIn": "Sign In",
@@ -1464,7 +1518,7 @@
       "startRallyDesc": "Use for subsequent rallies",
       "lineupWarning": "Both teams must set their initial lineup before the first rally can start.",
       "timeouts": "Timeouts",
-      "timeoutsDesc": "Each team can call 2 timeouts per set, lasting 30 seconds each.",
+      "timeoutsDesc": "Each team can call 1 timeout per set, lasting 30 seconds.",
       "toStep1": "Click \"TO Left\" or \"TO Right\" button for the requesting team",
       "toStep2": "The 30-second countdown will start automatically",
       "toStep3": "Click \"Stop Timeout\" when ready to resume play",
@@ -1612,7 +1666,7 @@
       "instruction": "See when timeouts can/cannot be called.",
       "tryIt": "Try the Interactive Demo",
       "notDuringRally": "Cannot call timeout during a rally!",
-      "maxReached": "Maximum timeouts reached (2/2)!",
+      "maxReached": "Maximum timeouts reached (1/1)!",
       "alreadyActive": "A timeout is already in progress!",
       "timeoutCalled": "Timeout called!",
       "simulateRally": "Simulate Rally",

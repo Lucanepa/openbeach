@@ -95,7 +95,8 @@ DELETE LIBERO, SUBSTITUTION, COACH, EXCEPTIONAL SUBSTITUTION, BENCH OFFICIAL, BE
 - Break offline functionality
 - Add inline styles (use CSS classes)
 - Forget to handle loading/error states for async operations
-- keep libero, substitutions, coach, bench players and officials, drag etc function
+- keep libero, substitutions, any bench officials but coach, bench players and officials, drag etc function
+- Use html2canvas — it breaks Tailwind CSS rendering and component styles. NEVER use it for PDF/screenshot capture.
 
 ## Environment Variables
 

@@ -138,7 +138,7 @@ export default function BMPSheet({ matchData }) {
           minHeight: '210mm',
           padding: '6mm',
           boxSizing: 'border-box',
-          fontFamily: 'Arial, sans-serif',
+          fontFamily: "'Inter', sans-serif",
           overflow: 'hidden'
         }}
       >
