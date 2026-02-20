@@ -719,6 +719,7 @@
     "continueMatch": "Spiel fortsetzen",
     "deleteMatch": "Spiel löschen",
     "restoreMatch": "Spiel wiederherstellen",
+    "loadCompetitionMatch": "Wettbewerbsspiel laden",
     "gamePin": "Spiel-PIN",
     "options": "Optionen",
     "myMatches": "Meine Spiele",

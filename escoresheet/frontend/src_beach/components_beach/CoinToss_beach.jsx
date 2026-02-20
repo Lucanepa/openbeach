@@ -193,6 +193,11 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
   const [openSignature, setOpenSignature] = useState(null)
   const [birthdateConfirmModal, setBirthdateConfirmModal] = useState(null) // { suspiciousDates: [], onConfirm: fn }
   const [rosterModalSignature, setRosterModalSignature] = useState(null) // 'captain' | null - for signing within roster modal (beach volleyball: captain only)
+  const [forfaitModal, setForfaitModal] = useState(false) // show forfait team selection
+  const [forfaitConfirmModal, setForfaitConfirmModal] = useState(null) // 'team1' | 'team2' - confirm which team forfeits
+  const [forfaitTypeModal, setForfaitTypeModal] = useState(null) // 'team1' | 'team2' - select forfait reason
+  const [forfaitType, setForfaitType] = useState('no_show') // 'no_show' | 'injury'
+  const [forfaitPlayerNumber, setForfaitPlayerNumber] = useState('')
 
   // Track original roster data when modal opens for change detection
   const originalRosterDataRef = useRef(null) // { roster: [] }
@@ -391,7 +396,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         ])
 
         // Helper to generate beach volleyball team name from players: "LastName1/LastName2 (COUNTRY)"
-        const toTitleCase = (str) => str ? str.replace(/\b\w/g, c => c.toUpperCase()) : ''
+        const toTitleCase = (str) => str ? str.replace(/(^|[\s-])(\S)/g, (m, pre, c) => pre + c.toUpperCase()) : ''
         const generateBeachTeamName = (players, country) => {
           if (!players || players.length === 0) return null
           const sorted = [...players].sort((a, b) => (a.number || 999) - (b.number || 999))
@@ -528,6 +533,108 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
     setOpenSignature(null)
   }
 
+  // Handle forfait from coin toss (team doesn't show up or injury before match)
+  async function handleForfait(forfaitTeam) {
+    if (!matchId || !match) return
+
+    const winnerTeam = forfaitTeam === 'team1' ? 'team2' : 'team1'
+    const forfaitTeamName = forfaitTeam === 'team1' ? team1Name : team2Name
+
+    // Generate FIVB-format remark based on forfait type
+    let remarksText = ''
+    if (forfaitType === 'injury') {
+      const playerNum = forfaitPlayerNumber || '...'
+      remarksText = `Team ${forfaitTeamName} forfeits the match due to injury (injury as confirmed by the official medical personnel) of player # ${playerNum}. Appropriate official medical personnel came to the court. Both teams and players were present`
+    } else {
+      remarksText = `Team ${forfaitTeamName} forfeits the match due to no show`
+    }
+
+    try {
+      await db.transaction('rw', db.matches, db.sets, db.events, db.sync_queue, async () => {
+        // Create 2 sets awarded to the winner (21-0, 21-0)
+        for (let setIndex = 1; setIndex <= 2; setIndex++) {
+          const existingSet = await db.sets.where({ matchId }).and(s => s.index === setIndex).first()
+          const setData = {
+            matchId,
+            index: setIndex,
+            finished: true,
+            team1Points: winnerTeam === 'team1' ? 21 : 0,
+            team2Points: winnerTeam === 'team2' ? 21 : 0,
+            reason: 'forfait'
+          }
+          if (existingSet) {
+            await db.sets.update(existingSet.id, setData)
+          } else {
+            await db.sets.add(setData)
+          }
+        }
+
+        // Log forfait event
+        await db.events.add({
+          matchId,
+          setIndex: 1,
+          type: 'forfait',
+          payload: {
+            team: forfaitTeam,
+            reason: forfaitType,
+            scope: 'match',
+            playerNumber: forfaitType === 'injury' ? forfaitPlayerNumber : undefined
+          },
+          ts: new Date().toISOString(),
+          seq: 0
+        })
+
+        // Save coin toss data + forfait flags + remarks
+        const firstServeTeam = serveA ? teamA : teamB
+        await db.matches.update(matchId, {
+          // Coin toss data (so PDF results table renders correctly)
+          coinTossTeamA: teamA,
+          coinTossTeamB: teamB,
+          coinTossServeA: serveA,
+          coinTossServeB: serveB,
+          coinTossWinner: coinTossWinner,
+          coinTossConfirmed: true,
+          firstServe: firstServeTeam,
+          team1Color,
+          team2Color,
+          // Forfait flags
+          status: 'ended',
+          forfait: true,
+          forfaitTeam: forfaitTeam,
+          forfaitType: forfaitType,
+          // FIVB remarks
+          remarks: remarksText
+        })
+
+        // Sync to Supabase if match has seed_key
+        if (match.seed_key) {
+          await db.sync_queue.add({
+            resource: 'match',
+            action: 'update',
+            payload: {
+              id: match.seed_key,
+              status: 'ended',
+              forfait: true,
+              forfait_team: forfaitTeam
+            },
+            ts: new Date().toISOString(),
+            status: 'queued'
+          })
+        }
+      })
+
+      setForfaitConfirmModal(null)
+      setForfaitModal(false)
+      setForfaitType('no_show')
+      setForfaitPlayerNumber('')
+      // Navigate to match end
+      onConfirm(matchId)
+    } catch (error) {
+      console.error('[CoinToss] Forfait error:', error)
+      showAlert('Failed to process forfait', 'error')
+    }
+  }
+
   // Execute coin toss after all validations pass
   async function proceedWithCoinToss() {
 
@@ -555,7 +662,9 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         coinTossServeA: serveA,
         coinTossServeB: serveB,
         coinTossWinner: coinTossWinner,  // Which team won the coin toss
-        coinTossConfirmed: true  // Mark coin toss as confirmed
+        coinTossConfirmed: true,  // Mark coin toss as confirmed
+        team1Color,
+        team2Color
       }
 
       // Save signatures (use placeholders for test matches)
@@ -1251,7 +1360,24 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isCompact ? 16 : 24 }}>
         <button className="secondary" onClick={onBack}>← Back</button>
         <h1 style={{ margin: 0, fontSize: '50px', fontWeight: 700, textAlign: 'center' }}>Coin Toss</h1>
-        <div style={{ width: '80px' }}></div>
+        <button
+          onClick={() => setForfaitModal(true)}
+          style={{
+            background: 'transparent',
+            border: '1px solid var(--danger)',
+            color: 'var(--danger)',
+            borderRadius: '8px',
+            padding: '6px 12px',
+            fontSize: '13px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}
+        >
+          🛑 Forfait
+        </button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)', gap: sizes.gap, marginBottom: sizes.marginBottom, alignItems: 'start' }}>
@@ -2415,6 +2541,158 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                 }}
               >
                 Yes, continue
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Forfait Team Selection Modal */}
+      {forfaitModal && (
+        <Modal
+          title="Forfait"
+          open={true}
+          onClose={() => setForfaitModal(false)}
+          width={400}
+        >
+          <div style={{ padding: '16px', textAlign: 'center' }}>
+            <p style={{ marginBottom: '20px', fontSize: '14px', color: 'var(--muted)' }}>
+              Which team forfeits?
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <button
+                onClick={() => { setForfaitModal(false); setForfaitTypeModal('team1') }}
+                style={{
+                  padding: '14px 24px', fontSize: '16px', fontWeight: 600,
+                  background: team1Color, color: isBrightColor(team1Color) ? '#000' : '#fff',
+                  border: 'none', borderRadius: '8px', cursor: 'pointer'
+                }}
+              >
+                {team1Name}
+              </button>
+              <button
+                onClick={() => { setForfaitModal(false); setForfaitTypeModal('team2') }}
+                style={{
+                  padding: '14px 24px', fontSize: '16px', fontWeight: 600,
+                  background: team2Color, color: isBrightColor(team2Color) ? '#000' : '#fff',
+                  border: 'none', borderRadius: '8px', cursor: 'pointer'
+                }}
+              >
+                {team2Name}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Forfait Reason Selection Modal */}
+      {forfaitTypeModal && (
+        <Modal
+          title="Forfait Reason"
+          open={true}
+          onClose={() => { setForfaitTypeModal(null); setForfaitType('no_show'); setForfaitPlayerNumber('') }}
+          width={400}
+        >
+          <div style={{ padding: '16px', textAlign: 'center' }}>
+            <p style={{ marginBottom: '20px', fontSize: '14px', color: 'var(--muted)' }}>
+              Why is {forfaitTypeModal === 'team1' ? team1Name : team2Name} forfeiting?
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <button
+                onClick={() => {
+                  setForfaitType('no_show')
+                  setForfaitPlayerNumber('')
+                  setForfaitTypeModal(null)
+                  setForfaitConfirmModal(forfaitTypeModal)
+                }}
+                className="secondary"
+                style={{ padding: '14px 24px', fontSize: '16px', fontWeight: 600 }}
+              >
+                No Show
+              </button>
+              <button
+                onClick={() => {
+                  setForfaitType('injury')
+                  setForfaitTypeModal(null)
+                  setForfaitConfirmModal(forfaitTypeModal)
+                }}
+                className="secondary"
+                style={{ padding: '14px 24px', fontSize: '16px', fontWeight: 600 }}
+              >
+                Injury
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Forfait Confirmation Modal */}
+      {forfaitConfirmModal && (
+        <Modal
+          title="Confirm Forfait"
+          open={true}
+          onClose={() => { setForfaitConfirmModal(null); setForfaitType('no_show'); setForfaitPlayerNumber('') }}
+          width={450}
+        >
+          <div style={{ padding: '16px' }}>
+            <p style={{ marginBottom: '8px', fontSize: '16px', fontWeight: 600, color: 'var(--text)', textAlign: 'center' }}>
+              {forfaitConfirmModal === 'team1' ? team1Name : team2Name} forfeits.
+            </p>
+            <p style={{ marginBottom: '16px', fontSize: '14px', color: 'var(--muted)', textAlign: 'center' }}>
+              {forfaitConfirmModal === 'team1' ? team2Name : team1Name} wins 2-0 (21-0, 21-0).
+            </p>
+
+            {/* Player number input for injury forfait */}
+            {forfaitType === 'injury' && (
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '13px', color: 'var(--muted)', marginBottom: '6px' }}>
+                  Injured player number
+                </label>
+                <input
+                  type="text"
+                  value={forfaitPlayerNumber}
+                  onChange={e => setForfaitPlayerNumber(e.target.value)}
+                  placeholder="#"
+                  style={{
+                    width: '100%', padding: '10px 12px', fontSize: '14px',
+                    border: '1px solid var(--muted)', borderRadius: '6px',
+                    background: 'var(--panel)', color: 'var(--text)',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+            )}
+
+            {/* FIVB remark preview */}
+            <div style={{
+              padding: '10px 12px', marginBottom: '16px', fontSize: '12px',
+              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '6px', color: 'var(--muted)', lineHeight: 1.4
+            }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, marginBottom: '4px', color: 'var(--text)' }}>Remark:</div>
+              {forfaitType === 'injury'
+                ? `Team ${forfaitConfirmModal === 'team1' ? team1Name : team2Name} forfeits the match due to injury (injury as confirmed by the official medical personnel) of player # ${forfaitPlayerNumber || '...'}. Appropriate official medical personnel came to the court. Both teams and players were present`
+                : `Team ${forfaitConfirmModal === 'team1' ? team1Name : team2Name} forfeits the match due to no show`
+              }
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button
+                onClick={() => { setForfaitConfirmModal(null); setForfaitType('no_show'); setForfaitPlayerNumber('') }}
+                className="secondary"
+                style={{ padding: '12px 24px', fontSize: '14px' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleForfait(forfaitConfirmModal)}
+                style={{
+                  padding: '12px 24px', fontSize: '14px', fontWeight: 600,
+                  background: 'var(--danger)', color: '#fff',
+                  border: 'none', borderRadius: '8px', cursor: 'pointer'
+                }}
+              >
+                Confirm Forfait
               </button>
             </div>
           </div>

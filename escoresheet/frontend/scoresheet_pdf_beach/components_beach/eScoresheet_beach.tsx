@@ -249,8 +249,8 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
       // Handle both team1Players/team2Players and team_1Players/team_2Players formats
       const team1Players = currentMatchData.team1Players || currentMatchData.team_1Players || [];
       const team2Players = currentMatchData.team2Players || currentMatchData.team_2Players || [];
-      const team1Team = currentMatchData.team1Team || currentMatchData.team_1Team;
-      const team2Team = currentMatchData.team2Team || currentMatchData.team_2Team;
+      const team1Team = currentMatchData.team1Team || currentMatchData.team_1Team || currentMatchData.team1;
+      const team2Team = currentMatchData.team2Team || currentMatchData.team_2Team || currentMatchData.team2;
       const { match, sets, events } = currentMatchData;
 
       console.log('[Scoresheet Component] Received matchData:', {
@@ -3272,26 +3272,10 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
         mtoRitRemarks.push(remarkLine);
       });
 
-      // Process forfait events for remarks (only actual forfeits, not expulsion/disqualification
-      // which are already recorded in the sanctions table Exp./Disq. columns)
-      const forfaitRemarks: string[] = [];
-      const forfaitEvents = events.filter((e: any) =>
-        e.type === 'forfait' &&
-        e.payload?.reason !== 'expulsion' &&
-        e.payload?.reason !== 'disqualification'
-      );
-      const forfaitTeamAKey = match?.coinTossTeamA || 'team1';
+      // Forfait remarks are now stored directly in match.remarks (FIVB format)
+      // No auto-generation needed — CoinToss/Scoreboard saves the proper remark text
 
-      forfaitEvents.forEach((event: any) => {
-        const forfaitTeam = event.payload?.team;
-        const setIndex = event.setIndex || event.payload?.setIndex || 1;
-        const setNumber = setIndex === 1 ? '1st' : setIndex === 2 ? '2nd' : '3rd';
-        const teamLabel = forfaitTeam === forfaitTeamAKey ? 'A' : 'B';
-
-        forfaitRemarks.push(`* ${setNumber.charAt(0).toUpperCase() + setNumber.slice(1)} Set — Team ${teamLabel}: Forfeit`);
-      });
-
-      // Combine existing remarks with MTO/RIT and forfait remarks
+      // Combine existing remarks (including forfait) with MTO/RIT remarks
       let remarksText = '';
       if (match?.remarks) {
         remarksText = match.remarks;
@@ -3301,12 +3285,6 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
           remarksText += '\n\n';
         }
         remarksText += mtoRitRemarks.join('\n');
-      }
-      if (forfaitRemarks.length > 0) {
-        if (remarksText) {
-          remarksText += '\n\n';
-        }
-        remarksText += forfaitRemarks.join('\n');
       }
 
       if (remarksText) {
@@ -3934,24 +3912,8 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
     return () => clearInterval(interval);
   }, []);
 
-  // Manual refresh handler
-  const handleManualRefresh = () => {
-    if (window.opener && !window.opener.closed) {
-      window.opener.postMessage({ type: 'REQUEST_SCORESHEET_REFRESH' }, '*');
-    }
-  };
-
   return (
     <div className="mx-auto text-black">
-      {/* Floating refresh button - hidden when printing */}
-      <button
-        onClick={handleManualRefresh}
-        className="fixed top-2 right-2 z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full w-10 h-10 flex items-center justify-center shadow-lg print:hidden cursor-pointer"
-        title="Refresh scoresheet"
-        style={{ fontSize: '18px' }}
-      >
-        &#x21bb;
-      </button>
       {/* ================= PAGE 1 ================= */}
       <div
         ref={page1Ref}
@@ -4374,16 +4336,28 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
                 <tbody>
                   {/* Referees - reduced height to h-4 (16px) */}
                   {[
-                    { l: '1st Referee', k: 'ref1' },
-                    { l: '2nd Referee', k: 'ref2' },
-                    { l: 'Scorer', k: 'scorer' },
-                    { l: 'Asst. Scorer', k: 'asst_scorer' }
+                    { l: '1st Referee', k: 'ref1', sig: 'ref1Signature' },
+                    { l: '2nd Referee', k: 'ref2', sig: 'ref2Signature' },
+                    { l: 'Scorer', k: 'scorer', sig: 'scorerSignature' },
+                    { l: 'Asst. Scorer', k: 'asst_scorer', sig: 'asstScorerSignature' }
                   ].map(r => (
                     <tr key={r.k} className="h-4">
                       <td className="border-r border-b border-black px-1 font-bold text-left">{r.l}</td>
                       <td className="border-r border-b border-black p-0"><Input value={get(`${r.k}_name`)} onChange={v => set(`${r.k}_name`, v)} className="w-full h-full px-1" style={{ textAlign: 'left' }} /></td>
                       <td className="border-r border-b border-black p-0"><Input value={get(`${r.k}_country`)} onChange={v => set(`${r.k}_country`, v)} className="w-full h-full text-center" /></td>
-                      <td className="border-b border-black bg-gray-50"></td>
+                      <td className="border-b border-black bg-gray-50 p-0" style={{ overflow: 'hidden' }}>
+                        {currentMatchData?.match?.[r.sig] && (
+                          <div style={{ maxHeight: '14px', overflow: 'hidden' }}>
+                            <img
+                              src={currentMatchData.match[r.sig]}
+                              alt=""
+                              crossOrigin="anonymous"
+                              style={{ width: '100%', maxWidth: '120px', height: 'auto', maxHeight: '14px', objectFit: 'contain' }}
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            />
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {/* Line Judges - reduced height to h-4 (16px) */}
@@ -4596,7 +4570,8 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
       {/* ================= BMP SHEET PAGES (Page 3+) ================= */}
       {(() => {
         const totalBMPs = Number(get('bmp_total_count')) || 0;
-        const bmpPagesNeeded = Math.max(1, Math.ceil(totalBMPs / 16));
+        if (totalBMPs === 0) return null;
+        const bmpPagesNeeded = Math.ceil(totalBMPs / 16);
 
         return Array.from({ length: bmpPagesNeeded }).map((_, pageIndex) => {
           const startRow = pageIndex * 16;

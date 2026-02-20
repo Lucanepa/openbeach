@@ -719,6 +719,7 @@
     "continueMatch": "Continua partita",
     "deleteMatch": "Elimina partita",
     "restoreMatch": "Ripristina partita",
+    "loadCompetitionMatch": "Carica partita competizione",
     "gamePin": "PIN partita",
     "options": "Opzioni",
     "myMatches": "Le mie partite",

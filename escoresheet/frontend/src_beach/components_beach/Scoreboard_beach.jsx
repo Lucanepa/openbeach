@@ -2060,9 +2060,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   // Sync remarks text when modal opens
   useEffect(() => {
     if (showRemarks) {
-      const currentRemarks = data?.match?.remarks || ''
-      // If there are existing remarks, add a newline at the end for new input
-      setRemarksText(currentRemarks ? `${currentRemarks}\n` : '')
+      // If stop-match forfeit flow pre-populated the text, don't override it
+      if (!stopMatchRemarksStep) {
+        const currentRemarks = data?.match?.remarks || ''
+        // If there are existing remarks, add a newline at the end for new input
+        setRemarksText(currentRemarks ? `${currentRemarks}\n` : '')
+      }
       // Focus textarea after modal opens
       setTimeout(() => {
         if (remarksTextareaRef.current) {
@@ -2072,7 +2075,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         }
       }, 100)
     }
-  }, [showRemarks, data?.match?.remarks])
+  }, [showRemarks, data?.match?.remarks, stopMatchRemarksStep])
 
   // Server management - Only check in Electron
   useEffect(() => {
@@ -2783,7 +2786,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
   // Helper to build beach volleyball team display name from player last names
   const buildBeachTeamName = useCallback((players, teamName, country) => {
-    const toTitleCase = (str) => str ? str.replace(/\b\w/g, c => c.toUpperCase()) : ''
+    const toTitleCase = (str) => str ? str.replace(/(^|[\s-])(\S)/g, (m, pre, c) => pre + c.toUpperCase()) : ''
     // For beach volleyball, build name from player last names if available
     if (players && players.length >= 1) {
       const sortedPlayers = [...players].sort((a, b) => (a.number || 0) - (b.number || 0))
@@ -6385,8 +6388,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // Use existing handleForfait logic
     await handleForfait(teamKey, 'forfeit')
 
-    // Update match status to 'ended'
-    await db.matches.update(matchId, { status: 'ended' })
+    // Update match status to 'ended' with forfait flags
+    await db.matches.update(matchId, { status: 'ended', forfait: true, forfaitTeam: teamKey })
 
     // Trigger backup
     onTriggerEventBackup?.('match_end')
@@ -6647,11 +6650,27 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // Close the modal
     setMedicalModal(null)
 
-    // If forfeit, trigger forfeit flow
+    // If forfeit, generate FIVB remark and trigger forfeit flow
     if (outcome === 'forfeit') {
+      const now = new Date()
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
+      const setIdx = data?.set?.index || 1
+      const setLabel = setIdx === 1 ? '1st' : setIdx === 2 ? '2nd' : '3rd'
+      const t1Pts = data?.set?.team1Points || 0
+      const t2Pts = data?.set?.team2Points || 0
+      const teamAKey = data?.match?.coinTossTeamA || 'team1'
+      const servingLabel = data?.servingTeam === teamAKey ? 'A' : 'B'
+      const forfaitTeamName = team === 'team1'
+        ? (data?.team1Team?.name || 'team1')
+        : (data?.team2Team?.name || 'team2')
+      const fivbRemark = `At ${timeStr} time, ${setLabel} set, ${t1Pts}:${t2Pts} score, team ${servingLabel} serving, team ${forfaitTeamName} forfeits the match due to injury (injury as confirmed by the official medical personnel) of player # ${playerNumber}`
+      const existingRemarks = data?.match?.remarks || ''
+      const updatedRemarks = existingRemarks ? `${existingRemarks}\n${fivbRemark}` : fivbRemark
+      await db.matches.update(matchId, { remarks: updatedRemarks, forfait: true, forfaitTeam: team })
+
       await handleForfait(team, 'medical', 'match')
     }
-  }, [medicalModal, data?.set, data?.match?.coinTossTeamA, logEvent, handleForfait])
+  }, [medicalModal, data?.set, data?.match?.coinTossTeamA, data?.match?.remarks, data?.servingTeam, data?.team1Team?.name, data?.team2Team?.name, matchId, logEvent, handleForfait])
 
   // Cancel medical dropdown
   const cancelMedical = useCallback(() => {
@@ -6970,9 +6989,25 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         return
       }
     } else if (sanctionType === 'disqualification') {
+      // Generate FIVB remark for disqualification forfeit (Case b)
+      const now = new Date()
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
+      const setIdx = data?.set?.index || 1
+      const setLabel = setIdx === 1 ? '1st' : setIdx === 2 ? '2nd' : '3rd'
+      const t1Pts = data?.set?.team1Points || 0
+      const t2Pts = data?.set?.team2Points || 0
+      const teamAKey = data?.match?.coinTossTeamA || 'team1'
+      const servingLabel = data?.servingTeam === teamAKey ? 'A' : 'B'
+      const forfaitTeamName = team === 'team1'
+        ? (data?.team1Team?.name || 'team1')
+        : (data?.team2Team?.name || 'team2')
+      const fivbRemark = `At ${timeStr} time, ${setLabel} set, ${t1Pts}:${t2Pts} score, team ${servingLabel} serving, team ${forfaitTeamName} forfeits the match due to disqualification of player # ${playerNumber}`
+      const existingRemarks = data?.match?.remarks || ''
+      const updatedRemarks = existingRemarks ? `${existingRemarks}\n${fivbRemark}` : fivbRemark
+
       // Disqualification: forfeit entire match
       await handleForfait(team, 'disqualification', 'match')
-      await db.matches.update(matchId, { status: 'ended' })
+      await db.matches.update(matchId, { status: 'ended', forfait: true, forfaitTeam: team, remarks: updatedRemarks })
       onTriggerEventBackup?.('match_end')
       setExpulsionConfirmModal(null)
       if (onFinishSet) onFinishSet(data.set)
@@ -14470,6 +14505,23 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               </button>
               <button
                 onClick={() => {
+                  // Pre-populate FIVB remark template for during-match forfeit (Case b)
+                  if (stopMatchConfirm.type === 'forfeit' && stopMatchConfirm.team) {
+                    const now = new Date()
+                    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
+                    const setIdx = data?.set?.index || 1
+                    const setLabel = setIdx === 1 ? '1st' : setIdx === 2 ? '2nd' : '3rd'
+                    const t1Pts = data?.set?.team1Points || 0
+                    const t2Pts = data?.set?.team2Points || 0
+                    const teamAKey = data?.match?.coinTossTeamA || 'team1'
+                    const servingLabel = data?.servingTeam === teamAKey ? 'A' : 'B'
+                    const forfaitTeamName = stopMatchConfirm.team === 'team1'
+                      ? (data?.team1Team?.name || 'team1')
+                      : (data?.team2Team?.name || 'team2')
+                    const template = `At ${timeStr} time, ${setLabel} set, ${t1Pts}:${t2Pts} score, team ${servingLabel} serving, team ${forfaitTeamName} forfeits the match due to ... of player # ....`
+                    const existing = data?.match?.remarks || ''
+                    setRemarksText(existing ? `${existing}\n${template}` : template)
+                  }
                   // Move to remarks step
                   setStopMatchRemarksStep({
                     type: stopMatchConfirm.type,

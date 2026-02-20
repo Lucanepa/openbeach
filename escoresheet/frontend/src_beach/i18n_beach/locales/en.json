@@ -723,6 +723,7 @@
     "continueMatch": "Continue Match",
     "deleteMatch": "Delete Match",
     "restoreMatch": "Restore Match",
+    "loadCompetitionMatch": "Load Competition Match",
     "gamePin": "Game PIN",
     "options": "Options",
     "myMatches": "My Matches",

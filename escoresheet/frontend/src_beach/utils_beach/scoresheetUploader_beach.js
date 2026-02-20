@@ -37,13 +37,42 @@ export async function uploadScoresheet({
   }
 
   try {
+    // Normalize coinToss keys (team_1 -> team1) for scoresheet compatibility
+    const normalizeTeamKey = (key) => {
+      if (!key) return key
+      if (key === 'team_1') return 'team1'
+      if (key === 'team_2') return 'team2'
+      return key
+    }
+
+    // Build match object with normalized coinTossData for PDF rendering
+    const normalizedMatch = {
+      ...match,
+      team_1Country: match?.team1Country || '',
+      team_2Country: match?.team2Country || '',
+      coinTossTeamA: normalizeTeamKey(match?.coinTossTeamA),
+      coinTossTeamB: normalizeTeamKey(match?.coinTossTeamB),
+      coinTossData: {
+        coinTossWinner: normalizeTeamKey(match?.coinTossWinner),
+        teamA: normalizeTeamKey(match?.coinTossTeamA),
+        teamB: normalizeTeamKey(match?.coinTossTeamB)
+      }
+    }
+
     // Prepare scoresheet data as JSON
+    // Use keys that eScoresheet_beach.tsx expects: team1Team/team2Team, team1Players/team2Players
     const scoresheetData = {
-      match,
-      team1,
-      team2,
+      match: normalizedMatch,
+      team1: team1,
+      team2: team2,
+      team1Team: team1,
+      team2Team: team2,
+      team_1Team: team1,
+      team_2Team: team2,
       team1Players,
       team2Players,
+      team_1Players: team1Players,
+      team_2Players: team2Players,
       sets,
       events,
       uploadedAt: new Date().toISOString()

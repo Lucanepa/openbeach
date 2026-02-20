@@ -321,6 +321,32 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
   const [remarksText, setRemarksText] = useState('')
   const remarksTextareaRef = useRef(null)
 
+  // Auto-populate FIVB remarks for forfait matches if remarks are empty
+  useEffect(() => {
+    if (!data?.match) return
+    const match = data.match
+    if (!match.forfait || match.remarks) return
+
+    const forfaitTeamName = match.forfaitTeam === 'team1'
+      ? (data.team1?.name || 'Team 1')
+      : (data.team2?.name || 'Team 2')
+
+    const forfaitEvent = data.events?.find(e => e.type === 'forfait')
+    const reason = forfaitEvent?.payload?.reason || match.forfaitType || 'no_show'
+
+    let defaultRemark = ''
+    if (reason === 'no_show') {
+      defaultRemark = `Team ${forfaitTeamName} forfeits the match due to no show`
+    } else if (reason === 'injury' || reason === 'medical') {
+      const playerNum = forfaitEvent?.payload?.playerNumber || '...'
+      defaultRemark = `Team ${forfaitTeamName} forfeits the match due to injury (injury as confirmed by the official medical personnel) of player # ${playerNum}. Appropriate official medical personnel came to the court. Both teams and players were present`
+    } else {
+      defaultRemark = `Team ${forfaitTeamName} forfeits the match`
+    }
+
+    db.matches.update(matchId, { remarks: defaultRemark })
+  }, [data?.match?.id, data?.match?.forfait, data?.match?.remarks, matchId])
+
   // Prevent accidental navigation team2 before approval
   // Skip warning during save process (isSaving) to avoid dialog during PDF generation
   useEffect(() => {
@@ -527,7 +553,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
   // Winner info
   const winnerTeamKey = team1SetsWon > team2SetsWon ? 'team1' : 'team2'
   const winner = winnerTeamKey === 'team1' ? (team1?.name || 'Team 1') : (team2?.name || 'Team 2')
-  const winnerColor = winnerTeamKey === 'team1' ? (match?.team1Color || '#22c55e') : (match?.team2Color || '#22c55e')
+  const winnerColor = winnerTeamKey === 'team1' ? (match?.team1Color || '#3b82f6') : (match?.team2Color || '#3b82f6')
   const winnerCountry = winnerTeamKey === 'team1' ? match?.team1Country : match?.team2Country
   const winnerSetsWon = winnerTeamKey === 'team1' ? team1SetsWon : team2SetsWon
   const loserSetsWon = winnerTeamKey === 'team1' ? team2SetsWon : team1SetsWon
@@ -578,8 +604,10 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     ))
 
   // Signature status checks - use POST-GAME captain signatures (not pre-match)
-  const captainASigned = team1Label === 'A' ? !!match.team1PostGameCaptainSignature : !!match.team2PostGameCaptainSignature
-  const captainBSigned = team1Label === 'B' ? !!match.team1PostGameCaptainSignature : !!match.team2PostGameCaptainSignature
+  // For forfait matches, skip captain signatures (forfeiting team captain may not be present)
+  const isForfait = !!match.forfait
+  const captainASigned = isForfait || (team1Label === 'A' ? !!match.team1PostGameCaptainSignature : !!match.team2PostGameCaptainSignature)
+  const captainBSigned = isForfait || (team1Label === 'B' ? !!match.team1PostGameCaptainSignature : !!match.team2PostGameCaptainSignature)
   const captainsDone = captainASigned && captainBSigned
 
   const asstScorerSigned = !hasAsstScorer || !!match.asstScorerSignature
@@ -891,10 +919,11 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
           }
 
           // Upload final JSON (with _final suffix for approved matches)
+          // Use country-enriched team objects so the archive PDF renders correctly
           const jsonResult = await uploadScoresheet({
             match,
-            team1,
-            team2,
+            team1: team1WithCountry,
+            team2: team2WithCountry,
             team1Players,
             team2Players,
             sets: allSets,
@@ -1153,7 +1182,6 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
           <div style={{ background: winnerColor, color: isBrightColor(winnerColor) ? '#000' : '#fff', padding: '12px 24px', borderRadius: '8px', textAlign: 'center', fontSize: '26px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '10px' }}>
             {winnerCountry && <CountryFlag countryCode={winnerCountry} size="lg" />}
             <span>{winner}</span>
-            {winnerCountry && <span style={{ fontSize: '14px', fontWeight: 500, opacity: 0.8 }}>({winnerCountry})</span>}
           </div>
         </div>
         {/* Score and Set Results */}

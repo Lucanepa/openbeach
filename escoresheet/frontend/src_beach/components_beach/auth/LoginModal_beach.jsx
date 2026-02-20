@@ -255,6 +255,19 @@ export default function LoginModal({ open, onClose, onSwitchToSignUp }) {
                   Sign Up
                 </button>
               </div>
+
+              <div style={{ marginTop: 12, textAlign: 'center' }}>
+                <a
+                  href="/admin_beach.html"
+                  style={{
+                    color: '#7c3aed',
+                    fontSize: 13,
+                    textDecoration: 'underline'
+                  }}
+                >
+                  Competition Admin
+                </a>
+              </div>
             </>
           )}
         </div>

@@ -13,7 +13,7 @@ export default function App({ matchData }: { matchData?: any }) {
   const [zoom, setZoom] = useState(1);
   const [isAutoFit, setIsAutoFit] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(3);
+  const [totalPages, setTotalPages] = useState(2);
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -178,8 +178,8 @@ export default function App({ matchData }: { matchData?: any }) {
   // Generate PDF filename
   const generateFilename = () => {
     const match = matchData?.match;
-    const team1Team = matchData?.team1Team || matchData?.team_1Team;
-    const team2Team = matchData?.team2Team || matchData?.team_2Team;
+    const team1Team = matchData?.team1Team || matchData?.team_1Team || matchData?.team1;
+    const team2Team = matchData?.team2Team || matchData?.team_2Team || matchData?.team2;
 
     let dateStr = '';
     let timeStr = '';

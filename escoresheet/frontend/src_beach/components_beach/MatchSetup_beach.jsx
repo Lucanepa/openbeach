@@ -371,7 +371,7 @@ const LineJudgesCard = memo(function LineJudgesCard({
 // Helper to capitalize first letter of each word (e.g. "del solar" -> "Del Solar")
 function toTitleCase(str) {
   if (!str) return ''
-  return str.replace(/\b\w/g, c => c.toUpperCase())
+  return str.replace(/(^|[\s-])(\S)/g, (m, pre, c) => pre + c.toUpperCase())
 }
 
 // Helper to generate short name from team name (first 3-4 chars uppercase)

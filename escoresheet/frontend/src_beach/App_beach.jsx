@@ -43,6 +43,7 @@ import { checkMatchSession, lockMatchSession, unlockMatchSession, verifyGamePin 
 const SPORT_TYPE = 'beach'
 import { fetchMatchByPin, importMatchFromSupabase, restoreMatchFromJson, selectBackupFile, listCloudBackups, fetchCloudBackup } from './utils_beach/backupManager_beach'
 import UpdateBanner from './components_beach/UpdateBanner_beach'
+import CompetitionMatchPicker from './components_beach/CompetitionMatchPicker_beach'
 
 function parseDateTime(dateTime) {
   const [datePart, timePart] = dateTime.split(' ')
@@ -89,6 +90,7 @@ export default function App() {
   const [homeOptionsModal, setHomeOptionsModal] = useState(false)
   const [interactiveGuideOpen, setInteractiveGuideOpen] = useState(false)
   const [connectionSetupModal, setConnectionSetupModal] = useState(false)
+  const [showCompetitionPicker, setShowCompetitionPicker] = useState(false)
   const { syncStatus, retryErrors, isOnline } = useSyncQueue()
   const backup = useAutoBackup(matchId)
   const canUseSupabase = Boolean(supabase)
@@ -2214,6 +2216,130 @@ export default function App() {
     setShowCoinToss(false) // Ensure we go to match setup, not coin toss
   }
 
+  async function loadCompetitionMatch(compMatch) {
+    // Check if match is ongoing
+    if (matchStatus?.status === 'Match recording') return
+
+    // If there's a confirmed match, warn first
+    if (currentMatch && currentMatch.matchInfoConfirmedAt) {
+      setNewMatchModal({
+        type: 'competition',
+        message: 'There is an existing match. Do you want to delete it and load the competition match?',
+        competitionMatch: compMatch
+      })
+      setShowCompetitionPicker(false)
+      return
+    }
+
+    // If unconfirmed match exists, delete silently
+    if (currentMatch) {
+      await db.matches.delete(currentMatch.id)
+    }
+
+    await createMatchFromCompetition(compMatch)
+  }
+
+  async function createMatchFromCompetition(compMatch) {
+    // Clear draft
+    await db.match_setup.clear()
+
+    // Create teams in Dexie
+    const team1Id = await db.teams.add({
+      name: compMatch.team1_data?.name || '',
+      color: compMatch.team1_data?.color || '#ef4444',
+      createdAt: new Date().toISOString()
+    })
+    const team2Id = await db.teams.add({
+      name: compMatch.team2_data?.name || '',
+      color: compMatch.team2_data?.color || '#3b82f6',
+      createdAt: new Date().toISOString()
+    })
+
+    // Create players
+    const now = new Date().toISOString()
+    for (const p of (compMatch.players_team1 || [])) {
+      await db.players.add({
+        teamId: team1Id,
+        number: p.number || '',
+        firstName: p.first_name || '',
+        lastName: p.last_name || '',
+        dob: p.dob || '',
+        isCaptain: p.is_captain || false,
+        createdAt: now
+      })
+    }
+    for (const p of (compMatch.players_team2 || [])) {
+      await db.players.add({
+        teamId: team2Id,
+        number: p.number || '',
+        firstName: p.first_name || '',
+        lastName: p.last_name || '',
+        dob: p.dob || '',
+        isCaptain: p.is_captain || false,
+        createdAt: now
+      })
+    }
+
+    // Build officials array
+    const officials = (compMatch.officials || []).map(o => ({
+      role: o.role || '',
+      firstName: o.firstName || o.first_name || '',
+      lastName: o.lastName || o.last_name || '',
+      country: o.country || '',
+      dob: o.dob || ''
+    }))
+
+    // Parse scheduled_at
+    const scheduledAt = compMatch.scheduled_at || null
+
+    // Create new match with all competition data pre-filled
+    const newMatchId = await db.matches.add({
+      team1Id,
+      team2Id,
+      status: 'scheduled',
+      scheduledAt,
+      site: compMatch.match_info?.site || '',
+      beach: compMatch.match_info?.beach || '',
+      court: compMatch.match_info?.court || '',
+      gender: compMatch.match_info?.gender || '',
+      phase: compMatch.match_info?.phase || '',
+      round: compMatch.match_info?.round || '',
+      hasCoach: compMatch.match_info?.has_coach || false,
+      team1Name: compMatch.team1_data?.name || '',
+      team2Name: compMatch.team2_data?.name || '',
+      team1ShortName: compMatch.team1_data?.short_name || '',
+      team2ShortName: compMatch.team2_data?.short_name || '',
+      team1Color: compMatch.team1_data?.color || '#ef4444',
+      team2Color: compMatch.team2_data?.color || '#3b82f6',
+      team1Country: compMatch.team1_data?.country || '',
+      team2Country: compMatch.team2_data?.country || '',
+      game_n: compMatch.game_n || null,
+      league: compMatch.competition_name || '',
+      officials,
+      refereePin: generateRefereePin(),
+      coinTossConfirmed: false,
+      createdAt: now
+    })
+
+    // Mark competition match as claimed (atomic check)
+    if (supabase && compMatch.id) {
+      try {
+        await supabase
+          .from('beach_competition_matches')
+          .update({ status: 'claimed', claimed_by: null, claimed_match_external_id: null })
+          .eq('id', compMatch.id)
+          .eq('status', 'template')
+      } catch (err) {
+        console.warn('[App] Failed to mark competition match as claimed:', err)
+      }
+    }
+
+    setMatchId(newMatchId)
+    setShowMatchSetup(true)
+    setShowCoinToss(false)
+    setShowCompetitionPicker(false)
+  }
+
   async function confirmNewMatch() {
     if (!newMatchModal) return
 
@@ -2271,6 +2397,8 @@ export default function App() {
       // Create test match (reuse the existing createNewTestMatch logic)
       await createTestMatchData()
       setShowCoinToss(false) // Ensure we go to match setup, not coin toss
+    } else if (newMatchModal.type === 'competition' && newMatchModal.competitionMatch) {
+      await createMatchFromCompetition(newMatchModal.competitionMatch)
     }
   }
 
@@ -3038,9 +3166,14 @@ export default function App() {
               {showCoinToss && matchId ? (
                 <CoinToss
                   matchId={matchId}
-                  onConfirm={() => {
+                  onConfirm={async () => {
                     setShowCoinToss(false)
-                    // Match status is set to 'live' by CoinToss component
+                    // Check if match was ended by forfait (skip to MatchEnd)
+                    const m = await db.matches.get(matchId)
+                    if (m?.status === 'ended') {
+                      setShowMatchEnd(true)
+                    }
+                    // Otherwise match status is set to 'live' by CoinToss component
                   }}
                   onBack={() => {
                     setShowCoinToss(false)
@@ -3107,6 +3240,8 @@ export default function App() {
                     restartTestMatch={restartTestMatch}
                     onOpenSettings={() => setHomeOptionsModal(true)}
                     onRestoreMatch={() => setRestoreMatchModal(true)}
+                    onLoadCompetitionMatch={() => setShowCompetitionPicker(true)}
+                    canUseSupabase={canUseSupabase}
                   />
                 </>
               ) : (
@@ -3856,6 +3991,13 @@ export default function App() {
                 </div>
               </Modal>
             )}
+
+            {/* Competition Match Picker */}
+            <CompetitionMatchPicker
+              open={showCompetitionPicker}
+              onClose={() => setShowCompetitionPicker(false)}
+              onSelect={loadCompetitionMatch}
+            />
 
             {/* Alert Modal */}
             {alertModal && (

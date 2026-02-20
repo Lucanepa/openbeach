@@ -103,6 +103,7 @@ export default defineConfig({
         main: './index.html',
         referee: './referee_beach.html',
         scoresheet: './scoresheet_beach.html',
+        admin: './admin_beach.html',
       },
       output: {
         // Avoid eval in production builds

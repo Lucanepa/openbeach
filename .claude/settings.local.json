@@ -44,7 +44,9 @@
       "WebFetch(domain:v3.tailwindcss.com)",
       "Bash(nslookup:*)",
       "Bash(dig:*)",
-      "Bash(host:*)"
+      "Bash(host:*)",
+      "WebFetch(domain:mcp.supabase.com)",
+      "WebFetch(domain:supabase.com)"
     ]
   },
   "outputStyle": "default"
