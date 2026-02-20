@@ -92,6 +92,9 @@ const fetchAllScoresheets = async () => {
           const text = await data.text()
           const json = JSON.parse(text)
 
+          // Filter out non-beach scoresheets
+          if (json.match?.sport_type && json.match.sport_type !== 'beach') return null
+
           return {
             ...item,
             team1: json.team1?.name || json.match?.team1Name || 'Team A',
@@ -105,7 +108,7 @@ const fetchAllScoresheets = async () => {
       })
     )
 
-    return enrichedScoresheets
+    return enrichedScoresheets.filter(Boolean)
   } catch (error) {
     console.error('[Scoresheet] Error fetching scoresheets:', error)
     return []
