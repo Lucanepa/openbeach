@@ -265,39 +265,63 @@ export default function App({ matchData }: { matchData?: any }) {
     }
   };
 
-  // Generate PDF using html2canvas (direct pixel-by-pixel canvas rendering — no SVG intermediary)
+  // Generate PDF: html-to-image toSvg (perfect SVG) → render inline in DOM →
+  // capture that inline SVG via canvas drawImage. Inline SVGs in the DOM get
+  // full browser rendering (unlike <img src="svg"> which restricts foreignObject).
   const handleSavePDF = async (returnBlob = false) => {
     setIsPdfGenerating(true);
     setPdfProgress('Preparing...');
 
     try {
-      const html2canvas = (await import('html2canvas')).default;
+      const htmlToImage = await import('html-to-image');
       const state = await prepareForCapture();
 
+      const preflightCSS = `*, ::before, ::after { border-style: solid !important; }`;
       const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
       for (let i = 0; i < state.pages.length; i++) {
         if (i > 0) pdf.addPage();
         setPdfProgress(`Page ${i + 1} of ${state.pages.length}...`);
 
-        const canvas = await html2canvas(state.pages[i], {
-          scale: 2,
-          backgroundColor: '#ffffff',
-          useCORS: true,
-          logging: false,
+        const page = state.pages[i];
+        const w = page.offsetWidth;
+        const h = page.offsetHeight;
+        const ratio = 2;
+
+        // Step 1: Get perfect SVG from html-to-image
+        const svgDataUrl = await htmlToImage.toSvg(page, {
+          width: w,
+          height: h,
+          style: { transform: 'none' },
+          fontEmbedCSS: preflightCSS,
         });
 
-        // Debug: save first page as PNG to inspect what html2canvas captures
-        if (i === 0) {
-          const debugUrl = canvas.toDataURL('image/png');
-          const a = document.createElement('a');
-          a.href = debugUrl;
-          a.download = 'debug_page1_html2canvas.png';
-          a.click();
-        }
+        // Step 2: Decode SVG markup from data URL
+        const svgMarkup = decodeURIComponent(svgDataUrl.split(',')[1]);
 
-        const imgData = canvas.toDataURL('image/jpeg', 0.92);
-        pdf.addImage(imgData, 'JPEG', 0, 0, 297, 210, undefined, 'FAST');
+        // Step 3: Insert SVG inline into the DOM (full rendering, not <img> restricted)
+        const container = document.createElement('div');
+        container.style.cssText = `position:fixed;left:-9999px;top:0;width:${w}px;height:${h}px;overflow:hidden;background:white;`;
+        container.innerHTML = svgMarkup;
+        document.body.appendChild(container);
+
+        // Wait for rendering
+        await new Promise(r => setTimeout(r, 100));
+
+        // Step 4: Capture the inline SVG using html-to-image toCanvas
+        // This time the SVG is rendered inline in the DOM (not via <img>),
+        // so the browser uses its full CSS engine including foreignObject.
+        const canvas = await htmlToImage.toCanvas(container, {
+          pixelRatio: ratio,
+          backgroundColor: '#ffffff',
+          width: w,
+          height: h,
+        });
+
+        document.body.removeChild(container);
+
+        const imgData = canvas.toDataURL('image/png');
+        pdf.addImage(imgData, 'PNG', 0, 0, 297, 210, undefined, 'FAST');
       }
 
       restoreAfterCapture(state);
@@ -354,7 +378,7 @@ export default function App({ matchData }: { matchData?: any }) {
 
           <button onClick={() => handleSavePDF(false)} disabled={isPdfGenerating}
             className="px-3 py-1.5 rounded bg-green-600 hover:bg-green-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Download PDF">
-            {isPdfGenerating ? pdfProgress : 'Download PDF'}
+            {isPdfGenerating ? `[v13-inlinesvg] ${pdfProgress}` : 'Download PDF'}
           </button>
         </div>
       </div>
