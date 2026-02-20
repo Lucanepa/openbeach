@@ -3785,14 +3785,14 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
     if (!inverted) {
       // TOP TEAM (Standard)
       return (
-        <div className="flex border-b border-black text-black">
+        <div className="flex border-b border-black text-black" style={{ borderBottom: '1px solid black' }}>
           {/* Time Out */}
-          <div className="flex flex-col border-r border-black">
-            <div className="border-b border-black">{TimeOutLabelBox}</div>
+          <div className="flex flex-col border-r border-black" style={{ borderRight: '1px solid black' }}>
+            <div className="border-b border-black" style={{ borderBottom: '1px solid black' }}>{TimeOutLabelBox}</div>
             {TimeOutInputBox}
           </div>
           {/* Delay */}
-          <div className="flex flex-col border-r border-black">
+          <div className="flex flex-col border-r border-black" style={{ borderRight: '1px solid black' }}>
             {DelayHeaderBox}
             {DelaySubHeaderBox(false)}
             {DelayInputBox}
@@ -3806,17 +3806,17 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
     } else {
       // BOTTOM TEAM (Inverted)
       return (
-        <div className="flex border-b border-black text-black">
+        <div className="flex border-b border-black text-black" style={{ borderBottom: '1px solid black' }}>
           {/* Time Out */}
-          <div className="flex flex-col border-r border-black">
+          <div className="flex flex-col border-r border-black" style={{ borderRight: '1px solid black' }}>
             {TimeOutInputBox}
-            <div className="border-t border-black">{TimeOutLabelBox}</div>
+            <div className="border-t border-black" style={{ borderTop: '1px solid black' }}>{TimeOutLabelBox}</div>
           </div>
           {/* Delay */}
-          <div className="flex flex-col border-r border-black">
+          <div className="flex flex-col border-r border-black" style={{ borderRight: '1px solid black' }}>
             {DelayInputBox}
             {DelaySubHeaderBox(true)}
-            <div className={`${H_HEADER_ROW} border-t border-black text-[5px] bg-gray-50 font-bold`} style={centerStyle}>Delay sanctions</div>
+            <div className={`${H_HEADER_ROW} border-t border-black text-[5px] bg-gray-50 font-bold`} style={{ ...centerStyle, borderTop: '1px solid black' }}>Delay sanctions</div>
           </div>
           {/* Points */}
           <div className="flex-1 flex flex-col">
@@ -3847,7 +3847,7 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
           {renderHeaderRow(setNum, prefix)}
 
           {/* TEAM UP (Top) Service Order - rows I and III (+ C for coach) */}
-          <div className="border-r border-black">
+          <div className="border-r border-black" style={{ borderRight: '1px solid black' }}>
             {renderPlayerRow(prefix, 'I', 'r1')}
             {renderPlayerRow(prefix, 'III', 'r3')}
             {currentMatchData?.match?.hasCoach && renderCoachRow(prefix, 'rc_up')}
@@ -3856,17 +3856,17 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
           <div className="h-0.5 w-full bg-white border-b border-white border-r"></div>
 
           {/* TEAM UP CONTROL (With Top Border) */}
-          <div className="border-t border-black border-r">
+          <div className="border-t border-black border-r border-black" style={{ borderTop: '1px solid black', borderRight: '1px solid black' }}>
             {renderTeamControlRow(prefix, teamUpSuffix, false, setNum)}
           </div>
 
           {/* GAP + SEPARATOR LINE */}
           <div className="h-0.5 w-full bg-white"></div>
-          <div className="h-[2px] w-full bg-black"></div>
+          <div className="h-[2px] w-full bg-black" style={{ height: '2px', backgroundColor: 'black', minHeight: '2px' }}></div>
           <div className="h-0.5 w-full bg-white"></div>
 
           {/* TEAM DOWN CONTROL (With Top Border) */}
-          <div className="border-t border-black border-r">
+          <div className="border-t border-black border-r border-black" style={{ borderTop: '1px solid black', borderRight: '1px solid black' }}>
             {renderTeamControlRow(prefix, teamDownSuffix, true, setNum)}
           </div>
 
@@ -3874,7 +3874,7 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
           <div className="h-0.5 w-full bg-white"></div>
 
           {/* TEAM DOWN (Bottom) Service Order (With Top Border) - rows II and IV (+ C for coach) */}
-          <div className="border-t border-black border-r">
+          <div className="border-t border-black border-r border-black" style={{ borderTop: '1px solid black', borderRight: '1px solid black' }}>
             {renderPlayerRow(prefix, 'II', 'r2')}
             {renderPlayerRow(prefix, 'IV', 'r4')}
             {currentMatchData?.match?.hasCoach && renderCoachRow(prefix, 'rc_down')}
@@ -4100,12 +4100,12 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData }: { m
         {/* Page Break Indicator - visible on screen only */}
         <div className="page-break-indicator"></div>
         {/* SET 3 */}
-        <div>
+        <div style={{ marginBottom: '-2px' }}>
           {renderSet(3)}
         </div>
 
         {/* FOOTER GRID */}
-        <div className="flex gap-1 mt-1 text-black flex-1">
+        <div className="flex gap-1 mt-0 text-black flex-1">
 
           {/* LEFT COLUMN: TEAMS, RESULTS, APPROVAL */}
           <div className="flex-1 flex flex-col gap-1 w-1/2">

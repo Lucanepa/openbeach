@@ -135,13 +135,19 @@ export default function App({ matchData }: { matchData?: any }) {
     return () => scrollContainer.removeEventListener('scroll', handleScroll);
   }, [zoom, currentPage, getPageElement]);
 
-  // Handle URL action parameters
+  // Handle URL action parameters - auto-trigger PDF save and close window
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const action = urlParams.get('action');
 
     if (action === 'save' || action === 'getBlob' || action === 'print') {
-      setTimeout(() => { handleSavePDF(action === 'getBlob'); }, 1500);
+      setTimeout(async () => {
+        await handleSavePDF(action === 'getBlob');
+        // Auto-close the window after saving (only for action-triggered saves)
+        if (action === 'save') {
+          setTimeout(() => window.close(), 1000);
+        }
+      }, 1500);
     }
   }, []);
 
@@ -212,6 +218,7 @@ export default function App({ matchData }: { matchData?: any }) {
     contentEl.style.transform = 'none';
     contentEl.style.transition = 'none';
     scrollEl.style.overflow = 'visible';
+    scrollEl.style.scrollbarGutter = 'stable';
     scrollEl.style.scrollSnapType = 'none';
 
     await new Promise(resolve => setTimeout(resolve, 200));
@@ -265,18 +272,25 @@ export default function App({ matchData }: { matchData?: any }) {
     }
   };
 
-  // Generate PDF: html-to-image toSvg (perfect SVG) → render inline in DOM →
-  // capture that inline SVG via canvas drawImage. Inline SVGs in the DOM get
-  // full browser rendering (unlike <img src="svg"> which restricts foreignObject).
+  // Generate PDF using rasterizeHTML for all pages
   const handleSavePDF = async (returnBlob = false) => {
     setIsPdfGenerating(true);
     setPdfProgress('Preparing...');
 
     try {
-      const htmlToImage = await import('html-to-image');
+      const rasterizeHTML = (await import('rasterizehtml')).default;
       const state = await prepareForCapture();
 
-      const preflightCSS = `*, ::before, ::after { border-style: solid !important; }`;
+      // Collect all stylesheets as inline CSS
+      let allCSS = '';
+      for (const sheet of document.styleSheets) {
+        try {
+          for (const rule of sheet.cssRules) {
+            allCSS += rule.cssText + '\n';
+          }
+        } catch (_e) { /* cross-origin sheets */ }
+      }
+
       const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
       for (let i = 0; i < state.pages.length; i++) {
@@ -284,49 +298,34 @@ export default function App({ matchData }: { matchData?: any }) {
         setPdfProgress(`Page ${i + 1} of ${state.pages.length}...`);
 
         const page = state.pages[i];
-        const w = page.offsetWidth;
-        const h = page.offsetHeight;
-        const ratio = 2;
+        const htmlContent = `<!DOCTYPE html>
+<html><head><style>${allCSS}</style></head>
+<body style="margin:0;padding:0;background:white">${page.outerHTML}</body></html>`;
 
-        // Step 1: Get perfect SVG from html-to-image
-        const svgDataUrl = await htmlToImage.toSvg(page, {
-          width: w,
-          height: h,
-          style: { transform: 'none' },
-          fontEmbedCSS: preflightCSS,
-        });
+        const width = page.offsetWidth;
+        const height = page.offsetHeight;
 
-        // Step 2: Decode SVG markup from data URL
-        const svgMarkup = decodeURIComponent(svgDataUrl.split(',')[1]);
+        const canvas = document.createElement('canvas');
+        canvas.width = width * 2;
+        canvas.height = height * 2;
+        const ctx = canvas.getContext('2d')!;
+        ctx.scale(2, 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
 
-        // Step 3: Insert SVG inline into the DOM (full rendering, not <img> restricted)
-        const container = document.createElement('div');
-        container.style.cssText = `position:fixed;left:-9999px;top:0;width:${w}px;height:${h}px;overflow:hidden;background:white;`;
-        container.innerHTML = svgMarkup;
-        document.body.appendChild(container);
+        await rasterizeHTML.drawHTML(htmlContent, canvas, { width, height });
 
-        // Wait for rendering
-        await new Promise(r => setTimeout(r, 100));
-
-        // Step 4: Capture the inline SVG using html-to-image toCanvas
-        // This time the SVG is rendered inline in the DOM (not via <img>),
-        // so the browser uses its full CSS engine including foreignObject.
-        const canvas = await htmlToImage.toCanvas(container, {
-          pixelRatio: ratio,
-          backgroundColor: '#ffffff',
-          width: w,
-          height: h,
-        });
-
-        document.body.removeChild(container);
-
-        const imgData = canvas.toDataURL('image/png');
-        pdf.addImage(imgData, 'PNG', 0, 0, 297, 210, undefined, 'FAST');
+        const imgData = canvas.toDataURL('image/jpeg', 0.85);
+        pdf.addImage(imgData, 'JPEG', 0, 0, 297, 210, undefined, 'FAST');
       }
 
       restoreAfterCapture(state);
       setPdfProgress('Finalizing...');
-      finishPDF(pdf, returnBlob);
+      if (returnBlob) {
+        finishPDF(pdf, true);
+      } else {
+        pdf.save(generateFilename());
+      }
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('Error generating PDF: ' + (error instanceof Error ? error.message : 'Unknown error'));
@@ -378,7 +377,7 @@ export default function App({ matchData }: { matchData?: any }) {
 
           <button onClick={() => handleSavePDF(false)} disabled={isPdfGenerating}
             className="px-3 py-1.5 rounded bg-green-600 hover:bg-green-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Download PDF">
-            {isPdfGenerating ? `[v13-inlinesvg] ${pdfProgress}` : 'Download PDF'}
+            {isPdfGenerating ? pdfProgress : 'Download PDF'}
           </button>
         </div>
       </div>
@@ -395,11 +394,14 @@ export default function App({ matchData }: { matchData?: any }) {
           style={{
             transform: `scale(${zoom})`,
             transformOrigin: 'top center',
-            transition: 'transform 0.2s ease-out'
+            transition: 'transform 0.2s ease-out',
+            pointerEvents: 'none',
+            userSelect: 'none',
           }}
         >
           <OpenbeachScoresheet matchData={matchData} />
         </div>
+
       </div>
 
       {/* PDF Generating overlay */}
@@ -413,10 +415,10 @@ export default function App({ matchData }: { matchData?: any }) {
           <div style={{ fontSize: '48px', marginBottom: '24px', animation: 'spin 1s linear infinite' }}>⏳</div>
           <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
           <h2 style={{ color: 'white', fontSize: '24px', fontWeight: 'bold', marginBottom: '16px' }}>
-            Generating PDF...
+            Generating...
           </h2>
           <p style={{ color: '#d1d5db', fontSize: '16px', maxWidth: '400px' }}>
-            {pdfProgress || 'Please wait while the scoresheet is being converted to PDF.'}
+            {pdfProgress || 'Please wait while the scoresheet is being converted.'}
           </p>
         </div>
       )}

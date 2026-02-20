@@ -80,7 +80,19 @@ export default defineConfig({
       'yael-ethnic-aliana.ngrok-free.dev',
       '.ngrok-free.dev',
       '.ngrok.io'
-    ]
+    ],
+    proxy: {
+      '/api/screenshot': {
+        target: 'http://localhost:3456',
+        changeOrigin: true,
+        rewrite: (path) => '/screenshot',
+      },
+      '/api/pdf': {
+        target: 'http://localhost:3456',
+        changeOrigin: true,
+        rewrite: (path) => '/pdf',
+      },
+    },
   },
   build: {
     // Use safer build options to avoid eval in production

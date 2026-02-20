@@ -734,7 +734,8 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       events
     }
     sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
-    const url = action === 'preview' ? '/scoresheet_beach.html' : `/scoresheet_beach.html?action=${action}`
+    const url = action === 'preview' ? '/scoresheet_beach.html'
+      : `/scoresheet_beach.html?action=${action}`
     window.open(url, 'scoresheet_beach', 'width=1600,height=1200')
   }
 
