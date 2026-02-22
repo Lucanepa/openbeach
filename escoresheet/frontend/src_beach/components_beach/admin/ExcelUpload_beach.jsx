@@ -1,8 +1,46 @@
 import { useState, useRef } from 'react'
+import * as XLSX from 'xlsx'
 import { supabase } from '../../lib_beach/supabaseClient_beach'
 import { parseExcel, mapExcelRowToCompMatch, validateCompMatch } from '../../utils_beach/excelParser_beach'
 
 const BATCH_SIZE = 50
+
+const TEMPLATE_HEADERS = [
+  'Competition', 'Game #', 'Date', 'Time', 'Site', 'Beach', 'Court',
+  'Gender', 'Phase', 'Round', 'Has Coach',
+  'Team 1 Name', 'Team 1 Country',
+  'T1 Player 1 #', 'T1 Player 1 Last', 'T1 Player 1 First',
+  'T1 Player 2 #', 'T1 Player 2 Last', 'T1 Player 2 First',
+  'Team 2 Name', 'Team 2 Country',
+  'T2 Player 1 #', 'T2 Player 1 Last', 'T2 Player 1 First',
+  'T2 Player 2 #', 'T2 Player 2 Last', 'T2 Player 2 First',
+  '1st Referee Last', '1st Referee First',
+  '2nd Referee Last', '2nd Referee First',
+  'Scorer Last', 'Scorer First'
+]
+
+const TEMPLATE_EXAMPLE = [
+  'Swiss Beach Tour 2026', '1', '2026-06-15', '10:00', 'Bern', 'Bundesplatz Beach', '1',
+  'Men', 'Main Draw', 'Pool Play', '',
+  '', 'CHE',
+  '1', 'Heidrich', 'Adrian',
+  '2', 'Gerson', 'Mirco',
+  '', 'CHE',
+  '1', 'Krattiger', 'Florian',
+  '2', 'Breer', 'Marco',
+  'Mueller', 'Hans',
+  'Schmidt', 'Anna',
+  'Weber', 'Thomas'
+]
+
+function downloadTemplate() {
+  const wb = XLSX.utils.book_new()
+  const ws = XLSX.utils.aoa_to_sheet([TEMPLATE_HEADERS, TEMPLATE_EXAMPLE])
+  // Set column widths
+  ws['!cols'] = TEMPLATE_HEADERS.map(h => ({ wch: Math.max(h.length + 2, 14) }))
+  XLSX.utils.book_append_sheet(wb, ws, 'Competition Matches')
+  XLSX.writeFile(wb, 'competition_matches_template.xlsx')
+}
 
 export default function ExcelUpload({ userId, onComplete }) {
   const [file, setFile] = useState(null)
@@ -96,38 +134,42 @@ export default function ExcelUpload({ userId, onComplete }) {
       {step === 'select' && (
         <div style={{ background: '#111827', borderRadius: 12, border: '2px dashed #374151', padding: 40, textAlign: 'center' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>&#x1F4C4;</div>
-          <p style={{ color: '#9ca3af', marginBottom: 20 }}>Select an Excel file (.xlsx, .xls, or .csv) with competition match data</p>
-          <label style={{ display: 'inline-block', padding: '10px 24px', background: '#3b82f6', color: '#fff', borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
-            Choose File
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              onChange={handleFileSelect}
-              style={{ display: 'none' }}
-            />
-          </label>
+          <p style={{ color: '#9ca3af', marginBottom: 20 }}>Select a spreadsheet (.xlsx, .xls, .ods, .csv) with competition match data</p>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', alignItems: 'center' }}>
+            <label style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 180, height: 40, margin: 0, padding: 0, background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: 14, boxSizing: 'border-box', lineHeight: 1 }}>
+              Choose File
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".xlsx,.xls,.ods,.csv"
+                onChange={handleFileSelect}
+                style={{ display: 'none' }}
+              />
+            </label>
+            <button
+              onClick={downloadTemplate}
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 180, height: 40, margin: 0, padding: 0, background: '#374151', color: '#e5e7eb', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: 14, boxSizing: 'border-box', lineHeight: 1 }}
+            >
+              Download Template
+            </button>
+          </div>
           <div style={{ marginTop: 24, textAlign: 'left', maxWidth: 500, margin: '24px auto 0' }}>
             <p style={{ color: '#6b7280', fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Expected columns:</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 16px', fontSize: 11, color: '#4b5563' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 11, color: '#4b5563' }}>
               <span>Competition (required)</span>
-              <span>Team 1 Name</span>
               <span>Game #</span>
-              <span>Team 1 Country</span>
-              <span>Date (required)</span>
+              <span>Date, Time</span>
+              <span>Site, Beach, Court</span>
+              <span>Gender (required), Phase (required), Round (required)</span>
+              <span>Has Coach</span>
+              <span>Team 1 Name (auto-inferred from players), Country</span>
               <span>T1 Player 1 #, Last, First</span>
-              <span>Time</span>
               <span>T1 Player 2 #, Last, First</span>
-              <span>Site</span>
-              <span>Team 2 Name</span>
-              <span>Court</span>
-              <span>Team 2 Country</span>
-              <span>Gender (required)</span>
+              <span>Team 2 Name (auto-inferred from players), Country</span>
               <span>T2 Player 1 #, Last, First</span>
-              <span>Phase (required)</span>
               <span>T2 Player 2 #, Last, First</span>
-              <span>Round (required)</span>
               <span>1st/2nd Referee Last, First</span>
+              <span>Scorer Last, First</span>
             </div>
           </div>
         </div>

@@ -90,10 +90,12 @@ function Section({ label, badge, level, defaultOpen = true, children }) {
 }
 
 // Match card for admin
-function MatchCard({ item, onEdit, onDelete }) {
+function MatchCard({ item, onEdit, onDelete, selected, onToggleSelect, selectMode }) {
   const team1 = item.team1_data?.name || ''
   const team2 = item.team2_data?.name || ''
   const isClaimed = item.status === 'claimed'
+  const result = item._result // e.g. "2-1", "2-0"
+  const hasResult = !!result
 
   return (
     <div style={{
@@ -101,11 +103,20 @@ function MatchCard({ item, onEdit, onDelete }) {
       alignItems: 'center',
       justifyContent: 'space-between',
       padding: '10px 12px',
-      background: '#111827',
+      background: selected ? 'rgba(59, 130, 246, 0.1)' : '#111827',
       borderRadius: 8,
-      border: `1px solid ${isClaimed ? '#374151' : '#1f2937'}`,
-      opacity: isClaimed ? 0.6 : 1
+      border: `1px solid ${selected ? '#3b82f6' : hasResult ? 'rgba(34, 197, 94, 0.15)' : isClaimed ? '#374151' : '#1f2937'}`
     }}>
+      {selectMode && (
+        <div style={{ marginRight: 10, flexShrink: 0 }}>
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggleSelect(item.id)}
+            style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#3b82f6' }}
+          />
+        </div>
+      )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
           <span style={{
@@ -126,39 +137,47 @@ function MatchCard({ item, onEdit, onDelete }) {
               {new Date(item.scheduled_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
             </span>
           )}
-          {isClaimed && (
-            <span style={{ fontSize: 10, color: '#22c55e', background: 'rgba(34, 197, 94, 0.1)', padding: '1px 6px', borderRadius: 4 }}>
-              Claimed
+          {hasResult ? (
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#22c55e', background: 'rgba(34, 197, 94, 0.1)', padding: '1px 8px', borderRadius: 4 }}>
+              {result}
             </span>
-          )}
+          ) : isClaimed ? (
+            <span style={{ fontSize: 10, color: '#f59e0b', background: 'rgba(245, 158, 11, 0.1)', padding: '1px 6px', borderRadius: 4 }}>
+              In Progress
+            </span>
+          ) : null}
         </div>
         <div style={{ fontSize: 13, fontWeight: 500, color: '#e5e7eb', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {team1 || 'TBD'} vs {team2 || 'TBD'}
         </div>
       </div>
-      <div style={{ display: 'flex', gap: 6, flexShrink: 0, marginLeft: 12 }}>
-        <button
-          onClick={() => onEdit(item)}
-          style={{ padding: '5px 12px', fontSize: 12, fontWeight: 500, background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}
-        >
-          Edit
-        </button>
-        <button
-          onClick={() => onDelete(item)}
-          style={{ padding: '5px 12px', fontSize: 12, fontWeight: 500, background: '#374151', color: '#9ca3af', border: 'none', borderRadius: 6, cursor: 'pointer' }}
-        >
-          Delete
-        </button>
-      </div>
+      {!selectMode && (
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0, marginLeft: 12 }}>
+          <button
+            onClick={() => onEdit(item)}
+            style={{ padding: '5px 12px', fontSize: 12, fontWeight: 500, background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}
+          >
+            Edit
+          </button>
+          <button
+            onClick={() => onDelete(item)}
+            style={{ padding: '5px 12px', fontSize: 12, fontWeight: 500, background: '#374151', color: '#9ca3af', border: 'none', borderRadius: 6, cursor: 'pointer' }}
+          >
+            Delete
+          </button>
+        </div>
+      )}
     </div>
   )
 }
 
-export default function CompetitionList({ onEdit }) {
+export default function CompetitionList({ onEdit, onAdd }) {
   const [matches, setMatches] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [deleteConfirm, setDeleteConfirm] = useState(null)
+  const [deleteConfirm, setDeleteConfirm] = useState(null) // single match or 'bulk'
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(new Set())
 
   const fetchMatches = async () => {
     try {
@@ -173,7 +192,37 @@ export default function CompetitionList({ onEdit }) {
         .order('scheduled_at', { ascending: true })
 
       if (err) throw err
-      setMatches(data || [])
+      const compMatches = data || []
+
+      // Fetch results for claimed matches that have a linked scored match
+      const externalIds = compMatches
+        .filter(m => m.claimed_match_external_id)
+        .map(m => m.claimed_match_external_id)
+
+      let resultsMap = {}
+      if (externalIds.length > 0) {
+        const { data: scoredMatches } = await supabase
+          .from('matches')
+          .select('external_id, final_score, winner, status')
+          .in('external_id', externalIds)
+
+        if (scoredMatches) {
+          for (const sm of scoredMatches) {
+            resultsMap[sm.external_id] = sm
+          }
+        }
+      }
+
+      // Attach results to competition matches
+      const enriched = compMatches.map(m => {
+        if (m.claimed_match_external_id && resultsMap[m.claimed_match_external_id]) {
+          const result = resultsMap[m.claimed_match_external_id]
+          return { ...m, _result: result.final_score, _winner: result.winner, _matchStatus: result.status }
+        }
+        return m
+      })
+
+      setMatches(enriched)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -204,6 +253,46 @@ export default function CompetitionList({ onEdit }) {
     setDeleteConfirm(null)
   }
 
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const selectAll = () => {
+    if (selectedIds.size === matches.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(matches.map(m => m.id)))
+    }
+  }
+
+  const confirmBulkDelete = async () => {
+    if (selectedIds.size === 0) return
+    try {
+      const ids = [...selectedIds]
+      const { error: err } = await supabase
+        .from('beach_competition_matches')
+        .delete()
+        .in('id', ids)
+      if (err) throw err
+      setMatches(prev => prev.filter(m => !selectedIds.has(m.id)))
+      setSelectedIds(new Set())
+      setSelectMode(false)
+    } catch (err) {
+      alert('Bulk delete failed: ' + err.message)
+    }
+    setDeleteConfirm(null)
+  }
+
+  const exitSelectMode = () => {
+    setSelectMode(false)
+    setSelectedIds(new Set())
+  }
+
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60 }}>
@@ -232,16 +321,46 @@ export default function CompetitionList({ onEdit }) {
             {matches.length} match{matches.length !== 1 ? 'es' : ''} across {new Set(matches.map(m => m.competition_name)).size} competition{new Set(matches.map(m => m.competition_name)).size !== 1 ? 's' : ''}
           </p>
         </div>
-        <button onClick={fetchMatches} style={{ padding: '6px 14px', background: '#1f2937', color: '#9ca3af', border: '1px solid #374151', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>
-          Refresh
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {selectMode ? (
+            <>
+              <button onClick={selectAll} style={{ padding: '6px 14px', background: '#1f2937', color: '#9ca3af', border: '1px solid #374151', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>
+                {selectedIds.size === matches.length ? 'Deselect All' : 'Select All'}
+              </button>
+              <button
+                onClick={() => setDeleteConfirm('bulk')}
+                disabled={selectedIds.size === 0}
+                style={{ padding: '6px 14px', background: selectedIds.size > 0 ? '#ef4444' : '#374151', color: '#fff', border: 'none', borderRadius: 6, cursor: selectedIds.size > 0 ? 'pointer' : 'default', fontSize: 13, fontWeight: 600 }}
+              >
+                Delete ({selectedIds.size})
+              </button>
+              <button onClick={exitSelectMode} style={{ padding: '6px 14px', background: '#374151', color: '#9ca3af', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => onAdd()} style={{ padding: '6px 14px', background: '#22c55e', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                + Add Match
+              </button>
+              {matches.length > 0 && (
+                <button onClick={() => setSelectMode(true)} style={{ padding: '6px 14px', background: '#1f2937', color: '#9ca3af', border: '1px solid #374151', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>
+                  Select
+                </button>
+              )}
+              <button onClick={fetchMatches} style={{ padding: '6px 14px', background: '#1f2937', color: '#9ca3af', border: '1px solid #374151', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>
+                Refresh
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {matches.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 60, background: '#111827', borderRadius: 12, border: '1px solid #1f2937' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>&#x1F4CB;</div>
           <div style={{ color: '#6b7280', fontSize: 16 }}>No competition matches yet</div>
-          <p style={{ color: '#4b5563', fontSize: 13 }}>Upload an Excel file to get started</p>
+          <p style={{ color: '#4b5563', fontSize: 13 }}>Upload an Excel file or add a match manually</p>
         </div>
       ) : (
         sortedYears.map(year => {
@@ -298,7 +417,15 @@ export default function CompetitionList({ onEdit }) {
                                     <Section key={round} label={roundLabel} badge={roundMatches.length} level={4}>
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 16 }}>
                                         {sorted.map(item => (
-                                          <MatchCard key={item.id} item={item} onEdit={onEdit} onDelete={handleDelete} />
+                                          <MatchCard
+                                            key={item.id}
+                                            item={item}
+                                            onEdit={onEdit}
+                                            onDelete={handleDelete}
+                                            selected={selectedIds.has(item.id)}
+                                            onToggleSelect={toggleSelect}
+                                            selectMode={selectMode}
+                                          />
                                         ))}
                                       </div>
                                     </Section>
@@ -318,18 +445,33 @@ export default function CompetitionList({ onEdit }) {
         })
       )}
 
-      {/* Delete confirmation modal */}
+      {/* Delete confirmation modal (single or bulk) */}
       {deleteConfirm && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }} onClick={() => setDeleteConfirm(null)}>
           <div style={{ width: 'min(90vw, 380px)', background: '#111827', border: '2px solid #ef4444', borderRadius: 12, padding: 20 }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 12px 0', color: '#fff', fontSize: 16 }}>Delete Match #{deleteConfirm.game_n}?</h3>
-            <p style={{ color: '#9ca3af', fontSize: 14, marginBottom: 20 }}>
-              {deleteConfirm.team1_data?.name || 'TBD'} vs {deleteConfirm.team2_data?.name || 'TBD'}
-            </p>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setDeleteConfirm(null)} style={{ flex: 1, padding: '10px', background: '#374151', color: '#e5e7eb', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14 }}>Cancel</button>
-              <button onClick={confirmDelete} style={{ flex: 1, padding: '10px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>Delete</button>
-            </div>
+            {deleteConfirm === 'bulk' ? (
+              <>
+                <h3 style={{ margin: '0 0 12px 0', color: '#fff', fontSize: 16 }}>Delete {selectedIds.size} match{selectedIds.size !== 1 ? 'es' : ''}?</h3>
+                <p style={{ color: '#9ca3af', fontSize: 14, marginBottom: 20 }}>
+                  This action cannot be undone.
+                </p>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => setDeleteConfirm(null)} style={{ flex: 1, padding: '10px', background: '#374151', color: '#e5e7eb', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14 }}>Cancel</button>
+                  <button onClick={confirmBulkDelete} style={{ flex: 1, padding: '10px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>Delete {selectedIds.size}</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 style={{ margin: '0 0 12px 0', color: '#fff', fontSize: 16 }}>Delete Match #{deleteConfirm.game_n}?</h3>
+                <p style={{ color: '#9ca3af', fontSize: 14, marginBottom: 20 }}>
+                  {deleteConfirm.team1_data?.name || 'TBD'} vs {deleteConfirm.team2_data?.name || 'TBD'}
+                </p>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => setDeleteConfirm(null)} style={{ flex: 1, padding: '10px', background: '#374151', color: '#e5e7eb', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14 }}>Cancel</button>
+                  <button onClick={confirmDelete} style={{ flex: 1, padding: '10px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>Delete</button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

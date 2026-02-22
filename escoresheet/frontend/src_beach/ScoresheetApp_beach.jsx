@@ -1,33 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { supabase } from './lib_beach/supabaseClient_beach'
-import App from '../scoresheet_pdf_beach/App'
 
-// Fetch scoresheet data from Supabase storage (only _final files)
-const fetchFromStorage = async (date, game) => {
-  try {
-    if (!supabase) {
-      console.error('Supabase client not available')
-      return null
-    }
-
-    const storagePath = `${date}/game${game}_final.json`
-
-    const { data, error } = await supabase.storage
-      .from('scoresheets')
-      .download(storagePath)
-
-    if (error) {
-      console.error('[Scoresheet] Storage fetch error:', error)
-      return null
-    }
-
-    const text = await data.text()
-    return JSON.parse(text)
-  } catch (error) {
-    console.error('[Scoresheet] Error fetching from storage:', error)
+// Get a signed URL for a file in Supabase storage (valid for 1 hour)
+const getSignedUrl = async (path) => {
+  if (!supabase) return null
+  const { data, error } = await supabase.storage
+    .from('scoresheets')
+    .createSignedUrl(path, 3600)
+  if (error) {
+    console.error('[Scoresheet] Signed URL error:', error)
     return null
   }
+  return data.signedUrl
 }
 
 // Extract team name from scoresheet JSON, checking all possible key formats
@@ -70,6 +55,9 @@ const fetchAllScoresheets = async () => {
         continue
       }
 
+      // Collect all filenames in this folder to check for PDFs
+      const fileNames = new Set((files || []).map(f => f.name))
+
       for (const file of files || []) {
         // Only show approved/final scoresheets (game123_final.json)
         if (!file.name.endsWith('_final.json')) continue
@@ -78,10 +66,14 @@ const fetchAllScoresheets = async () => {
         const gameMatch = file.name.match(/game(\d+)_final\.json/)
         if (!gameMatch) continue
 
+        const gameNum = gameMatch[1]
+        const hasPdf = fileNames.has(`game${gameNum}.pdf`)
+
         scoresheets.push({
           date: folder.name,
-          game: gameMatch[1],
-          path: `${folder.name}/${file.name}`
+          game: gameNum,
+          path: `${folder.name}/${file.name}`,
+          pdfPath: hasPdf ? `${folder.name}/game${gameNum}.pdf` : null
         })
       }
     }
@@ -99,9 +91,13 @@ const fetchAllScoresheets = async () => {
           const text = await data.text()
           const json = JSON.parse(text)
 
-          // Only show beach volleyball scoresheets
-          // If sport_type is set and not beach, skip. If not set, assume beach (this is the beach app).
-          if (json.match?.sport_type && json.match.sport_type !== 'beach') return null
+          console.log(`[Scoresheet] ${item.path} → sport_type: "${json.match?.sport_type}"`)
+
+          // Only show beach volleyball scoresheets — sport_type MUST be 'beach'
+          if (json.match?.sport_type !== 'beach') {
+            console.warn(`[Scoresheet] FILTERED OUT ${item.path} (sport_type="${json.match?.sport_type}")`)
+            return null
+          }
 
           const match = json.match || {}
 
@@ -137,8 +133,7 @@ const getUrlParams = () => {
   const params = new URLSearchParams(window.location.search)
   const date = params.get('date')
   const game = params.get('game')
-  const action = params.get('action') || 'preview'
-  return { date, game, action }
+  return { date, game }
 }
 
 // Label maps for display
@@ -178,47 +173,47 @@ const buildGroupedTree = (scoresheets) => {
   return years
 }
 
-// Scoresheet viewer component
-const ScoresheetViewer = ({ date, game, action }) => {
+// Scoresheet PDF viewer — embeds the PDF from Supabase storage
+const ScoresheetViewer = ({ date, game }) => {
   const { t } = useTranslation()
-  const [matchData, setMatchData] = useState(null)
+  const [pdfUrl, setPdfUrl] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    const loadData = async () => {
+    const loadPdf = async () => {
       try {
-        const data = await fetchFromStorage(date, game)
-        if (data) {
-          setMatchData(data)
+        const url = await getSignedUrl(`${date}/game${game}.pdf`)
+        if (url) {
+          setPdfUrl(url)
         } else {
-          setError(`Scoresheet not found: ${date}/game${game}_final.json`)
+          setError(`PDF not found: ${date}/game${game}.pdf`)
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load scoresheet')
+        setError(err instanceof Error ? err.message : 'Failed to load PDF')
       } finally {
         setLoading(false)
       }
     }
-    loadData()
+    loadPdf()
   }, [date, game])
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-lg text-gray-600">{t('scoresheetApp.loadingScoresheet')}</div>
+      <div className="scoresheet-fullscreen-center">
+        <div className="scoresheet-loading-text">{t('scoresheetApp.loadingScoresheet')}</div>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen gap-5">
-        <div className="text-2xl font-bold text-red-500">{t('scoresheetApp.scoresheetNotFound')}</div>
-        <div className="text-gray-600">{error}</div>
+      <div className="scoresheet-fullscreen-center scoresheet-fullscreen-col">
+        <div className="scoresheet-error-title">{t('scoresheetApp.scoresheetNotFound')}</div>
+        <div className="scoresheet-error-detail">{error}</div>
         <button
           onClick={() => window.location.href = '/'}
-          className="px-5 py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+          className="scoresheet-btn-back"
         >
           {t('scoresheetApp.backToList')}
         </button>
@@ -226,85 +221,95 @@ const ScoresheetViewer = ({ date, game, action }) => {
     )
   }
 
-  return <App matchData={matchData} autoAction={action} />
-}
-
-// Match card component
-const MatchCard = ({ item }) => (
-  <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-    <div className="flex-1 min-w-0">
-      <div className="flex items-center gap-2 mb-0.5">
-        <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded flex-shrink-0">
-          #{item.gameN || item.game}
-        </span>
-        {item.finalScore && (
-          <span className="text-sm font-semibold text-emerald-600 flex-shrink-0">
-            {item.finalScore}
-          </span>
-        )}
-      </div>
-      <div className="text-sm font-medium text-gray-800 truncate">
-        {item.team1 || 'Team A'} vs {item.team2 || 'Team B'}
-      </div>
-    </div>
-    <div className="flex gap-2 flex-shrink-0 ml-3">
-      <a
-        href={`?date=${item.date}&game=${item.game}`}
-        className="px-3 py-1.5 text-sm font-medium bg-blue-500 text-white rounded-md hover:bg-blue-600"
-      >
-        View
-      </a>
-      <a
-        href={`?date=${item.date}&game=${item.game}&action=save`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="px-3 py-1.5 text-sm font-medium bg-gray-100 text-gray-600 border border-gray-200 rounded-md hover:bg-gray-200"
-      >
-        PDF
-      </a>
-    </div>
-  </div>
-)
-
-// Collapsible section component
-const Section = ({ label, badge, level, defaultOpen = true, children }) => {
-  const [open, setOpen] = useState(defaultOpen)
-
-  const styles = {
-    0: 'text-lg font-bold text-gray-800 border-b-2 border-gray-300 pb-1',
-    1: 'text-base font-semibold text-gray-700',
-    2: 'text-sm font-semibold text-gray-600',
-    3: 'text-sm font-medium text-gray-500',
-    4: 'text-xs font-medium text-gray-500 uppercase tracking-wide',
-  }
-
-  const paddings = { 0: 'pl-0', 1: 'pl-2', 2: 'pl-4', 3: 'pl-6', 4: 'pl-8' }
-
   return (
-    <div className={`${paddings[level] || 'pl-0'} mb-3`}>
-      <button
-        onClick={() => setOpen(!open)}
-        className={`flex items-center gap-2 w-full text-left py-1 hover:opacity-80 ${styles[level] || styles[4]}`}
-      >
-        <span className="text-gray-400 text-xs w-4 flex-shrink-0">{open ? '▼' : '▶'}</span>
-        <span>{label}</span>
-        {badge != null && (
-          <span className="text-xs font-normal text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
-            {badge}
-          </span>
-        )}
-      </button>
-      {open && <div className="mt-1">{children}</div>}
+    <div className="scoresheet-pdf-viewer">
+      <div className="scoresheet-pdf-toolbar">
+        <a href="/" className="scoresheet-btn-back">Back to archive</a>
+        <a href={pdfUrl} download={`game${game}.pdf`} className="scoresheet-btn-view">Download PDF</a>
+      </div>
+      <iframe src={pdfUrl} className="scoresheet-pdf-frame" title={`Game ${game} scoresheet`} />
     </div>
   )
 }
 
-// Scoresheet list component
+// Match card component
+const MatchCard = ({ item }) => (
+  <div className="scoresheet-match-card">
+    <div className="scoresheet-match-info">
+      <div className="scoresheet-match-badges">
+        <span className="scoresheet-badge-game">
+          #{item.gameN || item.game}
+        </span>
+        {item.finalScore && (
+          <span className="scoresheet-badge-score">
+            {item.finalScore}
+          </span>
+        )}
+      </div>
+      <div className="scoresheet-match-teams">
+        {item.team1 || 'Team A'} vs {item.team2 || 'Team B'}
+      </div>
+    </div>
+    <div className="scoresheet-match-actions">
+      {item.pdfPath ? (
+        <a
+          href={`?date=${item.date}&game=${item.game}`}
+          className="scoresheet-btn-view"
+        >
+          View PDF
+        </a>
+      ) : (
+        <span className="scoresheet-no-pdf">No PDF</span>
+      )}
+    </div>
+  </div>
+)
+
+// Collapsible section component — collapsed by default
+const Section = ({ label, badge, level, defaultOpen = false, children }) => {
+  const [open, setOpen] = useState(defaultOpen)
+
+  return (
+    <div className={`scoresheet-section scoresheet-section-l${level}`}>
+      <button
+        onClick={() => setOpen(!open)}
+        className={`scoresheet-section-btn scoresheet-section-btn-l${level}`}
+      >
+        <span className="scoresheet-section-arrow">{open ? '▼' : '▶'}</span>
+        <span>{label}</span>
+        {badge != null && (
+          <span className="scoresheet-section-badge">{badge}</span>
+        )}
+      </button>
+      {open && <div className="scoresheet-section-content">{children}</div>}
+    </div>
+  )
+}
+
+// Sidebar navigation item
+const SidebarItem = ({ label, dateRange, count, active, onClick }) => (
+  <button
+    onClick={onClick}
+    className={`scoresheet-sidebar-item ${active ? 'active' : ''}`}
+  >
+    <div className="scoresheet-sidebar-item-row">
+      <span className="scoresheet-sidebar-item-label">{label}</span>
+      <span className={`scoresheet-sidebar-item-count ${active ? 'active' : ''}`}>
+        {count}
+      </span>
+    </div>
+    {dateRange && <div className="scoresheet-sidebar-item-date">{dateRange}</div>}
+  </button>
+)
+
+// Scoresheet list component with sidebar layout
 const ScoresheetList = () => {
   const { t } = useTranslation()
   const [scoresheets, setScoresheets] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [selectedComp, setSelectedComp] = useState(null) // { year, compName }
+  const [sidebarOpen, setSidebarOpen] = useState(true)
 
   useEffect(() => {
     const loadList = async () => {
@@ -322,19 +327,32 @@ const ScoresheetList = () => {
 
   const tree = useMemo(() => buildGroupedTree(scoresheets), [scoresheets])
 
+  // Auto-select first competition when data loads
+  useEffect(() => {
+    if (!selectedComp && Object.keys(tree).length > 0) {
+      const firstYear = Object.keys(tree).sort((a, b) => b.localeCompare(a))[0]
+      const firstComp = Object.keys(tree[firstYear]).sort((a, b) => {
+        const aMin = [...tree[firstYear][a].dates].sort()[0] || ''
+        const bMin = [...tree[firstYear][b].dates].sort()[0] || ''
+        return bMin.localeCompare(aMin)
+      })[0]
+      if (firstYear && firstComp) setSelectedComp({ year: firstYear, compName: firstComp })
+    }
+  }, [tree, selectedComp])
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-lg text-gray-600">{t('scoresheetApp.loadingScoresheets')}</div>
+      <div className="scoresheet-fullscreen-center">
+        <div className="scoresheet-loading-text">{t('scoresheetApp.loadingScoresheets')}</div>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen gap-5">
-        <div className="text-2xl font-bold text-red-500">{t('scoresheetApp.errorLoadingScoresheets')}</div>
-        <div className="text-gray-600">{error}</div>
+      <div className="scoresheet-fullscreen-center scoresheet-fullscreen-col">
+        <div className="scoresheet-error-title">{t('scoresheetApp.errorLoadingScoresheets')}</div>
+        <div className="scoresheet-error-detail">{error}</div>
       </div>
     )
   }
@@ -342,95 +360,139 @@ const ScoresheetList = () => {
   // Sort years descending
   const sortedYears = Object.keys(tree).sort((a, b) => b.localeCompare(a))
 
+  // Get the selected competition data
+  const selectedCompData = selectedComp ? tree[selectedComp.year]?.[selectedComp.compName] : null
+
+  // Count matches in a competition
+  const countCompMatches = (comp) =>
+    Object.values(comp.genders).reduce((gSum, phases) =>
+      gSum + Object.values(phases).reduce((pSum, rounds) =>
+        pSum + Object.values(rounds).reduce((rSum, matches) => rSum + matches.length, 0)
+      , 0)
+    , 0)
+
   return (
-    <div className="min-h-screen bg-gray-50 p-5">
-      <div className="max-w-3xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-6">
-          <img src="/openbeach_no_bg.png" alt="openBeach" className="w-12 h-12" />
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">{t('scoresheetApp.scoresheetArchive')}</h1>
-            <p className="text-gray-500">
-              {scoresheets.length} scoresheet{scoresheets.length !== 1 ? 's' : ''} available
+    <div className="scoresheet-archive-layout">
+      {/* Sidebar */}
+      <aside className={`scoresheet-sidebar ${sidebarOpen ? 'open' : ''}`}>
+        {/* Sidebar header */}
+        <div className="scoresheet-sidebar-header">
+          <img src="/openbeach_no_bg.png" alt="openBeach" style={{ width: 32, height: 32 }} />
+          <div style={{ minWidth: 0 }}>
+            <h1 className="scoresheet-sidebar-title">{t('scoresheetApp.scoresheetArchive')}</h1>
+            <p className="scoresheet-sidebar-subtitle">
+              {scoresheets.length} scoresheet{scoresheets.length !== 1 ? 's' : ''}
             </p>
           </div>
         </div>
 
-        {scoresheets.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
-            <div className="text-5xl mb-4">📋</div>
-            <div className="text-lg text-gray-500">{t('scoresheetApp.noScoresheetsYet')}</div>
-          </div>
-        ) : (
-          sortedYears.map(year => {
-            // Sort competitions by earliest date within the year
-            const comps = Object.entries(tree[year])
-              .sort(([, a], [, b]) => {
-                const aMin = [...a.dates].sort()[0] || ''
-                const bMin = [...b.dates].sort()[0] || ''
-                return bMin.localeCompare(aMin) // newest first
-              })
+        {/* Sidebar body — scrollable */}
+        <nav className="scoresheet-sidebar-nav">
+          {scoresheets.length === 0 ? (
+            <div className="scoresheet-sidebar-empty">{t('scoresheetApp.noScoresheetsYet')}</div>
+          ) : (
+            sortedYears.map(year => {
+              const comps = Object.entries(tree[year])
+                .sort(([, a], [, b]) => {
+                  const aMin = [...a.dates].sort()[0] || ''
+                  const bMin = [...b.dates].sort()[0] || ''
+                  return bMin.localeCompare(aMin)
+                })
 
-            const yearMatchCount = comps.reduce((sum, [, comp]) => {
-              return sum + Object.values(comp.genders).reduce((gSum, phases) => {
-                return gSum + Object.values(phases).reduce((pSum, rounds) => {
-                  return pSum + Object.values(rounds).reduce((rSum, matches) => rSum + matches.length, 0)
-                }, 0)
-              }, 0)
-            }, 0)
+              return (
+                <div key={year} className="scoresheet-sidebar-year">
+                  <div className="scoresheet-sidebar-year-label">{year}</div>
+                  <div className="scoresheet-sidebar-comps">
+                    {comps.map(([compName, comp]) => {
+                      const sortedDates = [...comp.dates].sort()
+                      const dateRange = sortedDates.length === 1
+                        ? formatCompDate(sortedDates[0])
+                        : `${formatCompDate(sortedDates[0])} — ${formatCompDate(sortedDates[sortedDates.length - 1])}`
+                      const isActive = selectedComp?.year === year && selectedComp?.compName === compName
 
-            return (
-              <Section key={year} label={year} badge={yearMatchCount} level={0}>
-                {comps.map(([compName, comp]) => {
-                  // Format date range for this competition
-                  const sortedDates = [...comp.dates].sort()
-                  const dateRange = sortedDates.length === 1
-                    ? formatCompDate(sortedDates[0])
-                    : `${formatCompDate(sortedDates[0])} — ${formatCompDate(sortedDates[sortedDates.length - 1])}`
+                      return (
+                        <SidebarItem
+                          key={compName}
+                          label={compName}
+                          dateRange={dateRange}
+                          count={countCompMatches(comp)}
+                          active={isActive}
+                          onClick={() => setSelectedComp({ year, compName })}
+                        />
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </nav>
+      </aside>
 
-                  // Sort genders: men first, then women, then unknown
-                  const genderEntries = Object.entries(comp.genders)
+      {/* Main content */}
+      <main className="scoresheet-main">
+        {/* Top bar with sidebar toggle */}
+        <div className="scoresheet-topbar">
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="scoresheet-topbar-toggle"
+            title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+          >
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <line x1="3" y1="5" x2="17" y2="5" />
+              <line x1="3" y1="10" x2="17" y2="10" />
+              <line x1="3" y1="15" x2="17" y2="15" />
+            </svg>
+          </button>
+          {selectedComp && (
+            <div>
+              <h2 className="scoresheet-topbar-title">{selectedComp.compName}</h2>
+              <p className="scoresheet-topbar-subtitle">{selectedComp.year}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Match content */}
+        <div className="scoresheet-content-area">
+          {!selectedCompData ? (
+            <div className="scoresheet-empty-state">Select a competition from the sidebar</div>
+          ) : (
+            <div className="scoresheet-matches-container">
+              {(() => {
+                const genderEntries = Object.entries(selectedCompData.genders)
+                  .sort(([a], [b]) => {
+                    const order = { men: 0, women: 1, unknown: 2 }
+                    return (order[a] ?? 2) - (order[b] ?? 2)
+                  })
+
+                return genderEntries.map(([gender, phases]) => {
+                  const genderLabel = genderLabels[gender] || gender
+                  const phaseEntries = Object.entries(phases)
                     .sort(([a], [b]) => {
-                      const order = { men: 0, women: 1, unknown: 2 }
+                      const order = { main: 0, main_draw: 0, qualification: 1, unknown: 2 }
                       return (order[a] ?? 2) - (order[b] ?? 2)
                     })
 
                   return (
-                    <Section key={compName} label={<>{compName} <span className="font-normal text-xs text-gray-400">{dateRange}</span></>} level={1}>
-                      {genderEntries.map(([gender, phases]) => {
-                        const genderLabel = genderLabels[gender] || gender
-                        // Sort phases: main first, then qualification
-                        const phaseEntries = Object.entries(phases)
-                          .sort(([a], [b]) => {
-                            const order = { main: 0, main_draw: 0, qualification: 1, unknown: 2 }
-                            return (order[a] ?? 2) - (order[b] ?? 2)
-                          })
+                    <Section key={gender} label={genderLabel} level={0}>
+                      {phaseEntries.map(([phase, rounds]) => {
+                        const phaseLabel = phaseLabels[phase] || phase
+                        const roundEntries = Object.entries(rounds)
+                          .sort(([a], [b]) => (roundOrder[a] ?? 99) - (roundOrder[b] ?? 99))
 
                         return (
-                          <Section key={gender} label={genderLabel} level={2}>
-                            {phaseEntries.map(([phase, rounds]) => {
-                              const phaseLabel = phaseLabels[phase] || phase
-                              // Sort rounds by round order
-                              const roundEntries = Object.entries(rounds)
-                                .sort(([a], [b]) => (roundOrder[a] ?? 99) - (roundOrder[b] ?? 99))
+                          <Section key={phase} label={phaseLabel} level={1}>
+                            {roundEntries.map(([round, matches]) => {
+                              const roundLabel = roundLabels[round] || round
+                              const sortedMatches = [...matches].sort((a, b) => a.gameN - b.gameN)
 
                               return (
-                                <Section key={phase} label={phaseLabel} level={3}>
-                                  {roundEntries.map(([round, matches]) => {
-                                    const roundLabel = roundLabels[round] || round
-                                    // Sort matches by game number
-                                    const sortedMatches = [...matches].sort((a, b) => a.gameN - b.gameN)
-
-                                    return (
-                                      <Section key={round} label={roundLabel} badge={matches.length} level={4}>
-                                        <div className="flex flex-col gap-1.5 pl-4">
-                                          {sortedMatches.map(item => (
-                                            <MatchCard key={item.path} item={item} />
-                                          ))}
-                                        </div>
-                                      </Section>
-                                    )
-                                  })}
+                                <Section key={round} label={roundLabel} badge={matches.length} level={2}>
+                                  <div className="scoresheet-match-list">
+                                    {sortedMatches.map(item => (
+                                      <MatchCard key={item.path} item={item} />
+                                    ))}
+                                  </div>
                                 </Section>
                               )
                             })}
@@ -439,12 +501,12 @@ const ScoresheetList = () => {
                       })}
                     </Section>
                   )
-                })}
-              </Section>
-            )
-          })
-        )}
-      </div>
+                })
+              })()}
+            </div>
+          )}
+        </div>
+      </main>
     </div>
   )
 }
@@ -461,11 +523,11 @@ const formatCompDate = (dateStr) => {
 
 // Main app component
 export default function ScoresheetApp() {
-  const { date, game, action } = getUrlParams()
+  const { date, game } = getUrlParams()
 
-  // If date and game are provided, show the scoresheet viewer
+  // If date and game are provided, show the PDF viewer
   if (date && game) {
-    return <ScoresheetViewer date={date} game={game} action={action} />
+    return <ScoresheetViewer date={date} game={game} />
   }
 
   // Otherwise show the list

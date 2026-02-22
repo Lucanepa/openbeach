@@ -374,16 +374,10 @@ function toTitleCase(str) {
   return str.replace(/(^|[\s-])(\S)/g, (m, pre, c) => pre + c.toUpperCase())
 }
 
-// Helper to generate short name from team name (first 3-4 chars uppercase)
+// Helper to generate short name from team name — use full name for beach
 function generateShortName(name) {
   if (!name) return ''
-  // Remove common prefixes/suffixes and take first word or first 4 chars
-  const cleaned = name.trim().toUpperCase()
-  const words = cleaned.split(/\s+/)
-  if (words.length > 1 && words[0].length <= 4) {
-    return words[0]
-  }
-  return cleaned.substring(0, 4)
+  return name.trim().toUpperCase()
 }
 
 // Helper to convert DOB from DD.MM.YYYY to YYYY-MM-DD for Supabase date columns
@@ -1527,8 +1521,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           site: city,
           beach: hall,
           court,
-          team1ShortName: team1ShortName || team1Name.substring(0, 8).toUpperCase(),
-          team2ShortName: team2ShortName || team2Name.substring(0, 8).toUpperCase(),
+          team1ShortName: team1ShortName || team1Name.trim().toUpperCase(),
+          team2ShortName: team2ShortName || team2Name.trim().toUpperCase(),
           game_n: gameN ? Number(gameN) : null,
           gameNumber: gameN ? gameN : null,
           league,
@@ -1573,14 +1567,14 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             await db.teams.update(team1Id, {
               name: team1Name.trim(),
               color: team1Color,
-              shortName: team1ShortName || team1Name.trim().substring(0, 8).toUpperCase(),
+              shortName: team1ShortName || generateShortName(team1Name.trim()),
             })
           } else {
             // Create new team if it doesn't exist
             team1Id = await db.teams.add({
               name: team1Name.trim(),
               color: team1Color,
-              shortName: team1ShortName || team1Name.trim().substring(0, 8).toUpperCase(),
+              shortName: team1ShortName || generateShortName(team1Name.trim()),
               createdAt: new Date().toISOString()
             })
             // Update match with new team ID
@@ -1594,14 +1588,14 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             await db.teams.update(team2Id, {
               name: team2Name.trim(),
               color: team2Color,
-              shortName: team2ShortName || team2Name.trim().substring(0, 8).toUpperCase()
+              shortName: team2ShortName || generateShortName(team2Name.trim())
             })
           } else {
             // Create new team if it doesn't exist
             team2Id = await db.teams.add({
               name: team2Name.trim(),
               color: team2Color,
-              shortName: team2ShortName || team2Name.trim().substring(0, 8).toUpperCase(),
+              shortName: team2ShortName || generateShortName(team2Name.trim()),
               createdAt: new Date().toISOString()
             })
             // Update match with new team ID
@@ -1830,7 +1824,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         team1Id = await db.teams.add({
           name: team1Name.trim(),
           color: team1Color,
-          shortName: team1ShortName || team1Name.trim().substring(0, 8).toUpperCase(),
+          shortName: team1ShortName || generateShortName(team1Name.trim()),
           createdAt: new Date().toISOString()
         })
       } else {
@@ -1838,7 +1832,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         await db.teams.update(team1Id, {
           name: team1Name.trim(),
           color: team1Color,
-          shortName: team1ShortName || team1Name.trim().substring(0, 8).toUpperCase(),
+          shortName: team1ShortName || generateShortName(team1Name.trim()),
         })
       }
 
@@ -1846,7 +1840,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         team2Id = await db.teams.add({
           name: team2Name.trim(),
           color: team2Color,
-          shortName: team2ShortName || team2Name.trim().substring(0, 8).toUpperCase(),
+          shortName: team2ShortName || generateShortName(team2Name.trim()),
           createdAt: new Date().toISOString()
         })
       } else {
@@ -1854,7 +1848,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         await db.teams.update(team2Id, {
           name: team2Name.trim(),
           color: team2Color,
-          shortName: team2ShortName || team2Name.trim().substring(0, 8).toUpperCase()
+          shortName: team2ShortName || generateShortName(team2Name.trim())
         })
       }
 
@@ -1906,6 +1900,18 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         matchInfoConfirmedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       })
+
+      // Link competition match template to this scored match via seed_key
+      if (supabase && match?.competitionMatchId) {
+        try {
+          await supabase
+            .from('beach_competition_matches')
+            .update({ claimed_match_external_id: matchSeedKey })
+            .eq('id', match.competitionMatchId)
+        } catch (err) {
+          console.warn('[MatchSetup] Failed to link competition match:', err)
+        }
+      }
 
       // Queue match for Supabase sync - all data stored as JSONB
       // Only set status to 'setup' when creating a new match, not when updating existing match
@@ -2126,8 +2132,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     }
 
     await db.transaction('rw', db.matches, db.teams, db.players, db.sync_queue, async () => {
-      const team1DbId = await db.teams.add({ name: team1Name, color: team1Color, shortName: team1ShortName || team1Name.substring(0, 8).toUpperCase(), createdAt: new Date().toISOString() })
-      const team2DbId = await db.teams.add({ name: team2Name, color: team2Color, shortName: team2ShortName || team2Name.substring(0, 8).toUpperCase(), createdAt: new Date().toISOString() })
+      const team1DbId = await db.teams.add({ name: team1Name, color: team1Color, shortName: team1ShortName || team1Name.trim().toUpperCase(), createdAt: new Date().toISOString() })
+      const team2DbId = await db.teams.add({ name: team2Name, color: team2Color, shortName: team2ShortName || team2Name.trim().toUpperCase(), createdAt: new Date().toISOString() })
 
       // Generate 6-digit PIN code for referee authentication
       const generatePinCode = (existingPins = []) => {
@@ -2194,8 +2200,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         // Team names and colors for local access
         team1Name: team1Name.trim(),
         team2Name: team2Name.trim(),
-        team1ShortName: team1ShortName || team1Name.substring(0, 3).toUpperCase(),
-        team2ShortName: team2ShortName || team2Name.substring(0, 3).toUpperCase(),
+        team1ShortName: team1ShortName || team1Name.trim().toUpperCase(),
+        team2ShortName: team2ShortName || team2Name.trim().toUpperCase(),
         team1Color: team1Color || '#ef4444',
         team2Color: team2Color || '#3b82f6',
         team1Country: team1Country || '',
@@ -3715,7 +3721,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               // Update match with team name, short name and country
               const updateData = {
                 team1Name: finalTeam1Name,
-                team1ShortName: team1ShortName || team1Name.substring(0, 3).toUpperCase(),
+                team1ShortName: team1ShortName || team1Name.trim().toUpperCase(),
                 team1Country: team1Country || '',
               }
 
@@ -4374,7 +4380,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               // Update match with team name, short name and country
               const updateData = {
                 team2Name: finalTeam2Name,
-                team2ShortName: team2ShortName || team2Name.substring(0, 3).toUpperCase(),
+                team2ShortName: team2ShortName || team2Name.trim().toUpperCase(),
                 team2Country: team2Country || ''
               }
 
@@ -5437,8 +5443,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     hasCoach,
                     team1Name: team1Name.trim(),
                     team2Name: team2Name.trim(),
-                    team1ShortName: team1ShortName || team1Name.substring(0, 10).toUpperCase(),
-                    team2ShortName: team2ShortName || team2Name.substring(0, 10).toUpperCase(),
+                    team1ShortName: team1ShortName || team1Name.trim().toUpperCase(),
+                    team2ShortName: team2ShortName || team2Name.trim().toUpperCase(),
                     team1Country: team1Country || '',
                     team2Country: team2Country || '',
                     game_n: gameN ? Number(gameN) : null,

@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import i18n from '../i18n'
 import ConnectionStatus from './ConnectionStatus_beach'
-import UserButton from './auth/UserButton_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 
 
@@ -843,9 +842,6 @@ export default function MainHeader({
           {/* Compact Mode: Collapsible Actions Menu */}
           {isCompactMode ? (
             <>
-              {/* User Button - hidden in offline mode */}
-              {!offlineMode && <UserButton />}
-
               <div style={{ position: 'relative' }}>
                 <button
                   onClick={(e) => {
@@ -1450,13 +1446,6 @@ export default function MainHeader({
                         <span>📖</span>
                         <span>{t('interactiveGuide.title', 'App Guide')}</span>
                       </button>
-                    )}
-
-                    {/* Login / User Button - hidden in offline mode */}
-                    {!offlineMode && (
-                      <div style={{ padding: '2px 4px' }}>
-                        <UserButton />
-                      </div>
                     )}
 
                     {/* Divider */}

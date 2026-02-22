@@ -46,7 +46,10 @@
       "Bash(dig:*)",
       "Bash(host:*)",
       "WebFetch(domain:mcp.supabase.com)",
-      "WebFetch(domain:supabase.com)"
+      "WebFetch(domain:supabase.com)",
+      "WebFetch(domain:tjnbwwjstxehwhxnvxyy.supabase.co)",
+      "Bash(/home/luca-canepa/Desktop/Github/openbeach/escoresheet/frontend/generate_sample_competition.js:*)",
+      "WebFetch(domain:docs.sheetjs.com)"
     ]
   },
   "outputStyle": "default"

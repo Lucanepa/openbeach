@@ -2318,15 +2318,17 @@ export default function App() {
       officials,
       refereePin: generateRefereePin(),
       coinTossConfirmed: false,
+      competitionMatchId: compMatch.id || null, // Link back to competition match template
       createdAt: now
     })
 
     // Mark competition match as claimed (atomic check)
+    // claimed_match_external_id will be set later when seed_key is generated in MatchSetup
     if (supabase && compMatch.id) {
       try {
         await supabase
           .from('beach_competition_matches')
-          .update({ status: 'claimed', claimed_by: null, claimed_match_external_id: null })
+          .update({ status: 'claimed' })
           .eq('id', compMatch.id)
           .eq('status', 'template')
       } catch (err) {

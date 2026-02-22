@@ -34,15 +34,10 @@ function generatePlaceholderSignature() {
   return canvas.toDataURL('image/png')
 }
 
-// Helper to generate short name from team name (e.g., "VBC Zürich" -> "VBC")
+// Helper to generate short name from team name — use full name for beach
 function generateShortName(name) {
   if (!name) return ''
-  const cleaned = name.trim().toUpperCase()
-  const words = cleaned.split(/\s+/)
-  if (words.length > 1 && words[0].length <= 4) {
-    return words[0]
-  }
-  return cleaned.substring(0, 4)
+  return name.trim().toUpperCase()
 }
 
 // Hook to detect if we should use compact sizing

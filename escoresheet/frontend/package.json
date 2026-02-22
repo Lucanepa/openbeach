@@ -91,7 +91,7 @@
         "deb"
       ],
       "icon": "build/icon.png",
-      "category": "Game"
+      "category": "Sports"
     },
     "nsis": {
       "oneClick": false,

@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import SupportFeedbackModal from '../SupportFeedbackModal_beach'
-import UserButton from '../auth/UserButton_beach'
 
 export default function HomePage({
   favicon,

@@ -39,7 +39,7 @@ const inputStyle = {
 const buttonStyle = {
   width: '100%',
   padding: '12px 16px',
-  background: '#3b82f6',
+  background: '#7c3aed',
   color: '#fff',
   border: 'none',
   borderRadius: 8,
@@ -54,6 +54,7 @@ function AdminLogin() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -69,7 +70,7 @@ function AdminLogin() {
       <div style={{ width: 'min(90vw, 400px)', background: '#111827', border: '2px solid #7c3aed', borderRadius: 12, overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px', background: 'rgba(124, 58, 237, 0.1)', borderBottom: '1px solid rgba(124, 58, 237, 0.3)' }}>
           <img src="/openbeach_no_bg.png" alt="openBeach" style={{ width: 32, height: 32 }} />
-          <h2 style={{ margin: 0, color: '#fff', fontSize: 20, fontWeight: 600 }}>Competition Admin</h2>
+          <h2 style={{ margin: 0, color: '#fff', fontSize: 20, fontWeight: 600 }}>Competitions Admin</h2>
         </div>
         <div style={{ padding: 20 }}>
           {error && (
@@ -81,10 +82,28 @@ function AdminLogin() {
             <div style={{ marginBottom: 12 }}>
               <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" style={inputStyle} required />
             </div>
-            <div style={{ marginBottom: 16 }}>
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" style={inputStyle} required />
+            <div style={{ marginBottom: 16, position: 'relative' }}>
+              <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" style={{ ...inputStyle, paddingRight: 44 }} required />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#9ca3af', display: 'flex', alignItems: 'center' }}
+              >
+                {showPassword ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                )}
+              </button>
             </div>
-            <button type="submit" style={{ ...buttonStyle, background: '#7c3aed' }} disabled={loading}>
+            <button type="submit" style={buttonStyle} disabled={loading}>
               {loading ? 'Signing in...' : 'Sign In as Admin'}
             </button>
           </form>
@@ -102,7 +121,6 @@ function AccessDenied() {
   return (
     <div style={{ minHeight: '100vh', background: '#0b1220', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ textAlign: 'center', color: '#e5e7eb' }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>&#x1F6AB;</div>
         <h2 style={{ fontSize: 24, fontWeight: 600, marginBottom: 8 }}>Access Denied</h2>
         <p style={{ color: '#9ca3af', marginBottom: 24 }}>Your account does not have the admin role.</p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
@@ -119,7 +137,8 @@ export default function CompetitionAdminApp() {
   const [view, setView] = useState('list') // 'list' | 'upload' | 'editor'
   const [editingMatch, setEditingMatch] = useState(null)
 
-  if (loading) {
+  // Show loading while auth initializes OR while profile is still being fetched after login
+  if (loading || (user && !profile)) {
     return (
       <div style={{ minHeight: '100vh', background: '#0b1220', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ color: '#9ca3af', fontSize: 16 }}>Loading...</div>
@@ -134,6 +153,11 @@ export default function CompetitionAdminApp() {
 
   const handleEdit = (match) => {
     setEditingMatch(match)
+    setView('editor')
+  }
+
+  const handleAdd = () => {
+    setEditingMatch({}) // empty object = new match
     setView('editor')
   }
 
@@ -152,7 +176,7 @@ export default function CompetitionAdminApp() {
       <div style={headerStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <img src="/openbeach_no_bg.png" alt="openBeach" style={{ width: 28, height: 28 }} />
-          <span style={{ fontWeight: 600, fontSize: 16, color: '#fff' }}>Competition Admin</span>
+          <span style={{ fontWeight: 600, fontSize: 16, color: '#fff' }}>Competitions Admin</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button onClick={() => { setView('list'); setEditingMatch(null) }} style={navBtnStyle(view === 'list')}>Matches</button>
@@ -166,9 +190,9 @@ export default function CompetitionAdminApp() {
       </div>
 
       {/* Content */}
-      {view === 'list' && <CompetitionList onEdit={handleEdit} />}
+      {view === 'list' && <CompetitionList onEdit={handleEdit} onAdd={handleAdd} />}
       {view === 'upload' && <ExcelUpload userId={user.id} onComplete={handleUploadComplete} />}
-      {view === 'editor' && <CompMatchEditor match={editingMatch} onClose={handleEditorClose} />}
+      {view === 'editor' && <CompMatchEditor match={editingMatch} onClose={handleEditorClose} userId={user.id} />}
     </div>
   )
 }

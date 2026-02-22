@@ -48,6 +48,7 @@ export async function uploadScoresheet({
     // Build match object with normalized coinTossData for PDF rendering
     const normalizedMatch = {
       ...match,
+      sport_type: 'beach',
       team_1Country: match?.team1Country || '',
       team_2Country: match?.team2Country || '',
       coinTossTeamA: normalizeTeamKey(match?.coinTossTeamA),
@@ -73,7 +74,7 @@ export async function uploadScoresheet({
       team2Players,
       team_1Players: team1Players,
       team_2Players: team2Players,
-      sets,
+      sets: (sets || []).map(({ matchId, lineupA, lineupB, serverNumber, ...rest }) => rest),
       events,
       uploadedAt: new Date().toISOString()
     }

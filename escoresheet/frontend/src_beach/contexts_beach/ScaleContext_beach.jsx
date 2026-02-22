@@ -3,7 +3,7 @@ import { createContext, useContext, useState, useCallback, useEffect } from 'rea
 // Context for sharing scale state across all components
 const ScaleContext = createContext(null)
 
-export function ScaleProvider({ children }) {
+export function ScaleProvider({ children, defaultScale = 1.0 }) {
   // User scale override (null = auto / 1.0)
   const [userScaleOverride, setUserScaleOverrideState] = useState(() => {
     const saved = localStorage.getItem('userScaleOverride')
@@ -38,8 +38,8 @@ export function ScaleProvider({ children }) {
   // Current viewport's vmin
   const viewportVmin = Math.min(viewport.width, viewport.height)
 
-  // Scale factor: user override or 1.0 (clamped 0.5-1.5)
-  const rawScale = userScaleOverride ?? 1.0
+  // Scale factor: user override or defaultScale (clamped 0.5-2.0)
+  const rawScale = userScaleOverride ?? defaultScale
   const scaleFactor = Math.min(Math.max(rawScale, 0.5), 1.5)
 
   // Update CSS custom properties on the root element for CSS-based scaling

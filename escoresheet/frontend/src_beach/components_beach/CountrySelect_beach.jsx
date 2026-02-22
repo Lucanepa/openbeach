@@ -5,7 +5,7 @@ import enLocale from 'i18n-iso-countries/langs/en.json'
 // Register locale
 countries.registerLocale(enLocale)
 
-export default function CountrySelect({ value, onChange, placeholder = "Select Country", fontSize = '14px' }) {
+export default function CountrySelect({ value, onChange, placeholder = "Select Country", fontSize = '14px', triggerStyle = {} }) {
     const [isOpen, setIsOpen] = useState(false)
     const [search, setSearch] = useState('')
     const wrapperRef = useRef(null)
@@ -78,7 +78,9 @@ export default function CountrySelect({ value, onChange, placeholder = "Select C
                     borderRadius: '4px',
                     cursor: 'pointer',
                     minHeight: '28px',
-                    fontSize
+                    fontSize,
+                    boxSizing: 'border-box',
+                    ...triggerStyle
                 }}
             >
                 {selectedCountry ? (

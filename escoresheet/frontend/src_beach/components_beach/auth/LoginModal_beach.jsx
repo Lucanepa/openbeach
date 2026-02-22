@@ -265,7 +265,7 @@ export default function LoginModal({ open, onClose, onSwitchToSignUp }) {
                     textDecoration: 'underline'
                   }}
                 >
-                  Competition Admin
+                  Competitions Admin
                 </a>
               </div>
             </>

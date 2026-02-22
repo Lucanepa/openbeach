@@ -7516,11 +7516,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   const teamALabel = leftTeam.isTeamA ? 'A' : 'B'
   const teamBLabel = rightTeam.isTeamA ? 'A' : 'B'
   const teamAShortName = leftisTeam1
-    ? (data?.match?.team1ShortName || leftTeam.name?.substring(0, 3).toUpperCase() || 'A')
-    : (data?.match?.team2ShortName || leftTeam.name?.substring(0, 3).toUpperCase() || 'A')
+    ? (data?.match?.team1ShortName || leftTeam.name?.trim().toUpperCase() || 'A')
+    : (data?.match?.team2ShortName || leftTeam.name?.trim().toUpperCase() || 'A')
   const teamBShortName = leftisTeam1
-    ? (data?.match?.team2ShortName || rightTeam.name?.substring(0, 3).toUpperCase() || 'B')
-    : (data?.match?.team1ShortName || rightTeam.name?.substring(0, 3).toUpperCase() || 'B')
+    ? (data?.match?.team2ShortName || rightTeam.name?.trim().toUpperCase() || 'B')
+    : (data?.match?.team1ShortName || rightTeam.name?.trim().toUpperCase() || 'B')
 
   // Help content function
   const getHelpContent = (topicId) => {

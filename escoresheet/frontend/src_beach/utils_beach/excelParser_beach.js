@@ -196,11 +196,18 @@ export function mapExcelRowToCompMatch(row, userId) {
   const playersTeam1 = [buildPlayer(t1P1Num, t1P1First, t1P1Last), buildPlayer(t1P2Num, t1P2First, t1P2Last)].filter(Boolean)
   const playersTeam2 = [buildPlayer(t2P1Num, t2P1First, t2P1Last), buildPlayer(t2P2Num, t2P2First, t2P2Last)].filter(Boolean)
 
+  // Infer team name from player last names if not provided
+  const inferName = (players) => {
+    const names = players.map(p => p?.last_name).filter(Boolean)
+    return names.length > 0 ? names.join('/') : ''
+  }
+
   // Build officials array
+  const DEFAULT_COUNTRY = 'CHE'
   const officials = []
-  if (ref1First || ref1Last) officials.push({ role: '1st referee', firstName: String(ref1First || ''), lastName: String(ref1Last || ''), country: '', dob: '' })
-  if (ref2First || ref2Last) officials.push({ role: '2nd referee', firstName: String(ref2First || ''), lastName: String(ref2Last || ''), country: '', dob: '' })
-  if (scorerFirst || scorerLast) officials.push({ role: 'scorer', firstName: String(scorerFirst || ''), lastName: String(scorerLast || ''), country: '', dob: '' })
+  if (ref1First || ref1Last) officials.push({ role: '1st referee', firstName: String(ref1First || ''), lastName: String(ref1Last || ''), country: DEFAULT_COUNTRY, dob: '' })
+  if (ref2First || ref2Last) officials.push({ role: '2nd referee', firstName: String(ref2First || ''), lastName: String(ref2Last || ''), country: DEFAULT_COUNTRY, dob: '' })
+  if (scorerFirst || scorerLast) officials.push({ role: 'scorer', firstName: String(scorerFirst || ''), lastName: String(scorerLast || ''), country: DEFAULT_COUNTRY, dob: '' })
 
   // Build has_coach boolean
   const hasCoachVal = hasCoach === true || norm(hasCoach) === 'yes' || norm(hasCoach) === 'true' || hasCoach === 1
@@ -219,16 +226,14 @@ export function mapExcelRowToCompMatch(row, userId) {
       has_coach: hasCoachVal
     },
     team1_data: {
-      name: String(t1Name || ''),
-      short_name: String(t1Short || ''),
-      color: '#ef4444',
-      country: String(t1Country || '')
+      name: String(t1Name || inferName(playersTeam1)),
+      short_name: '',
+      country: String(t1Country || DEFAULT_COUNTRY)
     },
     team2_data: {
-      name: String(t2Name || ''),
-      short_name: String(t2Short || ''),
-      color: '#3b82f6',
-      country: String(t2Country || '')
+      name: String(t2Name || inferName(playersTeam2)),
+      short_name: '',
+      country: String(t2Country || DEFAULT_COUNTRY)
     },
     players_team1: playersTeam1,
     players_team2: playersTeam2,

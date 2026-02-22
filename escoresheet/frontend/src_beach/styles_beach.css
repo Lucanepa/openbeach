@@ -2534,3 +2534,395 @@ body.ios-fullscreen {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* ═══════════════════════════════════════════════
+   Scoresheet Archive (dark theme)
+   ═══════════════════════════════════════════════ */
+
+/* Fullscreen states (loading, error) */
+.scoresheet-fullscreen-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+}
+.scoresheet-fullscreen-col {
+  flex-direction: column;
+  gap: 20px;
+}
+.scoresheet-loading-text {
+  font-size: 16px;
+  color: var(--muted);
+}
+.scoresheet-error-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--danger);
+}
+.scoresheet-error-detail {
+  font-size: 14px;
+  color: var(--muted);
+}
+.scoresheet-btn-back {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.scoresheet-btn-back:hover {
+  background: #2563eb;
+}
+
+.scoresheet-archive-layout {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+}
+
+/* Sidebar */
+.scoresheet-sidebar {
+  background: var(--panel);
+  border-right: 1px solid #1e293b;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  width: 0;
+  overflow: hidden;
+  transition: width 0.2s ease;
+}
+.scoresheet-sidebar.open {
+  width: 280px;
+}
+.scoresheet-sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid #1e293b;
+}
+.scoresheet-sidebar-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.scoresheet-sidebar-subtitle {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0;
+}
+.scoresheet-sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+.scoresheet-sidebar-empty {
+  text-align: center;
+  padding: 32px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.scoresheet-sidebar-year {
+  margin-bottom: 12px;
+}
+.scoresheet-sidebar-year-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 4px 12px;
+}
+.scoresheet-sidebar-comps {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Sidebar item */
+.scoresheet-sidebar-item {
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.scoresheet-sidebar-item:hover {
+  background: #1e293b;
+  color: var(--text);
+}
+.scoresheet-sidebar-item.active {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  font-weight: 600;
+}
+.scoresheet-sidebar-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.scoresheet-sidebar-item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scoresheet-sidebar-item-count {
+  font-size: 11px;
+  flex-shrink: 0;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  background: #1e293b;
+  color: var(--muted);
+}
+.scoresheet-sidebar-item-count.active {
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+}
+.scoresheet-sidebar-item-date {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+/* Main content area */
+.scoresheet-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.scoresheet-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid #1e293b;
+  background: var(--panel);
+}
+.scoresheet-topbar-toggle {
+  padding: 6px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.scoresheet-topbar-toggle:hover {
+  background: #1e293b;
+  color: var(--text);
+}
+.scoresheet-topbar-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+.scoresheet-topbar-subtitle {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0;
+}
+.scoresheet-content-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+.scoresheet-empty-state {
+  text-align: center;
+  padding: 64px 0;
+  font-size: 15px;
+  color: var(--muted);
+}
+.scoresheet-matches-container {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* Collapsible sections */
+.scoresheet-section {
+  margin-bottom: 12px;
+}
+.scoresheet-section-l0 { padding-left: 0; }
+.scoresheet-section-l1 { padding-left: 8px; }
+.scoresheet-section-l2 { padding-left: 16px; }
+.scoresheet-section-l3 { padding-left: 24px; }
+.scoresheet-section-l4 { padding-left: 32px; }
+
+.scoresheet-section-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 4px 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text);
+  transition: opacity 0.15s;
+}
+.scoresheet-section-btn:hover { opacity: 0.8; }
+
+.scoresheet-section-btn-l0 {
+  font-size: 16px;
+  font-weight: 700;
+  border-bottom: 2px solid #374151;
+  padding-bottom: 4px;
+}
+.scoresheet-section-btn-l1 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #d1d5db;
+}
+.scoresheet-section-btn-l2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.scoresheet-section-btn-l3 {
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+}
+.scoresheet-section-btn-l4 {
+  font-size: 11px;
+  font-weight: 500;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.scoresheet-section-arrow {
+  color: #6b7280;
+  font-size: 10px;
+  width: 16px;
+  flex-shrink: 0;
+}
+.scoresheet-section-badge {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  background: #1e293b;
+  padding: 1px 6px;
+  border-radius: 9999px;
+}
+.scoresheet-section-content {
+  margin-top: 4px;
+}
+
+/* Match list & cards */
+.scoresheet-match-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 16px;
+}
+.scoresheet-match-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background: var(--panel);
+  border-radius: 8px;
+  border: 1px solid #1e293b;
+  transition: border-color 0.15s;
+}
+.scoresheet-match-card:hover {
+  border-color: #374151;
+}
+.scoresheet-match-info {
+  flex: 1;
+  min-width: 0;
+}
+.scoresheet-match-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.scoresheet-match-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+.scoresheet-badge-game {
+  font-size: 11px;
+  font-weight: 600;
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.15);
+  padding: 2px 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.scoresheet-badge-score {
+  font-size: 13px;
+  font-weight: 600;
+  color: #93c5fd;
+  flex-shrink: 0;
+}
+.scoresheet-match-teams {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scoresheet-btn-view {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  background: #3b82f6;
+  color: #fff;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.scoresheet-btn-view:hover {
+  background: #2563eb;
+}
+.scoresheet-no-pdf {
+  font-size: 12px;
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* PDF viewer page */
+.scoresheet-pdf-viewer {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+}
+.scoresheet-pdf-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  background: var(--panel);
+  border-bottom: 1px solid #1e293b;
+}
+.scoresheet-pdf-frame {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: #fff;
+}
