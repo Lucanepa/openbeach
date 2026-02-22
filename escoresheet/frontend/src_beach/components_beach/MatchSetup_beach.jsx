@@ -400,7 +400,7 @@ function formatDobForSync(dob) {
   return null // Unknown format, don't sync
 }
 
-export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, onOpenCoinToss, offlineMode = false }) {
+export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, onOpenCoinToss, offlineMode = false, onLoadCompetitionMatch }) {
   const { t } = useTranslation()
   const { scaleFactor: baseScaleFactor } = useScaledLayout()
   const scaleFactor = baseScaleFactor * 1.25
@@ -1209,6 +1209,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         // when auto-save creates teams before user explicitly confirms
         if (match.matchInfoConfirmedAt && team1 && team2) {
           setMatchInfoConfirmed(true)
+        }
+
+        // Auto-navigate to info view for competition matches that aren't confirmed yet
+        if (match.competitionMatchId && !match.matchInfoConfirmedAt) {
+          setCurrentView('info')
         }
       } catch (error) {
         console.error('Error loading initial match data:', error)
@@ -5079,16 +5084,27 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               </span>
             </div>
           </div>
-          <div className="actions">
+          <div className="actions" style={{ display: 'flex', gap: 8 }}>
             {matchInfoConfirmed ? (
               <button className="secondary" onClick={() => setCurrentView('info')}>{t('common.edit')}</button>
             ) : (
-              <button
-                className="primary"
-                onClick={() => setCurrentView('info')}
-              >
-                {t('matchSetup.createMatch')}
-              </button>
+              <>
+                <button
+                  className="primary"
+                  onClick={() => setCurrentView('info')}
+                >
+                  {t('matchSetup.createMatch')}
+                </button>
+                {onLoadCompetitionMatch && (
+                  <button
+                    className="secondary"
+                    onClick={onLoadCompetitionMatch}
+                    style={{ background: 'rgba(124, 58, 237, 0.15)', color: '#a78bfa', border: '1px solid rgba(124, 58, 237, 0.3)' }}
+                  >
+                    {t('home.loadCompetitionMatch', 'Load Competition Match')}
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>

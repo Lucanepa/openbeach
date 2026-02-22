@@ -16,9 +16,7 @@ export default function HomePage({
   showDeleteMatchModal,
   restartTestMatch,
   onOpenSettings,
-  onRestoreMatch,
-  onLoadCompetitionMatch,
-  canUseSupabase
+  onRestoreMatch
 }) {
   const { t } = useTranslation()
   const [supportFeedbackOpen, setSupportFeedbackOpen] = useState(false)
@@ -130,30 +128,6 @@ export default function HomePage({
                 >
                   {testMatchLoading ? t('home.preparing') : t('home.testMatch')}
                 </button>
-                {canUseSupabase && onLoadCompetitionMatch && (
-                  <button
-                    onClick={() => {
-                      setNewMatchMenuOpen(false)
-                      onLoadCompetitionMatch()
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '12px 20px',
-                      fontSize: '20px',
-                      fontWeight: 600,
-                      background: 'rgba(124, 58, 237, 0.1)',
-                      color: 'rgba(124, 58, 237, 1)',
-                      border: '1px solid rgba(124, 58, 237, 0.3)',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      transition: 'background 0.2s'
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(124, 58, 237, 0.2)' }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(124, 58, 237, 0.1)' }}
-                  >
-                    {t('home.loadCompetitionMatch')}
-                  </button>
-                )}
               </div>
             )}
           </div>

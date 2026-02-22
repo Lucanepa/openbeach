@@ -3193,6 +3193,7 @@ export default function App() {
                     setShowCoinToss(true)
                   }}
                   offlineMode={offlineMode}
+                  onLoadCompetitionMatch={canUseSupabase ? () => setShowCompetitionPicker(true) : undefined}
                 />
               ) : showManualAdjustments && matchId ? (
                 <ManualAdjustments
@@ -3242,8 +3243,6 @@ export default function App() {
                     restartTestMatch={restartTestMatch}
                     onOpenSettings={() => setHomeOptionsModal(true)}
                     onRestoreMatch={() => setRestoreMatchModal(true)}
-                    onLoadCompetitionMatch={() => setShowCompetitionPicker(true)}
-                    canUseSupabase={canUseSupabase}
                   />
                 </>
               ) : (

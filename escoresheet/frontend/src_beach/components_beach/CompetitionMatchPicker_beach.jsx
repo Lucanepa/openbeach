@@ -33,20 +33,20 @@ function buildGroupedTree(matches) {
 
 function Section({ label, badge, level, defaultOpen = true, children }) {
   const [open, setOpen] = useState(defaultOpen)
-  const sizes = { 0: 15, 1: 14, 2: 13, 3: 12 }
-  const paddings = { 0: 0, 1: 8, 2: 16, 3: 24 }
+  const sizes = { 0: 20, 1: 18, 2: 16, 3: 15 }
+  const paddings = { 0: 0, 1: 12, 2: 24, 3: 36 }
 
   return (
-    <div style={{ paddingLeft: paddings[level] || 0, marginBottom: level < 2 ? 8 : 4 }}>
+    <div style={{ paddingLeft: paddings[level] || 0, marginBottom: level < 2 ? 12 : 6 }}>
       <button
         onClick={() => setOpen(!open)}
-        style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left', padding: '3px 0', background: 'none', border: 'none', color: '#d1d5db', fontSize: sizes[level] || 12, fontWeight: level < 2 ? 600 : 500, cursor: 'pointer' }}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', padding: '5px 0', background: 'none', border: 'none', color: '#d1d5db', fontSize: sizes[level] || 15, fontWeight: level < 2 ? 600 : 500, cursor: 'pointer' }}
       >
-        <span style={{ color: '#4b5563', fontSize: 10, width: 12, flexShrink: 0 }}>{open ? '\u25BC' : '\u25B6'}</span>
+        <span style={{ color: '#4b5563', fontSize: 13, width: 16, flexShrink: 0 }}>{open ? '\u25BC' : '\u25B6'}</span>
         <span>{label}</span>
-        {badge != null && <span style={{ fontSize: 10, color: '#6b7280', background: '#1f2937', padding: '1px 5px', borderRadius: 8 }}>{badge}</span>}
+        {badge != null && <span style={{ fontSize: 13, color: '#6b7280', background: '#1f2937', padding: '2px 7px', borderRadius: 10 }}>{badge}</span>}
       </button>
-      {open && <div style={{ marginTop: 2 }}>{children}</div>}
+      {open && <div style={{ marginTop: 4 }}>{children}</div>}
     </div>
   )
 }
@@ -98,26 +98,26 @@ export default function CompetitionMatchPicker({ open, onClose, onSelect }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }} onClick={onClose}>
-      <div style={{ width: 'min(95vw, 600px)', maxHeight: '85vh', background: '#111827', border: '2px solid #7c3aed', borderRadius: 12, display: 'flex', flexDirection: 'column', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+      <div style={{ width: 'min(95vw, 900px)', maxHeight: '90vh', background: '#111827', border: '2px solid #7c3aed', borderRadius: 16, display: 'flex', flexDirection: 'column', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', background: 'rgba(124, 58, 237, 0.1)', borderBottom: '1px solid rgba(124, 58, 237, 0.3)', flexShrink: 0 }}>
-          <h2 style={{ margin: 0, color: '#fff', fontSize: 18, fontWeight: 600 }}>Load Competition Match</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: 22, cursor: 'pointer', padding: 0, lineHeight: 1 }}>x</button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', background: 'rgba(124, 58, 237, 0.1)', borderBottom: '1px solid rgba(124, 58, 237, 0.3)', flexShrink: 0 }}>
+          <h2 style={{ margin: 0, color: '#fff', fontSize: 24, fontWeight: 600 }}>Load Competition Match</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: 28, cursor: 'pointer', padding: 0, lineHeight: 1 }}>x</button>
         </div>
 
         {/* Content */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
           {loading ? (
-            <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>Loading available matches...</div>
+            <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af', fontSize: 18 }}>Loading available matches...</div>
           ) : error ? (
-            <div style={{ textAlign: 'center', padding: 40 }}>
-              <p style={{ color: '#ef4444', marginBottom: 8 }}>Error: {error}</p>
+            <div style={{ textAlign: 'center', padding: 60 }}>
+              <p style={{ color: '#ef4444', marginBottom: 12, fontSize: 16 }}>Error: {error}</p>
             </div>
           ) : matches.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 40 }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>&#x1F4CB;</div>
-              <p style={{ color: '#6b7280' }}>No competition matches available</p>
-              <p style={{ color: '#4b5563', fontSize: 13 }}>Ask your competition admin to upload matches</p>
+            <div style={{ textAlign: 'center', padding: 60 }}>
+              <div style={{ fontSize: 48, marginBottom: 12 }}>&#x1F4CB;</div>
+              <p style={{ color: '#6b7280', fontSize: 18 }}>No competition matches available</p>
+              <p style={{ color: '#4b5563', fontSize: 15 }}>Ask your competition admin to upload matches</p>
             </div>
           ) : (
             Object.entries(tree)
@@ -158,7 +158,7 @@ export default function CompetitionMatchPicker({ open, onClose, onSelect }) {
 
                                   return (
                                     <Section key={round} label={roundLabel} badge={roundMatches.length} level={3}>
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 12 }}>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 16 }}>
                                         {sorted.map(item => {
                                           const t1 = item.team1_data?.name || ''
                                           const t2 = item.team2_data?.name || ''
@@ -173,9 +173,9 @@ export default function CompetitionMatchPicker({ open, onClose, onSelect }) {
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'space-between',
-                                                padding: '8px 10px',
+                                                padding: '12px 14px',
                                                 background: isSelecting ? 'rgba(124, 58, 237, 0.2)' : '#0b1220',
-                                                borderRadius: 6,
+                                                borderRadius: 8,
                                                 border: '1px solid #1f2937',
                                                 cursor: isSelecting ? 'wait' : 'pointer',
                                                 width: '100%',
@@ -183,23 +183,23 @@ export default function CompetitionMatchPicker({ open, onClose, onSelect }) {
                                               }}
                                             >
                                               <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                                                  <span style={{ fontSize: 10, fontWeight: 600, color: '#3b82f6', background: 'rgba(59, 130, 246, 0.1)', padding: '1px 5px', borderRadius: 3 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                                                  <span style={{ fontSize: 14, fontWeight: 600, color: '#3b82f6', background: 'rgba(59, 130, 246, 0.1)', padding: '2px 7px', borderRadius: 4 }}>
                                                     #{item.game_n || '?'}
                                                   </span>
                                                   {item.scheduled_at && (
-                                                    <span style={{ fontSize: 10, color: '#6b7280' }}>
+                                                    <span style={{ fontSize: 14, color: '#6b7280' }}>
                                                       {new Date(item.scheduled_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                                       {' '}
                                                       {new Date(item.scheduled_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
                                                     </span>
                                                   )}
                                                 </div>
-                                                <div style={{ fontSize: 12, fontWeight: 500, color: '#e5e7eb', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                <div style={{ fontSize: 16, fontWeight: 500, color: '#e5e7eb', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                   {t1 || 'TBD'} vs {t2 || 'TBD'}
                                                 </div>
                                               </div>
-                                              <span style={{ fontSize: 11, color: isSelecting ? '#7c3aed' : '#6b7280', fontWeight: 500, flexShrink: 0, marginLeft: 8 }}>
+                                              <span style={{ fontSize: 15, color: isSelecting ? '#7c3aed' : '#6b7280', fontWeight: 500, flexShrink: 0, marginLeft: 12 }}>
                                                 {isSelecting ? 'Loading...' : 'Load'}
                                               </span>
                                             </button>
