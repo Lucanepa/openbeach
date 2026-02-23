@@ -385,6 +385,7 @@
     "endMatch": "Spiil beände",
     "matchPoint": "Matchball",
     "setPoint": "Satzball",
+    "setInterval": "Satzpause",
     "options": "Optione",
     "showRosters": "Kader aazeige",
     "hideRosters": "Kader usblände",
@@ -533,7 +534,8 @@
       "actionLog": "Aktionsprotokoll",
       "manualChanges": "Manuelli Änderige",
       "keyboardShortcuts": "Tastaturchürzel",
-      "searchEvents": "Ereignis sueche..."
+      "searchEvents": "Ereignis sueche...",
+      "openScoreboard": "Aazeigetafle öffne"
     },
     "stopMatch": {
       "title": "Spiil abbreche",
@@ -640,7 +642,20 @@
     "captainOnCourt": {
       "designate": "Spiilcaptain",
       "selectTitle": "Spielführer"
-    }
+    },
+    "title": "Aazeigetafle",
+    "setup": "Wähled Sie d Verbindig zum Spiil",
+    "localMode": "Lokal",
+    "localModeDesc": "Gliichs Grät wie de Schriber. Sofortigi Verbindig über Browser.",
+    "remoteMode": "Fernzuegriff",
+    "remoteModeDesc": "Anders Grät. Verbindig über Internet mit Supabase.",
+    "selectGame": "Spiil uswähle",
+    "selectGameDesc": "Wähled Sie es Live-Spiil zum Aazeige",
+    "waiting": "Warte uf de Schriber...",
+    "waitingHint": "Started Sie es Spiil i de Schriber-App uf dem Grät",
+    "connecting": "Verbindig wird hergstellt...",
+    "displayTimeout": "USZIIT",
+    "displayFinal": "ENDRESULTAT"
   },
   "settings": {
     "title": "Iistellige",
@@ -1230,25 +1245,6 @@
     "errorLoadingScoresheets": "Fehler bim Lade vo de Spiilprotokoll",
     "scoresheetArchive": "Spiilprotokoll-Archiv",
     "noScoresheetsYet": "No kei Spiilprotokoll ueglade"
-  },
-  "scoreboard": {
-    "title": "Aazeigetafle",
-    "setup": "Wähled Sie d Verbindig zum Spiil",
-    "localMode": "Lokal",
-    "localModeDesc": "Gliichs Grät wie de Schriber. Sofortigi Verbindig über Browser.",
-    "remoteMode": "Fernzuegriff",
-    "remoteModeDesc": "Anders Grät. Verbindig über Internet mit Supabase.",
-    "selectGame": "Spiil uswähle",
-    "selectGameDesc": "Wähled Sie es Live-Spiil zum Aazeige",
-    "waiting": "Warte uf de Schriber...",
-    "waitingHint": "Started Sie es Spiil i de Schriber-App uf dem Grät",
-    "connecting": "Verbindig wird hergstellt...",
-    "timeout": "USZIIT",
-    "setInterval": "SATZPAUSE",
-    "final": "ENDRESULTAT",
-    "menu": {
-      "openScoreboard": "Aazeigetafle öffne"
-    }
   },
   "auth": {
     "signIn": "Aamälde",

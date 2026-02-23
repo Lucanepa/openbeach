@@ -936,6 +936,27 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           const teamAColor = teamA === 'team1' ? team1Color : team2Color
           const teamBColor = teamA === 'team1' ? team2Color : team1Color
 
+          // Serving info (same logic as BroadcastChannel below)
+          const servingSide = serveA ? 'left' : 'right'
+          const firstServeTeam = serveA ? teamA : teamB
+          const serverNum = firstServeTeam === 'team1' ? team1FirstServe : team2FirstServe
+
+          // Build initial lineups (beach: positions I = first server, II = other player)
+          const teamARoster = teamA === 'team1' ? team1Roster : team2Roster
+          const teamBRoster = teamA === 'team1' ? team2Roster : team1Roster
+          const teamAFirstServe = teamA === 'team1' ? team1FirstServe : team2FirstServe
+          const teamBFirstServe = teamA === 'team1' ? team2FirstServe : team1FirstServe
+
+          const buildInitialLineup = (roster, firstServeNum) => {
+            if (!roster || roster.length < 2 || !firstServeNum) return null
+            const otherPlayer = roster.find(p => p.number !== firstServeNum)
+            if (!otherPlayer) return null
+            return {
+              I: { number: Number(firstServeNum), isCaptain: !!roster.find(p => p.number === firstServeNum)?.isCaptain, isCourtCaptain: false, hasSanction: false },
+              II: { number: Number(otherPlayer.number), isCaptain: !!otherPlayer.isCaptain, isCourtCaptain: false, hasSanction: false }
+            }
+          }
+
           const { error: insertError } = await supabase
             .from('match_live_state')
             .upsert({
@@ -955,11 +976,20 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               points_b: 0,
               // Side (Team A always on left in Set 1)
               side_a: 'left',
+              // Serving info
+              serving_team: servingSide,
+              ...(serverNum ? { server_number: Number(serverNum) } : {}),
+              // Initial lineups (positions I and II for beach)
+              lineup_a: buildInitialLineup(teamARoster, teamAFirstServe),
+              lineup_b: buildInitialLineup(teamBRoster, teamBFirstServe),
               // Stats
               timeouts_a: 0,
               timeouts_b: 0,
-              subs_a: 0,
-              subs_b: 0,
+              challenges_used_a: 0,
+              challenges_used_b: 0,
+              timeout_active: false,
+              set_interval_active: false,
+              sport_type: 'beach',
               match_status: 'starting',
               // Match metadata
               game_n: match.gameN || match.game_n || null,
@@ -977,6 +1007,52 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         console.warn('[CoinToss] Error creating match_live_state:', err)
       }
     }
+
+    // Broadcast initial state to local scoreboard (works offline, no Supabase needed)
+    try {
+      const teamAName = teamA === 'team1' ? team1Name : team2Name
+      const teamBName = teamA === 'team1' ? team2Name : team1Name
+      const teamAShort = teamA === 'team1' ? team1ShortName : team2ShortName
+      const teamBShort = teamA === 'team1' ? team2ShortName : team1ShortName
+      const teamAColor = teamA === 'team1' ? team1Color : team2Color
+      const teamBColor = teamA === 'team1' ? team2Color : team1Color
+      const servingSide = serveA ? 'left' : 'right'
+      const serverNum = firstServeTeam === 'team1' ? team1FirstServe : team2FirstServe
+
+      const ch = new BroadcastChannel('openbeach-scoreboard')
+      ch.postMessage({
+        type: 'LIVE_STATE_UPDATE',
+        data: {
+          match_id: matchId,
+          current_set: 1,
+          team_a_name: teamAName,
+          team_a_short: teamAShort || teamAName?.substring(0, 3).toUpperCase(),
+          team_a_color: teamAColor || '#ef4444',
+          team_b_name: teamBName,
+          team_b_short: teamBShort || teamBName?.substring(0, 3).toUpperCase(),
+          team_b_color: teamBColor || '#3b82f6',
+          sets_won_a: 0,
+          sets_won_b: 0,
+          points_a: 0,
+          points_b: 0,
+          side_a: 'left',
+          serving_team: servingSide,
+          server_number: serverNum || null,
+          challenges_used_a: 0,
+          challenges_used_b: 0,
+          timeouts_a: 0,
+          timeouts_b: 0,
+          timeout_active: false,
+          set_interval_active: false,
+          match_status: 'live',
+          game_n: match.gameN || match.game_n || null,
+          league: match.league || null,
+          gender: match.match_type_2 || null,
+          updated_at: new Date().toISOString()
+        }
+      })
+      ch.close()
+    } catch (e) { /* BroadcastChannel not supported */ }
 
     // Cloud backup at coin toss (non-blocking)
     if (!match?.test) {

@@ -385,6 +385,7 @@
     "endMatch": "Spiel beenden",
     "matchPoint": "Matchball",
     "setPoint": "Satzball",
+    "setInterval": "Satzpause",
     "options": "Optionen",
     "showRosters": "Kader anzeigen",
     "hideRosters": "Kader ausblenden",
@@ -533,7 +534,8 @@
       "actionLog": "Aktionsprotokoll",
       "manualChanges": "Manuelle Änderungen",
       "keyboardShortcuts": "Tastaturkürzel",
-      "searchEvents": "Ereignisse suchen..."
+      "searchEvents": "Ereignisse suchen...",
+      "openScoreboard": "Anzeigetafel öffnen"
     },
     "stopMatch": {
       "title": "Spiel abbrechen",
@@ -640,7 +642,20 @@
     "captainOnCourt": {
       "designate": "Spielkapitän",
       "selectTitle": "Spielführer"
-    }
+    },
+    "title": "Anzeigetafel",
+    "setup": "Wählen Sie die Verbindung zum Spiel",
+    "localMode": "Lokal",
+    "localModeDesc": "Gleiches Gerät wie der Schreiber. Sofortige Verbindung über Browser.",
+    "remoteMode": "Fernzugriff",
+    "remoteModeDesc": "Anderes Gerät. Verbindung über Internet mit Supabase.",
+    "selectGame": "Spiel auswählen",
+    "selectGameDesc": "Wählen Sie ein Live-Spiel zum Anzeigen",
+    "waiting": "Warte auf den Schreiber...",
+    "waitingHint": "Starten Sie ein Spiel in der Schreiber-App auf diesem Gerät",
+    "connecting": "Verbindung wird hergestellt...",
+    "displayTimeout": "AUSZEIT",
+    "displayFinal": "ENDERGEBNIS"
   },
   "settings": {
     "title": "Einstellungen",
@@ -1230,25 +1245,6 @@
     "errorLoadingScoresheets": "Fehler beim Laden der Spielprotokolle",
     "scoresheetArchive": "Spielprotokoll-Archiv",
     "noScoresheetsYet": "Noch keine Spielprotokolle hochgeladen"
-  },
-  "scoreboard": {
-    "title": "Anzeigetafel",
-    "setup": "Wählen Sie die Verbindung zum Spiel",
-    "localMode": "Lokal",
-    "localModeDesc": "Gleiches Gerät wie der Schreiber. Sofortige Verbindung über Browser.",
-    "remoteMode": "Fernzugriff",
-    "remoteModeDesc": "Anderes Gerät. Verbindung über Internet mit Supabase.",
-    "selectGame": "Spiel auswählen",
-    "selectGameDesc": "Wählen Sie ein Live-Spiel zum Anzeigen",
-    "waiting": "Warte auf den Schreiber...",
-    "waitingHint": "Starten Sie ein Spiel in der Schreiber-App auf diesem Gerät",
-    "connecting": "Verbindung wird hergestellt...",
-    "timeout": "AUSZEIT",
-    "setInterval": "SATZPAUSE",
-    "final": "ENDERGEBNIS",
-    "menu": {
-      "openScoreboard": "Anzeigetafel öffnen"
-    }
   },
   "auth": {
     "signIn": "Anmelden",

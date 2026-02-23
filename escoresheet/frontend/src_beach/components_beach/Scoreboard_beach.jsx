@@ -840,10 +840,41 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       }
 
       const servingTeam = pointEvents.length > 0 ? (pointEvents[0].payload?.team || currentSetFirstServe) : currentSetFirstServe
-      const servingTeamLineup = getLineupForTeam(servingTeam)
-      // In beach volleyball, first server is position I (if this team serves first) or II (if second)
-      const serverNumber = servingTeamLineup?.['I'] ? Number(servingTeamLineup['I'])
-        : servingTeamLineup?.['II'] ? Number(servingTeamLineup['II']) : null
+
+      // Determine which player on the serving team is currently serving
+      // In beach volleyball each team has 2 players. The first server is set at coin toss.
+      // Server alternates within a team each time they regain service.
+      // Count how many times this team has gained serve (service changes)
+      const pointEventsAsc = [...pointEvents].reverse()
+      let trackingServe = currentSetFirstServe
+      let serviceChangeCount = trackingServe === servingTeam ? 1 : 0
+      for (const pe of pointEventsAsc) {
+        const scorer = pe.payload?.team
+        if (scorer && scorer !== trackingServe) {
+          trackingServe = scorer
+          if (scorer === servingTeam) serviceChangeCount++
+        }
+      }
+      // Odd = first server, Even = second server
+      const isFirstServer = serviceChangeCount % 2 === 1
+
+      // Get the first server number for the serving team (set at coin toss)
+      const servingTeamFirstServe = servingTeam === 'team1'
+        ? match.team1FirstServe
+        : match.team2FirstServe
+      // Get the other player on the serving team
+      const servingTeamPlayers = servingTeam === 'team1' ? team1PlayersDb : team2PlayersDb
+      const otherPlayer = servingTeamPlayers.find(p => String(p.number) !== String(servingTeamFirstServe))
+      const secondServerNum = otherPlayer ? Number(otherPlayer.number) : null
+      const firstServerNum = servingTeamFirstServe ? Number(servingTeamFirstServe) : null
+
+      const serverNumber = isFirstServer ? firstServerNum : secondServerNum
+      console.warn('[Snapshot] serverNumber=' + serverNumber +
+        ' servingTeam=' + servingTeam +
+        ' isFirstServer=' + isFirstServer +
+        ' firstServerNum=' + firstServerNum +
+        ' secondServerNum=' + secondServerNum +
+        ' serviceChangeCount=' + serviceChangeCount)
 
       // Sanctions
       const getSanctionsForTeam = (teamKey) => {
@@ -1556,11 +1587,90 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     ws.send(JSON.stringify(actionPayload))
   }, [matchId])
 
+  // Broadcast match state to local scoreboard windows via BroadcastChannel (works offline, no Supabase)
+  const broadcastToScoreboard = useCallback(async (cachedSnapshot = null) => {
+    if (!matchId) return
+    try {
+      const snapshot = cachedSnapshot || await captureFullStateSnapshot()
+      if (!snapshot) return
+
+      const match = await db.matches.get(matchId)
+      if (!match) return
+
+      const sideA = snapshot.sideA || 'left'
+      const servingTeam = snapshot.servingTeam === snapshot.teamAKey ? sideA : (sideA === 'left' ? 'right' : 'left')
+
+      const broadcastData = {
+        match_id: matchId,
+        current_set: snapshot.currentSetIndex,
+        team_a_name: snapshot.teamAName,
+        team_a_short: snapshot.teamAShort,
+        team_a_color: snapshot.teamAColor,
+        team_b_name: snapshot.teamBName,
+        team_b_short: snapshot.teamBShort,
+        team_b_color: snapshot.teamBColor,
+        sets_won_a: snapshot.setScoreA,
+        sets_won_b: snapshot.setScoreB,
+        points_a: snapshot.pointsA,
+        points_b: snapshot.pointsB,
+        side_a: sideA,
+        serving_team: servingTeam,
+        server_number: snapshot.serverNumber || null,
+        rally_in_progress: snapshot.rallyInProgress || false,
+        challenges_used_a: snapshot.challengesUsedA || 0,
+        challenges_used_b: snapshot.challengesUsedB || 0,
+        timeouts_a: snapshot.timeoutsA,
+        timeouts_b: snapshot.timeoutsB,
+        timeout_active: !!timeoutModal,
+        set_interval_active: false,
+        match_status: snapshot.matchStatus || 'live',
+        game_n: match.gameN || match.game_n || null,
+        league: match.league || null,
+        gender: match.match_type_2 || null,
+        updated_at: new Date().toISOString()
+      }
+
+      console.log('[Broadcast] server_number debug:', {
+        snapshotServerNumber: snapshot.serverNumber,
+        snapshotServingTeam: snapshot.servingTeam,
+        snapshotTeamAKey: snapshot.teamAKey,
+        sideA,
+        servingTeam,
+        broadcastServerNumber: broadcastData.server_number,
+        broadcastServingTeam: broadcastData.serving_team,
+        rallyInProgress: broadcastData.rally_in_progress
+      })
+
+      const ch = new BroadcastChannel('openbeach-scoreboard')
+      ch.postMessage({ type: 'LIVE_STATE_UPDATE', data: broadcastData })
+      ch.close()
+    } catch (e) { console.error('[Broadcast] error:', e) }
+  }, [matchId, captureFullStateSnapshot, timeoutModal])
+
+  // Listen for scoreboard state requests (when scoreboard opens mid-match)
+  useEffect(() => {
+    if (!matchId) return
+    let channel
+    try {
+      channel = new BroadcastChannel('openbeach-scoreboard')
+      channel.onmessage = (event) => {
+        if (event.data?.type === 'REQUEST_STATE') {
+          broadcastToScoreboard()
+        }
+      }
+    } catch (e) { return }
+    return () => { try { channel.close() } catch (e) {} }
+  }, [matchId, broadcastToScoreboard])
+
   // Sync live state to Supabase for referee.openvolley.app
   // SIMPLIFIED: Uses stateSnapshot from events instead of recomputing everything
   // cachedSnapshot: Optional snapshot passed from logEvent to avoid re-fetching/re-computing
   const syncLiveStateToSupabase = useCallback(async (eventType, eventTeam, eventData, cachedSnapshot = null) => {
     const _tl = performance.now()
+
+    // Always broadcast locally (works offline, no Supabase needed)
+    broadcastToScoreboard(cachedSnapshot)
+
     if (!supabase || !matchId) return
 
     try {
@@ -1710,7 +1820,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         timeouts_a: snapshot.timeoutsA,
         timeouts_b: snapshot.timeoutsB,
         // Serving player number and BMP challenges used (for scoreboard/livescore display)
-        server_number: snapshot.serverNumber || null,
+        ...(snapshot.serverNumber ? { server_number: snapshot.serverNumber } : {}),
         challenges_used_a: snapshot.challengesUsedA || 0,
         challenges_used_b: snapshot.challengesUsedB || 0,
         subs_a: snapshot.subsA?.length > 0 ? snapshot.subsA : null,
@@ -1737,13 +1847,6 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         gender: match.match_type_2 || null,
         updated_at: new Date().toISOString()
       }
-
-      // Broadcast to local scoreboard windows via BroadcastChannel
-      try {
-        const scoreboardChannel = new BroadcastChannel('openbeach-scoreboard')
-        scoreboardChannel.postMessage({ type: 'LIVE_STATE_UPDATE', data: liveStateData })
-        scoreboardChannel.close()
-      } catch (e) { /* BroadcastChannel not supported */ }
 
       // DIRECT SUPABASE WRITE (bypasses sync_queue) - see architecture note at top of file
       // Reason: match_live_state needs sub-second latency for real-time spectator display.
@@ -1776,7 +1879,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     } catch (err) {
       console.error('[LiveState] Exception:', err)
     }
-  }, [matchId, captureFullStateSnapshot])
+  }, [matchId, captureFullStateSnapshot, broadcastToScoreboard])
 
 
 
@@ -3460,10 +3563,27 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             .sort((a, b) => (b.seq || 0) - (a.seq || 0))
           const servingTeam = pointEventsForSync.length > 0 ? (pointEventsForSync[0].payload?.team || currentSetFirstServe) : currentSetFirstServe
 
-          // Get server number from position I or II of serving team's lineup (beach volleyball)
-          const servingTeamLineup = getLineupForTeamFresh(servingTeam)
-          const serverNumber = servingTeamLineup?.['I'] ? Number(servingTeamLineup['I'])
-            : servingTeamLineup?.['II'] ? Number(servingTeamLineup['II']) : null
+          // Determine which player on serving team is currently serving
+          // Count service changes to determine first vs second server
+          const pointEventsAscSync = [...pointEventsForSync].reverse()
+          let trackingServeSync = currentSetFirstServe
+          let serviceChangeCountSync = trackingServeSync === servingTeam ? 1 : 0
+          for (const pe of pointEventsAscSync) {
+            const scorer = pe.payload?.team
+            if (scorer && scorer !== trackingServeSync) {
+              trackingServeSync = scorer
+              if (scorer === servingTeam) serviceChangeCountSync++
+            }
+          }
+          const isFirstServerSync = serviceChangeCountSync % 2 === 1
+          // Get player numbers from match data
+          const syncFirstServeNum = servingTeam === 'team1' ? match?.team1FirstServe : match?.team2FirstServe
+          const syncTeamId = servingTeam === 'team1' ? (match?.team1Id || match?.team1TeamId) : (match?.team2Id || match?.team2TeamId)
+          const syncPlayers = syncTeamId ? await db.players.where('teamId').equals(syncTeamId).toArray() : []
+          const syncOtherPlayer = syncPlayers.find(p => String(p.number) !== String(syncFirstServeNum))
+          const serverNumber = isFirstServerSync
+            ? (syncFirstServeNum ? Number(syncFirstServeNum) : null)
+            : (syncOtherPlayer ? Number(syncOtherPlayer.number) : null)
 
           // Get fresh score from the current set for this event
           const allSetsForScore = await db.sets.where('matchId').equals(matchId).toArray()
@@ -3502,6 +3622,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
         // Sync to referee after every event
         syncToReferee()
+
+        // Broadcast to local scoreboard (works offline, every event)
+        broadcastToScoreboard(stateSnapshot)
 
         // Sync live state to Supabase for key events
         const keyEvents = ['point', 'timeout', 'substitution', 'set_start', 'set_end', 'lineup', 'sanction', 'court_captain_designation']
@@ -3550,7 +3673,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         }
       }
     },
-    [data?.set, matchId, getNextSeq, getNextSubSeq, captureFullStateSnapshot, syncToReferee, syncLiveStateToSupabase, refreshScoresheet]
+    [data?.set, matchId, getNextSeq, getNextSubSeq, captureFullStateSnapshot, syncToReferee, broadcastToScoreboard, syncLiveStateToSupabase, refreshScoresheet]
   )
 
   // Keep logEventRef updated with latest function to avoid circular dependencies
@@ -15120,7 +15243,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       {/* Timeout confirmation modal - only show before timeout starts, not during countdown */}
       {timeoutModal && !timeoutModal.started && (
         <Modal
-          title={`Time-out — ${timeoutModal.team === 'team1' ? (data?.team1Team?.name || 'team1') : (data?.team2Team?.name || 'team2')}`}
+          title={`Time-out — ${timeoutModal.team === teamAKey ? 'A' : 'B'}`}
           open={true}
           onClose={cancelTimeout}
           width={400}
@@ -17026,9 +17149,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             </p>
             <div style={{ marginBottom: '16px', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
               <span style={{ background: data?.team1Team?.color || '#ef4444', color: isBrightColor(data?.team1Team?.color || '#ef4444') ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>{teamAKey === 'team1' ? 'A' : 'B'}</span>
-              <span>{data?.team1Team?.shortName || data?.team1Team?.name || 'Team 1'}</span>
               <strong style={{ fontSize: '20px' }}>{ttoModal.team1Points} : {ttoModal.team2Points}</strong>
-              <span>{data?.team2Team?.shortName || data?.team2Team?.name || 'Team 2'}</span>
               <span style={{ background: data?.team2Team?.color || '#3b82f6', color: isBrightColor(data?.team2Team?.color || '#3b82f6') ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>{teamAKey === 'team2' ? 'A' : 'B'}</span>
             </div>
             {ttoModal.triggerCourtSwitchAfter && (
@@ -17592,9 +17713,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             </p>
             <div style={{ marginBottom: '16px', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
               <span style={{ background: data?.team1Team?.color || '#ef4444', color: isBrightColor(data?.team1Team?.color || '#ef4444') ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>{teamAKey === 'team1' ? 'A' : 'B'}</span>
-              <span>{data?.team1Team?.shortName || data?.team1Team?.name || 'Team 1'}</span>
               <strong style={{ fontSize: '20px' }}>{courtSwitchModal.team1Points} : {courtSwitchModal.team2Points}</strong>
-              <span>{data?.team2Team?.shortName || data?.team2Team?.name || 'Team 2'}</span>
               <span style={{ background: data?.team2Team?.color || '#3b82f6', color: isBrightColor(data?.team2Team?.color || '#3b82f6') ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>{teamAKey === 'team2' ? 'A' : 'B'}</span>
             </div>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>

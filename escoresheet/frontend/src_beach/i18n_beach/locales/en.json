@@ -389,6 +389,7 @@
     "endMatch": "End Match",
     "matchPoint": "Match Point",
     "setPoint": "Set Point",
+    "setInterval": "Set Interval",
     "options": "Options",
     "showRosters": "Show Rosters",
     "hideRosters": "Hide Rosters",
@@ -537,7 +538,8 @@
       "actionLog": "Action Log",
       "manualChanges": "Manual Changes",
       "keyboardShortcuts": "Keyboard Shortcuts",
-      "searchEvents": "Search events..."
+      "searchEvents": "Search events...",
+      "openScoreboard": "Open Scoreboard"
     },
     "stopMatch": {
       "title": "Stop the Match",
@@ -644,7 +646,20 @@
     "captainOnCourt": {
       "designate": "Game Captain",
       "selectTitle": "Game Captain"
-    }
+    },
+    "title": "Scoreboard",
+    "setup": "Choose how to connect to the match",
+    "localMode": "Local",
+    "localModeDesc": "Same device as the scorer. Connect instantly via browser.",
+    "remoteMode": "Remote",
+    "remoteModeDesc": "Different device. Connect via internet using Supabase.",
+    "selectGame": "Select a Game",
+    "selectGameDesc": "Choose a live match to display",
+    "waiting": "Waiting for scorer...",
+    "waitingHint": "Start scoring a match in the scorer app on this device",
+    "connecting": "Connecting...",
+    "displayTimeout": "TIMEOUT",
+    "displayFinal": "FINAL"
   },
   "settings": {
     "title": "Settings",
@@ -1234,25 +1249,6 @@
     "errorLoadingScoresheets": "Error Loading Scoresheets",
     "scoresheetArchive": "Scoresheet Archive",
     "noScoresheetsYet": "No scoresheets uploaded yet"
-  },
-  "scoreboard": {
-    "title": "Scoreboard",
-    "setup": "Choose how to connect to the match",
-    "localMode": "Local",
-    "localModeDesc": "Same device as the scorer. Connect instantly via browser.",
-    "remoteMode": "Remote",
-    "remoteModeDesc": "Different device. Connect via internet using Supabase.",
-    "selectGame": "Select a Game",
-    "selectGameDesc": "Choose a live match to display",
-    "waiting": "Waiting for scorer...",
-    "waitingHint": "Start scoring a match in the scorer app on this device",
-    "connecting": "Connecting...",
-    "timeout": "TIMEOUT",
-    "setInterval": "SET INTERVAL",
-    "final": "FINAL",
-    "menu": {
-      "openScoreboard": "Open Scoreboard"
-    }
   },
   "auth": {
     "signIn": "Sign In",

@@ -3251,7 +3251,7 @@ body.ios-fullscreen {
    =========================== */
 .scoreboard-app {
   min-height: 100vh;
-  background: #0f172a;
+  background: #000;
   color: #fff;
   font-family: 'Inter', sans-serif;
   overflow: hidden;
@@ -3267,31 +3267,32 @@ body.ios-fullscreen {
   gap: 32px;
 }
 .scoreboard-setup-title {
-  font-size: 32px;
+  font-size: clamp(22px, 5vw, 32px);
   font-weight: 800;
   text-align: center;
 }
 .scoreboard-setup-subtitle {
-  font-size: 16px;
+  font-size: clamp(13px, 2.5vw, 16px);
   color: var(--muted);
   text-align: center;
   margin-top: 8px;
 }
 .scoreboard-mode-cards {
   display: flex;
-  gap: 24px;
+  gap: clamp(12px, 3vw, 24px);
   flex-wrap: wrap;
   justify-content: center;
+  padding: 0 16px;
 }
 .scoreboard-mode-card {
-  padding: 32px;
+  padding: clamp(16px, 4vw, 32px);
   background: rgba(255, 255, 255, 0.05);
   border: 2px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
   cursor: pointer;
   text-align: center;
   transition: border-color 0.2s, background 0.2s;
-  width: 280px;
+  width: min(280px, 80vw);
   color: #fff;
   font-family: inherit;
 }
@@ -3380,156 +3381,186 @@ body.ios-fullscreen {
   opacity: 0.5;
   cursor: not-allowed;
 }
-/* Main scoreboard display */
+/* Main scoreboard display — explicit row heights */
 .scoreboard-display {
+  display: grid;
+  grid-template-rows: 7vh 6vh 1fr 6vh 4vh;
+  height: 100vh;
+  background: #000;
+  position: relative;
+  overflow: hidden;
+}
+/* Row 1: team names + color bars (7vh) */
+.scoreboard-top-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2vw;
+  padding: 0 3vw;
+  align-items: center;
+}
+.scoreboard-top-team {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  background: #0f172a;
-  position: relative;
-}
-.scoreboard-header {
-  display: flex;
-  justify-content: center;
   align-items: center;
-  padding: 1.5vh 2vw;
-  background: rgba(255, 255, 255, 0.03);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  justify-content: center;
+  gap: 0.5vh;
+  overflow: hidden;
 }
-.scoreboard-header-text {
-  font-size: clamp(14px, 2vw, 28px);
-  color: rgba(255, 255, 255, 0.6);
-  text-align: center;
-  font-weight: 500;
+.scoreboard-team-color-bar {
+  width: 90%;
+  height: clamp(4px, 1.2vh, 10px);
+  border-radius: 4px;
 }
-.scoreboard-header-accent {
-  color: var(--accent);
+.scoreboard-team-name-display {
+  font-size: clamp(12px, 3.5vw, 48px);
   font-weight: 700;
+  text-align: center;
+  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 44vw;
+  width: 100%;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
 }
-/* Score area */
-.scoreboard-main {
-  flex: 1;
+/* Row 2: BMP LED lights (6vh) */
+/* Row 4: TO LED lights (6vh) */
+.scoreboard-led-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2vw;
+  padding: 0 3vw;
+  align-items: center;
+}
+.scoreboard-led-row {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2vh 4vw;
+  gap: clamp(10px, 2vw, 28px);
+}
+.scoreboard-led {
+  width: clamp(18px, 4vw, 52px);
+  height: clamp(18px, 4vw, 52px);
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  transition: background 0.3s, box-shadow 0.3s, border-color 0.3s;
+}
+/* BMP LED: orange when on */
+.scoreboard-led-bmp.scoreboard-led-on {
+  background: #f59e0b;
+  border-color: #f59e0b;
+  box-shadow: 0 0 18px 6px rgba(245, 158, 11, 0.5);
+}
+/* TO LED: red when on */
+.scoreboard-led-to.scoreboard-led-on {
+  background: #ef4444;
+  border-color: #ef4444;
+  box-shadow: 0 0 18px 6px rgba(239, 68, 68, 0.5);
+}
+/* Row 3: Score area (fills remaining ~77vh) */
+.scoreboard-main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 .scoreboard-score-grid {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 4vw;
+  gap: 0;
   width: 100%;
-  max-width: 95vw;
+  padding: 0;
 }
-.scoreboard-team-block {
+.scoreboard-score-col {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 1vh;
 }
-.scoreboard-team-color-bar {
-  width: 80%;
-  height: clamp(4px, 0.8vh, 8px);
-  border-radius: 4px;
+/* Left score pushes toward colon, right score pushes toward colon */
+.scoreboard-score-grid > .scoreboard-score-col:first-child {
+  justify-content: flex-end;
 }
-.scoreboard-team-name-display {
-  font-size: clamp(18px, 4vw, 64px);
-  font-weight: 700;
-  text-align: center;
-  line-height: 1.1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 40vw;
+.scoreboard-score-grid > .scoreboard-score-col:nth-child(3) {
+  justify-content: flex-start;
 }
+/* Score row — score digit centered, server number positioned absolutely */
+.scoreboard-score-row {
+  display: inline-flex;
+  align-items: flex-end;
+  justify-content: center;
+  position: relative;
+}
+/* Score digits — fill the ~77vh row, outdoor readable, NO upper cap */
 .scoreboard-points {
-  font-size: clamp(60px, 16vw, 280px);
-  font-weight: 800;
-  line-height: 1;
+  font-size: clamp(80px, 65vh, 9999px);
+  font-weight: 900;
+  line-height: 0.75;
   text-align: center;
+  color: #fff;
+  text-shadow:
+    0 0 30px rgba(255, 255, 255, 0.3),
+    0 4px 20px rgba(0, 0, 0, 0.9);
+}
+/* Server player number — absolute positioned, doesn't affect score centering */
+.scoreboard-server-num {
+  position: absolute;
+  bottom: 0;
+  font-size: clamp(40px, 40vh, 9999px);
+  font-weight: 800;
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+  border: clamp(2px, 0.4vh, 5px) solid #ef4444;
+  border-radius: clamp(4px, 1vh, 12px);
+  padding: 0 clamp(4px, 1vw, 16px);
+  line-height: 0.9;
+  text-shadow: 0 0 16px rgba(239, 68, 68, 0.5);
+  box-shadow: 0 0 12px 2px rgba(239, 68, 68, 0.3);
+}
+/* Left score: server num to the left of digits */
+.scoreboard-score-grid > .scoreboard-score-col:first-child .scoreboard-server-num {
+  right: 100%;
+}
+/* Right score: server num to the right of digits */
+.scoreboard-score-grid > .scoreboard-score-col:nth-child(3) .scoreboard-server-num {
+  left: 100%;
+}
+/* Flashing when waiting for rally start */
+.scoreboard-server-flash {
+  animation: scoreboard-server-blink 0.8s ease-in-out infinite;
+}
+@keyframes scoreboard-server-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.15; }
 }
 .scoreboard-center-col {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 2vh;
+  justify-content: center;
 }
 .scoreboard-points-separator {
-  font-size: clamp(40px, 10vw, 180px);
-  color: rgba(255, 255, 255, 0.3);
+  font-size: clamp(48px, 50vh, 9999px);
+  color: rgba(255, 255, 255, 0.15);
   font-weight: 300;
-  line-height: 1;
+  line-height: 0.75;
 }
-.scoreboard-set-score {
-  font-size: clamp(20px, 4vw, 60px);
-  font-weight: 700;
-  background: rgba(255, 255, 255, 0.08);
-  padding: 0.5vh 2vw;
-  border-radius: 8px;
-}
-.scoreboard-set-label {
-  font-size: clamp(10px, 1.5vw, 24px);
-  color: rgba(255, 255, 255, 0.4);
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  font-weight: 600;
-}
-/* Bottom info bar */
-.scoreboard-info-bar {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  padding: 1.5vh 4vw;
-  background: rgba(255, 255, 255, 0.03);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-.scoreboard-info-team {
-  display: flex;
-  align-items: center;
-  gap: clamp(12px, 3vw, 48px);
-}
-.scoreboard-info-team-left {
-  justify-content: flex-start;
-}
-.scoreboard-info-team-right {
-  justify-content: flex-end;
-}
-.scoreboard-info-item {
-  display: flex;
-  align-items: center;
-  gap: clamp(4px, 0.5vw, 8px);
-}
-.scoreboard-info-label {
-  font-size: clamp(10px, 1.5vw, 22px);
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.5);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-.scoreboard-info-value {
-  font-size: clamp(14px, 2.5vw, 36px);
-  font-weight: 700;
-  color: #fff;
-}
-.scoreboard-serve-indicator {
-  display: flex;
-  align-items: center;
-  gap: clamp(4px, 0.5vw, 8px);
-}
-.scoreboard-serve-ball {
-  width: clamp(20px, 3vw, 48px);
-  height: clamp(20px, 3vw, 48px);
-}
-.scoreboard-serve-number {
-  font-size: clamp(16px, 3vw, 48px);
-  font-weight: 800;
-  color: var(--accent);
-}
-.scoreboard-info-center {
+/* Row 5: Footer (4vh) */
+.scoreboard-footer {
   display: flex;
   justify-content: center;
   align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.scoreboard-footer-center {
+  font-size: clamp(11px, 2.5vh, 28px);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
+  white-space: nowrap;
 }
 /* Match ended state */
 .scoreboard-final-overlay {
@@ -3543,9 +3574,10 @@ body.ios-fullscreen {
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.3);
+  z-index: 10;
 }
 .scoreboard-final-text {
-  font-size: clamp(32px, 8vw, 120px);
+  font-size: clamp(24px, 8vw, 120px);
   font-weight: 800;
   color: var(--accent);
   text-transform: uppercase;
@@ -3553,7 +3585,7 @@ body.ios-fullscreen {
 }
 /* Timeout overlay */
 .scoreboard-timeout-overlay {
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
   right: 0;
@@ -3565,7 +3597,7 @@ body.ios-fullscreen {
   z-index: 100;
 }
 .scoreboard-timeout-text {
-  font-size: clamp(24px, 6vw, 80px);
+  font-size: clamp(18px, 6vw, 80px);
   font-weight: 800;
   color: #fbbf24;
   text-transform: uppercase;
@@ -3631,11 +3663,15 @@ body.ios-fullscreen {
   color: var(--muted);
 }
 .scoreboard-waiting-icon {
-  font-size: 64px;
+  width: clamp(64px, 15vw, 120px);
+  height: clamp(64px, 15vw, 120px);
+  object-fit: contain;
   opacity: 0.5;
   animation: scoreboard-pulse 2s ease-in-out infinite;
 }
 .scoreboard-waiting-text {
-  font-size: 20px;
+  font-size: clamp(14px, 3vw, 20px);
   font-weight: 600;
+  text-align: center;
+  padding: 0 16px;
 }

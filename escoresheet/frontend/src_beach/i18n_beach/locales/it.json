@@ -385,6 +385,7 @@
     "endMatch": "Fine Partita",
     "matchPoint": "Match Point",
     "setPoint": "Set Point",
+    "setInterval": "Intervallo set",
     "options": "Opzioni",
     "showRosters": "Mostra rose",
     "hideRosters": "Nascondi rose",
@@ -533,7 +534,8 @@
       "actionLog": "Registro azioni",
       "manualChanges": "Modifiche manuali",
       "keyboardShortcuts": "Scorciatoie tastiera",
-      "searchEvents": "Cerca eventi..."
+      "searchEvents": "Cerca eventi...",
+      "openScoreboard": "Apri tabellone"
     },
     "stopMatch": {
       "title": "Interrompi partita",
@@ -640,7 +642,20 @@
     "captainOnCourt": {
       "designate": "Capitano in gioco",
       "selectTitle": "Capitano del gioco"
-    }
+    },
+    "title": "Tabellone",
+    "setup": "Scegli come collegarti alla partita",
+    "localMode": "Locale",
+    "localModeDesc": "Stesso dispositivo del segnapunti. Connessione istantanea via browser.",
+    "remoteMode": "Remoto",
+    "remoteModeDesc": "Dispositivo diverso. Connessione via internet tramite Supabase.",
+    "selectGame": "Seleziona una partita",
+    "selectGameDesc": "Scegli una partita in diretta da visualizzare",
+    "waiting": "In attesa del segnapunti...",
+    "waitingHint": "Avvia una partita nell'app segnapunti su questo dispositivo",
+    "connecting": "Connessione in corso...",
+    "displayTimeout": "TIMEOUT",
+    "displayFinal": "FINALE"
   },
   "settings": {
     "title": "Impostazioni",
@@ -1230,25 +1245,6 @@
     "errorLoadingScoresheets": "Errore nel caricamento dei referti",
     "scoresheetArchive": "Archivio referti",
     "noScoresheetsYet": "Nessun referto caricato"
-  },
-  "scoreboard": {
-    "title": "Tabellone",
-    "setup": "Scegli come collegarti alla partita",
-    "localMode": "Locale",
-    "localModeDesc": "Stesso dispositivo del segnapunti. Connessione istantanea via browser.",
-    "remoteMode": "Remoto",
-    "remoteModeDesc": "Dispositivo diverso. Connessione via internet tramite Supabase.",
-    "selectGame": "Seleziona una partita",
-    "selectGameDesc": "Scegli una partita in diretta da visualizzare",
-    "waiting": "In attesa del segnapunti...",
-    "waitingHint": "Avvia una partita nell'app segnapunti su questo dispositivo",
-    "connecting": "Connessione in corso...",
-    "timeout": "TIMEOUT",
-    "setInterval": "INTERVALLO SET",
-    "final": "FINALE",
-    "menu": {
-      "openScoreboard": "Apri tabellone"
-    }
   },
   "auth": {
     "signIn": "Accedi",

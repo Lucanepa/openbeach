@@ -31,6 +31,7 @@ function normalizeState(raw) {
     rightChallenges: isALeft ? (raw.challenges_used_b || 0) : (raw.challenges_used_a || 0),
     servingTeam: raw.serving_team, // already 'left' or 'right'
     serverNumber: raw.server_number || null,
+    rallyInProgress: raw.rally_in_progress || false,
     currentSet: raw.current_set || 1,
     matchStatus: raw.match_status || 'live',
     isMatchEnded,
@@ -75,10 +76,22 @@ export default function ScoreboardApp() {
     const channel = new BroadcastChannel('openbeach-scoreboard')
     channel.onmessage = (event) => {
       if (event.data?.type === 'LIVE_STATE_UPDATE') {
-        setGameState(event.data.data)
+        const d = event.data.data
+        console.log('[ScoreboardApp] received LIVE_STATE_UPDATE:', {
+          server_number: d.server_number,
+          serving_team: d.serving_team,
+          rally_in_progress: d.rally_in_progress,
+          side_a: d.side_a,
+          points_a: d.points_a,
+          points_b: d.points_b
+        })
+        setGameState(d)
         setConnectionStatus('connected')
       }
     }
+
+    // Request current state from scorer (in case match is already running)
+    channel.postMessage({ type: 'REQUEST_STATE' })
 
     return () => channel.close()
   }, [connectionMode])
@@ -280,20 +293,25 @@ export default function ScoreboardApp() {
   }
 
   // ── Scoreboard Display ──
+  console.log('[ScoreboardApp] normalized state:', {
+    servingTeam: normalized.servingTeam,
+    serverNumber: normalized.serverNumber,
+    rallyInProgress: normalized.rallyInProgress,
+    isMatchEnded: normalized.isMatchEnded
+  })
+
   const {
     leftName, rightName, leftColor, rightColor,
     leftPoints, rightPoints, leftSets, rightSets,
     leftTimeouts, rightTimeouts, leftChallenges, rightChallenges,
-    servingTeam, serverNumber, currentSet, isMatchEnded,
+    servingTeam, serverNumber, rallyInProgress, currentSet, isMatchEnded,
     timeoutActive, setIntervalActive, gameN, league, gender
   } = normalized
-
-  const headerParts = [league, gender, gameN && `Game ${gameN}`].filter(Boolean)
 
   return (
     <div className="scoreboard-app">
       <div className="scoreboard-display">
-        {/* Connection badge */}
+        {/* Connection badge (absolute positioned, not a grid child) */}
         <div className={`scoreboard-connection-badge ${
           connectionStatus === 'connected' ? 'scoreboard-connection-connected'
           : connectionStatus === 'waiting' ? 'scoreboard-connection-waiting'
@@ -304,106 +322,95 @@ export default function ScoreboardApp() {
           : 'OFFLINE'}
         </div>
 
-        {/* Back button */}
+        {/* Back button (absolute positioned, not a grid child) */}
         <button className="scoreboard-back-btn" onClick={handleBack}>
           ← {t('common.back', 'Back')}
         </button>
 
-        {/* Header */}
-        <div className="scoreboard-header">
-          <div className="scoreboard-header-text">
-            {headerParts.length > 0 && (
-              <span>{headerParts.join(' \u2022 ')} \u2022 </span>
-            )}
-            <span className="scoreboard-header-accent">
-              {isMatchEnded ? t('scoreboard.final', 'FINAL') : `Set ${currentSet}`}
-            </span>
+        {/* Row 1: Team names + color bars (10vh) */}
+        <div className="scoreboard-top-bar">
+          <div className="scoreboard-top-team">
+            <div className="scoreboard-team-color-bar" style={{ backgroundColor: leftColor }} />
+            <div className="scoreboard-team-name-display">{leftName}</div>
+          </div>
+          <div className="scoreboard-top-team">
+            <div className="scoreboard-team-color-bar" style={{ backgroundColor: rightColor }} />
+            <div className="scoreboard-team-name-display">{rightName}</div>
           </div>
         </div>
 
-        {/* Main Score Area */}
+        {/* Row 2: BMP LED lights (10vh) */}
+        <div className="scoreboard-led-bar">
+          <div className="scoreboard-led-row">
+            <div className={`scoreboard-led scoreboard-led-bmp ${!isMatchEnded && leftChallenges >= 1 ? 'scoreboard-led-on' : ''}`} />
+            <div className={`scoreboard-led scoreboard-led-bmp ${!isMatchEnded && leftChallenges >= 2 ? 'scoreboard-led-on' : ''}`} />
+          </div>
+          <div className="scoreboard-led-row">
+            <div className={`scoreboard-led scoreboard-led-bmp ${!isMatchEnded && rightChallenges >= 1 ? 'scoreboard-led-on' : ''}`} />
+            <div className={`scoreboard-led scoreboard-led-bmp ${!isMatchEnded && rightChallenges >= 2 ? 'scoreboard-led-on' : ''}`} />
+          </div>
+        </div>
+
+        {/* Row 3: Score area (fills remaining ~65vh) */}
         <div className="scoreboard-main">
           <div className="scoreboard-score-grid">
-            {/* Left Team */}
-            <div className="scoreboard-team-block">
-              <div className="scoreboard-team-color-bar" style={{ backgroundColor: leftColor }} />
-              <div className="scoreboard-team-name-display">{leftName}</div>
-              <div className="scoreboard-points">
-                {isMatchEnded ? leftSets : leftPoints}
+            <div className="scoreboard-score-col">
+              <div className="scoreboard-score-row">
+                {!isMatchEnded && servingTeam === 'left' && serverNumber && (
+                  <span className={`scoreboard-server-num ${!rallyInProgress ? 'scoreboard-server-flash' : ''}`}>
+                    {serverNumber}
+                  </span>
+                )}
+                <span className="scoreboard-points">
+                  {isMatchEnded ? leftSets : leftPoints}
+                </span>
               </div>
             </div>
 
-            {/* Center */}
             <div className="scoreboard-center-col">
               <div className="scoreboard-points-separator">:</div>
-              {!isMatchEnded && (
-                <>
-                  <div className="scoreboard-set-label">{t('livescore.sets', 'SETS')}</div>
-                  <div className="scoreboard-set-score">{leftSets} - {rightSets}</div>
-                </>
-              )}
             </div>
 
-            {/* Right Team */}
-            <div className="scoreboard-team-block">
-              <div className="scoreboard-team-color-bar" style={{ backgroundColor: rightColor }} />
-              <div className="scoreboard-team-name-display">{rightName}</div>
-              <div className="scoreboard-points">
-                {isMatchEnded ? rightSets : rightPoints}
+            <div className="scoreboard-score-col">
+              <div className="scoreboard-score-row">
+                <span className="scoreboard-points">
+                  {isMatchEnded ? rightSets : rightPoints}
+                </span>
+                {!isMatchEnded && servingTeam === 'right' && serverNumber && (
+                  <span className={`scoreboard-server-num ${!rallyInProgress ? 'scoreboard-server-flash' : ''}`}>
+                    {serverNumber}
+                  </span>
+                )}
               </div>
             </div>
           </div>
         </div>
 
-        {/* Bottom Info Bar */}
-        {!isMatchEnded && (
-          <div className="scoreboard-info-bar">
-            {/* Left team info */}
-            <div className="scoreboard-info-team scoreboard-info-team-left">
-              {servingTeam === 'left' && (
-                <div className="scoreboard-serve-indicator">
-                  <img src={ballImage} alt="Serve" className="scoreboard-serve-ball" />
-                  {serverNumber && <span className="scoreboard-serve-number">#{serverNumber}</span>}
-                </div>
-              )}
-              <div className="scoreboard-info-item">
-                <span className="scoreboard-info-label">TO</span>
-                <span className="scoreboard-info-value">{leftTimeouts}/1</span>
-              </div>
-              <div className="scoreboard-info-item">
-                <span className="scoreboard-info-label">BMP</span>
-                <span className="scoreboard-info-value">{leftChallenges}/2</span>
-              </div>
-            </div>
-
-            {/* Center */}
-            <div className="scoreboard-info-center" />
-
-            {/* Right team info */}
-            <div className="scoreboard-info-team scoreboard-info-team-right">
-              <div className="scoreboard-info-item">
-                <span className="scoreboard-info-label">BMP</span>
-                <span className="scoreboard-info-value">{rightChallenges}/2</span>
-              </div>
-              <div className="scoreboard-info-item">
-                <span className="scoreboard-info-label">TO</span>
-                <span className="scoreboard-info-value">{rightTimeouts}/1</span>
-              </div>
-              {servingTeam === 'right' && (
-                <div className="scoreboard-serve-indicator">
-                  {serverNumber && <span className="scoreboard-serve-number">#{serverNumber}</span>}
-                  <img src={ballImage} alt="Serve" className="scoreboard-serve-ball" />
-                </div>
-              )}
-            </div>
+        {/* Row 4: TO LED lights (10vh) */}
+        <div className="scoreboard-led-bar">
+          <div className="scoreboard-led-row">
+            <div className={`scoreboard-led scoreboard-led-to ${!isMatchEnded && leftTimeouts >= 1 ? 'scoreboard-led-on' : ''}`} />
           </div>
-        )}
+          <div className="scoreboard-led-row">
+            <div className={`scoreboard-led scoreboard-led-to ${!isMatchEnded && rightTimeouts >= 1 ? 'scoreboard-led-on' : ''}`} />
+          </div>
+        </div>
+
+        {/* Row 5: Footer (5vh) */}
+        <div className="scoreboard-footer">
+          <div className="scoreboard-footer-center">
+            {isMatchEnded
+              ? t('scoreboard.displayFinal', 'FINAL')
+              : <>Set {currentSet} {' \u2022 '} {leftSets} - {rightSets}</>
+            }
+          </div>
+        </div>
 
         {/* Timeout overlay */}
         {timeoutActive && (
           <div className="scoreboard-timeout-overlay">
             <div className="scoreboard-timeout-text">
-              {t('scoreboard.timeout', 'TIMEOUT')}
+              {t('scoreboard.displayTimeout', 'TIMEOUT')}
             </div>
           </div>
         )}
@@ -421,7 +428,7 @@ export default function ScoreboardApp() {
         {isMatchEnded && (
           <div className="scoreboard-final-overlay">
             <div className="scoreboard-final-text">
-              {t('scoreboard.final', 'FINAL')}
+              {t('scoreboard.displayFinal', 'FINAL')}
             </div>
           </div>
         )}

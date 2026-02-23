@@ -385,6 +385,7 @@
     "endMatch": "Fin du match",
     "matchPoint": "Balle de match",
     "setPoint": "Balle de set",
+    "setInterval": "Intervalle de set",
     "options": "Options",
     "showRosters": "Afficher les effectifs",
     "hideRosters": "Masquer les effectifs",
@@ -533,7 +534,8 @@
       "actionLog": "Journal des actions",
       "manualChanges": "Modifications manuelles",
       "keyboardShortcuts": "Raccourcis clavier",
-      "searchEvents": "Rechercher des événements..."
+      "searchEvents": "Rechercher des événements...",
+      "openScoreboard": "Ouvrir le tableau de score"
     },
     "stopMatch": {
       "title": "Arrêter le match",
@@ -640,7 +642,20 @@
     "captainOnCourt": {
       "designate": "Capitaine de jeu",
       "selectTitle": "Capitaine de jeu"
-    }
+    },
+    "title": "Tableau de score",
+    "setup": "Choisissez comment vous connecter au match",
+    "localMode": "Local",
+    "localModeDesc": "Même appareil que le marqueur. Connexion instantanée via le navigateur.",
+    "remoteMode": "Distant",
+    "remoteModeDesc": "Appareil différent. Connexion via internet avec Supabase.",
+    "selectGame": "Sélectionner un match",
+    "selectGameDesc": "Choisir un match en direct à afficher",
+    "waiting": "En attente du marqueur...",
+    "waitingHint": "Démarrez un match dans l'application marqueur sur cet appareil",
+    "connecting": "Connexion en cours...",
+    "displayTimeout": "TEMPS MORT",
+    "displayFinal": "FINAL"
   },
   "settings": {
     "title": "Paramètres",
@@ -1230,25 +1245,6 @@
     "errorLoadingScoresheets": "Erreur lors du chargement des feuilles de match",
     "scoresheetArchive": "Archive des feuilles de match",
     "noScoresheetsYet": "Aucune feuille de match téléchargée"
-  },
-  "scoreboard": {
-    "title": "Tableau de score",
-    "setup": "Choisissez comment vous connecter au match",
-    "localMode": "Local",
-    "localModeDesc": "Même appareil que le marqueur. Connexion instantanée via le navigateur.",
-    "remoteMode": "Distant",
-    "remoteModeDesc": "Appareil différent. Connexion via internet avec Supabase.",
-    "selectGame": "Sélectionner un match",
-    "selectGameDesc": "Choisir un match en direct à afficher",
-    "waiting": "En attente du marqueur...",
-    "waitingHint": "Démarrez un match dans l'application marqueur sur cet appareil",
-    "connecting": "Connexion en cours...",
-    "timeout": "TEMPS MORT",
-    "setInterval": "INTERVALLE DE SET",
-    "final": "FINAL",
-    "menu": {
-      "openScoreboard": "Ouvrir le tableau de score"
-    }
   },
   "auth": {
     "signIn": "Se connecter",
