@@ -933,6 +933,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const lineupA = buildRichLineup(rawLineupA, initialLineupA, teamAPlayersDb, sanctionsA, servingTeam === teamAKey, captainA, courtCaptainA)
       const lineupB = buildRichLineup(rawLineupB, initialLineupB, teamBPlayersDb, sanctionsB, servingTeam === teamBKey, captainB, courtCaptainB)
 
+      // BMP challenges used (unsuccessful) per team in current set
+      const challengesUsedA = currentSetEvents.filter(e =>
+        e.type === 'challenge_outcome' && e.payload?.team === teamAKey && e.payload?.result === 'unsuccessful'
+      ).length
+      const challengesUsedB = currentSetEvents.filter(e =>
+        e.type === 'challenge_outcome' && e.payload?.team === teamBKey && e.payload?.result === 'unsuccessful'
+      ).length
+
       // Check rally status
       const lastRallyStart = currentSetEvents.filter(e => e.type === 'rally_start').sort((a, b) => (b.seq || 0) - (a.seq || 0))[0]
       const lastPoint = pointEvents[0]
@@ -987,6 +995,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
         // Set results history
         setResults,
+
+        // BMP challenges used (unsuccessful) per team
+        challengesUsedA,
+        challengesUsedB,
 
         // Match flags
         set3CourtSwitched: !!set3CourtSwitched,
@@ -1697,6 +1709,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         // Timeouts and subs (send full array for referee to see substitution details)
         timeouts_a: snapshot.timeoutsA,
         timeouts_b: snapshot.timeoutsB,
+        // Serving player number and BMP challenges used (for scoreboard/livescore display)
+        server_number: snapshot.serverNumber || null,
+        challenges_used_a: snapshot.challengesUsedA || 0,
+        challenges_used_b: snapshot.challengesUsedB || 0,
         subs_a: snapshot.subsA?.length > 0 ? snapshot.subsA : null,
         subs_b: snapshot.subsB?.length > 0 ? snapshot.subsB : null,
         // All sanctions (team, players) - match-wide, persist across sets
@@ -1721,6 +1737,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         gender: match.match_type_2 || null,
         updated_at: new Date().toISOString()
       }
+
+      // Broadcast to local scoreboard windows via BroadcastChannel
+      try {
+        const scoreboardChannel = new BroadcastChannel('openbeach-scoreboard')
+        scoreboardChannel.postMessage({ type: 'LIVE_STATE_UPDATE', data: liveStateData })
+        scoreboardChannel.close()
+      } catch (e) { /* BroadcastChannel not supported */ }
 
       // DIRECT SUPABASE WRITE (bypasses sync_queue) - see architecture note at top of file
       // Reason: match_live_state needs sub-second latency for real-time spectator display.
@@ -8116,6 +8139,16 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             showArrow={false}
             position="right"
             items={[
+              {
+                key: 'open-scoreboard',
+                label: t('scoreboard.menu.openScoreboard', 'Open Scoreboard'),
+                onClick: () => {
+                  const scoreboardWindow = window.open('/scoreboard_beach.html?mode=local', '_blank', 'width=1280,height=720')
+                  if (!scoreboardWindow) {
+                    showAlert(t('header.allowPopups'), 'warning')
+                  }
+                }
+              },
               {
                 key: 'action-log',
                 label: 'Show Action Log',

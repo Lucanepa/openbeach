@@ -105,6 +105,7 @@ export default defineConfig({
         scoresheet: './scoresheet_beach.html',
         scoresheetArchive: './scoresheet_archive_beach.html',
         admin: './admin_beach.html',
+        scoreboard: './scoreboard_beach.html',
       },
       output: {
         // Avoid eval in production builds

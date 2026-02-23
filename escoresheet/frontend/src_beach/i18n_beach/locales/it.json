@@ -738,6 +738,7 @@
       "enter6DigitPin": "Inserisci un PIN a 6 cifre",
       "matchNotFound": "Partita non trovata"
     },
+    "openScoreboard": "Apri Tabellone",
     "exitFullscreen": "Esci dallo schermo intero",
     "fullscreen": "Schermo intero"
   },
@@ -1208,6 +1209,11 @@
     "gameNotFound": "Partita non trovata o non in corso",
     "gamesLive": "{{count}} partita in diretta",
     "gamesLive_other": "{{count}} partite in diretta",
+    "to": "TO",
+    "bmp": "BMP",
+    "server": "Battitore",
+    "final": "FINALE",
+    "sets": "SET",
     "errors": {
       "enterGameNumber": "Inserisci un numero di partita",
       "matchNotFound": "Partita non trovata con questo numero",
@@ -1224,6 +1230,25 @@
     "errorLoadingScoresheets": "Errore nel caricamento dei referti",
     "scoresheetArchive": "Archivio referti",
     "noScoresheetsYet": "Nessun referto caricato"
+  },
+  "scoreboard": {
+    "title": "Tabellone",
+    "setup": "Scegli come collegarti alla partita",
+    "localMode": "Locale",
+    "localModeDesc": "Stesso dispositivo del segnapunti. Connessione istantanea via browser.",
+    "remoteMode": "Remoto",
+    "remoteModeDesc": "Dispositivo diverso. Connessione via internet tramite Supabase.",
+    "selectGame": "Seleziona una partita",
+    "selectGameDesc": "Scegli una partita in diretta da visualizzare",
+    "waiting": "In attesa del segnapunti...",
+    "waitingHint": "Avvia una partita nell'app segnapunti su questo dispositivo",
+    "connecting": "Connessione in corso...",
+    "timeout": "TIMEOUT",
+    "setInterval": "INTERVALLO SET",
+    "final": "FINALE",
+    "menu": {
+      "openScoreboard": "Apri tabellone"
+    }
   },
   "auth": {
     "signIn": "Accedi",

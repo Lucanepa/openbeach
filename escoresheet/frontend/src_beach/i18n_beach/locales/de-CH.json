@@ -738,6 +738,7 @@
       "enter6DigitPin": "Bitte gänd Sie en 6-stellige PIN ii",
       "matchNotFound": "Spiil nöd gfunde"
     },
+    "openScoreboard": "Azeigetafele öffne",
     "exitFullscreen": "Vollbildmodus beenden",
     "fullscreen": "Vollbildschirm"
   },
@@ -1208,6 +1209,11 @@
     "gameNotFound": "Spiil nöd gfunde oder nöd im Gang",
     "gamesLive": "{{count}} Spiil live",
     "gamesLive_other": "{{count}} Spiil live",
+    "to": "AZ",
+    "bmp": "BMP",
+    "server": "Ufschlag",
+    "final": "ENDRESULTAT",
+    "sets": "SÄTZ",
     "errors": {
       "enterGameNumber": "Bitte gänd Sie e Spiilnummere ii",
       "matchNotFound": "Spiil mit dere Nummere nöd gfunde",
@@ -1224,6 +1230,25 @@
     "errorLoadingScoresheets": "Fehler bim Lade vo de Spiilprotokoll",
     "scoresheetArchive": "Spiilprotokoll-Archiv",
     "noScoresheetsYet": "No kei Spiilprotokoll ueglade"
+  },
+  "scoreboard": {
+    "title": "Aazeigetafle",
+    "setup": "Wähled Sie d Verbindig zum Spiil",
+    "localMode": "Lokal",
+    "localModeDesc": "Gliichs Grät wie de Schriber. Sofortigi Verbindig über Browser.",
+    "remoteMode": "Fernzuegriff",
+    "remoteModeDesc": "Anders Grät. Verbindig über Internet mit Supabase.",
+    "selectGame": "Spiil uswähle",
+    "selectGameDesc": "Wähled Sie es Live-Spiil zum Aazeige",
+    "waiting": "Warte uf de Schriber...",
+    "waitingHint": "Started Sie es Spiil i de Schriber-App uf dem Grät",
+    "connecting": "Verbindig wird hergstellt...",
+    "timeout": "USZIIT",
+    "setInterval": "SATZPAUSE",
+    "final": "ENDRESULTAT",
+    "menu": {
+      "openScoreboard": "Aazeigetafle öffne"
+    }
   },
   "auth": {
     "signIn": "Aamälde",

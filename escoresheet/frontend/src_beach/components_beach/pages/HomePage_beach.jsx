@@ -251,7 +251,34 @@ export default function HomePage({
           </div>
         </div>
         <div style={{ marginTop: '50px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-          
+
+          <button
+            onClick={() => {
+              window.open('/scoreboard_beach.html?mode=local', '_blank', 'width=1280,height=720')
+            }}
+            style={{
+              padding: '10px 20px',
+              fontSize: '20px',
+              fontWeight: 600,
+              background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              width: '400px',
+              transition: 'transform 0.2s, box-shadow 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)'
+              e.currentTarget.style.boxShadow = '0 8px 16px rgba(99, 102, 241, 0.3)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)'
+              e.currentTarget.style.boxShadow = 'none'
+            }}
+          >
+            {t('home.openScoreboard', 'Open Scoreboard')}
+          </button>
 
           <button
             onClick={onOpenSettings}

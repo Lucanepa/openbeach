@@ -738,6 +738,7 @@
       "enter6DigitPin": "Bitte geben Sie einen 6-stelligen PIN ein",
       "matchNotFound": "Spiel nicht gefunden"
     },
+    "openScoreboard": "Anzeigetafel öffnen",
     "exitFullscreen": "Vollbild beenden",
     "fullscreen": "Vollbild"
   },
@@ -1208,6 +1209,11 @@
     "gameNotFound": "Spiel nicht gefunden oder nicht im Gange",
     "gamesLive": "{{count}} Spiel live",
     "gamesLive_other": "{{count}} Spiele live",
+    "to": "AZ",
+    "bmp": "BMP",
+    "server": "Aufschlag",
+    "final": "ENDERGEBNIS",
+    "sets": "SÄTZE",
     "errors": {
       "enterGameNumber": "Bitte geben Sie eine Spielnummer ein",
       "matchNotFound": "Spiel mit dieser Nummer nicht gefunden",
@@ -1224,6 +1230,25 @@
     "errorLoadingScoresheets": "Fehler beim Laden der Spielprotokolle",
     "scoresheetArchive": "Spielprotokoll-Archiv",
     "noScoresheetsYet": "Noch keine Spielprotokolle hochgeladen"
+  },
+  "scoreboard": {
+    "title": "Anzeigetafel",
+    "setup": "Wählen Sie die Verbindung zum Spiel",
+    "localMode": "Lokal",
+    "localModeDesc": "Gleiches Gerät wie der Schreiber. Sofortige Verbindung über Browser.",
+    "remoteMode": "Fernzugriff",
+    "remoteModeDesc": "Anderes Gerät. Verbindung über Internet mit Supabase.",
+    "selectGame": "Spiel auswählen",
+    "selectGameDesc": "Wählen Sie ein Live-Spiel zum Anzeigen",
+    "waiting": "Warte auf den Schreiber...",
+    "waitingHint": "Starten Sie ein Spiel in der Schreiber-App auf diesem Gerät",
+    "connecting": "Verbindung wird hergestellt...",
+    "timeout": "AUSZEIT",
+    "setInterval": "SATZPAUSE",
+    "final": "ENDERGEBNIS",
+    "menu": {
+      "openScoreboard": "Anzeigetafel öffnen"
+    }
   },
   "auth": {
     "signIn": "Anmelden",

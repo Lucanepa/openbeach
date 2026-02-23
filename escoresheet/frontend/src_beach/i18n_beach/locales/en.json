@@ -742,6 +742,7 @@
       "enter6DigitPin": "Please enter a 6-digit Game PIN",
       "matchNotFound": "Match not found"
     },
+    "openScoreboard": "Open Scoreboard",
     "exitFullscreen": "Exit Fullscreen",
     "fullscreen": "Fullscreen"
   },
@@ -1212,6 +1213,11 @@
     "gameNotFound": "Game not in progress or not existing",
     "gamesLive": "{{count}} game live",
     "gamesLive_other": "{{count}} games live",
+    "to": "TO",
+    "bmp": "BMP",
+    "server": "Server",
+    "final": "FINAL",
+    "sets": "SETS",
     "errors": {
       "enterGameNumber": "Please enter a game number",
       "matchNotFound": "Match not found with this game number",
@@ -1228,6 +1234,25 @@
     "errorLoadingScoresheets": "Error Loading Scoresheets",
     "scoresheetArchive": "Scoresheet Archive",
     "noScoresheetsYet": "No scoresheets uploaded yet"
+  },
+  "scoreboard": {
+    "title": "Scoreboard",
+    "setup": "Choose how to connect to the match",
+    "localMode": "Local",
+    "localModeDesc": "Same device as the scorer. Connect instantly via browser.",
+    "remoteMode": "Remote",
+    "remoteModeDesc": "Different device. Connect via internet using Supabase.",
+    "selectGame": "Select a Game",
+    "selectGameDesc": "Choose a live match to display",
+    "waiting": "Waiting for scorer...",
+    "waitingHint": "Start scoring a match in the scorer app on this device",
+    "connecting": "Connecting...",
+    "timeout": "TIMEOUT",
+    "setInterval": "SET INTERVAL",
+    "final": "FINAL",
+    "menu": {
+      "openScoreboard": "Open Scoreboard"
+    }
   },
   "auth": {
     "signIn": "Sign In",

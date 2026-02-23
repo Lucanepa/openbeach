@@ -55,6 +55,14 @@ const subdomains = {
     mainEntry: 'livescore-main_beach',
     themeColor: '#7c3aed'
   },
+  'beach-scoreboard': {
+    name: 'Beach Scoreboard Display',
+    shortName: 'Scoreboard',
+    description: 'Arena scoreboard display for beach volleyball matches',
+    title: 'Beach Scoreboard - OpenBeach',
+    mainEntry: 'scoreboard-main_beach',
+    themeColor: '#0f172a'
+  },
   'beach-scoresheet': {
     name: 'Beach Scoresheet Archive',
     shortName: 'Scoresheet',

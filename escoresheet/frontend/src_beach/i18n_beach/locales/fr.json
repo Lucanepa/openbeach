@@ -738,6 +738,7 @@
       "enter6DigitPin": "Veuillez entrer un code PIN à 6 chiffres",
       "matchNotFound": "Match non trouvé"
     },
+    "openScoreboard": "Ouvrir le tableau de scores",
     "exitFullscreen": "Quitter le plein écran",
     "fullscreen": "Plein écran"
   },
@@ -1208,6 +1209,11 @@
     "gameNotFound": "Match non trouvé ou pas en cours",
     "gamesLive": "{{count}} match en direct",
     "gamesLive_other": "{{count}} matchs en direct",
+    "to": "TM",
+    "bmp": "BMP",
+    "server": "Serveur",
+    "final": "FINAL",
+    "sets": "SETS",
     "errors": {
       "enterGameNumber": "Veuillez entrer un numéro de match",
       "matchNotFound": "Match non trouvé avec ce numéro",
@@ -1224,6 +1230,25 @@
     "errorLoadingScoresheets": "Erreur lors du chargement des feuilles de match",
     "scoresheetArchive": "Archive des feuilles de match",
     "noScoresheetsYet": "Aucune feuille de match téléchargée"
+  },
+  "scoreboard": {
+    "title": "Tableau de score",
+    "setup": "Choisissez comment vous connecter au match",
+    "localMode": "Local",
+    "localModeDesc": "Même appareil que le marqueur. Connexion instantanée via le navigateur.",
+    "remoteMode": "Distant",
+    "remoteModeDesc": "Appareil différent. Connexion via internet avec Supabase.",
+    "selectGame": "Sélectionner un match",
+    "selectGameDesc": "Choisir un match en direct à afficher",
+    "waiting": "En attente du marqueur...",
+    "waitingHint": "Démarrez un match dans l'application marqueur sur cet appareil",
+    "connecting": "Connexion en cours...",
+    "timeout": "TEMPS MORT",
+    "setInterval": "INTERVALLE DE SET",
+    "final": "FINAL",
+    "menu": {
+      "openScoreboard": "Ouvrir le tableau de score"
+    }
   },
   "auth": {
     "signIn": "Se connecter",
