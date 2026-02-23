@@ -756,7 +756,9 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               serve_a: serveA,
               confirmed: true,
               first_serve: firstServeTeam,
-              winner: coinTossWinner
+              winner: coinTossWinner,
+              team1_first_serve: team1FirstServe || null,
+              team2_first_serve: team2FirstServe || null
             },
             team1: { name: team1Name, short_name: team1ShortName || generateShortName(team1Name), color: team1Color },
             team2: { name: team2Name, short_name: team2ShortName || generateShortName(team2Name), color: team2Color },
@@ -941,19 +943,25 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           const firstServeTeam = serveA ? teamA : teamB
           const serverNum = firstServeTeam === 'team1' ? team1FirstServe : team2FirstServe
 
-          // Build initial lineups (beach: positions I = first server, II = other player)
+          // Build initial lineups
+          // First-serving team: positions I (first server) and III (second server)
+          // Second-serving team: positions II (first server) and IV (second server)
           const teamARoster = teamA === 'team1' ? team1Roster : team2Roster
           const teamBRoster = teamA === 'team1' ? team2Roster : team1Roster
           const teamAFirstServe = teamA === 'team1' ? team1FirstServe : team2FirstServe
           const teamBFirstServe = teamA === 'team1' ? team2FirstServe : team1FirstServe
+          const teamAServesFirst = firstServeTeam === teamA
+          const teamBServesFirst = firstServeTeam === teamB
 
-          const buildInitialLineup = (roster, firstServeNum) => {
+          const buildInitialLineup = (roster, firstServeNum, thisTeamServesFirst) => {
             if (!roster || roster.length < 2 || !firstServeNum) return null
             const otherPlayer = roster.find(p => p.number !== firstServeNum)
             if (!otherPlayer) return null
+            const pos1 = thisTeamServesFirst ? 'I' : 'II'
+            const pos2 = thisTeamServesFirst ? 'III' : 'IV'
             return {
-              I: { number: Number(firstServeNum), isCaptain: !!roster.find(p => p.number === firstServeNum)?.isCaptain, isCourtCaptain: false, hasSanction: false },
-              II: { number: Number(otherPlayer.number), isCaptain: !!otherPlayer.isCaptain, isCourtCaptain: false, hasSanction: false }
+              [pos1]: { number: Number(firstServeNum), isCaptain: !!roster.find(p => p.number === firstServeNum)?.isCaptain, isCourtCaptain: false, hasSanction: false },
+              [pos2]: { number: Number(otherPlayer.number), isCaptain: !!otherPlayer.isCaptain, isCourtCaptain: false, hasSanction: false }
             }
           }
 
@@ -979,9 +987,9 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               // Serving info
               serving_team: servingSide,
               ...(serverNum ? { server_number: Number(serverNum) } : {}),
-              // Initial lineups (positions I and II for beach)
-              lineup_a: buildInitialLineup(teamARoster, teamAFirstServe),
-              lineup_b: buildInitialLineup(teamBRoster, teamBFirstServe),
+              // Initial lineups (first-serving team: I/III, second-serving: II/IV)
+              lineup_a: buildInitialLineup(teamARoster, teamAFirstServe, teamAServesFirst),
+              lineup_b: buildInitialLineup(teamBRoster, teamBFirstServe, teamBServesFirst),
               // Stats
               timeouts_a: 0,
               timeouts_b: 0,

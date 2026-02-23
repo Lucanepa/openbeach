@@ -11,6 +11,9 @@ build/
 .env
 .env.local
 
+# MCP
+.mcp.json
+
 # IDE
 .vscode/
 .idea/

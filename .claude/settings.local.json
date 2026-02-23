@@ -53,7 +53,8 @@
       "WebFetch(domain:live.app.fivb.com)",
       "WebFetch(domain:scorecount.com)",
       "Bash(for f in escoresheet/frontend/src_beach/i18n_beach/locales/*.json)",
-      "Bash(do echo -n \"$f: \")"
+      "Bash(do echo -n \"$f: \")",
+      "Bash(env:*)"
     ]
   },
   "outputStyle": "default"

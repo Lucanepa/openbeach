@@ -800,8 +800,36 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         return initialLineup?.payload?.lineup || null
       }
 
-      const rawLineupA = getLineupForTeam(teamAKey)
-      const rawLineupB = getLineupForTeam(teamBKey)
+      let rawLineupA = getLineupForTeam(teamAKey)
+      let rawLineupB = getLineupForTeam(teamBKey)
+
+      // Beach volleyball fallback: build lineup from team players when no lineup events exist
+      // First-serving team: positions I (first server) and III (second server)
+      // Second-serving team: positions II (first server) and IV (second server)
+      const set1FirstServe = match.firstServe || 'team1'
+      const buildBasicLineup = (playersDb, teamKey) => {
+        if (!playersDb || playersDb.length === 0) return null
+        const thisTeamServesFirst = teamKey === set1FirstServe
+        const pos1 = thisTeamServesFirst ? 'I' : 'II'
+        const pos2 = thisTeamServesFirst ? 'III' : 'IV'
+        const firstServeNum = teamKey === 'team1' ? match.team1FirstServe : match.team2FirstServe
+        const sorted = [...playersDb].sort((a, b) => (a.number || 0) - (b.number || 0))
+        let firstServer, secondServer
+        if (firstServeNum) {
+          firstServer = sorted.find(p => String(p.number) === String(firstServeNum))
+          secondServer = sorted.find(p => String(p.number) !== String(firstServeNum))
+        } else {
+          firstServer = sorted[0]
+          secondServer = sorted[1]
+        }
+        const lineup = {}
+        if (firstServer) lineup[pos1] = firstServer.number
+        if (secondServer) lineup[pos2] = secondServer.number
+        return Object.keys(lineup).length > 0 ? lineup : null
+      }
+      if (!rawLineupA && teamAPlayersDb?.length > 0) rawLineupA = buildBasicLineup(teamAPlayersDb, teamAKey)
+      if (!rawLineupB && teamBPlayersDb?.length > 0) rawLineupB = buildBasicLineup(teamBPlayersDb, teamBKey)
+
       const initialLineupA = getInitialLineupForTeam(teamAKey)
       const initialLineupB = getInitialLineupForTeam(teamBKey)
 
@@ -823,7 +851,6 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         .filter(e => e.type === 'point' && e.setIndex === currentSet.index)
         .sort((a, b) => (b.seq || 0) - (a.seq || 0))
 
-      const set1FirstServe = match.firstServe || 'team1'
       let currentSetFirstServe
       if (setIndex === 3 && match.set3FirstServe) {
         currentSetFirstServe = match.set3FirstServe === 'A' ? teamAKey : teamBKey
@@ -909,7 +936,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const matchTeamSanctionsB = getMatchTeamSanctionsForTeam(teamBKey)
 
       // Build rich lineup
-      const buildRichLineup = (rawLineup, initialLineup, playersDb, sanctions, isServingTeam, captainNum, courtCaptainNum) => {
+      const buildRichLineup = (rawLineup, initialLineup, playersDb, sanctions, isServingTeam, captainNum, courtCaptainNum, serverNum) => {
         if (!rawLineup) return null
 
         const backRowPositions = ['I', 'V', 'VI']
@@ -944,9 +971,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             isCourtCaptain
           }
 
-          // In beach volleyball, positions I and II are the first servers for each team
-          if (position === 'I' || position === 'II') {
-            positionData.isServing = isServingTeam
+          // Beach volleyball: only the actual server is marked as serving (not both players)
+          if (isServingTeam && serverNum != null && String(playerNum) === String(serverNum)) {
+            positionData.isServing = true
+          } else {
+            positionData.isServing = false
           }
 
 
@@ -961,8 +990,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         return Object.keys(richLineup).length > 0 ? richLineup : null
       }
 
-      const lineupA = buildRichLineup(rawLineupA, initialLineupA, teamAPlayersDb, sanctionsA, servingTeam === teamAKey, captainA, courtCaptainA)
-      const lineupB = buildRichLineup(rawLineupB, initialLineupB, teamBPlayersDb, sanctionsB, servingTeam === teamBKey, captainB, courtCaptainB)
+      const lineupA = buildRichLineup(rawLineupA, initialLineupA, teamAPlayersDb, sanctionsA, servingTeam === teamAKey, captainA, courtCaptainA, serverNumber)
+      const lineupB = buildRichLineup(rawLineupB, initialLineupB, teamBPlayersDb, sanctionsB, servingTeam === teamBKey, captainB, courtCaptainB, serverNumber)
 
       // BMP challenges used (unsuccessful) per team in current set
       const challengesUsedA = currentSetEvents.filter(e =>
@@ -1034,7 +1063,18 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         // Match flags
         set3CourtSwitched: !!set3CourtSwitched,
         set3LeftTeam: set3LeftTeam || null,
-        setLeftTeamOverrides: { ...setLeftTeamOverrides }
+        setLeftTeamOverrides: { ...setLeftTeamOverrides },
+
+        // Match-level sanctions (improper request, delay warning flags)
+        matchSanctions: match.sanctions ? { ...match.sanctions } : {},
+
+        // Serve configuration (needed for undo of coin toss / between-sets changes)
+        firstServe: match.firstServe || null,
+        set2FirstServe: match.set2FirstServe || null,
+        set3FirstServe: match.set3FirstServe || null,
+        team1FirstServe: match.team1FirstServe || null,
+        team2FirstServe: match.team2FirstServe || null,
+        set3CoinTossWinner: match.set3CoinTossWinner || null
       }
     } catch (err) {
       console.error('[captureFullStateSnapshot] Error:', err)
@@ -1066,19 +1106,46 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         await db.matches.update(matchId, { status: snapshot.matchStatus })
       }
 
-      // Restore court switch state
+      // Restore court switch state and match-level sanctions
       if (match) {
-        const courtSwitchUpdate = {}
+        const matchUpdate = {}
         // Restore setLeftTeamOverrides (court side assignments for all sets)
         if (snapshot.setLeftTeamOverrides !== undefined) {
-          courtSwitchUpdate.setLeftTeamOverrides = snapshot.setLeftTeamOverrides
+          matchUpdate.setLeftTeamOverrides = snapshot.setLeftTeamOverrides
         }
         // Restore set3 (tie break) court switch flag
         if (snapshot.currentSetIndex === 3) {
-          courtSwitchUpdate.set3CourtSwitched = snapshot.set3CourtSwitched || false
+          matchUpdate.set3CourtSwitched = snapshot.set3CourtSwitched || false
         }
-        if (Object.keys(courtSwitchUpdate).length > 0) {
-          await db.matches.update(matchId, courtSwitchUpdate)
+        // Restore match-level sanctions (improper request, delay warning flags)
+        if (snapshot.matchSanctions !== undefined) {
+          matchUpdate.sanctions = snapshot.matchSanctions
+        }
+        // Restore serve configuration
+        if (snapshot.firstServe !== undefined) {
+          matchUpdate.firstServe = snapshot.firstServe
+        }
+        if (snapshot.set2FirstServe !== undefined) {
+          matchUpdate.set2FirstServe = snapshot.set2FirstServe
+        }
+        if (snapshot.set3FirstServe !== undefined) {
+          matchUpdate.set3FirstServe = snapshot.set3FirstServe
+        }
+        if (snapshot.team1FirstServe !== undefined) {
+          matchUpdate.team1FirstServe = snapshot.team1FirstServe
+        }
+        if (snapshot.team2FirstServe !== undefined) {
+          matchUpdate.team2FirstServe = snapshot.team2FirstServe
+        }
+        if (snapshot.set3CoinTossWinner !== undefined) {
+          matchUpdate.set3CoinTossWinner = snapshot.set3CoinTossWinner
+        }
+        // Restore set3LeftTeam
+        if (snapshot.set3LeftTeam !== undefined) {
+          matchUpdate.set3LeftTeam = snapshot.set3LeftTeam
+        }
+        if (Object.keys(matchUpdate).length > 0) {
+          await db.matches.update(matchId, matchUpdate)
         }
       }
     } catch (err) {
@@ -1718,11 +1785,25 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Determine match status from event type and current state
       const isSetInterval = eventType === 'set_end' || (match?.status === 'interval' && !isSetFinished)
       const isTimeout = eventType === 'timeout' || (timeoutModal !== null)
+      const isTto = eventType !== 'end_tto' && (eventType === 'technical_to' || eventType === 'tto_start' || (ttoModal !== null && ttoModal.started))
+
+      console.debug('[Scoreboard TTO DEBUG] syncLiveState called:', {
+        eventType,
+        isTto,
+        ttoModalInClosure: ttoModal ? { started: ttoModal.started, startedAt: ttoModal.startedAt, countdown: ttoModal.countdown } : null,
+        isTimeout,
+        isSetInterval
+      })
 
       // If it's a timeout, we need a stable start time
       const timeoutStartedAt = eventType === 'timeout'
         ? new Date().toISOString()
         : (timeoutModal?.startedAt || new Date().toISOString())
+
+      // If it's a TTO, we need a stable start time
+      const ttoStartedAt = (eventType === 'technical_to' || eventType === 'tto_start')
+        ? new Date().toISOString()
+        : (ttoModal?.startedAt || new Date().toISOString())
 
       // For intervals, we also need a stable start time
       const intervalStartedAt = eventType === 'set_end'
@@ -1837,6 +1918,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         last_event_ts: new Date().toISOString(),
         timeout_active: isTimeout,
         timeout_started_at: isTimeout ? (timeoutModal?.startedAt || timeoutStartedAt) : null,
+        tto_active: isTto,
+        tto_started_at: isTto ? ttoStartedAt : null,
         set_interval_active: isSetInterval,
         set_interval_started_at: isSetInterval ? (match?.intervalStartedAt || intervalStartedAt) : null,
         match_status: matchStatus,
@@ -4139,15 +4222,23 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         // At 21 points in Sets 1-2: TTO modal that triggers court switch when dismissed
         if (totalScore === 21 && currentSetIndex >= 1 && currentSetIndex <= 2) {
           // Log technical_to event for PDF scoresheet
+          // Store pre-court-switch overrides so undo can restore them
+          const preSwitchOverrides = data.match?.setLeftTeamOverrides ? { ...data.match.setLeftTeamOverrides } : {}
           const ttoSeq = await getNextSeq()
-          await db.events.add({
+          const ttoEventId = await db.events.add({
             matchId,
             setIndex: currentSetIndex,
             type: 'technical_to',
-            payload: {},
+            payload: { preSwitchOverrides },
             ts: new Date().toISOString(),
             seq: ttoSeq
           })
+
+          // Capture state snapshot for undo system
+          const ttoSnapshot = await captureFullStateSnapshot()
+          if (ttoSnapshot) {
+            await db.events.update(ttoEventId, { stateSnapshot: ttoSnapshot })
+          }
 
           // Show TTO modal directly - court switch will happen when TTO ends
           setTtoModal({
@@ -4392,6 +4483,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       stateBefore: setStartStateBefore
     })
 
+    // Capture state snapshot for undo system
+    const setStartSnapshot = await captureFullStateSnapshot()
+    if (setStartSnapshot) {
+      await db.events.update(setStartEventId, { stateSnapshot: setStartSnapshot })
+    }
+
     // Debug log: set start
     debugLogger.log('SET_START', {
       setIndex: setStartTimeModal.setIndex,
@@ -4415,7 +4512,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     const serverNumber = servingPlayer?.number || null
 
     const rallyStartStateBefore = getStateSnapshot()
-    await db.events.add({
+    const rallyStartEventId = await db.events.add({
       matchId,
       setIndex: data.set.index,
       type: 'rally_start',
@@ -4427,6 +4524,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       seq: nextSeq2,
       stateBefore: rallyStartStateBefore
     })
+
+    // Capture state snapshot for undo system
+    const rallyStartSnapshot = await captureFullStateSnapshot()
+    if (rallyStartSnapshot) {
+      await db.events.update(rallyStartEventId, { stateSnapshot: rallyStartSnapshot })
+    }
 
     // Sync to referee immediately after set start
     syncToReferee()
@@ -4980,7 +5083,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // Log the set 3 coin toss event so it can be undone
     const nextSeq = await getNextSeq()
     const set3CoinTossStateBefore = getStateSnapshot()
-    await db.events.add({
+    const set3CoinTossEventId = await db.events.add({
       matchId,
       setIndex: setIndex,
       type: 'set3_coin_toss',
@@ -4994,6 +5097,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       seq: nextSeq,
       stateBefore: set3CoinTossStateBefore
     })
+
+    // Capture state snapshot for undo system
+    const set3CoinTossSnapshot = await captureFullStateSnapshot()
+    if (set3CoinTossSnapshot) {
+      await db.events.update(set3CoinTossEventId, { stateSnapshot: set3CoinTossSnapshot })
+    }
 
     // Close modal or confirm inline setup
     if (inlineMode) {
@@ -5011,7 +5120,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
     // Log event for undo
     const nextSeq = await getNextSeq()
-    await db.events.add({
+    const coinTossWinnerEventId = await db.events.add({
       matchId,
       setIndex: 3,
       type: 'set3_coin_toss_winner',
@@ -5019,7 +5128,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       ts: new Date().toISOString(),
       seq: nextSeq
     })
-  }, [matchId, data?.match, getNextSeq])
+
+    // Capture state snapshot for undo system
+    const coinTossWinnerSnapshot = await captureFullStateSnapshot()
+    if (coinTossWinnerSnapshot) {
+      await db.events.update(coinTossWinnerEventId, { stateSnapshot: coinTossWinnerSnapshot })
+    }
+  }, [matchId, data?.match, getNextSeq, captureFullStateSnapshot])
 
   // Switch which team starts on which side for the next set
   const handleBetweenSetsSwitchSides = useCallback(async () => {
@@ -5093,7 +5208,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
     // Log the setup confirmation event
     const nextSeq = await getNextSeq()
-    await db.events.add({
+    const betweenSetsEventId = await db.events.add({
       matchId,
       setIndex: data.set.index,
       type: 'between_sets_setup_confirmed',
@@ -5104,6 +5219,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       ts: new Date().toISOString(),
       seq: nextSeq
     })
+
+    // Capture state snapshot for undo system
+    const betweenSetsSnapshot = await captureFullStateSnapshot()
+    if (betweenSetsSnapshot) {
+      await db.events.update(betweenSetsEventId, { stateSnapshot: betweenSetsSnapshot })
+    }
 
     setBetweenSetsSetupConfirmed(true)
     countdownDismissedRef.current = true
@@ -5630,8 +5751,32 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           await db.sets.update(currentSet.id, { team1Points, team2Points, finished: false })
         }
 
-        // Reset match status to live
-        await db.matches.update(matchId, { status: 'live' })
+        // Recalculate match-level sanctions from remaining events
+        const sanctions = {}
+        for (const e of remainingAllEvents) {
+          if (e.type === 'sanction') {
+            const sType = e.payload?.type
+            const sTeam = e.payload?.team
+            if (sType === 'improper_request' && sTeam) {
+              sanctions[`improperRequest${sTeam}`] = true
+            } else if (sType === 'delay_warning' && sTeam) {
+              sanctions[`delayWarning${sTeam}`] = true
+            }
+          }
+        }
+
+        // Reset match status to live and restore sanctions
+        await db.matches.update(matchId, { status: 'live', sanctions })
+      }
+
+      // Handle special cases for court switch undo (technical_to and court_switch events)
+      // These events write setLeftTeamOverrides directly to the match before the event is created,
+      // so we store preSwitchOverrides in the payload to enable reliable restoration
+      if (lastEvent.type === 'technical_to' || lastEvent.type === 'court_switch') {
+        const preSwitchOverrides = lastEvent.payload?.preSwitchOverrides
+        if (preSwitchOverrides !== undefined) {
+          await db.matches.update(matchId, { setLeftTeamOverrides: preSwitchOverrides })
+        }
       }
 
       // Handle special cases for set_end undo
@@ -5769,7 +5914,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const nextSeq = await getNextSeq()
       const replayStateBefore = getStateSnapshot()
 
-      await db.events.add({
+      const replayEventId = await db.events.add({
         matchId,
         setIndex: data.set.index,
         type: 'replay',
@@ -5785,6 +5930,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         seq: nextSeq,
         stateBefore: replayStateBefore
       })
+
+      // Capture state snapshot for undo system
+      const replaySnapshot = await captureFullStateSnapshot()
+      if (replaySnapshot) {
+        await db.events.update(replayEventId, { stateSnapshot: replaySnapshot })
+      }
 
       // Go back to idle state - user can then click "Start rally" or "Undo"
       // No automatic rally start
@@ -5843,7 +5994,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
         // Log a decision_change event for the record
         const nextSeq = await getNextSeq()
-        await db.events.add({
+        const decisionChangeEventId = await db.events.add({
           matchId,
           setIndex: data.set.index,
           type: 'decision_change',
@@ -5859,6 +6010,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           ts: new Date().toISOString(),
           seq: nextSeq
         })
+
+        // Capture state snapshot for undo system
+        const decisionChangeSnapshot = await captureFullStateSnapshot()
+        if (decisionChangeSnapshot) {
+          await db.events.update(decisionChangeEventId, { stateSnapshot: decisionChangeSnapshot })
+        }
 
         // Handle rotation changes if serve changed
         // If old team was NOT serving (sideout happened), we need to undo their rotation
@@ -6160,13 +6317,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             db.events.delete(ttoEvent.id)
           }
           setTtoModal(null)
+          syncLiveStateToSupabase('end_tto')
+          sendActionToReferee('end_tto', {})
         } else {
           // Update modal with new scores
           setTtoModal(prev => prev ? { ...prev, team1Points, team2Points } : null)
         }
       }
     }
-  }, [bmpOutcomeModal, data?.set, data?.events, logEvent, checkSetEnd, syncLiveStateToSupabase, courtSwitchModal, ttoModal])
+  }, [bmpOutcomeModal, data?.set, data?.events, logEvent, checkSetEnd, syncLiveStateToSupabase, courtSwitchModal, ttoModal, sendActionToReferee])
 
   // Count unsuccessful BMPs per team in current set (each team has 2 unsuccessful per set)
   const getUnsuccessfulBMPsUsed = useCallback((teamKey) => {
@@ -6316,10 +6475,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           }
         }
         setTtoModal(null)
+        syncLiveStateToSupabase('end_tto')
+        sendActionToReferee('end_tto', {})
       }, 500)
       return () => clearTimeout(timeout)
     }
-  }, [ttoModal?.countdown, ttoModal?.triggerCourtSwitchAfter, ttoModal?.set, matchId, data?.match, data?.set, syncLiveStateToSupabase])
+  }, [ttoModal?.countdown, ttoModal?.triggerCourtSwitchAfter, ttoModal?.set, matchId, data?.match, data?.set, syncLiveStateToSupabase, sendActionToReferee])
 
   const getTimeoutsUsed = useCallback(
     side => {
@@ -7415,6 +7576,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     const teamAKey = data.match.coinTossTeamA || 'team1'
     const teamBKey = teamAKey === 'team1' ? 'team2' : 'team1'
 
+    // Store pre-switch overrides so undo can restore them
+    const preSwitchOverrides = data.match.setLeftTeamOverrides ? { ...data.match.setLeftTeamOverrides } : {}
+
     if (setIndex === 3) {
       // Set 3: Mark that courts have been switched at 8 points AND swap court sides
       const currentOverrides = data.match.setLeftTeamOverrides || {}
@@ -7475,16 +7639,23 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
     // Log court_switch event for PDF scoresheet
     const nextSeq = await getNextSeq()
-    await db.events.add({
+    const courtSwitchEventId = await db.events.add({
       matchId,
       setIndex: setIndex,
       type: 'court_switch',
       payload: {
-        score: { team1: courtSwitchModal.team1Points, team2: courtSwitchModal.team2Points }
+        score: { team1: courtSwitchModal.team1Points, team2: courtSwitchModal.team2Points },
+        preSwitchOverrides
       },
       ts: new Date().toISOString(),
       seq: nextSeq
     })
+
+    // Capture state snapshot for undo system
+    const courtSwitchSnapshot = await captureFullStateSnapshot()
+    if (courtSwitchSnapshot) {
+      await db.events.update(courtSwitchEventId, { stateSnapshot: courtSwitchSnapshot })
+    }
 
     // Check if TTO should be triggered after court switch (at 21 points in sets 1-2)
     const shouldTriggerTto = courtSwitchModal?.triggerTtoAfter
@@ -7552,9 +7723,26 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       }
     }
 
+    // Update the technical_to event's snapshot to include the court switch
+    // Without this, undoing the next point after TTO would incorrectly revert the court switch
+    if (shouldSwitchCourts) {
+      const allEvents = await db.events.where('matchId').equals(matchId).toArray()
+      const ttoEvent = allEvents
+        .filter(e => e.type === 'technical_to' && e.setIndex === ttoModal.set?.index)
+        .sort((a, b) => (b.seq || 0) - (a.seq || 0))[0]
+      if (ttoEvent) {
+        const updatedSnapshot = await captureFullStateSnapshot()
+        if (updatedSnapshot) {
+          await db.events.update(ttoEvent.id, { stateSnapshot: updatedSnapshot })
+        }
+      }
+    }
+
     // Close the TTO modal
     setTtoModal(null)
-  }, [ttoModal, matchId, data?.match, data?.set, syncLiveStateToSupabase])
+    syncLiveStateToSupabase('end_tto')
+    sendActionToReferee('end_tto', {})
+  }, [ttoModal, matchId, data?.match, data?.set, syncLiveStateToSupabase, captureFullStateSnapshot, sendActionToReferee])
 
   const cancelCourtSwitch = useCallback(async () => {
     if (!courtSwitchModal || !data?.events) return
@@ -17227,7 +17415,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   Technical timeout is automatic at 21 points.
                 </p>
                 <button
-                  onClick={() => setTtoModal(prev => ({ ...prev, started: true }))}
+                  onClick={() => {
+                    console.debug('[Scoreboard TTO DEBUG] Start TTO button clicked')
+                    const startTimestamp = Date.now()
+                    setTtoModal(prev => ({ ...prev, started: true, startedAt: new Date(startTimestamp).toISOString() }))
+                    syncLiveStateToSupabase('tto_start', null, { duration: 45 })
+                    sendActionToReferee('tto', { countdown: 45, startTimestamp })
+                  }}
                   style={{
                     padding: '12px 32px',
                     fontSize: '16px',

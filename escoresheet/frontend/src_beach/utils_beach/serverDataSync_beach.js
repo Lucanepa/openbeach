@@ -106,7 +106,10 @@ export async function validatePin(pin, type = 'referee') {
       throw new Error('Invalid response from server. Make sure the main scoresheet is running and connected.')
     }
   } catch (error) {
-    console.error('Error validating PIN:', error)
+    // Only log unexpected errors (not network failures from local server not running)
+    if (!error.message?.includes('Failed to fetch') && !error.message?.includes('Not Found')) {
+      console.error('Error validating PIN:', error)
+    }
     // If it's already an Error with a message, re-throw it
     if (error instanceof Error) {
       throw error
@@ -255,7 +258,7 @@ export async function getMatchData(matchId) {
           // If serving team1 and Team A is team1, use lineupA. Otherwise use lineupB.
           const servingTeamIsA = (servingTeam === 'team1') === teamAIsTeam1
           const servingTeamLineup = servingTeamIsA ? lineupA : lineupB
-          serverNumber = servingTeamLineup?.I?.number || null
+          serverNumber = servingTeamLineup?.I?.number || liveState.server_number || null
         } else if (lineupA?.I?.isServing) {
           // Fallback: Rich format with serving info in position I (isServing field)
           servingTeam = teamAIsTeam1 ? 'team1' : 'team2'
@@ -264,6 +267,11 @@ export async function getMatchData(matchId) {
           servingTeam = teamAIsTeam1 ? 'team2' : 'team1'
           serverNumber = lineupB.I.number
         } else {
+        }
+
+        // Final fallback: use server_number from liveState directly
+        if (!serverNumber && liveState.server_number) {
+          serverNumber = liveState.server_number
         }
 
         const currentSet = {
@@ -420,6 +428,16 @@ export async function getMatchData(matchId) {
         if (team2Lineup?.[pos]?.isCourtCaptain) team2CourtCaptain = team2Lineup[pos].number
       }
 
+      // Fallback: check players_team1/players_team2 JSONB for captain info (is_captain field)
+      if (!team1Captain && team1Players?.length > 0) {
+        const cap = team1Players.find(p => p.isCaptain || p.is_captain || p.captain)
+        if (cap) team1Captain = cap.number
+      }
+      if (!team2Captain && team2Players?.length > 0) {
+        const cap = team2Players.find(p => p.isCaptain || p.is_captain || p.captain)
+        if (cap) team2Captain = cap.number
+      }
+
       return {
         success: true,
         match: {
@@ -431,6 +449,8 @@ export async function getMatchData(matchId) {
           coinTossTeamB: coinTossTeamA === 'team1' ? 'team2' : 'team1',
           coinTossServeA: match.coin_toss?.serve_a ?? match.coin_toss_serve_a,
           firstServe: match.coin_toss?.first_serve || match.first_serve,
+          team1FirstServe: match.coin_toss?.team1_first_serve || null,
+          team2FirstServe: match.coin_toss?.team2_first_serve || null,
           // coin_toss_confirmed = true if we have liveState with team names (means coin toss happened)
           coin_toss_confirmed: !!(liveState?.team_a_name),
           // Get short names from JSONB, or fallback to old columns
@@ -905,9 +925,19 @@ export async function listAvailableMatches() {
       return { success: false, matches: [], error: `HTTP ${response.status}: ${response.statusText}` }
     }
 
+    // Check content type - if server returns HTML (e.g., Vite dev server fallback), skip JSON parse
+    const contentType = response.headers.get('content-type') || ''
+    if (!contentType.includes('application/json')) {
+      return { success: false, matches: [], error: 'Server returned non-JSON response' }
+    }
+
     const result = await response.json()
     return result
   } catch (error) {
+    // Suppress noisy errors when local server isn't running (expected in Supabase-only mode)
+    if (error.message?.includes('not valid JSON') || error.message?.includes('Failed to fetch')) {
+      return { success: false, matches: [], error: 'Local server not available' }
+    }
     console.error('[listAvailableMatches] Error:', error.message)
     return { success: false, matches: [], error: error.message }
   }
