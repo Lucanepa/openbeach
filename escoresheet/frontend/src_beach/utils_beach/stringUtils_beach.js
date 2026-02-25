@@ -103,3 +103,18 @@ export function sanitizeSimple(str, maxLength = 15) {
 
   return result
 }
+
+/**
+ * Hash a password using SHA-256 (Web Crypto API).
+ * Returns the hex-encoded hash string. Works fully offline.
+ *
+ * @param {string} password - The plaintext password to hash
+ * @returns {Promise<string>} - Hex-encoded SHA-256 hash
+ */
+export async function hashPassword(password) {
+  const encoder = new TextEncoder()
+  const data = encoder.encode(password)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+}

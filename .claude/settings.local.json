@@ -55,7 +55,12 @@
       "Bash(for f in escoresheet/frontend/src_beach/i18n_beach/locales/*.json)",
       "Bash(do echo -n \"$f: \")",
       "Bash(env:*)",
-      "Bash(git ls-tree:*)"
+      "Bash(git ls-tree:*)",
+      "Bash(/tmp/extract_filters.sh:*)",
+      "Bash(bash /tmp/extract_filters.sh)",
+      "Bash(node -c /home/luca-canepa/Desktop/Github/openvolley/escoresheet/backend/server.js)",
+      "Bash(node -c /home/luca-canepa/Desktop/Github/openvolley/escoresheet/frontend/src/lib/apiClient.js)",
+      "Bash(node -c /home/luca-canepa/Desktop/Github/openbeach/escoresheet/frontend/src_beach/lib_beach/apiClient_beach.js)"
     ]
   },
   "outputStyle": "default"
