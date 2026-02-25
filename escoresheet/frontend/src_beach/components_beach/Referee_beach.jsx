@@ -14,7 +14,9 @@ import { db } from '../db_beach/db_beach'
 import TestModeControls from './TestModeControls_beach'
 import SimpleHeader from './SimpleHeader_beach'
 import DonutCountdown from './DonutCountdown_beach'
-import { supabase } from '../lib_beach/supabaseClient_beach'
+import { supabase } from '../lib_beach/supabaseClient_beach'  // Realtime only
+import { apiFrom } from '../lib_beach/apiClient_beach'
+import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 import { useSyncQueue } from '../hooks_beach/useSyncQueue_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 
@@ -629,11 +631,10 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
   // Look up Supabase UUID from seed_key when matchId changes
   useEffect(() => {
-    if (!supabase || !matchId) return
+    if (!isBackendAvailable() || !matchId) return
 
     const lookupUuid = async () => {
-      const { data, error } = await supabase
-        .from('matches')
+      const { data, error } = await apiFrom('matches')
         .select('id')
         .eq('external_id', matchId)
         .maybeSingle()

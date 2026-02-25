@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts_beach/AuthContext_beach'
-import { supabase } from '../../lib_beach/supabaseClient_beach'
+import { apiFrom } from '../../lib_beach/apiClient_beach'
+import { isBackendAvailable } from '../../utils_beach/backendConfig_beach'
 
 export default function MatchHistory({ open, onClose, onSelectMatch }) {
   const { user } = useAuth()
@@ -12,10 +13,10 @@ export default function MatchHistory({ open, onClose, onSelectMatch }) {
   // Fetch user's matches when modal opens
   useEffect(() => {
     if (open) {
-      if (user && supabase) {
+      if (user && isBackendAvailable()) {
         fetchMatches()
       } else {
-        // No user or no supabase configured - show empty state
+        // No user or no backend configured - show empty state
         setMatches([])
         setLoading(false)
       }
@@ -28,8 +29,7 @@ export default function MatchHistory({ open, onClose, onSelectMatch }) {
 
     try {
       // Get user's match associations
-      const { data: userMatches, error: userMatchesError } = await supabase
-        .from('user_matches')
+      const { data: userMatches, error: userMatchesError } = await apiFrom('user_matches')
         .select('match_external_id, role, created_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
@@ -46,8 +46,7 @@ export default function MatchHistory({ open, onClose, onSelectMatch }) {
 
       // Get match details for each match_external_id (which references matches.external_id)
       const matchIds = userMatches.map(m => m.match_external_id)
-      const { data: matchDetails, error: matchError } = await supabase
-        .from('matches')
+      const { data: matchDetails, error: matchError } = await apiFrom('matches')
         .select('external_id, team_a, team_b, final_score, winner, status, start_time, created_at')
         .in('external_id', matchIds)
 

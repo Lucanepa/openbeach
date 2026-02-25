@@ -1,4 +1,5 @@
-import { supabase } from '../lib_beach/supabaseClient_beach'
+import { apiStorage } from '../lib_beach/apiClient_beach'
+import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 
 /**
  * Upload scoresheet data as JSON to Supabase storage.
@@ -27,7 +28,7 @@ export async function uploadScoresheet({
   final = false
 }) {
   // Skip if no supabase or no match
-  if (!supabase || !match) {
+  if (!isBackendAvailable() || !match) {
     return { success: false, error: 'No supabase or match' }
   }
 
@@ -93,7 +94,7 @@ export async function uploadScoresheet({
     const storagePath = `${scheduledDate}/game${gameNumber}${suffix}.json`
 
     // Upload to Supabase storage
-    const { error: uploadError } = await supabase.storage
+    const { error: uploadError } = await apiStorage
       .from('scoresheets')
       .upload(storagePath, jsonBlob, {
         contentType: 'application/json',

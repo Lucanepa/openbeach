@@ -8,7 +8,8 @@ import Modal from './Modal_beach'
 // Beach volleyball ball image
 const ballImage = '/beachball.png'
 import JSZip from 'jszip'
-import { supabase } from '../lib_beach/supabaseClient_beach'
+import { apiStorage } from '../lib_beach/apiClient_beach'
+import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 import { uploadScoresheet } from '../utils_beach/scoresheetUploader_beach'
 import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { exportLogsAsNDJSON } from '../utils_beach/comprehensiveLogger_beach'
@@ -898,7 +899,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       const zipFilename = `Match_${sanitizeForFilename(team1?.name || 'Team 1')}_vs_${sanitizeForFilename(team2?.name || 'Team 2')}_${matchDate}.zip`
 
       // Upload PDF and final JSON to Supabase storage "scoresheets" bucket
-      if (supabase && !match?.test) {
+      if (isBackendAvailable() && !match?.test) {
         try {
           const scheduledDate = match.scheduledAt
             ? new Date(match.scheduledAt).toISOString().slice(0, 10) // YYYY-MM-DD
@@ -907,7 +908,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
 
           // Upload PDF
           const pdfStoragePath = `${scheduledDate}/game${gameNumber}.pdf`
-          const { error: uploadError } = await supabase.storage
+          const { error: uploadError } = await apiStorage
             .from('scoresheets')
             .upload(pdfStoragePath, pdfResult.blob, {
               contentType: 'application/pdf',

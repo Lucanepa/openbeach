@@ -11,10 +11,10 @@ import CountrySelect from './CountrySelect_beach'
 import CountryFlag from './CountryFlag_beach'
 // Beach volleyball ball image
 const ballImage = '/beachball.png'
-import { getWebSocketUrl } from '../utils_beach/backendConfig_beach'
+import { getWebSocketUrl, getBackendUrl, isBackendAvailable } from '../utils_beach/backendConfig_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { uploadBackupToCloud, uploadLogsToCloud } from '../utils_beach/logger_beach'
-import { supabase } from '../lib_beach/supabaseClient_beach'
+import { apiFrom } from '../lib_beach/apiClient_beach'
 import { generateMatchSeedKey } from '../utils_beach/serverDataSync_beach'
 import { TEST_TEAM_SEED_DATA } from '../constants_beach/testSeeds_beach'
 import { splitLocalDateTime, parseLocalDateTimeToISO, roundToMinute } from '../utils_beach/timeUtils_beach'
@@ -725,13 +725,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   useEffect(() => {
     const checkSupabaseAndSyncStatus = async () => {
       // Check if Supabase is available
-      if (!supabase) {
+      if (!isBackendAvailable()) {
         setIsSupabaseAvailable(false)
         return
       }
 
       try {
-        const { error } = await supabase.from('matches').select('id').limit(1)
+        const { error } = await apiFrom('matches').select('id').limit(1)
         const available = !error
         setIsSupabaseAvailable(available)
 
@@ -769,8 +769,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           setTeam2SyncStatus('syncing')
         } else {
           // Check if match exists in Supabase
-          const { data: supabaseMatch } = await supabase
-            .from('matches')
+          const { data: supabaseMatch } = await apiFrom('matches')
             .select('id, status')
             .eq('external_id', match.seed_key)
             .maybeSingle()
@@ -821,8 +820,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       } else if (cardType === 'matchInfo') {
         // No error jobs - check if match exists in Supabase
         // If not, create a new match insert job
-        const { data: supabaseMatch } = await supabase
-          .from('matches')
+        const { data: supabaseMatch } = await apiFrom('matches')
           .select('id')
           .eq('external_id', match.seed_key)
           .maybeSingle()
@@ -830,8 +828,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         if (!supabaseMatch) {
           // Check if a match with the same game_n already exists in the same tournament (prevent duplicates)
           if (match.gameN) {
-            let supabaseQuery = supabase
-              .from('matches')
+            let supabaseQuery = apiFrom('matches')
               .select('id, external_id')
               .eq('game_n', parseInt(match.gameN, 10))
             // Scope to same league/tournament via match_info JSONB
@@ -1090,14 +1087,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
         // Always sync upload PINs to Supabase if connected (whether newly generated or existing)
         // This ensures existing local PINs get pushed to Supabase
-        if (supabase && match.seed_key) {
+        if (isBackendAvailable() && match.seed_key) {
           const team1UploadPin = updates.team1UploadPin || match.team1UploadPin
           const team2UploadPin = updates.team2UploadPin || match.team2UploadPin
           if (team1UploadPin || team2UploadPin) {
             try {
               // Fetch existing connection_pins to merge (use maybeSingle to avoid 406 if match not synced yet)
-              const { data: existingMatch } = await supabase
-                .from('matches')
+              const { data: existingMatch } = await apiFrom('matches')
                 .select('connection_pins')
                 .eq('external_id', match.seed_key)
                 .maybeSingle()
@@ -1110,8 +1106,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                   ...(team2UploadPin ? { team2_upload: team2UploadPin } : {})
                 }
 
-                await supabase
-                  .from('matches')
+                await apiFrom('matches')
                   .update({ connection_pins: connectionPinsUpdate })
                   .eq('external_id', match.seed_key)
               }
@@ -1907,10 +1902,9 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       })
 
       // Link competition match template to this scored match via seed_key
-      if (supabase && match?.competitionMatchId) {
+      if (isBackendAvailable() && match?.competitionMatchId) {
         try {
-          await supabase
-            .from('beach_competition_matches')
+          await apiFrom('beach_competition_matches')
             .update({ claimed_match_external_id: matchSeedKey })
             .eq('id', match.competitionMatchId)
         } catch (err) {
@@ -1979,7 +1973,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         }
 
         // Get backend URL from environment or use default
-        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://openvolley-escoresheet-backend-production.up.railway.app'
+        const backendUrl = getBackendUrl()
 
         fetch(`${backendUrl}/api/match/send-info`, {
           method: 'POST',
@@ -2293,9 +2287,9 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       })
 
       // Associate user with this match if logged in
-      if (user && supabase) {
+      if (user && isBackendAvailable()) {
         try {
-          await supabase.from('user_matches').upsert({
+          await apiFrom('user_matches').upsert({
             user_id: user.id,
             match_external_id: seedKey,
             role: 'scorer'
@@ -2690,7 +2684,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
   // Search for pending roster in Supabase
   const handleSearchTeam1Roster = async () => {
-    if (!match || !supabase) {
+    if (!match || !isBackendAvailable()) {
       setNoticeModal({ message: t('matchSetup.noSupabaseConnection') })
       return
     }
@@ -2700,8 +2694,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       const gameNumber = match.game_n || match.gameNumber || gameN
 
       // Search for pending roster in Supabase
-      const { data, error } = await supabase
-        .from('matches')
+      const { data, error } = await apiFrom('matches')
         .select('pending_team1_roster, external_id')
         .eq('game_n', gameNumber)
         .not('pending_team1_roster', 'is', null)
@@ -2725,7 +2718,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   }
 
   const handleSearchTeam2Roster = async () => {
-    if (!match || !supabase) {
+    if (!match || !isBackendAvailable()) {
       setNoticeModal({ message: t('matchSetup.noSupabaseConnection') })
       return
     }
@@ -2735,8 +2728,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       const gameNumber = match.game_n || match.gameNumber || gameN
 
       // Search for pending roster in Supabase
-      const { data, error } = await supabase
-        .from('matches')
+      const { data, error } = await apiFrom('matches')
         .select('pending_team2_roster, external_id')
         .eq('game_n', gameNumber)
         .not('pending_team2_roster', 'is', null)
@@ -3758,8 +3750,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
                 // Also sync to match_live_state if it exists (for Referee app)
                 try {
-                  const { data: supabaseMatch } = await supabase
-                    .from('matches')
+                  const { data: supabaseMatch } = await apiFrom('matches')
                     .select('id')
                     .eq('external_id', match.seed_key)
                     .maybeSingle()
@@ -3771,8 +3762,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     const shortKey = team1IsTeamA ? 'team_a_short' : 'team_b_short'
                     const nameKey = team1IsTeamA ? 'team_a_name' : 'team_b_name'
 
-                    await supabase
-                      .from('match_live_state')
+                    await apiFrom('match_live_state')
                       .update({
                         [colorKey]: team1Color,
                         [shortKey]: team1ShortName || generateShortName(finalTeam1Name),
@@ -4417,8 +4407,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
                 // Also sync to match_live_state if it exists (for Referee app)
                 try {
-                  const { data: supabaseMatch } = await supabase
-                    .from('matches')
+                  const { data: supabaseMatch } = await apiFrom('matches')
                     .select('id')
                     .eq('external_id', match.seed_key)
                     .maybeSingle()
@@ -4431,8 +4420,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     const shortKey = team1IsTeamA ? 'team_b_short' : 'team_a_short'
                     const nameKey = team1IsTeamA ? 'team_b_name' : 'team_a_name'
 
-                    await supabase
-                      .from('match_live_state')
+                    await apiFrom('match_live_state')
                       .update({
                         [colorKey]: team2Color,
                         [shortKey]: team2ShortName || generateShortName(finalTeam2Name),
@@ -5741,14 +5729,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                         }
 
                         // Sync to Supabase if match exists
-                        if (supabase && match?.seed_key) {
+                        if (isBackendAvailable() && match?.seed_key) {
                           const teamKey = isTeam1 ? 'team1_data' : 'team2_data'
                           const teamName = isTeam1 ? team1Name : team2Name
                           const shortName = isTeam1 ? team1ShortName : team2ShortName
 
                           // Update matches table
-                          const { data: supabaseMatch } = await supabase
-                            .from('matches')
+                          const { data: supabaseMatch } = await apiFrom('matches')
                             .update({
                               [teamKey]: {
                                 name: teamName?.trim() || '',
@@ -5772,8 +5759,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                             // If changing Team 1 color and Team 1 is Team B -> update team_b_color
                             const liveStateColorKey = (isTeam1 === team1IsTeamA) ? 'team_a_color' : 'team_b_color'
 
-                            await supabase
-                              .from('match_live_state')
+                            await apiFrom('match_live_state')
                               .update({ [liveStateColorKey]: color, updated_at: new Date().toISOString() })
                               .eq('match_id', supabaseMatch.id)
                           }

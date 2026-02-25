@@ -6,7 +6,8 @@
  */
 
 import { db } from '../db_beach/db_beach'
-import { supabase } from '../lib_beach/supabaseClient_beach'
+import { apiFrom, apiStorage } from '../lib_beach/apiClient_beach'
+import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 import { sanitizeSimple } from './stringUtils'
 
 // IndexedDB key for storing file system directory handle
@@ -669,13 +670,12 @@ export async function restoreMatchInPlace(matchId, jsonData) {
  * Uses JSONB columns for team/player data (teams/players tables were dropped)
  */
 export async function fetchMatchByPin(gamePin, gameN) {
-  if (!supabase) {
+  if (!isBackendAvailable()) {
     throw new Error('Supabase not configured')
   }
 
   // Find match by game_n and game_pin (filtered by sport_type)
-  let query = supabase
-    .from('matches')
+  let query = apiFrom('matches')
     .select('*')
     .eq('game_pin', gamePin)
     .eq('sport_type', SPORT_TYPE)
@@ -692,9 +692,9 @@ export async function fetchMatchByPin(gamePin, gameN) {
 
   // Fetch sets, events, and live state using the UUID match id
   const [setsResult, eventsResult, liveStateResult] = await Promise.all([
-    supabase.from('sets').select('*').eq('match_id', matchData.id),
-    supabase.from('events').select('*').eq('match_id', matchData.id),
-    supabase.from('match_live_state').select('*').eq('match_id', matchData.id).maybeSingle()
+    apiFrom('sets').select('*').eq('match_id', matchData.id),
+    apiFrom('events').select('*').eq('match_id', matchData.id),
+    apiFrom('match_live_state').select('*').eq('match_id', matchData.id).maybeSingle()
   ])
 
   let events = eventsResult.data || []
@@ -1083,15 +1083,14 @@ export async function selectBackupFile() {
  * @returns {Array} Array of backup file info
  */
 export async function listCloudBackups(gamePin, gameN = 1) {
-  if (!supabase) {
+  if (!isBackendAvailable()) {
     throw new Error('Supabase not configured')
   }
 
   // Use the same path format as logger.js continuous backups
   const folderPath = `backups/backup_g${gameN}`
 
-  const { data, error } = await supabase
-    .storage
+  const { data, error } = await apiStorage
     .from('backup')
     .list(folderPath, {
       sortBy: { column: 'name', order: 'desc' }
@@ -1136,12 +1135,11 @@ export async function listCloudBackups(gamePin, gameN = 1) {
  * @returns {Object} Parsed JSON backup data
  */
 export async function fetchCloudBackup(path) {
-  if (!supabase) {
+  if (!isBackendAvailable()) {
     throw new Error('Supabase not configured')
   }
 
-  const { data, error } = await supabase
-    .storage
+  const { data, error } = await apiStorage
     .from('backup')
     .download(path)
 

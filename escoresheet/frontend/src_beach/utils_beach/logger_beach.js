@@ -2,7 +2,8 @@
  * Logger - Captures console logs and backs up to Supabase storage
  */
 
-import { supabase } from '../lib_beach/supabaseClient_beach'
+import { apiStorage } from '../lib_beach/apiClient_beach'
+import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 
 // In-memory log buffer
 let logBuffer = []
@@ -135,7 +136,7 @@ export function downloadLogs(matchId = null) {
  * @param {string|number|null} gameNumber - Game number for human-readable folder names
  */
 export async function uploadLogsToCloud(matchId = null, gameNumber = null) {
-  if (!supabase) {
+  if (!isBackendAvailable()) {
     console.warn('[Logger] Supabase not configured - cannot upload logs')
     return null
   }
@@ -148,7 +149,7 @@ export async function uploadLogsToCloud(matchId = null, gameNumber = null) {
   try {
     // Try to download existing log file
     let existingLogs = ''
-    const { data: existingData, error: downloadError } = await supabase.storage
+    const { data: existingData, error: downloadError } = await apiStorage
       .from('backup')
       .download(filename)
 
@@ -163,7 +164,7 @@ export async function uploadLogsToCloud(matchId = null, gameNumber = null) {
       : newLogs
 
     // Upload combined logs (will replace the file)
-    const { data, error } = await supabase.storage
+    const { data, error } = await apiStorage
       .from('backup')
       .upload(filename, combinedLogs, {
         contentType: 'text/plain',
@@ -187,7 +188,7 @@ export async function uploadLogsToCloud(matchId = null, gameNumber = null) {
  * Uses game_pin for folder structure so backups can be found by PIN
  */
 export async function uploadBackupToCloud(matchId, backupData) {
-  if (!supabase) {
+  if (!isBackendAvailable()) {
     console.warn('[Logger] Supabase not configured - cannot upload backup')
     return null
   }
@@ -217,7 +218,7 @@ export async function uploadBackupToCloud(matchId, backupData) {
   const filename = `backups/backup_g${gameN}/backup_g${gameN}_set${setIndex}_scoreleft${leftScore}_scoreright${rightScore}_${utcDate}_${utcTime}_${ms}.json`
 
   try {
-    const { data, error } = await supabase.storage
+    const { data, error } = await apiStorage
       .from('backup')
       .upload(filename, JSON.stringify(backupData, null, 2), {
         contentType: 'application/json',
@@ -243,13 +244,13 @@ export async function uploadBackupToCloud(matchId, backupData) {
  * @returns {Array} List of backup files with name and metadata
  */
 export async function listCloudBackups(gamePin, gameN = 1) {
-  if (!supabase) {
+  if (!isBackendAvailable()) {
     console.warn('[Logger] Supabase not configured')
     return []
   }
 
   try {
-    const { data, error } = await supabase.storage
+    const { data, error } = await apiStorage
       .from('backup')
       .list(`backups/backup_g${gameN}`, {
         sortBy: { column: 'name', order: 'desc' }
@@ -295,13 +296,13 @@ export async function listCloudBackups(gamePin, gameN = 1) {
  * @returns {Object} Parsed backup data
  */
 export async function loadCloudBackup(path) {
-  if (!supabase) {
+  if (!isBackendAvailable()) {
     console.warn('[Logger] Supabase not configured')
     return null
   }
 
   try {
-    const { data, error } = await supabase.storage
+    const { data, error } = await apiStorage
       .from('backup')
       .download(path)
 

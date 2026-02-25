@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { supabase } from './lib_beach/supabaseClient_beach'
+import { apiFrom } from './lib_beach/apiClient_beach'
+import { isBackendAvailable } from './utils_beach/backendConfig_beach'
 
 const ballImage = '/beachball.png'
 
@@ -98,11 +100,10 @@ export default function ScoreboardApp() {
 
   // Remote mode: fetch available games
   const fetchGames = useCallback(async () => {
-    if (!supabase) return
+    if (!isBackendAvailable()) return
     setLoadingGames(true)
     try {
-      const { data } = await supabase
-        .from('match_live_state')
+      const { data } = await apiFrom('match_live_state')
         .select('*, matches!match_live_state_match_id_fkey_cascade(sport_type)')
         .order('updated_at', { ascending: false })
       const beachGames = (data || []).filter(g => g.matches?.sport_type === 'beach')
@@ -122,14 +123,13 @@ export default function ScoreboardApp() {
 
   // Remote mode: subscribe to selected match
   useEffect(() => {
-    if (connectionMode !== 'remote' || !selectedMatchId || !supabase) return
+    if (connectionMode !== 'remote' || !selectedMatchId || !isBackendAvailable() || !supabase) return
 
     setConnectionStatus('waiting')
 
     // Initial fetch
     const fetchState = async () => {
-      const { data } = await supabase
-        .from('match_live_state')
+      const { data } = await apiFrom('match_live_state')
         .select('*')
         .eq('match_id', selectedMatchId)
         .single()

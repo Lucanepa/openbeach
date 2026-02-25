@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { supabase } from '../../lib_beach/supabaseClient_beach'
+import { apiFrom } from '../../lib_beach/apiClient_beach'
+import { isBackendAvailable } from '../../utils_beach/backendConfig_beach'
 import { useScaledLayout } from '../../hooks_beach/useScaledLayout_beach'
 import CountrySelect from '../CountrySelect_beach'
 
@@ -292,7 +293,7 @@ export default function CompMatchEditor({ match, onClose, userId }) {
   }, [match])
 
   const handleSave = async () => {
-    if (!supabase) return
+    if (!isBackendAvailable()) return
     if (!competitionName.trim()) {
       setError('Competition name is required')
       return
@@ -328,13 +329,11 @@ export default function CompMatchEditor({ match, onClose, userId }) {
         payload.created_by = userId || null
         payload.sport_type = 'beach'
         payload.status = 'template'
-        const { error: err } = await supabase
-          .from('beach_competition_matches')
+        const { error: err } = await apiFrom('beach_competition_matches')
           .insert(payload)
         if (err) throw err
       } else {
-        const { error: err } = await supabase
-          .from('beach_competition_matches')
+        const { error: err } = await apiFrom('beach_competition_matches')
           .update(payload)
           .eq('id', match.id)
         if (err) throw err

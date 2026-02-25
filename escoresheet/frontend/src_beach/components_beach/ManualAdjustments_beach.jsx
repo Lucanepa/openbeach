@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db_beach/db_beach'
 import { useAlert } from '../contexts_beach/AlertContext_beach'
-import { supabase } from '../lib_beach/supabaseClient_beach'
+import { apiFrom } from '../lib_beach/apiClient_beach'
+import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 
 // Standard volleyball team colors - keys for translation
 const TEAM_COLORS = [
@@ -512,7 +513,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
       }
 
       // Sync to Supabase if available
-      if (supabase && editedMatch?.seed_key) {
+      if (isBackendAvailable() && editedMatch?.seed_key) {
         await syncToSupabase()
       }
 
@@ -529,7 +530,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
 
   // Sync changes to Supabase
   const syncToSupabase = async () => {
-    if (!supabase || !editedMatch?.seed_key) return
+    if (!isBackendAvailable() || !editedMatch?.seed_key) return
 
     try {
       // Build set results for Supabase
@@ -569,8 +570,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
       } : null
 
       // Update match in Supabase
-      const { error: matchError } = await supabase
-        .from('matches')
+      const { error: matchError } = await apiFrom('matches')
         .update({
           match_info: {
             hall: editedMatch.hall || '',

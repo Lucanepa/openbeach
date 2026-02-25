@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useAlert } from '../contexts_beach/AlertContext_beach'
 import { db } from '../db_beach/db_beach'
-import { supabase } from '../lib_beach/supabaseClient_beach'
+import { apiFrom } from '../lib_beach/apiClient_beach'
+import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 import SignaturePad from './SignaturePad_beach'
 import Modal from './Modal_beach'
 import MenuList from './MenuList_beach'
@@ -278,7 +279,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
 
 
       // Also sync to Supabase if match has seed_key
-      if (supabase && match.seed_key) {
+      if (isBackendAvailable() && match.seed_key) {
         try {
           const isTeam1 = teamType === 'team1'
           const teamKey = isTeam1 ? 'team1' : 'team2'
@@ -288,8 +289,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           const color = isTeam1 ? team1Color : team2Color
 
           // Update matches table
-          const { data: supabaseMatch } = await supabase
-            .from('matches')
+          const { data: supabaseMatch } = await apiFrom('matches')
             .update({
               [teamKey]: {
                 name: teamName?.trim() || '',
@@ -319,8 +319,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
             const shortLiveKey = isTeamA ? 'team_a_short' : 'team_b_short'
             const nameLiveKey = isTeamA ? 'team_a_name' : 'team_b_name'
 
-            await supabase
-              .from('match_live_state')
+            await apiFrom('match_live_state')
               .update({
                 [colorLiveKey]: color,
                 [shortLiveKey]: shortName || generateShortName(teamName),
@@ -920,11 +919,10 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
 
     // Create initial match_live_state entry for Referee app (only for official matches with Supabase)
     // A/B Model: Team A = coin toss winner (constant), side_a = which side they're on
-    if (!isTest && supabase && match?.seed_key) {
+    if (!isTest && isBackendAvailable() && match?.seed_key) {
       try {
         // First get the Supabase match UUID from external_id
-        const { data: supabaseMatch, error: lookupError } = await supabase
-          .from('matches')
+        const { data: supabaseMatch, error: lookupError } = await apiFrom('matches')
           .select('id')
           .eq('external_id', match.seed_key)
           .maybeSingle()
@@ -965,8 +963,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
             }
           }
 
-          const { error: insertError } = await supabase
-            .from('match_live_state')
+          const { error: insertError } = await apiFrom('match_live_state')
             .upsert({
               match_id: supabaseMatch.id,
               current_set: 1,
@@ -1104,7 +1101,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
     // This is non-blocking - if offline or error, we still proceed (local status is already 'live')
     let verificationSkipped = false
 
-    if (!match?.test && supabase) {
+    if (!match?.test && isBackendAvailable()) {
       setInitModal({ status: 'verifying', message: 'Verifying match status...' })
 
       try {
@@ -1113,8 +1110,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         const seedKey = localMatch?.seed_key
 
         if (seedKey) {
-          const { data: supabaseMatch, error } = await supabase
-            .from('matches')
+          const { data: supabaseMatch, error } = await apiFrom('matches')
             .select('status')
             .eq('external_id', seedKey)
             .single()

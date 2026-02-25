@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { supabase } from '../../lib_beach/supabaseClient_beach'
+import { apiFrom } from '../../lib_beach/apiClient_beach'
+import { isBackendAvailable } from '../../utils_beach/backendConfig_beach'
 
 // Label maps (same as ScoresheetApp)
 const genderLabels = { men: 'Men', women: 'Women' }
@@ -182,12 +183,11 @@ export default function CompetitionList({ onEdit, onAdd }) {
   const fetchMatches = async () => {
     try {
       setLoading(true)
-      if (!supabase) {
+      if (!isBackendAvailable()) {
         setError('Supabase not configured')
         return
       }
-      const { data, error: err } = await supabase
-        .from('beach_competition_matches')
+      const { data, error: err } = await apiFrom('beach_competition_matches')
         .select('*')
         .order('scheduled_at', { ascending: true })
 
@@ -201,8 +201,7 @@ export default function CompetitionList({ onEdit, onAdd }) {
 
       let resultsMap = {}
       if (externalIds.length > 0) {
-        const { data: scoredMatches } = await supabase
-          .from('matches')
+        const { data: scoredMatches } = await apiFrom('matches')
           .select('external_id, final_score, winner, status')
           .in('external_id', externalIds)
 
@@ -241,8 +240,7 @@ export default function CompetitionList({ onEdit, onAdd }) {
   const confirmDelete = async () => {
     if (!deleteConfirm) return
     try {
-      const { error: err } = await supabase
-        .from('beach_competition_matches')
+      const { error: err } = await apiFrom('beach_competition_matches')
         .delete()
         .eq('id', deleteConfirm.id)
       if (err) throw err
@@ -274,8 +272,7 @@ export default function CompetitionList({ onEdit, onAdd }) {
     if (selectedIds.size === 0) return
     try {
       const ids = [...selectedIds]
-      const { error: err } = await supabase
-        .from('beach_competition_matches')
+      const { error: err } = await apiFrom('beach_competition_matches')
         .delete()
         .in('id', ids)
       if (err) throw err

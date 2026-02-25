@@ -1,6 +1,10 @@
 import { useEffect, useCallback, useRef, useState } from 'react'
 import { db } from '../db_beach/db_beach'
-import { supabase } from '../lib_beach/supabaseClient_beach'
+import { apiFrom } from '../lib_beach/apiClient_beach'
+import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
+
+// Thin wrapper so processJobToTarget can call client.from(table)
+const apiClient = { from: apiFrom }
 import { getSynologyClient, isSynologyEnabled } from '../lib_beach/synologyClient_beach'
 
 /**
@@ -209,7 +213,7 @@ export function useSyncQueue() {
 
   // Check Supabase connection (with caching)
   const checkSupabaseConnection = useCallback(async (forceCheck = false) => {
-    if (!supabase) {
+    if (!isBackendAvailable()) {
       setSupabaseStatus('disabled')
       return false
     }
@@ -224,7 +228,7 @@ export function useSyncQueue() {
       if (!supabaseConnectionVerified.current) {
         setSupabaseStatus('connecting')
       }
-      const { error } = await supabase.from('matches').select('id').limit(1)
+      const { error } = await apiFrom('matches').select('id').limit(1)
       if (error) {
         supabaseConnectionVerified.current = false
         if (error.code === '42P01' || error.message?.includes('relation') || error.message?.includes('does not exist')) {
@@ -559,8 +563,8 @@ export function useSyncQueue() {
 
   // Legacy processJob for Supabase (backwards compatibility)
   const processJob = useCallback(async (job) => {
-    if (!supabase) return false
-    return processJobToTarget(job, supabase, 'supabase')
+    if (!isBackendAvailable()) return false
+    return processJobToTarget(job, apiClient, 'supabase')
   }, [processJobToTarget])
 
   const flush = useCallback(async () => {
@@ -570,7 +574,7 @@ export function useSyncQueue() {
     refreshSynologyClient()
 
     const synologyClient = synologyClientRef.current
-    const hasSupabase = !!supabase
+    const hasSupabase = isBackendAvailable()
     const hasSynology = !!synologyClient
 
     // If neither target is configured, nothing to do
@@ -630,7 +634,7 @@ export function useSyncQueue() {
         for (const resource of RESOURCE_ORDER) {
           const jobs = jobsByResource[resource] || []
           for (const job of jobs) {
-            const result = await processJobToTarget(job, supabase, 'supabase')
+            const result = await processJobToTarget(job, apiClient, 'supabase')
 
             if (result === true) {
               await db.sync_queue.update(job.id, {

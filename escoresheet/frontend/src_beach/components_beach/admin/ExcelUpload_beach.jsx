@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
-import * as XLSX from 'xlsx'
-import { supabase } from '../../lib_beach/supabaseClient_beach'
+import { apiFrom } from '../../lib_beach/apiClient_beach'
+import { isBackendAvailable } from '../../utils_beach/backendConfig_beach'
 import { parseExcel, mapExcelRowToCompMatch, validateCompMatch } from '../../utils_beach/excelParser_beach'
 
 const BATCH_SIZE = 50
@@ -33,13 +33,24 @@ const TEMPLATE_EXAMPLE = [
   'Weber', 'Thomas'
 ]
 
+function escapeCsvCell(val) {
+  const str = String(val ?? '')
+  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    return '"' + str.replace(/"/g, '""') + '"'
+  }
+  return str
+}
+
 function downloadTemplate() {
-  const wb = XLSX.utils.book_new()
-  const ws = XLSX.utils.aoa_to_sheet([TEMPLATE_HEADERS, TEMPLATE_EXAMPLE])
-  // Set column widths
-  ws['!cols'] = TEMPLATE_HEADERS.map(h => ({ wch: Math.max(h.length + 2, 14) }))
-  XLSX.utils.book_append_sheet(wb, ws, 'Competition Matches')
-  XLSX.writeFile(wb, 'competition_matches_template.xlsx')
+  const rows = [TEMPLATE_HEADERS, TEMPLATE_EXAMPLE]
+  const csv = rows.map(row => row.map(escapeCsvCell).join(',')).join('\r\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'competition_matches_template.csv'
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 export default function ExcelUpload({ userId, onComplete }) {
@@ -78,7 +89,7 @@ export default function ExcelUpload({ userId, onComplete }) {
   }
 
   const handleImport = async () => {
-    if (!supabase) {
+    if (!isBackendAvailable()) {
       setError('Supabase not configured')
       return
     }
@@ -88,8 +99,7 @@ export default function ExcelUpload({ userId, onComplete }) {
     try {
       for (let i = 0; i < mappedMatches.length; i += BATCH_SIZE) {
         const batch = mappedMatches.slice(i, i + BATCH_SIZE)
-        const { error: err } = await supabase
-          .from('beach_competition_matches')
+        const { error: err } = await apiFrom('beach_competition_matches')
           .insert(batch)
         if (err) throw err
         setProgress({ done: Math.min(i + BATCH_SIZE, mappedMatches.length), total: mappedMatches.length })
@@ -134,14 +144,14 @@ export default function ExcelUpload({ userId, onComplete }) {
       {step === 'select' && (
         <div style={{ background: '#111827', borderRadius: 12, border: '2px dashed #374151', padding: 40, textAlign: 'center' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>&#x1F4C4;</div>
-          <p style={{ color: '#9ca3af', marginBottom: 20 }}>Select a spreadsheet (.xlsx, .xls, .ods, .csv) with competition match data</p>
+          <p style={{ color: '#9ca3af', marginBottom: 20 }}>Select a spreadsheet (.xlsx, .csv) with competition match data</p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', alignItems: 'center' }}>
             <label style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 180, height: 40, margin: 0, padding: 0, background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: 14, boxSizing: 'border-box', lineHeight: 1 }}>
               Choose File
               <input
                 ref={fileRef}
                 type="file"
-                accept=".xlsx,.xls,.ods,.csv"
+                accept=".xlsx,.csv"
                 onChange={handleFileSelect}
                 style={{ display: 'none' }}
               />

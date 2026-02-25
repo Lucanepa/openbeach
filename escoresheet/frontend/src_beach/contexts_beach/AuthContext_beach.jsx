@@ -1,19 +1,20 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
-import { supabase } from '../lib_beach/supabaseClient_beach'
+import { apiFrom, apiAuth, apiRpc } from '../lib_beach/apiClient_beach'
+import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
-  // Only show loading if supabase is configured (otherwise show sign-in immediately)
-  const [loading, setLoading] = useState(!!supabase)
+  // Only show loading if backend is configured (otherwise show sign-in immediately)
+  const [loading, setLoading] = useState(isBackendAvailable())
   // Prevent duplicate profile fetches
   const fetchingProfile = useRef(false)
 
   // Fetch user profile from profiles table
   const fetchProfile = useCallback(async (userId) => {
-    if (!supabase || !userId) {
+    if (!isBackendAvailable() || !userId) {
       setProfile(null)
       return null
     }
@@ -26,13 +27,12 @@ export function AuthProvider({ children }) {
     try {
       fetchingProfile.current = true
 
-      // Add timeout to detect hanging queries (15s to allow for Supabase cold starts)
+      // Add timeout to detect hanging queries (15s to allow for cold starts)
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Profile query timed out after 15s')), 15000)
       )
 
-      const queryPromise = supabase
-        .from('profiles')
+      const queryPromise = apiFrom('profiles')
         .select('*')
         .eq('user_id', userId)
         .single()
@@ -61,7 +61,7 @@ export function AuthProvider({ children }) {
 
   // Initialize auth state
   useEffect(() => {
-    if (!supabase) {
+    if (!isBackendAvailable()) {
       setLoading(false)
       return
     }
@@ -72,7 +72,7 @@ export function AuthProvider({ children }) {
     }, 3000)
 
     // Listen for auth changes FIRST (this is the reliable way to get auth state)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    const { data: { subscription } } = apiAuth.onAuthStateChange(
       async (event, session) => {
         clearTimeout(loadingTimeout)
         setUser(session?.user ?? null)
@@ -90,7 +90,7 @@ export function AuthProvider({ children }) {
     )
 
     // Get initial session (triggers onAuthStateChange with INITIAL_SESSION event)
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    apiAuth.getSession().then(({ data: { session } }) => {
       // Don't call fetchProfile here - let onAuthStateChange handle it
       // This prevents duplicate fetches
     }).catch((err) => {
@@ -107,11 +107,11 @@ export function AuthProvider({ children }) {
 
   // Sign in with email/password
   const signIn = useCallback(async (email, password) => {
-    if (!supabase) {
-      return { error: { message: 'Supabase not configured' } }
+    if (!isBackendAvailable()) {
+      return { error: { message: 'Backend not configured' } }
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await apiAuth.signInWithPassword({
       email,
       password
     })
@@ -125,12 +125,12 @@ export function AuthProvider({ children }) {
 
   // Sign up with email/password
   const signUp = useCallback(async (email, password, profileData = {}) => {
-    if (!supabase) {
-      return { error: { message: 'Supabase not configured' } }
+    if (!isBackendAvailable()) {
+      return { error: { message: 'Backend not configured' } }
     }
 
     // Pass profile data in user metadata - the database trigger will read it
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await apiAuth.signUp({
       email,
       password,
       options: {
@@ -149,11 +149,11 @@ export function AuthProvider({ children }) {
 
   // Sign out
   const signOut = useCallback(async () => {
-    if (!supabase) {
-      return { error: { message: 'Supabase not configured' } }
+    if (!isBackendAvailable()) {
+      return { error: { message: 'Backend not configured' } }
     }
 
-    const { error } = await supabase.auth.signOut()
+    const { error } = await apiAuth.signOut()
     if (!error) {
       setUser(null)
       setProfile(null)
@@ -165,12 +165,11 @@ export function AuthProvider({ children }) {
 
   // Update profile
   const updateProfile = useCallback(async (updates) => {
-    if (!supabase || !user) {
+    if (!isBackendAvailable() || !user) {
       return { error: { message: 'Not authenticated' } }
     }
 
-    const { data, error } = await supabase
-      .from('profiles')
+    const { data, error } = await apiFrom('profiles')
       .update({
         first_name: updates.firstName,
         last_name: updates.lastName,
@@ -192,11 +191,11 @@ export function AuthProvider({ children }) {
 
   // Reset password
   const resetPassword = useCallback(async (email) => {
-    if (!supabase) {
-      return { error: { message: 'Supabase not configured' } }
+    if (!isBackendAvailable()) {
+      return { error: { message: 'Backend not configured' } }
     }
 
-    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+    const { data, error } = await apiAuth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`
     })
 
@@ -205,11 +204,11 @@ export function AuthProvider({ children }) {
 
   // Update email - sends confirmation to new email
   const updateEmail = useCallback(async (newEmail) => {
-    if (!supabase || !user) {
+    if (!isBackendAvailable() || !user) {
       return { error: { message: 'Not authenticated' } }
     }
 
-    const { data, error } = await supabase.auth.updateUser({
+    const { data, error } = await apiAuth.updateUser({
       email: newEmail
     })
 
@@ -224,14 +223,14 @@ export function AuthProvider({ children }) {
 
   // Delete account - requires RPC function in database
   const deleteAccount = useCallback(async () => {
-    if (!supabase || !user) {
+    if (!isBackendAvailable() || !user) {
       return { error: { message: 'Not authenticated' } }
     }
 
     try {
       // Call the delete_user RPC function which deletes the auth user
       // This function must be created in Supabase with SECURITY DEFINER
-      const { error: rpcError } = await supabase.rpc('delete_user')
+      const { error: rpcError } = await apiRpc('delete_user')
 
       if (rpcError) {
         console.error('Delete user RPC error:', rpcError)

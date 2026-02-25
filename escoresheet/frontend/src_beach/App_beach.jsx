@@ -36,7 +36,8 @@ import {
   getTestTeam1ShortName,
   getTestTeam2ShortName
 } from './constants_beach/testSeeds_beach'
-import { supabase } from './lib_beach/supabaseClient_beach'
+import { apiFrom } from './lib_beach/apiClient_beach'
+import { isBackendAvailable, getBackendUrl, getWebSocketUrl } from './utils_beach/backendConfig_beach'
 import { checkMatchSession, lockMatchSession, unlockMatchSession, verifyGamePin } from './utils_beach/sessionManager_beach'
 
 // Sport type for beach volleyball
@@ -93,7 +94,7 @@ export default function App() {
   const [showCompetitionPicker, setShowCompetitionPicker] = useState(false)
   const { syncStatus, retryErrors, isOnline } = useSyncQueue()
   const backup = useAutoBackup(matchId)
-  const canUseSupabase = Boolean(supabase)
+  const canUseSupabase = isBackendAvailable()
 
   // Dashboard Server state
   const [dashboardServerEnabled, setDashboardServerEnabled] = useState(
@@ -456,8 +457,8 @@ export default function App() {
       window.location.hostname.endsWith('.openvolley.app') // All openvolley.app subdomains are static
     )
 
-    // Check if we have a configured backend URL (Railway/cloud backend)
-    const hasBackendUrl = !!import.meta.env.VITE_BACKEND_URL
+    // Check if we have a configured backend URL (cloud backend)
+    const hasBackendUrl = isBackendAvailable()
 
     // Check API/Server connection
     if (isStaticDeployment && !hasBackendUrl) {
@@ -467,9 +468,9 @@ export default function App() {
       debugInfo.api = { status: 'not_available', message: 'API not available in static deployment (using local database only)' }
       debugInfo.server = { status: 'not_available', message: 'Server not available in static deployment (using local database only)' }
     } else if (hasBackendUrl) {
-      // Backend URL configured - check Railway backend health
+      // Backend URL configured - check cloud backend health
       try {
-        const backendUrl = import.meta.env.VITE_BACKEND_URL
+        const backendUrl = getBackendUrl()
         const response = await fetch(`${backendUrl}/health`)
         if (response.ok) {
           const data = await response.json()
@@ -526,35 +527,27 @@ export default function App() {
       // Reuse main WebSocket connection status - no need to create test connection
       statuses.websocket = 'connected'
       debugInfo.websocket = { status: 'connected', message: 'WebSocket server is reachable (active connection)' }
-    } else if (!import.meta.env.VITE_BACKEND_URL) {
+    } else if (!isBackendAvailable()) {
       // No backend configured — skip WebSocket check entirely
       statuses.websocket = 'not_configured'
       debugInfo.websocket = { status: 'not_configured', message: 'No VITE_BACKEND_URL configured' }
     } else {
       try {
-        // Check if we have a configured backend URL (Railway/cloud backend)
-        const backendUrl = import.meta.env.VITE_BACKEND_URL
-
-        let wsUrl
-        if (backendUrl) {
-          // Use configured backend (Railway cloud)
-          const url = new URL(backendUrl)
-          const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-          wsUrl = `${protocol}//${url.host}`
-        } else {
-          // Fallback to local WebSocket server
-          const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-          const hostname = window.location.hostname
-          const wsPort = serverStatus?.wsPort || 8080
-          wsUrl = `${protocol}://${hostname}:${wsPort}`
+        const wsUrl = getWebSocketUrl()
+        if (!wsUrl) {
+          statuses.websocket = 'not_configured'
+          debugInfo.websocket = { status: 'not_configured', message: 'No backend URL configured for WebSocket' }
+          setConnectionStatuses(statuses)
+          setConnectionDebugInfo(debugInfo)
+          return
         }
 
         const wsTest = new WebSocket(wsUrl)
         let resolved = false
         let errorMessage = ''
 
-        // Use longer timeout for cloud backends (Railway needs more time to wake up)
-        const connectionTimeout = backendUrl ? 10000 : 2000
+        // Use longer timeout for cloud backends (may need more time to wake up)
+        const connectionTimeout = isBackendAvailable() ? 10000 : 2000
 
         await new Promise((resolve) => {
           const timeout = setTimeout(() => {
@@ -1090,7 +1083,7 @@ export default function App() {
       }
 
       // Skip WebSocket if no backend URL configured (avoids console spam in dev)
-      if (!import.meta.env.VITE_BACKEND_URL) {
+      if (!isBackendAvailable()) {
         return
       }
 
@@ -1124,24 +1117,9 @@ export default function App() {
       }
 
       try {
-        // Check if we have a configured backend URL (Railway/cloud backend)
-        const backendUrl = import.meta.env.VITE_BACKEND_URL
-
-        let wsUrl
-        if (backendUrl) {
-          // Use configured backend (Railway cloud)
-          const url = new URL(backendUrl)
-          const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-          wsUrl = `${protocol}//${url.host}`
-        } else {
-          // Fallback to local WebSocket server
-          const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-          const hostname = window.location.hostname
-          let wsPort = 8080
-          if (serverStatus?.wsPort) {
-            wsPort = serverStatus.wsPort
-          }
-          wsUrl = `${protocol}://${hostname}:${wsPort}`
+        const wsUrl = getWebSocketUrl()
+        if (!wsUrl) {
+          return
         }
 
         wsRef.current = new WebSocket(wsUrl)
@@ -1640,12 +1618,11 @@ export default function App() {
   }
 
   async function resetSupabaseTestMatch() {
-    if (!supabase) {
+    if (!isBackendAvailable()) {
       throw new Error('Supabase client is not configured.')
     }
 
-    const { data: matchRecord, error: matchLookupError } = await supabase
-      .from('matches')
+    const { data: matchRecord, error: matchLookupError } = await apiFrom('matches')
       .select('id')
       .eq('external_id', TEST_MATCH_EXTERNAL_ID)
       .single()
@@ -1659,16 +1636,14 @@ export default function App() {
 
     const matchUuid = matchRecord.id
 
-    const { error: deleteEventsError } = await supabase
-      .from('events')
+    const { error: deleteEventsError } = await apiFrom('events')
       .delete()
       .eq('match_id', matchUuid)
     if (deleteEventsError) {
       throw new Error(deleteEventsError.message)
     }
 
-    const { error: deleteSetsError } = await supabase
-      .from('sets')
+    const { error: deleteSetsError } = await apiFrom('sets')
       .delete()
       .eq('match_id', matchUuid)
     if (deleteSetsError) {
@@ -1676,8 +1651,7 @@ export default function App() {
     }
 
     const newScheduled = getNextTestMatchStartTime()
-    const { error: updateMatchError } = await supabase
-      .from('matches')
+    const { error: updateMatchError } = await apiFrom('matches')
       .update({
         status: 'scheduled',
         scheduled_at: newScheduled,
@@ -1691,7 +1665,7 @@ export default function App() {
   }
 
   async function loadTestMatchFromSupabase({ resetRemote = false, targetView = 'setup' } = {}) {
-    if (!supabase) {
+    if (!isBackendAvailable()) {
       throw new Error('Supabase client is not configured.')
     }
 
@@ -1699,8 +1673,7 @@ export default function App() {
       await resetSupabaseTestMatch()
     }
 
-    const { data: matchData, error: matchError } = await supabase
-      .from('matches')
+    const { data: matchData, error: matchError } = await apiFrom('matches')
       .select('*')
       .eq('external_id', TEST_MATCH_EXTERNAL_ID)
       .eq('sport_type', SPORT_TYPE)
@@ -1715,8 +1688,8 @@ export default function App() {
 
 
     const [team1Res, team2Res] = await Promise.all([
-      supabase.from('teams').select('*').eq('id', matchData.team1_id).single(),
-      supabase.from('teams').select('*').eq('id', matchData.team2_id).single()
+      apiFrom('teams').select('*').eq('id', matchData.team1_id).single(),
+      apiFrom('teams').select('*').eq('id', matchData.team2_id).single()
     ])
 
     if (team1Res.error) {
@@ -1730,8 +1703,7 @@ export default function App() {
     const team2Data = team2Res.data
 
 
-    const { data: playersData, error: playersError } = await supabase
-      .from('players')
+    const { data: playersData, error: playersError } = await apiFrom('players')
       .select('*')
       .in('team_id', [matchData.team1_id, matchData.team2_id])
 
@@ -1739,8 +1711,7 @@ export default function App() {
       throw new Error(playersError.message)
     }
 
-    const { data: setsData, error: setsError } = await supabase
-      .from('sets')
+    const { data: setsData, error: setsError } = await apiFrom('sets')
       .select('*')
       .eq('match_id', matchData.id)
       .order('index')
@@ -1749,8 +1720,7 @@ export default function App() {
       throw new Error(setsError.message)
     }
 
-    const { data: eventsData, error: eventsError } = await supabase
-      .from('events')
+    const { data: eventsData, error: eventsError } = await apiFrom('events')
       .select('*')
       .eq('match_id', matchData.id)
       .order('ts')
@@ -1823,7 +1793,7 @@ export default function App() {
 
     const fetchOfficialByExternalId = async (table, externalId) => {
       if (!externalId) return null
-      const { data, error } = await supabase.from(table).select('first_name,last_name,country,dob').eq('external_id', externalId).maybeSingle()
+      const { data, error } = await apiFrom(table).select('first_name,last_name,country,dob').eq('external_id', externalId).maybeSingle()
       if (error) {
         console.warn(`Unable to load ${table} ${externalId}:`, error.message)
         return null
@@ -2324,10 +2294,9 @@ export default function App() {
 
     // Mark competition match as claimed (atomic check)
     // claimed_match_external_id will be set later when seed_key is generated in MatchSetup
-    if (supabase && compMatch.id) {
+    if (isBackendAvailable() && compMatch.id) {
       try {
-        await supabase
-          .from('beach_competition_matches')
+        await apiFrom('beach_competition_matches')
           .update({ status: 'claimed' })
           .eq('id', compMatch.id)
           .eq('status', 'template')
@@ -3097,7 +3066,7 @@ export default function App() {
             } : null}
             collapsible={!!(matchId && !showCoinToss && !showMatchSetup && !showMatchEnd)}
             onTriggerAlarm={async () => {
-              if (!matchId || !supabase || !currentMatch) return
+              if (!matchId || !isBackendAvailable() || !currentMatch) return
 
               // Identify the UUID for Supabase
               let supabaseMatchId = null
@@ -3108,8 +3077,7 @@ export default function App() {
               } else {
                 // Fallback: look up standard ID from matches table using the match seed key
                 const seedKey = currentMatch.seed_key || String(matchId)
-                const { data: matchData } = await supabase
-                  .from('matches')
+                const { data: matchData } = await apiFrom('matches')
                   .select('id')
                   .eq('external_id', seedKey)
                   .maybeSingle()
@@ -3124,8 +3092,7 @@ export default function App() {
               const trigger = new Date().toISOString()
               setScorerAttentionTrigger(trigger)
               try {
-                const { error } = await supabase
-                  .from('match_live_state')
+                const { error } = await apiFrom('match_live_state')
                   .update({ scorer_attention_trigger: trigger })
                   .eq('match_id', supabaseMatchId)
                 if (error) throw error

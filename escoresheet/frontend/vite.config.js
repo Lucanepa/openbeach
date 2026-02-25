@@ -78,8 +78,6 @@ export default defineConfig({
     host: true, // Allow external connections
     allowedHosts: [
       'yael-ethnic-aliana.ngrok-free.dev',
-      '.ngrok-free.dev',
-      '.ngrok.io'
     ],
     proxy: {
       '/api/screenshot': {

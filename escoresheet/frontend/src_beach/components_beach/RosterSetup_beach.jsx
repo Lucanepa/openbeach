@@ -4,7 +4,8 @@ import { useAlert } from '../contexts_beach/AlertContext_beach'
 import { getMatchData } from '../utils_beach/serverDataSync_beach'
 import { useRealtimeConnection } from '../hooks_beach/useRealtimeConnection_beach'
 import { db } from '../db_beach/db_beach'
-import { supabase } from '../lib_beach/supabaseClient_beach'
+import { apiFrom } from '../lib_beach/apiClient_beach'
+import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 import SignaturePad from './SignaturePad_beach'
 
 export default function RosterSetup({ matchId, team, onBack, embedded = false, useSupabaseConnection = false, matchData = null }) {
@@ -228,7 +229,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
       }
 
       // If connected to Supabase, also sync roster
-      if (useSupabaseConnection && supabase && matchData?.external_id) {
+      if (useSupabaseConnection && isBackendAvailable() && matchData?.external_id) {
         setSyncing(true)
 
         // JSONB signature keys
@@ -246,8 +247,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
 
         // Merge with existing signatures JSONB
         if (Object.keys(signaturesUpdate).length > 0) {
-          const { data: existingMatch } = await supabase
-            .from('matches')
+          const { data: existingMatch } = await apiFrom('matches')
             .select('signatures')
             .eq('external_id', matchData.external_id)
             .maybeSingle()
@@ -258,8 +258,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
           }
         }
 
-        const { error: supabaseError } = await supabase
-          .from('matches')
+        const { error: supabaseError } = await apiFrom('matches')
           .update(supabaseUpdate)
           .eq('external_id', matchData.external_id)
 

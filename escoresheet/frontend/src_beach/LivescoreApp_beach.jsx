@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { supabase } from './lib_beach/supabaseClient_beach'
+import { apiFrom } from './lib_beach/apiClient_beach'
+import { isBackendAvailable } from './utils_beach/backendConfig_beach'
 import UpdateBanner from './components_beach/UpdateBanner_beach'
 import DashboardHeader from './components_beach/DashboardHeader_beach'
 
@@ -32,15 +34,14 @@ export default function LivescoreApp() {
   }, [])
 
   const fetchLiveGames = useCallback(async () => {
-    if (!supabase) {
+    if (!isBackendAvailable()) {
       setError(t('errors.supabaseNotConfigured'))
       setLoading(false)
       return
     }
 
     try {
-      const { data, error: fetchError } = await supabase
-        .from('match_live_state')
+      const { data, error: fetchError } = await apiFrom('match_live_state')
         .select('*, matches!match_live_state_match_id_fkey_cascade(set_results, sport_type)')
         .order('updated_at', { ascending: false })
 

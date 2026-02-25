@@ -1,23 +1,57 @@
-import * as XLSX from 'xlsx'
+import readXlsxFile from 'read-excel-file/browser'
 
 /**
- * Parse an Excel file (.xlsx/.xls/.csv) into an array of row objects.
+ * Parse a CSV string into an array of arrays (rows of cells).
  */
-export function parseExcel(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      try {
-        const workbook = XLSX.read(e.target.result, { type: 'array', cellDates: true })
-        const sheet = workbook.Sheets[workbook.SheetNames[0]]
-        const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' })
-        resolve(rows)
-      } catch (err) {
-        reject(err)
-      }
+function parseCsvText(text) {
+  const rows = []
+  let row = []
+  let cell = ''
+  let inQuote = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (inQuote) {
+      if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++ }
+      else if (ch === '"') { inQuote = false }
+      else { cell += ch }
+    } else {
+      if (ch === '"') { inQuote = true }
+      else if (ch === ',') { row.push(cell); cell = '' }
+      else if (ch === '\n' || (ch === '\r' && text[i + 1] === '\n')) {
+        if (ch === '\r') i++
+        row.push(cell); cell = ''
+        if (row.some(c => c !== '')) rows.push(row)
+        row = []
+      } else { cell += ch }
     }
-    reader.onerror = () => reject(new Error('Failed to read file'))
-    reader.readAsArrayBuffer(file)
+  }
+  row.push(cell)
+  if (row.some(c => c !== '')) rows.push(row)
+  return rows
+}
+
+/**
+ * Parse an Excel file (.xlsx) or CSV file into an array of row objects.
+ */
+export async function parseExcel(file) {
+  const ext = file.name.toLowerCase().split('.').pop()
+
+  let rawRows
+  if (ext === 'csv') {
+    const text = await file.text()
+    rawRows = parseCsvText(text)
+  } else {
+    rawRows = await readXlsxFile(file)
+  }
+
+  if (rawRows.length < 2) return []
+  const headers = rawRows[0].map(h => String(h ?? ''))
+  return rawRows.slice(1).map(row => {
+    const obj = {}
+    headers.forEach((h, i) => {
+      obj[h] = row[i] ?? ''
+    })
+    return obj
   })
 }
 

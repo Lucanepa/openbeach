@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { db } from '../db_beach/db_beach'
-import { supabase } from '../lib_beach/supabaseClient_beach'
+import { apiFrom } from '../lib_beach/apiClient_beach'
+import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 
 // Valid sets table columns - filters out invalid columns (e.g., 'test' from local DB)
 const VALID_SET_COLUMNS = [
@@ -44,7 +45,7 @@ export function useSequentialSync() {
     }
 
     // 3. Check if Supabase is configured
-    if (!supabase) {
+    if (!isBackendAvailable()) {
       console.warn('[SequentialSync] Supabase not configured - job queued for later')
       return { success: false, offline: true, jobId }
     }
@@ -107,8 +108,7 @@ export function useSequentialSync() {
         const { external_id, ...rawUpdateData } = job.payload
         const updateData = filterSetPayload(rawUpdateData)
 
-        const { error } = await supabase
-          .from('sets')
+        const { error } = await apiFrom('sets')
           .update(updateData)
           .eq('external_id', external_id)
 
@@ -124,8 +124,7 @@ export function useSequentialSync() {
 
         // Resolve match_id from external_id if needed
         if (setPayload.match_id && typeof setPayload.match_id === 'string') {
-          const { data: matchData, error: lookupError } = await supabase
-            .from('matches')
+          const { data: matchData, error: lookupError } = await apiFrom('matches')
             .select('id')
             .eq('external_id', setPayload.match_id)
             .maybeSingle()
@@ -141,8 +140,7 @@ export function useSequentialSync() {
           setPayload.match_id = matchData.id
         }
 
-        const { error } = await supabase
-          .from('sets')
+        const { error } = await apiFrom('sets')
           .upsert(setPayload, { onConflict: 'external_id' })
 
         if (error) {
@@ -157,8 +155,7 @@ export function useSequentialSync() {
 
         // Resolve match_id from external_id if needed
         if (eventPayload.match_id && typeof eventPayload.match_id === 'string') {
-          const { data: matchData, error: lookupError } = await supabase
-            .from('matches')
+          const { data: matchData, error: lookupError } = await apiFrom('matches')
             .select('id')
             .eq('external_id', eventPayload.match_id)
             .maybeSingle()
@@ -174,8 +171,7 @@ export function useSequentialSync() {
           eventPayload.match_id = matchData.id
         }
 
-        const { error } = await supabase
-          .from('events')
+        const { error } = await apiFrom('events')
           .upsert(eventPayload, { onConflict: 'external_id' })
 
         if (error) {
@@ -197,8 +193,7 @@ export function useSequentialSync() {
         // If updating JSONB columns, fetch existing values and merge
         if (hasJsonbColumns) {
           const columnsToFetch = jsonbColumns.filter(col => updateData[col] !== undefined)
-          const { data: existingMatch, error: fetchError } = await supabase
-            .from('matches')
+          const { data: existingMatch, error: fetchError } = await apiFrom('matches')
             .select(columnsToFetch.join(','))
             .eq('external_id', id)
             .maybeSingle()
@@ -220,8 +215,7 @@ export function useSequentialSync() {
           }
         }
 
-        const { error } = await supabase
-          .from('matches')
+        const { error } = await apiFrom('matches')
           .update(finalUpdateData)
           .eq('external_id', id)
 

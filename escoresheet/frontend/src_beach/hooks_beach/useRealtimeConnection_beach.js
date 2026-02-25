@@ -5,7 +5,8 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { supabase } from '../lib_beach/supabaseClient_beach'
+import { supabase } from '../lib_beach/supabaseClient_beach'  // Realtime only
+import { apiFrom } from '../lib_beach/apiClient_beach'
 import { subscribeToMatchData, getMatchData } from '../utils_beach/serverDataSync_beach'
 
 // Connection types
@@ -108,8 +109,7 @@ export function useRealtimeConnection({
       // First, look up the Supabase UUID from external_id (seed_key)
       // This is needed because events/sets tables use match_id (UUID), not external_id
       let supabaseMatchUuid = null
-      const { data: matchData, error: lookupError } = await supabase
-        .from('matches')
+      const { data: matchData, error: lookupError } = await apiFrom('matches')
         .select('id')
         .eq('external_id', matchId)
         .maybeSingle()

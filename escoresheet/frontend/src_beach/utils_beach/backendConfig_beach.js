@@ -4,7 +4,7 @@
  */
 
 // Cloud relay URL for tablets/mobile (non-Electron/non-desktop)
-const CLOUD_RELAY_URL = 'https://escoresheet-backend-production.up.railway.app'
+const CLOUD_RELAY_URL = 'https://backend.openvolley.app'
 
 /**
  * Detect if running on a desktop platform (Mac/PC/Linux) vs tablet/mobile

@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { supabase } from './lib_beach/supabaseClient_beach'
+import { apiStorage } from './lib_beach/apiClient_beach'
+import { isBackendAvailable } from './utils_beach/backendConfig_beach'
 
 // Get a signed URL for a file in Supabase storage (valid for 1 hour)
 const getSignedUrl = async (path) => {
-  if (!supabase) return null
-  const { data, error } = await supabase.storage
+  if (!isBackendAvailable()) return null
+  const { data, error } = await apiStorage
     .from('scoresheets')
     .createSignedUrl(path, 3600)
   if (error) {
@@ -25,13 +26,13 @@ const extractTeamName = (json, teamNum) => {
 // Fetch all scoresheets from storage (beach only)
 const fetchAllScoresheets = async () => {
   try {
-    if (!supabase) {
+    if (!isBackendAvailable()) {
       console.error('Supabase client not available')
       return []
     }
 
     // List all folders (dates) in the scoresheets bucket
-    const { data: folders, error: foldersError } = await supabase.storage
+    const { data: folders, error: foldersError } = await apiStorage
       .from('scoresheets')
       .list('', { limit: 100, sortBy: { column: 'name', order: 'desc' } })
 
@@ -46,7 +47,7 @@ const fetchAllScoresheets = async () => {
     for (const folder of folders || []) {
       if (!folder.name || folder.name.startsWith('.')) continue
 
-      const { data: files, error: filesError } = await supabase.storage
+      const { data: files, error: filesError } = await apiStorage
         .from('scoresheets')
         .list(folder.name, { limit: 50 })
 
@@ -82,7 +83,7 @@ const fetchAllScoresheets = async () => {
     const enrichedScoresheets = await Promise.all(
       scoresheets.slice(0, 50).map(async (item) => {
         try {
-          const { data, error } = await supabase.storage
+          const { data, error } = await apiStorage
             .from('scoresheets')
             .download(item.path)
 

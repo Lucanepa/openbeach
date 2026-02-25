@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { supabase } from '../lib_beach/supabaseClient_beach'
+import { apiFrom } from '../lib_beach/apiClient_beach'
+import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 
 // Sport type for beach volleyball
 const SPORT_TYPE = 'beach'
@@ -28,13 +29,12 @@ export default function RefereeSelector({ open, onClose, onSelect, position = {}
   const loadReferees = async () => {
     setLoading(true)
     try {
-      if (!supabase) {
+      if (!isBackendAvailable()) {
         setReferees([])
         return
       }
 
-      const { data, error } = await supabase
-        .from('referee_database')
+      const { data, error } = await apiFrom('referee_database')
         .select('first_name, last_name, country, dob, created_at')
         .contains('sport_type', JSON.stringify([SPORT_TYPE]))
         .order('last_name', { ascending: true })
@@ -106,7 +106,7 @@ export default function RefereeSelector({ open, onClose, onSelect, position = {}
 
   if (!open) return null
 
-  const isOnline = !!supabase
+  const isOnline = isBackendAvailable()
 
   return (
     <>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { supabase } from '../lib_beach/supabaseClient_beach'
+import { apiFrom } from '../lib_beach/apiClient_beach'
+import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 
 // Label maps (same as ScoresheetApp/CompetitionList)
 const genderLabels = { men: 'Men', women: 'Women' }
@@ -63,12 +64,11 @@ export default function CompetitionMatchPicker({ open, onClose, onSelect }) {
       try {
         setLoading(true)
         setError(null)
-        if (!supabase) {
+        if (!isBackendAvailable()) {
           setError('Supabase not configured')
           return
         }
-        const { data, error: err } = await supabase
-          .from('beach_competition_matches')
+        const { data, error: err } = await apiFrom('beach_competition_matches')
           .select('*')
           .eq('status', 'template')
           .order('scheduled_at', { ascending: true })

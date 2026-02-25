@@ -18,7 +18,8 @@ import { useSequentialSync } from '../hooks_beach/useSequentialSync_beach'
 const ballImage = '/beachball.png'
 import { debugLogger, createStateSnapshot } from '../utils_beach/debugLogger_beach'
 import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
-import { supabase } from '../lib_beach/supabaseClient_beach'
+import { apiFrom } from '../lib_beach/apiClient_beach'
+import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 
@@ -1208,7 +1209,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
     const connectWebSocket = () => {
       try {
-        // Check if we have a configured backend URL (Railway/cloud backend)
+        // Check if we have a configured backend URL (cloud backend)
         const backendUrl = import.meta.env.VITE_BACKEND_URL
 
         // Skip WebSocket connection if no backend URL is configured (standalone/dev without backend)
@@ -1738,7 +1739,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // Always broadcast locally (works offline, no Supabase needed)
     broadcastToScoreboard(cachedSnapshot)
 
-    if (!supabase || !matchId) return
+    if (!isBackendAvailable() || !matchId) return
 
     try {
       // Get match to check if it's a test match
@@ -1752,8 +1753,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         supabaseMatchId = externalId
       } else {
         const seedKey = match.seed_key || String(matchId)
-        const { data: matchData, error } = await supabase
-          .from('matches')
+        const { data: matchData, error } = await apiFrom('matches')
           .select('id')
           .eq('external_id', seedKey)
           .eq('sport_type', SPORT_TYPE)
@@ -1935,8 +1935,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Reason: match_live_state needs sub-second latency for real-time spectator display.
       // Queuing would add 1s+ delay from the polling interval in useSyncQueue.
       const [liveStateResult, matchResult] = await Promise.all([
-        supabase.from('match_live_state').upsert(liveStateData, { onConflict: 'match_id' }),
-        supabase.from('matches').update({ current_set: finalSetIndex }).eq('id', supabaseMatchId)
+        apiFrom('match_live_state').upsert(liveStateData, { onConflict: 'match_id' }),
+        apiFrom('matches').update({ current_set: finalSetIndex }).eq('id', supabaseMatchId)
       ])
 
       if (liveStateResult.error) {
@@ -3330,9 +3330,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       })
 
       // Sync to Supabase
-      if (supabase && data.match?.seed_key) {
-        supabase
-          .from('matches')
+      if (isBackendAvailable() && data.match?.seed_key) {
+        apiFrom('matches')
           .update({ manual_changes: updatedChanges })
           .eq('external_id', data.match.seed_key)
           .eq('sport_type', SPORT_TYPE)
@@ -3352,7 +3351,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
 
     return change
-  }, [matchId, data?.match, supabase])
+  }, [matchId, data?.match])
 
   // Refresh the eScoresheet window with latest data
   const refreshScoresheet = useCallback(async () => {
@@ -13090,10 +13089,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     await db.sets.update(data.set.id, update)
 
                                     // Sync to Supabase
-                                    if (supabase && data.match?.seed_key) {
+                                    if (isBackendAvailable() && data.match?.seed_key) {
                                       try {
                                         const sbUpdate = leftisTeam1 ? { team1_points: newPoints } : { team2_points: newPoints }
-                                        await supabase.from('sets').update(sbUpdate).eq('external_id', String(data.set.id))
+                                        await apiFrom('sets').update(sbUpdate).eq('external_id', String(data.set.id))
                                       } catch (err) { /* ignore */ }
                                     }
 
@@ -13127,10 +13126,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     await db.sets.update(data.set.id, update)
 
                                     // Sync to Supabase
-                                    if (supabase && data.match?.seed_key) {
+                                    if (isBackendAvailable() && data.match?.seed_key) {
                                       try {
                                         const sbUpdate = rightIsTeam1 ? { team1_points: newPoints } : { team2_points: newPoints }
-                                        await supabase.from('sets').update(sbUpdate).eq('external_id', String(data.set.id))
+                                        await apiFrom('sets').update(sbUpdate).eq('external_id', String(data.set.id))
                                       } catch (err) { /* ignore */ }
                                     }
 
@@ -13271,9 +13270,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     const newPoints = Math.max(0, Math.min(99, parseInt(e.target.value) || 0))
                                     await db.sets.update(set.id, { team1Points: newPoints })
                                     // Sync to Supabase
-                                    if (supabase && data.match?.seed_key) {
+                                    if (isBackendAvailable() && data.match?.seed_key) {
                                       try {
-                                        await supabase.from('sets').update({ team1_points: newPoints }).eq('external_id', String(set.id))
+                                        await apiFrom('sets').update({ team1_points: newPoints }).eq('external_id', String(set.id))
                                       } catch (err) { /* ignore */ }
                                     }
                                   }}
@@ -13299,9 +13298,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     const newPoints = Math.max(0, Math.min(99, parseInt(e.target.value) || 0))
                                     await db.sets.update(set.id, { team2Points: newPoints })
                                     // Sync to Supabase
-                                    if (supabase && data.match?.seed_key) {
+                                    if (isBackendAvailable() && data.match?.seed_key) {
                                       try {
-                                        await supabase.from('sets').update({ team2_points: newPoints }).eq('external_id', String(set.id))
+                                        await apiFrom('sets').update({ team2_points: newPoints }).eq('external_id', String(set.id))
                                       } catch (err) { /* ignore */ }
                                     }
                                   }}
@@ -13324,9 +13323,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   onChange={async (e) => {
                                     await db.sets.update(set.id, { finished: e.target.checked })
                                     // Sync to Supabase
-                                    if (supabase && data.match?.seed_key) {
+                                    if (isBackendAvailable() && data.match?.seed_key) {
                                       try {
-                                        await supabase.from('sets').update({ finished: e.target.checked }).eq('external_id', String(set.id))
+                                        await apiFrom('sets').update({ finished: e.target.checked }).eq('external_id', String(set.id))
                                       } catch (err) { /* ignore */ }
                                     }
                                   }}
@@ -13409,10 +13408,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               await db.matches.update(matchId, { status: newStatus })
 
                               // Also sync to Supabase if match has seed_key
-                              if (supabase && data.match?.seed_key) {
+                              if (isBackendAvailable() && data.match?.seed_key) {
                                 try {
-                                  await supabase
-                                    .from('matches')
+                                  await apiFrom('matches')
                                     .update({ status: newStatus })
                                     .eq('external_id', data.match.seed_key)
                                 } catch (err) {
