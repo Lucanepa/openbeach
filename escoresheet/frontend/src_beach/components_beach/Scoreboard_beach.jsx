@@ -1934,30 +1934,16 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // DIRECT SUPABASE WRITE (bypasses sync_queue) - see architecture note at top of file
       // Reason: match_live_state needs sub-second latency for real-time spectator display.
       // Queuing would add 1s+ delay from the polling interval in useSyncQueue.
-      const [liveStateResult, matchResult] = await Promise.all([
-        apiFrom('match_live_state').upsert(liveStateData, { onConflict: 'match_id' }),
-        apiFrom('matches').update({ current_set: finalSetIndex }).eq('id', supabaseMatchId)
-      ])
+      // Note: current_set is already in liveStateData, so we don't need a separate matches.update().
+      // The sync queue will update matches.current_set for persistence.
+      const liveStateResult = await apiFrom('match_live_state').upsert(liveStateData, { onConflict: 'match_id' })
 
       if (liveStateResult.error) {
         console.error('[LiveState] Sync error:', liveStateResult.error)
-        // Show error notification for direct write failure
         setScoresheetErrorModal({
           error: t('errors.syncFailed'),
           details: liveStateResult.error.message || t('errors.databaseWriteError')
         })
-      } else {
-      }
-
-      if (matchResult.error) {
-        console.error('[LiveState] Match current_set update error:', matchResult.error)
-        // matchResult error is also critical but usually fails together with liveState
-        if (!liveStateResult.error) {
-          setScoresheetErrorModal({
-            error: t('errors.syncFailed'),
-            details: matchResult.error.message || t('errors.databaseWriteError')
-          })
-        }
       }
     } catch (err) {
       console.error('[LiveState] Exception:', err)

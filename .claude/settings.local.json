@@ -60,7 +60,10 @@
       "Bash(bash /tmp/extract_filters.sh)",
       "Bash(node -c /home/luca-canepa/Desktop/Github/openvolley/escoresheet/backend/server.js)",
       "Bash(node -c /home/luca-canepa/Desktop/Github/openvolley/escoresheet/frontend/src/lib/apiClient.js)",
-      "Bash(node -c /home/luca-canepa/Desktop/Github/openbeach/escoresheet/frontend/src_beach/lib_beach/apiClient_beach.js)"
+      "Bash(node -c /home/luca-canepa/Desktop/Github/openbeach/escoresheet/frontend/src_beach/lib_beach/apiClient_beach.js)",
+      "Bash(node -c src/hooks/useRealtimeConnection.js)",
+      "Bash(node -c src/hooks/useSyncQueue.js)",
+      "Bash(node -c src/components/Scoreboard.jsx)"
     ]
   },
   "outputStyle": "default"
