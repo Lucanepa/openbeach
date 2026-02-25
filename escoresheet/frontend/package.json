@@ -1,6 +1,6 @@
 {
   "name": "escoresheet",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "OpenBeach eScoresheet - Offline-first beach volleyball scoresheet application",
   "author": "OpenBeach",
   "private": true,
