@@ -1,7 +1,12 @@
 /**
  * useRealtimeConnection Hook
- * Manages connection to match data using Supabase Realtime as primary
- * with WebSocket fallback
+ * Manages connection to match data with strict priority waterfall:
+ *   1. Supabase Realtime (primary)
+ *   2. WebSocket (exclusive fallback — only when Supabase is unreachable)
+ *   3. Disconnected (offline)
+ *
+ * When in WebSocket fallback mode, periodically rechecks Supabase availability
+ * and auto-promotes back to Supabase when it becomes reachable.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
@@ -9,11 +14,11 @@ import { supabase } from '../lib_beach/supabaseClient_beach'  // Realtime only
 import { apiFrom } from '../lib_beach/apiClient_beach'
 import { subscribeToMatchData, getMatchData } from '../utils_beach/serverDataSync_beach'
 
-// Connection types
+// Connection types — kept for backward compatibility, all resolve to auto behavior
 export const CONNECTION_TYPES = {
-  AUTO: 'auto',           // Try Supabase first, fall back to WebSocket
-  SUPABASE: 'supabase',   // Force Supabase Realtime only
-  WEBSOCKET: 'websocket'  // Force WebSocket only
+  AUTO: 'auto',
+  SUPABASE: 'auto',
+  WEBSOCKET: 'auto'
 }
 
 // Connection status
@@ -22,14 +27,19 @@ export const CONNECTION_STATUS = {
   CONNECTING: 'connecting',
   CONNECTED: 'connected',
   ERROR: 'error',
-  FALLBACK: 'fallback'    // Using fallback connection
+  FALLBACK: 'fallback'    // Using WebSocket fallback
 }
 
+// How often to recheck Supabase when in WebSocket fallback mode (ms)
+const SUPABASE_RECHECK_INTERVAL = 30000
+
 /**
- * Hook for managing realtime connection with Supabase primary + WebSocket fallback
+ * Hook for managing realtime connection with strict priority:
+ * Supabase → WebSocket fallback → disconnected
+ *
  * @param {Object} options
  * @param {string|number} options.matchId - Match ID to subscribe to
- * @param {string} options.preferredConnection - Preferred connection type (auto|supabase|websocket)
+ * @param {string} options.preferredConnection - Ignored (kept for backward compat)
  * @param {function} options.onData - Callback when data is received
  * @param {function} options.onAction - Callback when action is received (timeout, sanction, etc.)
  * @param {function} options.onDeleted - Callback when match is deleted from server
@@ -37,13 +47,12 @@ export const CONNECTION_STATUS = {
  */
 export function useRealtimeConnection({
   matchId,
-  preferredConnection = CONNECTION_TYPES.AUTO,
+  preferredConnection,  // ignored — always auto
   onData,
   onAction,
   onDeleted,
   enabled = true
 }) {
-  const [connectionType, setConnectionType] = useState(preferredConnection)
   const [activeConnection, setActiveConnection] = useState(null) // 'supabase' | 'websocket' | null
   const [status, setStatus] = useState(CONNECTION_STATUS.DISCONNECTED)
   const [error, setError] = useState(null)
@@ -53,6 +62,7 @@ export function useRealtimeConnection({
   const wsUnsubscribeRef = useRef(null)
   const isMountedRef = useRef(true)
   const isConnectingRef = useRef(false)
+  const supabaseRecheckRef = useRef(null)
 
   // Store callbacks in refs to avoid dependency changes
   const onDataRef = useRef(onData)
@@ -60,24 +70,25 @@ export function useRealtimeConnection({
   const onDeletedRef = useRef(onDeleted)
 
   // Update refs when callbacks change (without triggering re-renders)
-  useEffect(() => {
-    onDataRef.current = onData
-  }, [onData])
+  useEffect(() => { onDataRef.current = onData }, [onData])
+  useEffect(() => { onActionRef.current = onAction }, [onAction])
+  useEffect(() => { onDeletedRef.current = onDeleted }, [onDeleted])
 
-  useEffect(() => {
-    onActionRef.current = onAction
-  }, [onAction])
+  // UUID retry timer ref
+  const uuidRetryRef = useRef(null)
 
-  useEffect(() => {
-    onDeletedRef.current = onDeleted
-  }, [onDeleted])
-
-  // Cleanup function
+  // Cleanup function — tears down all connections and timers
   const cleanup = useCallback(() => {
     // Clear UUID retry timer
     if (uuidRetryRef.current) {
       clearTimeout(uuidRetryRef.current)
       uuidRetryRef.current = null
+    }
+
+    // Clear Supabase recheck timer
+    if (supabaseRecheckRef.current) {
+      clearInterval(supabaseRecheckRef.current)
+      supabaseRecheckRef.current = null
     }
 
     // Cleanup Supabase subscription
@@ -102,9 +113,6 @@ export function useRealtimeConnection({
 
     setActiveConnection(null)
   }, [])
-
-  // UUID retry timer ref
-  const uuidRetryRef = useRef(null)
 
   // Helper: fetch data and deliver to callback
   const fetchAndDeliver = useCallback((reason) => {
@@ -231,9 +239,9 @@ export function useRealtimeConnection({
       setError(err.message)
       return false
     }
-  }, [matchId, buildChannel, fetchAndDeliver]) // Removed onData from deps - using ref instead
+  }, [matchId, buildChannel, fetchAndDeliver])
 
-  // Connect to WebSocket
+  // Connect to WebSocket (exclusive fallback)
   const connectWebSocket = useCallback(() => {
     if (!matchId) return false
 
@@ -257,7 +265,7 @@ export function useRealtimeConnection({
       })
 
       wsUnsubscribeRef.current = unsubscribe
-      setStatus(CONNECTION_STATUS.CONNECTED)
+      setStatus(CONNECTION_STATUS.FALLBACK)
       setActiveConnection('websocket')
       setError(null)
       return true
@@ -266,44 +274,23 @@ export function useRealtimeConnection({
       setError(err.message)
       return false
     }
-  }, [matchId]) // Removed onData, onAction from deps - using refs instead
+  }, [matchId])
 
-  // Switch connection type
-  const switchConnection = useCallback((newType) => {
-    setConnectionType(newType)
-    // Save preference to localStorage
-    try {
-      localStorage.setItem('preferredConnection', newType)
-    } catch (e) {}
-  }, [])
-
-  // Force reconnect - will trigger effect by changing a state
+  // Force reconnect — runs the waterfall again
   const reconnect = useCallback(() => {
-    // Reset connecting flag and trigger reconnection
     isConnectingRef.current = false
     cleanup()
-    // Small delay then trigger by toggling enabled state would be complex
-    // Instead, just call the connect functions directly
     if (!matchId) return
 
     const doReconnect = async () => {
       isConnectingRef.current = true
       try {
-        if (connectionType === CONNECTION_TYPES.SUPABASE) {
-          const success = await connectSupabase()
-          if (!success) setStatus(CONNECTION_STATUS.ERROR)
-        } else if (connectionType === CONNECTION_TYPES.WEBSOCKET) {
-          const success = connectWebSocket()
-          if (!success) setStatus(CONNECTION_STATUS.ERROR)
-        } else {
-          const supabaseSuccess = await connectSupabase()
-          if (!supabaseSuccess) {
-            const wsSuccess = connectWebSocket()
-            if (wsSuccess) {
-              setStatus(CONNECTION_STATUS.FALLBACK)
-            } else {
-              setStatus(CONNECTION_STATUS.ERROR)
-            }
+        // Strict waterfall: Supabase → WebSocket → disconnected
+        const supabaseSuccess = await connectSupabase()
+        if (!supabaseSuccess) {
+          const wsSuccess = connectWebSocket()
+          if (!wsSuccess) {
+            setStatus(CONNECTION_STATUS.ERROR)
           }
         }
       } finally {
@@ -311,21 +298,10 @@ export function useRealtimeConnection({
       }
     }
     doReconnect()
-  }, [matchId, connectionType, cleanup, connectSupabase, connectWebSocket])
+  }, [matchId, cleanup, connectSupabase, connectWebSocket])
 
-  // Load saved preference on mount
+  // Main connection effect — strict waterfall: Supabase → WebSocket → disconnected
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('preferredConnection')
-      if (saved && Object.values(CONNECTION_TYPES).includes(saved)) {
-        setConnectionType(saved)
-      }
-    } catch (e) {}
-  }, [])
-
-  // Connect when key dependencies change (not callback refs)
-  useEffect(() => {
-    // Prevent multiple simultaneous connections
     if (isConnectingRef.current) return
 
     isMountedRef.current = true
@@ -336,29 +312,15 @@ export function useRealtimeConnection({
       isConnectingRef.current = true
       cleanup()
 
-      const type = connectionType
-
       try {
-        if (type === CONNECTION_TYPES.SUPABASE) {
-          const success = await connectSupabase()
-          if (!success) {
+        // Priority 1: Try Supabase
+        const supabaseSuccess = await connectSupabase()
+        if (!supabaseSuccess) {
+          // Priority 2: Fall back to WebSocket (exclusive — Supabase is not running)
+          const wsSuccess = connectWebSocket()
+          if (!wsSuccess) {
+            // Priority 3: Disconnected
             setStatus(CONNECTION_STATUS.ERROR)
-          }
-        } else if (type === CONNECTION_TYPES.WEBSOCKET) {
-          const success = connectWebSocket()
-          if (!success) {
-            setStatus(CONNECTION_STATUS.ERROR)
-          }
-        } else {
-          // Auto mode: Try Supabase first, fall back to WebSocket
-          const supabaseSuccess = await connectSupabase()
-          if (!supabaseSuccess) {
-            const wsSuccess = connectWebSocket()
-            if (wsSuccess) {
-              setStatus(CONNECTION_STATUS.FALLBACK)
-            } else {
-              setStatus(CONNECTION_STATUS.ERROR)
-            }
           }
         }
       } finally {
@@ -373,11 +335,68 @@ export function useRealtimeConnection({
       isConnectingRef.current = false
       cleanup()
     }
-  }, [matchId, enabled, connectionType]) // Only core dependencies, not callbacks
+  }, [matchId, enabled]) // Only core dependencies
+
+  // Supabase recheck: when in WebSocket fallback, periodically try to promote to Supabase
+  useEffect(() => {
+    if (status !== CONNECTION_STATUS.FALLBACK || !matchId || !enabled) {
+      // Not in fallback mode — clear any existing recheck timer
+      if (supabaseRecheckRef.current) {
+        clearInterval(supabaseRecheckRef.current)
+        supabaseRecheckRef.current = null
+      }
+      return
+    }
+
+    // Start periodic recheck
+    supabaseRecheckRef.current = setInterval(async () => {
+      if (!isMountedRef.current || isConnectingRef.current) return
+
+      console.log('[RealtimeConnection] Rechecking Supabase availability...')
+
+      // Quick probe: try a lightweight query
+      try {
+        const { error: probeError } = await apiFrom('matches').select('id').limit(1)
+        if (probeError) return // Supabase still not available
+
+        // Supabase is back! Promote from WebSocket → Supabase
+        console.log('[RealtimeConnection] Supabase is back — promoting from WebSocket fallback')
+        isConnectingRef.current = true
+
+        // Tear down WebSocket
+        if (wsUnsubscribeRef.current) {
+          try { wsUnsubscribeRef.current() } catch {}
+          wsUnsubscribeRef.current = null
+        }
+
+        // Connect to Supabase
+        const success = await connectSupabase()
+        if (!success) {
+          // Failed to promote — stay on WebSocket
+          console.warn('[RealtimeConnection] Promotion failed, reconnecting WebSocket')
+          connectWebSocket()
+        }
+
+        isConnectingRef.current = false
+      } catch {
+        // Supabase still not reachable — stay on WebSocket
+      }
+    }, SUPABASE_RECHECK_INTERVAL)
+
+    return () => {
+      if (supabaseRecheckRef.current) {
+        clearInterval(supabaseRecheckRef.current)
+        supabaseRecheckRef.current = null
+      }
+    }
+  }, [status, matchId, enabled, connectSupabase, connectWebSocket])
+
+  // No-op for backward compatibility
+  const switchConnection = useCallback(() => {}, [])
 
   return {
     // State
-    connectionType,
+    connectionType: 'auto', // Always auto now
     activeConnection,
     status,
     error,
@@ -390,9 +409,9 @@ export function useRealtimeConnection({
     isFallback: status === CONNECTION_STATUS.FALLBACK,
 
     // Actions
-    switchConnection,
+    switchConnection, // no-op for backward compat
     reconnect,
-    setConnectionType: switchConnection
+    setConnectionType: switchConnection // no-op for backward compat
   }
 }
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import i18n from '../i18n'
 import ConnectionStatus from './ConnectionStatus_beach'
+import TabletStatusIndicator from './TabletStatusIndicator_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 
 
@@ -573,6 +574,11 @@ export default function MainHeader({
               position="left"
               size="normal"
             />
+          )}
+
+          {/* Tablet Status - show per-role connection health when a match is active */}
+          {currentMatch && (
+            <TabletStatusIndicator match={currentMatch} />
           )}
 
           {/* Alarm Bell Button - visible if alarm is enabled and match is active */}

@@ -30,6 +30,7 @@ import { uploadBackupToCloud, uploadLogsToCloud, triggerContinuousBackup } from 
 import { splitLocalDateTime, parseLocalDateTimeToISO, roundToMinute, formatTimeLocal } from '../utils_beach/timeUtils_beach'
 import { TimeInput24 } from './TimeInput24_beach'
 import { uploadScoresheetAsync } from '../utils_beach/scoresheetUploader_beach'
+import { useConnectionHealthMonitor } from '../hooks_beach/useConnectionHealthMonitor_beach'
 
 /**
  * SYNC ARCHITECTURE NOTE:
@@ -628,6 +629,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
     return result
   }, [matchId])
+
+  // --- Live connection health monitoring ---
+  const handleDeviceDisconnected = useCallback(({ label }) => {
+    showAlert(t('scoreboard.deviceDisconnected', { defaultValue: '{{device}} disconnected', device: label }), 'warning')
+  }, [showAlert, t])
+
+  useConnectionHealthMonitor(data?.match, handleDeviceDisconnected, {
+    enabled: !!(data?.match && (data.match.refereeConnectionEnabled || data.match.team1TeamConnectionEnabled || data.match.team2TeamConnectionEnabled))
+  })
 
   // Check if Set 3 was already confirmed (on mount or when entering Set 3)
   useEffect(() => {
@@ -12157,7 +12167,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         open={connectionSetupModal}
         onClose={() => setConnectionSetupModal(false)}
         matchId={matchId}
+        matchSeedKey={data?.match?.seed_key}
+        match={data?.match}
         refereePin={data?.match?.refereePin}
+        team1Pin={data?.match?.team1TeamPin}
+        team2Pin={data?.match?.team2TeamPin}
         gameNumber={data?.match?.gameNumber}
       />
 

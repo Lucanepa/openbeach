@@ -846,7 +846,13 @@ export default function HomeOptionsModal({
                 </div>
                 <ToggleSwitch
                   value={backup.autoBackupEnabled}
-                  onToggle={() => backup.toggleAutoBackup(!backup.autoBackupEnabled)}
+                  onToggle={() => {
+                    const newValue = !backup.autoBackupEnabled
+                    backup.toggleAutoBackup(newValue)
+                    if (newValue && backup.hasFileSystemAccess && !backup.backupDirName) {
+                      backup.selectBackupDir()
+                    }
+                  }}
                 />
               </div>
 

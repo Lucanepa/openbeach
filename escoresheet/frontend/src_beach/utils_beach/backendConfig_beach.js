@@ -40,8 +40,29 @@ export function isStaticDeployment() {
   return window.location.hostname.endsWith('.openvolley.app')
 }
 
+// --- Backend Override (for ServerConnectionScreen manual server selection) ---
+const BACKEND_OVERRIDE_KEY = 'openbeach_backend_override'
+
+export function getBackendOverride() {
+  try { return localStorage.getItem(BACKEND_OVERRIDE_KEY) } catch { return null }
+}
+
+export function setBackendOverride(url) {
+  try { localStorage.setItem(BACKEND_OVERRIDE_KEY, url) } catch { /* ignore */ }
+}
+
+export function clearBackendOverride() {
+  try { localStorage.removeItem(BACKEND_OVERRIDE_KEY) } catch { /* ignore */ }
+}
+
 // Get backend URL from environment or use current host
 export function getBackendUrl() {
+  // Check for manual override first (set by ServerConnectionScreen)
+  const override = getBackendOverride()
+  if (override) {
+    return override
+  }
+
   // If VITE_BACKEND_URL is set, use it (production with separate backend)
   if (import.meta.env.VITE_BACKEND_URL) {
     return import.meta.env.VITE_BACKEND_URL

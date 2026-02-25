@@ -1228,8 +1228,8 @@ export default function App() {
           team1Pin: currentMatchData.team1Pin,
           team2Pin: currentMatchData.team2Pin,
           refereeConnectionEnabled: currentMatchData.refereeConnectionEnabled,
-          team1ConnectionEnabled: currentMatchData.team1ConnectionEnabled,
-          team2ConnectionEnabled: currentMatchData.team2ConnectionEnabled,
+          team1TeamConnectionEnabled: currentMatchData.team1TeamConnectionEnabled,
+          team2TeamConnectionEnabled: currentMatchData.team2TeamConnectionEnabled,
           status: currentMatchData.status,
           gameNumber: currentMatchData.gameNumber,
           game_n: currentMatchData.game_n,
@@ -1277,10 +1277,10 @@ export default function App() {
           connectionEnabled = currentMatchData.refereeConnectionEnabled === true
         } else if (pinType === 'team1') {
           matchPin = currentMatchData.team1Pin
-          connectionEnabled = currentMatchData.team1ConnectionEnabled === true
+          connectionEnabled = currentMatchData.team1TeamConnectionEnabled === true
         } else if (pinType === 'team2') {
           matchPin = currentMatchData.team2Pin
-          connectionEnabled = currentMatchData.team2ConnectionEnabled === true
+          connectionEnabled = currentMatchData.team2TeamConnectionEnabled === true
         }
 
         if (matchPin && String(matchPin).trim() === pinStr && connectionEnabled && currentMatchData.status !== 'final') {

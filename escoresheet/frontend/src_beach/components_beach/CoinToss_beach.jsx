@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useAlert } from '../contexts_beach/AlertContext_beach'
 import { db } from '../db_beach/db_beach'
 import { apiFrom } from '../lib_beach/apiClient_beach'
-import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
+import { isBackendAvailable, getBackendUrl } from '../utils_beach/backendConfig_beach'
 import SignaturePad from './SignaturePad_beach'
 import Modal from './Modal_beach'
 import MenuList from './MenuList_beach'
@@ -1143,6 +1143,123 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
     }
 
     if (verificationSkipped) {
+    }
+
+    // --- Pre-game connection checks (non-blocking, informational) ---
+    if (!match?.test && isBackendAvailable()) {
+      setInitModal({ status: 'checking', message: 'Running connection checks...', checks: {} })
+
+      const localMatchForChecks = await db.matches.get(matchId)
+      const seedKeyForChecks = localMatchForChecks?.seed_key
+      const backendUrl = getBackendUrl()
+
+      const checks = {
+        supabase: { status: 'pending', label: 'Cloud Database' },
+        matchData: { status: 'pending', label: 'Match Data in Cloud' },
+        devices: { status: 'pending', label: 'Connected Devices' }
+      }
+
+      const checkPromises = []
+
+      // Check 1: Cloud Database
+      checkPromises.push(
+        (async () => {
+          try {
+            const { error } = await apiFrom('matches').select('id').limit(1)
+            checks.supabase = error
+              ? { status: 'warn', label: 'Cloud Database', detail: error.message }
+              : { status: 'pass', label: 'Cloud Database' }
+          } catch (e) {
+            checks.supabase = { status: 'fail', label: 'Cloud Database', detail: e.message }
+          }
+        })()
+      )
+
+      // Check 2: Match Data
+      if (seedKeyForChecks) {
+        checkPromises.push(
+          (async () => {
+            try {
+              const { data: supaMatch, error } = await apiFrom('matches')
+                .select('status')
+                .eq('external_id', seedKeyForChecks)
+                .maybeSingle()
+              if (error) {
+                checks.matchData = { status: 'warn', label: 'Match Data in Cloud', detail: error.message }
+              } else if (!supaMatch) {
+                checks.matchData = { status: 'warn', label: 'Match Data in Cloud', detail: 'Not found in cloud' }
+              } else if (supaMatch.status !== 'live') {
+                checks.matchData = { status: 'warn', label: 'Match Data in Cloud', detail: `Status: ${supaMatch.status}` }
+              } else {
+                checks.matchData = { status: 'pass', label: 'Match Data in Cloud' }
+              }
+            } catch (e) {
+              checks.matchData = { status: 'fail', label: 'Match Data in Cloud', detail: e.message }
+            }
+          })()
+        )
+      } else {
+        checks.matchData = { status: 'skip', label: 'Match Data in Cloud', detail: 'No seed key' }
+      }
+
+      // Check 3: Connected Devices
+      if (backendUrl) {
+        checkPromises.push(
+          (async () => {
+            try {
+              const resp = await fetch(`${backendUrl}/api/server/connections`, {
+                signal: AbortSignal.timeout(3000)
+              })
+              if (resp.ok) {
+                const connData = await resp.json()
+                const matchSubs = connData.matchSubscriptions?.[matchId] || 0
+                const expectedRoles = [
+                  localMatchForChecks?.refereeConnectionEnabled,
+                  localMatchForChecks?.team1TeamConnectionEnabled,
+                  localMatchForChecks?.team2TeamConnectionEnabled
+                ].filter(Boolean).length
+
+                if (expectedRoles === 0) {
+                  checks.devices = { status: 'pass', label: 'Connected Devices', detail: 'No roles enabled' }
+                } else if (matchSubs >= expectedRoles) {
+                  checks.devices = { status: 'pass', label: 'Connected Devices', detail: `${matchSubs}/${expectedRoles} connected` }
+                } else {
+                  checks.devices = { status: 'warn', label: 'Connected Devices', detail: `${matchSubs}/${expectedRoles} connected` }
+                }
+              } else {
+                checks.devices = { status: 'warn', label: 'Connected Devices', detail: 'Server not responding' }
+              }
+            } catch (e) {
+              checks.devices = { status: 'fail', label: 'Connected Devices', detail: e.message }
+            }
+          })()
+        )
+      } else {
+        checks.devices = { status: 'skip', label: 'Connected Devices', detail: 'No backend' }
+      }
+
+      // Run all checks with 10s overall timeout
+      await Promise.race([
+        Promise.allSettled(checkPromises),
+        new Promise(resolve => setTimeout(resolve, 10000))
+      ])
+
+      const allPassed = Object.values(checks).every(c => c.status === 'pass' || c.status === 'skip')
+      const anyFailed = Object.values(checks).some(c => c.status === 'fail')
+
+      if (allPassed) {
+        setInitModal({ status: 'check_results', message: 'All checks passed', checks })
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      } else if (anyFailed) {
+        setInitModal({ status: 'check_results', message: 'Some checks failed', checks })
+        // Wait for user to click "Proceed Anyway"
+        await new Promise(resolve => { window.__coinTossCheckResolve = resolve })
+        delete window.__coinTossCheckResolve
+      } else {
+        // Warnings only - show briefly then proceed
+        setInitModal({ status: 'check_results', message: 'Checks complete', checks })
+        await new Promise(resolve => setTimeout(resolve, 2000))
+      }
     }
 
     // Upload scoresheet to cloud (async, non-blocking)
@@ -2482,6 +2599,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         <Modal
           title={initModal.status === 'success' ? 'Match Initialized' :
             initModal.status === 'error' ? 'Initialization Error' :
+              initModal.status === 'checking' || initModal.status === 'check_results' ? 'Connection Checks' :
               'Initializing Match'}
           open={true}
           onClose={initModal.status === 'error' ? () => setInitModal(null) : undefined}
@@ -2491,7 +2609,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           <div style={{ padding: '24px', textAlign: 'center' }}>
             {/* Status Icon */}
             <div style={{ marginBottom: '20px' }}>
-              {initModal.status === 'syncing' && (
+              {(initModal.status === 'syncing' || initModal.status === 'checking') && (
                 <div style={{
                   width: '60px', height: '60px', margin: '0 auto',
                   border: '4px solid rgba(59, 130, 246, 0.3)',
@@ -2516,7 +2634,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                   borderRadius: '50%',
                   display: 'flex', alignItems: 'center', justifyContent: 'center'
                 }}>
-                  <span style={{ fontSize: '32px', color: '#22c55e' }}>✓</span>
+                  <span style={{ fontSize: '32px', color: '#22c55e' }}>{'\u2713'}</span>
                 </div>
               )}
               {initModal.status === 'error' && (
@@ -2526,20 +2644,63 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                   borderRadius: '50%',
                   display: 'flex', alignItems: 'center', justifyContent: 'center'
                 }}>
-                  <span style={{ fontSize: '32px', color: '#ef4444' }}>✕</span>
+                  <span style={{ fontSize: '32px', color: '#ef4444' }}>{'\u2715'}</span>
                 </div>
               )}
             </div>
 
+            {/* Connection checks checklist */}
+            {(initModal.status === 'checking' || initModal.status === 'check_results') && initModal.checks && (
+              <div style={{ textAlign: 'left', marginBottom: 16 }}>
+                {Object.entries(initModal.checks).map(([key, check]) => {
+                  const icons = { pending: '\u23F3', pass: '\u2713', warn: '\u26A0', fail: '\u2715', skip: '\u2014' }
+                  const colors = { pending: '#6b7280', pass: '#22c55e', warn: '#eab308', fail: '#ef4444', skip: '#6b7280' }
+                  return (
+                    <div key={key} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.08)'
+                    }}>
+                      <span style={{ fontSize: 16, color: colors[check.status] || '#6b7280', width: 24, textAlign: 'center' }}>
+                        {icons[check.status] || '\u23F3'}
+                      </span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 500 }}>{check.label}</div>
+                        {check.detail && (
+                          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{check.detail}</div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Proceed Anyway button for failed checks */}
+            {initModal.status === 'check_results' && Object.values(initModal.checks).some(c => c.status === 'fail') && (
+              <button
+                onClick={() => { if (window.__coinTossCheckResolve) window.__coinTossCheckResolve() }}
+                style={{
+                  padding: '10px 24px', fontSize: '14px', fontWeight: 600,
+                  background: 'rgba(234, 179, 8, 0.2)', color: '#eab308',
+                  border: '1px solid #eab308', borderRadius: '8px', cursor: 'pointer',
+                  marginBottom: 16
+                }}
+              >
+                Proceed Anyway
+              </button>
+            )}
+
             {/* Message */}
-            <p style={{
-              marginBottom: '24px',
-              fontSize: '16px',
-              color: initModal.status === 'error' ? '#ef4444' :
-                initModal.status === 'success' ? '#22c55e' : 'var(--text)'
-            }}>
-              {initModal.message}
-            </p>
+            {initModal.status !== 'checking' && initModal.status !== 'check_results' && (
+              <p style={{
+                marginBottom: '24px',
+                fontSize: '16px',
+                color: initModal.status === 'error' ? '#ef4444' :
+                  initModal.status === 'success' ? '#22c55e' : 'var(--text)'
+              }}>
+                {initModal.message}
+              </p>
+            )}
 
             {/* Error button */}
             {initModal.status === 'error' && (

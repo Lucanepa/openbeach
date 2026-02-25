@@ -544,8 +544,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   // Show both rosters in match setup
   const [showBothRosters, setShowBothRosters] = useState(false)
 
-  // Referee connection
-  const [refereeConnectionEnabled, setRefereeConnectionEnabled] = useState(false)
+  // Referee connection (read from match object, no local state needed)
   const [editPinModal, setEditPinModal] = useState(false)
   const [editPinType, setEditPinType] = useState(null) // 'referee'
   const [newPin, setNewPin] = useState('')
@@ -1141,12 +1140,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           })))
         }
 
-        // Load referee connection setting (default to disabled if not set)
-        setRefereeConnectionEnabled(match.refereeConnectionEnabled === true)
-
         // Migrate old matches: ensure connection fields are explicitly set to false if undefined
         const connectionUpdates = {}
         if (match.refereeConnectionEnabled === undefined) connectionUpdates.refereeConnectionEnabled = false
+        if (match.team1TeamConnectionEnabled === undefined) connectionUpdates.team1TeamConnectionEnabled = false
+        if (match.team2TeamConnectionEnabled === undefined) connectionUpdates.team2TeamConnectionEnabled = false
         if (Object.keys(connectionUpdates).length > 0) {
           await db.matches.update(matchId, connectionUpdates)
         }
@@ -1222,15 +1220,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   useEffect(() => {
     rosterLoadedRef.current = false
   }, [matchId])
-
-  // Update effect - runs when match changes (for connection settings, etc.)
-  useEffect(() => {
-    if (!matchId || !match) return
-
-    // Update connection settings (these can change without affecting roster)
-    // Default to disabled if not explicitly enabled
-    setRefereeConnectionEnabled(match.refereeConnectionEnabled === true)
-  }, [matchId, match?.refereeConnectionEnabled])
 
   // Auto-fill scorer fields from logged-in user profile
   // Only applies when scorer fields are empty (new match or scorer not yet set)
@@ -2214,8 +2203,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         team2Pin: String(generatedTeam2Pin).trim(),
         matchPin: matchPin.trim(),
         refereeConnectionEnabled: false,
-        team1ConnectionEnabled: false,
-        team2ConnectionEnabled: false,
+        team1TeamConnectionEnabled: false,
+        team2TeamConnectionEnabled: false,
         officials: buildOfficialsArray(
           { firstName: ref1First, lastName: ref1Last, country: ref1Country, dob: ref1Dob },
           { firstName: ref2First, lastName: ref2Last, country: ref2Country, dob: ref2Dob },
@@ -4829,7 +4818,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
   const handleRefereeConnectionToggle = async (enabled) => {
     if (!matchId) return
-    setRefereeConnectionEnabled(enabled)
     try {
       const match = await db.matches.get(matchId)
       if (!match) return
@@ -5145,7 +5133,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <ConnectionBanner
             team="referee"
-            enabled={refereeConnectionEnabled}
+            enabled={match?.refereeConnectionEnabled === true}
             onToggle={handleRefereeConnectionToggle}
             pin={match?.refereePin}
           />
