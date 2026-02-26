@@ -40,6 +40,19 @@ export function isStaticDeployment() {
   return window.location.hostname.endsWith('.openvolley.app')
 }
 
+/**
+ * Detect if being served from a standalone local server (not cloud, not dev)
+ * e.g., http://192.168.1.100:8080/beach-referee/ — a LAN IP with a port
+ */
+export function isServedFromLocalServer() {
+  if (typeof window === 'undefined') return false
+  if (import.meta.env.DEV) return false
+  const hostname = window.location.hostname
+  if (hostname.endsWith('.openvolley.app')) return false
+  if (hostname === 'localhost' || hostname === '127.0.0.1') return false
+  return /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(hostname)
+}
+
 // --- Backend Override (for ServerConnectionScreen manual server selection) ---
 const BACKEND_OVERRIDE_KEY = 'openbeach_backend_override'
 
@@ -72,6 +85,11 @@ export function getBackendUrl() {
   // These deployments have no backend server
   if (isStaticDeployment()) {
     return CLOUD_RELAY_URL
+  }
+
+  // If served from a local server (LAN IP), use same origin as backend
+  if (isServedFromLocalServer()) {
+    return window.location.origin
   }
 
   // On tablets/mobile in production, use cloud relay automatically
@@ -108,6 +126,13 @@ export function getWebSocketUrl() {
   // On static deployments, use cloud relay WebSocket
   if (isStaticDeployment()) {
     const url = new URL(CLOUD_RELAY_URL)
+    const protocol = url.protocol === 'https:' ? 'wss' : 'ws'
+    return `${protocol}://${url.host}`
+  }
+
+  // If served from local server, use same origin for WebSocket
+  if (isServedFromLocalServer()) {
+    const url = new URL(window.location.origin)
     const protocol = url.protocol === 'https:' ? 'wss' : 'ws'
     return `${protocol}://${url.host}`
   }
