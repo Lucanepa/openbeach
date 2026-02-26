@@ -11,6 +11,7 @@
     "dev:tunnel": "concurrently \"npm run dev\" \"npm run ngrok\"",
     "ngrok": "ngrok http 6173",
     "build": "vite build",
+    "build:subdomains": "node scripts/build-subdomains.js",
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
