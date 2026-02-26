@@ -203,9 +203,6 @@ async function buildSubdomain(subdomain) {
       define: {
         __APP_VERSION__: JSON.stringify(appVersion)
       },
-      optimizeDeps: {
-        include: ['pdfjs-dist', 'react', 'react-dom', 'dexie', 'dexie-react-hooks']
-      },
       resolve: {
         dedupe: ['react', 'react-dom', 'dexie']
       },
