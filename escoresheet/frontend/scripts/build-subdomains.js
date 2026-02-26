@@ -175,7 +175,7 @@ function createScoresheetHtml(config) {
 `
 }
 
-async function buildSubdomain(subdomain) {
+async function buildSubdomain(subdomain, basePath = '/') {
   const config = subdomains[subdomain]
   if (!config) {
     console.error(`Unknown subdomain: ${subdomain}`)
@@ -199,7 +199,7 @@ async function buildSubdomain(subdomain) {
   try {
     await build({
       root: frontendDir,
-      base: '/',
+      base: basePath,
       publicDir: false, // We'll copy assets manually
       define: {
         __APP_VERSION__: JSON.stringify(appVersion)
@@ -323,8 +323,11 @@ async function main() {
   console.log('🏖️  OpenBeach Subdomain Builder')
   console.log(`   Version: ${appVersion}`)
 
+  const baseArgIndex = process.argv.indexOf('--base')
+  const basePath = baseArgIndex !== -1 ? process.argv[baseArgIndex + 1] : '/'
+
   if (targetSubdomain) {
-    await buildSubdomain(targetSubdomain)
+    await buildSubdomain(targetSubdomain, basePath)
   } else {
     console.log('\n📦 Building all subdomains...')
     for (const subdomain of Object.keys(subdomains)) {
