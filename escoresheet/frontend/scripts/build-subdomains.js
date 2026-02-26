@@ -338,7 +338,9 @@ async function main() {
   }
 }
 
-main().catch((err) => {
+main().then(() => {
+  process.exit(0)
+}).catch((err) => {
   console.error('Build failed:', err)
   process.exit(1)
 })
