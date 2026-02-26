@@ -24,6 +24,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const frontendDir = resolve(__dirname, '..')
+const disablePWA = process.env.DISABLE_PWA === 'true'
 
 // Read version from package.json
 const packageJson = JSON.parse(readFileSync(resolve(frontendDir, 'package.json'), 'utf-8'))
@@ -208,7 +209,7 @@ async function buildSubdomain(subdomain) {
       },
       plugins: [
         react(),
-        VitePWA({
+        ...(!disablePWA ? [VitePWA({
           registerType: 'prompt',
           includeAssets: ['favicon_beach.png'],
           workbox: {
@@ -258,7 +259,7 @@ async function buildSubdomain(subdomain) {
               { src: 'favicon_beach.png', sizes: '512x512', type: 'image/png' }
             ]
           }
-        })
+        })] : [])
       ],
       build: {
         outDir,
