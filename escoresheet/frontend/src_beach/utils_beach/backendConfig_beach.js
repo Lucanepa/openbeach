@@ -42,15 +42,13 @@ export function isStaticDeployment() {
 
 /**
  * Detect if being served from a standalone local server (not cloud, not dev)
- * e.g., http://192.168.1.100:8080/beach-referee/ — a LAN IP with a port
+ * Any non-cloud production host = standalone server (LAN IP, localhost, etc.)
  */
 export function isServedFromLocalServer() {
   if (typeof window === 'undefined') return false
   if (import.meta.env.DEV) return false
-  const hostname = window.location.hostname
-  if (hostname.endsWith('.openvolley.app')) return false
-  if (hostname === 'localhost' || hostname === '127.0.0.1') return false
-  return /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(hostname)
+  if (window.location.hostname.endsWith('.openvolley.app')) return false
+  return true
 }
 
 // --- Backend Override (for ServerConnectionScreen manual server selection) ---
