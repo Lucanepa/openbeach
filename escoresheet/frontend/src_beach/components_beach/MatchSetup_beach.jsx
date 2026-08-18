@@ -19,6 +19,7 @@ import { generateMatchSeedKey } from '../utils_beach/serverDataSync_beach'
 import { TEST_TEAM_SEED_DATA } from '../constants_beach/testSeeds_beach'
 import { splitLocalDateTime, parseLocalDateTimeToISO, roundToMinute } from '../utils_beach/timeUtils_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
+import { ClipboardList, FileText } from './Icons_beach'
 
 // Date formatting helpers (outside component to avoid recreation)
 function formatDateToDDMMYYYY(dateStr) {
@@ -5005,7 +5006,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             onClick={openScoresheet}
             style={{ padding: '6px 12px', fontSize: '13px', background: '#22c55e', color: '#000' }}
           >
-            📄 {t('matchSetup.scoresheet')}
+            <FileText /> {t('matchSetup.scoresheet')}
           </button>
         </div>
 
@@ -5361,7 +5362,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 >
                   {typeof window !== 'undefined' && window.electronAPI?.server
                     ? (serverLoading ? 'Starting...' : 'Start Server')
-                    : '📋 Copy Start Command'
+                    : <><ClipboardList /> Copy Start Command</>
                   }
                 </button>
               )}

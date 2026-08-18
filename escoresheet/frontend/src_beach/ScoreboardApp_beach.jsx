@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { supabase } from './lib_beach/supabaseClient_beach'
 import { apiFrom } from './lib_beach/apiClient_beach'
 import { isBackendAvailable } from './utils_beach/backendConfig_beach'
+import { Globe, Monitor } from './components_beach/Icons_beach'
 
 const ballImage = '/beachball.png'
 
@@ -192,7 +193,7 @@ export default function ScoreboardApp() {
               className="scoreboard-mode-card"
               onClick={() => setConnectionMode('local')}
             >
-              <div className="scoreboard-mode-icon">🖥️</div>
+              <div className="scoreboard-mode-icon"><Monitor /></div>
               <div className="scoreboard-mode-name">{t('scoreboard.localMode', 'Local')}</div>
               <div className="scoreboard-mode-desc">
                 {t('scoreboard.localModeDesc', 'Same device as the scorer. Connect instantly via browser.')}
@@ -203,7 +204,7 @@ export default function ScoreboardApp() {
               className="scoreboard-mode-card"
               onClick={() => setConnectionMode('remote')}
             >
-              <div className="scoreboard-mode-icon">🌐</div>
+              <div className="scoreboard-mode-icon"><Globe /></div>
               <div className="scoreboard-mode-name">{t('scoreboard.remoteMode', 'Remote')}</div>
               <div className="scoreboard-mode-desc">
                 {t('scoreboard.remoteModeDesc', 'Different device. Connect via internet using Supabase.')}

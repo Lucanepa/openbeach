@@ -18,6 +18,7 @@ import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { sanitizeForFilename } from '../utils_beach/stringUtils_beach'
 import { formatTimeLocal } from '../utils_beach/timeUtils_beach'
 import CountryFlag from './CountryFlag_beach'
+import { ChartColumn, FileText, Save, Search } from './Icons_beach'
 
 // Helper to determine if a color is bright (for text contrast)
 function isBrightColor(color) {
@@ -1438,16 +1439,16 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
               Manual Adjustments
             </button>
             <MenuList
-              buttonLabel="📄 Scoresheet"
+              buttonLabel={<><FileText /> Scoresheet</>}
               buttonClassName="secondary"
               buttonStyle={{ padding: '14px 20px', fontSize: '15px' }}
               showArrow={true}
               position="right"
               vertical="top"
               items={[
-                { key: 'preview', label: '🔍 Preview', onClick: () => handleShowScoresheet('preview') },
-                { key: 'save', label: '💾 Save PDF', onClick: () => handleShowScoresheet('save') },
-                { key: 'logs', label: '📊 Download Logs', onClick: handleDownloadLogs }
+                { key: 'preview', icon: <Search />, label: 'Preview', onClick: () => handleShowScoresheet('preview') },
+                { key: 'save', icon: <Save />, label: 'Save PDF', onClick: () => handleShowScoresheet('save') },
+                { key: 'logs', icon: <ChartColumn />, label: 'Download Logs', onClick: handleDownloadLogs }
               ]}
             />
           </>

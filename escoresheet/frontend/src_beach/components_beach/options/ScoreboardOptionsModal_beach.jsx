@@ -5,6 +5,7 @@ import Modal from '../Modal_beach'
 import { listCloudBackups, loadCloudBackup } from '../../utils_beach/logger_beach'
 import { restoreMatchInPlace } from '../../utils_beach/backupManager_beach'
 import BackupTable from '../BackupTable_beach'
+import { SatelliteDish } from '../Icons_beach'
 
 function InfoDot({ title }) {
   const [showTooltip, setShowTooltip] = useState(false)
@@ -825,7 +826,7 @@ export default function ScoreboardOptionsModal({
               e.currentTarget.style.background = 'linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%)'
             }}
           >
-            <span style={{ fontSize: '20px' }}>📡</span>
+            <span style={{ fontSize: '20px' }}><SatelliteDish /></span>
             <span>{t('options.setupConnections')}</span>
           </button>
 

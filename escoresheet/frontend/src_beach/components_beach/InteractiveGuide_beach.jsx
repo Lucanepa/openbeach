@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import Modal from './Modal_beach'
+import { Camera, Card, ChartColumn, CircleAlert, ClipboardList, CloudUpload, Coin, FileText, Globe, House, Info, Keyboard, Lightbulb, Link, LockOpen, NotebookPen, Pause, Play, Plus, Rocket, RotateCw, Save, Settings, Shield, Signature, Smartphone, SquareNumber3, Target, Timer, TrendingUp, TriangleAlert, Trophy, Undo, Users, Volleyball, Whistle, Wrench, Zap } from './Icons_beach'
 
 // CSS Keyframe animations as inline styles
 const animationStyles = `
@@ -227,7 +228,7 @@ function CourtDemo({ animateRotation = false, highlightPosition = null, t }) {
                 fontSize: 10,
                 animation: 'bounce 1s infinite'
               }}>
-                🏐
+                <Volleyball />
               </div>
             )}
           </div>
@@ -896,7 +897,7 @@ function MatchSetupMockup({ t }) {
               VBC Zürich
             </div>
             <div style={{ fontSize: 11, opacity: 0.7, display: 'flex', justifyContent: 'space-between' }}>
-              <span>👥 12 {t('interactiveGuide.mockups.players')}</span>
+              <span><Users /> 12 {t('interactiveGuide.mockups.players')}</span>
               <span>✓ {t('interactiveGuide.mockups.rosterComplete')}</span>
             </div>
           </div>
@@ -910,7 +911,7 @@ function MatchSetupMockup({ t }) {
               Volley Luzern
             </div>
             <div style={{ fontSize: 11, opacity: 0.7, display: 'flex', justifyContent: 'space-between' }}>
-              <span>👥 11 {t('interactiveGuide.mockups.players')}</span>
+              <span><Users /> 11 {t('interactiveGuide.mockups.players')}</span>
               <span>✓ {t('interactiveGuide.mockups.rosterComplete')}</span>
             </div>
           </div>
@@ -991,7 +992,7 @@ function CoinTossMockup({ t }) {
             <div style={{ fontSize: 11, opacity: 0.7 }}>{t('interactiveGuide.mockups.teamA')}</div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ fontSize: 24, opacity: 0.3 }}>🪙</div>
+            <div style={{ fontSize: 24, opacity: 0.3 }}><Coin /></div>
           </div>
           <div style={{ textAlign: 'center' }}>
             <div style={{
@@ -1017,7 +1018,7 @@ function CoinTossMockup({ t }) {
         <div style={{ width: '100%', background: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 8 }}>
             <span style={{ opacity: 0.6 }}>{t('interactiveGuide.mockups.serve')}:</span>
-            <span style={{ color: '#3b82f6', fontWeight: 600 }}>VBC Zürich 🏐</span>
+            <span style={{ color: '#3b82f6', fontWeight: 600 }}>VBC Zürich <Volleyball /></span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
             <span style={{ opacity: 0.6 }}>{t('interactiveGuide.mockups.leftSide')}:</span>
@@ -1061,13 +1062,13 @@ function ScoreboardMockup({ t, state = 'normal' }) {
   const getStatusBar = () => {
     switch (state) {
       case 'rally':
-        return { bg: '#22c55e', text: t('interactiveGuide.mockups.rallyInProgress'), icon: '🏐' }
+        return { bg: '#22c55e', text: t('interactiveGuide.mockups.rallyInProgress'), icon: <Volleyball /> }
       case 'timeout':
-        return { bg: '#eab308', text: t('interactiveGuide.mockups.timeout') + ' - 0:25', icon: '⏱️' }
+        return { bg: '#eab308', text: t('interactiveGuide.mockups.timeout') + ' - 0:25', icon: <Timer /> }
       case 'sanction':
-        return { bg: '#ef4444', text: t('interactiveGuide.mockups.sanction'), icon: '🟨' }
+        return { bg: '#ef4444', text: t('interactiveGuide.mockups.sanction'), icon: <Card fill="currentColor" /> }
       default:
-        return { bg: '#3b82f6', text: t('interactiveGuide.mockups.waitingForRally'), icon: '⏸️' }
+        return { bg: '#3b82f6', text: t('interactiveGuide.mockups.waitingForRally'), icon: <Pause /> }
     }
   }
 
@@ -1117,7 +1118,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
               marginBottom: 4,
               animation: state === 'rally' ? 'bounce 1s infinite' : 'none'
             }}>
-              🏐
+              <Volleyball />
             </div>
             <div style={{ fontSize: 14, fontWeight: 600 }}>2 : 1</div>
             <div style={{ fontSize: 10, opacity: 0.5 }}>{t('interactiveGuide.mockups.sets')}</div>
@@ -1237,7 +1238,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
             fontWeight: 600,
             cursor: 'default'
           }}>
-            ⏱️ TO
+            <Timer /> TO
           </button>
           <button style={{
             padding: '8px 16px',
@@ -1249,7 +1250,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
             fontWeight: 600,
             cursor: 'default'
           }}>
-            ↩️ {t('interactiveGuide.demos.undo')}
+            <Undo /> {t('interactiveGuide.demos.undo')}
           </button>
         </div>
 
@@ -1291,10 +1292,10 @@ function ScoreboardMockup({ t, state = 'normal' }) {
             <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>{t('interactiveGuide.mockups.selectSanction')}</div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
               <div style={{ padding: '8px 16px', background: '#eab308', borderRadius: 6, fontWeight: 600, cursor: 'default' }}>
-                🟨 {t('interactiveGuide.scoreboard.warning')}
+                <Card fill="currentColor" /> {t('interactiveGuide.scoreboard.warning')}
               </div>
               <div style={{ padding: '8px 16px', background: '#ef4444', borderRadius: 6, fontWeight: 600, cursor: 'default' }}>
-                🟥 {t('interactiveGuide.scoreboard.penalty')}
+                <Card fill="currentColor" /> {t('interactiveGuide.scoreboard.penalty')}
               </div>
             </div>
           </div>
@@ -1376,7 +1377,7 @@ function MatchEndMockup({ t }) {
             fontSize: 13,
             cursor: 'default'
           }}>
-            📄 {t('interactiveGuide.mockups.exportPdf')}
+            <FileText /> {t('interactiveGuide.mockups.exportPdf')}
           </button>
           <button style={{
             padding: '10px 20px',
@@ -1388,7 +1389,7 @@ function MatchEndMockup({ t }) {
             fontSize: 13,
             cursor: 'default'
           }}>
-            💾 {t('interactiveGuide.mockups.exportJson')}
+            <Save /> {t('interactiveGuide.mockups.exportJson')}
           </button>
           <button style={{
             padding: '10px 20px',
@@ -1400,7 +1401,7 @@ function MatchEndMockup({ t }) {
             fontSize: 13,
             cursor: 'default'
           }}>
-            ☁️ {t('interactiveGuide.mockups.uploadCloud')}
+            <CloudUpload /> {t('interactiveGuide.mockups.uploadCloud')}
           </button>
         </div>
       </div>
@@ -1411,9 +1412,9 @@ function MatchEndMockup({ t }) {
 // Tip Box Component
 function TipBox({ children, type = 'tip' }) {
   const colors = {
-    tip: { bg: 'rgba(59, 130, 246, 0.15)', border: '#3b82f6', icon: '💡' },
-    warning: { bg: 'rgba(234, 179, 8, 0.15)', border: '#eab308', icon: '⚠️' },
-    important: { bg: 'rgba(239, 68, 68, 0.15)', border: '#ef4444', icon: '❗' },
+    tip: { bg: 'rgba(59, 130, 246, 0.15)', border: '#3b82f6', icon: <Lightbulb /> },
+    warning: { bg: 'rgba(234, 179, 8, 0.15)', border: '#eab308', icon: <TriangleAlert /> },
+    important: { bg: 'rgba(239, 68, 68, 0.15)', border: '#ef4444', icon: <CircleAlert /> },
     success: { bg: 'rgba(34, 197, 94, 0.15)', border: '#22c55e', icon: '✓' }
   }
 
@@ -1514,7 +1515,7 @@ function NavSidebar({ sections, activeSection, onSectionClick }) {
             transition: 'all 0.2s'
           }}
         >
-          <span style={{ marginRight: 8 }}>{section.icon}</span>
+          <span style={{ marginRight: 8 }}><section.Icon /></span>
           {section.title}
         </button>
       ))}
@@ -1536,16 +1537,16 @@ export default function InteractiveGuide({ open, onClose }) {
   }, [])
 
   const sections = [
-    { id: 'quickstart', title: t('interactiveGuide.sections.quickstart'), icon: '🚀' },
-    { id: 'home', title: t('interactiveGuide.sections.home'), icon: '🏠' },
-    { id: 'setup', title: t('interactiveGuide.sections.setup'), icon: '📋' },
-    { id: 'cointoss', title: t('interactiveGuide.sections.cointoss'), icon: '🪙' },
-    { id: 'scoreboard', title: t('interactiveGuide.sections.scoreboard'), icon: '📊' },
-    { id: 'matchend', title: t('interactiveGuide.sections.matchend'), icon: '🏆' },
-    { id: 'shortcuts', title: t('interactiveGuide.sections.shortcuts'), icon: '⌨️' },
-    { id: 'settings', title: t('interactiveGuide.sections.settings'), icon: '⚙️' },
-    { id: 'troubleshooting', title: t('interactiveGuide.sections.troubleshooting'), icon: '🔧' },
-    { id: 'dashboards', title: t('interactiveGuide.sections.dashboards'), icon: '📱' }
+    { id: 'quickstart', title: t('interactiveGuide.sections.quickstart'), Icon: Rocket },
+    { id: 'home', title: t('interactiveGuide.sections.home'), Icon: House },
+    { id: 'setup', title: t('interactiveGuide.sections.setup'), Icon: ClipboardList },
+    { id: 'cointoss', title: t('interactiveGuide.sections.cointoss'), Icon: Coin },
+    { id: 'scoreboard', title: t('interactiveGuide.sections.scoreboard'), Icon: ChartColumn },
+    { id: 'matchend', title: t('interactiveGuide.sections.matchend'), Icon: Trophy },
+    { id: 'shortcuts', title: t('interactiveGuide.sections.shortcuts'), Icon: Keyboard },
+    { id: 'settings', title: t('interactiveGuide.sections.settings'), Icon: Settings },
+    { id: 'troubleshooting', title: t('interactiveGuide.sections.troubleshooting'), Icon: Wrench },
+    { id: 'dashboards', title: t('interactiveGuide.sections.dashboards'), Icon: Smartphone }
   ]
 
   const scrollToSection = (sectionId) => {
@@ -1618,7 +1619,7 @@ export default function InteractiveGuide({ open, onClose }) {
               }}
             >
               {sections.map(s => (
-                <option key={s.id} value={s.id}>{s.icon} {s.title}</option>
+                <option key={s.id} value={s.id}>{s.title}</option>
               ))}
             </select>
           )}
@@ -1626,7 +1627,7 @@ export default function InteractiveGuide({ open, onClose }) {
           {/* ==================== QUICK START ==================== */}
           <div id="guide-section-quickstart">
             <h2 style={{ fontSize: 22, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-              🚀 {t('interactiveGuide.sections.quickstart')}
+              <Rocket /> {t('interactiveGuide.sections.quickstart')}
             </h2>
 
             <p style={{ marginBottom: 16, fontSize: 15 }}>
@@ -1649,11 +1650,11 @@ export default function InteractiveGuide({ open, onClose }) {
               marginBottom: 16
             }}>
               {[
-                `🏠 ${t('interactiveGuide.sections.home')}`,
-                `📋 ${t('interactiveGuide.sections.setup')}`,
-                `🪙 ${t('interactiveGuide.sections.cointoss')}`,
-                `📊 ${t('interactiveGuide.sections.scoreboard')}`,
-                `🏆 ${t('interactiveGuide.sections.matchend')}`
+                <><House /> {t('interactiveGuide.sections.home')}</>,
+                <><ClipboardList /> {t('interactiveGuide.sections.setup')}</>,
+                <><Coin /> {t('interactiveGuide.sections.cointoss')}</>,
+                <><ChartColumn /> {t('interactiveGuide.sections.scoreboard')}</>,
+                <><Trophy /> {t('interactiveGuide.sections.matchend')}</>
               ].map((step, i, arr) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{
@@ -1678,14 +1679,14 @@ export default function InteractiveGuide({ open, onClose }) {
           {/* ==================== HOME PAGE ==================== */}
           <div id="guide-section-home" style={{ marginTop: 40 }}>
             <h2 style={{ fontSize: 22, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-              🏠 {t('interactiveGuide.sections.home')}
+              <House /> {t('interactiveGuide.sections.home')}
             </h2>
 
             <p style={{ marginBottom: 16 }}>
               {t('interactiveGuide.home.intro')}
             </p>
 
-            <Section title={t('interactiveGuide.home.newMatch')} icon="➕" defaultOpen>
+            <Section title={t('interactiveGuide.home.newMatch')} icon={<Plus />} defaultOpen>
               <p>{t('interactiveGuide.home.newMatchDesc')}</p>
 
               <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'wrap' }}>
@@ -1716,7 +1717,7 @@ export default function InteractiveGuide({ open, onClose }) {
               </div>
             </Section>
 
-            <Section title={t('interactiveGuide.home.matchActions')} icon="⚡">
+            <Section title={t('interactiveGuide.home.matchActions')} icon={<Zap />}>
               <ul style={{ paddingLeft: 20 }}>
                 <li><strong>{t('interactiveGuide.home.continue')}</strong> - {t('interactiveGuide.home.continueDesc')}</li>
                 <li><strong>{t('interactiveGuide.home.delete')}</strong> - {t('interactiveGuide.home.deleteDesc')}</li>
@@ -1728,7 +1729,7 @@ export default function InteractiveGuide({ open, onClose }) {
           {/* ==================== MATCH SETUP ==================== */}
           <div id="guide-section-setup" style={{ marginTop: 40 }}>
             <h2 style={{ fontSize: 22, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-              📋 {t('interactiveGuide.sections.setup')}
+              <ClipboardList /> {t('interactiveGuide.sections.setup')}
             </h2>
 
             <p style={{ marginBottom: 16 }}>
@@ -1740,7 +1741,7 @@ export default function InteractiveGuide({ open, onClose }) {
               <MatchSetupMockup t={t} />
             </div>
 
-            <Section title={t('interactiveGuide.setup.matchInfo')} icon="ℹ️" defaultOpen>
+            <Section title={t('interactiveGuide.setup.matchInfo')} icon={<Info />} defaultOpen>
               <p>{t('interactiveGuide.setup.matchInfoDesc')}</p>
               <ul style={{ paddingLeft: 20 }}>
                 <li><strong>{t('interactiveGuide.setup.gameNumber')}</strong> - {t('interactiveGuide.setup.gameNumberDesc')}</li>
@@ -1750,7 +1751,7 @@ export default function InteractiveGuide({ open, onClose }) {
               </ul>
             </Section>
 
-            <Section title={t('interactiveGuide.setup.teams')} icon="👥">
+            <Section title={t('interactiveGuide.setup.teams')} icon={<Users />}>
               <StepList steps={[
                 t('interactiveGuide.setup.teamStep1'),
                 t('interactiveGuide.setup.teamStep2'),
@@ -1758,7 +1759,7 @@ export default function InteractiveGuide({ open, onClose }) {
               ]} />
             </Section>
 
-            <Section title={t('interactiveGuide.setup.roster')} icon="📝">
+            <Section title={t('interactiveGuide.setup.roster')} icon={<NotebookPen />}>
               <p>{t('interactiveGuide.setup.rosterDesc')}</p>
 
               <h4 style={{ marginTop: 16 }}>{t('interactiveGuide.setup.addingPlayers')}</h4>
@@ -1779,7 +1780,7 @@ export default function InteractiveGuide({ open, onClose }) {
               </TipBox>
             </Section>
 
-            <Section title={t('interactiveGuide.setup.signatures')} icon="✍️">
+            <Section title={t('interactiveGuide.setup.signatures')} icon={<Signature />}>
               <p>{t('interactiveGuide.setup.signaturesDesc')}</p>
               <ul style={{ paddingLeft: 20 }}>
                 <li>{t('interactiveGuide.setup.sig1')}</li>
@@ -1794,7 +1795,7 @@ export default function InteractiveGuide({ open, onClose }) {
           {/* ==================== COIN TOSS ==================== */}
           <div id="guide-section-cointoss" style={{ marginTop: 40 }}>
             <h2 style={{ fontSize: 22, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-              🪙 {t('interactiveGuide.sections.cointoss')}
+              <Coin /> {t('interactiveGuide.sections.cointoss')}
             </h2>
 
             <p style={{ marginBottom: 16 }}>
@@ -1806,7 +1807,7 @@ export default function InteractiveGuide({ open, onClose }) {
               <CoinTossMockup t={t} />
             </div>
 
-            <Section title={t('interactiveGuide.cointoss.howTo')} icon="🎯" defaultOpen>
+            <Section title={t('interactiveGuide.cointoss.howTo')} icon={<Target />} defaultOpen>
               <StepList steps={[
                 t('interactiveGuide.cointoss.step1'),
                 t('interactiveGuide.cointoss.step2'),
@@ -1825,7 +1826,7 @@ export default function InteractiveGuide({ open, onClose }) {
           {/* ==================== SCOREBOARD ==================== */}
           <div id="guide-section-scoreboard" style={{ marginTop: 40 }}>
             <h2 style={{ fontSize: 22, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-              📊 {t('interactiveGuide.sections.scoreboard')}
+              <ChartColumn /> {t('interactiveGuide.sections.scoreboard')}
             </h2>
 
             <p style={{ marginBottom: 16 }}>
@@ -1833,7 +1834,7 @@ export default function InteractiveGuide({ open, onClose }) {
             </p>
 
             {/* Visual Mockups of Scoreboard in Different States */}
-            <Section title={t('interactiveGuide.mockups.screenStates')} icon="📸" defaultOpen>
+            <Section title={t('interactiveGuide.mockups.screenStates')} icon={<Camera />} defaultOpen>
               <p style={{ marginBottom: 16, fontSize: 13, opacity: 0.8 }}>
                 {t('interactiveGuide.mockups.screenStatesDesc')}
               </p>
@@ -1873,14 +1874,14 @@ export default function InteractiveGuide({ open, onClose }) {
               </div>
             </Section>
 
-            <Section title={t('interactiveGuide.scoreboard.courtLayout')} icon="🏐">
+            <Section title={t('interactiveGuide.scoreboard.courtLayout')} icon={<Volleyball />}>
               <p style={{ marginBottom: 16 }}>
                 {t('interactiveGuide.scoreboard.courtDesc')}
               </p>
               <CourtDemo t={t} />
             </Section>
 
-            <Section title={t('interactiveGuide.scoreboard.recordingPoints')} icon="📈">
+            <Section title={t('interactiveGuide.scoreboard.recordingPoints')} icon={<TrendingUp />}>
               <p>{t('interactiveGuide.scoreboard.pointsDesc')}</p>
               <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center' }}>
                 <ScoreDemo t={t} />
@@ -1891,7 +1892,7 @@ export default function InteractiveGuide({ open, onClose }) {
               </TipBox>
             </Section>
 
-            <Section title={t('interactiveGuide.scoreboard.startingRallies')} icon="▶️">
+            <Section title={t('interactiveGuide.scoreboard.startingRallies')} icon={<Play />}>
               <p>{t('interactiveGuide.scoreboard.ralliesDesc')}</p>
 
               <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
@@ -1913,7 +1914,7 @@ export default function InteractiveGuide({ open, onClose }) {
               </TipBox>
             </Section>
 
-            <Section title={t('interactiveGuide.scoreboard.timeouts')} icon="⏱️">
+            <Section title={t('interactiveGuide.scoreboard.timeouts')} icon={<Timer />}>
               <p>{t('interactiveGuide.scoreboard.timeoutsDesc')}</p>
 
               <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center' }}>
@@ -1934,7 +1935,7 @@ export default function InteractiveGuide({ open, onClose }) {
               </TipBox>
             </Section>
 
-            <Section title={t('interactiveGuide.scoreboard.sanctions')} icon="🟨">
+            <Section title={t('interactiveGuide.scoreboard.sanctions')} icon={<Card fill="currentColor" style={{ color: '#eab308' }} />}>
               <p>{t('interactiveGuide.scoreboard.sanctionsDesc')}</p>
 
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginTop: 12 }}>
@@ -1971,7 +1972,7 @@ export default function InteractiveGuide({ open, onClose }) {
               </table>
             </Section>
 
-            <Section title={t('interactiveGuide.scoreboard.undo')} icon="↩️">
+            <Section title={t('interactiveGuide.scoreboard.undo')} icon={<Undo />}>
               <p>{t('interactiveGuide.scoreboard.undoDesc')}</p>
 
               <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center' }}>
@@ -1983,14 +1984,14 @@ export default function InteractiveGuide({ open, onClose }) {
               </TipBox>
             </Section>
 
-            <Section title={t('interactiveGuide.scoreboard.rotation')} icon="🔃">
+            <Section title={t('interactiveGuide.scoreboard.rotation')} icon={<RotateCw />}>
               <p style={{ marginBottom: 16 }}>
                 {t('interactiveGuide.scoreboard.rotationDesc')}
               </p>
               <CourtDemo animateRotation t={t} />
             </Section>
 
-            <Section title={t('interactiveGuide.scoreboard.set3')} icon="3️⃣">
+            <Section title={t('interactiveGuide.scoreboard.set3')} icon={<SquareNumber3 />}>
               <p>{t('interactiveGuide.scoreboard.set3Desc')}</p>
               <ul style={{ paddingLeft: 20 }}>
                 <li>{t('interactiveGuide.scoreboard.set3Rule1')}</li>
@@ -2003,7 +2004,7 @@ export default function InteractiveGuide({ open, onClose }) {
           {/* ==================== MATCH END ==================== */}
           <div id="guide-section-matchend" style={{ marginTop: 40 }}>
             <h2 style={{ fontSize: 22, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-              🏆 {t('interactiveGuide.sections.matchend')}
+              <Trophy /> {t('interactiveGuide.sections.matchend')}
             </h2>
 
             <p style={{ marginBottom: 16 }}>
@@ -2015,7 +2016,7 @@ export default function InteractiveGuide({ open, onClose }) {
               <MatchEndMockup t={t} />
             </div>
 
-            <Section title={t('interactiveGuide.matchend.results')} icon="📋" defaultOpen>
+            <Section title={t('interactiveGuide.matchend.results')} icon={<ClipboardList />} defaultOpen>
               <p>{t('interactiveGuide.matchend.resultsDesc')}</p>
               <ul style={{ paddingLeft: 20 }}>
                 <li>{t('interactiveGuide.matchend.result1')}</li>
@@ -2026,7 +2027,7 @@ export default function InteractiveGuide({ open, onClose }) {
               </ul>
             </Section>
 
-            <Section title={t('interactiveGuide.matchend.signatures')} icon="✍️">
+            <Section title={t('interactiveGuide.matchend.signatures')} icon={<Signature />}>
               <p>{t('interactiveGuide.matchend.signaturesDesc')}</p>
               <StepList steps={[
                 t('interactiveGuide.matchend.sigStep1'),
@@ -2037,7 +2038,7 @@ export default function InteractiveGuide({ open, onClose }) {
               ]} />
             </Section>
 
-            <Section title={t('interactiveGuide.matchend.export')} icon="💾">
+            <Section title={t('interactiveGuide.matchend.export')} icon={<Save />}>
               <ul style={{ paddingLeft: 20 }}>
                 <li><strong>{t('interactiveGuide.matchend.exportJson')}</strong> - {t('interactiveGuide.matchend.exportJsonDesc')}</li>
                 <li><strong>{t('interactiveGuide.matchend.exportPdf')}</strong> - {t('interactiveGuide.matchend.exportPdfDesc')}</li>
@@ -2045,7 +2046,7 @@ export default function InteractiveGuide({ open, onClose }) {
               </ul>
             </Section>
 
-            <Section title={t('interactiveGuide.matchend.reopen')} icon="🔓">
+            <Section title={t('interactiveGuide.matchend.reopen')} icon={<LockOpen />}>
               <p>{t('interactiveGuide.matchend.reopenDesc')}</p>
               <TipBox type="warning">
                 {t('interactiveGuide.matchend.reopenWarning')}
@@ -2056,7 +2057,7 @@ export default function InteractiveGuide({ open, onClose }) {
           {/* ==================== KEYBOARD SHORTCUTS ==================== */}
           <div id="guide-section-shortcuts" style={{ marginTop: 40 }}>
             <h2 style={{ fontSize: 22, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-              ⌨️ {t('interactiveGuide.sections.shortcuts')}
+              <Keyboard /> {t('interactiveGuide.sections.shortcuts')}
             </h2>
 
             <p style={{ marginBottom: 16 }}>
@@ -2081,17 +2082,17 @@ export default function InteractiveGuide({ open, onClose }) {
           {/* ==================== SETTINGS ==================== */}
           <div id="guide-section-settings" style={{ marginTop: 40 }}>
             <h2 style={{ fontSize: 22, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-              ⚙️ {t('interactiveGuide.sections.settings')}
+              <Settings /> {t('interactiveGuide.sections.settings')}
             </h2>
 
-            <Section title={t('interactiveGuide.settings.safety')} icon="🛡️" defaultOpen>
+            <Section title={t('interactiveGuide.settings.safety')} icon={<Shield />} defaultOpen>
               <ul style={{ paddingLeft: 20 }}>
                 <li><strong>{t('interactiveGuide.settings.accidentalRally')}</strong> - {t('interactiveGuide.settings.accidentalRallyDesc')}</li>
                 <li><strong>{t('interactiveGuide.settings.accidentalPoint')}</strong> - {t('interactiveGuide.settings.accidentalPointDesc')}</li>
               </ul>
             </Section>
 
-            <Section title={t('interactiveGuide.settings.display')} icon="📱">
+            <Section title={t('interactiveGuide.settings.display')} icon={<Smartphone />}>
               <ul style={{ paddingLeft: 20 }}>
                 <li><strong>{t('interactiveGuide.settings.desktop')}</strong> - {t('interactiveGuide.settings.desktopDesc')}</li>
                 <li><strong>{t('interactiveGuide.settings.tablet')}</strong> - {t('interactiveGuide.settings.tabletDesc')}</li>
@@ -2099,7 +2100,7 @@ export default function InteractiveGuide({ open, onClose }) {
               </ul>
             </Section>
 
-            <Section title={t('interactiveGuide.settings.backup')} icon="💾">
+            <Section title={t('interactiveGuide.settings.backup')} icon={<Save />}>
               <p>{t('interactiveGuide.settings.backupDesc')}</p>
               <ul style={{ paddingLeft: 20 }}>
                 <li><strong>{t('interactiveGuide.settings.autoBackup')}</strong> - {t('interactiveGuide.settings.autoBackupDesc')}</li>
@@ -2111,14 +2112,14 @@ export default function InteractiveGuide({ open, onClose }) {
           {/* ==================== TROUBLESHOOTING ==================== */}
           <div id="guide-section-troubleshooting" style={{ marginTop: 40 }}>
             <h2 style={{ fontSize: 22, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-              🔧 {t('interactiveGuide.sections.troubleshooting')}
+              <Wrench /> {t('interactiveGuide.sections.troubleshooting')}
             </h2>
 
             <p style={{ marginBottom: 16 }}>
               {t('interactiveGuide.troubleshooting.intro')}
             </p>
 
-            <Section title={t('interactiveGuide.troubleshooting.matchIssues')} icon="📊" defaultOpen>
+            <Section title={t('interactiveGuide.troubleshooting.matchIssues')} icon={<ChartColumn />} defaultOpen>
               <QAItem
                 question={t('interactiveGuide.troubleshooting.q1')}
                 answer={t('interactiveGuide.troubleshooting.a1')}
@@ -2137,7 +2138,7 @@ export default function InteractiveGuide({ open, onClose }) {
               />
             </Section>
 
-            <Section title={t('interactiveGuide.troubleshooting.connectionIssues')} icon="🌐">
+            <Section title={t('interactiveGuide.troubleshooting.connectionIssues')} icon={<Globe />}>
               <QAItem
                 question={t('interactiveGuide.troubleshooting.q11')}
                 answer={t('interactiveGuide.troubleshooting.a11')}
@@ -2152,7 +2153,7 @@ export default function InteractiveGuide({ open, onClose }) {
               />
             </Section>
 
-            <Section title={t('interactiveGuide.troubleshooting.recovery')} icon="💾">
+            <Section title={t('interactiveGuide.troubleshooting.recovery')} icon={<Save />}>
               <QAItem
                 question={t('interactiveGuide.troubleshooting.q14')}
                 answer={t('interactiveGuide.troubleshooting.a14')}
@@ -2171,14 +2172,14 @@ export default function InteractiveGuide({ open, onClose }) {
           {/* ==================== DASHBOARDS ==================== */}
           <div id="guide-section-dashboards" style={{ marginTop: 40 }}>
             <h2 style={{ fontSize: 22, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-              📱 {t('interactiveGuide.sections.dashboards')}
+              <Smartphone /> {t('interactiveGuide.sections.dashboards')}
             </h2>
 
             <p style={{ marginBottom: 16 }}>
               {t('interactiveGuide.dashboards.intro')}
             </p>
 
-            <Section title={t('interactiveGuide.dashboards.referee')} icon="👨‍⚖️" defaultOpen>
+            <Section title={t('interactiveGuide.dashboards.referee')} icon={<Whistle />} defaultOpen>
               <p>{t('interactiveGuide.dashboards.refereeDesc')}</p>
               <StepList steps={[
                 t('interactiveGuide.dashboards.refStep1'),
@@ -2191,7 +2192,7 @@ export default function InteractiveGuide({ open, onClose }) {
               </TipBox>
             </Section>
 
-            <Section title={t('interactiveGuide.dashboards.connection')} icon="🔗">
+            <Section title={t('interactiveGuide.dashboards.connection')} icon={<Link />}>
               <ul style={{ paddingLeft: 20 }}>
                 <li><strong>{t('interactiveGuide.dashboards.lan')}</strong> - {t('interactiveGuide.dashboards.lanDesc')}</li>
                 <li><strong>{t('interactiveGuide.dashboards.cloud')}</strong> - {t('interactiveGuide.dashboards.cloudDesc')}</li>

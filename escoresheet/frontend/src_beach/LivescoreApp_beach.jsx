@@ -5,6 +5,7 @@ import { apiFrom } from './lib_beach/apiClient_beach'
 import { isBackendAvailable } from './utils_beach/backendConfig_beach'
 import UpdateBanner from './components_beach/UpdateBanner_beach'
 import DashboardHeader from './components_beach/DashboardHeader_beach'
+import { Smartphone } from './components_beach/Icons_beach'
 
 const ballImage = '/beachball.png'
 
@@ -146,7 +147,7 @@ export default function LivescoreApp() {
   // Narrow screen overlay
   const narrowOverlay = (viewportWidth < 357 || viewportHeight < 650) && (
     <div className="livescore-narrow-overlay">
-      <div className="livescore-narrow-icon">📱</div>
+      <div className="livescore-narrow-icon"><Smartphone /></div>
       <h2 className="livescore-narrow-title">
         {t('common.screenTooSmall', 'Screen too Small')}
       </h2>

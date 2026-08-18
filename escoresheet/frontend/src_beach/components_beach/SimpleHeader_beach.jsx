@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ClipboardList } from './Icons_beach'
 
 /**
  * SimpleHeader - 3-column header for all dashboard apps
@@ -316,7 +317,7 @@ export default function SimpleHeader({
                       textAlign: 'left'
                     }}
                   >
-                    <span style={{ fontSize: '13px', width: '20px', textAlign: 'center' }}>📋</span>
+                    <span style={{ fontSize: '13px', width: '20px', textAlign: 'center' }}><ClipboardList /></span>
                     <span style={{ flex: 1 }}>Version {currentVersion}</span>
                     <span style={{
                       fontSize: '8px',

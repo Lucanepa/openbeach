@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import i18n from '../i18n'
+import { Check, ClipboardList, Database, Monitor, Moon, RefreshCw, SatelliteDish, Sun, X } from './Icons_beach'
 
 // Flag SVG components for language selector
 const FlagGB = () => (
@@ -105,7 +106,7 @@ export default function DashboardHeader({
   // Load games button
   if (onLoadGames) {
     menuItems.push({
-      icon: '🔄',
+      icon: <RefreshCw />,
       label: loadingMatches ? t('common.loading', 'Loading...') : t('refereeDashboard.loadGames', 'Load Games'),
       onClick: onLoadGames,
       disabled: loadingMatches,
@@ -119,7 +120,7 @@ export default function DashboardHeader({
   // Wake lock toggle
   if (showWakeLock && onToggleWakeLock) {
     menuItems.push({
-      icon: wakeLockActive ? '☀️' : '🌙',
+      icon: wakeLockActive ? <Sun /> : <Moon />,
       label: t('refereeDashboard.keepScreenOn', 'Keep Screen On'),
       onClick: onToggleWakeLock,
       toggle: wakeLockActive,
@@ -132,20 +133,20 @@ export default function DashboardHeader({
     if (menuItems.length > 0) menuItems.push({ divider: true })
     menuItems.push({ header: t('refereeDashboard.connection.title', 'Connection') })
     menuItems.push({
-      icon: '🔄',
+      icon: <RefreshCw />,
       label: t('refereeDashboard.connection.auto', 'Auto'),
       onClick: () => onConnectionModeChange('auto'),
       active: connectionMode === 'auto'
     })
     menuItems.push({
-      icon: '🗄️',
+      icon: <Database />,
       label: t('refereeDashboard.connection.dbOnly', 'Database Only'),
       onClick: () => onConnectionModeChange('supabase'),
       active: connectionMode === 'supabase',
       color: '#22c55e'
     })
     menuItems.push({
-      icon: '📡',
+      icon: <SatelliteDish />,
       label: t('refereeDashboard.connection.directOnly', 'Direct Only'),
       onClick: () => onConnectionModeChange('websocket'),
       active: connectionMode === 'websocket',
@@ -159,15 +160,15 @@ export default function DashboardHeader({
     menuItems.push({ header: t('refereeDashboard.status', 'Status') })
 
     const statusLabels = {
-      server: '🖥️ Server',
-      websocket: '📡 WebSocket',
-      supabase: '🗄️ Database'
+      server: <><Monitor /> Server</>,
+      websocket: <><SatelliteDish /> WebSocket</>,
+      supabase: <><Database /> Database</>
     }
 
     Object.entries(connectionStatuses).forEach(([key, status]) => {
       if (statusLabels[key]) {
         menuItems.push({
-          icon: status === 'connected' ? '✅' : status === 'connecting' ? '🔄' : '❌',
+          icon: status === 'connected' ? <Check /> : status === 'connecting' ? <RefreshCw /> : <X />,
           label: statusLabels[key],
           disabled: true,
           color: status === 'connected' ? '#22c55e' : status === 'connecting' ? '#fbbf24' : '#ef4444'
@@ -520,7 +521,7 @@ export default function DashboardHeader({
                       textAlign: 'left'
                     }}
                   >
-                    <span style={{ fontSize: '13px', width: '20px', textAlign: 'center' }}>📋</span>
+                    <span style={{ fontSize: '13px', width: '20px', textAlign: 'center' }}><ClipboardList /></span>
                     <span style={{ flex: 1 }}>Version {currentVersion}</span>
                     <span style={{
                       fontSize: '8px',

@@ -4,6 +4,7 @@ import i18n from '../i18n'
 import ConnectionStatus from './ConnectionStatus_beach'
 import TabletStatusIndicator from './TabletStatusIndicator_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
+import { Bell, BookOpen, ClipboardList, House, Search } from './Icons_beach'
 
 
 const FlagBox = ({ children }) => (
@@ -611,7 +612,7 @@ export default function MainHeader({
                 e.currentTarget.style.background = '#ef4444'
               }}
             >
-              <span>🔔</span>
+              <span><Bell /></span>
             </button>
           )}
 
@@ -975,7 +976,7 @@ export default function MainHeader({
                         }
                       }}
                     >
-                      <span>📋</span>
+                      <span><ClipboardList /></span>
                       <span>v{currentVersion}</span>
                     </button>
 
@@ -1096,7 +1097,7 @@ export default function MainHeader({
                         }
                       }}
                     >
-                      <span>🔍</span>
+                      <span><Search /></span>
                       <span>{t('header.scale', 'Scale')}</span>
                       <span style={{
                         marginLeft: 'auto',
@@ -1227,7 +1228,7 @@ export default function MainHeader({
                           e.currentTarget.style.background = 'transparent'
                         }}
                       >
-                        <span>📖</span>
+                        <span><BookOpen /></span>
                         <span>{t('interactiveGuide.title', 'App Guide')}</span>
                       </button>
                     )}
@@ -1413,7 +1414,7 @@ export default function MainHeader({
                           e.currentTarget.style.background = 'transparent'
                         }}
                       >
-                        <span>🏠</span>
+                        <span><House /></span>
                         <span>{t('Home')}</span>
                       </button>
                     )}
@@ -1449,7 +1450,7 @@ export default function MainHeader({
                           e.currentTarget.style.background = 'transparent'
                         }}
                       >
-                        <span>📖</span>
+                        <span><BookOpen /></span>
                         <span>{t('interactiveGuide.title', 'App Guide')}</span>
                       </button>
                     )}
@@ -1579,7 +1580,7 @@ export default function MainHeader({
                         }
                       }}
                     >
-                      <span>🔍</span>
+                      <span><Search /></span>
                       <span style={{ flex: 1 }}>{t('header.scale', 'Scale')}</span>
                       <span style={{
                         padding: '2px 6px',
@@ -1677,7 +1678,7 @@ export default function MainHeader({
                         }
                       }}
                     >
-                      <span>📋</span>
+                      <span><ClipboardList /></span>
                       <span style={{ flex: 1 }}>v{currentVersion}</span>
                       <span style={{
                         fontSize: '10px',

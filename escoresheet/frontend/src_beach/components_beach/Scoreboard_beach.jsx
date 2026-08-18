@@ -31,6 +31,7 @@ import { splitLocalDateTime, parseLocalDateTimeToISO, roundToMinute, formatTimeL
 import { TimeInput24 } from './TimeInput24_beach'
 import { uploadScoresheetAsync } from '../utils_beach/scoresheetUploader_beach'
 import { useConnectionHealthMonitor } from '../hooks_beach/useConnectionHealthMonitor_beach'
+import { ArrowLeftRight, Card, ChartColumn, ClipboardList, Copy, Download, FileText, NotebookPen, RefreshCw, Save, Search, Settings, Smartphone, TriangleAlert, Volleyball, Wrench } from './Icons_beach'
 
 /**
  * SYNC ARCHITECTURE NOTE:
@@ -8050,7 +8051,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         <div style={{
           fontSize: '48px',
           marginBottom: '20px'
-        }}>⚠️</div>
+        }}><TriangleAlert /></div>
         <h1 style={{
           fontSize: '24px',
           fontWeight: 600,
@@ -8109,7 +8110,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             marginBottom: '24px',
             animation: 'rotate90 1.5s ease-in-out infinite'
           }}>
-            📱
+            <Smartphone />
           </div>
           <style>{`
             @keyframes rotate90 {
@@ -8299,7 +8300,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         <div className="toolbar-actions" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: isCompactMode ? '4px' : '12px' }}>
           {/* Scoresheet dropdown menu */}
           <MenuList
-            buttonLabel="📄"
+            buttonLabel={<FileText />}
             buttonTitle={t('header.scoresheet')}
             menuTitle={t('header.scoresheet')}
             buttonClassName="secondary"
@@ -8315,7 +8316,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             items={[
               {
                 key: 'scoresheet-preview',
-                label: `🔍 ${t('header.preview')}`,
+                icon: <Search />,
+                label: t('header.preview'),
                 onClick: async () => {
                   try {
                     const match = data?.match
@@ -8373,7 +8375,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               },
               {
                 key: 'scoresheet-save',
-                label: `💾 ${t('header.savePdf')}`,
+                icon: <Save />,
+                label: t('header.savePdf'),
                 onClick: async () => {
                   try {
                     const match = data?.match
@@ -8516,7 +8519,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               { separator: true },
               {
                 key: 'export',
-                label: '📥 Download Game Data (JSON)',
+                icon: <Download />,
+                label: 'Download Game Data (JSON)',
                 onClick: async () => {
                   try {
                     // Export all database data
@@ -8559,7 +8563,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               },
               {
                 key: 'options',
-                label: '⚙️ Options',
+                icon: <Settings />,
+                label: 'Options',
                 onClick: () => {
                   setShowOptionsInMenu(true)
                 }
@@ -8949,7 +8954,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   borderRadius: '4px',
                   color: '#fde047'
                 }}>
-                  {t('scoreboard.sanctions.sanctionedFormalWarning')} 🟨
+                  {t('scoreboard.sanctions.sanctionedFormalWarning')} <Card fill="currentColor" />
                 </div>
               )}
             </div>
@@ -11729,7 +11734,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   borderRadius: '4px',
                   color: '#fde047'
                 }}>
-                  {t('scoreboard.sanctions.sanctionedFormalWarning')} 🟨
+                  {t('scoreboard.sanctions.sanctionedFormalWarning')} <Card fill="currentColor" />
                 </div>
               )}
             </div>
@@ -11963,7 +11968,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     showAlert(t('scoreboard.errors.exportFailed'), 'error')
                   }
                 }}>
-                📥 {t('scoreboard.menu.downloadGameData', 'Download Game Data (JSON)')}
+                <Download /> {t('scoreboard.menu.downloadGameData', 'Download Game Data (JSON)')}
               </div>
               <div style={{
                 background: 'rgba(255, 255, 255, 0.05)',
@@ -11986,7 +11991,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 onClick={() => {
                   setShowOptionsInMenu(true)
                 }}>
-                ⚙️ {t('scoreboard.menu.options', 'Options')}
+                <Settings /> {t('scoreboard.menu.options', 'Options')}
               </div>
             </div>
           </div>
@@ -12760,7 +12765,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               borderRadius: '8px',
                               color: isBrightColor(leftTeamColor) ? '#000' : '#fff'
                             }}>
-                              {leftIsServing && <span style={{ fontSize: '20px' }}>🏐</span>}
+                              {leftIsServing && <span style={{ fontSize: '20px' }}><Volleyball /></span>}
                               <div style={{ textAlign: 'center' }}>
                                 <div style={{ fontWeight: 700, fontSize: '14px' }}>{leftTeamName}</div>
                                 <div style={{ fontSize: '10px', opacity: 0.8 }}>{leftisTeam1 ? 'Team 1' : 'Team 2'}</div>
@@ -12791,7 +12796,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 <div style={{ fontWeight: 700, fontSize: '14px' }}>{rightTeamName}</div>
                                 <div style={{ fontSize: '10px', opacity: 0.8 }}>{rightIsTeam1 ? 'TEAM 1' : 'TEAM 2'}</div>
                               </div>
-                              {rightIsServing && <span style={{ fontSize: '20px' }}>🏐</span>}
+                              {rightIsServing && <span style={{ fontSize: '20px' }}><Volleyball /></span>}
                             </div>
                           </div>
 
@@ -12862,7 +12867,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 fontWeight: 600
                               }}
                             >
-                              ↔️ Switch Sides
+                              <ArrowLeftRight /> Switch Sides
                             </button>
                             <button
                               className="secondary"
@@ -12907,7 +12912,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 fontWeight: 600
                               }}
                             >
-                              🔄 Switch Team A ↔ B
+                              <RefreshCw /> Switch Team A ↔ B
                             </button>
                             <button
                               className="secondary"
@@ -12966,7 +12971,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 fontWeight: 600
                               }}
                             >
-                              🏐 Switch Serve
+                              <Volleyball /> Switch Serve
                             </button>
                           </div>
 
@@ -13012,7 +13017,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 fontWeight: 600
                               }}
                             >
-                              🔄 {data?.team1Team?.shortName || data?.team1Team?.name || 'team1'} Server: #{data?.match?.team1FirstServe || '?'}
+                              <RefreshCw /> {data?.team1Team?.shortName || data?.team1Team?.name || 'team1'} Server: #{data?.match?.team1FirstServe || '?'}
                             </button>
                             {/* Team 2 - Switch Server */}
                             <button
@@ -13051,7 +13056,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 fontWeight: 600
                               }}
                             >
-                              🔄 {data?.team2Team?.shortName || data?.team2Team?.name || 'team2'} Server: #{data?.match?.team2FirstServe || '?'}
+                              <RefreshCw /> {data?.team2Team?.shortName || data?.team2Team?.name || 'team2'} Server: #{data?.match?.team2FirstServe || '?'}
                             </button>
                           </div>
                         </div>
@@ -13182,7 +13187,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 }}
               >
                 <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontSize: '18px' }}>📊</span>
+                  <span style={{ fontSize: '18px' }}><ChartColumn /></span>
                   Score &amp; Sets
                 </span>
                 <span style={{ fontSize: '12px', transform: manualPanelExpandedSections.scores ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
@@ -13371,7 +13376,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 }}
               >
                 <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontSize: '18px' }}>⚙️</span>
+                  <span style={{ fontSize: '18px' }}><Settings /></span>
                   Match Settings
                 </span>
                 <span style={{ fontSize: '12px', transform: manualPanelExpandedSections.matchSettings ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
@@ -13491,7 +13496,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 }}
               >
                 <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontSize: '18px' }}>📝</span>
+                  <span style={{ fontSize: '18px' }}><NotebookPen /></span>
                   Event History
                 </span>
                 <span style={{ fontSize: '12px', transform: manualPanelExpandedSections.events ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
@@ -14178,7 +14183,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 }}
               >
                 <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontSize: '18px' }}>🔧</span>
+                  <span style={{ fontSize: '18px' }}><Wrench /></span>
                   Advanced
                 </span>
                 <span style={{ fontSize: '12px', transform: manualPanelExpandedSections.advanced ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
@@ -14513,7 +14518,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 }}
               >
                 <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontSize: '18px' }}>📋</span>
+                  <span style={{ fontSize: '18px' }}><ClipboardList /></span>
                   Manual Changes Summary
                   {manualChangesLog.length > 0 && (
                     <span style={{
@@ -14635,7 +14640,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             width: '100%'
                           }}
                         >
-                          📋 Copy Log
+                          <Copy /> Copy Log
                         </button>
                       </div>
                     </div>
@@ -16513,7 +16518,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           hideCloseButton={true}
         >
           <div style={{ padding: '24px', textAlign: 'center' }}>
-            <div style={{ marginBottom: '16px', fontSize: '48px' }}>⚠️</div>
+            <div style={{ marginBottom: '16px', fontSize: '48px' }}><TriangleAlert /></div>
             <p style={{ marginBottom: '8px', fontSize: '14px', fontWeight: 600 }}>
               {t('scoreboard.confirm.rallyStartedQuickly')}
             </p>
@@ -16566,7 +16571,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           hideCloseButton={true}
         >
           <div style={{ padding: '24px', textAlign: 'center' }}>
-            <div style={{ marginBottom: '16px', fontSize: '48px' }}>⚠️</div>
+            <div style={{ marginBottom: '16px', fontSize: '48px' }}><TriangleAlert /></div>
             <p style={{ marginBottom: '8px', fontSize: '14px', fontWeight: 600 }}>
               {t('scoreboard.confirm.pointAwardedQuickly')}
             </p>
@@ -17687,19 +17692,19 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               <div style={{ fontSize: '15px', color: 'var(--muted)', marginBottom: '12px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', padding: '6px 10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>
                                   <span>Current:</span>
-                                  <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · 🏐 {currentServe === 'team1' ? team1Name : team2Name}</span>
+                                  <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
                                 </div>
                                 {selectedTeam === 'unavailable' ? (
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(156, 163, 175, 0.15)', borderRadius: '6px', border: '1px solid rgba(156, 163, 175, 0.3)' }}>
                                     <span style={{ color: '#9ca3af' }}>No change:</span>
-                                    <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · 🏐 {currentServe === 'team1' ? team1Name : team2Name}</span>
+                                    <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
                                   </div>
                                 ) : (
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(234, 179, 8, 0.15)', borderRadius: '6px', border: '1px solid rgba(234, 179, 8, 0.3)' }}>
                                     <span style={{ color: '#eab308' }}>New:</span>
                                     <span><strong style={{ color: '#eab308' }}>
                                       {selectedTeam === 'left' ? leftTeamScore.team1 : rightTeamScore.team1} : {selectedTeam === 'left' ? leftTeamScore.team2 : rightTeamScore.team2}
-                                    </strong> · 🏐 {(selectedTeam === 'left' ? leftTeamScore.serve : rightTeamScore.serve) === 'team1' ? team1Name : team2Name}</span>
+                                    </strong> · <Volleyball /> {(selectedTeam === 'left' ? leftTeamScore.serve : rightTeamScore.serve) === 'team1' ? team1Name : team2Name}</span>
                                   </div>
                                 )}
                               </div>
@@ -17833,22 +17838,22 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         <div style={{ fontSize: '15px', color: 'var(--muted)', marginBottom: '12px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', padding: '6px 10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>
                             <span>Current:</span>
-                            <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · 🏐 {currentServe === 'team1' ? team1Name : team2Name}</span>
+                            <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
                           </div>
                           {bmpSelectedOutcome === 'successful' ? (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(34, 197, 94, 0.15)', borderRadius: '6px', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
                               <span style={{ color: '#22c55e' }}>New:</span>
-                              <span><strong style={{ color: '#22c55e' }}>{successScore.team1} : {successScore.team2}</strong> · 🏐 {successServe === 'team1' ? team1Name : team2Name}</span>
+                              <span><strong style={{ color: '#22c55e' }}>{successScore.team1} : {successScore.team2}</strong> · <Volleyball /> {successServe === 'team1' ? team1Name : team2Name}</span>
                             </div>
                           ) : bmpSelectedOutcome === 'unsuccessful' ? (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(239, 68, 68, 0.15)', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
                               <span style={{ color: '#ef4444' }}>No change:</span>
-                              <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · 🏐 {currentServe === 'team1' ? team1Name : team2Name}</span>
+                              <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
                             </div>
                           ) : (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(156, 163, 175, 0.15)', borderRadius: '6px', border: '1px solid rgba(156, 163, 175, 0.3)' }}>
                               <span style={{ color: '#9ca3af' }}>No change:</span>
-                              <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · 🏐 {currentServe === 'team1' ? team1Name : team2Name}</span>
+                              <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
                             </div>
                           )}
                         </div>
@@ -18399,7 +18404,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ width: '55px', textAlign: 'right' }}>Serve:</span>
-                    <span style={{ fontSize: '16px' }}>🏐</span>
+                    <span style={{ fontSize: '16px' }}><Volleyball /></span>
                     <span style={{ background: (selectedOption === 'swap' ? swapServeTeam : replayServeTeam) === 'team1' ? team1Color : team2Color, color: isBrightColor((selectedOption === 'swap' ? swapServeTeam : replayServeTeam) === 'team1' ? team1Color : team2Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>
                       {(selectedOption === 'swap' ? swapServeTeam : replayServeTeam) === 'team1' ? team1Label : team2Label}
                     </span>

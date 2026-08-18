@@ -19,6 +19,7 @@ import { apiFrom } from '../lib_beach/apiClient_beach'
 import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 import { useSyncQueue } from '../hooks_beach/useSyncQueue_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
+import { Bell, Database, Moon, RefreshCw, SatelliteDish, Smartphone, Sun, TriangleAlert } from './Icons_beach'
 
 // Get current version from package.json (injected by Vite at build time)
 const currentVersion = __APP_VERSION__
@@ -1685,7 +1686,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
               }}
               title={wakeLockActive ? t('refereeDashboard.screenWillStayOn') : t('refereeDashboard.screenMayTurnOff')}
             >
-              {wakeLockActive ? `☀️` : `🌙`}
+              {wakeLockActive ? <Sun /> : <Moon />}
             </button>
 
             <ConnectionStatus
@@ -1727,7 +1728,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
               }}
               title={t('refereeDashboard.refresh')}
             >
-              🔄 {window.innerWidth >= 500 && t('refereeDashboard.refresh')}
+              <RefreshCw /> {window.innerWidth >= 500 && t('refereeDashboard.refresh')}
             </button>
           </div>
 
@@ -2239,7 +2240,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           padding: '24px',
           textAlign: 'center'
         }}>
-          <div style={{ fontSize: '64px', marginBottom: '24px' }}>📱</div>
+          <div style={{ fontSize: '64px', marginBottom: '24px' }}><Smartphone /></div>
           <h2 style={{
             fontSize: '24px',
             fontWeight: 700,
@@ -2305,7 +2306,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           // Screen options
           { header: t('refereeDashboard.screenOptions') },
           {
-            icon: wakeLockActive ? '☀️' : '🌙',
+            icon: wakeLockActive ? <Sun /> : <Moon />,
             label: t('refereeDashboard.keepScreenOn'),
             onClick: toggleWakeLock,
             toggle: wakeLockActive,
@@ -2316,20 +2317,20 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           ...(!isMasterMode ? [
             { header: t('refereeDashboard.connection.title') },
             {
-              icon: '🔄',
+              icon: <RefreshCw />,
               label: t('refereeDashboard.connection.auto'),
               onClick: () => setConnectionType(CONNECTION_TYPES.AUTO),
               active: connectionType === CONNECTION_TYPES.AUTO
             },
             {
-              icon: '🗄️',
+              icon: <Database />,
               label: t('refereeDashboard.connection.dbOnly'),
               onClick: () => setConnectionType(CONNECTION_TYPES.SUPABASE),
               active: connectionType === CONNECTION_TYPES.SUPABASE,
               color: '#22c55e'
             },
             {
-              icon: '📡',
+              icon: <SatelliteDish />,
               label: t('refereeDashboard.connection.directOnly'),
               onClick: () => setConnectionType(CONNECTION_TYPES.WEBSOCKET),
               active: connectionType === CONNECTION_TYPES.WEBSOCKET,
@@ -2340,7 +2341,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           // Test mode indicator
           ...(isMasterMode ? [
             {
-              icon: '⚠️',
+              icon: <TriangleAlert />,
               label: t('refereeDashboard.testMode'),
               disabled: true,
               color: '#fbbf24'
@@ -2349,7 +2350,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           ] : []),
           // Refresh (always visible)
           {
-            icon: '🔄',
+            icon: <RefreshCw />,
             label: t('refereeDashboard.refresh'),
             onClick: fetchFreshData,
             color: '#3b82f6'
@@ -3287,7 +3288,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             hideCloseButton={true}
           >
             <div style={{ padding: '24px', textAlign: 'center' }}>
-              <div style={{ marginBottom: '16px', fontSize: '48px' }}>🔔</div>
+              <div style={{ marginBottom: '16px', fontSize: '48px' }}><Bell /></div>
               <p style={{ marginBottom: '20px', fontSize: vmin(3), fontWeight: 700, color: '#ef4444' }}>
                 Scorer Needs Attention!
               </p>

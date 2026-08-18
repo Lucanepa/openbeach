@@ -15,6 +15,7 @@ import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { uploadBackupToCloud, uploadLogsToCloud } from '../utils_beach/logger_beach'
 import { uploadScoresheetAsync } from '../utils_beach/scoresheetUploader_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
+import { FileText, OctagonX, Search, Trash, Volleyball } from './Icons_beach'
 
 // Generate a placeholder signature image (wavy line) for test matches
 function generatePlaceholderSignature() {
@@ -1568,7 +1569,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
             gap: '4px'
           }}
         >
-          🛑 Forfait
+          <OctagonX /> Forfait
         </button>
       </div>
 
@@ -1772,7 +1773,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
 
       <div style={{ display: 'flex', justifyContent: 'center', margin: '1px 0' }}>
         <MenuList
-          buttonLabel={isCompact ? "📄" : "📄 Scoresheet"}
+          buttonLabel={isCompact ? <FileText /> : <><FileText /> Scoresheet</>}
           buttonClassName="secondary"
           buttonStyle={{
             background: '#22c55e',
@@ -1786,7 +1787,8 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           items={[
             {
               key: 'scoresheet-preview',
-              label: '🔍 Preview',
+              icon: <Search />,
+              label: 'Preview',
               onClick: async () => {
                 try {
                   if (!match) {
@@ -2054,7 +2056,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                               onClick={() => setDeletePlayerModal({ team: rosterModal, index: originalIdx })}
                               style={{ padding: '2px', fontSize: '10px', minWidth: 'auto', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                             >
-                              🗑️
+                              <Trash />
                             </button>
                           </td>
                         </tr>
@@ -2429,7 +2431,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                             cursor: 'pointer'
                           }}
                         >
-                          {isFirstServe ? '🏐 First Serve ✓' : '🏐 First Serve'}
+                          {isFirstServe ? <><Volleyball /> First Serve ✓</> : <><Volleyball /> First Serve</>}
                         </button>
                       </div>
                     </div>

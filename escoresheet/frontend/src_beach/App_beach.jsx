@@ -45,6 +45,7 @@ const SPORT_TYPE = 'beach'
 import { fetchMatchByPin, importMatchFromSupabase, restoreMatchFromJson, selectBackupFile, listCloudBackups, fetchCloudBackup, listPocketBaseBackups, fetchPocketBaseMatch } from './utils_beach/backupManager_beach'
 import UpdateBanner from './components_beach/UpdateBanner_beach'
 import CompetitionMatchPicker from './components_beach/CompetitionMatchPicker_beach'
+import { Smartphone } from './components_beach/Icons_beach'
 
 function parseDateTime(dateTime) {
   const [datePart, timePart] = dateTime.split(' ')
@@ -2975,7 +2976,7 @@ export default function App() {
             fontSize: '48px',
             marginBottom: '10px'
           }}>
-            📱
+            <Smartphone />
           </div>
           <div style={{
             fontSize: '18px',

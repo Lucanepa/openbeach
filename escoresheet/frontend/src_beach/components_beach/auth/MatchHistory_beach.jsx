@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts_beach/AuthContext_beach'
 import { apiFrom } from '../../lib_beach/apiClient_beach'
 import { isBackendAvailable } from '../../utils_beach/backendConfig_beach'
+import { ClipboardList } from '../Icons_beach'
 
 export default function MatchHistory({ open, onClose, onSelectMatch }) {
   const { user } = useAuth()
@@ -175,7 +176,7 @@ export default function MatchHistory({ open, onClose, onSelectMatch }) {
             </div>
           ) : matches.length === 0 ? (
             <div style={{ textAlign: 'center', color: '#9ca3af', padding: 40 }}>
-              <div style={{ fontSize: 48, marginBottom: 12, opacity: 0.5 }}>📋</div>
+              <div style={{ fontSize: 48, marginBottom: 12, opacity: 0.5 }}><ClipboardList /></div>
               <p>No matches yet</p>
               <p style={{ fontSize: 13, marginTop: 8 }}>
                 Matches you score will appear here
