@@ -77,7 +77,7 @@ async function resolveLegacyCoinToss(seed, { matches, events }) {
  *
  * @param {object} job - sync_queue row
  * @param {{ sets: object, matches: object, events?: object }} tables - Dexie tables (or fakes)
- * @returns {Promise<null | { external_id: string } | { drop: true }>}
+ * @returns {Promise<null | { external_id: string, match_id?: string } | { drop: true }>}
  *   null when nothing needs changing, { drop: true } when the job cannot be
  *   attributed to a match (sending it bare would overwrite another match's row).
  */
@@ -93,6 +93,27 @@ export async function resolveJobExternalId(job, { sets, matches, events }) {
     if (!events?.where) return null
     const seed = typeof p.match_id === 'string' && p.match_id && !UUID.test(p.match_id) ? p.match_id : coinTossSeed
     return { external_id: await resolveLegacyCoinToss(seed, { matches, events }) }
+  }
+
+  // A numeric match_id is a local Dexie match id, not a seed: jobs queued for
+  // a match without a seed_key carried String(dexieMatchId). The seed is that
+  // local match's seed_key; without one the job cannot be attributed.
+  const localMatchRef = p.match_id != null && isBareLocalId(p.match_id) ? Number(p.match_id) : null
+  if (localMatchRef != null) {
+    let seedOfLocal = null
+    try {
+      seedOfLocal = (await matches.get(localMatchRef))?.seed_key || null
+    } catch {
+      seedOfLocal = null
+    }
+    if (!seedOfLocal) return { drop: true }
+    const parsed = parseExtId(p.external_id)
+    const localId = isBareLocalId(p.external_id) ? p.external_id : parsed?.localId
+    if (localId == null) return { drop: true }
+    return {
+      external_id: job.resource === 'set' ? setExtId(seedOfLocal, localId) : eventExtId(seedOfLocal, localId),
+      match_id: seedOfLocal
+    }
   }
 
   if (!isBareLocalId(p.external_id)) return null
@@ -170,7 +191,7 @@ export async function rewriteQueuedSyncJobs({ queue, sets, matches, events }, { 
         dropped++
         continue
       }
-      const changes = { payload: { ...job.payload, external_id: result.external_id } }
+      const changes = { payload: { ...job.payload, external_id: result.external_id, ...(result.match_id ? { match_id: result.match_id } : {}) } }
       if (requeue && job.status !== 'queued') {
         Object.assign(changes, { status: 'queued', retry_count: 0, next_attempt_at: null, last_error: null })
       }

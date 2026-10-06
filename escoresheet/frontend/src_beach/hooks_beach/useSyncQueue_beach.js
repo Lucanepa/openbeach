@@ -650,7 +650,7 @@ async function processJobInner(job, ctx) {
         return DROP_JOB
       }
       if (resolved?.external_id) {
-        job = { ...job, payload: { ...job.payload, external_id: resolved.external_id } }
+        job = { ...job, payload: { ...job.payload, external_id: resolved.external_id, ...(resolved.match_id ? { match_id: resolved.match_id } : {}) } }
         await db.sync_queue.update(job.id, { payload: job.payload })
       }
     }

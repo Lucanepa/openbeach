@@ -37,6 +37,10 @@ describe('db_beach v18 upgrade', () => {
     await old.open()
     const seed = 'match_1700000000000_abc'
     await old.table('matches').add({ id: 1, seed_key: seed, status: 'live' })
+    // matches whose jobs were queued with match_id = String(dexieMatchId)
+    const seed3 = 'match_1700000000333_ccc'
+    await old.table('matches').add({ id: 2, status: 'live' }) // still no seed_key
+    await old.table('matches').add({ id: 3, seed_key: seed3, status: 'live' }) // got one since
     await old.table('sets').add({ id: 3, matchId: 1, index: 1 })
     await old.table('events').add({ id: 7, matchId: 1, type: 'coin_toss', seq: 1 })
     await old.table('events').add({ id: 8, matchId: 1, type: 'point', seq: 2 })
@@ -53,7 +57,13 @@ describe('db_beach v18 upgrade', () => {
       // 5 point event sent by useSequentialSync
       job({ id: 5, resource: 'event', action: 'insert', status: 'sent', payload: { external_id: '8', match_id: seed, type: 'point' } }),
       // 6 orphan event (no match anywhere) -> dropped
-      job({ id: 6, resource: 'event', action: 'insert', status: 'queued', payload: { external_id: '99' } })
+      job({ id: 6, resource: 'event', action: 'insert', status: 'queued', payload: { external_id: '99' } }),
+      // 7 numeric match_id, the local match has no seed_key -> dropped (not '2:e:12')
+      job({ id: 7, resource: 'event', action: 'insert', status: 'queued', payload: { external_id: '12', match_id: '2', type: 'point' } }),
+      // 8 numeric match_id, the local match has a seed_key now -> its seed
+      job({ id: 8, resource: 'event', action: 'insert', status: 'error', payload: { external_id: '13', match_id: '3', type: 'point' } }),
+      // 9 numeric match_id of a match that is gone -> dropped
+      job({ id: 9, resource: 'set', action: 'insert', status: 'queued', payload: { external_id: '4', match_id: '99', index: 1 } })
     ])
     old.close()
 
@@ -68,12 +78,15 @@ describe('db_beach v18 upgrade', () => {
     expect(rows[4]).toMatchObject({ status: 'queued', payload: { external_id: `${seed}:s:3`, team1_points: 21 } })
     expect(rows[5]).toMatchObject({ status: 'sent', payload: { external_id: '8' } })
     expect(rows[6].status).toBe('dropped')
+    expect(rows[7].status).toBe('dropped')
+    expect(rows[8]).toMatchObject({ status: 'queued', payload: { external_id: `${seed3}:e:13`, match_id: seed3 } })
+    expect(rows[9].status).toBe('dropped')
     for (const r of Object.values(rows)) {
       expect(r).not.toHaveProperty('supabase_status')
       expect(r).not.toHaveProperty('synology_status')
     }
     // The queue reads one status index now
-    expect(await db.sync_queue.where('status').equals('queued').count()).toBe(3)
+    expect(await db.sync_queue.where('status').equals('queued').count()).toBe(4)
     db.close()
   })
 })
