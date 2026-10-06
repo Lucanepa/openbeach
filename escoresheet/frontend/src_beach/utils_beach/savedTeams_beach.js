@@ -134,9 +134,18 @@ export function zurichYear(now = new Date()) {
   }
 }
 
-function seasonOf(date) {
-  const m = /^(\d{4})-\d{2}-\d{2}/.exec(String(date ?? ''))
-  return m ? m[1] : zurichYear()
+/**
+ * The season (year) of a match date: MatchSetup_beach keeps DD.MM.YYYY,
+ * stored matches use ISO YYYY-MM-DD. Anything else (empty, half typed) is
+ * this Zurich year.
+ */
+export function seasonOf(date) {
+  const s = String(date ?? '').trim()
+  const iso = /^(\d{4})-\d{2}-\d{2}/.exec(s)
+  if (iso) return iso[1]
+  const swiss = /^\d{1,2}\.\d{1,2}\.(\d{4})$/.exec(s)
+  if (swiss) return swiss[1]
+  return zurichYear()
 }
 
 function bestMatch(rows, name, { league, gender, season }) {

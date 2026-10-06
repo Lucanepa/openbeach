@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   normalizeName, beachNameKey, pairKeyFromName, pairKeyFromPlayers, teamKeys, isoToBeachDob, teamCountry,
-  savedTeamToBeachRoster, rosterHasNames, teamMatchesName, findBeachTeamSuggestions, zurichYear
+  savedTeamToBeachRoster, rosterHasNames, teamMatchesName, findBeachTeamSuggestions, zurichYear, seasonOf
 } from '../../utils_beach/savedTeams_beach'
 import { beachBundle, COOP_ID, MUELLER_WEBER_ID, ROSSI_ID } from '../fixtures/beachBundle'
 
@@ -166,6 +166,28 @@ describe('findBeachTeamSuggestions', () => {
     const now = base({ id: 'now', competition: comp({ name: 'Other', season: zurichYear() }), updatedAt: '2000-01-01T00:00:00Z' })
     const other = base({ id: 'other', competition: comp({ name: 'Other', season: '1999' }), updatedAt: '2026-09-01T00:00:00Z' })
     expect(findBeachTeamSuggestions([other, now], { team1Name: 'Müller/Weber', gender: 'women' }).team1.id).toBe('now')
+  })
+
+  it('uses the year of the DD.MM.YYYY date MatchSetup_beach keeps', () => {
+    // Same league and gender in two seasons: this year's team is newer, but
+    // the match is dated in the older season
+    const past = base({ id: 'past', competition: comp({ id: 'c2019', season: '2019' }), updatedAt: '2019-06-01T00:00:00Z' })
+    const current = base({ id: 'current', competition: comp({ id: 'cNow', season: zurichYear() }), updatedAt: '2030-01-01T00:00:00Z' })
+    const ctx = { team1Name: 'Müller / Weber', league: 'Coop Beachtour', gender: 'women' }
+    expect(findBeachTeamSuggestions([current, past], { ...ctx, date: '15.08.2019' }).team1.id).toBe('past')
+    expect(findBeachTeamSuggestions([current, past], { ...ctx, date: '2019-08-15' }).team1.id).toBe('past')
+    // Half typed: this year
+    expect(findBeachTeamSuggestions([current, past], { ...ctx, date: '15.08.20' }).team1.id).toBe('current')
+  })
+
+  it('seasonOf reads both date formats', () => {
+    expect(seasonOf('01.07.2025')).toBe('2025')
+    expect(seasonOf('1.7.2025')).toBe('2025')
+    expect(seasonOf('2025-07-01')).toBe('2025')
+    expect(seasonOf('2025-07-01T18:00:00Z')).toBe('2025')
+    expect(seasonOf('')).toBe(zurichYear())
+    expect(seasonOf(null)).toBe(zurichYear())
+    expect(seasonOf('01/07/2025')).toBe(zurichYear())
   })
 
   it('never suggests a team of an archived competition', () => {
