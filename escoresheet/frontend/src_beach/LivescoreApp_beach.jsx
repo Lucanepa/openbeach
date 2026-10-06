@@ -42,15 +42,18 @@ export default function LivescoreApp() {
     }
 
     try {
+      // Beach rows only (the live-state table is shared with indoor). The
+      // backend knows the embed with (set_results) only as one shape.
       const { data, error: fetchError } = await apiFrom('match_live_state')
-        .select('*, matches!match_live_state_match_id_fkey_cascade(set_results, sport_type)')
+        .select('*, matches!match_live_state_match_id_fkey_cascade(set_results)')
+        .eq('sport_type', 'beach')
         .order('updated_at', { ascending: false })
 
       if (fetchError) {
         console.error('[Livescore] Error fetching games:', fetchError)
         setError(fetchError.message)
       } else {
-        const beachGames = (data || []).filter(g => g.matches?.sport_type === 'beach')
+        const beachGames = (data || []).filter(g => g.sport_type === 'beach')
         setLiveGames(beachGames)
         setError(null)
       }
@@ -65,8 +68,6 @@ export default function LivescoreApp() {
   useEffect(() => {
     fetchLiveGames()
 
-    if (!supabase) return
-
     const channel = supabase
       .channel('livescore-all-games')
       .on(
@@ -74,7 +75,9 @@ export default function LivescoreApp() {
         {
           event: '*',
           schema: 'public',
-          table: 'match_live_state'
+          table: 'match_live_state',
+          // Beach games only: indoor matches share the table
+          filter: 'sport_type=eq.beach'
         },
         (payload) => {
           if (payload.eventType === 'INSERT') {

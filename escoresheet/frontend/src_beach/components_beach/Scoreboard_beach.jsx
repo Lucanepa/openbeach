@@ -1890,6 +1890,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Map directly from snapshot to Supabase table
       const liveStateData = {
         match_id: supabaseMatchId,
+        // The live-state table is shared with indoor: livescore and the
+        // display lists filter on sport_type
+        sport_type: SPORT_TYPE,
         current_set: finalSetIndex,
         // Team A/B info (from snapshot)
         team_a_name: snapshot.teamAName,
@@ -1951,6 +1954,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
       if (liveStateResult.error) {
         console.error('[LiveState] Sync error:', liveStateResult.error)
+        // Not signed in / not this account's match / offline: the sync
+        // queue's banner explains that once; no modal on every point.
+        const st = liveStateResult.error.status
+        if (st === 401 || st === 403 || st === 426 || st === 429 || st === 0 || liveStateResult.error.network) return
         setScoresheetErrorModal({
           error: t('errors.syncFailed'),
           details: liveStateResult.error.message || t('errors.databaseWriteError')

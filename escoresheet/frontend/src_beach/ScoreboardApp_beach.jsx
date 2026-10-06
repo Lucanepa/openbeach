@@ -104,10 +104,12 @@ export default function ScoreboardApp() {
     if (!isBackendAvailable()) return
     setLoadingGames(true)
     try {
+      // Beach rows only: the live-state table is shared with indoor
       const { data } = await apiFrom('match_live_state')
-        .select('*, matches!match_live_state_match_id_fkey_cascade(sport_type)')
+        .select('*, matches!match_live_state_match_id_fkey_cascade(set_results)')
+        .eq('sport_type', 'beach')
         .order('updated_at', { ascending: false })
-      const beachGames = (data || []).filter(g => g.matches?.sport_type === 'beach')
+      const beachGames = (data || []).filter(g => g.sport_type === 'beach')
       setAvailableGames(beachGames)
     } catch (err) {
       console.error('[Scoreboard] Error fetching games:', err)
