@@ -76,7 +76,7 @@ export default function StartupConnectivityModal({
     websocket: t('connectionStatus.webSocket', 'WebSocket'),
     scoreboard: t('connectionStatus.scoreboard', 'Scoreboard'),
     db: t('connectionStatus.database', 'Database'),
-    supabase: t('connectionStatus.supabase', 'Supabase')
+    supabase: t('connectionStatus.supabase', 'OpenVolley Cloud')
   }
 
   const getStatusIcon = (status) => {

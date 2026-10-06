@@ -11,7 +11,7 @@ Offline-first beach volleyball scoring application with multi-platform support (
 
 - **Frontend**: React 18 + Vite
 - **Database**: Dexie (IndexedDB wrapper) for offline-first local storage
-- **Cloud Sync**: Supabase (auth, realtime, storage)
+- **Cloud Sync**: the OpenVolley backend (backend.openvolley.app: auth, `/api/db`, realtime relay, storage), shared with indoor; beach rows carry `sport_type = 'beach'`
 - **Desktop**: Electron
 - **PDF**: jsPDF, pdf-lib, pdfjs-dist
 - **i18n**: i18next (en, fr, it, de, de-CH)
@@ -56,7 +56,7 @@ npm run electron:build:linux # Build Linux packages
 
 ### Offline-First Sync
 - All data written to IndexedDB first
-- Sync queue processes changes to Supabase when online
+- Sync queue processes changes to the backend when online and signed in (it waits for a sign-in on 401)
 - External IDs enable idempotent retries
 
 ### Two-Path Sync
@@ -100,12 +100,15 @@ DELETE LIBERO, SUBSTITUTION, COACH, EXCEPTIONAL SUBSTITUTION, BENCH OFFICIAL, BE
 
 ## Environment Variables
 
-Required in `.env`:
+In `.env`:
 ```
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
-VITE_BACKEND_URL=
+VITE_BACKEND_URL=https://backend.openvolley.app   # or a LOCAL backend for testing, never production writes
+VITE_LOCAL_SERVER=                                # 'true' only for a build that runs next to a local server
 ```
+
+No Supabase variables: openbeach talks only to the OpenVolley backend
+(`lib_beach/apiClient_beach.js`, `X-OV-Proto: 2`). `lib_beach/supabaseClient_beach.js`
+is a shim over the backend's realtime relay, not a Supabase client.
 
 ## Database Schema (Dexie)
 

@@ -982,10 +982,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           matchPin = freshMatch.refereePin
           connectionEnabled = freshMatch.refereeConnectionEnabled === true
         } else if (pinType === 'team1Team') {
-          matchPin = freshMatch.team1TeamPin
+          matchPin = freshMatch.team1Pin ?? freshMatch.team1TeamPin
           connectionEnabled = freshMatch.team1TeamConnectionEnabled === true
         } else if (pinType === 'team2Team') {
-          matchPin = freshMatch.team2TeamPin
+          matchPin = freshMatch.team2Pin ?? freshMatch.team2TeamPin
           connectionEnabled = freshMatch.team2TeamConnectionEnabled === true
         }
 
@@ -1010,8 +1010,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             match: {
               id: freshMatch.id,
               refereePin: freshMatch.refereePin,
-              team1TeamPin: freshMatch.team1TeamPin,
-              team2TeamPin: freshMatch.team2TeamPin,
+              team1TeamPin: freshMatch.team1Pin ?? freshMatch.team1TeamPin,
+              team2TeamPin: freshMatch.team2Pin ?? freshMatch.team2TeamPin,
               team1TeamUploadPin: freshMatch.team1TeamUploadPin,
               team2TeamUploadPin: freshMatch.team2TeamUploadPin,
               refereeConnectionEnabled: freshMatch.refereeConnectionEnabled,
@@ -11696,14 +11696,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               )}
 
               {/* Team Dashboard PINs - Same row (50/50) */}
-              {((data?.match?.team1TeamPin && data?.match?.team1TeamConnectionEnabled === true) ||
-                (data?.match?.team2TeamPin && data?.match?.team2TeamConnectionEnabled === true)) && (
+              {(((data?.match?.team1Pin ?? data?.match?.team1TeamPin) && data?.match?.team1TeamConnectionEnabled === true) ||
+                ((data?.match?.team2Pin ?? data?.match?.team2TeamPin) && data?.match?.team2TeamConnectionEnabled === true)) && (
                   <div style={{
                     display: 'flex',
                     gap: '16px',
                     width: '100%'
                   }}>
-                    {data?.match?.team1TeamPin && data?.match?.team1TeamConnectionEnabled === true && (
+                    {(data?.match?.team1Pin ?? data?.match?.team1TeamPin) && data?.match?.team1TeamConnectionEnabled === true && (
                       <div style={{
                         background: 'rgba(255, 255, 255, 0.05)',
                         border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -11720,12 +11720,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           {data?.team1Team?.name || 'Team 1'} PIN
                         </div>
                         <div style={{ fontSize: '20px', fontWeight: 600, fontFamily: 'monospace', letterSpacing: '2px', wordBreak: 'break-all' }}>
-                          {String(data.match.team1TeamPin).padStart(6, '0')}
+                          {String(data.match.team1Pin ?? data.match.team1TeamPin).padStart(6, '0')}
                         </div>
                       </div>
                     )}
 
-                    {data?.match?.team2TeamPin && data?.match?.team2TeamConnectionEnabled === true && (
+                    {(data?.match?.team2Pin ?? data?.match?.team2TeamPin) && data?.match?.team2TeamConnectionEnabled === true && (
                       <div style={{
                         background: 'rgba(255, 255, 255, 0.05)',
                         border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -11742,7 +11742,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           {data?.team2Team?.name || 'Team 2'} PIN
                         </div>
                         <div style={{ fontSize: '20px', fontWeight: 600, fontFamily: 'monospace', letterSpacing: '2px', wordBreak: 'break-all' }}>
-                          {String(data.match.team2TeamPin).padStart(6, '0')}
+                          {String(data.match.team2Pin ?? data.match.team2TeamPin).padStart(6, '0')}
                         </div>
                       </div>
                     )}
@@ -11808,8 +11808,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         matchSeedKey={data?.match?.seed_key}
         match={data?.match}
         refereePin={data?.match?.refereePin}
-        team1Pin={data?.match?.team1TeamPin}
-        team2Pin={data?.match?.team2TeamPin}
+        team1Pin={(data?.match?.team1Pin ?? data?.match?.team1TeamPin)}
+        team2Pin={(data?.match?.team2Pin ?? data?.match?.team2TeamPin)}
         gameNumber={data?.match?.gameNumber}
       />
 
@@ -16835,8 +16835,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       {connectionModal === 'referee'
                         ? (data?.match?.refereePin || '—')
                         : connectionModal === 'teamA'
-                          ? (data?.match?.team1TeamPin || '—')
-                          : (data?.match?.team2TeamPin || '—')}
+                          ? ((data?.match?.team1Pin ?? data?.match?.team1TeamPin) || '—')
+                          : ((data?.match?.team2Pin ?? data?.match?.team2TeamPin) || '—')}
                     </span>
                     <button
                       onClick={(e) => {

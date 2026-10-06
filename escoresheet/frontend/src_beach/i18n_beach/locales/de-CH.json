@@ -124,7 +124,7 @@
   "errors": {
     "databaseWriteError": "Datenbank-Schreibfehler",
     "syncFailed": "Synchronisierung fehlgeschlagen",
-    "supabaseNotConfigured": "Supabase nöd konfiguriert"
+    "supabaseNotConfigured": "OpenVolley Cloud nöd konfiguriert"
   },
   "signature": {
     "title": "Underschrift",
@@ -648,7 +648,7 @@
     "localMode": "Lokal",
     "localModeDesc": "Gliichs Grät wie de Schriber. Sofortigi Verbindig über Browser.",
     "remoteMode": "Fernzuegriff",
-    "remoteModeDesc": "Anders Grät. Verbindig über Internet mit Supabase.",
+    "remoteModeDesc": "Anders Grät. Verbindig über Internet mit OpenVolley Cloud.",
     "selectGame": "Spiil uswähle",
     "selectGameDesc": "Wähled Sie es Live-Spiil zum Aazeige",
     "waiting": "Warte uf de Schriber...",
@@ -1150,7 +1150,7 @@
       "auto": "Auto",
       "autoDesc": "DB → Direkte Fallback",
       "dbOnly": "Nur DB",
-      "dbDesc": "Supabase Echtziit",
+      "dbDesc": "OpenVolley Cloud Echtziit",
       "directOnly": "Nur direkt",
       "directDesc": "WebSocket direkt"
     },
@@ -1348,7 +1348,7 @@
     "scoreboard": "Aazeigetafle",
     "match": "Spiil",
     "database": "Datebank",
-    "supabase": "Supabase",
+    "supabase": "OpenVolley Cloud",
     "syncingDots": "Synchronisiere...",
     "title": "Verbindigsstatus",
     "pendingBackgroundSync": "Usstehendi Hintergrund-Sync:",
@@ -1359,7 +1359,7 @@
     "connectionIssueDetected": "Verbindigsproblem erkannt"
   },
   "dashboardOptions": {
-    "supabase": "Supabase",
+    "supabase": "OpenVolley Cloud",
     "webSocket": "WebSocket",
     "none": "Keis",
     "options": "Optione",
@@ -1368,8 +1368,8 @@
     "active": "Aktiv:",
     "connectionType": "Verbindigstyp",
     "autoRecommended": "Auto (Empfohle)",
-    "supabasePrimaryFallback": "Supabase primär, WebSocket Fallback",
-    "supabaseOnly": "Nur Supabase",
+    "supabasePrimaryFallback": "OpenVolley Cloud primär, WebSocket Fallback",
+    "supabaseOnly": "Nur OpenVolley Cloud",
     "databaseRealtimeOnly": "Nur Datebank-Echtziit",
     "webSocketOnly": "Nur WebSocket",
     "directServerConnection": "Direkti Server-Verbindig",
@@ -1593,7 +1593,7 @@
       "exportPdf": "Generate PDF",
       "exportPdfDesc": "Official scoresheet in PDF format",
       "exportCloud": "Cloud Upload",
-      "exportCloudDesc": "Automatic sync to Supabase (official matches)",
+      "exportCloudDesc": "Automatic sync to OpenVolley Cloud (official matches)",
       "reopen": "Reopening Sets",
       "reopenDesc": "Need to make corrections? You can reopen the last set:",
       "reopenWarning": "Reopening a set will clear all collected signatures. You'll need to collect them again after making corrections."
@@ -1848,7 +1848,7 @@
   "startupConnectivity": {
     "connecting": "Verbindig wird hergstellt...",
     "allConnected": "Alli Dienscht verbunde!",
-    "serverUnavailable": "Scoring works fully offline. Referee and livescore sync via Supabase — server is only needed as fallback.",
+    "serverUnavailable": "Scoring works fully offline. Referee and livescore sync via OpenVolley Cloud — server is only needed as fallback.",
     "backgroundRetry": "D'Verbindig wird im Hintergrund witer probiert.",
     "dismiss": "Schliesse",
     "goOffline": "Offline gah"

@@ -145,7 +145,7 @@ describe('ConnectionStatus', () => {
       await waitFor(() => {
         expect(screen.getByText('Server:')).toBeInTheDocument()
         expect(screen.getByText('WebSocket:')).toBeInTheDocument()
-        expect(screen.getByText('Supabase:')).toBeInTheDocument()
+        expect(screen.getByText('Cloud:')).toBeInTheDocument()
         expect(screen.getByText('Match:')).toBeInTheDocument()
       })
     })

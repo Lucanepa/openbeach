@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../../contexts_beach/AuthContext_beach'
 
 export default function SignUpModal({ open, onClose, onSwitchToLogin }) {
-  const { signUp } = useAuth()
+  const { signUp, signIn } = useAuth()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -11,7 +11,6 @@ export default function SignUpModal({ open, onClose, onSwitchToLogin }) {
   const [lastName, setLastName] = useState('')
   const [country, setCountry] = useState('CHE')
   const [dob, setDob] = useState('')
-  const [roles, setRoles] = useState(['scorer'])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
@@ -38,25 +37,24 @@ export default function SignUpModal({ open, onClose, onSwitchToLogin }) {
       firstName,
       lastName,
       country,
-      dob: dob || null,
-      roles
+      dob: dob || null
     })
 
     if (signUpError) {
       setError(signUpError.message)
       setLoading(false)
-    } else {
-      setSuccess(true)
-      setLoading(false)
+      return
     }
-  }
 
-  const toggleRole = (role) => {
-    setRoles(prev =>
-      prev.includes(role)
-        ? prev.filter(r => r !== role)
-        : [...prev, role]
-    )
+    // The backend confirms new accounts at once (no e-mail step) but gives no
+    // session with the sign-up: sign in straight away
+    const { error: signInError } = await signIn(email, password)
+    setLoading(false)
+    if (signInError) {
+      setSuccess(true) // created; the user signs in by hand
+      return
+    }
+    onClose?.()
   }
 
   const modalStyle = {
@@ -113,16 +111,6 @@ export default function SignUpModal({ open, onClose, onSwitchToLogin }) {
     cursor: 'pointer'
   }
 
-  const roleButtonStyle = (isActive) => ({
-    padding: '8px 16px',
-    background: isActive ? '#22c55e' : '#1f2937',
-    color: isActive ? '#fff' : '#9ca3af',
-    border: isActive ? 'none' : '1px solid #374151',
-    borderRadius: 6,
-    cursor: 'pointer',
-    fontSize: 14
-  })
-
   return (
     <div style={modalStyle} onClick={onClose}>
       <div style={contentStyle} onClick={e => e.stopPropagation()}>
@@ -168,7 +156,7 @@ export default function SignUpModal({ open, onClose, onSwitchToLogin }) {
               <div style={{ fontSize: 40, marginBottom: 12 }}>✓</div>
               <p style={{ marginBottom: 8 }}>Account created successfully!</p>
               <p style={{ color: '#9ca3af', fontSize: 14 }}>
-                Check your email to confirm your account
+                Sign in with your e-mail and password
               </p>
               <button
                 onClick={onSwitchToLogin}
@@ -231,29 +219,6 @@ export default function SignUpModal({ open, onClose, onSwitchToLogin }) {
                       onChange={e => setDob(e.target.value)}
                       style={inputStyle}
                     />
-                  </div>
-                </div>
-
-                {/* Role selection */}
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ color: '#9ca3af', fontSize: 13, marginBottom: 6, display: 'block' }}>
-                    I am a:
-                  </label>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                      type="button"
-                      onClick={() => toggleRole('scorer')}
-                      style={roleButtonStyle(roles.includes('scorer'))}
-                    >
-                      Scorer
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => toggleRole('referee')}
-                      style={roleButtonStyle(roles.includes('referee'))}
-                    >
-                      Referee
-                    </button>
                   </div>
                 </div>
 

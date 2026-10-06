@@ -124,7 +124,7 @@
   "errors": {
     "databaseWriteError": "Erreur d'écriture dans la base de données",
     "syncFailed": "Échec de la synchronisation",
-    "supabaseNotConfigured": "Supabase n'est pas configuré"
+    "supabaseNotConfigured": "OpenVolley Cloud n'est pas configuré"
   },
   "signature": {
     "title": "Signature",
@@ -648,7 +648,7 @@
     "localMode": "Local",
     "localModeDesc": "Même appareil que le marqueur. Connexion instantanée via le navigateur.",
     "remoteMode": "Distant",
-    "remoteModeDesc": "Appareil différent. Connexion via internet avec Supabase.",
+    "remoteModeDesc": "Appareil différent. Connexion via internet avec OpenVolley Cloud.",
     "selectGame": "Sélectionner un match",
     "selectGameDesc": "Choisir un match en direct à afficher",
     "waiting": "En attente du marqueur...",
@@ -1150,7 +1150,7 @@
       "auto": "Auto",
       "autoDesc": "Direct + Base de données",
       "dbOnly": "Base de données seule",
-      "dbDesc": "Temps réel via Supabase",
+      "dbDesc": "Temps réel via OpenVolley Cloud",
       "directOnly": "Direct seul",
       "directDesc": "WebSocket direct"
     },
@@ -1348,7 +1348,7 @@
     "scoreboard": "Tableau de bord",
     "match": "Match",
     "database": "Base de données",
-    "supabase": "Supabase",
+    "supabase": "OpenVolley Cloud",
     "syncingDots": "Synchronisation...",
     "title": "État de connexion",
     "pendingBackgroundSync": "Synchronisation en attente :",
@@ -1359,7 +1359,7 @@
     "connectionIssueDetected": "Problème de connexion détecté"
   },
   "dashboardOptions": {
-    "supabase": "Supabase",
+    "supabase": "OpenVolley Cloud",
     "webSocket": "WebSocket",
     "none": "Aucun",
     "options": "Options",
@@ -1368,8 +1368,8 @@
     "active": "Actif :",
     "connectionType": "Type de connexion",
     "autoRecommended": "Auto (Recommandé)",
-    "supabasePrimaryFallback": "Supabase principal, WebSocket fallback",
-    "supabaseOnly": "Supabase uniquement",
+    "supabasePrimaryFallback": "OpenVolley Cloud principal, WebSocket fallback",
+    "supabaseOnly": "OpenVolley Cloud uniquement",
     "databaseRealtimeOnly": "Base de données temps réel uniquement",
     "webSocketOnly": "WebSocket uniquement",
     "directServerConnection": "Connexion serveur directe",
@@ -1593,7 +1593,7 @@
       "exportPdf": "Generate PDF",
       "exportPdfDesc": "Official scoresheet in PDF format",
       "exportCloud": "Cloud Upload",
-      "exportCloudDesc": "Automatic sync to Supabase (official matches)",
+      "exportCloudDesc": "Automatic sync to OpenVolley Cloud (official matches)",
       "reopen": "Reopening Sets",
       "reopenDesc": "Need to make corrections? You can reopen the last set:",
       "reopenWarning": "Reopening a set will clear all collected signatures. You'll need to collect them again after making corrections."
@@ -1848,7 +1848,7 @@
   "startupConnectivity": {
     "connecting": "Connexion en cours...",
     "allConnected": "Tous les services sont connectés !",
-    "serverUnavailable": "Scoring works fully offline. Referee and livescore sync via Supabase — server is only needed as fallback.",
+    "serverUnavailable": "Scoring works fully offline. Referee and livescore sync via OpenVolley Cloud — server is only needed as fallback.",
     "backgroundRetry": "La connexion sera retentée en arrière-plan.",
     "dismiss": "Fermer",
     "goOffline": "Passer hors ligne"

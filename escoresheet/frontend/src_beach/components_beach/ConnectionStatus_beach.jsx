@@ -128,7 +128,7 @@ export default function ConnectionStatus({
     scoreboard: 'Scoreboard',
     match: 'Match',
     db: 'Database',
-    supabase: 'Supabase'
+    supabase: 'Cloud'
   }
 
   const getOverallStatus = () => {

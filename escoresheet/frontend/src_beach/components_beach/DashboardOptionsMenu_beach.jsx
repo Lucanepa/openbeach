@@ -184,7 +184,7 @@ export function DashboardOptionsMenu({
 
   // Get connection label
   const getConnectionLabel = () => {
-    if (activeConnection === 'supabase') return t('dashboardOptions.supabase', 'Supabase')
+    if (activeConnection === 'supabase') return t('dashboardOptions.supabase', 'OpenVolley Cloud')
     if (activeConnection === 'websocket') return t('dashboardOptions.webSocket', 'WebSocket')
     return t('dashboardOptions.none', 'None')
   }

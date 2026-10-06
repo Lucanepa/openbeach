@@ -138,8 +138,8 @@ export function AuthProvider({ children }) {
           first_name: profileData.firstName || null,
           last_name: profileData.lastName || null,
           country: profileData.country || 'CHE',
-          dob: profileData.dob || null,
-          roles: profileData.roles || ['scorer']
+          dob: profileData.dob || null
+          // No roles: the backend ignores them (only an admin assigns roles)
         }
       }
     })

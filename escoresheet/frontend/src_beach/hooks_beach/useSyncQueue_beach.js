@@ -1026,6 +1026,13 @@ export function pendingEntityBlocks(pendingJobs) {
  * match restored here, a second scoring device). This device holds the
  * match's game PIN, which the backend accepts as proof (POST /api/match/claim):
  * the signed-in account becomes an editor and the write can be retried.
+ *
+ * Automatic on purpose, no confirm step (the plan's F3 offered one): the
+ * game PIN on this device is the proof the backend asks for, the only
+ * outcome is "this account may also write this match" (the creator keeps
+ * it, nothing is deleted), and the scorer's writes must not wait for a tap
+ * mid-match. A wrong local PIN parks the job (OV_NOT_MATCH_OWNER) and the
+ * sync banner says so.
  * @returns {Promise<boolean>} true when the backend granted access
  */
 export async function claimMatchWithLocalPin(seedKey, { findLocal = findLocalMatchBySeed, claim = apiMatchClaim } = {}) {
