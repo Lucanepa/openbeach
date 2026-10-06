@@ -22,6 +22,9 @@ import { generateMatchSeedKey } from '../utils_beach/serverDataSync_beach'
 import { TEST_TEAM_SEED_DATA } from '../constants_beach/testSeeds_beach'
 import { splitLocalDateTime, parseLocalDateTimeToISO, roundToMinute } from '../utils_beach/timeUtils_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
+import { useSavedTeams as useSavedTeams_beach } from '../hooks_beach/useSavedTeams_beach'
+import SavedTeamPickerModal from './SavedTeamPickerModal_beach'
+import { savedTeamToBeachRoster, rosterHasNames, findBeachTeamSuggestions } from '../utils_beach/savedTeams_beach'
 import { ClipboardList, FileText } from './Icons_beach'
 
 // Date formatting helpers (outside component to avoid recreation)
@@ -410,7 +413,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   const scaleFactor = baseScaleFactor * 1.25
   const s = (px) => Math.round(px * scaleFactor)
   const { showAlert } = useAlert()
-  const { user, profile, getCachedProfile } = useAuth()
+  const { user, profile, getCachedProfile, access } = useAuth()
   const [team1Name, setTeam1Name] = useState('')
   // Match created popup state
   const [matchCreatedModal, setMatchCreatedModal] = useState(null) // { matchId, gamePin, refereePin, team1Pin, team2Pin }
@@ -544,6 +547,19 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   const [colorPickerModal, setColorPickerModal] = useState(null) // { team: 'team1'|'team2', position: { x, y } } | null
   const [noticeModal, setNoticeModal] = useState(null) // { message: string, type?: 'success' | 'error' } | null
   const [testRosterConfirm, setTestRosterConfirm] = useState(null) // 'team1' | 'team2' | null
+
+  // Saved beach teams (managed in the OpenVolley admin console; read-only
+  // here, from the offline cache). Only approved accounts read them.
+  const canReadSavedTeams = !!access?.canReadTeams
+  const { teams: savedTeams } = useSavedTeams_beach({
+    userId: user?.id ?? null,
+    access,
+    enabled: canReadSavedTeams,
+    refreshOnMount: true
+  })
+  const [savedPicker, setSavedPicker] = useState(null) // null | 'team1' | 'team2'
+  const [savedReplace, setSavedReplace] = useState(null) // null | { side, row }
+  const [suggestionDismissed, setSuggestionDismissed] = useState({ team1: false, team2: false })
 
   // Show both rosters in match setup
   const [showBothRosters, setShowBothRosters] = useState(false)
@@ -2672,6 +2688,169 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     setShowRefereeSelector(selectorKey)
   }, [])
 
+  // ── Saved beach teams: load, confirm before replacing, suggestions ──
+  const savedSuggestion = (() => {
+    if (!canReadSavedTeams || !savedTeams.length) return { team1: null, team2: null }
+    const found = findBeachTeamSuggestions(savedTeams, { team1Name, team2Name, league, gender: type2, date })
+    return {
+      team1: found.team1 && !rosterHasNames(team1Roster) && !suggestionDismissed.team1 ? found.team1 : null,
+      team2: found.team2 && !rosterHasNames(team2Roster) && !suggestionDismissed.team2 ? found.team2 : null
+    }
+  })()
+
+  const applySavedTeam = (side, row) => {
+    const r = savedTeamToBeachRoster(row)
+    if (side === 'team1') {
+      setTeam1Roster(r.roster)
+      if (!team1Name.trim()) setTeam1Name(r.meta.name)
+      if (!team1ShortName && r.meta.shortName) setTeam1ShortName(r.meta.shortName)
+      if (r.meta.color && team1Color === '#ef4444') setTeam1Color(r.meta.color)
+      if (r.country) setTeam1Country(r.country)
+    } else {
+      setTeam2Roster(r.roster)
+      if (!team2Name.trim()) setTeam2Name(r.meta.name)
+      if (!team2ShortName && r.meta.shortName) setTeam2ShortName(r.meta.shortName)
+      if (r.meta.color && team2Color === '#3b82f6') setTeam2Color(r.meta.color)
+      if (r.country) setTeam2Country(r.country)
+    }
+    // hasCoach is match-wide and stays as it is; captains stay unset (the
+    // roster error box asks the scorer to choose one).
+    showAlert(t('savedTeams.loaded', { name: row.name }), 'success')
+    for (const w of r.warnings) showAlert(t(w.key, w.params), 'info')
+  }
+
+  const pickSavedTeam = (side, row) => {
+    setSavedPicker(null)
+    const roster = side === 'team1' ? team1Roster : team2Roster
+    if (rosterHasNames(roster)) setSavedReplace({ side, row })
+    else applySavedTeam(side, row)
+  }
+
+  const savedTeamButtonStyle = {
+    padding: '6px 12px', fontSize: '12px', fontWeight: 600, minHeight: 36,
+    background: '#000', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer'
+  }
+
+  // "Load saved team" for the roster header, or a short note when this
+  // device cannot read saved teams (signed out, pending, no scorer role).
+  const renderSavedTeamControl = (side) => {
+    if (canReadSavedTeams) {
+      return (
+        <button type="button" onClick={() => setSavedPicker(side)} style={savedTeamButtonStyle}>
+          {t('savedTeams.load')}
+        </button>
+      )
+    }
+    if (!isBackendAvailable()) return null
+    return (
+      <span data-testid="saved-teams-note" style={{ fontSize: 12, color: 'var(--muted)', alignSelf: 'center', maxWidth: 220 }}>
+        {user ? t('savedTeams.noAccessNote') : t('savedTeams.signInNote')}
+      </span>
+    )
+  }
+
+  const suggestionBoxStyle = {
+    background: 'rgba(14,165,233,0.12)', border: '1px solid rgba(14,165,233,0.4)', borderRadius: 8, padding: 12
+  }
+
+  // One side's suggestion, under the roster title of the team view
+  const renderSuggestionStrip = (side) => {
+    const row = savedSuggestion[side]
+    if (!row) return null
+    return (
+      <div data-testid={`saved-team-suggestion-${side}`} style={{ ...suggestionBoxStyle, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <span style={{ flex: '1 1 200px', fontSize: 14 }}>
+          <strong>{t('savedTeams.suggestionTitle')}</strong>{' · '}
+          {t(side === 'team1' ? 'savedTeams.suggestionTeam1' : 'savedTeams.suggestionTeam2', { name: row.name })}
+        </span>
+        <button type="button" className="secondary" style={{ minHeight: 36 }} onClick={() => applySavedTeam(side, row)}>
+          {t(side === 'team1' ? 'savedTeams.loadTeam1' : 'savedTeams.loadTeam2')}
+        </button>
+        <button type="button" className="secondary" style={{ minHeight: 36 }} onClick={() => setSuggestionDismissed(d => ({ ...d, [side]: true }))}>
+          {t('savedTeams.dismiss')}
+        </button>
+      </div>
+    )
+  }
+
+  // Both sides, above the team cards of the main view
+  const renderSuggestionBanner = () => {
+    const { team1: s1, team2: s2 } = savedSuggestion
+    if (!s1 && !s2) return null
+    return (
+      <div data-testid="saved-team-suggestions" className="setup-section" style={{ ...suggestionBoxStyle, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <strong>{t('savedTeams.suggestionTitle')}</strong>
+        {s1 && <span style={{ fontSize: 14 }}>{t('savedTeams.suggestionTeam1', { name: s1.name })}</span>}
+        {s2 && <span style={{ fontSize: 14 }}>{t('savedTeams.suggestionTeam2', { name: s2.name })}</span>}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {s1 && (
+            <button type="button" className="secondary" style={{ minHeight: 36 }} onClick={() => applySavedTeam('team1', s1)}>
+              {t('savedTeams.loadTeam1')}
+            </button>
+          )}
+          {s2 && (
+            <button type="button" className="secondary" style={{ minHeight: 36 }} onClick={() => applySavedTeam('team2', s2)}>
+              {t('savedTeams.loadTeam2')}
+            </button>
+          )}
+          <button type="button" className="secondary" style={{ minHeight: 36 }} onClick={() => setSuggestionDismissed({ team1: true, team2: true })}>
+            {t('savedTeams.dismiss')}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const savedTeamsModals = (
+    <>
+      <SavedTeamPickerModal
+        open={savedPicker !== null}
+        side={savedPicker}
+        onClose={() => setSavedPicker(null)}
+        onPick={(row) => pickSavedTeam(savedPicker, row)}
+        userId={user?.id ?? null}
+        access={access}
+      />
+      {savedReplace && (
+        <Modal
+          title={t('savedTeams.replaceConfirmTitle')}
+          open={true}
+          onClose={() => setSavedReplace(null)}
+          width={400}
+        >
+          <div style={{ padding: '20px', textAlign: 'center' }}>
+            <p style={{ marginBottom: '24px', fontSize: '16px', color: 'var(--text)' }}>
+              {t('savedTeams.replaceConfirmBody', {
+                team: (savedReplace.side === 'team1' ? team1Name : team2Name) || t(savedReplace.side === 'team1' ? 'matchSetup.team1' : 'matchSetup.team2')
+              })}
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const { side, row } = savedReplace
+                  setSavedReplace(null)
+                  applySavedTeam(side, row)
+                }}
+                style={{ padding: '12px 24px', fontSize: '14px', fontWeight: 600, background: '#000', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+              >
+                {t('savedTeams.replace')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSavedReplace(null)}
+                className="secondary"
+                style={{ padding: '12px 24px', fontSize: '14px', fontWeight: 600 }}
+              >
+                {t('common.cancel')}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </>
+  )
+
   if (currentView === 'info') {
     return (
       <MatchSetupInfoView>
@@ -3275,9 +3454,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           </div>
           <div style={{ width: 80 }}></div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
           <h1 style={{ margin: 0 }}>{t('roster.title')}</h1>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {renderSavedTeamControl('team1')}
             <button
               onClick={() => {
                 setTeam1Roster([
@@ -3315,6 +3495,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             </button>
           </div>
         </div>
+        {renderSuggestionStrip('team1')}
         {/* Player Stats for Team 1 Team */}
         <div style={{ marginBottom: '12px', display: 'flex', gap: '12px' }}>
           {/* Player Stats */}
@@ -3880,6 +4061,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           )
         }
 
+        {savedTeamsModals}
+
         {/* SignaturePad for Team 1 team view */}
         <SignaturePad
           open={openSignature !== null}
@@ -3933,9 +4116,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           </div>
           <div style={{ width: 80 }}></div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
           <h1 style={{ margin: 0 }}>{t('roster.title')}</h1>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {renderSavedTeamControl('team2')}
             <button
               onClick={() => {
                 setTeam2Roster([
@@ -3973,6 +4157,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             </button>
           </div>
         </div>
+        {renderSuggestionStrip('team2')}
         {/* Player Stats for team2 Team */}
         <div style={{ marginBottom: '12px', display: 'flex', gap: '12px' }}>
           {/* Player Stats */}
@@ -4528,6 +4713,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           </Modal>
         )}
 
+        {savedTeamsModals}
+
         {/* SignaturePad for team2 team view */}
         <SignaturePad
           open={openSignature !== null}
@@ -5064,6 +5251,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           />
         </div>
       </div>
+
+      {matchInfoConfirmed && renderSuggestionBanner()}
 
       <div className="grid-4 setup-section" style={!matchInfoConfirmed ? { opacity: 0.5, pointerEvents: 'none' } : {}}>
         <div className="card" style={{ order: 1 }}>
@@ -5999,6 +6188,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         title={openSignature === 'team1-captain' ? 'Team 1 Captain Signature' :
               openSignature === 'team2-captain' ? 'Team 2 Captain Signature' : 'Sign'}
       />
+      {savedTeamsModals}
     </MatchSetupMainView>
   )
 }
