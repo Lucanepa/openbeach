@@ -704,11 +704,18 @@ export default function App() {
   }, [currentMatch, syncStatus, serverStatus])
 
   // Periodically check connection statuses
+  // The check depends on the match (a new object on every point): the
+  // interval reads the latest check through a ref and is set up once. With
+  // the check itself as dependency it ran on every point (a /api/match/list
+  // call and a test WebSocket each time, 429s from the backend).
+  const checkConnectionStatusesRef = useRef(checkConnectionStatuses)
+  checkConnectionStatusesRef.current = checkConnectionStatuses
   useEffect(() => {
-    checkConnectionStatuses()
-    const interval = setInterval(checkConnectionStatuses, 30000) // Check every 30 seconds
+    const run = () => checkConnectionStatusesRef.current()
+    run()
+    const interval = setInterval(run, 30000)
     return () => clearInterval(interval)
-  }, [checkConnectionStatuses])
+  }, [])
 
   // Show startup connectivity popup when toggling from offline to online
   const prevOfflineModeRef = useRef(offlineMode)

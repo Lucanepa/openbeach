@@ -448,11 +448,18 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     setConnectionDebugInfo(debugInfo)
   }, [matchId, data?.match, isMasterMode])
 
+  // The check depends on the match (a new object on every point): the
+  // interval reads the latest check through a ref and is set up once. With
+  // the check itself as dependency it ran on every point (a /api/match/list
+  // call and a test WebSocket each time, 429s from the backend).
+  const checkConnectionStatusesRef = useRef(checkConnectionStatuses)
+  checkConnectionStatusesRef.current = checkConnectionStatuses
   useEffect(() => {
-    checkConnectionStatuses()
-    const interval = setInterval(checkConnectionStatuses, 60000) // 60s to reduce console spam
+    const run = () => checkConnectionStatusesRef.current()
+    run()
+    const interval = setInterval(run, 60000)
     return () => clearInterval(interval)
-  }, [checkConnectionStatuses])
+  }, [])
 
   // Track consecutive fetch failures to detect deleted matches
   const fetchFailureCountRef = useRef(0)
