@@ -4,7 +4,7 @@ vi.mock('../../utils_beach/backendConfig_beach', () => ({
   getApiUrl: (path) => `http://backend.test${path}`
 }))
 
-import { apiFrom, apiAuth, apiStorage, apiMatchRestore, apiMatchRestoreByPin, apiMatchClaim, isSessionRejected, normalizeError, toBase64, canUseStorage } from '../../lib_beach/apiClient_beach'
+import { apiFrom, apiAuth, apiStorage, apiGet, savedTeamsApi, apiMatchRestore, apiMatchRestoreByPin, apiMatchClaim, isSessionRejected, normalizeError, toBase64, canUseStorage } from '../../lib_beach/apiClient_beach'
 import { useMemoryLocalStorage } from '../helpers/memoryStorage'
 
 // Ported from OpenVolley src/lib/__tests__/apiClient.test.js, plus the
@@ -411,5 +411,51 @@ describe('openbeach specifics', () => {
     const headers = globalThis.fetch.mock.calls[0][1].headers
     expect(headers['X-OV-Proto']).toBe('2')
     expect(headers.Authorization).toBeUndefined()
+  })
+})
+
+describe('saved teams (GET /api/saved-teams?sport=beach)', () => {
+  const session = { access_token: 'tok', expires_at: Math.floor(Date.now() / 1000) + 3600, user: { id: 'u1' } }
+  beforeEach(() => {
+    localStorage.setItem('api_auth_token', JSON.stringify(session))
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('fetchBundle sends a GET for beach with the session and X-OV-Proto, and no body', async () => {
+    const bundle = { version: '1', fetched_at: 'x', sport: 'beach', competitions: [], teams: [] }
+    globalThis.fetch = vi.fn(async () => jsonResponse({ data: bundle }))
+    const r = await savedTeamsApi.fetchBundle()
+    const [url, init] = globalThis.fetch.mock.calls[0]
+    expect(url).toBe('http://backend.test/api/saved-teams?sport=beach')
+    expect(init.method).toBe('GET')
+    expect(init.body).toBeUndefined()
+    expect(init.headers.Authorization).toBe('Bearer tok')
+    expect(init.headers['X-OV-Proto']).toBe('2')
+    expect(r).toEqual({ data: bundle, error: null, status: 200 })
+  })
+
+  it('a network failure resolves with status 0 and error.network', async () => {
+    globalThis.fetch = vi.fn(async () => { throw new TypeError('Failed to fetch') })
+    const r = await savedTeamsApi.fetchBundle()
+    expect(r.status).toBe(0)
+    expect(r.data).toBeNull()
+    expect(r.error.network).toBe(true)
+  })
+
+  it('a 403 (pending account) carries the status on the error', async () => {
+    globalThis.fetch = vi.fn(async () => jsonResponse({ error: { code: 'OV_FORBIDDEN', message: 'Forbidden' } }, 403))
+    const r = await savedTeamsApi.fetchBundle()
+    expect(r.status).toBe(403)
+    expect(r.error).toMatchObject({ status: 403, code: 'OV_FORBIDDEN' })
+  })
+
+  it('apiGet without a session sends no Authorization', async () => {
+    localStorage.removeItem('api_auth_token')
+    globalThis.fetch = vi.fn(async () => jsonResponse({ data: { ok: true } }))
+    const r = await apiGet('/api/x')
+    expect(globalThis.fetch.mock.calls[0][1].headers.Authorization).toBeUndefined()
+    expect(r.data).toEqual({ ok: true })
   })
 })

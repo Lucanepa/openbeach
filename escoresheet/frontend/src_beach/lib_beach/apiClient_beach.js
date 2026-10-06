@@ -261,6 +261,38 @@ async function postJson(path, body, { auth = true, timeoutMs = DB_REQUEST_TIMEOU
 }
 
 /**
+ * GET a JSON route of the backend with the session (if any). Mirrors postJson:
+ * the same headers, timeout and error shape, no body.
+ * @returns {Promise<{data: any, error: object|null, status: number}>}
+ */
+export async function apiGet(path, { timeoutMs = DB_REQUEST_TIMEOUT_MS, fallbackError = 'Request failed' } = {}) {
+  const apiUrl = getApiUrl(path)
+  if (!apiUrl) return { data: null, error: { message: 'Backend not available' }, status: 0 }
+  let response
+  try {
+    response = await fetch(apiUrl, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+      signal: requestTimeoutSignal(timeoutMs)
+    })
+  } catch (err) {
+    return { data: null, error: networkError(err), status: 0 }
+  }
+  const result = await safeJsonResponse(response, fallbackError)
+  return { data: result.data ?? null, error: result.error ?? null, status: result.status }
+}
+
+/**
+ * Saved teams, read-only here: the beach competitions and teams the OpenVolley
+ * admin console manages. Needs an approved account (scorer, competition
+ * manager or admin): anonymous 401, pending 403.
+ * data: { version, fetched_at, sport: 'beach', competitions, teams }.
+ */
+export const savedTeamsApi = {
+  fetchBundle: () => apiGet('/api/saved-teams?sport=beach', { fallbackError: 'Saved teams load failed' })
+}
+
+/**
  * Restore one match in the cloud in a single server-side transaction:
  * upsert the match by external_id, replace its sets, events and live state.
  * Needs a session. 426 / 429 / 5xx / network errors are worth retrying later.
