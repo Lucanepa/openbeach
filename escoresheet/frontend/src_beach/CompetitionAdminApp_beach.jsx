@@ -3,6 +3,7 @@ import { useAuth } from './contexts_beach/AuthContext_beach'
 import CompetitionList from './components_beach/admin/CompetitionList_beach'
 import ExcelUpload from './components_beach/admin/ExcelUpload_beach'
 import CompMatchEditor from './components_beach/admin/CompMatchEditor_beach'
+import { COMPETITIONS_ENABLED } from './utils_beach/features_beach'
 
 const headerStyle = {
   display: 'flex',
@@ -133,6 +134,27 @@ function AccessDenied() {
 }
 
 export default function CompetitionAdminApp() {
+  if (!COMPETITIONS_ENABLED) return <CompetitionsUnavailable />
+  return <CompetitionAdmin />
+}
+
+// Shown instead of the admin while the backend has no competitions
+// (utils_beach/features_beach.js): no request that would only answer 400
+function CompetitionsUnavailable() {
+  return (
+    <div style={{ minHeight: '100vh', background: '#0b1220', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ maxWidth: 420, textAlign: 'center', color: '#e5e7eb' }}>
+        <h1 style={{ fontSize: 20, marginBottom: 8 }}>Competitions are not available yet</h1>
+        <p style={{ color: '#9ca3af', fontSize: 14, lineHeight: 1.5, marginBottom: 20 }}>
+          Competition matches come back once the OpenVolley backend serves them. Matches are set up in the scoresheet as usual.
+        </p>
+        <a href="/" style={{ color: '#22c55e', fontSize: 14 }}>Open the scoresheet</a>
+      </div>
+    </div>
+  )
+}
+
+function CompetitionAdmin() {
   const { user, profile, loading } = useAuth()
   const [view, setView] = useState('list') // 'list' | 'upload' | 'editor'
   const [editingMatch, setEditingMatch] = useState(null)

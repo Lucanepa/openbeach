@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../../contexts_beach/AuthContext_beach'
+import { COMPETITIONS_ENABLED } from '../../utils_beach/features_beach'
 
 export default function LoginModal({ open, onClose, onSwitchToSignUp }) {
   const { signIn, resetPassword } = useAuth()
@@ -256,6 +257,7 @@ export default function LoginModal({ open, onClose, onSwitchToSignUp }) {
                 </button>
               </div>
 
+              {COMPETITIONS_ENABLED && (
               <div style={{ marginTop: 12, textAlign: 'center' }}>
                 <a
                   href="/admin_beach.html"
@@ -268,6 +270,7 @@ export default function LoginModal({ open, onClose, onSwitchToSignUp }) {
                   Competitions Admin
                 </a>
               </div>
+              )}
             </>
           )}
         </div>

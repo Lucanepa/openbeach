@@ -17,6 +17,7 @@ import { uploadBackupToCloud, uploadLogsToCloud } from '../utils_beach/logger_be
 import { apiFrom } from '../lib_beach/apiClient_beach'
 import { setExtId } from '../utils_beach/syncIds_beach'
 import { buildConnectionPins } from '../utils_beach/connectionPins_beach'
+import { COMPETITIONS_ENABLED } from '../utils_beach/features_beach'
 import { generateMatchSeedKey } from '../utils_beach/serverDataSync_beach'
 import { TEST_TEAM_SEED_DATA } from '../constants_beach/testSeeds_beach'
 import { splitLocalDateTime, parseLocalDateTimeToISO, roundToMinute } from '../utils_beach/timeUtils_beach'
@@ -1881,7 +1882,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       })
 
       // Link competition match template to this scored match via seed_key
-      if (isBackendAvailable() && match?.competitionMatchId) {
+      if (COMPETITIONS_ENABLED && isBackendAvailable() && match?.competitionMatchId) {
         try {
           await apiFrom('beach_competition_matches')
             .update({ claimed_match_external_id: matchSeedKey })

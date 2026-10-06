@@ -47,6 +47,7 @@ const SPORT_TYPE = 'beach'
 import { fetchMatchByPin, importMatchFromSupabase, restoreMatchFromJson, selectBackupFile, listCloudBackups, fetchCloudBackup } from './utils_beach/backupManager_beach'
 import UpdateBanner from './components_beach/UpdateBanner_beach'
 import CompetitionMatchPicker from './components_beach/CompetitionMatchPicker_beach'
+import { COMPETITIONS_ENABLED } from './utils_beach/features_beach'
 import { Smartphone } from './components_beach/Icons_beach'
 
 function parseDateTime(dateTime) {
@@ -1955,7 +1956,7 @@ export default function App() {
 
     // Mark competition match as claimed (atomic check)
     // claimed_match_external_id will be set later when seed_key is generated in MatchSetup
-    if (isBackendAvailable() && compMatch.id) {
+    if (COMPETITIONS_ENABLED && isBackendAvailable() && compMatch.id) {
       try {
         await apiFrom('beach_competition_matches')
           .update({ status: 'claimed' })
@@ -2828,7 +2829,7 @@ export default function App() {
                     setShowCoinToss(true)
                   }}
                   offlineMode={offlineMode}
-                  onLoadCompetitionMatch={canUseSupabase ? () => setShowCompetitionPicker(true) : undefined}
+                  onLoadCompetitionMatch={COMPETITIONS_ENABLED && canUseSupabase ? () => setShowCompetitionPicker(true) : undefined}
                 />
               ) : showManualAdjustments && matchId ? (
                 <ManualAdjustments
@@ -3636,12 +3637,14 @@ export default function App() {
               </Modal>
             )}
 
-            {/* Competition Match Picker */}
-            <CompetitionMatchPicker
-              open={showCompetitionPicker}
-              onClose={() => setShowCompetitionPicker(false)}
-              onSelect={loadCompetitionMatch}
-            />
+            {/* Competition Match Picker (off until the backend serves competitions) */}
+            {COMPETITIONS_ENABLED && (
+              <CompetitionMatchPicker
+                open={showCompetitionPicker}
+                onClose={() => setShowCompetitionPicker(false)}
+                onSelect={loadCompetitionMatch}
+              />
+            )}
 
             {/* Alert Modal */}
             {alertModal && (
