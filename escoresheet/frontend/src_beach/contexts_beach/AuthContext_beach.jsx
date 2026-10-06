@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, us
 import { apiFrom, apiAuth } from '../lib_beach/apiClient_beach'
 import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 import { accessFromRoles, NO_ACCESS } from '../lib_beach/access_beach'
-import { clearSavedTeams, refreshSavedTeams } from '../db_beach/savedTeams_beach'
+import { clearSavedTeams, clearSavedTeamsOfOtherAccount, refreshSavedTeams } from '../db_beach/savedTeams_beach'
 
 function readCachedProfile() {
   try {
@@ -263,21 +263,44 @@ export function AuthProvider({ children }) {
   }, [user])
 
   // What this account may do (roles from the profile, or the cached profile
-  // offline). The backend enforces every rule; the UI only hides.
+  // of the same account offline). The backend enforces every rule; the UI
+  // only hides. `known` is false while neither is at hand (profile still
+  // loading, or its fetch failed on a new device): the UI then shows no
+  // "pending" note yet. Ported from OpenVolley's AuthContext.
+  const userId = user?.id ?? null
+  const accessSource = useMemo(() => {
+    if (!userId) return null
+    if (profile) return profile
+    const cached = readCachedProfile()
+    return cached && (!cached.user_id || cached.user_id === userId) ? cached : null
+  }, [userId, profile])
+  const rolesKey = JSON.stringify(accessSource?.roles ?? [])
+  const known = !!accessSource
   const access = useMemo(() => {
-    if (!user) return NO_ACCESS
-    return accessFromRoles(profile?.roles ?? readCachedProfile()?.roles ?? [])
-  }, [user, profile])
+    if (!userId) return NO_ACCESS
+    return { ...accessFromRoles(JSON.parse(rolesKey)), known }
+  }, [userId, rolesKey, known])
 
-  // Another account signed in on this device: drop the previous account's
-  // saved teams (personal data) before anything reads them.
-  const previousUserId = useRef(null)
+  // Another account, or none (sign-out, a login the server rejected or that
+  // expired): drop the previous account's saved teams (personal data) and its
+  // cached profile before anything reads them.
+  const previousUserId = useRef(undefined)
   useEffect(() => {
-    const id = user?.id ?? null
     const prev = previousUserId.current
-    if (prev && id && prev !== id) clearSavedTeams()
-    if (id) previousUserId.current = id
-  }, [user?.id])
+    previousUserId.current = userId
+    if (prev === undefined || prev === null || prev === userId) return
+    clearSavedTeams()
+    if (!userId) {
+      try { localStorage.removeItem('cachedProfile') } catch { /* storage blocked */ }
+    }
+  }, [userId])
+
+  // Once the stored login is resolved, a cache left by another account (or
+  // by an account whose login lapsed while the app was closed) goes too.
+  useEffect(() => {
+    if (loading) return
+    clearSavedTeamsOfOtherAccount(userId)
+  }, [loading, userId])
 
   // Approved accounts keep an offline copy of the saved beach teams
   // (keyed on the read flag: a profile reload with the same roles does not refetch)

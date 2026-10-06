@@ -61,7 +61,7 @@ beforeEach(async () => {
   h.teams = rowsOf(beachBundle())
   h.auth = {
     user: { id: 'u1' }, profile: { roles: ['scorer'] }, getCachedProfile: () => null,
-    access: accessFromRoles(['scorer'])
+    access: { ...accessFromRoles(['scorer']), known: true }
   }
 })
 
@@ -81,10 +81,19 @@ describe('MatchSetup_beach saved teams', () => {
   })
 
   it('pending account: no button, a note that approval is needed', async () => {
-    h.auth = { user: { id: 'u2' }, profile: { roles: [] }, getCachedProfile: () => null, access: accessFromRoles([]) }
+    h.auth = { user: { id: 'u2' }, profile: { roles: [] }, getCachedProfile: () => null, access: { ...accessFromRoles([]), known: true } }
     await openTeam1View()
     expect(screen.queryByRole('button', { name: 'Load saved team' })).toBeNull()
     expect(screen.getByTestId('saved-teams-note').textContent).toMatch(/approved scorers/)
+  })
+
+  it('signed in, roles not known yet: no button and no approval note', async () => {
+    // Profile still loading (or its fetch failed with no cached profile):
+    // an approved scorer must not be told to ask for approval
+    h.auth = { user: { id: 'u3' }, profile: null, getCachedProfile: () => null, access: { ...accessFromRoles([]), known: false } }
+    await openTeam1View()
+    expect(screen.queryByRole('button', { name: 'Load saved team' })).toBeNull()
+    expect(screen.queryByTestId('saved-teams-note')).toBeNull()
   })
 
   it('a scorer loads a saved pair into the empty roster', async () => {

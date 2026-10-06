@@ -13,6 +13,7 @@ vi.mock('../../utils_beach/backendConfig_beach', () => ({
 
 import { savedTeamsApi } from '../../lib_beach/apiClient_beach'
 import { accessFromRoles } from '../../lib_beach/access_beach'
+import { useMemoryLocalStorage } from '../helpers/memoryStorage'
 
 // The setup file replaces window.indexedDB with a stub; the real db_beach
 // instance captures Dexie.dependencies when it is constructed, so they are
@@ -163,5 +164,35 @@ describe('saved beach teams cache', () => {
     expect(await db.saved_teams.count()).toBe(0)
     expect(await db.saved_teams_meta.count()).toBe(0)
     expect(seen).toHaveBeenCalled()
+  })
+
+  it('clearSavedTeamsOfOtherAccount keeps the owner\'s cache and drops anyone else\'s', async () => {
+    savedTeamsApi.fetchBundle.mockResolvedValue(ok())
+    await cache.refreshSavedTeams({ access: scorer, userId: 'u1', online: true })
+    expect(await cache.clearSavedTeamsOfOtherAccount('u1')).toBe(false)
+    expect(await db.saved_teams.count()).toBe(2)
+    // signed out (a login that lapsed while the app was closed)
+    expect(await cache.clearSavedTeamsOfOtherAccount(null)).toBe(true)
+    expect(await db.saved_teams.count()).toBe(0)
+    expect(await db.saved_teams_meta.count()).toBe(0)
+    // another account
+    await cache.refreshSavedTeams({ access: scorer, userId: 'u1', online: true })
+    expect(await cache.clearSavedTeamsOfOtherAccount('u2')).toBe(true)
+    expect(await db.saved_teams.count()).toBe(0)
+    // rows without an owner row go too; an empty cache is left alone
+    await db.saved_teams.put({ id: 'orphan', competitionId: 'c', nameKey: 'x', pairKey: 'x' })
+    expect(await cache.clearSavedTeamsOfOtherAccount('u1')).toBe(true)
+    expect(await cache.clearSavedTeamsOfOtherAccount('u1')).toBe(false)
+  })
+
+  it('without an access, a refresh uses the cached profile only when it is the signed-in account\'s', async () => {
+    useMemoryLocalStorage()
+    savedTeamsApi.fetchBundle.mockResolvedValue(ok())
+    localStorage.setItem('api_auth_token', JSON.stringify({ access_token: 't', user: { id: 'u2' } }))
+    localStorage.setItem('cachedProfile', JSON.stringify({ user_id: 'u1', roles: ['scorer'] }))
+    expect((await cache.refreshSavedTeams({ online: true })).status).toBe('skipped')
+    expect(savedTeamsApi.fetchBundle).not.toHaveBeenCalled()
+    localStorage.setItem('cachedProfile', JSON.stringify({ user_id: 'u2', roles: ['scorer'] }))
+    expect((await cache.refreshSavedTeams({ online: true })).status).toBe('refreshed')
   })
 })

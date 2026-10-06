@@ -2742,6 +2742,9 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       )
     }
     if (!isBackendAvailable()) return null
+    // Signed in but the profile (roles) is not known yet: say nothing rather
+    // than tell an approved scorer to ask for approval
+    if (user && !access?.known) return null
     return (
       <span data-testid="saved-teams-note" style={{ fontSize: 12, color: 'var(--muted)', alignSelf: 'center', maxWidth: 220 }}>
         {user ? t('savedTeams.noAccessNote') : t('savedTeams.signInNote')}

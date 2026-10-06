@@ -7,7 +7,9 @@
  *
  * The rows hold personal data (DOB, licence number, country): they are only
  * for the account that loaded them (meta.userId) and are cleared on sign-out,
- * account switch and account deletion (AuthContext_beach). Never log a row.
+ * account switch, account deletion, a login the server rejects or that
+ * expires, and on start when they belong to another account
+ * (AuthContext_beach). Never log a row.
  */
 
 import { db } from './db_beach'
@@ -34,8 +36,12 @@ export function currentUserId() {
   return readJson('api_auth_token')?.user?.id ?? null
 }
 
+// The cached profile's roles, only when that profile is the signed-in account's
 function currentAccess() {
-  return accessFromRoles(readJson('cachedProfile')?.roles ?? [])
+  const cached = readJson('cachedProfile')
+  const uid = currentUserId()
+  const own = cached && uid && (!cached.user_id || cached.user_id === uid)
+  return accessFromRoles(own ? cached.roles ?? [] : [])
 }
 
 function isOnline() {
@@ -138,6 +144,34 @@ export async function clearSavedTeams() {
   } catch (e) {
     console.warn('[savedTeams] clear failed:', e?.message)
   }
+}
+
+/**
+ * Drop the cache when it belongs to another account than `userId` (null: no
+ * account signed in). Checked and cleared in one transaction, so a bundle
+ * the signed-in account stores meanwhile is never wiped. Catches what the
+ * in-memory account switch check misses, e.g. a login that expired while
+ * the app was closed.
+ * @returns {Promise<boolean>} true when the cache was cleared
+ */
+export async function clearSavedTeamsOfOtherAccount(userId) {
+  let cleared = false
+  try {
+    await db.transaction('rw', db.saved_teams, db.saved_teams_meta, async () => {
+      const meta = await db.saved_teams_meta.get(META_KEY)
+      // Rows without a meta row have no known owner: drop them too
+      const foreign = meta ? meta.userId !== (userId ?? null) : (await db.saved_teams.count()) > 0
+      if (foreign) {
+        await db.saved_teams.clear()
+        await db.saved_teams_meta.clear()
+        cleared = true
+      }
+    })
+  } catch (e) {
+    console.warn('[savedTeams] owner check failed:', e?.message)
+  }
+  if (cleared) notify()
+  return cleared
 }
 
 /** Replace the cache with a bundle. */
