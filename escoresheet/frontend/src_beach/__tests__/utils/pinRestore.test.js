@@ -1,0 +1,64 @@
+import { describe, it, expect, vi } from 'vitest'
+
+// Build-time constant the referee screens read
+vi.hoisted(() => { globalThis.__APP_VERSION__ = 'test' })
+
+vi.mock('../../utils_beach/backendConfig_beach', () => ({
+  getApiUrl: (p) => `http://backend.test${p}`,
+  isBackendAvailable: () => true,
+  getWebSocketUrl: () => null
+}))
+vi.mock('../../db_beach/db_beach', () => ({ db: { sync_queue: { hook: () => {} } } }))
+
+import { fetchMatchByPin } from '../../utils_beach/backupManager_beach'
+import { revalidateRefereeSession, validateRefereePin } from '../../RefereeApp_beach'
+
+describe('fetchMatchByPin (POST /api/match/restore-by-pin)', () => {
+  const beach = { id: 'uuid', external_id: 'match_1', sport_type: 'beach', game_n: 12 }
+
+  it('looks the match up by game number and PIN on the server and keeps the PIN', async () => {
+    const restoreByPin = vi.fn(async () => ({ data: { match: beach, sets: [{ index: 1 }], events: [], liveState: null }, error: null, status: 200 }))
+    const r = await fetchMatchByPin(' 864201 ', '12', { restoreByPin })
+    expect(restoreByPin).toHaveBeenCalledWith(12, '864201')
+    expect(r.match.external_id).toBe('match_1')
+    expect(r.sets).toHaveLength(1)
+    expect(r.gamePin).toBe('864201')
+  })
+
+  it('refuses an indoor match with the same number and PIN', async () => {
+    const restoreByPin = vi.fn(async () => ({ data: { match: { ...beach, sport_type: 'indoor' }, sets: [], events: [] }, error: null, status: 200 }))
+    await expect(fetchMatchByPin('864201', 12, { restoreByPin })).rejects.toThrow('Match not found')
+  })
+
+  it('maps 404 and 429', async () => {
+    const notFound = vi.fn(async () => ({ data: null, error: { code: 'OV_NOT_FOUND', status: 404 }, status: 404 }))
+    await expect(fetchMatchByPin('000000', 1, { restoreByPin: notFound })).rejects.toThrow('Match not found')
+    const limited = vi.fn(async () => ({ data: null, error: { code: 'OV_TOO_MANY_ATTEMPTS', status: 429 }, status: 429 }))
+    await expect(fetchMatchByPin('000000', 1, { restoreByPin: limited })).rejects.toThrow('Too many wrong PINs')
+  })
+})
+
+describe('referee PIN checks', () => {
+  const m = { id: 'match_42', team1: 'A', team2: 'B' }
+
+  it('a typed PIN: the backend first, then the LAN relay', async () => {
+    const cloudOk = vi.fn(async () => ({ success: true, match: m }))
+    const lan = vi.fn()
+    expect(await validateRefereePin('123456', { checkCloud: cloudOk, checkLan: lan })).toEqual({ match: m, source: 'supabase' })
+    expect(lan).not.toHaveBeenCalled()
+
+    const cloudNo = vi.fn(async () => ({ success: false }))
+    const lanOk = vi.fn(async () => ({ success: true, match: m }))
+    expect(await validateRefereePin('123456', { checkCloud: cloudNo, checkLan: lanOk })).toEqual({ match: m, source: 'websocket' })
+
+    const lanThrows = vi.fn(async () => { throw new Error('No match found') })
+    expect(await validateRefereePin('123456', { checkCloud: cloudNo, checkLan: lanThrows })).toEqual({ match: null })
+  })
+
+  it('a stored PIN after a reload restores the same match only, with its seed key id', async () => {
+    const cloud = vi.fn(async () => ({ success: true, match: m }))
+    expect(await revalidateRefereeSession('match_42', '123456', { checkCloud: cloud, checkLan: vi.fn() })).toBe(m)
+    const other = vi.fn(async () => ({ success: true, match: { id: 'match_7' } }))
+    expect(await revalidateRefereeSession('match_42', '123456', { checkCloud: other, checkLan: other })).toBeNull()
+  })
+})

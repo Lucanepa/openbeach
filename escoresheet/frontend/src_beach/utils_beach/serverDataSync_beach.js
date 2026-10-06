@@ -4,7 +4,7 @@
  */
 
 import { apiFrom } from '../lib_beach/apiClient_beach'
-import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
+import { isBackendAvailable, getApiUrl } from '../utils_beach/backendConfig_beach'
 import { formatTimeLocal } from './timeUtils'
 
 const SPORT_TYPE = 'beach'
@@ -63,6 +63,103 @@ function getWebSocketUrl() {
   return `${protocol}://${hostname}:${wsPort}`
 }
 
+// ---------------------------------------------------------------------------
+// Match access after the PIN step (ported from OpenVolley serverDataSync.js)
+// ---------------------------------------------------------------------------
+// The relays and the backend hand out a match's bundle (rosters, events) only
+// to a device that proved one of its PINs; everyone else gets the public
+// summary (teams, status, score). A successful PIN check remembers, per match
+// key, the PIN and the backend's match token, and every later subscribe /
+// fetch of that match carries them (subscribe-match pin/token, the
+// X-OV-Match-Pin / X-OV-Match-Token headers). In memory only: after a reload
+// the apps re-check their stored PIN, which remembers it again.
+const matchAccess = new Map() // String(match key) -> { pin, token, type? }
+const MAX_MATCH_ACCESS = 16
+
+/**
+ * Remember what proves access to a match (after a successful PIN check).
+ * `type` is the cloud PIN check's type (referee / bench_team1 / bench_team2):
+ * with it an expired match token can be renewed with the same PIN.
+ */
+export function rememberMatchAccess(matchId, { pin = null, token = null, type = null } = {}) {
+  if (matchId === undefined || matchId === null || (!pin && !token)) return
+  const key = String(matchId)
+  const prev = matchAccess.get(key) || {}
+  matchAccess.delete(key)
+  if (matchAccess.size >= MAX_MATCH_ACCESS) matchAccess.delete(matchAccess.keys().next().value)
+  const entry = { pin: pin ? String(pin).trim() : prev.pin || null, token: token || prev.token || null }
+  const kind = type || prev.type
+  if (kind) entry.type = kind
+  matchAccess.set(key, entry)
+}
+
+// Token renewals per match (at most one a minute)
+const TOKEN_RENEW_MS = 60 * 1000
+const tokenRenewedAt = new Map()
+
+/**
+ * The API fallback read a remembered match without its rosters: the match
+ * token expired (or the backend restarted without a fixed token secret).
+ * Renew it with the remembered PIN (cloud PIN check, at most once a minute).
+ * @returns {Promise<boolean>} true when a new token was remembered
+ */
+async function renewMatchToken(matchId, row) {
+  const a = matchAccessFor(matchId)
+  if (!a?.pin || !a.type || !row || typeof row !== 'object' || 'players_team1' in row) return false
+  const key = String(matchId)
+  const last = tokenRenewedAt.get(key)
+  if (last !== undefined && Date.now() - last < TOKEN_RENEW_MS) return false
+  tokenRenewedAt.set(key, Date.now())
+  const r = await validatePinSupabase(a.pin, a.type)
+  return !!(r?.success && r.token && String(r.match?.id) === key)
+}
+
+/** Forget a match's access (exit, PIN no longer valid). No argument: all. */
+export function forgetMatchAccess(matchId) {
+  if (matchId === undefined) {
+    matchAccess.clear()
+    tokenRenewedAt.clear()
+  } else {
+    matchAccess.delete(String(matchId))
+    tokenRenewedAt.delete(String(matchId))
+  }
+}
+
+/** The remembered access of a match, or null. */
+export function matchAccessFor(matchId) {
+  if (matchId === undefined || matchId === null) return null
+  return matchAccess.get(String(matchId)) || null
+}
+
+/** Request headers proving access to a match (empty without one). */
+export function matchAccessHeaders(matchId) {
+  const a = matchAccessFor(matchId)
+  const h = {}
+  if (a?.token) h['X-OV-Match-Token'] = a.token
+  if (a?.pin) h['X-OV-Match-Pin'] = a.pin
+  return h
+}
+
+/**
+ * The subscribe-match message for a match key, with what proves access to it
+ * (PIN / match token of the PIN check).
+ */
+export function subscribeMessage(matchId) {
+  const access = matchAccessFor(matchId)
+  return {
+    type: 'subscribe-match',
+    matchId: String(matchId),
+    ...(access?.pin ? { pin: access.pin } : {}),
+    ...(access?.token ? { token: access.token } : {})
+  }
+}
+
+/** A match some server says is not a beach match (indoor shares the backend). */
+export function isOtherSportMatch(match) {
+  const sport = match?.sport_type ?? match?.sportType
+  return sport !== undefined && sport !== null && sport !== '' && sport !== SPORT_TYPE
+}
+
 /**
  * Validate PIN and get match data from server
  */
@@ -99,13 +196,21 @@ export async function validatePin(pin, type = 'referee') {
       throw new Error('Empty response from server. Make sure the main scoresheet is running and connected.')
     }
 
+    let result
     try {
-      const result = JSON.parse(text)
-      return result
+      result = JSON.parse(text)
     } catch (e) {
       console.error('Invalid JSON response:', text)
       throw new Error('Invalid response from server. Make sure the main scoresheet is running and connected.')
     }
+    // The cloud relay also holds indoor matches: a PIN of one is not ours
+    if (result?.success && isOtherSportMatch(result.match)) {
+      return { success: false, error: 'Invalid PIN code' }
+    }
+    if (result?.success && result.match?.id != null) {
+      rememberMatchAccess(result.match.id, { pin, token: result.token || null })
+    }
+    return result
   } catch (error) {
     // Only log unexpected errors (not network failures from local server not running)
     if (!error.message?.includes('Failed to fetch') && !error.message?.includes('Not Found')) {
@@ -132,13 +237,24 @@ export async function getMatchData(matchId) {
     const response = await fetch(`${serverUrl}/api/match/${matchId}`, {
       method: 'GET',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        // The PIN / match token of the PIN check: without them the relay
+        // answers with the public summary only (no rosters, no events)
+        ...matchAccessHeaders(matchId)
       }
     })
 
     if (response.ok) {
       const result = await response.json()
-      return result
+      // A summary is fine before the PIN step, never a replacement for the
+      // bundle after it: then try the database read below
+      if (result?.success && result.access === 'summary' && matchAccessFor(matchId)) {
+        console.debug('[getMatchData] relay answered with the summary only, trying the API')
+      } else if (result?.success && isOtherSportMatch(result.match)) {
+        return { success: false, error: 'Match not found' }
+      } else {
+        return result
+      }
     }
   } catch (error) {
     console.debug('[getMatchData] HTTP fetch failed, trying Supabase:', error.message)
@@ -151,12 +267,21 @@ export async function getMatchData(matchId) {
       let match = null
       let matchError = null
 
-      // Try 1: Fetch match by external_id (seed_key)
-      const { data: matchByExtId, error: extIdError } = await apiFrom('matches')
+      // Try 1: Fetch match by external_id (seed_key). The match token of the
+      // PIN check unlocks this match's rosters on an anonymous read (other
+      // matches: public columns only).
+      const readByExtId = () => apiFrom('matches')
+        .headers(matchAccessHeaders(matchId))
         .select('*')
         .eq('external_id', matchId)
         .eq('sport_type', SPORT_TYPE)
         .maybeSingle()
+      let { data: matchByExtId, error: extIdError } = await readByExtId()
+      // Rosters missing after the PIN step: renew the token once and read again
+      if (matchByExtId && await renewMatchToken(matchId, matchByExtId)) {
+        const again = await readByExtId()
+        if (again.data) matchByExtId = again.data
+      }
 
       if (matchByExtId) {
         match = matchByExtId
@@ -165,6 +290,7 @@ export async function getMatchData(matchId) {
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
         if (uuidRegex.test(matchId)) {
           const { data: matchById, error: idError } = await apiFrom('matches')
+            .headers(matchAccessHeaders(matchId))
             .select('*')
             .eq('id', matchId)
             .eq('sport_type', SPORT_TYPE)
@@ -603,10 +729,7 @@ export function subscribeToMatchData(matchId, onUpdate) {
     if (connection.ws && connection.ws.readyState === WebSocket.OPEN) {
       // Already connected, just send subscription message
       try {
-        connection.ws.send(JSON.stringify({
-          type: 'subscribe-match',
-          matchId: matchIdStr
-        }))
+        connection.ws.send(JSON.stringify(subscribeMessage(matchIdStr)))
       } catch (err) {
         console.error('[ServerDataSync] Error sending subscription:', err)
       }
@@ -637,10 +760,7 @@ export function subscribeToMatchData(matchId, onUpdate) {
 
         // Request match data subscription
         try {
-          connection.ws.send(JSON.stringify({
-            type: 'subscribe-match',
-            matchId: matchIdStr
-          }))
+          connection.ws.send(JSON.stringify(subscribeMessage(matchIdStr)))
         } catch (err) {
           // Error sending subscription
         }
@@ -790,10 +910,7 @@ export function subscribeToMatchData(matchId, onUpdate) {
   } else if (connection.ws.readyState === WebSocket.OPEN) {
     // Already connected, send subscription immediately
     try {
-      connection.ws.send(JSON.stringify({
-        type: 'subscribe-match',
-        matchId: matchIdStr
-      }))
+      connection.ws.send(JSON.stringify(subscribeMessage(matchIdStr)))
     } catch (err) {
       console.error('[ServerDataSync] Error sending subscription:', err)
     }
@@ -942,7 +1059,7 @@ export async function listAvailableMatches() {
 }
 
 /**
- * List available matches from Supabase (for Supabase-only mode)
+ * List available beach matches from the backend (cloud mode)
  * Returns matches that are in 'setup' or 'live' status with referee_connection_enabled = true
  */
 export async function listAvailableMatchesSupabase() {
@@ -960,8 +1077,7 @@ export async function listAvailableMatchesSupabase() {
         scheduled_at,
         team1_data,
         team2_data,
-        connections,
-        connection_pins
+        connections
       `)
       .in('status', ['setup', 'live'])
       .eq('sport_type', SPORT_TYPE)
@@ -1002,7 +1118,6 @@ export async function listAvailableMatchesSupabase() {
       const team1Name = m.team1_data?.name || m.team1_team?.name || 'Team 1'
       const team2Name = m.team2_data?.name || m.team2_team?.name || 'Team 2'
       const connections = m.connections || {}
-      const connectionPins = m.connection_pins || {}
 
       return {
         id: m.external_id || m.id,
@@ -1015,10 +1130,9 @@ export async function listAvailableMatchesSupabase() {
         scheduledAt: m.scheduled_at,
         dateTime,
         status: m.status,
-        refereeConnectionEnabled: connections.referee_enabled === true,
-        // Include upload PINs for roster upload app
-        team1UploadPin: connectionPins.upload_team1,
-        team2UploadPin: connectionPins.upload_team2
+        refereeConnectionEnabled: connections.referee_enabled === true
+        // No PINs: the backend never sends them; a PIN is checked server-side
+        // (validatePinSupabase)
       }
     })
 
@@ -1029,68 +1143,75 @@ export async function listAvailableMatchesSupabase() {
   }
 }
 
-export async function validatePinSupabase(pin, type = 'referee') {
+// Beach PIN types of POST /api/match/validate-connection-pin (sport 'beach')
+export const BEACH_PIN_TYPES = Object.freeze(['referee', 'bench_team1', 'bench_team2'])
+
+/**
+ * Validate a referee / team bench PIN on the backend
+ * (POST /api/match/validate-connection-pin with sport 'beach'). The PINs never
+ * reach the browser: the server compares them. On success the PIN and the
+ * match token are remembered for the match (rememberMatchAccess), so the
+ * relay subscription and the match reads that follow get the rosters.
+ * Bounded by `timeoutMs`: on a venue network without internet this check must
+ * fail fast so the caller can fall back to the LAN relay.
+ * @param {string} pin
+ * @param {'referee'|'bench_team1'|'bench_team2'} [type]
+ * @returns {Promise<{success: boolean, match?: object, token?: string|null, error?: string}>}
+ */
+export async function validatePinSupabase(pin, type = 'referee', { timeoutMs = 3000, fetchImpl = fetch } = {}) {
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null
+  const timer = controller && timeoutMs > 0 ? setTimeout(() => controller.abort(), timeoutMs) : null
   try {
-    const pinStr = String(pin).trim()
+    const pinStr = String(pin ?? '').trim()
 
     if (!pinStr || pinStr.length !== 6) {
       return { success: false, error: 'Invalid PIN format' }
     }
-
-    // Query matches by PIN in connection_pins JSONB
-    const { data, error } = await apiFrom('matches')
-      .select(`
-        id,
-        external_id,
-        game_n,
-        status,
-        scheduled_at,
-        team1_data,
-        team2_data,
-        connections,
-        connection_pins
-      `)
-      .in('status', ['setup', 'live'])
-      .eq('sport_type', SPORT_TYPE)
-
-    if (error) {
-      console.error('[validatePinSupabase] Error:', error)
-      return { success: false, error: error.message }
+    if (!BEACH_PIN_TYPES.includes(type)) {
+      return { success: false, error: 'Invalid PIN type' }
     }
 
-    // Find match where PIN matches the appropriate type in connection_pins
-    const matchData = (data || []).find(m => {
-      const connectionPins = m.connection_pins || {}
-      const connections = m.connections || {}
+    const apiUrl = getApiUrl('/api/match/validate-connection-pin')
+    if (!apiUrl) return { success: false, error: 'Backend not available' }
 
-      if (type === 'referee') {
-        return connectionPins.referee === pinStr && connections.referee_enabled
-      }
-      return false
+    const response = await fetchImpl(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: pinStr, type, sport: SPORT_TYPE }),
+      ...(controller ? { signal: controller.signal } : {})
     })
 
-    if (!matchData) {
+    let result
+    try {
+      result = await response.json()
+    } catch {
+      return { success: false, error: 'Validation failed' }
+    }
+
+    if (!response.ok || !result?.success || !result.match) {
+      return { success: false, error: result?.error || 'Invalid PIN code' }
+    }
+    // A backend that ignores `sport` would answer with an indoor match
+    if ((result.match.sportType ?? result.match.sport_type) !== SPORT_TYPE) {
       return { success: false, error: 'Invalid PIN code' }
     }
 
-    // Read from JSONB columns only (clean schema)
-    const connections = matchData.connections || {}
-
+    const m = result.match
     const match = {
-      id: matchData.external_id || matchData.id,
-      gameNumber: matchData.game_n || matchData.external_id,
-      status: matchData.status,
-      scheduledAt: matchData.scheduled_at,
-      refereeConnectionEnabled: connections.referee_enabled,
-      team1: matchData.team1_data?.name || matchData.team1_team?.name || 'Team 1',
-      team2: matchData.team2_data?.name || matchData.team2_team?.name || 'Team 2',
-      team1Color: matchData.team1_data?.color || matchData.team1_team?.color,
-      team2Color: matchData.team2_data?.color || matchData.team2_team?.color
+      ...m,
+      // Older beach screens read team1 / team2 (names)
+      team1: m.team1Team || 'Team 1',
+      team2: m.team2Team || 'Team 2',
+      team1Color: m.team1TeamColor,
+      team2Color: m.team2TeamColor
     }
-
-    return { success: true, match }
+    if (match.id != null) rememberMatchAccess(match.id, { pin: pinStr, token: result.token || null, type })
+    return { success: true, match, token: result.token || null }
   } catch (error) {
+    if (error?.name === 'AbortError') return { success: false, error: 'Server PIN check timed out', unreachable: true }
     console.error('[validatePinSupabase] Exception:', error)
     return { success: false, error: error.message }
+  } finally {
+    if (timer) clearTimeout(timer)
   }
 }

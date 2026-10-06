@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import Modal from '../Modal_beach'
+import { buildConnectionPins } from '../../utils_beach/connectionPins_beach'
 import {
   getLocalIP,
   getServerStatus,
@@ -98,7 +99,9 @@ export default function ConnectionSetupModal({
           payload: {
             id: m.seed_key,
             connections: { [syncField]: enabled },
-            connection_pins: pinField ? { [pinField]: m?.[pinField === 'referee' ? 'refereePin' : pinField === 'bench_team1' ? 'team1TeamPin' : 'team2TeamPin'] || '' } : undefined
+            // Whole object from the local match (bench_team1 / bench_team2 read
+            // team1Pin / team2Pin): a partial one would erase the other PINs
+            ...(pinField ? { connection_pins: buildConnectionPins(m) } : {})
           },
           ts: new Date().toISOString(),
           status: 'queued'

@@ -6,7 +6,7 @@
  */
 
 import { db } from '../db_beach/db_beach'
-import { apiFrom, apiStorage } from '../lib_beach/apiClient_beach'
+import { apiFrom, apiStorage, apiMatchRestoreByPin } from '../lib_beach/apiClient_beach'
 import { isBackendAvailable, getApiUrl } from '../utils_beach/backendConfig_beach'
 import { sanitizeSimple } from './stringUtils'
 
@@ -666,39 +666,36 @@ export async function restoreMatchInPlace(matchId, jsonData) {
 }
 
 /**
- * Fetch match from Supabase by Game N and Game PIN
- * Uses JSONB columns for team/player data (teams/players tables were dropped)
+ * Fetch a match from the backend by Game N and Game PIN
+ * (POST /api/match/restore-by-pin: exact match, attempt-limited, the PIN is
+ * compared server-side; game_pin can no longer be filtered on). With a session
+ * the backend also makes this account an editor of the match (take-over).
+ * Uses JSONB columns for team/player data (teams/players tables were dropped).
+ * @param {string} gamePin
+ * @param {number|string} gameN
+ * @param {{ restoreByPin?: Function }} [deps] - injectable for tests
  */
-export async function fetchMatchByPin(gamePin, gameN) {
+export async function fetchMatchByPin(gamePin, gameN, { restoreByPin = apiMatchRestoreByPin } = {}) {
   if (!isBackendAvailable()) {
-    throw new Error('Supabase not configured')
+    throw new Error('Backend not configured')
   }
+  const n = parseInt(gameN, 10)
+  if (!Number.isFinite(n)) throw new Error('Enter the game number')
 
-  // Find match by game_n and game_pin (filtered by sport_type)
-  let query = apiFrom('matches')
-    .select('*')
-    .eq('game_pin', gamePin)
-    .eq('sport_type', SPORT_TYPE)
-
-  // If gameN provided, also filter by game_n
-  if (gameN) {
-    query = query.eq('game_n', parseInt(gameN, 10))
+  const { data, error, status } = await restoreByPin(n, String(gamePin ?? '').trim())
+  if (error) {
+    if (status === 429 || error.code === 'OV_TOO_MANY_ATTEMPTS') throw new Error('Too many wrong PINs. Wait a few minutes and try again.')
+    if (status === 404 || error.code === 'OV_NOT_FOUND') throw new Error('Match not found with this ID and PIN')
+    throw new Error(error.message || 'Match lookup failed')
   }
+  const matchData = data?.match
+  // The lookup does not know the sport: an indoor match with this number and
+  // PIN is not one openbeach can restore
+  if (!matchData || matchData.sport_type !== SPORT_TYPE) throw new Error('Match not found with this ID and PIN')
 
-  const { data: matchData, error: matchError } = await query.maybeSingle()
-
-  if (matchError) throw matchError
-  if (!matchData) throw new Error('Match not found with this ID and PIN')
-
-  // Fetch sets, events, and live state using the UUID match id
-  const [setsResult, eventsResult, liveStateResult] = await Promise.all([
-    apiFrom('sets').select('*').eq('match_id', matchData.id),
-    apiFrom('events').select('*').eq('match_id', matchData.id),
-    apiFrom('match_live_state').select('*').eq('match_id', matchData.id).maybeSingle()
-  ])
-
-  let events = eventsResult.data || []
-  const liveState = liveStateResult.data
+  const setsResult = { data: Array.isArray(data.sets) ? data.sets : [] }
+  let events = Array.isArray(data.events) ? [...data.events] : []
+  const liveState = data.liveState || null
 
   console.debug('[BackupManager] Fetched match data from Supabase:', {
     matchId: matchData.id,
@@ -825,7 +822,10 @@ export async function fetchMatchByPin(gamePin, gameN) {
     // JSONB data is already in matchData: team1_data, team2_data, players_team1, players_team2, officials
     sets: setsResult.data || [],
     events,
-    liveState // Include live state for additional data
+    liveState, // Include live state for additional data
+    // The backend never returns game_pin: keep the one that proved access, so
+    // the imported match can still claim its cloud copy
+    gamePin: String(gamePin ?? '').trim()
   }
 }
 
@@ -888,7 +888,7 @@ export async function importMatchFromSupabase(cloudData) {
       league: matchInfo.league || match.league,
       championshipType: matchInfo.championship_type || match.championship_type,
       refereePin: match.referee_pin,
-      gamePin: match.game_pin,
+      gamePin: cloudData.gamePin || match.game_pin,
       gameN: match.game_n,
       gameNumber: match.game_n ? String(match.game_n) : null, // Also set gameNumber
       test: match.test || false,

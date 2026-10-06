@@ -16,6 +16,7 @@ import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { uploadBackupToCloud, uploadLogsToCloud } from '../utils_beach/logger_beach'
 import { apiFrom } from '../lib_beach/apiClient_beach'
 import { setExtId } from '../utils_beach/syncIds_beach'
+import { buildConnectionPins } from '../utils_beach/connectionPins_beach'
 import { generateMatchSeedKey } from '../utils_beach/serverDataSync_beach'
 import { TEST_TEAM_SEED_DATA } from '../constants_beach/testSeeds_beach'
 import { splitLocalDateTime, parseLocalDateTimeToISO, roundToMinute } from '../utils_beach/timeUtils_beach'
@@ -1086,34 +1087,21 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           await db.matches.update(matchId, updates)
         }
 
-        // Always sync upload PINs to Supabase if connected (whether newly generated or existing)
-        // This ensures existing local PINs get pushed to Supabase
-        if (isBackendAvailable() && match.seed_key) {
-          const team1UploadPin = updates.team1UploadPin || match.team1UploadPin
-          const team2UploadPin = updates.team2UploadPin || match.team2UploadPin
-          if (team1UploadPin || team2UploadPin) {
-            try {
-              // Fetch existing connection_pins to merge (use maybeSingle to avoid 406 if match not synced yet)
-              const { data: existingMatch } = await apiFrom('matches')
-                .select('connection_pins')
-                .eq('external_id', match.seed_key)
-                .maybeSingle()
-
-              // Only update if match exists in Supabase
-              if (existingMatch) {
-                const connectionPinsUpdate = {
-                  ...(existingMatch.connection_pins || {}),
-                  ...(team1UploadPin ? { team1_upload: team1UploadPin } : {}),
-                  ...(team2UploadPin ? { team2_upload: team2UploadPin } : {})
-                }
-
-                await apiFrom('matches')
-                  .update({ connection_pins: connectionPinsUpdate })
-                  .eq('external_id', match.seed_key)
-              }
-            } catch (err) {
-              console.warn('[MatchSetup] Failed to sync upload PINs to Supabase:', err)
-            }
+        // Newly generated PINs go to the cloud through the sync queue. The
+        // backend never returns connection_pins (no read-merge), so the queue
+        // sends the whole object built from the local match
+        // (connectionPins_beach.js); it needs a session like every write.
+        if (Object.keys(updates).length > 0 && match.seed_key && !match.test) {
+          try {
+            await db.sync_queue.add({
+              resource: 'match',
+              action: 'update',
+              payload: { id: match.seed_key, connection_pins: buildConnectionPins({ ...match, ...updates }) },
+              ts: new Date().toISOString(),
+              status: 'queued'
+            })
+          } catch (err) {
+            console.warn('[MatchSetup] Failed to queue the PIN sync:', err)
           }
         }
 
@@ -2267,11 +2255,12 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           // PINs for dashboard connections
           game_pin: generatedGamePin,
           game_n: gameN ? Number(gameN) : null,
-          connection_pins: {
-            referee: String(generatedRefereePin).trim(),
-            team1_data: String(generatedTeam1Pin).trim(),
-            team2_data: String(generatedTeam2Pin).trim()
-          }
+          // Beach keys of the backend's validate-connection-pin (sport 'beach')
+          connection_pins: buildConnectionPins({
+            refereePin: generatedRefereePin,
+            team1Pin: generatedTeam1Pin,
+            team2Pin: generatedTeam2Pin
+          })
         },
         ts: new Date().toISOString(),
         status: 'queued'
@@ -4849,9 +4838,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               connections: {
                 referee_enabled: enabled
               },
-              connection_pins: {
-                referee: updatedMatch.refereePin || ''
-              }
+              // Whole object: a partial one would erase the bench PINs
+              connection_pins: buildConnectionPins(updatedMatch)
             },
             ts: new Date().toISOString(),
             status: 'queued'

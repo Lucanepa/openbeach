@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { validatePin, listAvailableMatches, validatePinSupabase, listAvailableMatchesSupabase } from './utils_beach/serverDataSync_beach'
+import { validatePin, listAvailableMatches, validatePinSupabase, listAvailableMatchesSupabase, forgetMatchAccess } from './utils_beach/serverDataSync_beach'
 import Referee from './components_beach/Referee_beach'
 import Modal from './components_beach/Modal_beach'
 import UpdateBanner from './components_beach/UpdateBanner_beach'
@@ -10,6 +10,42 @@ import { db } from './db_beach/db_beach'
 
 // Master PIN for testing without a match
 const MASTER_PIN = '123456'
+
+/**
+ * Re-check a stored referee PIN (after a reload) the way handlePinSubmit checks
+ * a typed one: the backend's check first, then the LAN relay. The match must
+ * still be the stored one. Ids stay strings: they are seed keys ('match_…'),
+ * and Number() of one is NaN. Ported from OpenVolley RefereeApp.
+ * @returns {Promise<object|null>} the match, or null
+ */
+export async function revalidateRefereeSession(storedMatchId, storedPin, { checkCloud = validatePinSupabase, checkLan = validatePin } = {}) {
+  const same = (r) => r?.success && r.match && String(r.match.id) === String(storedMatchId)
+  let result = null
+  try { result = await checkCloud(storedPin, 'referee') } catch { result = null }
+  if (same(result)) return result.match
+  try { result = await checkLan(storedPin, 'referee') } catch { result = null }
+  return same(result) ? result.match : null
+}
+
+/**
+ * Check a typed referee PIN: the backend's check (beach matches only), then
+ * the LAN relay (relay-only matches are known there only). A thrown relay
+ * error is a failed check, not the message to show.
+ * @returns {Promise<{ match: object|null, source?: 'supabase'|'websocket' }>}
+ */
+export async function validateRefereePin(pin, { checkCloud = validatePinSupabase, checkLan = validatePin } = {}) {
+  const ok = (r) => r?.success && r.match
+  let cloud
+  try { cloud = await checkCloud(pin, 'referee') } catch { cloud = null }
+  if (ok(cloud)) return { match: cloud.match, source: 'supabase' }
+  let lan
+  try { lan = await checkLan(pin, 'referee') } catch { lan = null }
+  if (ok(lan)) return { match: lan.match, source: 'websocket' }
+  return { match: null }
+}
+
+// Numeric LAN ids stay numbers, seed keys stay strings
+const toMatchId = (id) => (/^\d+$/.test(String(id)) ? Number(id) : id)
 
 export default function RefereeApp() {
   const { t } = useTranslation()
@@ -329,21 +365,18 @@ export default function RefereeApp() {
       setIsMasterMode(true)
       setMatchId(-1) // Use -1 as a sentinel for master mode
     } else if (storedMatchId && storedPin) {
-      validatePin(storedPin, 'referee')
-        .then(result => {
-          if (result.success && result.match && String(result.match.id) === String(storedMatchId)) {
-            setMatchId(Number(storedMatchId))
-            setMatch(result.match)
+      revalidateRefereeSession(storedMatchId, storedPin)
+        .then(restored => {
+          if (restored) {
+            setMatchId(toMatchId(restored.id))
+            setMatch(restored)
             setPinInput(storedPin)
           } else {
             localStorage.removeItem('refereeMatchId')
             localStorage.removeItem('refereePin')
           }
         })
-        .catch(() => {
-          localStorage.removeItem('refereeMatchId')
-          localStorage.removeItem('refereePin')
-        })
+        .catch(() => { /* unreachable now: keep the credentials for the next load */ })
     }
   }, [])
   
@@ -387,21 +420,11 @@ export default function RefereeApp() {
     }
 
     try {
-      // Try Supabase first (cloud database)
-      let result = await validatePinSupabase(pinInput.trim(), 'referee')
-      let source = 'supabase'
+      // The backend's check first (beach matches only), then the LAN relay
+      const result = await validateRefereePin(pinInput.trim())
 
-      // If Supabase fails, try WebSocket server
-      if (!result.success) {
-        const wsResult = await validatePin(pinInput.trim(), 'referee')
-        if (wsResult.success) {
-          result = wsResult
-          source = 'websocket'
-        }
-      }
-
-      if (result.success && result.match) {
-        setMatchId(result.match.id)
+      if (result.match) {
+        setMatchId(toMatchId(result.match.id))
         setMatch(result.match)
         localStorage.setItem('refereeMatchId', String(result.match.id))
         localStorage.setItem('refereePin', pinInput)
@@ -421,6 +444,7 @@ export default function RefereeApp() {
   }
 
   const handleExit = useCallback((reason) => {
+    forgetMatchAccess()
     setMatchId(null)
     setMatch(null)
     setPinInput('')

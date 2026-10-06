@@ -20,6 +20,7 @@ import { debugLogger, createStateSnapshot } from '../utils_beach/debugLogger_bea
 import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { apiFrom } from '../lib_beach/apiClient_beach'
 import { setExtId, eventExtId } from '../utils_beach/syncIds_beach'
+import { buildConnectionPins } from '../utils_beach/connectionPins_beach'
 import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
@@ -7533,9 +7534,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             connections: {
               referee_enabled: enabled
             },
-            connection_pins: {
-              referee: match?.refereePin || ''
-            }
+            // Whole object: a partial one would erase the bench PINs
+            connection_pins: buildConnectionPins(match)
           },
           ts: new Date().toISOString(),
           status: 'queued'
