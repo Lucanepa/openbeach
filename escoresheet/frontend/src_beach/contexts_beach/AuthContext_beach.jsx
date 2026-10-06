@@ -1,6 +1,17 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { apiFrom, apiAuth } from '../lib_beach/apiClient_beach'
 import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
+import { accessFromRoles, NO_ACCESS } from '../lib_beach/access_beach'
+import { clearSavedTeams, refreshSavedTeams } from '../db_beach/savedTeams_beach'
+
+function readCachedProfile() {
+  try {
+    const cached = localStorage.getItem('cachedProfile')
+    return cached ? JSON.parse(cached) : null
+  } catch {
+    return null
+  }
+}
 
 const AuthContext = createContext(null)
 
@@ -158,6 +169,8 @@ export function AuthProvider({ children }) {
       setUser(null)
       setProfile(null)
       localStorage.removeItem('cachedProfile')
+      // The saved teams cache holds personal data of this account
+      await clearSavedTeams()
     }
 
     return { error }
@@ -240,6 +253,7 @@ export function AuthProvider({ children }) {
       setUser(null)
       setProfile(null)
       localStorage.removeItem('cachedProfile')
+      await clearSavedTeams()
 
       return { error: null }
     } catch (err) {
@@ -248,9 +262,37 @@ export function AuthProvider({ children }) {
     }
   }, [user])
 
+  // What this account may do (roles from the profile, or the cached profile
+  // offline). The backend enforces every rule; the UI only hides.
+  const access = useMemo(() => {
+    if (!user) return NO_ACCESS
+    return accessFromRoles(profile?.roles ?? readCachedProfile()?.roles ?? [])
+  }, [user, profile])
+
+  // Another account signed in on this device: drop the previous account's
+  // saved teams (personal data) before anything reads them.
+  const previousUserId = useRef(null)
+  useEffect(() => {
+    const id = user?.id ?? null
+    const prev = previousUserId.current
+    if (prev && id && prev !== id) clearSavedTeams()
+    if (id) previousUserId.current = id
+  }, [user?.id])
+
+  // Approved accounts keep an offline copy of the saved beach teams
+  // (keyed on the read flag: a profile reload with the same roles does not refetch)
+  const accessRef = useRef(access)
+  accessRef.current = access
+  const canReadTeams = access.canReadTeams
+  useEffect(() => {
+    if (!user?.id || !canReadTeams) return
+    refreshSavedTeams({ access: accessRef.current, userId: user.id }).catch(() => {})
+  }, [user?.id, canReadTeams])
+
   const value = {
     user,
     profile,
+    access,
     loading,
     isAuthenticated: !!user,
     signIn,
