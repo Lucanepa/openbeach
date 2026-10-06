@@ -1856,5 +1856,30 @@
     "backgroundRetry": "Connection will keep retrying in the background.",
     "dismiss": "Dismiss",
     "goOffline": "Go Offline"
+  },
+  "savedTeams": {
+    "load": "Load saved team",
+    "pickerTitle": "Load saved team",
+    "pickerCompetition": "Competition",
+    "pickerAll": "All competitions",
+    "pickerSearch": "Search teams or players",
+    "pickerEmpty": "No saved beach teams yet. They are added in the OpenVolley admin console.",
+    "pickerOffline": "Offline – showing saved teams from {{date}}.",
+    "pickerPlayers": "{{count}}/2 players",
+    "coach": "Coach: {{name}}",
+    "replaceConfirmTitle": "Replace the players?",
+    "replaceConfirmBody": "The players of {{team}} are replaced by the saved team. You can still edit them afterwards.",
+    "replace": "Replace",
+    "loaded": "{{name}} loaded",
+    "incompleteTeam": "{{name}} has fewer than two saved players. Add the missing player.",
+    "countryMismatch": "The players of {{name}} have different countries. Choose the team country.",
+    "suggestionTitle": "Saved teams found",
+    "suggestionTeam1": "Team 1: {{name}}",
+    "suggestionTeam2": "Team 2: {{name}}",
+    "loadTeam1": "Load team 1",
+    "loadTeam2": "Load team 2",
+    "dismiss": "Not now",
+    "signInNote": "Sign in with an approved account to load saved teams.",
+    "noAccessNote": "Saved teams are for approved scorers. Ask an admin to approve your account."
   }
 }

@@ -1852,5 +1852,30 @@
     "backgroundRetry": "La connessione verrà ritentata in background.",
     "dismiss": "Chiudi",
     "goOffline": "Vai offline"
+  },
+  "savedTeams": {
+    "load": "Carica squadra salvata",
+    "pickerTitle": "Carica squadra salvata",
+    "pickerCompetition": "Competizione",
+    "pickerAll": "Tutte le competizioni",
+    "pickerSearch": "Cerca squadre o giocatori",
+    "pickerEmpty": "Nessuna squadra beach salvata. Si inseriscono nella gestione di OpenVolley.",
+    "pickerOffline": "Offline – squadre salvate del {{date}}.",
+    "pickerPlayers": "{{count}}/2 giocatori",
+    "coach": "Allenatore: {{name}}",
+    "replaceConfirmTitle": "Sostituire i giocatori?",
+    "replaceConfirmBody": "I giocatori di {{team}} vengono sostituiti dalla squadra salvata. Poi tutto resta modificabile.",
+    "replace": "Sostituisci",
+    "loaded": "{{name}} caricata",
+    "incompleteTeam": "{{name}} ha meno di due giocatori salvati. Aggiungi quello mancante.",
+    "countryMismatch": "I giocatori di {{name}} hanno nazioni diverse. Scegli la nazione della squadra.",
+    "suggestionTitle": "Squadre salvate trovate",
+    "suggestionTeam1": "Squadra 1: {{name}}",
+    "suggestionTeam2": "Squadra 2: {{name}}",
+    "loadTeam1": "Carica squadra 1",
+    "loadTeam2": "Carica squadra 2",
+    "dismiss": "Non ora",
+    "signInNote": "Accedi con un account approvato per caricare le squadre salvate.",
+    "noAccessNote": "Le squadre salvate sono per segnapunti approvati. Chiedi a un amministratore di approvare il tuo account."
   }
 }

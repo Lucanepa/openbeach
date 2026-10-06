@@ -1852,5 +1852,30 @@
     "backgroundRetry": "La connexion sera retentée en arrière-plan.",
     "dismiss": "Fermer",
     "goOffline": "Passer hors ligne"
+  },
+  "savedTeams": {
+    "load": "Charger une équipe enregistrée",
+    "pickerTitle": "Charger une équipe enregistrée",
+    "pickerCompetition": "Compétition",
+    "pickerAll": "Toutes les compétitions",
+    "pickerSearch": "Rechercher équipes ou joueurs",
+    "pickerEmpty": "Aucune équipe de beach enregistrée. Elles sont saisies dans la gestion d'OpenVolley.",
+    "pickerOffline": "Hors ligne – équipes enregistrées du {{date}}.",
+    "pickerPlayers": "{{count}}/2 joueurs",
+    "coach": "Entraîneur : {{name}}",
+    "replaceConfirmTitle": "Remplacer les joueurs ?",
+    "replaceConfirmBody": "Les joueurs de {{team}} sont remplacés par l'équipe enregistrée. Tout reste modifiable ensuite.",
+    "replace": "Remplacer",
+    "loaded": "{{name}} chargée",
+    "incompleteTeam": "{{name}} a moins de deux joueurs enregistrés. Ajoutez le joueur manquant.",
+    "countryMismatch": "Les joueurs de {{name}} ont des pays différents. Choisissez le pays de l'équipe.",
+    "suggestionTitle": "Équipes enregistrées trouvées",
+    "suggestionTeam1": "Équipe 1 : {{name}}",
+    "suggestionTeam2": "Équipe 2 : {{name}}",
+    "loadTeam1": "Charger l'équipe 1",
+    "loadTeam2": "Charger l'équipe 2",
+    "dismiss": "Pas maintenant",
+    "signInNote": "Connectez-vous avec un compte approuvé pour charger les équipes enregistrées.",
+    "noAccessNote": "Les équipes enregistrées sont réservées aux marqueurs approuvés. Demandez à un administrateur d'approuver votre compte."
   }
 }

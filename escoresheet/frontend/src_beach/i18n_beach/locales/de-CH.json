@@ -1852,5 +1852,30 @@
     "backgroundRetry": "D'Verbindig wird im Hintergrund witer probiert.",
     "dismiss": "Schliesse",
     "goOffline": "Offline gah"
+  },
+  "savedTeams": {
+    "load": "Gespeichertes Team laden",
+    "pickerTitle": "Gespeichertes Team laden",
+    "pickerCompetition": "Wettbewerb",
+    "pickerAll": "Alle Wettbewerbe",
+    "pickerSearch": "Teams oder Spieler/innen suchen",
+    "pickerEmpty": "Noch keine gespeicherten Beach-Teams. Sie werden in der OpenVolley-Verwaltung erfasst.",
+    "pickerOffline": "Offline – gespeicherte Teams vom {{date}}.",
+    "pickerPlayers": "{{count}}/2 Spieler/innen",
+    "coach": "Trainer: {{name}}",
+    "replaceConfirmTitle": "Spieler/innen ersetzen?",
+    "replaceConfirmBody": "Die Spieler/innen von {{team}} werden durch das gespeicherte Team ersetzt. Danach bleibt alles bearbeitbar.",
+    "replace": "Ersetzen",
+    "loaded": "{{name}} geladen",
+    "incompleteTeam": "Bei {{name}} sind weniger als zwei Spieler/innen gespeichert. Ergänzen Sie die fehlende Person.",
+    "countryMismatch": "Die Spieler/innen von {{name}} haben verschiedene Länder. Wählen Sie das Land des Teams.",
+    "suggestionTitle": "Gespeicherte Teams gefunden",
+    "suggestionTeam1": "Team 1: {{name}}",
+    "suggestionTeam2": "Team 2: {{name}}",
+    "loadTeam1": "Team 1 laden",
+    "loadTeam2": "Team 2 laden",
+    "dismiss": "Nicht jetzt",
+    "signInNote": "Melden Sie sich mit einem freigegebenen Konto an, um gespeicherte Teams zu laden.",
+    "noAccessNote": "Gespeicherte Teams sind für freigegebene Schreiber/innen. Bitten Sie einen Admin, Ihr Konto freizugeben."
   }
 }
