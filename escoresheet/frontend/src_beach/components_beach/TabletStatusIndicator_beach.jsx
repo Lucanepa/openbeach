@@ -18,9 +18,6 @@ export default function TabletStatusIndicator({ match }) {
 
   const summary = getTabletStatusSummary(match)
 
-  // Don't render if no roles are enabled
-  if (summary.expectedCount === 0) return null
-
   const overallColor = summary.overallStatus === 'ok' ? '#22c55e'
     : summary.overallStatus === 'issues' ? '#eab308'
     : '#6b7280'
@@ -47,6 +44,9 @@ export default function TabletStatusIndicator({ match }) {
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [menuOpen])
+
+  // Don't render if no roles are enabled (after every hook: the hook order must not change)
+  if (summary.expectedCount === 0) return null
 
   const roleColors = {
     referee: '#3b82f6',
