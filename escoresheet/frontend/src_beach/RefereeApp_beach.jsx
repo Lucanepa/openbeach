@@ -21,23 +21,34 @@ const MASTER_PIN = '123456'
 export async function revalidateRefereeSession(storedMatchId, storedPin, { checkCloud = validatePinSupabase, checkLan = validatePin } = {}) {
   const same = (r) => r?.success && r.match && String(r.match.id) === String(storedMatchId)
   let result = null
-  try { result = await checkCloud(storedPin, 'referee') } catch { result = null }
+  try { result = await checkCloud(storedPin, 'referee') } catch { result = { unreachable: true } }
   if (same(result)) return result.match
+  if (!cloudUnreachable(result)) return null
   try { result = await checkLan(storedPin, 'referee') } catch { result = null }
   return same(result) ? result.match : null
 }
 
+// The backend's PIN check did not answer (timeout, network, no backend, 5xx).
+// A wrong PIN (404) or a rate limit (429) is an answer: the relay is not asked
+// then, because both checks charge the same per-address failure budget (one
+// typo would cost two attempts, and referees behind one venue NAT would lock
+// each other out twice as fast).
+function cloudUnreachable(r) {
+  return !r || r.unreachable === true
+}
+
 /**
- * Check a typed referee PIN: the backend's check (beach matches only), then
- * the LAN relay (relay-only matches are known there only). A thrown relay
- * error is a failed check, not the message to show.
- * @returns {Promise<{ match: object|null, source?: 'supabase'|'websocket' }>}
+ * Check a typed referee PIN: the backend's check (beach matches only), then,
+ * only when that did not answer, the LAN relay. A thrown relay error is a
+ * failed check, not the message to show.
+ * @returns {Promise<{ match: object|null, source?: 'supabase'|'websocket', error?: string }>}
  */
 export async function validateRefereePin(pin, { checkCloud = validatePinSupabase, checkLan = validatePin } = {}) {
   const ok = (r) => r?.success && r.match
   let cloud
-  try { cloud = await checkCloud(pin, 'referee') } catch { cloud = null }
+  try { cloud = await checkCloud(pin, 'referee') } catch { cloud = { unreachable: true } }
   if (ok(cloud)) return { match: cloud.match, source: 'supabase' }
+  if (!cloudUnreachable(cloud)) return { match: null, ...(cloud?.status === 429 ? { error: cloud.error } : {}) }
   let lan
   try { lan = await checkLan(pin, 'referee') } catch { lan = null }
   if (ok(lan)) return { match: lan.match, source: 'websocket' }
@@ -420,7 +431,8 @@ export default function RefereeApp() {
     }
 
     try {
-      // The backend's check first (beach matches only), then the LAN relay
+      // The backend's check first (beach matches only); the LAN relay only
+      // when the backend did not answer
       const result = await validateRefereePin(pinInput.trim())
 
       if (result.match) {
@@ -429,7 +441,7 @@ export default function RefereeApp() {
         localStorage.setItem('refereeMatchId', String(result.match.id))
         localStorage.setItem('refereePin', pinInput)
       } else {
-        setError(t('refereeDashboard.errors.invalidPin'))
+        setError(result.error || t('refereeDashboard.errors.invalidPin'))
         setPinInput('')
         localStorage.removeItem('refereeMatchId')
         localStorage.removeItem('refereePin')

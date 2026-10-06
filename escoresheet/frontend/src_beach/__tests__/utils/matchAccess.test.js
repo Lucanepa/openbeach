@@ -83,7 +83,12 @@ describe('validatePinSupabase (POST /api/match/validate-connection-pin, sport be
 
   it('rejects a wrong PIN and an answer for another sport', async () => {
     const wrong = vi.fn(async () => json({ success: false, error: 'Invalid PIN code' }, 404))
-    expect(await validatePinSupabase('000000', 'referee', { fetchImpl: wrong })).toEqual({ success: false, error: 'Invalid PIN code' })
+    expect(await validatePinSupabase('000000', 'referee', { fetchImpl: wrong })).toEqual({ success: false, error: 'Invalid PIN code', status: 404 })
+    // a 5xx or no answer at all: unreachable (the LAN relay may be asked)
+    const down = vi.fn(async () => json({ error: 'down' }, 502))
+    expect(await validatePinSupabase('000000', 'referee', { fetchImpl: down })).toMatchObject({ success: false, unreachable: true })
+    const offline = vi.fn(async () => { throw new TypeError('Failed to fetch') })
+    expect(await validatePinSupabase('000000', 'referee', { fetchImpl: offline })).toMatchObject({ success: false, unreachable: true })
 
     const indoor = vi.fn(async () => json({ success: true, token: 'x', match: { id: 'match_in', gameNumber: 3 } }))
     const r = await validatePinSupabase('222222', 'referee', { fetchImpl: indoor })
@@ -112,6 +117,23 @@ describe('relay PIN check and match reads', () => {
     const headers = globalThis.fetch.mock.calls[0][1].headers
     expect(headers['X-OV-Match-Token']).toBe('v1.m')
     expect(headers['X-OV-Match-Pin']).toBe('555555')
+  })
+
+  it('getMatchData backs off the relay after a 404 (the room is gone at the end of a match)', async () => {
+    globalThis.fetch = vi.fn(async (url) => (String(url).includes('/api/match/match_9')
+      ? json({ success: false, error: 'Match not found' }, 404)
+      : json({ data: null, error: null })))
+    await getMatchData('match_9')
+    await getMatchData('match_9')
+    await getMatchData('match_9')
+    const relayCalls = globalThis.fetch.mock.calls.filter(([u]) => String(u).includes('/api/match/match_9'))
+    expect(relayCalls).toHaveLength(1)
+  })
+
+  it('the relay PIN check names the sport', async () => {
+    globalThis.fetch = vi.fn(async () => json({ success: false }, 404))
+    await validatePin('666666', 'referee').catch(() => {})
+    expect(JSON.parse(globalThis.fetch.mock.calls[0][1].body)).toMatchObject({ pin: '666666', type: 'referee', sport: 'beach' })
   })
 })
 

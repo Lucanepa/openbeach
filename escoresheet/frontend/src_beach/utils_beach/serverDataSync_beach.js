@@ -213,7 +213,9 @@ export async function validatePin(pin, type = 'referee') {
       },
       body: JSON.stringify({
         pin: String(pin).trim(),
-        type
+        type,
+        // the relay answers beach rooms only (a PIN may collide with indoor)
+        sport: SPORT_TYPE
       })
     })
 
@@ -268,11 +270,19 @@ export async function validatePin(pin, type = 'referee') {
  * Get full match data from server (match, teams, players, sets, events)
  * Falls back to Supabase direct fetch if HTTP endpoint is not available
  */
+// Matches the relay answered 404 for (its room is gone, e.g. at the end of
+// the match): the next reads go to the API for a while instead of asking the
+// relay again on every change notification
+const RELAY_MISS_BACKOFF_MS = 30 * 1000
+const relayMissUntil = new Map() // String(matchId) -> ms
+
 export async function getMatchData(matchId) {
   const serverUrl = getServerUrl()
+  const key = String(matchId)
 
   // Try HTTP endpoint first (WebSocket server may have it)
   try {
+    if ((relayMissUntil.get(key) || 0) > Date.now()) throw new Error('relay has no copy (recent 404)')
     const response = await fetch(`${serverUrl}/api/match/${matchId}`, {
       method: 'GET',
       headers: {
@@ -283,6 +293,12 @@ export async function getMatchData(matchId) {
       }
     })
 
+    if (response.status === 404) {
+      relayMissUntil.set(key, Date.now() + RELAY_MISS_BACKOFF_MS)
+      if (relayMissUntil.size > 64) relayMissUntil.delete(relayMissUntil.keys().next().value)
+    } else if (response.ok) {
+      relayMissUntil.delete(key)
+    }
     if (response.ok) {
       const result = await response.json()
       // A summary is fine before the PIN step, never a replacement for the
@@ -1212,7 +1228,7 @@ export async function validatePinSupabase(pin, type = 'referee', { timeoutMs = 3
     }
 
     const apiUrl = getApiUrl('/api/match/validate-connection-pin')
-    if (!apiUrl) return { success: false, error: 'Backend not available' }
+    if (!apiUrl) return { success: false, error: 'Backend not available', unreachable: true }
 
     const response = await fetchImpl(apiUrl, {
       method: 'POST',
@@ -1225,11 +1241,18 @@ export async function validatePinSupabase(pin, type = 'referee', { timeoutMs = 3
     try {
       result = await response.json()
     } catch {
-      return { success: false, error: 'Validation failed' }
+      return { success: false, error: 'Validation failed', status: response.status, ...(response.status >= 500 ? { unreachable: true } : {}) }
     }
 
     if (!response.ok || !result?.success || !result.match) {
-      return { success: false, error: result?.error || 'Invalid PIN code' }
+      // A 5xx is no answer about the PIN (the caller may try the LAN relay);
+      // 404 (wrong PIN) and 429 (too many) are
+      return {
+        success: false,
+        error: result?.error || 'Invalid PIN code',
+        status: response.status,
+        ...(response.status >= 500 ? { unreachable: true } : {})
+      }
     }
     // A backend that ignores `sport` would answer with an indoor match
     if ((result.match.sportType ?? result.match.sport_type) !== SPORT_TYPE) {
@@ -1249,8 +1272,9 @@ export async function validatePinSupabase(pin, type = 'referee', { timeoutMs = 3
     return { success: true, match, token: result.token || null }
   } catch (error) {
     if (error?.name === 'AbortError') return { success: false, error: 'Server PIN check timed out', unreachable: true }
-    console.error('[validatePinSupabase] Exception:', error)
-    return { success: false, error: error.message }
+    // fetch rejects without an answer (offline, DNS, CORS): unreachable
+    console.warn('[validatePinSupabase] No answer:', error?.message)
+    return { success: false, error: error.message, unreachable: true }
   } finally {
     if (timer) clearTimeout(timer)
   }

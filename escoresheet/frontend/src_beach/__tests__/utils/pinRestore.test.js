@@ -47,12 +47,24 @@ describe('referee PIN checks', () => {
     expect(await validateRefereePin('123456', { checkCloud: cloudOk, checkLan: lan })).toEqual({ match: m, source: 'supabase' })
     expect(lan).not.toHaveBeenCalled()
 
-    const cloudNo = vi.fn(async () => ({ success: false }))
+    const cloudDown = vi.fn(async () => ({ success: false, unreachable: true }))
     const lanOk = vi.fn(async () => ({ success: true, match: m }))
-    expect(await validateRefereePin('123456', { checkCloud: cloudNo, checkLan: lanOk })).toEqual({ match: m, source: 'websocket' })
+    expect(await validateRefereePin('123456', { checkCloud: cloudDown, checkLan: lanOk })).toEqual({ match: m, source: 'websocket' })
+    const cloudThrows = vi.fn(async () => { throw new Error('offline') })
+    expect(await validateRefereePin('123456', { checkCloud: cloudThrows, checkLan: lanOk })).toEqual({ match: m, source: 'websocket' })
 
     const lanThrows = vi.fn(async () => { throw new Error('No match found') })
-    expect(await validateRefereePin('123456', { checkCloud: cloudNo, checkLan: lanThrows })).toEqual({ match: null })
+    expect(await validateRefereePin('123456', { checkCloud: cloudDown, checkLan: lanThrows })).toEqual({ match: null })
+  })
+
+  it('a wrong PIN the backend answered (404) or a rate limit (429) does not ask the relay too', async () => {
+    const lan = vi.fn(async () => ({ success: true, match: m }))
+    const wrong = vi.fn(async () => ({ success: false, error: 'Invalid PIN code', status: 404 }))
+    expect(await validateRefereePin('123456', { checkCloud: wrong, checkLan: lan })).toEqual({ match: null })
+    const limited = vi.fn(async () => ({ success: false, error: 'Too many failed attempts', status: 429 }))
+    expect(await validateRefereePin('123456', { checkCloud: limited, checkLan: lan })).toEqual({ match: null, error: 'Too many failed attempts' })
+    expect(await revalidateRefereeSession('match_42', '123456', { checkCloud: wrong, checkLan: lan })).toBeNull()
+    expect(lan).not.toHaveBeenCalled()
   })
 
   it('a stored PIN after a reload restores the same match only, with its seed key id', async () => {
@@ -60,5 +72,7 @@ describe('referee PIN checks', () => {
     expect(await revalidateRefereeSession('match_42', '123456', { checkCloud: cloud, checkLan: vi.fn() })).toBe(m)
     const other = vi.fn(async () => ({ success: true, match: { id: 'match_7' } }))
     expect(await revalidateRefereeSession('match_42', '123456', { checkCloud: other, checkLan: other })).toBeNull()
+    const down = vi.fn(async () => ({ success: false, unreachable: true }))
+    expect(await revalidateRefereeSession('match_42', '123456', { checkCloud: down, checkLan: cloud })).toBe(m)
   })
 })
