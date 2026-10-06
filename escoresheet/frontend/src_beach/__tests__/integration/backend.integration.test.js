@@ -238,6 +238,23 @@ describe.skipIf(!BASE)('openbeach on a local OpenVolley backend', () => {
     expect(data.status).toBe('ended')
   })
 
+  it('queued match updates: current_set, approval, and signatures merged, not replaced', async () => {
+    const job = (payload) => ({ resource: 'match', action: 'update', status: 'queued', ts: new Date().toISOString(), payload: { id: seed, ...payload } })
+    await db.sync_queue.bulkAdd([
+      job({ current_set: 2 }),
+      job({ signatures: { team1_captain: 'data:sig-a' } }),
+      job({ signatures: { team2_captain: 'data:sig-b' } }),
+      job({ approval: { approvedAt: '2026-10-06T12:00:00.000Z', signatures: { scorer: null } } })
+    ])
+    await queue.runQueuePass()
+    expect(await db.sync_queue.where('status').noneOf(['sent', 'failed']).count()).toBe(0)
+    const { data, error } = await api.apiFrom('matches').select('current_set, approval, signatures').eq('external_id', seed).maybeSingle()
+    expect(error).toBeNull()
+    expect(data.current_set).toBe(2)
+    expect(data.approval.approvedAt).toBe('2026-10-06T12:00:00.000Z')
+    expect(data.signatures).toMatchObject({ team1_captain: 'data:sig-a', team2_captain: 'data:sig-b' })
+  })
+
   it('a backup restore is one /api/match/restore with beach rows', async () => {
     const jobId = await db.sync_queue.add({ resource: 'match', action: 'restore', status: 'queued', ts: new Date().toISOString(), payload: {
       match: { external_id: seed, status: 'live', game_n: 7, team1_data: { name: 'Muster / Beispiel' }, team2_data: { name: 'Rossi / Bianchi' } },

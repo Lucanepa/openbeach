@@ -3,8 +3,6 @@ import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db_beach/db_beach'
 import { useAlert } from '../contexts_beach/AlertContext_beach'
-import { apiFrom } from '../lib_beach/apiClient_beach'
-import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 
 // Standard volleyball team colors - keys for translation
 const TEAM_COLORS = [
@@ -512,8 +510,8 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
         }
       }
 
-      // Sync to Supabase if available
-      if (isBackendAvailable() && editedMatch?.seed_key) {
+      // Queue for the cloud (also while offline / signed out)
+      if (editedMatch?.seed_key) {
         await syncToSupabase()
       }
 
@@ -528,9 +526,9 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
     }
   }
 
-  // Sync changes to Supabase
+  // Queue the changes for the cloud (the sync queue sends them)
   const syncToSupabase = async () => {
-    if (!isBackendAvailable() || !editedMatch?.seed_key) return
+    if (!editedMatch?.seed_key || editedMatch.test) return
 
     try {
       // Build set results for Supabase
@@ -569,9 +567,14 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
         color: editedTeam2.color
       } : null
 
-      // Update match in Supabase
-      const { error: matchError } = await apiFrom('matches')
-        .update({
+      // Through the sync queue (not a direct write): signed out or offline it
+      // waits and retries, so the cloud record follows the local scoresheet.
+      // The queue merges the JSONB columns (team1_data, officials, ...).
+      await db.sync_queue.add({
+        resource: 'match',
+        action: 'update',
+        payload: {
+          id: editedMatch.seed_key,
           match_info: {
             hall: editedMatch.hall || '',
             city: editedMatch.city || '',
@@ -585,16 +588,13 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
           team2_data: team2Data,
           officials: editedOfficials,
           manual_changes: [...(editedMatch.manualChanges || []), ...changes]
-        })
-        .eq('external_id', editedMatch.seed_key)
-
-      if (matchError) {
-        console.error('Supabase match update error:', matchError)
-        throw matchError
-      }
+        },
+        ts: new Date().toISOString(),
+        status: 'queued'
+      })
 
     } catch (error) {
-      console.error('Supabase sync error:', error)
+      console.error('Queueing the cloud update failed:', error)
     }
   }
 

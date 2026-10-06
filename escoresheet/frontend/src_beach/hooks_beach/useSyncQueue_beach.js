@@ -24,7 +24,7 @@ export const VALID_MATCH_COLUMNS = [
 // (connection_pins is never read back: it is sent whole, see below)
 export const JSONB_COLUMNS = [
   'connections', 'connection_pins', 'team1_data', 'team2_data',
-  'officials', 'coin_toss', 'set_results', 'sanctions'
+  'officials', 'coin_toss', 'set_results', 'sanctions', 'signatures'
 ]
 
 /** Keep only columns that exist on the matches table. */

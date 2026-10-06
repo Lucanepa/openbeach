@@ -53,6 +53,19 @@ import { ArrowLeftRight, Card, ChartColumn, ClipboardList, Copy, Download, FileT
  * conditions (e.g., rapid clicks causing duplicate sets).
  */
 
+// matches.current_set follows the set being played, through the sync queue
+// (the live state carries it too, but only the matches row is the record)
+async function queueCurrentSet(seedKey, index) {
+  if (!seedKey || !index) return
+  await db.sync_queue.add({
+    resource: 'match',
+    action: 'update',
+    payload: { id: seedKey, current_set: index },
+    ts: new Date().toISOString(),
+    status: 'queued'
+  })
+}
+
 // Live-state write failures already shown to the scorer this session (one
 // modal per kind, never one per point)
 const liveStateErrorShown = new Set()
@@ -1551,8 +1564,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // DIRECT SUPABASE WRITE (bypasses sync_queue) - see architecture note at top of file
       // Reason: match_live_state needs sub-second latency for real-time spectator display.
       // Queuing would add 1s+ delay from the polling interval in useSyncQueue.
-      // Note: current_set is already in liveStateData, so we don't need a separate matches.update().
-      // The sync queue will update matches.current_set for persistence.
+      // matches.current_set is queued on every set change (queueCurrentSet).
       const liveStateResult = await apiFrom('match_live_state').upsert(liveStateData, { onConflict: 'match_id' })
 
       if (liveStateResult.error) {
@@ -1849,6 +1861,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         ts: roundToMinute(new Date().toISOString()),
         status: 'queued'
       })
+      await queueCurrentSet(match.seed_key, nextIndex)
     }
 
     // Release the lock after successful creation
@@ -4602,6 +4615,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               status: 'queued'
             })
           }
+          if (!isTest && matchRecordForNewSet?.seed_key) await queueCurrentSet(matchRecordForNewSet.seed_key, newSetIndex)
 
           // Refresh eScoresheet to show the new set
           refreshScoresheet()
@@ -4691,6 +4705,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           status: 'queued'
         })
       }
+      if (!isTest && match?.seed_key) await queueCurrentSet(match.seed_key, setIndex)
     }
 
     // Log the set 3 coin toss event so it can be undone

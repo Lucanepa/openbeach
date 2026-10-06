@@ -4,8 +4,6 @@ import { useAlert } from '../contexts_beach/AlertContext_beach'
 import { getMatchData } from '../utils_beach/serverDataSync_beach'
 import { useRealtimeConnection } from '../hooks_beach/useRealtimeConnection_beach'
 import { db } from '../db_beach/db_beach'
-import { apiFrom } from '../lib_beach/apiClient_beach'
-import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 import SignaturePad from './SignaturePad_beach'
 
 export default function RosterSetup({ matchId, team, onBack, embedded = false, useSupabaseConnection = false, matchData = null }) {
@@ -228,49 +226,20 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
         await db.matches.update(matchId, { [coachKey]: coachName || '' })
       }
 
-      // If connected to Supabase, also sync roster
-      if (useSupabaseConnection && isBackendAvailable() && matchData?.external_id) {
-        setSyncing(true)
-
-        // JSONB signature keys
+      // The captain's signature reaches the cloud through the sync queue
+      // (signed out / offline it waits and retries); the queue merges it
+      // into the row's signatures instead of replacing them.
+      if (useSupabaseConnection && matchData?.external_id && captainSignature) {
         const captainSigJsonKey = team === 'team1' ? 'team1_captain' : 'team2_captain'
-
-        const supabaseUpdate = {}
-
-        // Build signatures JSONB partial update
-        const signaturesUpdate = {}
-
-        // Save signatures to JSONB
-        if (captainSignature) {
-          signaturesUpdate[captainSigJsonKey] = captainSignature
-        }
-
-        // Merge with existing signatures JSONB
-        if (Object.keys(signaturesUpdate).length > 0) {
-          const { data: existingMatch } = await apiFrom('matches')
-            .select('signatures')
-            .eq('external_id', matchData.external_id)
-            .maybeSingle()
-
-          supabaseUpdate.signatures = {
-            ...(existingMatch?.signatures || {}),
-            ...signaturesUpdate
-          }
-        }
-
-        const { error: supabaseError } = await apiFrom('matches')
-          .update(supabaseUpdate)
-          .eq('external_id', matchData.external_id)
-
-        setSyncing(false)
-
-        if (supabaseError) {
-          console.error('[RosterSetup] Failed to sync roster to Supabase:', supabaseError)
-        }
-        showAlert(t('rosterSetup.rosterSaved'), 'success')
-      } else {
-        showAlert(t('rosterSetup.rosterSaved'), 'success')
+        await db.sync_queue.add({
+          resource: 'match',
+          action: 'update',
+          payload: { id: matchData.external_id, signatures: { [captainSigJsonKey]: captainSignature } },
+          ts: new Date().toISOString(),
+          status: 'queued'
+        })
       }
+      showAlert(t('rosterSetup.rosterSaved'), 'success')
     } catch (err) {
       console.error('Error saving roster:', err)
       setError('Failed to save roster')
