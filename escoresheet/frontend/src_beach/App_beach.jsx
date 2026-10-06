@@ -15,7 +15,8 @@ import HomePage from './components_beach/pages/HomePage_beach'
 import HomeOptionsModal from './components_beach/options/HomeOptionsModal_beach'
 import ConnectionSetupModal from './components_beach/options/ConnectionSetupModal_beach'
 import StartupConnectivityModal from './components_beach/StartupConnectivityModal_beach'
-import { useSyncQueue } from './hooks_beach/useSyncQueue_beach'
+import { useSyncQueue, useSyncQueueStats } from './hooks_beach/useSyncQueue_beach'
+import SyncSignInBanner from './components_beach/auth/SyncSignInBanner_beach'
 import useAutoBackup from './hooks_beach/useAutoBackup_beach'
 import { useDashboardServer } from './hooks_beach/useDashboardServer_beach'
 // Beach volleyball ball image
@@ -95,6 +96,8 @@ export default function App() {
   const [connectionSetupModal, setConnectionSetupModal] = useState(false)
   const [showCompetitionPicker, setShowCompetitionPicker] = useState(false)
   const { syncStatus, retryErrors, isOnline } = useSyncQueue()
+  // Live queue counts for the connection indicator (pending / error / failed)
+  const syncQueueCounts = useSyncQueueStats()
   const backup = useAutoBackup(matchId)
   const canUseSupabase = isBackendAvailable()
 
@@ -666,16 +669,21 @@ export default function App() {
         message: 'Cloud backend is not configured',
         details: 'No backend URL: set VITE_BACKEND_URL (e.g. https://backend.openvolley.app) or choose a server.'
       }
+    } else if (syncStatus === 'auth_required') {
+      // The backend is reachable; writes wait for a sign-in (banner says so)
+      statuses.supabase = 'connected'
+      debugInfo.supabase = { status: 'connected', message: 'Cloud backend is reachable. Sign in to sync this device\'s matches.' }
     } else if (syncStatus === 'synced' || syncStatus === 'syncing') {
       statuses.supabase = 'connected'
       debugInfo.supabase = { status: 'connected', message: 'Supabase is connected and syncing' }
     } else if (syncStatus === 'online_no_supabase') {
-      // This shouldn't happen if canUseSupabase is true, but handle it anyway
+      // The server answered without /api/db: a LAN relay (desktop app, venue
+      // server) that only relays matches
       statuses.supabase = 'not_configured'
       debugInfo.supabase = {
         status: 'not_configured',
-        message: 'Supabase client not initialized',
-        details: 'Supabase environment variables may be set but client failed to initialize. Check your .env file.'
+        message: 'Offline: no cloud backend here',
+        details: 'This server is an offline LAN relay or the build has no backend URL. Matches are kept on this device.'
       }
     } else if (syncStatus === 'connecting') {
       statuses.supabase = 'connecting'
@@ -2956,6 +2964,13 @@ export default function App() {
         setMatchInfoMenuOpen(false)
       }
     }}>
+      {/* Cloud sync waits for a sign-in: say so once, without blocking scoring */}
+      {!offlineMode && (
+        <SyncSignInBanner
+          syncStatus={syncStatus}
+          compact={!!(matchId && !showCoinToss && !showMatchSetup && !showMatchEnd && !showManualAdjustments)}
+        />
+      )}
       {/* Minimum screen size warning - block phones/small screens */}
       {/* Allow if at least one dimension >= 800 (tablet in any orientation), but enforce min 500 on both */}
       {/* Skip warning in fullscreen mode - trust user has adequate screen space */}
@@ -3049,7 +3064,7 @@ export default function App() {
               localStorage.setItem('offlineMode', val.toString())
             }}
             onOpenSetup={openMatchSetup}
-            queueStats={syncStatus}
+            queueStats={syncQueueCounts}
             onRetryErrors={retryErrors}
             dashboardServer={dashboardServerEnabled ? {
               enabled: dashboardServerEnabled,
