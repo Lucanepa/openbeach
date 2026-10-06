@@ -4,7 +4,7 @@ vi.mock('../../utils_beach/backendConfig_beach', () => ({
   getApiUrl: (path) => `http://backend.test${path}`
 }))
 
-import { apiFrom, apiAuth, apiStorage, apiMatchRestore, apiMatchRestoreByPin, apiMatchClaim, isSessionRejected, normalizeError, toBase64 } from '../../lib_beach/apiClient_beach'
+import { apiFrom, apiAuth, apiStorage, apiMatchRestore, apiMatchRestoreByPin, apiMatchClaim, isSessionRejected, normalizeError, toBase64, canUseStorage } from '../../lib_beach/apiClient_beach'
 import { useMemoryLocalStorage } from '../helpers/memoryStorage'
 
 // Ported from OpenVolley src/lib/__tests__/apiClient.test.js, plus the
@@ -236,10 +236,37 @@ describe('storage upload encoding', () => {
   })
 
   it('upload sends the UTF-8 base64 body', async () => {
+    localStorage.setItem('api_auth_token', JSON.stringify({ access_token: 'up-tok', expires_at: Math.floor(Date.now() / 1000) + 3600 }))
     globalThis.fetch = vi.fn(async () => jsonResponse({ data: { path: 'p' }, error: null }))
     const result = await apiStorage.from('backup').upload('logs/x.txt', 'ü 🏐', { contentType: 'text/plain' })
     expect(result.error).toBeNull()
     expect(decode(sentBody().fileBase64)).toBe('ü 🏐')
+  })
+
+  it('storage sends nothing signed out, nor again with a token the server refused (401)', async () => {
+    localStorage.removeItem('api_auth_token')
+    globalThis.fetch = vi.fn(async () => jsonResponse({ data: { path: 'p' }, error: null }))
+    for (const call of [
+      () => apiStorage.from('backup').upload('logs/x.txt', 'x'),
+      () => apiStorage.from('backup').download('logs/x.txt'),
+      () => apiStorage.from('backup').list('logs')
+    ]) {
+      const r = await call()
+      expect(r.error).toMatchObject({ status: 401, code: 'auth_required' })
+    }
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+    expect(canUseStorage()).toBe(false)
+
+    localStorage.setItem('api_auth_token', JSON.stringify({ access_token: 'revoked', expires_at: Math.floor(Date.now() / 1000) + 3600 }))
+    expect(canUseStorage()).toBe(true)
+    globalThis.fetch = vi.fn(async () => jsonResponse({ error: { message: 'Unauthorized' } }, 401))
+    await apiStorage.from('backup').list('logs')
+    await apiStorage.from('backup').list('logs')
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1)
+    expect(canUseStorage()).toBe(false)
+    // a new sign-in lifts it
+    localStorage.setItem('api_auth_token', JSON.stringify({ access_token: 'fresh', expires_at: Math.floor(Date.now() / 1000) + 3600 }))
+    expect(canUseStorage()).toBe(true)
   })
 })
 

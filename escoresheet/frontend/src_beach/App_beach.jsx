@@ -254,17 +254,12 @@ export default function App() {
 
   // Fetch server status periodically
   useEffect(() => {
-    // Skip server status checks in production static deployments
-    // Server is only available in development or Electron app
-    const isStaticDeployment = !import.meta.env.DEV && (
-      window.location.hostname.includes('github.io') ||
-      window.location.hostname.endsWith('.openvolley.app') // All openvolley.app subdomains are static
-    )
-
-    if (isStaticDeployment) {
-      // No server available in static deployment
-      return
-    }
+    // Only the local-server mode has /api/server/status: the Electron app
+    // (its bundled server) or a build that says so (VITE_LOCAL_SERVER=true).
+    // Elsewhere (the static PWA, the Vite dev server against the cloud
+    // backend) every poll was a 404.
+    const localServerMode = !!window.electronAPI?.server || import.meta.env.VITE_LOCAL_SERVER === 'true'
+    if (!localServerMode) return
 
     const fetchServerStatus = async () => {
       try {

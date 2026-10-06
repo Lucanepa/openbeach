@@ -2,7 +2,7 @@
  * Logger - Captures console logs and backs up to Supabase storage
  */
 
-import { apiStorage } from '../lib_beach/apiClient_beach'
+import { apiStorage, canUseStorage } from '../lib_beach/apiClient_beach'
 import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 
 // In-memory log buffer
@@ -135,11 +135,17 @@ export function downloadLogs(matchId = null) {
  * @param {string|null} matchId - Match ID for organizing logs
  * @param {string|number|null} gameNumber - Game number for human-readable folder names
  */
+// Log files this page uploaded (or found) already: no listing before the next append
+const knownLogFiles = new Set()
+
 export async function uploadLogsToCloud(matchId = null, gameNumber = null) {
   if (!isBackendAvailable()) {
     console.warn('[Logger] Supabase not configured - cannot upload logs')
     return null
   }
+
+  // Storage needs a session: signed out, nothing is sent (no 401s)
+  if (!canUseStorage()) return null
 
   const newLogs = exportLogsAsText()
   // Use gameNumber if available for human-readable paths, fall back to matchId
@@ -147,15 +153,21 @@ export async function uploadLogsToCloud(matchId = null, gameNumber = null) {
   const filename = `logs/${folderName}/logs.txt` // Single file name, not timestamped
 
   try {
-    // Try to download existing log file
+    // Read the existing log file to append to it; whether it exists comes
+    // from a listing (a download of a missing file is a 404 in the server log)
     let existingLogs = ''
-    const { data: existingData, error: downloadError } = await apiStorage
-      .from('backup')
-      .download(filename)
-
-    if (!downloadError && existingData) {
-      // File exists, read its contents
-      existingLogs = await existingData.text()
+    let exists = knownLogFiles.has(filename)
+    if (!exists) {
+      const { data: listed, error: listError } = await apiStorage.from('backup').list(`logs/${folderName}`)
+      exists = !listError && Array.isArray(listed) && listed.some(f => f?.name === 'logs.txt')
+    }
+    if (exists) {
+      const { data: existingData, error: downloadError } = await apiStorage
+        .from('backup')
+        .download(filename)
+      if (!downloadError && existingData) {
+        existingLogs = await existingData.text()
+      }
     }
 
     // Append new logs to existing logs
@@ -176,6 +188,7 @@ export async function uploadLogsToCloud(matchId = null, gameNumber = null) {
       return null
     }
 
+    knownLogFiles.add(filename)
     return data?.path || filename
   } catch (err) {
     console.error('[Logger] Error uploading logs:', err)
@@ -192,6 +205,9 @@ export async function uploadBackupToCloud(matchId, backupData) {
     console.warn('[Logger] Supabase not configured - cannot upload backup')
     return null
   }
+
+  // Storage needs a session: signed out, nothing is sent (no 401s)
+  if (!canUseStorage()) return null
 
   const gameN = backupData?.match?.gameN || backupData?.match?.game_n || 1
 

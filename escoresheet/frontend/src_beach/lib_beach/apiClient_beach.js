@@ -326,12 +326,40 @@ export async function toBase64(fileData) {
 
 // ==================== Storage ====================
 
+// Every storage call needs a session (the files belong to an account). Without
+// one, or with the token the server already refused (401), nothing is sent:
+// the backup and log uploaders run on a timer and would put a 401 in the
+// server log every time. A new sign-in (another token) lifts the block.
+let storageRejectedToken = null
+const STORAGE_SIGNED_OUT = Object.freeze({ message: 'Not signed in', status: 401, code: 'auth_required', local: true })
+
+/** The session storage calls would use, or null when they must not be sent. */
+function storageSession() {
+  const token = getStoredToken()?.access_token
+  if (!token || token === storageRejectedToken) return null
+  return token
+}
+
+/** Remember a 401 of a storage call for the token that got it. */
+function noteStorageAuth(result, token) {
+  const st = result?.status ?? result?.error?.status
+  if (st === 401) storageRejectedToken = token
+  return result
+}
+
+/** True when storage calls would be sent (a session the server has not refused). */
+export function canUseStorage() {
+  return storageSession() !== null
+}
+
 export const apiStorage = {
   from(bucket) {
     return {
       async upload(path, fileData, options = {}) {
         const apiUrl = getApiUrl('/api/storage/upload')
         if (!apiUrl) return { data: null, error: { message: 'Backend not available' } }
+        const token = storageSession()
+        if (!token) return { data: null, error: { ...STORAGE_SIGNED_OUT }, status: 401 }
 
         // Convert file data to base64 (inside the try: an encoding failure must
         // come back as { error }, not throw past the caller)
@@ -354,7 +382,7 @@ export const apiStorage = {
               upsert: options.upsert
             })
           })
-          return safeJsonResponse(response, 'Storage upload failed')
+          return noteStorageAuth(await safeJsonResponse(response, 'Storage upload failed'), token)
         } catch (err) {
           return { data: null, error: networkError(err) }
         }
@@ -363,6 +391,8 @@ export const apiStorage = {
       async download(path) {
         const apiUrl = getApiUrl('/api/storage/download')
         if (!apiUrl) return { data: null, error: { message: 'Backend not available' } }
+        const token = storageSession()
+        if (!token) return { data: null, error: { ...STORAGE_SIGNED_OUT }, status: 401 }
 
         let response
         try {
@@ -375,7 +405,7 @@ export const apiStorage = {
           return { data: null, error: networkError(err) }
         }
         if (!response.ok) {
-          return await safeJsonResponse(response, 'Storage download failed')
+          return noteStorageAuth(await safeJsonResponse(response, 'Storage download failed'), token)
         }
         const result = await response.json()
 
@@ -398,6 +428,8 @@ export const apiStorage = {
       async list(dirPath, options = {}) {
         const apiUrl = getApiUrl('/api/storage/list')
         if (!apiUrl) return { data: null, error: { message: 'Backend not available' } }
+        const token = storageSession()
+        if (!token) return { data: null, error: { ...STORAGE_SIGNED_OUT }, status: 401 }
 
         try {
           const response = await fetch(apiUrl, {
@@ -405,7 +437,7 @@ export const apiStorage = {
             headers: getAuthHeaders(),
             body: JSON.stringify({ bucket, path: dirPath, options })
           })
-          return safeJsonResponse(response, 'Storage list failed')
+          return noteStorageAuth(await safeJsonResponse(response, 'Storage list failed'), token)
         } catch (err) {
           return { data: null, error: networkError(err) }
         }

@@ -555,8 +555,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   const [pinError, setPinError] = useState('')
 
   // Remote roster search state
-  const [team1RosterSearching, setTeam1RosterSearching] = useState(false)
-  const [team2RosterSearching, setTeam2RosterSearching] = useState(false)
   const [rosterPreview, setRosterPreview] = useState(null) // 'team1' | 'team2' | null
 
   // Referee selector state
@@ -2663,74 +2661,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     onStart(matchId)
   }
 
-  // Search for pending roster in Supabase
-  const handleSearchTeam1Roster = async () => {
-    if (!match || !isBackendAvailable()) {
-      setNoticeModal({ message: t('matchSetup.noSupabaseConnection') })
-      return
-    }
-
-    setTeam1RosterSearching(true)
-    try {
-      const gameNumber = match.game_n || match.gameNumber || gameN
-
-      // Search for pending roster in Supabase
-      const { data, error } = await apiFrom('matches')
-        .select('pending_team1_roster, external_id')
-        .eq('game_n', gameNumber)
-        .not('pending_team1_roster', 'is', null)
-        .limit(1)
-        .single()
-
-      if (error || !data?.pending_team1_roster) {
-        setNoticeModal({ message: t('matchSetup.noRosterFound') })
-        return
-      }
-
-
-      // Store in local match data to trigger the pending roster UI
-      await db.matches.update(matchId, { pendingTeam1Roster: data.pending_team1_roster })
-    } catch (err) {
-      console.error('[MatchSetup] Error searching for Team 1 roster:', err)
-      setNoticeModal({ message: t('matchSetup.errorSearchingRoster') })
-    } finally {
-      setTeam1RosterSearching(false)
-    }
-  }
-
-  const handleSearchTeam2Roster = async () => {
-    if (!match || !isBackendAvailable()) {
-      setNoticeModal({ message: t('matchSetup.noSupabaseConnection') })
-      return
-    }
-
-    setTeam2RosterSearching(true)
-    try {
-      const gameNumber = match.game_n || match.gameNumber || gameN
-
-      // Search for pending roster in Supabase
-      const { data, error } = await apiFrom('matches')
-        .select('pending_team2_roster, external_id')
-        .eq('game_n', gameNumber)
-        .not('pending_team2_roster', 'is', null)
-        .limit(1)
-        .single()
-
-      if (error || !data?.pending_team2_roster) {
-        setNoticeModal({ message: t('matchSetup.noRosterFound') })
-        return
-      }
-
-
-      // Store in local match data to trigger the pending roster UI
-      await db.matches.update(matchId, { pendingteam2Roster: data.pending_team2_roster })
-    } catch (err) {
-      console.error('[MatchSetup] Error searching for team2 roster:', err)
-      setNoticeModal({ message: t('matchSetup.errorSearchingRoster') })
-    } finally {
-      setTeam2RosterSearching(false)
-    }
-  }
+  // (The "search uploaded roster" handlers are gone: nothing called them, they
+  // read pending_team1_roster / pending_team2_roster, columns the backend
+  // does not have, unscoped by sport. A roster upload for beach needs the
+  // backend's upload-roster, which is indoor only today; plan, later phase.)
 
   // Callback for opening database selector - MUST be before any early returns to satisfy React hooks rules
   const handleOpenDatabase = useCallback((e, selectorKey) => {
