@@ -3,17 +3,20 @@ import { useTranslation } from 'react-i18next'
 import { apiStorage } from './lib_beach/apiClient_beach'
 import { isBackendAvailable } from './utils_beach/backendConfig_beach'
 
-// Get a signed URL for a file in Supabase storage (valid for 1 hour)
-const getSignedUrl = async (path) => {
+// Download a PDF from the backend's scoresheets bucket and return an object
+// URL for it (the backend has no signed URLs; every read needs the session of
+// the account that uploaded the scoresheet). The caller revokes the URL.
+const getPdfObjectUrl = async (path) => {
   if (!isBackendAvailable()) return null
   const { data, error } = await apiStorage
     .from('scoresheets')
-    .createSignedUrl(path, 3600)
-  if (error) {
-    console.error('[Scoresheet] Signed URL error:', error)
+    .download(path)
+  if (error || !data) {
+    console.error('[Scoresheet] PDF download error:', error)
     return null
   }
-  return data.signedUrl
+  const blob = data.type === 'application/pdf' ? data : new Blob([data], { type: 'application/pdf' })
+  return URL.createObjectURL(blob)
 }
 
 // Extract team name from scoresheet JSON, checking all possible key formats
@@ -182,10 +185,17 @@ const ScoresheetViewer = ({ date, game }) => {
   const [error, setError] = useState(null)
 
   useEffect(() => {
+    let objectUrl = null
+    let cancelled = false
     const loadPdf = async () => {
       try {
-        const url = await getSignedUrl(`${date}/game${game}.pdf`)
+        const url = await getPdfObjectUrl(`${date}/game${game}.pdf`)
+        if (cancelled) {
+          if (url) URL.revokeObjectURL(url)
+          return
+        }
         if (url) {
+          objectUrl = url
           setPdfUrl(url)
         } else {
           setError(`PDF not found: ${date}/game${game}.pdf`)
@@ -197,6 +207,10 @@ const ScoresheetViewer = ({ date, game }) => {
       }
     }
     loadPdf()
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
   }, [date, game])
 
   if (loading) {
