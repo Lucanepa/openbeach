@@ -69,7 +69,7 @@ describe('db_beach v18 upgrade', () => {
 
     const { db } = await import('../../db_beach/db_beach')
     await db.open()
-    expect(db.verno).toBe(18)
+    expect(db.verno).toBe(19)
     const rows = Object.fromEntries((await db.sync_queue.toArray()).map(r => [r.id, r]))
 
     expect(rows[1].status).toBe('sent')
@@ -87,6 +87,50 @@ describe('db_beach v18 upgrade', () => {
     }
     // The queue reads one status index now
     expect(await db.sync_queue.where('status').equals('queued').count()).toBe(4)
+    // v19 adds the saved teams cache, empty
+    expect(await db.saved_teams.count()).toBe(0)
+    expect(await db.saved_teams_meta.count()).toBe(0)
+    db.close()
+  })
+})
+
+// v18 -> v19 only adds the saved beach teams cache (two new tables, no upgrade
+// function): a device's matches and waiting sync jobs must come through intact.
+const V18_STORES = { ...V17_STORES, sync_queue: '++id,resource,action,payload,ts,status' }
+
+describe('db_beach v19 (saved teams cache)', () => {
+  it('opens a v18 database at 19 with its rows intact and empty cache tables', async () => {
+    const { db } = await import('../../db_beach/db_beach')
+    await db.delete()
+    const old = new Dexie('escoresheet')
+    old.version(18).stores(V18_STORES)
+    await old.open()
+    await old.table('matches').add({ id: 1, seed_key: 'match_1', status: 'live', team1Name: 'A' })
+    await old.table('sync_queue').bulkAdd([
+      { id: 1, resource: 'match', action: 'insert', status: 'queued', ts: '2026-10-01T10:00:00.000Z', payload: { external_id: 'match_1' } },
+      { id: 2, resource: 'event', action: 'insert', status: 'sent', ts: '2026-10-01T10:00:01.000Z', payload: { external_id: 'match_1:e:3', match_id: 'match_1' } }
+    ])
+    old.close()
+
+    await db.open()
+    expect(db.verno).toBe(19)
+    expect(await db.matches.get(1)).toMatchObject({ seed_key: 'match_1', status: 'live', team1Name: 'A' })
+    const jobs = await db.sync_queue.toArray()
+    expect(jobs.map(j => [j.id, j.status, j.payload.external_id])).toEqual([[1, 'queued', 'match_1'], [2, 'sent', 'match_1:e:3']])
+    expect(await db.saved_teams.count()).toBe(0)
+    expect(await db.saved_teams_meta.count()).toBe(0)
+    await db.saved_teams.put({ id: 't1', competitionId: 'c1', nameKey: 'a/b', pairKey: 'a/b' })
+    expect(await db.saved_teams.where('nameKey').equals('a/b').count()).toBe(1)
+    db.close()
+  })
+
+  it('a fresh database opens at 19', async () => {
+    const { db } = await import('../../db_beach/db_beach')
+    await db.delete()
+    await db.open()
+    expect(db.verno).toBe(19)
+    expect(db.tables.map(t => t.name)).toEqual(expect.arrayContaining(['matches', 'sync_queue', 'saved_teams', 'saved_teams_meta']))
+    expect(await db.saved_teams.count()).toBe(0)
     db.close()
   })
 })
