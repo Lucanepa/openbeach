@@ -119,8 +119,7 @@ export default function ProfileModal({ open, onClose }) {
       firstName,
       lastName,
       country,
-      dob: dob || null,
-      roles: profile?.roles || ['scorer']
+      dob: dob || null
     })
 
     if (updateError) {

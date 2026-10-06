@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
-import { apiFrom, apiAuth, apiRpc } from '../lib_beach/apiClient_beach'
+import { apiFrom, apiAuth } from '../lib_beach/apiClient_beach'
 import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 
 const AuthContext = createContext(null)
@@ -174,8 +174,8 @@ export function AuthProvider({ children }) {
         first_name: updates.firstName,
         last_name: updates.lastName,
         country: updates.country,
-        dob: updates.dob,
-        roles: updates.roles
+        dob: updates.dob
+        // No roles: the backend strips them (only an admin assigns roles)
       })
       .eq('user_id', user.id)
       .select()
@@ -221,20 +221,19 @@ export function AuthProvider({ children }) {
     return cached ? JSON.parse(cached) : null
   }, [])
 
-  // Delete account - requires RPC function in database
+  // Delete account: POST /api/auth/delete-account (the backend deletes the
+  // user, its sessions and its profile; apiAuth then drops the stored token)
   const deleteAccount = useCallback(async () => {
     if (!isBackendAvailable() || !user) {
       return { error: { message: 'Not authenticated' } }
     }
 
     try {
-      // Call the delete_user RPC function which deletes the auth user
-      // This function must be created in Supabase with SECURITY DEFINER
-      const { error: rpcError } = await apiRpc('delete_user')
+      const { error: deleteError } = await apiAuth.deleteUser()
 
-      if (rpcError) {
-        console.error('Delete user RPC error:', rpcError)
-        return { error: rpcError }
+      if (deleteError) {
+        console.error('Delete account error:', deleteError)
+        return { error: deleteError }
       }
 
       // Clear local state
