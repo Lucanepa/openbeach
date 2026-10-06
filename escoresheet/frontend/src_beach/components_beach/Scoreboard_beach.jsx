@@ -53,6 +53,10 @@ import { ArrowLeftRight, Card, ChartColumn, ClipboardList, Copy, Download, FileT
  * conditions (e.g., rapid clicks causing duplicate sets).
  */
 
+// Live-state write failures already shown to the scorer this session (one
+// modal per kind, never one per point)
+const liveStateErrorShown = new Set()
+
 export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onFinishSet, onOpenSetup, onOpenMatchSetup, onOpenCoinToss, onTriggerEventBackup }) {
   const { t } = useTranslation()
   const { vmin } = useScaledLayout()
@@ -1553,10 +1557,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
       if (liveStateResult.error) {
         console.error('[LiveState] Sync error:', liveStateResult.error)
-        // Not signed in / not this account's match / offline: the sync
-        // queue's banner explains that once; no modal on every point.
+        // Not signed in / not this account's match / offline / rate limited:
+        // the sync queue's banner explains that; no modal. Any other refusal
+        // (4xx: a column the server lacks, a bad value) gets the modal once
+        // per session, not on every point; a 5xx too, once.
         const st = liveStateResult.error.status
         if (st === 401 || st === 403 || st === 426 || st === 429 || st === 0 || liveStateResult.error.network) return
+        const kind = st >= 400 && st < 500 ? '4xx' : 'other'
+        if (liveStateErrorShown.has(kind)) return
+        liveStateErrorShown.add(kind)
         setScoresheetErrorModal({
           error: t('errors.syncFailed'),
           details: liveStateResult.error.message || t('errors.databaseWriteError')
