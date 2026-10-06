@@ -660,12 +660,10 @@ export default function App() {
     // First check if Supabase is configured at all
     if (!canUseSupabase) {
       statuses.supabase = 'not_configured'
-      const envUrl = import.meta.env.VITE_SUPABASE_URL
-      const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY
       debugInfo.supabase = {
         status: 'not_configured',
-        message: 'Supabase is not configured',
-        details: `Environment variables missing: ${!envUrl ? 'VITE_SUPABASE_URL' : ''}${!envUrl && !envKey ? ' and ' : ''}${!envKey ? 'VITE_SUPABASE_ANON_KEY' : ''}. Set these in your .env file to enable Supabase sync.`
+        message: 'Cloud backend is not configured',
+        details: 'No backend URL: set VITE_BACKEND_URL (e.g. https://backend.openvolley.app) or choose a server.'
       }
     } else if (syncStatus === 'synced' || syncStatus === 'syncing') {
       statuses.supabase = 'connected'

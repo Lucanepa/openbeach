@@ -114,6 +114,19 @@ export function getWebSocketUrl() {
     return null // No backend available
   }
 
+  // A runtime override (server chosen on the connection screen) wins, as in
+  // getBackendUrl: the realtime socket must follow the API calls
+  const override = getBackendOverride()
+  if (override) {
+    try {
+      const url = new URL(override)
+      const protocol = url.protocol === 'https:' ? 'wss' : 'ws'
+      return `${protocol}://${url.host}`
+    } catch {
+      return null
+    }
+  }
+
   // If backend URL is set, use it for WebSocket
   if (import.meta.env.VITE_BACKEND_URL) {
     const url = new URL(import.meta.env.VITE_BACKEND_URL)
