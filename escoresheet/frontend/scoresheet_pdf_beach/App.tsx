@@ -328,7 +328,14 @@ export default function App({ matchData }: { matchData?: any }) {
       }
     } catch (error) {
       console.error('Error generating PDF:', error);
-      alert('Error generating PDF: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      if (returnBlob && window.opener && !window.opener.closed) {
+        // The approval waits for this window: say so at once (no blocking alert)
+        window.opener.postMessage({ type: 'pdfError', message }, window.location.origin);
+        setTimeout(() => window.close(), 500);
+      } else {
+        alert('Error generating PDF: ' + message);
+      }
     } finally {
       setIsPdfGenerating(false);
       setPdfProgress('');

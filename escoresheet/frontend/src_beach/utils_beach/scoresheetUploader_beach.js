@@ -17,19 +17,64 @@ export function scoresheetDate(match) {
 
 /**
  * Storage path of a beach scoresheet file:
- * beach/{scheduled_date}/game{n}{suffix}.{ext}
- * @param {object} match - local match (scheduledAt, gameNumber / externalId / game_n)
+ * beach/{scheduled_date}/game{n}_{seed_key}{_final}.{ext}
+ *
+ * The seed_key makes the key unique per match: two tournaments (or two
+ * accounts) play a game n on the same date, and a storage key belongs to the
+ * account that wrote it first (the second upload would be refused, or one
+ * game would overwrite the other). A match without a seed_key keeps the old
+ * game{n}{_final}.{ext}.
+ * @param {object} match - local match (scheduledAt, gameNumber / externalId / game_n, seed_key)
  * @param {{ ext?: 'json'|'pdf', final?: boolean }} [options]
  */
 export function scoresheetStoragePath(match, { ext = 'json', final = false } = {}) {
   const gameNumber = match?.gameNumber || match?.externalId || match?.game_n || 'unknown'
-  return `${BEACH_SCORESHEET_PREFIX}/${scoresheetDate(match)}/game${gameNumber}${final ? '_final' : ''}.${ext}`
+  const seed = match?.seed_key ? `_${String(match.seed_key).replace(/[^A-Za-z0-9_-]/g, '-')}` : ''
+  return `${BEACH_SCORESHEET_PREFIX}/${scoresheetDate(match)}/game${gameNumber}${seed}${final ? '_final' : ''}.${ext}`
+}
+
+/**
+ * A final scoresheet file name of a date folder (game{n}[_{seed}]_final.json):
+ * its game number and the name of its PDF, or null for any other file.
+ * @param {string} name
+ * @returns {{ game: string, pdfName: string }|null}
+ */
+export function parseFinalScoresheetName(name) {
+  const m = /^game(\d+)(_[A-Za-z0-9_-]+?)?_final\.json$/.exec(String(name || ''))
+  if (!m) return null
+  return { game: m[1], pdfName: `game${m[1]}${m[2] || ''}.pdf` }
+}
+
+/**
+ * Upload the scoresheet PDF next to its JSON (scoresheetStoragePath, .pdf).
+ * @param {object} match - local match
+ * @param {Blob} blob - the PDF
+ * @returns {Promise<{success: boolean, path?: string, error?: string}>}
+ */
+export async function uploadScoresheetPdf(match, blob) {
+  if (!isBackendAvailable() || !match) return { success: false, error: 'No backend or match' }
+  if (match.test) return { success: false, error: 'Test match' }
+  if (!blob) return { success: false, error: 'No PDF' }
+  const path = scoresheetStoragePath(match, { ext: 'pdf' })
+  try {
+    const { error } = await apiStorage
+      .from('scoresheets')
+      .upload(path, blob, { contentType: 'application/pdf', upsert: true })
+    if (error) {
+      console.warn('[scoresheetUploader] PDF upload failed:', error)
+      return { success: false, error: error.message || 'Upload failed' }
+    }
+    return { success: true, path }
+  } catch (err) {
+    console.warn('[scoresheetUploader] PDF upload error:', err)
+    return { success: false, error: err.message }
+  }
 }
 
 /**
  * Upload scoresheet data as JSON to the backend's 'scoresheets' bucket.
- * Uploads to: scoresheets/beach/{scheduled_date}/game{n}.json (or
- * game{n}_final.json if final=true), see scoresheetStoragePath.
+ * Uploads to: scoresheets/beach/{scheduled_date}/game{n}_{seed}.json (or
+ * ..._final.json if final=true), see scoresheetStoragePath.
  *
  * @param {Object} options
  * @param {Object} options.match - Match data
@@ -39,7 +84,7 @@ export function scoresheetStoragePath(match, { ext = 'json', final = false } = {
  * @param {Array} options.team2Players - Team 2 players
  * @param {Array} options.sets - Sets data
  * @param {Array} options.events - Events data
- * @param {boolean} options.final - If true, uploads as game{n}_final.json (approved match)
+ * @param {boolean} options.final - If true, uploads as game{n}_{seed}_final.json (approved match)
  * @returns {Promise<{success: boolean, path?: string, error?: string}>}
  */
 export async function uploadScoresheet({
@@ -109,7 +154,7 @@ export async function uploadScoresheet({
     const jsonString = JSON.stringify(scoresheetData)
     const jsonBlob = new Blob([jsonString], { type: 'application/json' })
 
-    // beach/{scheduled_date}/game{n}.json or game{n}_final.json
+    // beach/{scheduled_date}/game{n}_{seed}.json or ..._final.json
     const storagePath = scoresheetStoragePath(match, { final })
 
     // Upload to Supabase storage

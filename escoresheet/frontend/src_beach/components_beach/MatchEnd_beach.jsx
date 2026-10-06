@@ -8,10 +8,9 @@ import Modal from './Modal_beach'
 // Beach volleyball ball image
 const ballImage = '/beachball.png'
 import JSZip from 'jszip'
-import { apiStorage } from '../lib_beach/apiClient_beach'
 import { setExtId } from '../utils_beach/syncIds_beach'
 import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
-import { uploadScoresheet, scoresheetStoragePath } from '../utils_beach/scoresheetUploader_beach'
+import { uploadScoresheet, uploadScoresheetPdf } from '../utils_beach/scoresheetUploader_beach'
 import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { exportLogsAsNDJSON } from '../utils_beach/comprehensiveLogger_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
@@ -855,35 +854,52 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       }
       sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
 
-      // Create a promise that resolves when we receive the PDF blob
-      const pdfPromise = new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          window.removeEventListener('message', handler)
-          reject(new Error('PDF generation timed out'))
-        }, 30000) // 30 second timeout
-
-        const handler = (event) => {
-          if (event.data?.type === 'pdfBlob') {
+      // The PDF comes from the scoresheet window (postMessage 'pdfBlob', or
+      // 'pdfError' when it could not render). A PDF that does not come (popup
+      // blocked, render error, 30 s) no longer stops the approval: the final
+      // JSON, the approval and the ZIP (without the PDF) go ahead and the
+      // scorer is told to save the PDF from the scoresheet.
+      let pdfResult = null
+      let pdfError = null
+      try {
+        pdfResult = await new Promise((resolve, reject) => {
+          let timeout = null
+          const handler = (event) => {
+            if (event.origin !== window.location.origin) return // our own scoresheet window only
+            if (event.data?.type === 'pdfBlob') {
+              clearTimeout(timeout)
+              window.removeEventListener('message', handler)
+              const blob = new Blob([event.data.arrayBuffer], { type: 'application/pdf' })
+              resolve({ blob, filename: event.data.filename })
+            } else if (event.data?.type === 'pdfError') {
+              clearTimeout(timeout)
+              window.removeEventListener('message', handler)
+              reject(new Error(event.data.message || 'PDF generation failed'))
+            }
+          }
+          window.addEventListener('message', handler)
+          timeout = setTimeout(() => {
+            window.removeEventListener('message', handler)
+            reject(new Error('PDF generation timed out'))
+          }, 30000)
+          // Open scoresheet window with getBlob action
+          const win = window.open('/scoresheet_beach.html?action=getBlob', '_blank', 'width=1600,height=1200')
+          if (!win) {
             clearTimeout(timeout)
             window.removeEventListener('message', handler)
-            const blob = new Blob([event.data.arrayBuffer], { type: 'application/pdf' })
-            resolve({ blob, filename: event.data.filename })
+            reject(new Error('The scoresheet window was blocked'))
           }
-        }
-        window.addEventListener('message', handler)
-      })
-
-      // Open scoresheet window with getBlob action
-      window.open('/scoresheet_beach.html?action=getBlob', '_blank', 'width=1600,height=1200')
-
-      // Wait for PDF blob
-      const pdfResult = await pdfPromise
+        })
+      } catch (err) {
+        pdfError = err
+        console.warn('[MatchEnd] No PDF:', err)
+      }
       setDownloadProgress(prev => ({ ...prev, pdf: true }))
 
       // Create ZIP with both files
       const zip = new JSZip()
       zip.file(jsonFilename, dataStr)
-      zip.file(pdfResult.filename, pdfResult.blob)
+      if (pdfResult) zip.file(pdfResult.filename, pdfResult.blob)
 
       // Add comprehensive interaction logs to the ZIP
       try {
@@ -903,17 +919,10 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       // Upload PDF and final JSON to Supabase storage "scoresheets" bucket
       if (isBackendAvailable() && !match?.test) {
         try {
-          // Upload PDF: beach/{date}/game{n}.pdf (scoresheetStoragePath)
-          const pdfStoragePath = scoresheetStoragePath(match, { ext: 'pdf' })
-          const { error: uploadError } = await apiStorage
-            .from('scoresheets')
-            .upload(pdfStoragePath, pdfResult.blob, {
-              contentType: 'application/pdf',
-              upsert: true
-            })
-          if (uploadError) {
-            console.warn('Failed to upload PDF to cloud:', uploadError)
-          } else {
+          // Upload PDF: beach/{date}/game{n}_{seed}.pdf (scoresheetStoragePath)
+          if (pdfResult) {
+            const pdfUpload = await uploadScoresheetPdf(match, pdfResult.blob)
+            if (!pdfUpload.success) console.warn('Failed to upload PDF to cloud:', pdfUpload.error)
           }
 
           // Upload final JSON (with _final suffix for approved matches)
@@ -983,6 +992,9 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       setDownloadProgress(null)
       setIsSaving(false)
       setIsApproved(true)
+      if (pdfError) {
+        showAlert(`The match is approved, but the PDF could not be made (${pdfError.message}). Open the scoresheet and save the PDF from there.`, 'warning')
+      }
     } catch (error) {
       console.error('Error approving match:', error)
       showAlert(`Error approving match: ${error.message}`, 'error')

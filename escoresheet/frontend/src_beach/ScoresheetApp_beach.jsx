@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { apiStorage } from './lib_beach/apiClient_beach'
 import { isBackendAvailable } from './utils_beach/backendConfig_beach'
-import { BEACH_SCORESHEET_PREFIX } from './utils_beach/scoresheetUploader_beach'
+import { BEACH_SCORESHEET_PREFIX, parseFinalScoresheetName } from './utils_beach/scoresheetUploader_beach'
 
 // Beach scoresheets live under beach/{date}/ in the shared bucket (indoor
 // writes {date}/ at the root)
@@ -68,21 +68,16 @@ const fetchAllScoresheets = async () => {
       const fileNames = new Set((files || []).map(f => f.name))
 
       for (const file of files || []) {
-        // Only show approved/final scoresheets (game123_final.json)
-        if (!file.name.endsWith('_final.json')) continue
-
-        // Extract game number from filename (game123_final.json -> 123)
-        const gameMatch = file.name.match(/game(\d+)_final\.json/)
-        if (!gameMatch) continue
-
-        const gameNum = gameMatch[1]
-        const hasPdf = fileNames.has(`game${gameNum}.pdf`)
+        // Only show approved/final scoresheets: game{n}_{seed}_final.json
+        // (older ones: game{n}_final.json); the PDF has the same name, .pdf
+        const parsed = parseFinalScoresheetName(file.name)
+        if (!parsed) continue
 
         scoresheets.push({
           date: folder.name,
-          game: gameNum,
+          game: parsed.game,
           path: inBeachFolder(`${folder.name}/${file.name}`),
-          pdfPath: hasPdf ? inBeachFolder(`${folder.name}/game${gameNum}.pdf`) : null
+          pdfPath: fileNames.has(parsed.pdfName) ? inBeachFolder(`${folder.name}/${parsed.pdfName}`) : null
         })
       }
     }

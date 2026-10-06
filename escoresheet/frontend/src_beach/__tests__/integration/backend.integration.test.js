@@ -253,14 +253,24 @@ describe.skipIf(!BASE)('openbeach on a local OpenVolley backend', () => {
     expect(sets[0].sport_type).toBe('beach')
   })
 
-  it('scoresheets go under beach/', async () => {
-    // A game number of its own: a scoresheet path belongs to its uploader
-    const n = Date.now() % 1000000
-    const r = await scoresheets.uploadScoresheet({ match: { scheduledAt: '2026-07-04T10:00:00Z', gameNumber: n }, team1: {}, team2: {}, team1Players: [], team2Players: [], sets: [], events: [] })
-    expect(r).toEqual({ success: true, path: `beach/2026-07-04/game${n}.json` })
+  it('scoresheets go under beach/, the final JSON and its PDF, one key per match', async () => {
+    // Game 7 of the same date is someone else's too: the seed_key keeps the keys apart
+    const match = { scheduledAt: '2026-07-04T10:00:00Z', gameNumber: 7, seed_key: seed }
+    const r = await scoresheets.uploadScoresheet({ match, team1: {}, team2: {}, team1Players: [], team2Players: [], sets: [], events: [], final: true })
+    expect(r).toEqual({ success: true, path: `beach/2026-07-04/game7_${seed}_final.json` })
+    const pdf = await scoresheets.uploadScoresheetPdf(match, new Blob(['%PDF-1.4 test'], { type: 'application/pdf' }))
+    expect(pdf).toEqual({ success: true, path: `beach/2026-07-04/game7_${seed}.pdf` })
     const { data, error } = await api.apiStorage.from('scoresheets').list('beach/2026-07-04')
     expect(error).toBeNull()
-    expect(data.map(f => f.name)).toContain(`game${n}.json`)
+    const names = data.map(f => f.name)
+    expect(names).toContain(`game7_${seed}_final.json`)
+    expect(names).toContain(`game7_${seed}.pdf`)
+    // the archive pairs them
+    const parsed = scoresheets.parseFinalScoresheetName(`game7_${seed}_final.json`)
+    expect(names).toContain(parsed.pdfName)
+    const down = await api.apiStorage.from('scoresheets').download(`beach/2026-07-04/game7_${seed}.pdf`)
+    expect(down.error).toBeNull()
+    expect(await down.data.text()).toBe('%PDF-1.4 test')
   })
 
   it('delete account works and signs out', async () => {
