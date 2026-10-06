@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useAlert } from '../contexts_beach/AlertContext_beach'
 import { db } from '../db_beach/db_beach'
 import { apiFrom } from '../lib_beach/apiClient_beach'
+import { setExtId, eventExtId } from '../utils_beach/syncIds_beach'
 import { isBackendAvailable, getBackendUrl } from '../utils_beach/backendConfig_beach'
 import SignaturePad from './SignaturePad_beach'
 import Modal from './Modal_beach'
@@ -687,9 +688,11 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         .and(e => e.type === 'coin_toss')
         .first()
 
-      // Create coin_toss event if it doesn't exist
+      // Create coin_toss event if it doesn't exist (its local id names the
+      // cloud row: `${seed_key}:e:${id}`)
+      let coinTossEventId = existingCoinTossEvent?.id ?? null
       if (!existingCoinTossEvent) {
-        await db.events.add({
+        coinTossEventId = await db.events.add({
           matchId: matchId,
           setIndex: 1,
           type: 'coin_toss',
@@ -718,7 +721,9 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           resource: 'event',
           action: 'insert',
           payload: {
-            external_id: 'coin_toss_' + match.seed_key, // Unique ID for this event
+            // Scoped to the match (the backend refuses ids without the match key
+            // as prefix); the old 'coin_toss_<seed>' id is rewritten by db v18
+            external_id: coinTossEventId != null ? eventExtId(match.seed_key, coinTossEventId) : `${match.seed_key}:e:coin_toss`,
             match_id: match.seed_key,
             set_index: 1,
             type: 'coin_toss',
@@ -871,7 +876,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         resource: 'set',
         action: 'insert',
         payload: {
-          external_id: String(firstSetId),
+          external_id: setExtId(match.seed_key, firstSetId),
           match_id: match.seed_key, // Use seed_key (external_id) for Supabase lookup
           index: 1,
           team1_points: 0,

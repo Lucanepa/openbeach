@@ -1,4 +1,5 @@
 import Dexie from 'dexie'
+import { rewriteQueuedSyncJobs } from '../utils_beach/syncIds_beach'
 
 /**
  * ============================================================================
@@ -6,7 +7,8 @@ import Dexie from 'dexie'
  * ============================================================================
  *
  * This is the offline-first local database. All data is written here first,
- * then synced to Supabase via the sync_queue mechanism.
+ * then synced to the OpenVolley backend (backend.openvolley.app) via the
+ * sync_queue mechanism.
  *
  * KEY TABLES:
  * - matches: Local match data (synced to Supabase 'matches' table)
@@ -23,7 +25,8 @@ import Dexie from 'dexie'
  * - action: 'insert' | 'update' | 'delete' | 'restore' - determines operation
  * - payload: Data to sync, includes external_id for deduplication
  * - ts: Timestamp when queued (for ordering)
- * - status: 'queued' | 'sent' | 'error' - processing state
+ * - status: 'queued' | 'sending' | 'sent' | 'error' | 'failed' | 'dropped' |
+ *   'superseded' - processing state (see useSyncQueue_beach.js)
  *
  * Processing order: match → set → event (respects foreign key dependencies)
  *
@@ -31,8 +34,9 @@ import Dexie from 'dexie'
  * -------------------
  * All synced resources use external_id as the stable identifier:
  * - Match: seed_key (format: match_{timestamp}_{random})
- * - Set: Local Dexie ID as string
- * - Event: Local Dexie ID as string
+ * - Set: `${seed_key}:s:${localSetId}` (utils_beach/syncIds_beach.js)
+ * - Event: `${seed_key}:e:${localEventId}` (bare ids collided across devices
+ *   and matches; the backend refuses them)
  *
  * Why external_id?
  * - Supabase UUID isn't known until first sync
@@ -330,4 +334,59 @@ db.version(17).stores({
   })
 })
 
+/**
+ * Collapse the per-target statuses of the removed dual sync (Supabase +
+ * Synology) into the one `status` the queue reads now:
+ * supabase_status 'sent' -> 'sent', 'error' -> 'error'; everything not yet sent
+ * to the cloud -> 'queued'. Exported for tests.
+ * @param {object} job - sync_queue row (modified in place)
+ */
+export function collapseTargetStatus(job) {
+  const cloud = job.supabase_status
+  if (cloud === 'sent' || (cloud === undefined && job.status === 'sent')) {
+    job.status = 'sent'
+  } else if (cloud === 'error') {
+    job.status = 'error'
+    job.attempts = job.attempts || 1
+  } else if (job.status !== 'dropped') {
+    // queued for the cloud, or a direct (set end) send that failed: the queue
+    // used to resend those because supabase_status was not 'sent'
+    job.status = 'queued'
+  }
+  delete job.supabase_status
+  delete job.synology_status
+  delete job.supabase_retry_count
+  delete job.synology_retry_count
+}
 
+// Version 18: one sync target (the OpenVolley backend), namespaced ids.
+// - The Synology/PocketBase target is gone: per-target statuses collapse into
+//   `status` (collapseTargetStatus).
+// - Set/event external ids become `${seed}:s:${id}` / `${seed}:e:${id}`
+//   (utils_beach/syncIds_beach.js): bare Dexie ids ('42') and the coin toss's
+//   'coin_toss_<seed>' are refused by the backend (400 OV_UNSCOPED_EXTERNAL_ID)
+//   and collided across devices. Waiting jobs are rewritten; parked ones are put
+//   back in the queue; jobs that cannot be attributed to a match are 'dropped'.
+// The upgrade must never reject: a failed upgrade leaves the database unopenable.
+db.version(18).stores({
+  sync_queue: '++id,resource,action,payload,ts,status'
+}).upgrade(async tx => {
+  try {
+    await tx.table('sync_queue').toCollection().modify(collapseTargetStatus)
+  } catch (e) {
+    console.warn('[db] v18 sync status collapse skipped:', e?.message)
+  }
+  try {
+    const { rewritten, dropped, failed } = await rewriteQueuedSyncJobs({
+      queue: tx.table('sync_queue'),
+      sets: tx.table('sets'),
+      matches: tx.table('matches'),
+      events: tx.table('events')
+    }, { statuses: ['queued', 'error', 'failed'], requeue: true })
+    if (rewritten || dropped || failed) {
+      console.log(`[db] v18: namespaced ${rewritten} queued set/event jobs, dropped ${dropped}, failed ${failed}`)
+    }
+  } catch (e) {
+    console.warn('[db] v18 queue id rewrite skipped:', e?.message)
+  }
+})

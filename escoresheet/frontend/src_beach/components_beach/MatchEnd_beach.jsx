@@ -9,6 +9,7 @@ import Modal from './Modal_beach'
 const ballImage = '/beachball.png'
 import JSZip from 'jszip'
 import { apiStorage } from '../lib_beach/apiClient_beach'
+import { setExtId } from '../utils_beach/syncIds_beach'
 import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 import { uploadScoresheet } from '../utils_beach/scoresheetUploader_beach'
 import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
@@ -1130,7 +1131,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
           resource: 'set',
           action: 'update',
           payload: {
-            external_id: String(lastSet.id),
+            external_id: setExtId(match.seed_key, lastSet.id),
             finished: false
           },
           ts: new Date().toISOString(),

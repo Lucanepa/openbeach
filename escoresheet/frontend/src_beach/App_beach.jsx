@@ -37,6 +37,7 @@ import {
   getTestTeam2ShortName
 } from './constants_beach/testSeeds_beach'
 import { apiFrom } from './lib_beach/apiClient_beach'
+import { setExtId } from './utils_beach/syncIds_beach'
 import { isBackendAvailable, getBackendUrl, getWebSocketUrl } from './utils_beach/backendConfig_beach'
 import { checkMatchSession, lockMatchSession, unlockMatchSession, verifyGamePin } from './utils_beach/sessionManager_beach'
 
@@ -1546,7 +1547,7 @@ export default function App() {
         resource: 'set',
         action: 'insert',
         payload: {
-          external_id: String(setId),
+          external_id: setExtId(matchRecord.seed_key, setId),
           match_id: matchRecord.seed_key, // Use seed_key (external_id) for Supabase lookup
           index: cur.index + 1,
           team1_points: 0,

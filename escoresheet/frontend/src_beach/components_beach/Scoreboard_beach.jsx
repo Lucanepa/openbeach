@@ -19,6 +19,7 @@ const ballImage = '/beachball.png'
 import { debugLogger, createStateSnapshot } from '../utils_beach/debugLogger_beach'
 import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { apiFrom } from '../lib_beach/apiClient_beach'
+import { setExtId, eventExtId } from '../utils_beach/syncIds_beach'
 import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
@@ -2223,14 +2224,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // Use match from guard check above (already fetched)
     const isTest = match?.test || false
 
-    // Only sync official matches (not test matches)
-    if (!isTest) {
+    // Only sync official matches (not test matches) that have a seed_key
+    // (the cloud key; a bare Dexie id is not unique across devices)
+    if (!isTest && match?.seed_key) {
       await db.sync_queue.add({
         resource: 'set',
         action: 'insert',
         payload: {
-          external_id: String(setId),
-          match_id: match?.seed_key || String(matchId),
+          external_id: setExtId(match.seed_key, setId),
+          match_id: match.seed_key,
           index: nextIndex,
           team1_points: 0,
           team2_points: 0,
@@ -3524,8 +3526,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         const match = await db.matches.get(matchId)
         const isTest = match?.test || false
 
-        // Only sync official matches to Supabase, not test matches
-        if (!isTest) {
+        // Only sync official matches to the cloud, not test matches, and only
+        // with a seed_key (the event id is scoped to it)
+        if (!isTest && match?.seed_key) {
           // Query fresh events from IndexedDB to get current lineups (avoid stale closure)
           const allEventsForSync = await db.events.where({ matchId }).toArray()
           const setIndex = actualSetIndex // Use the fresh set index, not stale data.set.index
@@ -3682,8 +3685,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             resource: 'event',
             action: 'insert',
             payload: {
-              external_id: String(eventId),
-              match_id: match?.seed_key || String(matchId), // Use seed_key (external_id) for Supabase lookup
+              external_id: eventExtId(match.seed_key, eventId),
+              match_id: match.seed_key, // Use seed_key (external_id) for Supabase lookup
               set_index: setIndex,
               type,
               payload: payload || {},
@@ -4683,7 +4686,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
         // Prepare set update payload
         const setPayload = {
-          external_id: String(setIdToUpdate),
+          external_id: setExtId(matchRecord.seed_key, setIdToUpdate),
           team1_points: team1Points,
           team2_points: team2Points,
           finished: true,
@@ -4975,13 +4978,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           // Sync new set to cloud (if not test match)
           const matchRecordForNewSet = await db.matches.get(matchId)
           const isTest = matchRecordForNewSet?.test || false
-          if (!isTest && !existingSet) {
+          if (!isTest && !existingSet && matchRecordForNewSet?.seed_key) {
             await db.sync_queue.add({
               resource: 'set',
               action: 'insert',
               payload: {
-                external_id: String(newSetId),
-                match_id: matchRecordForNewSet?.seed_key || String(matchId),
+                external_id: setExtId(matchRecordForNewSet.seed_key, newSetId),
+                match_id: matchRecordForNewSet.seed_key,
                 index: newSetIndex,
                 team1_points: 0,
                 team2_points: 0,
@@ -5064,13 +5067,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const isTest = match?.test || false
 
       // Only add to sync queue if set was newly created and it's an official match
-      if (!existingSet3 && !isTest) {
+      if (!existingSet3 && !isTest && match?.seed_key) {
         await db.sync_queue.add({
           resource: 'set',
           action: 'insert',
           payload: {
-            external_id: String(newSetId),
-            match_id: match?.seed_key || String(matchId),
+            external_id: setExtId(match.seed_key, newSetId),
+            match_id: match.seed_key,
             index: setIndex,
             team1_points: 0,
             team2_points: 0,
@@ -5710,7 +5713,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         await db.events.delete(e.id)
         // Also remove from sync_queue if pending
         const syncItems = await db.sync_queue.where('status').equals('queued').toArray()
-        const matchingSyncItem = syncItems.find(s => s.payload?.external_id === String(e.id))
+        const undoMatch = await db.matches.get(matchId)
+        const undoExtIds = new Set([String(e.id), ...(undoMatch?.seed_key ? [eventExtId(undoMatch.seed_key, e.id)] : [])])
+        const matchingSyncItem = syncItems.find(s => s.resource === 'event' && undoExtIds.has(s.payload?.external_id))
         if (matchingSyncItem) {
           await db.sync_queue.delete(matchingSyncItem.id)
         }

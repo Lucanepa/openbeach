@@ -15,6 +15,7 @@ import { getWebSocketUrl, getBackendUrl, isBackendAvailable } from '../utils_bea
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { uploadBackupToCloud, uploadLogsToCloud } from '../utils_beach/logger_beach'
 import { apiFrom } from '../lib_beach/apiClient_beach'
+import { setExtId } from '../utils_beach/syncIds_beach'
 import { generateMatchSeedKey } from '../utils_beach/serverDataSync_beach'
 import { TEST_TEAM_SEED_DATA } from '../constants_beach/testSeeds_beach'
 import { splitLocalDateTime, parseLocalDateTimeToISO, roundToMinute } from '../utils_beach/timeUtils_beach'
@@ -2641,7 +2642,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         resource: 'set',
         action: 'insert',
         payload: {
-          external_id: String(firstSetId),
+          external_id: setExtId(matchForSet.seed_key, firstSetId),
           match_id: matchForSet.seed_key, // Use seed_key (external_id) for Supabase lookup
           index: 1,
           team1_points: 0,
