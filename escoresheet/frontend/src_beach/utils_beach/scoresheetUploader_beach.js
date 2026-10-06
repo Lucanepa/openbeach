@@ -2,9 +2,34 @@ import { apiStorage } from '../lib_beach/apiClient_beach'
 import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 
 /**
- * Upload scoresheet data as JSON to Supabase storage.
- * PDFs are generated on-demand at scoresheet.openvolley.app/storage
- * Uploads to: scoresheets/{scheduled_date}/game{n}.json (or game{n}_final.json if final=true)
+ * Folder of every beach scoresheet in the shared 'scoresheets' bucket. Indoor
+ * (OpenVolley) writes {date}/game{n}.json at the bucket root: without the
+ * prefix a beach and an indoor game n on the same date overwrite each other.
+ */
+export const BEACH_SCORESHEET_PREFIX = 'beach'
+
+/** YYYY-MM-DD of the match's scheduled date (today without one). */
+export function scoresheetDate(match) {
+  return match?.scheduledAt
+    ? new Date(match.scheduledAt).toISOString().slice(0, 10)
+    : new Date().toISOString().slice(0, 10)
+}
+
+/**
+ * Storage path of a beach scoresheet file:
+ * beach/{scheduled_date}/game{n}{suffix}.{ext}
+ * @param {object} match - local match (scheduledAt, gameNumber / externalId / game_n)
+ * @param {{ ext?: 'json'|'pdf', final?: boolean }} [options]
+ */
+export function scoresheetStoragePath(match, { ext = 'json', final = false } = {}) {
+  const gameNumber = match?.gameNumber || match?.externalId || match?.game_n || 'unknown'
+  return `${BEACH_SCORESHEET_PREFIX}/${scoresheetDate(match)}/game${gameNumber}${final ? '_final' : ''}.${ext}`
+}
+
+/**
+ * Upload scoresheet data as JSON to the backend's 'scoresheets' bucket.
+ * Uploads to: scoresheets/beach/{scheduled_date}/game{n}.json (or
+ * game{n}_final.json if final=true), see scoresheetStoragePath.
  *
  * @param {Object} options
  * @param {Object} options.match - Match data
@@ -84,14 +109,8 @@ export async function uploadScoresheet({
     const jsonString = JSON.stringify(scoresheetData)
     const jsonBlob = new Blob([jsonString], { type: 'application/json' })
 
-    // Determine storage path: {scheduled_date}/game{n}.json or game{n}_final.json
-    const scheduledDate = match.scheduledAt
-      ? new Date(match.scheduledAt).toISOString().slice(0, 10) // YYYY-MM-DD
-      : new Date().toISOString().slice(0, 10)
-
-    const gameNumber = match.gameNumber || match.externalId || match.game_n || 'unknown'
-    const suffix = final ? '_final' : ''
-    const storagePath = `${scheduledDate}/game${gameNumber}${suffix}.json`
+    // beach/{scheduled_date}/game{n}.json or game{n}_final.json
+    const storagePath = scoresheetStoragePath(match, { final })
 
     // Upload to Supabase storage
     const { error: uploadError } = await apiStorage

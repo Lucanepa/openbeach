@@ -11,7 +11,7 @@ import JSZip from 'jszip'
 import { apiStorage } from '../lib_beach/apiClient_beach'
 import { setExtId } from '../utils_beach/syncIds_beach'
 import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
-import { uploadScoresheet } from '../utils_beach/scoresheetUploader_beach'
+import { uploadScoresheet, scoresheetStoragePath } from '../utils_beach/scoresheetUploader_beach'
 import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { exportLogsAsNDJSON } from '../utils_beach/comprehensiveLogger_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
@@ -903,13 +903,8 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       // Upload PDF and final JSON to Supabase storage "scoresheets" bucket
       if (isBackendAvailable() && !match?.test) {
         try {
-          const scheduledDate = match.scheduledAt
-            ? new Date(match.scheduledAt).toISOString().slice(0, 10) // YYYY-MM-DD
-            : new Date().toISOString().slice(0, 10)
-          const gameNumber = match.gameNumber || match.externalId || match.game_n || 'unknown'
-
-          // Upload PDF
-          const pdfStoragePath = `${scheduledDate}/game${gameNumber}.pdf`
+          // Upload PDF: beach/{date}/game{n}.pdf (scoresheetStoragePath)
+          const pdfStoragePath = scoresheetStoragePath(match, { ext: 'pdf' })
           const { error: uploadError } = await apiStorage
             .from('scoresheets')
             .upload(pdfStoragePath, pdfResult.blob, {

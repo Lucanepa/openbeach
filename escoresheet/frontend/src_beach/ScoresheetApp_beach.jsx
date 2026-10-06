@@ -2,6 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { apiStorage } from './lib_beach/apiClient_beach'
 import { isBackendAvailable } from './utils_beach/backendConfig_beach'
+import { BEACH_SCORESHEET_PREFIX } from './utils_beach/scoresheetUploader_beach'
+
+// Beach scoresheets live under beach/{date}/ in the shared bucket (indoor
+// writes {date}/ at the root)
+const inBeachFolder = (path) => `${BEACH_SCORESHEET_PREFIX}/${path}`
 
 // Download a PDF from the backend's scoresheets bucket and return an object
 // URL for it (the backend has no signed URLs; every read needs the session of
@@ -34,10 +39,10 @@ const fetchAllScoresheets = async () => {
       return []
     }
 
-    // List all folders (dates) in the scoresheets bucket
+    // List all date folders under beach/ in the scoresheets bucket
     const { data: folders, error: foldersError } = await apiStorage
       .from('scoresheets')
-      .list('', { limit: 100, sortBy: { column: 'name', order: 'desc' } })
+      .list(BEACH_SCORESHEET_PREFIX, { limit: 100, sortBy: { column: 'name', order: 'desc' } })
 
     if (foldersError) {
       console.error('[Scoresheet] Error listing folders:', foldersError)
@@ -52,7 +57,7 @@ const fetchAllScoresheets = async () => {
 
       const { data: files, error: filesError } = await apiStorage
         .from('scoresheets')
-        .list(folder.name, { limit: 50 })
+        .list(inBeachFolder(folder.name), { limit: 50 })
 
       if (filesError) {
         console.error(`[Scoresheet] Error listing files in ${folder.name}:`, filesError)
@@ -76,8 +81,8 @@ const fetchAllScoresheets = async () => {
         scoresheets.push({
           date: folder.name,
           game: gameNum,
-          path: `${folder.name}/${file.name}`,
-          pdfPath: hasPdf ? `${folder.name}/game${gameNum}.pdf` : null
+          path: inBeachFolder(`${folder.name}/${file.name}`),
+          pdfPath: hasPdf ? inBeachFolder(`${folder.name}/game${gameNum}.pdf`) : null
         })
       }
     }
@@ -189,7 +194,7 @@ const ScoresheetViewer = ({ date, game }) => {
     let cancelled = false
     const loadPdf = async () => {
       try {
-        const url = await getPdfObjectUrl(`${date}/game${game}.pdf`)
+        const url = await getPdfObjectUrl(inBeachFolder(`${date}/game${game}.pdf`))
         if (cancelled) {
           if (url) URL.revokeObjectURL(url)
           return
@@ -198,7 +203,7 @@ const ScoresheetViewer = ({ date, game }) => {
           objectUrl = url
           setPdfUrl(url)
         } else {
-          setError(`PDF not found: ${date}/game${game}.pdf`)
+          setError(`PDF not found: ${inBeachFolder(`${date}/game${game}.pdf`)}`)
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load PDF')
