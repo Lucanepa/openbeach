@@ -309,6 +309,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   const debounceTimerRef = useRef(null)
   const DATA_UPDATE_DEBOUNCE_MS = 150 // Wait 150ms before applying new data
 
+  const lastLiveStateRef = useRef(null)
+
   // Helper function to update match data state (with debounce to reduce flickering)
   const updateMatchDataState = useCallback((result) => {
     if (result && result.success) {
@@ -324,8 +326,11 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         sets,
         currentSet,
         events: result.events || [],
-        liveState: result.liveState || null
+        // A relay bundle without a live state keeps the last one (the API
+        // read's), so a roster push does not blank the score / lineups
+        liveState: result.liveState !== undefined ? (result.liveState || null) : lastLiveStateRef.current
       }
+      lastLiveStateRef.current = newData.liveState
 
       const now = Date.now()
       const timeSinceLastUpdate = now - lastDataUpdateRef.current
@@ -602,6 +607,20 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     onDeleted: handleMatchDeleted,
     enabled: !isMasterMode && !!matchId
   })
+
+  // The relay room of the match (after the PIN step: subscribe-match carries
+  // the PIN / match token, so the relay sends the full bundle). It pushes the
+  // scorer's every sync (rosters, sets, events) and the match actions
+  // (timeout, TTO, set end) at once; the live socket above only says
+  // "something changed" and the page refetches.
+  useEffect(() => {
+    if (isMasterMode || !matchId) return undefined
+    return subscribeToMatchData(matchId, (msg) => {
+      if (!msg) return
+      if (msg._action) handleRealtimeAction(msg._action, msg._actionData)
+      else if (msg.match) handleRealtimeData({ success: true, ...msg })
+    })
+  }, [matchId, isMasterMode, handleRealtimeAction, handleRealtimeData])
 
   // Initial data fetch when connection changes or component mounts
   useEffect(() => {

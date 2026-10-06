@@ -161,6 +161,45 @@ export function isOtherSportMatch(match) {
 }
 
 /**
+ * A relay bundle (GET /api/match/:id, match-full-data, match-data-update) in
+ * openbeach's own shape. Every relay (the OpenVolley backend, the LAN relays)
+ * speaks home/away on the wire (team1 = home): homeTeam / awayTeam /
+ * homePlayers / awayPlayers, with the live state flat or under data. The beach
+ * pages read team1 / team2 / team1Players / team2Players (and team1Team /
+ * team2Team). Names already in openbeach's shape pass through. A team object
+ * the scorer did not sync is built from the match's team1Name / team1Color.
+ * @param {object} msg  the relay answer or message
+ * @returns {object}    the same bundle with openbeach's keys, no home/away keys
+ */
+export function fromWire(msg) {
+  if (!msg || typeof msg !== 'object') return msg
+  const { homeTeam, awayTeam, homePlayers, awayPlayers, teams, players, data, ...rest } = msg
+  const m = msg.match || {}
+  const teamOf = (n, wire, fromList) => {
+    const t = msg[`team${n}`] ?? msg[`team${n}Team`] ?? wire ?? fromList ?? null
+    if (t) return t
+    const name = m[`team${n}Name`]
+    return name ? { name, color: m[`team${n}Color`] || (n === 1 ? '#ef4444' : '#3b82f6') } : null
+  }
+  const team1 = teamOf(1, homeTeam, teams?.[0])
+  const team2 = teamOf(2, awayTeam, teams?.[1])
+  const out = {
+    ...rest,
+    team1,
+    team2,
+    team1Team: team1,
+    team2Team: team2,
+    team1Players: msg.team1Players ?? homePlayers ?? (Array.isArray(players) ? players.filter(p => p.teamId === m.team1Id) : []),
+    team2Players: msg.team2Players ?? awayPlayers ?? (Array.isArray(players) ? players.filter(p => p.teamId === m.team2Id) : []),
+    sets: msg.sets || [],
+    events: msg.events || []
+  }
+  const liveState = msg.liveState !== undefined ? msg.liveState : data?.liveState
+  if (liveState !== undefined) out.liveState = liveState
+  return out
+}
+
+/**
  * Validate PIN and get match data from server
  */
 export async function validatePin(pin, type = 'referee') {
@@ -253,7 +292,8 @@ export async function getMatchData(matchId) {
       } else if (result?.success && isOtherSportMatch(result.match)) {
         return { success: false, error: 'Match not found' }
       } else {
-        return result
+        // The relay speaks home/away: openbeach's team1/team2 keys
+        return result?.success ? fromWire(result) : result
       }
     }
   } catch (error) {
@@ -800,14 +840,10 @@ export function subscribeToMatchData(matchId, onUpdate) {
             // Match data updated, notify all subscribers
             // Pass through timestamp fields for latency tracking
             // Server sends data directly on message, not in a .data wrapper
+            if (isOtherSportMatch(message.match)) return
+            const { type: _type, matchId: _matchId, ...bundle } = message
             const dataWithTimestamps = {
-              match: message.match,
-              team1: message.team1 || message.teams?.[0],
-              team2: message.team2 || message.teams?.[1],
-              team1Players: message.team1Players || message.players?.filter(p => p.teamId === message.match?.team1Id) || [],
-              team2Players: message.team2Players || message.players?.filter(p => p.teamId === message.match?.team2Id) || [],
-              sets: message.sets || [],
-              events: message.events || [],
+              ...fromWire(bundle),
               _timestamp: message._timestamp || message.timestamp,
               _scoreboardTimestamp: message._scoreboardTimestamp || message.timestamp
             }
@@ -819,10 +855,14 @@ export function subscribeToMatchData(matchId, onUpdate) {
               }
             })
           } else if (message.type === 'match-full-data' && String(message.matchId) === matchIdStr) {
-            // Full match data received, notify all subscribers
+            // Full match data received (flat on the message, like
+            // match-data-update; older relays wrapped it in data)
+            if (isOtherSportMatch(message.match)) return
+            const { type: _type, matchId: _matchId, ...bundle } = message
+            const full = fromWire(message.match ? bundle : message.data)
             connection.subscribers.forEach(subscriber => {
               try {
-                subscriber(message.data)
+                subscriber(full)
               } catch (err) {
                 console.error('[ServerDataSync] Error in subscriber callback:', err)
               }
