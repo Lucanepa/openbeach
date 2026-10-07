@@ -526,6 +526,57 @@ export function isCloudBlockedOnThisPort() {
 
 const stripTrailingSlash = (url) => String(url).replace(/\/+$/, '')
 
+// ---------------------------------------------------------------------------
+// Offline mode: no cloud call at all
+// ---------------------------------------------------------------------------
+// The scorer chose to work offline (the header's Online/Offline switch, or
+// "Go offline" on the startup check). Every cloud call resolves its URL here
+// (getCloudApiUrl), so with offline mode on there is none: no /api/db probe,
+// no sync, no auth refresh. The relay (the venue tablets) is not affected.
+// The switch in the header persists the choice ('offlineMode' in
+// localStorage); the startup check's "Go offline" holds for this session only.
+const OFFLINE_MODE_KEY = 'offlineMode'
+let cloudOfflineSession = null // null: follow the stored choice
+
+/** Is the cloud switched off on this device (offline mode)? */
+export function isCloudOffline() {
+  if (cloudOfflineSession !== null) return cloudOfflineSession
+  try { return localStorage.getItem(OFFLINE_MODE_KEY) === 'true' } catch { return false }
+}
+
+/**
+ * Switch offline mode. `persist` stores the choice for later visits (the
+ * header switch); without it the choice holds until the page is reloaded.
+ * Turning it off always clears the stored choice.
+ * @param {boolean} on
+ * @param {{ persist?: boolean }} [options]
+ */
+export function setCloudOffline(on, { persist = false } = {}) {
+  cloudOfflineSession = !!on
+  try {
+    if (!on) localStorage.removeItem(OFFLINE_MODE_KEY)
+    else if (persist) localStorage.setItem(OFFLINE_MODE_KEY, 'true')
+  } catch { /* localStorage unavailable */ }
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    try { window.dispatchEvent(new CustomEvent('openbeach-offline-mode', { detail: { offline: !!on } })) } catch { /* old browser */ }
+  }
+}
+
+/** Tests only: forget the session choice. */
+export function resetCloudOffline() {
+  cloudOfflineSession = null
+}
+
+/**
+ * Is this page served by a venue relay (the desktop app's relay, a venue
+ * server, the Pi) to a tablet on the hall network? Its "cloud" is that relay,
+ * which has no /api/db: cloud sync can only run in the background there and
+ * no screen should wait for it.
+ */
+export function isRelayOriginPage() {
+  return isServedFromLanOrigin()
+}
+
 /**
  * Base URL of the CLOUD API: /api/db, /api/auth/*, /api/storage/*, the match
  * restore / claim / PIN endpoints, saved teams and the database realtime
@@ -543,9 +594,11 @@ const stripTrailingSlash = (url) => String(url).replace(/\/+$/, '')
  *   - The desktop window on loopback (http://localhost:5174): the cloud,
  *     while the relay keeps the venue running offline; on another port none.
  *   - Dev server: same as getBackendUrl.
+ * None at all in offline mode (isCloudOffline).
  * @returns {string|null}
  */
 export function getCloudApiBaseUrl() {
+  if (isCloudOffline()) return null
   if (isServedFromLanOrigin()) {
     const base = getBackendUrl()
     return base ? stripTrailingSlash(base) : null
@@ -588,7 +641,7 @@ export function getCloudApiUrl(path) {
  * getWebSocketUrl. None for the desktop window off its port.
  */
 export function getCloudWebSocketUrl() {
-  if (isCloudBlockedOnThisPort()) return null
+  if (isCloudOffline() || isCloudBlockedOnThisPort()) return null
   if (isCloudApiSplit()) {
     try { return httpToWsUrl(getCloudApiBaseUrl()) } catch { return null }
   }

@@ -401,7 +401,8 @@
       "reviewImportedData": "Verifica i dati importati:",
       "reviewVerifyDob": "Verifica che le date di nascita siano corrette",
       "reviewSetCaptain": "Set captain designation",
-      "savePin": "Salva PIN"
+      "savePin": "Salva PIN",
+      "syncingToDatabase": "Sincronizzazione con il database…"
     },
     "coinToss": "Sorteggio",
     "chooseTeamColor": "Scegli il colore di {{team}}",
@@ -2097,7 +2098,9 @@
     "serverUnavailable": "Il segnapunti funziona completamente offline. La vista arbitro e il livescore passano da OpenVolley Cloud; un server sul posto serve solo come riserva.",
     "backgroundRetry": "La connessione verrà ritentata in background.",
     "dismiss": "Chiudi",
-    "goOffline": "Vai offline"
+    "goOffline": "Vai offline",
+    "continue": "Continua",
+    "goOfflineHint": "«Vai offline» ferma ogni chiamata al cloud fino al ricaricamento dell’app. L’interruttore Online nell’intestazione mantiene la scelta anche per le visite successive."
   },
   "savedTeams": {
     "load": "Carica squadra salvata",

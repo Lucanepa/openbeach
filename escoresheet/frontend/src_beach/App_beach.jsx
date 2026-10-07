@@ -40,7 +40,8 @@ import {
 } from './constants_beach/testSeeds_beach'
 import { apiFrom } from './lib_beach/apiClient_beach'
 import { setExtId } from './utils_beach/syncIds_beach'
-import { isBackendAvailable, getBackendUrl, isServedFromLocalServer, getLocalServerStatusUrl, rememberRelayWsPort } from './utils_beach/backendConfig_beach'
+import { isBackendAvailable, getBackendUrl, isServedFromLocalServer, getLocalServerStatusUrl, rememberRelayWsPort, isCloudOffline, setCloudOffline, isLanBackendUrl, isRelayOriginPage } from './utils_beach/backendConfig_beach'
+import { cloudStatusFor } from './utils_beach/cloudStatus_beach'
 import { isCapacitorApp, installAppLifecycle, liveOf, setLiveMatch } from './utils_beach/appLifecycle_beach'
 import DesktopUpdateNotice from './components_beach/DesktopUpdateNotice_beach'
 import { smallScreenGate } from './utils_beach/screenGate_beach'
@@ -105,6 +106,9 @@ export default function App() {
   const [connectionSetupModal, setConnectionSetupModal] = useState(false)
   const [showCompetitionPicker, setShowCompetitionPicker] = useState(false)
   const { syncStatus, retryErrors, isOnline } = useSyncQueue()
+  // The periodic connection check reads the latest status (it is not re-created per status)
+  const syncStatusRef = useRef(syncStatus)
+  syncStatusRef.current = syncStatus
   // Live queue counts for the connection indicator (pending / error / failed)
   const syncQueueCounts = useSyncQueueStats()
   const backup = useAutoBackup(matchId)
@@ -135,13 +139,9 @@ export default function App() {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [viewportSize, setViewportSize] = useState({ width: window.innerWidth, height: window.innerHeight })
   const [matchInfoMenuOpen, setMatchInfoMenuOpen] = useState(false)
-  const [offlineMode, setOfflineMode] = useState(() => {
-    const saved = localStorage.getItem('offlineMode')
-    return saved === 'true'
-  })
-  const [showStartupConnectivity, setShowStartupConnectivity] = useState(() => {
-    return localStorage.getItem('offlineMode') !== 'true'
-  })
+  // Offline mode: no cloud call at all (backendConfig_beach isCloudOffline)
+  const [offlineMode, setOfflineMode] = useState(() => isCloudOffline())
+  const [showStartupConnectivity, setShowStartupConnectivity] = useState(() => !isCloudOffline())
   // Display mode: 'desktop' | 'tablet' | 'smartphone' | 'auto'
   const [displayMode, setDisplayMode] = useState(() => {
     const saved = localStorage.getItem('displayMode')
@@ -485,6 +485,12 @@ export default function App() {
       statuses.server = 'not_available'
       debugInfo.api = { status: 'not_available', message: 'API not available in static deployment (using local database only)' }
       debugInfo.server = { status: 'not_available', message: 'Server not available in static deployment (using local database only)' }
+    } else if (hasBackendUrl && isCloudOffline() && !isLanBackendUrl(getBackendUrl())) {
+      // Offline mode: the cloud backend is not asked
+      statuses.api = 'not_applicable'
+      statuses.server = 'not_applicable'
+      debugInfo.api = { status: 'not_applicable', message: 'Offline mode: the cloud backend is not asked' }
+      debugInfo.server = { status: 'not_applicable', message: 'Offline mode: the cloud backend is not asked' }
     } else if (hasBackendUrl) {
       // Backend URL configured - check cloud backend health
       try {
@@ -578,52 +584,23 @@ export default function App() {
       debugInfo.db = { status: 'disconnected', message: `IndexedDB error: ${err.message || 'Database not accessible'}` }
     }
 
-    // Check Supabase status (based on syncStatus and canUseSupabase)
-    // First check if Supabase is configured at all
-    if (!canUseSupabase) {
-      statuses.supabase = 'not_configured'
-      debugInfo.supabase = {
-        status: 'not_configured',
-        message: 'Cloud backend is not configured',
-        details: 'No backend URL: set VITE_BACKEND_URL (e.g. https://backend.openvolley.app) or choose a server.'
-      }
-    } else if (syncStatus === 'auth_required') {
-      // The backend is reachable; writes wait for a sign-in (banner says so)
-      statuses.supabase = 'connected'
-      debugInfo.supabase = { status: 'connected', message: 'Cloud backend is reachable. Sign in to sync this device\'s matches.' }
-    } else if (syncStatus === 'synced' || syncStatus === 'syncing') {
-      statuses.supabase = 'connected'
-      debugInfo.supabase = { status: 'connected', message: 'Supabase is connected and syncing' }
-    } else if (syncStatus === 'online_no_supabase') {
-      // The server answered without /api/db: a LAN relay (desktop app, venue
-      // server) that only relays matches
-      statuses.supabase = 'not_configured'
-      debugInfo.supabase = {
-        status: 'not_configured',
-        message: 'Offline: no cloud backend here',
-        details: 'This server is an offline LAN relay or the build has no backend URL. Matches are kept on this device.'
-      }
-    } else if (syncStatus === 'connecting') {
-      statuses.supabase = 'connecting'
-      debugInfo.supabase = { status: 'connecting', message: 'Connecting to Supabase...' }
-    } else if (syncStatus === 'error') {
-      statuses.supabase = 'error'
-      debugInfo.supabase = {
-        status: 'error',
-        message: 'Supabase connection error',
-        details: 'Check your Supabase credentials and network connection'
-      }
-    } else if (syncStatus === 'offline') {
-      statuses.supabase = 'offline'
-      debugInfo.supabase = { status: 'offline', message: 'Device is offline or Supabase is unreachable' }
-    } else {
-      statuses.supabase = 'unknown'
-      debugInfo.supabase = { status: 'unknown', message: 'Supabase status unknown' }
-    }
+    // The cloud row follows the sync queue's status (also between checks, below)
+    const cloud = cloudStatusFor({ canUseCloud: canUseSupabase, syncStatus: syncStatusRef.current, offlineMode: isCloudOffline(), relayOrigin: isRelayOriginPage() })
+    statuses.supabase = cloud.status
+    debugInfo.supabase = cloud
 
     setConnectionStatuses(statuses)
     setConnectionDebugInfo(debugInfo)
-  }, [currentMatch, syncStatus, serverStatus])
+  }, [currentMatch, serverStatus, canUseSupabase])
+
+  // The cloud row as soon as the sync queue's status changes: the checks
+  // above run every 30 s, and the first one ran before the queue's probe
+  // answered (a healthy cloud showed "Offline" for 30 s)
+  useEffect(() => {
+    const cloud = cloudStatusFor({ canUseCloud: canUseSupabase, syncStatus, offlineMode, relayOrigin: isRelayOriginPage() })
+    setConnectionStatuses(prev => (prev.supabase === cloud.status ? prev : { ...prev, supabase: cloud.status }))
+    setConnectionDebugInfo(prev => ({ ...prev, supabase: cloud }))
+  }, [syncStatus, offlineMode, canUseSupabase])
 
   // Periodically check connection statuses
   // The check depends on the match (a new object on every point): the
@@ -649,9 +626,11 @@ export default function App() {
     prevOfflineModeRef.current = offlineMode
   }, [offlineMode, checkConnectionStatuses])
 
+  // "Go offline" on the startup check: for this session only (the header's
+  // switch is where offline mode is kept for later visits)
   const handleStartupGoOffline = useCallback(() => {
+    setCloudOffline(true)
     setOfflineMode(true)
-    localStorage.setItem('offlineMode', 'true')
     setShowStartupConnectivity(false)
   }, [])
 
@@ -2180,8 +2159,9 @@ export default function App() {
             toggleFullscreen={toggleFullscreen}
             offlineMode={offlineMode}
             setOfflineMode={(val) => {
+              // The header switch: kept for later visits
+              setCloudOffline(val, { persist: true })
               setOfflineMode(val)
-              localStorage.setItem('offlineMode', val.toString())
             }}
             onOpenSetup={openMatchSetup}
             queueStats={syncQueueCounts}

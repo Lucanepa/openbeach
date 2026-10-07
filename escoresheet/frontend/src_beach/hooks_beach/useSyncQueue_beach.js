@@ -2,7 +2,7 @@ import { useEffect, useCallback, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db_beach/db_beach'
 import { apiFrom, apiMatchRestore, apiMatchClaim, AUTH_TOKEN_CHANGE_EVENT, AUTH_TOKEN_STORAGE_KEY } from '../lib_beach/apiClient_beach'
-import { getCloudApiUrl } from '../utils_beach/backendConfig_beach'
+import { getCloudApiUrl, isCloudOffline } from '../utils_beach/backendConfig_beach'
 import { parseExtId, resolveJobExternalId, jobMatchKey } from '../utils_beach/syncIds_beach'
 import { buildConnectionPins } from '../utils_beach/connectionPins_beach'
 
@@ -1234,7 +1234,18 @@ export function resetQueueHousekeeping() {
 // Sync status is shared by every mounted instance: whichever instance runs the
 // flush publishes it, so the Scoreboard indicator stays current even when the
 // App instance did the work.
-let currentSyncStatus = 'offline'
+// It starts out 'connecting' on a device that is online: 'offline' before the
+// first probe answered made the startup check show a healthy cloud as offline.
+let currentSyncStatus = initialSyncStatus()
+function initialSyncStatus() {
+  if (isCloudOffline()) return 'offline'
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'offline'
+  return 'connecting'
+}
+/** The sync status every mounted useSyncQueue shows now. */
+export function getSyncStatus() {
+  return currentSyncStatus
+}
 const syncStatusListeners = new Set()
 function publishSyncStatus(status) {
   currentSyncStatus = status
@@ -1262,9 +1273,11 @@ export function useSyncQueue() {
 
   // Check backend/Supabase connection (with caching)
   const hasBackend = () => !!getCloudApiUrl('/api/db')
+  // Offline mode switched the cloud off: 'offline', not "no cloud here"
+  const noBackendStatus = () => (isCloudOffline() ? 'offline' : 'online_no_supabase')
   const checkSupabaseConnection = useCallback(async (forceCheck = false) => {
     if (!hasBackend()) {
-      setSyncStatus('online_no_supabase')
+      setSyncStatus(noBackendStatus())
       return false
     }
 
@@ -1323,7 +1336,7 @@ export function useSyncQueue() {
     flushInProgress = true
     try {
       if (!hasBackend()) {
-        setSyncStatus('online_no_supabase')
+        setSyncStatus(noBackendStatus())
         return
       }
 
@@ -1417,7 +1430,7 @@ export function useSyncQueue() {
             flush()
           }
         } else {
-          setSyncStatus('online_no_supabase')
+          setSyncStatus(noBackendStatus())
         }
       }, 500)
     }
@@ -1444,7 +1457,7 @@ export function useSyncQueue() {
           }
         })
       } else {
-        setSyncStatus('online_no_supabase')
+        setSyncStatus(noBackendStatus())
       }
     } else {
       setSyncStatus('offline')
@@ -1455,6 +1468,26 @@ export function useSyncQueue() {
       window.removeEventListener('offline', handleOffline)
     }
   }, [isOnline, checkSupabaseConnection, flush])
+
+  // Offline mode switched: off -> probe and flush at once; on -> the cloud
+  // URL is gone (backendConfig), so say so without waiting for the next poll
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+    const onOfflineMode = (event) => {
+      if (event?.detail?.offline) {
+        connectionVerified.current = false
+        setSyncStatus('offline')
+        return
+      }
+      connectionVerified.current = false
+      probeFailures.current = 0
+      nextProbeAt.current = 0
+      if (hasBackend()) setSyncStatus('connecting')
+      if (!flushInProgress) flush()
+    }
+    window.addEventListener('openbeach-offline-mode', onOfflineMode)
+    return () => window.removeEventListener('openbeach-offline-mode', onOfflineMode)
+  }, [flush])
 
   // Debounced flush - triggers 200ms after a sync_queue write, with 5s fallback poll.
   // Gated on the browser being online only: a failed probe ('offline'/'error')

@@ -401,7 +401,8 @@
       "reviewImportedData": "Veuillez vérifier les données importées :",
       "reviewVerifyDob": "Vérifier que les dates de naissance sont correctes",
       "reviewSetCaptain": "Set captain designation",
-      "savePin": "Enregistrer le PIN"
+      "savePin": "Enregistrer le PIN",
+      "syncingToDatabase": "Synchronisation avec la base de données…"
     },
     "coinToss": "Tirage au sort",
     "chooseTeamColor": "Choisir la couleur de {{team}}",
@@ -2097,7 +2098,9 @@
     "serverUnavailable": "La saisie fonctionne entièrement hors ligne. La vue arbitre et le livescore passent par OpenVolley Cloud ; un serveur sur place n’est qu’une solution de repli.",
     "backgroundRetry": "La connexion sera retentée en arrière-plan.",
     "dismiss": "Fermer",
-    "goOffline": "Passer hors ligne"
+    "goOffline": "Passer hors ligne",
+    "continue": "Continuer",
+    "goOfflineHint": "« Passer hors ligne » arrête tout appel au cloud jusqu’au rechargement de l’app. L’interrupteur En ligne de l’en-tête garde ce choix pour les prochaines visites."
   },
   "savedTeams": {
     "load": "Charger une équipe enregistrée",

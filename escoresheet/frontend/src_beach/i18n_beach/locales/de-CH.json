@@ -401,7 +401,8 @@
       "reviewImportedData": "Bitte überprüefed Sie die importierte Date:",
       "reviewVerifyDob": "Überprüefed Sie, öb d Geburtsdate korrekt sind",
       "reviewSetCaptain": "Set captain designation",
-      "savePin": "PIN speichere"
+      "savePin": "PIN speichere",
+      "syncingToDatabase": "Wird mit de Datebank synchronisiert…"
     },
     "coinToss": "Usloosig",
     "chooseTeamColor": "Farb für {{team}} wähle",
@@ -2097,7 +2098,9 @@
     "serverUnavailable": "S Schriibe gaht vollständig offline. Schiri-Asicht und Livescore laufed über d OpenVolley Cloud; en Server vor Ort bruucht's nur als Rückfall.",
     "backgroundRetry": "D'Verbindig wird im Hintergrund witer probiert.",
     "dismiss": "Schliesse",
-    "goOffline": "Offline gah"
+    "goOffline": "Offline gah",
+    "continue": "Wiiter",
+    "goOfflineHint": "«Offline gah» stoppt jede Ufruef a d Cloud, bis d App neu glade wird. De Online-Schalter i de Chopfziile bhaltet d Wahl au für spöteri Bsüech."
   },
   "savedTeams": {
     "load": "Gespeichertes Team laden",

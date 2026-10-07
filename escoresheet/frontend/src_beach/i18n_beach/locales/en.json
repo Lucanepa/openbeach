@@ -404,7 +404,8 @@
       "reviewImportedData": "Please review the imported data:",
       "reviewVerifyDob": "Verify dates of birth are correct",
       "reviewSetCaptain": "Set captain designation",
-      "savePin": "Save PIN"
+      "savePin": "Save PIN",
+      "syncingToDatabase": "Syncing to the database…"
     },
     "coinToss": "Coin toss",
     "chooseTeamColor": "Choose the colour of {{team}}",
@@ -2098,7 +2099,9 @@
     "serverUnavailable": "Scoring works fully offline. The referee view and the livescore sync through OpenVolley Cloud; a venue server is only needed as a fallback.",
     "backgroundRetry": "Connection will keep retrying in the background.",
     "dismiss": "Dismiss",
-    "goOffline": "Go offline"
+    "goOffline": "Go offline",
+    "continue": "Continue",
+    "goOfflineHint": "Go offline stops every cloud call until the app is reloaded. The Online switch in the header keeps it for later visits."
   },
   "savedTeams": {
     "load": "Load saved team",

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, Loader2, Minus, WifiOff, X } from 'lucide-react'
-import { Button } from '../ui/volleyui/Button.jsx'
+import { ArrowRight, Check, Loader2, Minus, WifiOff, X } from 'lucide-react'
+import { Button, ButtonGroup } from '../ui/volleyui/Button.jsx'
 import { cn } from '../ui/volleyui/cn.js'
 
 // Primary services shown to the user — these are what matters
@@ -9,7 +9,7 @@ const PRIMARY_KEYS = ['db', 'supabase']
 
 const AUTO_DISMISS_SECONDS = 5
 
-const isStatusOk = (status) => {
+export const isStatusOk = (status) => {
   return status === 'connected' ||
     status === 'live' ||
     status === 'scheduled' ||
@@ -21,6 +21,8 @@ const isStatusOk = (status) => {
     status === 'not_configured' ||
     status === 'no_match'
 }
+
+const isPending = (status) => !status || status === 'unknown' || status === 'connecting'
 
 export default function StartupConnectivityModal({
   open,
@@ -42,7 +44,7 @@ export default function StartupConnectivityModal({
 
   // Only primary services gate dismissal
   const primaryOk = PRIMARY_KEYS.every(key => isStatusOk(connectionStatuses[key]))
-  const primaryChecked = PRIMARY_KEYS.every(key => connectionStatuses[key] !== 'unknown' && connectionStatuses[key] !== 'connecting')
+  const primaryChecked = PRIMARY_KEYS.every(key => !isPending(connectionStatuses[key]))
   const hasErrors = primaryChecked && PRIMARY_KEYS.some(key => !isStatusOk(connectionStatuses[key]))
 
   // Countdown + auto-dismiss once primary services are OK
@@ -162,19 +164,25 @@ export default function StartupConnectivityModal({
           </div>
         )}
 
-        {/* One action */}
-        <div className="mt-5 flex justify-center">
-          {primaryOk ? (
-            <Button variant="dark" size="xl" onClick={onDismiss} className="w-full sm:w-auto sm:min-w-[200px]">
-              {t('startupConnectivity.dismiss', 'Dismiss')}
-              <span className="font-normal tabular-nums opacity-70">({countdown}s)</span>
-            </Button>
-          ) : (
-            <Button variant="dark" size="xl" icon={WifiOff} onClick={onGoOffline} className="w-full sm:w-auto sm:min-w-[200px]">
+        {/* Continue is always there: scoring works without the cloud, and
+            the sync keeps retrying in the background. Going offline (no cloud
+            call at all) is a choice for this session only. */}
+        <ButtonGroup className="mt-5 flex-col-reverse sm:flex-row sm:justify-center">
+          {!primaryOk && (
+            <Button variant="secondary" size="xl" icon={WifiOff} onClick={onGoOffline} className="w-full sm:w-auto">
               {t('startupConnectivity.goOffline', 'Go offline')}
             </Button>
           )}
-        </div>
+          <Button variant="dark" size="xl" icon={primaryOk ? undefined : ArrowRight} onClick={onDismiss} className="w-full sm:w-auto sm:min-w-[200px]">
+            {primaryOk ? t('startupConnectivity.dismiss', 'Dismiss') : t('startupConnectivity.continue', 'Continue')}
+            {primaryOk && <span className="font-normal tabular-nums opacity-70">({countdown}s)</span>}
+          </Button>
+        </ButtonGroup>
+        {!primaryOk && (
+          <p className="mt-3 text-center text-xs leading-relaxed text-stone-500">
+            {t('startupConnectivity.goOfflineHint', 'Go offline stops every cloud call until the app is reloaded. The Online switch in the header keeps it for later visits.')}
+          </p>
+        )}
       </div>
     </div>
   )
