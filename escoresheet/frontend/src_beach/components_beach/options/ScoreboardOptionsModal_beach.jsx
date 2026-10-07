@@ -328,6 +328,7 @@ export default function ScoreboardOptionsModal({
       }}>
         <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>{t('options.title')}</h2>
         <button
+          data-modal-close
           onClick={onClose}
           style={{
             width: '32px',

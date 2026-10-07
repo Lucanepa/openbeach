@@ -342,6 +342,7 @@ export default function HomeOptionsModal({
             {t('supportFeedback.button')}
           </button>
           <button
+            data-modal-close
             onClick={onClose}
             style={{
               width: '32px',

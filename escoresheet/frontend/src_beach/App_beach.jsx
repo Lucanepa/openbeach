@@ -40,6 +40,7 @@ import {
 import { apiFrom } from './lib_beach/apiClient_beach'
 import { setExtId } from './utils_beach/syncIds_beach'
 import { isBackendAvailable, getBackendUrl, isServedFromLocalServer, getLocalServerStatusUrl, rememberRelayWsPort } from './utils_beach/backendConfig_beach'
+import { isCapacitorApp } from './utils_beach/appLifecycle_beach'
 import { scorerRelay, scorerPublisher, scorerRelayUrl, readRelayBundle, relayMatchKey } from './utils_beach/relayPublisher_beach'
 import { checkMatchSession, lockMatchSession, unlockMatchSession, verifyGamePin } from './utils_beach/sessionManager_beach'
 
@@ -842,15 +843,24 @@ export default function App() {
       history.pushState(null, '', window.location.href)
     }
 
-    // Push initial state to prevent back navigation
-    try {
-      history.pushState(null, '', window.location.href)
-    } catch (err) {
-      // Ignore history errors (e.g., older browsers or restricted environments)
-    }
+    // Android app: the Back button is MainActivity's (it goes back in real
+    // history, e.g. from the referee view, and on the first page asks "Exit
+    // OpenBeach?", utils_beach/appLifecycle_beach.js). An entry pushed here
+    // would make WebView.canGoBack() true, and Back then only replayed this
+    // block instead of asking (as in OpenVolley's App.jsx).
+    const blockHistory = !isCapacitorApp()
 
-    // Prevent browser back/forward buttons
-    window.addEventListener('popstate', blockHistoryNavigation)
+    if (blockHistory) {
+      // Push initial state to prevent back navigation
+      try {
+        history.pushState(null, '', window.location.href)
+      } catch (err) {
+        // Ignore history errors (e.g., older browsers or restricted environments)
+      }
+
+      // Prevent browser back/forward buttons
+      window.addEventListener('popstate', blockHistoryNavigation)
+    }
 
     // Prevent refresh keyboard shortcuts
     window.addEventListener('keydown', disableRefreshKeys, { passive: false })
