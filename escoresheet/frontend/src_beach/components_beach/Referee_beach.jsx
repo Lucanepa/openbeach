@@ -520,6 +520,14 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     }
   }, [updateMatchDataState])
 
+  // The scorer's live state from the relay (live-state-update, every point):
+  // the score, sides, serve and timeouts move without waiting for the cloud
+  // (a venue relay has none). The next bundle keeps it (lastLiveStateRef).
+  const handleRelayLiveState = useCallback((liveState) => {
+    lastLiveStateRef.current = liveState
+    setData(prev => (prev ? { ...prev, liveState } : prev))
+  }, [])
+
   // Handle realtime actions (timeout, set_end)
   const handleRealtimeAction = useCallback((action, actionData) => {
     const receiveTimestamp = Date.now()
@@ -625,9 +633,10 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     return subscribeToMatchData(matchId, (msg) => {
       if (!msg) return
       if (msg._action) handleRealtimeAction(msg._action, msg._actionData)
+      else if (msg._liveState) handleRelayLiveState(msg._liveState)
       else if (msg.match) handleRealtimeData({ success: true, ...msg })
     })
-  }, [matchId, isMasterMode, handleRealtimeAction, handleRealtimeData])
+  }, [matchId, isMasterMode, handleRealtimeAction, handleRealtimeData, handleRelayLiveState])
 
   // Initial data fetch when connection changes or component mounts
   useEffect(() => {

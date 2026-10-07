@@ -173,6 +173,29 @@ export function fromWire(msg) {
 }
 
 /**
+ * A relay's GET /api/match/list row in openbeach's shape: every relay names
+ * the teams homeTeam / awayTeam (team1 = home) and the bench connections
+ * homeTeamConnectionEnabled / awayTeamConnectionEnabled; the referee list
+ * reads team1Name / team2Name (and team1 / team2).
+ * @param {object} row
+ */
+export function fromWireListRow(row) {
+  if (!row || typeof row !== 'object') return row
+  const name = (v) => (v && typeof v === 'object' ? v.name : v) || null
+  const team1Name = name(row.team1Name) || name(row.team1) || name(row.homeTeam) || 'Team 1'
+  const team2Name = name(row.team2Name) || name(row.team2) || name(row.awayTeam) || 'Team 2'
+  return {
+    ...row,
+    team1: team1Name,
+    team2: team2Name,
+    team1Name,
+    team2Name,
+    team1TeamConnectionEnabled: row.team1TeamConnectionEnabled ?? row.homeTeamConnectionEnabled === true,
+    team2TeamConnectionEnabled: row.team2TeamConnectionEnabled ?? row.awayTeamConnectionEnabled === true
+  }
+}
+
+/**
  * Validate PIN and get match data from server
  */
 export async function validatePin(pin, type = 'referee') {
@@ -856,6 +879,19 @@ export function subscribeToMatchData(matchId, onUpdate) {
                 console.error('[ServerDataSync] Error in subscriber callback:', err)
               }
             })
+          } else if (message.type === 'live-state-update' && String(message.matchId) === matchIdStr) {
+            // The scorer's live state (score, sides, serve, timeouts), pushed
+            // on every point: on a venue relay without the cloud, the only one
+            const liveState = message.liveState
+            if (!liveState || typeof liveState !== 'object') return
+            if (liveState.sport_type && liveState.sport_type !== SPORT_TYPE) return
+            connection.subscribers.forEach(subscriber => {
+              try {
+                subscriber({ _liveState: liveState })
+              } catch (err) {
+                console.error('[ServerDataSync] Error in subscriber callback:', err)
+              }
+            })
           } else if (message.type === 'match-action' && String(message.matchId) === matchIdStr) {
             // Action received from scoreboard (timeout, set_end, etc.)
             connection.subscribers.forEach(subscriber => {
@@ -1076,7 +1112,7 @@ export async function listAvailableMatches() {
     }
 
     const result = await response.json()
-    return result
+    return { ...result, matches: Array.isArray(result?.matches) ? result.matches.map(fromWireListRow) : [] }
   } catch (error) {
     // Suppress noisy errors when local server isn't running (expected in Supabase-only mode)
     if (error.message?.includes('not valid JSON') || error.message?.includes('Failed to fetch')) {

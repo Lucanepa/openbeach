@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest'
 vi.mock('../../lib_beach/apiClient_beach', () => ({ apiFrom: vi.fn() }))
 vi.mock('../../utils_beach/backendConfig_beach', () => ({ isBackendAvailable: () => false, getApiUrl: () => null, getCloudApiUrl: () => null, getBackendUrl: () => null, getRelayWebSocketUrl: () => null }))
 
-const { fromWire } = await import('../../utils_beach/serverDataSync_beach')
+const { fromWire, fromWireListRow } = await import('../../utils_beach/serverDataSync_beach')
 
 // Every relay speaks home/away (team1 = home); the beach pages read team1/team2.
 describe('fromWire', () => {
@@ -34,5 +34,18 @@ describe('fromWire', () => {
     expect(built.team2).toEqual({ name: 'C / D', color: '#000' })
     expect(built.sets).toEqual([])
     expect(fromWire(null)).toBeNull()
+  })
+})
+
+describe('fromWireListRow (GET /api/match/list on a relay)', () => {
+  it('names the teams as the referee list reads them', () => {
+    const row = fromWireListRow({ id: 'match_1', gameNumber: 7, homeTeam: 'A / B', awayTeam: 'C / D', status: 'live', refereeConnectionEnabled: true, homeTeamConnectionEnabled: true, awayTeamConnectionEnabled: false })
+    expect(row).toMatchObject({ id: 'match_1', team1Name: 'A / B', team2Name: 'C / D', team1: 'A / B', team2: 'C / D', refereeConnectionEnabled: true, team1TeamConnectionEnabled: true, team2TeamConnectionEnabled: false })
+  })
+
+  it('keeps rows already in openbeach shape, and names missing teams', () => {
+    expect(fromWireListRow({ id: 'x', team1Name: 'X', team2Name: 'Y' })).toMatchObject({ team1Name: 'X', team2Name: 'Y' })
+    expect(fromWireListRow({ id: 'x', homeTeam: { name: 'O' } })).toMatchObject({ team1Name: 'O', team2Name: 'Team 2' })
+    expect(fromWireListRow(null)).toBeNull()
   })
 })

@@ -7,6 +7,10 @@ import UpdateBanner from './components_beach/UpdateBanner_beach'
 import DashboardHeader from './components_beach/DashboardHeader_beach'
 import refereeIcon from './ref.png'
 import { db } from './db_beach/db_beach'
+import { getRelayWebSocketUrl, isLanBackendUrl } from './utils_beach/backendConfig_beach'
+
+// A relay on the internet (the cloud) may need longer to answer than one on the venue LAN
+const isCloudRelayUrl = (wsUrl) => !isLanBackendUrl(String(wsUrl).replace(/^ws/, 'http'))
 
 // Master PIN for testing without a match
 const MASTER_PIN = '123456'
@@ -136,34 +140,17 @@ export default function RefereeApp() {
     
     // Check WebSocket server availability
     try {
-      // Check if we have a configured backend URL (cloud backend)
-      const backendUrl = import.meta.env.VITE_BACKEND_URL
-
-      let wsUrl
-      if (backendUrl) {
-        // Use configured backend (cloud backend)
-        const url = new URL(backendUrl)
-        const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-        wsUrl = `${protocol}//${url.host}`
-      } else {
-        // Fallback to local WebSocket server or same origin in production
-        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-        const hostname = window.location.hostname
-        // In production (HTTPS), use same origin without port (Cloudflare handles routing)
-        // In development (HTTP), use port 8080
-        if (window.location.protocol === 'https:') {
-          wsUrl = `${protocol}://${hostname}`
-        } else {
-          const wsPort = 8080
-          wsUrl = `${protocol}://${hostname}:${wsPort}`
-        }
-      }
+      // The relay the scorer publishes to (backendConfig: a venue relay's own
+      // WebSocket port, or the cloud)
+      const wsUrl = getRelayWebSocketUrl()
+      if (!wsUrl) throw new Error('No WebSocket relay for this page')
+      const onCloud = isCloudRelayUrl(wsUrl)
 
       const wsTest = new WebSocket(wsUrl)
       let resolved = false
 
       // Use longer timeout for cloud backends
-      const connectionTimeout = backendUrl ? 10000 : 2000
+      const connectionTimeout = onCloud ? 10000 : 2000
 
       await new Promise((resolve) => {
         const timeout = setTimeout(() => {

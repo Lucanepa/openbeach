@@ -5,22 +5,15 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { getLocalIP, getServerStatus } from '../utils_beach/networkInfo_beach'
+import { getBackendUrl } from '../utils_beach/backendConfig_beach'
 
 /**
- * Get WebSocket server URL
+ * The relay's HTTP base (/api/server/connections): the venue relay or the
+ * cloud, as backendConfig resolves it; else the page's own origin.
  */
 function getWsServerUrl() {
-  const backendUrl = import.meta.env.VITE_BACKEND_URL
-  if (backendUrl) {
-    return backendUrl
-  }
-  const protocol = window.location.protocol === 'https:' ? 'https' : 'http'
-  const hostname = window.location.hostname
-  // In production (HTTPS), use same origin without port (Cloudflare handles routing)
-  if (window.location.protocol === 'https:') {
-    return `${protocol}://${hostname}`
-  }
-  return `${protocol}://${hostname}:8080`
+  const base = getBackendUrl()
+  return base ? String(base).replace(/\/+$/, '') : window.location.origin
 }
 
 /**
