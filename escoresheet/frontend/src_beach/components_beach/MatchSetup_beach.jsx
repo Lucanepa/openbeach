@@ -26,7 +26,41 @@ import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { useSavedTeams as useSavedTeams_beach } from '../hooks_beach/useSavedTeams_beach'
 import SavedTeamPickerModal from './SavedTeamPickerModal_beach'
 import { savedTeamToBeachRoster, rosterHasNames, findBeachTeamSuggestions } from '../utils_beach/savedTeams_beach'
-import { ClipboardList, FileText } from './Icons_beach'
+import { ArrowLeft, Check, ChevronDown, ChevronUp, ClipboardList, Database, FileText, Loader2, RotateCcw, Users } from 'lucide-react'
+import { cn } from '../ui/volleyui/cn.js'
+import { Button, FOCUS_RING } from '../ui/volleyui/Button.jsx'
+import { Field } from '../ui/volleyui/Field.jsx'
+import { Input } from '../ui/volleyui/Input.jsx'
+import { Select } from '../ui/volleyui/Select.jsx'
+import { Switch } from '../ui/volleyui/Switch.jsx'
+import { KeyValue } from '../ui/volleyui/KeyValue.jsx'
+import { SectionHeader } from '../ui/volleyui/SectionHeader.jsx'
+import { Modal as KitModal, modalCancelClass, modalPrimaryClass, modalSaveClass } from '../ui/volleyui/Modal.jsx'
+
+// ---- volleyui class strings for the setup views --------------------------
+// A section inside the setup page card (match info, officials, dashboards,
+// team panels): the kit Block, sunken stone-50/60 with a hairline and no
+// shadow (volleyui: never a card in a card). As OpenVolley's MatchSetup.
+const SETUP_BLOCK = 'rounded-xl border border-stone-200/70 bg-stone-50/60'
+// Block heading (card heading scale).
+const BLOCK_TITLE = 'm-0 text-base font-semibold text-stone-900'
+// Summary definition list inside a block: label left, value left-aligned.
+const SUMMARY_KV = 'self-start text-sm gap-y-1.5 [&_dt]:whitespace-nowrap [&_dd]:text-left'
+const TRUNC = 'block truncate'
+// Field wrapper inside the editors: the label sits tight over its control.
+const FIELD = 'min-w-0'
+// One official box in the officials editor (kit Block + heading strip).
+const OFFICIAL_BOX = 'rounded-xl border border-stone-200/70 bg-stone-50/60 overflow-hidden'
+const OFFICIAL_HEAD = `flex w-full min-h-12 items-center justify-between gap-3 px-4 py-2 text-left hover:bg-stone-100/70 transition-colors cursor-pointer ${FOCUS_RING}`
+// A 44 px courtside control (tablet setup forms).
+const TOUCH = 'h-11'
+// The setup page's dialogs sit above the legacy header (z-index 1000), like
+// the legacy modals they replace.
+const DIALOG_LAYER = { position: 'relative', zIndex: 1000 }
+// Captain / C toggle: the emerald "done" state when chosen (a domain marker,
+// kept from the legacy green), a quiet outline otherwise.
+const CAPTAIN_ON = 'border-emerald-600 bg-emerald-50 text-emerald-700'
+const CAPTAIN_OFF = 'border-stone-300 bg-white text-stone-400 hover:bg-stone-50'
 
 // Date formatting helpers (outside component to avoid recreation)
 function formatDateToDDMMYYYY(dateStr) {
@@ -244,63 +278,45 @@ const OfficialCard = memo(function OfficialCard({
   }, [isExpanded])
 
   return (
-    <div ref={cardRef} style={{
-      border: '1px solid rgba(255, 255, 255, 0.2)',
-      borderRadius: '8px',
-      background: 'rgba(15, 23, 42, 0.2)',
-      overflow: 'hidden'
-    }}>
-      <div
-        onClick={onToggleExpanded}
-        style={{
-          padding: '12px 16px',
-          background: 'rgba(255, 255, 255, 0.1)',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
-          <span style={{ fontWeight: 600, fontSize: '14px' }}>{title}</span>
-          {!isExpanded && (
-            <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px' }}>{displayName}</span>
-          )}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {hasDatabase && isExpanded && (
-            <button
-              type="button"
+    <div ref={cardRef} className={OFFICIAL_BOX}>
+      <div className={cn('flex items-stretch', isExpanded && 'border-b border-stone-200/70')}>
+        <button
+          type="button"
+          onClick={onToggleExpanded}
+          aria-expanded={isExpanded}
+          className={cn(OFFICIAL_HEAD, 'flex-1')}
+        >
+          <span className="flex min-w-0 flex-1 items-center gap-3">
+            <span className="whitespace-nowrap text-sm font-semibold text-stone-700">{title}</span>
+            {!isExpanded && (
+              <span className="truncate text-sm text-stone-500">{displayName}</span>
+            )}
+          </span>
+          {isExpanded ? <ChevronUp size={16} className="shrink-0 text-stone-400" aria-hidden="true" /> : <ChevronDown size={16} className="shrink-0 text-stone-400" aria-hidden="true" />}
+        </button>
+        {hasDatabase && isExpanded && (
+          <div className="flex items-center pr-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={Database}
+              className="bg-white"
               onClick={(e) => {
                 e.stopPropagation()
                 onOpenDatabase(e, selectorKey)
               }}
-              style={{
-                padding: '4px 8px',
-                fontSize: '11px',
-                fontWeight: 500,
-                background: 'rgba(59, 130, 246, 0.2)',
-                color: '#60a5fa',
-                border: '1px solid rgba(59, 130, 246, 0.4)',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
             >
               {t('matchSetup.database')}
-            </button>
-          )}
-          <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>{isExpanded ? '▲' : '▼'}</span>
-        </div>
+            </Button>
+          </div>
+        )}
       </div>
       {isExpanded && (
-        <div style={{ padding: '16px' }}>
-          <div className="row">
-            <div className="field w-name"><label>{t('matchSetup.lastName')}</label><input className="capitalize" value={lastName} onChange={e => setLastName(e.target.value)} /></div>
-            <div className="field w-name"><label>{t('matchSetup.firstName')}</label><input className="capitalize" value={firstName} onChange={e => setFirstName(e.target.value)} /></div>
-            <div className="field w-90"><label>{t('matchSetup.country')}</label><input value={country} onChange={e => setCountry(e.target.value)} /></div>
-            {manageDob && <div className="field w-dob"><label>{t('matchSetup.dateOfBirth')}</label><input type="date" value={dob ? formatDateToISO(dob) : ''} onChange={e => setDob(e.target.value ? formatDateToDDMMYYYY(e.target.value) : '')} /></div>}
-          </div>
+        <div className="grid gap-3 p-4 [grid-template-columns:repeat(auto-fit,minmax(160px,1fr))]">
+          <Field tone="compact" className={FIELD} label={t('matchSetup.lastName')}><Input size="lg" className="capitalize" value={lastName} onChange={e => setLastName(e.target.value)} /></Field>
+          <Field tone="compact" className={FIELD} label={t('matchSetup.firstName')}><Input size="lg" className="capitalize" value={firstName} onChange={e => setFirstName(e.target.value)} /></Field>
+          <Field tone="compact" className={FIELD} label={t('matchSetup.country')}><Input size="lg" value={country} onChange={e => setCountry(e.target.value)} /></Field>
+          {manageDob && <Field tone="compact" className={FIELD} label={t('matchSetup.dateOfBirth')}><Input size="lg" type="date" value={dob ? formatDateToISO(dob) : ''} onChange={e => setDob(e.target.value ? formatDateToDDMMYYYY(e.target.value) : '')} /></Field>}
         </div>
       )}
     </div>
@@ -334,42 +350,27 @@ const LineJudgesCard = memo(function LineJudgesCard({
   }, [isExpanded])
 
   return (
-    <div ref={cardRef} style={{
-      border: '1px solid rgba(255, 255, 255, 0.2)',
-      borderRadius: '8px',
-      background: 'rgba(15, 23, 42, 0.2)',
-      overflow: 'hidden'
-    }}>
-      <div
+    <div ref={cardRef} className={OFFICIAL_BOX}>
+      <button
+        type="button"
         onClick={onToggleExpanded}
-        style={{
-          padding: '12px 16px',
-          background: 'rgba(255, 255, 255, 0.1)',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px'
-        }}
+        aria-expanded={isExpanded}
+        className={cn(OFFICIAL_HEAD, isExpanded && 'border-b border-stone-200/70')}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
-          <span style={{ fontWeight: 600, fontSize: '14px' }}>{t('matchSetup.lineJudges')}</span>
+        <span className="flex min-w-0 flex-1 items-center gap-3">
+          <span className="text-sm font-semibold text-stone-700">{t('matchSetup.lineJudges')}</span>
           {!isExpanded && (
-            <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px' }}>{displayText}</span>
+            <span className="truncate text-sm text-stone-500">{displayText}</span>
           )}
-        </div>
-        <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>{isExpanded ? '▲' : '▼'}</span>
-      </div>
+        </span>
+        {isExpanded ? <ChevronUp size={16} className="shrink-0 text-stone-400" aria-hidden="true" /> : <ChevronDown size={16} className="shrink-0 text-stone-400" aria-hidden="true" />}
+      </button>
       {isExpanded && (
-        <div style={{ padding: '16px' }}>
-          <div className="row">
-            <div className="field w-name"><label>{t('matchSetup.lineJudge1')}</label><input className="capitalize" value={lineJudge1} onChange={e => setLineJudge1(e.target.value)} placeholder={t('matchSetup.name')} /></div>
-            <div className="field w-name"><label>{t('matchSetup.lineJudge2')}</label><input className="capitalize" value={lineJudge2} onChange={e => setLineJudge2(e.target.value)} placeholder={t('matchSetup.name')} /></div>
-          </div>
-          <div className="row">
-            <div className="field w-name"><label>{t('matchSetup.lineJudge3')}</label><input className="capitalize" value={lineJudge3} onChange={e => setLineJudge3(e.target.value)} placeholder={t('matchSetup.name')} /></div>
-            <div className="field w-name"><label>{t('matchSetup.lineJudge4')}</label><input className="capitalize" value={lineJudge4} onChange={e => setLineJudge4(e.target.value)} placeholder={t('matchSetup.name')} /></div>
-          </div>
+        <div className="grid gap-3 p-4 sm:grid-cols-2">
+          <Field tone="compact" className={FIELD} label={t('matchSetup.lineJudge1')}><Input size="lg" className="capitalize" value={lineJudge1} onChange={e => setLineJudge1(e.target.value)} placeholder={t('matchSetup.name')} /></Field>
+          <Field tone="compact" className={FIELD} label={t('matchSetup.lineJudge2')}><Input size="lg" className="capitalize" value={lineJudge2} onChange={e => setLineJudge2(e.target.value)} placeholder={t('matchSetup.name')} /></Field>
+          <Field tone="compact" className={FIELD} label={t('matchSetup.lineJudge3')}><Input size="lg" className="capitalize" value={lineJudge3} onChange={e => setLineJudge3(e.target.value)} placeholder={t('matchSetup.name')} /></Field>
+          <Field tone="compact" className={FIELD} label={t('matchSetup.lineJudge4')}><Input size="lg" className="capitalize" value={lineJudge4} onChange={e => setLineJudge4(e.target.value)} placeholder={t('matchSetup.name')} /></Field>
         </div>
       )}
     </div>
@@ -413,6 +414,18 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   const { scaleFactor: baseScaleFactor } = useScaledLayout()
   const scaleFactor = baseScaleFactor * 1.25
   const s = (px) => Math.round(px * scaleFactor)
+  // The kit's Tailwind steps (spacing, text sizes) follow the user's display
+  // scale too: Tailwind v4 utilities read --spacing / --text-* at use site
+  // (as OpenVolley's MatchSetup).
+  const kitScale = useMemo(() => (baseScaleFactor === 1 ? undefined : {
+    '--spacing': `${0.25 * baseScaleFactor}rem`,
+    '--text-xs': `${0.75 * baseScaleFactor}rem`,
+    '--text-sm': `${0.875 * baseScaleFactor}rem`,
+    '--text-base': `${1 * baseScaleFactor}rem`,
+    '--text-lg': `${1.125 * baseScaleFactor}rem`,
+    '--text-xl': `${1.25 * baseScaleFactor}rem`,
+    '--text-2xl': `${1.5 * baseScaleFactor}rem`
+  }), [baseScaleFactor])
   const { showAlert } = useAlert()
   const { user, profile, getCachedProfile, access } = useAuth()
   const [team1Name, setTeam1Name] = useState('')
@@ -2805,6 +2818,49 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     )
   }
 
+  // The notice / syncing dialog (one copy for the main and roster views): a
+  // kit decision dialog with the state icon, the message and one dark OK.
+  // While syncing it has no button and cannot be closed, as before.
+  const renderNoticeModal = () => noticeModal && (
+    <div className="ov-kit" style={DIALOG_LAYER}>
+      <KitModal
+        open
+        decision
+        dismissible={false}
+        size="sm"
+        onClose={() => !noticeModal.syncing && setNoticeModal(null)}
+        closeLabel={t('common.close')}
+      >
+        <div className="flex flex-col items-center text-center" role="status" aria-live="polite">
+          {noticeModal.syncing && (
+            <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-stone-100 text-stone-500">
+              <Loader2 size={24} className="animate-spin" aria-hidden="true" />
+            </span>
+          )}
+          {!noticeModal.syncing && noticeModal.type === 'success' && (
+            <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+              <Check size={24} aria-hidden="true" />
+            </span>
+          )}
+          {!noticeModal.syncing && noticeModal.type === 'error' && (
+            <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-xl font-bold text-red-600" aria-hidden="true">×</span>
+          )}
+          <h3 className="text-lg font-bold text-stone-900">
+            {noticeModal.syncing ? t('matchSetup.modals.syncing') : noticeModal.type === 'success' ? t('matchSetup.modals.success') : t('matchSetup.modals.notice')}
+          </h3>
+          <p className="mt-2 whitespace-pre-line text-sm text-stone-600">
+            {noticeModal.message}
+          </p>
+          {!noticeModal.syncing && (
+            <button type="button" onClick={() => setNoticeModal(null)} className={cn(modalPrimaryClass, 'mt-5 min-h-11 min-w-28')}>
+              {t('common.ok')}
+            </button>
+          )}
+        </div>
+      </KitModal>
+    </div>
+  )
+
   const savedTeamsModals = (
     <>
       <SavedTeamPickerModal
@@ -2857,19 +2913,20 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
   if (currentView === 'info') {
     return (
-      <MatchSetupInfoView>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <button className="secondary" onClick={() => { restoreMatchInfo(); setCurrentView('main') }}>← {t('common.back')}</button>
-          <h1 style={{ margin: 8 }}>{t('matchSetup.matchInfo')}</h1>
-          <div style={{ width: 80 }}></div>
+      <MatchSetupInfoView kitScale={kitScale}>
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+          <div>
+            <Button variant="ghost" size="xl" icon={ArrowLeft} className="bg-white" onClick={() => { restoreMatchInfo(); setCurrentView('main') }}>{t('common.back')}</Button>
+          </div>
+          <h1 className="m-0 text-center text-xl font-bold tracking-tight text-stone-900 sm:text-2xl">{t('matchSetup.matchInfo')}</h1>
+          <div />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
-          <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
-            <h3 style={{ marginTop: 0 }}>{t('matchSetup.competitionName')}</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
-              <div className="field">
-                <label>{t('matchSetup.competitionName')}</label>
-                <input style={{ minWidth: 200, width: `${Math.max(200, (league?.length || 0) * 9 + 24)}px`, maxWidth: '100%' }} className="capitalize" value={league} onChange={async e => {
+        <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(250px,1fr))]">
+          <div className={cn('flex flex-col p-4', SETUP_BLOCK)}>
+            <h3 className="mb-3 text-sm font-semibold text-stone-700">{t('matchSetup.competitionName')}</h3>
+            <div className="flex flex-1 flex-col gap-3">
+              <Field className={FIELD} label={t('matchSetup.competitionName')}>
+                <Input size="lg" className="capitalize" value={league} onChange={async e => {
                   const newLeague = e.target.value
                   setLeague(newLeague)
                   // Re-check game number duplicate with new league
@@ -2883,13 +2940,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     setGameNError('')
                   }
                 }} placeholder={t('matchSetup.enterCompetitionName')} />
-              </div>
-              <div className="field">
-                <label>{t('matchSetup.matchNumber')}</label>
-                <input
-                  style={gameNError
-                    ? { minWidth: 100, width: `${Math.max(100, (gameN?.length || 0) * 9 + 24)}px`, maxWidth: '100%', borderColor: '#ef4444', boxShadow: '0 0 0 1px #ef4444' }
-                    : { minWidth: 100, width: `${Math.max(100, (gameN?.length || 0) * 9 + 24)}px`, maxWidth: '100%' }}
+              </Field>
+              <Field className={FIELD} label={t('matchSetup.matchNumber')} error={gameNError || undefined}>
+                <Input
+                  size="lg"
+                  className="tabular-nums"
                   value={gameN}
                   onChange={async e => {
                     const val = e.target.value
@@ -2907,12 +2962,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                   }}
                   placeholder="e.g. M01"
                 />
-                {gameNError && <span style={{ color: '#ef4444', fontSize: '12px', marginLeft: '8px' }}>{gameNError}</span>}
-              </div>
-              <div className="field">
-                <label>{t('matchSetup.date')}</label>
-                <input
+              </Field>
+              <Field className={FIELD} label={t('matchSetup.date')} error={dateError || undefined}>
+                <Input
+                  size="lg"
                   type="text"
+                  inputMode="numeric"
+                  className="max-w-[180px] tabular-nums"
                   value={date}
                   onChange={e => {
                     let val = e.target.value
@@ -2924,14 +2980,14 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     handleDateChange(val)
                   }}
                   placeholder="dd.mm.yyyy"
-                  style={dateError ? { borderColor: '#ef4444', boxShadow: '0 0 0 1px #ef4444', width: 130 } : { width: 130 }}
                 />
-                {dateError && <span style={{ color: '#ef4444', fontSize: '12px', marginLeft: '8px' }}>{dateError}</span>}
-              </div>
-              <div className="field">
-                <label>{t('matchSetup.time')}</label>
-                <input
+              </Field>
+              <Field className={FIELD} label={t('matchSetup.time')} error={timeError || undefined}>
+                <Input
+                  size="lg"
                   type="text"
+                  inputMode="numeric"
+                  className="max-w-[120px] tabular-nums"
                   value={time}
                   onChange={e => {
                     let val = e.target.value
@@ -2942,182 +2998,137 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     handleTimeChange(val)
                   }}
                   placeholder="HH:MM"
-                  style={timeError ? { borderColor: '#ef4444', boxShadow: '0 0 0 1px #ef4444', width: 90 } : { width: 90 }}
                 />
-                {timeError && <span style={{ color: '#ef4444', fontSize: '12px', marginLeft: '8px' }}>{timeError}</span>}
-              </div>
+              </Field>
             </div>
           </div>
 
-          <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
-            <h3 style={{ marginTop: 0 }}>{t('matchSetup.location')}</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
-              <div className="field">
-                <label>{t('matchSetup.site')}</label>
-                <input style={{ minWidth: 200, width: `${Math.max(200, (city?.length || 0) * 9 + 24)}px`, maxWidth: '100%' }} className="capitalize" value={city} onChange={e => setCity(e.target.value)} placeholder={t('matchSetup.enterSite')} />
-              </div>
-              <div className="field">
-                <label>{t('matchSetup.beach')}</label>
-                <input style={{ minWidth: 200, width: `${Math.max(200, (hall?.length || 0) * 9 + 24)}px`, maxWidth: '100%' }} className="capitalize" value={hall} onChange={e => setHall(e.target.value)} placeholder={t('matchSetup.enterBeach')} />
-              </div>
-              <div className="field">
-                <label>{t('matchSetup.court')}</label>
-                <input style={{ minWidth: 130, width: `${Math.max(130, (court?.length || 0) * 9 + 24)}px`, maxWidth: '100%' }} value={court} onChange={e => setCourt(e.target.value)} placeholder="e.g. 1, Center" />
-              </div>
+          <div className={cn('flex flex-col p-4', SETUP_BLOCK)}>
+            <h3 className="mb-3 text-sm font-semibold text-stone-700">{t('matchSetup.location')}</h3>
+            <div className="flex flex-1 flex-col gap-3">
+              <Field className={FIELD} label={t('matchSetup.site')}>
+                <Input size="lg" className="capitalize" value={city} onChange={e => setCity(e.target.value)} placeholder={t('matchSetup.enterSite')} />
+              </Field>
+              <Field className={FIELD} label={t('matchSetup.beach')}>
+                <Input size="lg" className="capitalize" value={hall} onChange={e => setHall(e.target.value)} placeholder={t('matchSetup.enterBeach')} />
+              </Field>
+              <Field className={FIELD} label={t('matchSetup.court')}>
+                <Input size="lg" value={court} onChange={e => setCourt(e.target.value)} placeholder="e.g. 1, Center" />
+              </Field>
             </div>
           </div>
 
-          <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
-            <h3 style={{ marginTop: 0 }}>{t('matchSetup.category', 'Category')}</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
-              <div className="field">
-                <label>{t('matchSetup.gender')}</label>
-                <select value={type2} onChange={e => setType2(e.target.value)}>
+          <div className={cn('flex flex-col p-4', SETUP_BLOCK)}>
+            <h3 className="mb-3 text-sm font-semibold text-stone-700">{t('matchSetup.category', 'Category')}</h3>
+            <div className="flex flex-1 flex-col gap-3">
+              <Field className={FIELD} label={t('matchSetup.gender')}>
+                <Select size="lg" block value={type2} onChange={e => setType2(e.target.value)}>
                   <option value="men">{t('matchSetup.men')}</option>
                   <option value="women">{t('matchSetup.women')}</option>
-                </select>
-              </div>
-              <div className="field">
-                <label>{t('matchSetup.phase')}</label>
-                <select value={phase} onChange={e => setPhase(e.target.value)}>
+                </Select>
+              </Field>
+              <Field className={FIELD} label={t('matchSetup.phase')}>
+                <Select size="lg" block value={phase} onChange={e => setPhase(e.target.value)}>
                   <option value="main">{t('matchSetup.mainDraw')}</option>
                   <option value="qualification">{t('matchSetup.qualification')}</option>
-                </select>
-              </div>
-              <div className="field">
-                <label>{t('matchSetup.round')}</label>
-                <select value={round} onChange={e => setRound(e.target.value)}>
+                </Select>
+              </Field>
+              <Field className={FIELD} label={t('matchSetup.round')}>
+                <Select size="lg" block value={round} onChange={e => setRound(e.target.value)}>
                   <option value="pool">{t('matchSetup.poolPlay')}</option>
                   <option value="winner">{t('matchSetup.winnerBracket')}</option>
                   <option value="class">{t('matchSetup.classificationRound')}</option>
                   <option value="semifinals">{t('matchSetup.semifinals')}</option>
                   <option value="finals">{t('matchSetup.finals')}</option>
-                </select>
-              </div>
-              <div className="field">
-                <label>{t('matchSetup.coach')}</label>
-                <select value={hasCoach ? 'yes' : 'no'} onChange={e => setHasCoach(e.target.value === 'yes')}>
+                </Select>
+              </Field>
+              <Field className={FIELD} label={t('matchSetup.coach')}>
+                <Select size="lg" block value={hasCoach ? 'yes' : 'no'} onChange={e => setHasCoach(e.target.value === 'yes')}>
                   <option value="no">{t('common.no')}</option>
                   <option value="yes">{t('common.yes')}</option>
-                </select>
-              </div>
+                </Select>
+              </Field>
             </div>
           </div>
         </div>
         {match && !match.test && match.gamePin && (
-          <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center' }}>
-            <div
-              style={{
-                padding: '12px 24px',
-                background: 'rgba(255, 255, 255, 0.05)',
-                borderRadius: '8px',
-                fontFamily: 'monospace',
-                fontSize: '18px',
-                fontWeight: 700,
-                letterSpacing: '2px',
-                textAlign: 'center',
-                minWidth: '200px',
-                transition: 'background 0.2s ease'
-              }}
-            >
-              <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>{t('matchSetup.gamePin')}</div>
-              <div style={{ userSelect: 'text', cursor: 'text' }}>{match.gamePin}</div>
-              <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '4px' }}>
-                {t('matchSetup.gamePinDescription')}
-              </div>
-              {match && !match.test && match.gamePin && (
-                <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center' }}>
-                  <div className="field" style={{ maxWidth: '400px', width: '100%' }}>
-                    <label style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px', display: 'block' }}>
-                      {t('matchSetup.notificationEmail')}
-                    </label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <input
-                        type="email"
-                        placeholder={t('matchSetup.notificationEmailPlaceholder')}
-                        value={notificationEmail}
-                        onChange={(e) => setNotificationEmail(e.target.value)}
-                        style={{
-                          flex: 1,
-                          padding: '10px 12px',
-                          fontSize: '14px',
-                          borderRadius: '6px',
-                          border: '1px solid rgba(255, 255, 255, 0.2)',
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          color: 'inherit'
-                        }}
-                      />
-                      <button
-                        type="button"
-                        disabled={sendingEmail}
-                        onClick={async () => {
-                          if (!notificationEmail || !notificationEmail.includes('@')) {
-                            showAlert(t('matchSetup.invalidEmail') || 'Please enter a valid email address', 'warning')
-                            return
-                          }
-                          setSendingEmail(true)
-                          try {
-                            const sendInfoUrl = getCloudApiUrl('/api/match/send-info')
-                            if (!sendInfoUrl) throw new Error('No cloud backend')
-                            const res = await fetch(sendInfoUrl, {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                email: notificationEmail,
-                                gameN: gameN,
-                                gamePin: match.gamePin,
-                                team1: team1Name,
-                                team1ShortName: team1ShortName,
-                                team2: team2Name,
-                                team2ShortName: team2ShortName,
-                                date: date,
-                                time: time,
-                                hall: hall,
-                                city: city,
-                                league: league
-                              })
-                            })
-                            const data = await res.json()
-                            if (data.success) {
-                              showAlert(t('matchSetup.emailSent') || 'Email sent successfully!', 'success')
-                            } else {
-                              showAlert(data.error || t('matchSetup.emailFailed') || 'Failed to send email', 'error')
-                            }
-                          } catch (err) {
-                            console.error('Failed to send email:', err)
-                            showAlert(t('matchSetup.emailFailed') || 'Failed to send email. Check server connection.', 'error')
-                          } finally {
-                            setSendingEmail(false)
-                          }
-                        }}
-                        style={{
-                          padding: '10px 16px',
-                          fontSize: '14px',
-                          borderRadius: '6px',
-                          border: 'none',
-                          background: sendingEmail ? 'var(--muted, #666)' : 'var(--primary, #4a90d9)',
-                          color: 'white',
-                          cursor: sendingEmail ? 'wait' : 'pointer',
-                          fontWeight: 600,
-                          opacity: sendingEmail ? 0.7 : 1
-                        }}
-                      >
-                        {sendingEmail ? (t('matchSetup.sending') || 'Sending...') : (t('matchSetup.send') || 'Send')}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
+          <div className={cn('mx-auto w-full max-w-md p-4 text-center', SETUP_BLOCK)}>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">{t('matchSetup.gamePin')}</div>
+            <div className="mt-1 cursor-text select-text font-mono text-2xl font-bold tracking-[0.3em] text-stone-900 tabular-nums">{match.gamePin}</div>
+            <div className="mt-1 text-xs text-stone-500">
+              {t('matchSetup.gamePinDescription')}
             </div>
-
+            <div className="mt-4 text-left">
+              <label htmlFor="ob-notification-email" className="mb-1.5 block text-sm font-medium text-stone-700">
+                {t('matchSetup.notificationEmail')}
+              </label>
+              <div className="flex gap-2">
+                <Input
+                  id="ob-notification-email"
+                  size="lg"
+                  type="email"
+                  className="min-w-0 flex-1"
+                  placeholder={t('matchSetup.notificationEmailPlaceholder')}
+                  value={notificationEmail}
+                  onChange={(e) => setNotificationEmail(e.target.value)}
+                />
+                <Button
+                  variant="dark"
+                  size="xl"
+                  loading={sendingEmail}
+                  onClick={async () => {
+                    if (!notificationEmail || !notificationEmail.includes('@')) {
+                      showAlert(t('matchSetup.invalidEmail') || 'Please enter a valid email address', 'warning')
+                      return
+                    }
+                    setSendingEmail(true)
+                    try {
+                      const sendInfoUrl = getCloudApiUrl('/api/match/send-info')
+                      if (!sendInfoUrl) throw new Error('No cloud backend')
+                      const res = await fetch(sendInfoUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          email: notificationEmail,
+                          gameN: gameN,
+                          gamePin: match.gamePin,
+                          team1: team1Name,
+                          team1ShortName: team1ShortName,
+                          team2: team2Name,
+                          team2ShortName: team2ShortName,
+                          date: date,
+                          time: time,
+                          hall: hall,
+                          city: city,
+                          league: league
+                        })
+                      })
+                      const data = await res.json()
+                      if (data.success) {
+                        showAlert(t('matchSetup.emailSent') || 'Email sent successfully!', 'success')
+                      } else {
+                        showAlert(data.error || t('matchSetup.emailFailed') || 'Failed to send email', 'error')
+                      }
+                    } catch (err) {
+                      console.error('Failed to send email:', err)
+                      showAlert(t('matchSetup.emailFailed') || 'Failed to send email. Check server connection.', 'error')
+                    } finally {
+                      setSendingEmail(false)
+                    }
+                  }}
+                >
+                  {sendingEmail ? (t('matchSetup.sending') || 'Sending...') : (t('matchSetup.send') || 'Send')}
+                </Button>
+              </div>
+            </div>
           </div>
-
         )}
 
-
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-          <button
+        <div className="flex justify-end border-t border-stone-200/70 pt-4">
+          <Button
+            variant="primary"
+            size="xl"
+            className="min-w-40"
             onClick={(e) => {
               if (!canConfirmMatchInfo) {
                 e.preventDefault()
@@ -3133,41 +3144,20 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             title={!canConfirmMatchInfo ? getMissingFieldsTooltip() : ''}
           >
             {matchInfoConfirmed ? t('matchSetup.save') : t('matchSetup.createMatch')}
-          </button>
+          </Button>
         </div>
 
-        {/* Color Picker Modal for Match Info view */}
+        {/* Color Picker Modal for Match Info view (kit dialog, frozen shirts) */}
         {colorPickerModal && (
-          <>
-            <div
-              style={{
-                position: 'fixed',
-                inset: 0,
-                zIndex: 999,
-                background: 'rgba(0, 0, 0, 0.6)'
-              }}
-              onClick={() => setColorPickerModal(null)}
-            />
-            <div
-              style={{
-                position: 'fixed',
-                left: '50%',
-                top: '50%',
-                transform: 'translate(-50%, -50%)',
-                zIndex: 1000,
-                background: '#1f2937',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                borderRadius: '12px',
-                padding: '16px',
-                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
-                minWidth: '280px'
-              }}
-              onClick={(e) => e.stopPropagation()}
+          <div className="ov-kit" style={DIALOG_LAYER}>
+            <KitModal
+              open
+              size="sm"
+              onClose={() => setColorPickerModal(null)}
+              closeLabel={t('common.close')}
+              title={t('matchSetup.chooseTeamColour', { team: colorPickerModal.team === 'team1' ? t('common.team1') : t('common.team2') })}
             >
-              <div style={{ marginBottom: '12px', fontSize: '14px', fontWeight: 600, color: 'var(--text)' }}>
-                {t('matchSetup.chooseTeamColour', { team: colorPickerModal.team === 'team1' ? t('common.team1') : t('common.team2') })}
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+              <div className="grid grid-cols-4 gap-2">
                 {teamColors.map((color) => {
                   const isSelected = (colorPickerModal.team === 'team1' ? team1Color : team2Color) === color
                   return (
@@ -3182,19 +3172,14 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                         }
                         setColorPickerModal(null)
                       }}
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '12px 8px',
-                        background: isSelected ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
-                        border: isSelected ? '2px solid #3b82f6' : '1px solid rgba(255, 255, 255, 0.1)',
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        minWidth: '60px'
-                      }}
+                      aria-pressed={isSelected}
+                      aria-label={color}
+                      title={color}
+                      className={cn(
+                        'flex min-h-16 min-w-[60px] items-center justify-center rounded-lg border px-2 py-3 transition-colors',
+                        isSelected ? 'border-slate-900 ring-2 ring-slate-900' : 'border-stone-200 bg-white hover:bg-stone-50',
+                        FOCUS_RING
+                      )}
                     >
                       <div className="shirt" style={{ background: color, transform: 'scale(0.8)' }}>
                         <div className="collar" style={{ background: color }} />
@@ -3204,8 +3189,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                   )
                 })}
               </div>
-            </div>
-          </>
+            </KitModal>
+          </div>
         )}
 
       </MatchSetupInfoView>
@@ -3214,14 +3199,16 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
   if (currentView === 'officials') {
     return (
-      <MatchSetupOfficialsView>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <button className="secondary" onClick={() => { restoreOfficials(); setCurrentView('main') }}>← {t('common.back')}</button>
-          <h2 style={{ marginLeft: 20, marginRight: 20 }}>{t('matchSetup.matchOfficials')}</h2>
-          <div style={{ width: 80 }}></div>
+      <MatchSetupOfficialsView kitScale={kitScale}>
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+          <div>
+            <Button variant="ghost" size="xl" icon={ArrowLeft} className="bg-white" onClick={() => { restoreOfficials(); setCurrentView('main') }}>{t('common.back')}</Button>
+          </div>
+          <h1 className="m-0 text-center text-xl font-bold tracking-tight text-stone-900 sm:text-2xl">{t('matchSetup.matchOfficials')}</h1>
+          <div />
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="flex flex-col gap-3">
           <OfficialCard
             title={t('matchSetup.referee1')}
             officialKey="ref1"
@@ -3335,8 +3322,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           position={refereeSelectorPosition}
         />
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-          <button onClick={async () => {
+        <div className="flex justify-end border-t border-stone-200/70 pt-4">
+          <Button variant="primary" size="xl" className="min-w-40" onClick={async () => {
             // Check if any changes were made (skip sync if no changes)
             const currentOfficials = {
               ref1First, ref1Last, ref1Country, ref1Dob,
@@ -3412,7 +3399,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               checkSyncStatus()
             }
             setCurrentView('main')
-          }}>{t('common.confirm')}</button>
+          }}>{t('common.confirm')}</Button>
         </div>
       </MatchSetupOfficialsView>
     )
@@ -3420,7 +3407,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
   if (currentView === 'team1') {
     return (
-      <MatchSetupTeam1View>
+      <MatchSetupTeam1View kitScale={kitScale}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <button className="secondary" onClick={() => { restoreTeam1(); setCurrentView('main') }}>← {t('common.back')}</button>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
@@ -4082,7 +4069,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
   if (currentView === 'team2') {
     return (
-      <MatchSetupTeam2View>
+      <MatchSetupTeam2View kitScale={kitScale}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <button className="secondary" onClick={() => { restoreTeam2(); setCurrentView('main') }}>← {t('common.back')}</button>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
@@ -4732,79 +4719,57 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     )
   }
 
+  // Card state mark: emerald done, sky ready to confirm, amber to do; each
+  // also says it in its title / label (volleyui: every colour has a word).
   const StatusBadge = ({ ready, pending }) => (
     <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 18,
-        height: 18,
-        minWidth: 18,
-        minHeight: 18,
-        flexShrink: 0,
-        borderRadius: '50%',
-        backgroundColor: ready ? '#22c55e' : pending ? '#3b82f6' : '#f97316',
-        color: ready || pending ? '#fff' : '#0b1120',
-        fontWeight: 700,
-        fontSize: 12
-      }}
-      aria-label={ready ? 'Complete' : pending ? 'Ready to confirm' : 'Incomplete'}
-      title={ready ? 'Complete' : pending ? 'Ready to confirm' : 'Incomplete'}
+      className={cn(
+        'inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold leading-none',
+        ready ? 'bg-emerald-700 text-white' : pending ? 'bg-sky-600 text-white' : 'border border-amber-300 bg-amber-100 text-amber-800'
+      )}
+      aria-label={ready ? t('matchSetup.status.complete', 'Complete') : pending ? t('matchSetup.status.readyToConfirm', 'Ready to confirm') : t('matchSetup.status.incomplete', 'Incomplete')}
+      title={ready ? t('matchSetup.status.complete', 'Complete') : pending ? t('matchSetup.status.readyToConfirm', 'Ready to confirm') : t('matchSetup.status.incomplete', 'Incomplete')}
     >
       {ready ? '✓' : pending ? '●' : '!'}
     </span>
   )
 
-  // Sync status indicator for cards - green=synced, yellow=syncing, red=error, gray=not synced
-  // Hidden if offline mode
+  // Sync status of a card: a kit status pill (tinted round pill, dot + word),
+  // tap to retry when not synced. Hidden in offline mode.
   const SyncStatusIndicator = ({ status, onRetry }) => {
     if (offlineMode) return null
 
-    const colors = {
-      synced: { bg: 'rgba(34, 197, 94, 0.2)', border: 'rgba(34, 197, 94, 0.5)', dot: '#22c55e' },
-      syncing: { bg: 'rgba(234, 179, 8, 0.2)', border: 'rgba(234, 179, 8, 0.5)', dot: '#eab308' },
-      error: { bg: 'rgba(239, 68, 68, 0.2)', border: 'rgba(239, 68, 68, 0.5)', dot: '#ef4444' },
-      idle: { bg: 'rgba(156, 163, 175, 0.2)', border: 'rgba(156, 163, 175, 0.5)', dot: '#9ca3af' }
+    const tones = {
+      synced: { pill: 'border-emerald-200 bg-emerald-50 text-emerald-800', dot: 'bg-emerald-500' },
+      syncing: { pill: 'border-amber-200 bg-amber-50 text-amber-800', dot: 'bg-amber-500 animate-pulse' },
+      error: { pill: 'border-red-200 bg-red-50 text-red-700', dot: 'bg-red-500' },
+      idle: { pill: 'border-stone-200 bg-stone-100 text-stone-600', dot: 'bg-stone-400' }
     }
     const labels = {
       synced: t('matchSetup.syncStatus.synced', 'Synced'),
       syncing: t('matchSetup.syncStatus.syncing', 'Syncing...'),
-      error: t('matchSetup.syncStatus.error', 'Sync Error'),
+      error: t('matchSetup.syncStatus.error', 'Sync error'),
       idle: isSupabaseAvailable ? t('matchSetup.syncStatus.notSynced') : t('matchSetup.syncStatus.offline', 'Offline')
     }
-    const c = colors[status] || colors.synced
+    const c = tones[status] || tones.synced
+    const retry = status !== 'synced' && onRetry
 
     return (
       <div
-        onClick={status !== 'synced' && onRetry ? onRetry : undefined}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '4px',
-          padding: '3px 8px',
-          background: c.bg,
-          border: `1px solid ${c.border}`,
-          borderRadius: '4px',
-          fontSize: '10px',
-          cursor: status !== 'synced' && onRetry ? 'pointer' : 'default',
-          transition: 'all 0.2s'
-        }}
-        title={status !== 'synced' ? t('matchSetup.syncStatus.clickToRetry', 'Click to retry sync') : ''}
+        onClick={retry ? onRetry : undefined}
+        className={cn(
+          'relative inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium whitespace-nowrap transition-colors',
+          retry && "before:absolute before:-inset-y-2.5 before:inset-x-0 before:content-['']",
+          c.pill,
+          retry ? 'cursor-pointer hover:brightness-95' : 'cursor-default'
+        )}
+        title={retry ? t('matchSetup.syncStatus.clickToRetry', 'Click to retry sync') : ''}
       >
-        <span style={{
-          display: 'inline-block',
-          width: '6px',
-          height: '6px',
-          borderRadius: '50%',
-          background: c.dot,
-          boxShadow: status === 'syncing' ? `0 0 4px 2px ${c.dot}` : 'none'
-        }} />
+        <span className={cn('inline-block h-1.5 w-1.5 rounded-full', c.dot)} />
         <span>{labels[status]}</span>
       </div>
     )
   }
-
   // Officials are complete if at least 1st referee and scorer are filled
   // 2nd referee and assistant scorer are optional
   const officialsConfigured =
@@ -4958,58 +4923,25 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     }
   }
 
-  // Dashboard Toggle Component - two rows: label+toggle on top, PIN below
+  // Dashboard toggle: a white row with the label and a kit switch (applies
+  // immediately), the connection PIN under it when on.
   const DashboardToggle = ({ label, enabled, onToggle, pin }) => {
     return (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '4px',
-        padding: '8px 12px',
-        background: enabled ? 'rgba(34, 197, 94, 0.1)' : 'rgba(255,255,255,0.03)',
-        borderRadius: '8px',
-        border: enabled ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid rgba(255,255,255,0.1)',
-        minWidth: '100px',
-        flex: 1
-      }}>
-        {/* Row 1: Label and Toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '12px', fontWeight: 600, color: enabled ? '#22c55e' : 'var(--muted)', flex: 1 }}>{label}</span>
-          <div style={{
-            position: 'relative',
-            width: '40px',
-            height: '22px',
-            background: enabled ? '#22c55e' : '#6b7280',
-            borderRadius: '11px',
-            transition: 'background 0.2s',
-            cursor: 'pointer',
-            flexShrink: 0
-          }}
-            onClick={() => onToggle(!enabled)}
-          >
-            <div style={{
-              position: 'absolute',
-              top: '2px',
-              left: enabled ? '20px' : '2px',
-              width: '18px',
-              height: '18px',
-              background: '#fff',
-              borderRadius: '50%',
-              transition: 'left 0.2s',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-            }} />
-          </div>
+      <div className="flex min-w-[100px] flex-1 flex-col gap-1 rounded-lg border border-stone-200 bg-white px-3 py-2">
+        <div className="flex min-h-8 items-center gap-2">
+          <span className="flex-1 text-sm font-medium text-stone-700">{label}</span>
+          <Switch
+            checked={enabled}
+            onCheckedChange={(next) => onToggle(next)}
+            size="lg"
+            aria-label={label}
+            title={label}
+            className="after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
+          />
         </div>
-        {/* Row 2: PIN (only when enabled) */}
         {enabled && pin && (
-          <div style={{ textAlign: 'center' }}>
-            <span style={{
-              fontWeight: 700,
-              fontSize: '16px',
-              color: 'var(--accent)',
-              letterSpacing: '3px',
-              fontFamily: 'monospace'
-            }}>
+          <div className="text-center">
+            <span className="font-mono text-base font-semibold tracking-[0.3em] text-stone-900 tabular-nums">
               {pin}
             </span>
           </div>
@@ -5017,7 +4949,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       </div>
     )
   }
-
   // Connection Banner Component (kept for backwards compatibility)
   const ConnectionBanner = ({ team, enabled, onToggle, pin }) => {
     const label = team === 'referee' ? t('matchSetup.referee') : team === 'team1' ? t('matchSetup.team1') : t('matchSetup.team2')
@@ -5073,141 +5004,115 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   }
 
   return (
-    <MatchSetupMainView>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', gap: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <h2 style={{ margin: 0 }}>{t('matchSetup.title')}</h2>
-          <button
-            className="secondary"
-            onClick={openScoresheet}
-            style={{ padding: '6px 12px', fontSize: '13px', background: '#22c55e', color: '#000' }}
-          >
-            <FileText /> {t('matchSetup.scoresheet')}
-          </button>
+    <MatchSetupMainView kitScale={kitScale}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="m-0 text-xl font-bold tracking-tight text-stone-900 sm:text-2xl">{t('matchSetup.title')}</h2>
+          <Button variant="secondary" size="xl" onClick={openScoresheet} icon={FileText}>
+            {t('matchSetup.scoresheet')}
+          </Button>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="flex items-center gap-2">
           {onOpenOptions && (
-            <button className="secondary" onClick={onOpenOptions}>
+            <Button variant="secondary" size="xl" onClick={onOpenOptions}>
               {t('matchSetup.options')}
-            </button>
+            </Button>
           )}
         </div>
       </div>
-      <div className="setup-cards-grid setup-section">
+      <div className="grid gap-4 sm:grid-cols-2">
         {/* Match Info Card */}
-        <div className="card" style={!matchInfoConfirmed ? { border: `2px solid ${canConfirmMatchInfo ? '#3b82f6' : '#f59e0b'}` } : {}}>
+        <div
+          className={cn(
+            'flex flex-col justify-between gap-4 rounded-xl bg-stone-50/60 p-4 sm:p-5',
+            matchInfoConfirmed ? 'border border-stone-200/70' : canConfirmMatchInfo ? 'border-2 border-sky-300' : 'border-2 border-amber-300'
+          )}
+        >
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
                 <StatusBadge ready={matchInfoConfirmed} pending={!matchInfoConfirmed && canConfirmMatchInfo} />
-                <h3 style={{ margin: 0, background: 'rgba(255, 255, 255, 0.1)', padding: '4px 8px', borderRadius: '4px' }}>{t('matchSetup.matchInfo')}</h3>
+                <h3 className={BLOCK_TITLE}>{t('matchSetup.matchInfo')}</h3>
               </div>
               <SyncStatusIndicator status={matchInfoSyncStatus} onRetry={() => retrySyncForCard('matchInfo')} />
             </div>
-            <div
-              className="text-sm"
-              style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', rowGap: 4, columnGap: 8, marginTop: 8 }}
-            >
-              <span>{t('matchSetup.competitionName')}:</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={league}>{league || t('common.notSet')}</span>
-              <span>{t('matchSetup.matchNumber')}:</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{gameN || t('common.notSet')}</span>
-              <span>{t('matchSetup.date')}:</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatDisplayDate(date) || t('common.notSet')}</span>
-              <span>{t('matchSetup.time')}:</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatDisplayTime(time) || t('common.notSet')}</span>
-              <span>{t('matchSetup.site')}:</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={city}>{city || t('common.notSet')}</span>
-              <span>{t('matchSetup.court')}:</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{court || t('common.notSet')}</span>
-              <span>{t('matchSetup.gender')}:</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{type2 === 'men' ? t('matchSetup.men') : t('matchSetup.women')}</span>
-              <span>Coach:</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{hasCoach ? 'Yes' : 'No'}</span>
-              <span>{t('matchSetup.phase')}:</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{phase === 'main' ? t('matchSetup.mainDraw') : t('matchSetup.qualification')}</span>
-              <span>{t('matchSetup.round')}:</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {round === 'pool' ? t('matchSetup.poolPlay') :
-                  round === 'winner' ? t('matchSetup.winnerBracket') :
-                    round === 'class' ? t('matchSetup.classificationRound') :
-                      round === 'semifinals' ? t('matchSetup.semifinals') :
-                        t('matchSetup.finals')}
-              </span>
-            </div>
+            <KeyValue variant="detail" className={SUMMARY_KV} items={[
+              { label: t('matchSetup.competitionName'), value: <span className={TRUNC} title={league}>{league || t('common.notSet')}</span> },
+              { label: t('matchSetup.matchNumber'), value: <span className={cn(TRUNC, 'tabular-nums')}>{gameN || t('common.notSet')}</span> },
+              { label: t('matchSetup.date'), value: <span className={cn(TRUNC, 'tabular-nums')}>{formatDisplayDate(date) || t('common.notSet')}</span> },
+              { label: t('matchSetup.time'), value: <span className={cn(TRUNC, 'tabular-nums')}>{formatDisplayTime(time) || t('common.notSet')}</span> },
+              { label: t('matchSetup.site'), value: <span className={TRUNC} title={city}>{city || t('common.notSet')}</span> },
+              { label: t('matchSetup.court'), value: <span className={TRUNC}>{court || t('common.notSet')}</span> },
+              { label: t('matchSetup.gender'), value: <span className={TRUNC}>{type2 === 'men' ? t('matchSetup.men') : t('matchSetup.women')}</span> },
+              { label: t('matchSetup.coach'), value: <span className={TRUNC}>{hasCoach ? t('common.yes') : t('common.no')}</span> },
+              { label: t('matchSetup.phase'), value: <span className={TRUNC}>{phase === 'main' ? t('matchSetup.mainDraw') : t('matchSetup.qualification')}</span> },
+              {
+                label: t('matchSetup.round'),
+                value: (
+                  <span className={TRUNC}>
+                    {round === 'pool' ? t('matchSetup.poolPlay') :
+                      round === 'winner' ? t('matchSetup.winnerBracket') :
+                        round === 'class' ? t('matchSetup.classificationRound') :
+                          round === 'semifinals' ? t('matchSetup.semifinals') :
+                            t('matchSetup.finals')}
+                  </span>
+                )
+              }
+            ]} />
           </div>
-          <div className="actions" style={{ display: 'flex', gap: 8 }}>
+          <div className="flex flex-wrap justify-end gap-2">
             {matchInfoConfirmed ? (
-              <button className="secondary" onClick={() => setCurrentView('info')}>{t('common.edit')}</button>
+              <Button variant="secondary" size="xl" onClick={() => setCurrentView('info')}>{t('common.edit')}</Button>
             ) : (
               <>
-                <button
-                  className="primary"
-                  onClick={() => setCurrentView('info')}
-                >
-                  {t('matchSetup.createMatch')}
-                </button>
                 {onLoadCompetitionMatch && (
-                  <button
-                    className="secondary"
-                    onClick={onLoadCompetitionMatch}
-                    style={{ background: 'rgba(124, 58, 237, 0.15)', color: '#a78bfa', border: '1px solid rgba(124, 58, 237, 0.3)' }}
-                  >
-                    {t('home.loadCompetitionMatch', 'Load Competition Match')}
-                  </button>
+                  <Button variant="secondary" size="xl" onClick={onLoadCompetitionMatch}>
+                    {t('home.loadCompetitionMatch', 'Load competition match')}
+                  </Button>
                 )}
+                <Button variant="primary" size="xl" onClick={() => setCurrentView('info')}>
+                  {t('matchSetup.createMatch')}
+                </Button>
               </>
             )}
           </div>
         </div>
 
         {/* Match Officials Card */}
-        <div className="card" style={!matchInfoConfirmed ? { opacity: 0.5, pointerEvents: 'none' } : {}}>
+        <div className={cn('flex flex-col justify-between gap-4 p-4 sm:p-5', SETUP_BLOCK, !matchInfoConfirmed && 'pointer-events-none opacity-50')}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
                 <StatusBadge ready={officialsConfigured} />
-                <h3 style={{ margin: 0, background: 'rgba(255, 255, 255, 0.1)', padding: '4px 8px', borderRadius: '4px' }}>{t('matchSetup.matchOfficials')}</h3>
+                <h3 className={BLOCK_TITLE}>{t('matchSetup.matchOfficials')}</h3>
               </div>
               <SyncStatusIndicator status={officialsSyncStatus} onRetry={() => retrySyncForCard('officials')} />
             </div>
-            <div className="text-sm" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', rowGap: 4, columnGap: 8, marginTop: 8 }}>
-              <span>{t('matchSetup.referee1')}:</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={formatOfficial(ref1Last, ref1First)}>{formatOfficial(ref1Last, ref1First)}</span>
-              <span>{t('matchSetup.referee2')}:</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={formatOfficial(ref2Last, ref2First)}>{formatOfficial(ref2Last, ref2First)}</span>
-              <span>{t('matchSetup.scorer')}:</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={formatOfficial(scorerLast, scorerFirst)}>{formatOfficial(scorerLast, scorerFirst)}</span>
-              <span>{t('matchSetup.assistantScorer')}:</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={formatOfficial(asstLast, asstFirst)}>{formatOfficial(asstLast, asstFirst)}</span>
-              {(lineJudge1 || lineJudge2 || lineJudge3 || lineJudge4) && (
-                <>
-                  <span>{t('matchSetup.lineJudges')}:</span>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={[lineJudge1, lineJudge2, lineJudge3, lineJudge4].filter(Boolean).map(formatLineJudge).join(', ')}>
+            <KeyValue variant="detail" className={SUMMARY_KV} items={[
+              { label: t('matchSetup.referee1'), value: <span className={TRUNC} title={formatOfficial(ref1Last, ref1First)}>{formatOfficial(ref1Last, ref1First)}</span> },
+              { label: t('matchSetup.referee2'), value: <span className={TRUNC} title={formatOfficial(ref2Last, ref2First)}>{formatOfficial(ref2Last, ref2First)}</span> },
+              { label: t('matchSetup.scorer'), value: <span className={TRUNC} title={formatOfficial(scorerLast, scorerFirst)}>{formatOfficial(scorerLast, scorerFirst)}</span> },
+              { label: t('matchSetup.assistantScorer'), value: <span className={TRUNC} title={formatOfficial(asstLast, asstFirst)}>{formatOfficial(asstLast, asstFirst)}</span> },
+              ...((lineJudge1 || lineJudge2 || lineJudge3 || lineJudge4) ? [{
+                label: t('matchSetup.lineJudges'),
+                value: (
+                  <span className={TRUNC} title={[lineJudge1, lineJudge2, lineJudge3, lineJudge4].filter(Boolean).map(formatLineJudge).join(', ')}>
                     {[lineJudge1, lineJudge2, lineJudge3, lineJudge4].filter(Boolean).map(formatLineJudge).join(', ') || t('common.notSet')}
                   </span>
-                </>
-              )}
-            </div>
+                )
+              }] : [])
+            ]} />
           </div>
-          <div className="actions">
-            <button className="secondary" onClick={() => setCurrentView('officials')} disabled={!matchInfoConfirmed}>{t('common.edit')}</button>
+          <div className="flex justify-end">
+            <Button variant="secondary" size="xl" onClick={() => setCurrentView('officials')} disabled={!matchInfoConfirmed}>{t('common.edit')}</Button>
           </div>
         </div>
       </div>
       {/* Dashboard Connections Row */}
-      <div className="setup-section" style={{
-        padding: '16px',
-        background: 'rgba(255, 255, 255, 0.03)',
-        borderRadius: '8px',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        ...(matchInfoConfirmed ? {} : { opacity: 0.5, pointerEvents: 'none' })
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-          <span style={{ fontWeight: 600, fontSize: '14px', textAlign: 'center', alignItems: 'center' }}>{t('matchSetup.dashboards')}</span>
-        </div>
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+      <div className={cn('p-4', SETUP_BLOCK, !matchInfoConfirmed && 'pointer-events-none opacity-50')}>
+        <h3 className="mb-2 text-sm font-semibold text-stone-700">{t('matchSetup.dashboards')}</h3>
+        <div className="flex flex-wrap gap-2.5">
           <ConnectionBanner
             team="referee"
             enabled={match?.refereeConnectionEnabled === true}
@@ -5219,261 +5124,163 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
       {matchInfoConfirmed && renderSuggestionBanner()}
 
-      <div className="grid-4 setup-section" style={!matchInfoConfirmed ? { opacity: 0.5, pointerEvents: 'none' } : {}}>
-        <div className="card" style={{ order: 1 }}>
-          {/* Row 0: Status + Sync Indicator */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <StatusBadge ready={team1Configured} />
-            <SyncStatusIndicator status={team1SyncStatus} onRetry={() => retrySyncForCard('team1')} />
-          </div>
-          {/* Row 1: Team Name Box with names on one line, country below */}
-          <div style={{
-            background: team1Color,
-            color: getContrastColor(team1Color),
-            padding: '12px 16px',
-            borderRadius: '8px',
-            textAlign: 'center'
-          }}>
-            {/* Player names on same line */}
+      <div className={cn('grid gap-4 sm:grid-cols-2', !matchInfoConfirmed && 'pointer-events-none opacity-50')}>
+        {[
+          { side: 'team1', ready: team1Configured, syncStatus: team1SyncStatus, color: team1Color, name: team1Name, roster: team1Roster, setRoster: setTeam1Roster, country: team1Country, fallback: t('matchSetup.team1') },
+          { side: 'team2', ready: team2Configured, syncStatus: team2SyncStatus, color: team2Color, name: team2Name, roster: team2Roster, setRoster: setTeam2Roster, country: team2Country, fallback: t('matchSetup.team2') }
+        ].map((team, idx) => (
+          <div key={team.side} className={cn('flex flex-col gap-4 p-4 sm:p-5', SETUP_BLOCK)} style={{ order: idx + 1 }}>
+            {/* Row 0: Status + Sync Indicator */}
+            <div className="flex items-center justify-between gap-2">
+              <StatusBadge ready={team.ready} />
+              <SyncStatusIndicator status={team.syncStatus} onRetry={() => retrySyncForCard(team.side)} />
+            </div>
+            {/* Row 1: the team-colour band (frozen: team colour, contrast text, names on one line, country below) */}
             <div style={{
-              fontSize: 'clamp(16px, 4vw, 24px)',
-              fontWeight: 700,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis'
+              background: team.color,
+              color: getContrastColor(team.color),
+              padding: '12px 16px',
+              borderRadius: '8px',
+              textAlign: 'center'
             }}>
-              {team1Name
-                || (team1Roster.length === 2 && team1Roster[0]?.lastName && team1Roster[1]?.lastName
-                  ? `${toTitleCase(team1Roster[0].lastName)} - ${toTitleCase(team1Roster[1].lastName)}`
-                  : t('matchSetup.team1'))}
-            </div>
-            {/* Country with flag centered below */}
-            {team1Country && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 6 }}>
-                <CountryFlag countryCode={team1Country} size="md" />
-                <span style={{ fontSize: '14px', fontWeight: 600 }}>{team1Country.toUpperCase()}</span>
+              <div style={{
+                fontSize: 'clamp(16px, 4vw, 24px)',
+                fontWeight: 700,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+              }}>
+                {team.name
+                  || (team.roster.length === 2 && team.roster[0]?.lastName && team.roster[1]?.lastName
+                    ? `${toTitleCase(team.roster[0].lastName)} - ${toTitleCase(team.roster[1].lastName)}`
+                    : team.fallback)}
               </div>
-            )}
-          </div>
-
-          {/* Row 2: Color selector + Shirt + Roster */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 30 }}>
-            <span style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.7)' }}>{t('matchSetup.selectColour')}</span>
-            <div
-              className="shirt"
-              style={{ background: team1Color, cursor: 'pointer', transform: 'scale(0.85)' }}
-              onClick={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect()
-                const centerX = rect.left + rect.width / 2
-                setColorPickerModal({
-                  team: 'team1',
-                  position: { x: centerX, y: rect.bottom + 8 }
-                })
-              }}
-            >
-              <div className="collar" style={{ background: team1Color }} />
-              <div className="number" style={{ color: getContrastColor(team1Color) }}>1</div>
-            </div>
-            <div style={{ flex: 1 }} />
-            <button className="secondary" onClick={() => {
-              if (team1Roster.length === 0) {
-                setTeam1Roster([
-                  { number: 1, firstName: '', lastName: '', dob: '', isCaptain: false },
-                  { number: 2, firstName: '', lastName: '', dob: '', isCaptain: false }
-                ])
-              }
-              setCurrentView('team1')
-            }}>{t('matchSetup.editRoster')}</button>
-          </div>
-        </div>
-
-        <div className="card" style={{ order: 2 }}>
-          {/* Row 0: Status + Sync Indicator */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <StatusBadge ready={team2Configured} />
-            <SyncStatusIndicator status={team2SyncStatus} onRetry={() => retrySyncForCard('team2')} />
-          </div>
-          {/* Row 1: Team Name Box with names on one line, country below */}
-          <div style={{
-            background: team2Color,
-            color: getContrastColor(team2Color),
-            padding: '12px 16px',
-            borderRadius: '8px',
-            textAlign: 'center'
-          }}>
-            {/* Player names on same line */}
-            <div style={{
-              fontSize: 'clamp(16px, 4vw, 24px)',
-              fontWeight: 700,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis'
-            }}>
-              {team2Name
-                || (team2Roster.length === 2 && team2Roster[0]?.lastName && team2Roster[1]?.lastName
-                  ? `${toTitleCase(team2Roster[0].lastName)} - ${toTitleCase(team2Roster[1].lastName)}`
-                  : t('matchSetup.team2'))}
-            </div>
-            {/* Country with flag centered below */}
-            {team2Country && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 6 }}>
-                <CountryFlag countryCode={team2Country} size="md" />
-                <span style={{ fontSize: '14px', fontWeight: 600 }}>{team2Country.toUpperCase()}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Row 2: Color selector + Shirt + Roster */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 30 }}>
-            <span style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.7)' }}>{t('matchSetup.selectColour')}</span>
-            <div
-              className="shirt"
-              style={{ background: team2Color, cursor: 'pointer', transform: 'scale(0.85)' }}
-              onClick={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect()
-                const centerX = rect.left + rect.width / 2
-                setColorPickerModal({
-                  team: 'team2',
-                  position: { x: centerX, y: rect.bottom + 8 }
-                })
-              }}
-            >
-              <div className="collar" style={{ background: team2Color }} />
-              <div className="number" style={{ color: getContrastColor(team2Color) }}>1</div>
-            </div>
-            <div style={{ flex: 1 }} />
-            <button className="secondary" onClick={() => {
-              if (team2Roster.length === 0) {
-                setTeam2Roster([
-                  { number: 1, firstName: '', lastName: '', dob: '', isCaptain: false },
-                  { number: 2, firstName: '', lastName: '', dob: '', isCaptain: false }
-                ])
-              }
-              setCurrentView('team2')
-            }}>{t('matchSetup.editRoster')}</button>
-          </div>
-        </div>
-        {typeof window !== 'undefined' && window.electronAPI?.server && (
-          <div className="card" style={{ order: 3 }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <StatusBadge ready={serverRunning} />
-                  <h3 style={{ margin: 0 }}>Live Server</h3>
+              {team.country && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 6 }}>
+                  <CountryFlag countryCode={team.country} size="md" />
+                  <span style={{ fontSize: '14px', fontWeight: 600 }}>{team.country.toUpperCase()}</span>
                 </div>
+              )}
+            </div>
+
+            {/* Row 2: Color selector + Shirt + Roster */}
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-stone-500">{t('matchSetup.selectColour')}</span>
+              <div
+                className="shirt"
+                style={{ background: team.color, cursor: 'pointer', transform: 'scale(0.85)' }}
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  const centerX = rect.left + rect.width / 2
+                  setColorPickerModal({
+                    team: team.side,
+                    position: { x: centerX, y: rect.bottom + 8 }
+                  })
+                }}
+              >
+                <div className="collar" style={{ background: team.color }} />
+                <div className="number" style={{ color: getContrastColor(team.color) }}>1</div>
+              </div>
+              <div className="flex-1" />
+              <Button variant="secondary" size="xl" icon={Users} onClick={() => {
+                if (team.roster.length === 0) {
+                  team.setRoster([
+                    { number: 1, firstName: '', lastName: '', dob: '', isCaptain: false },
+                    { number: 2, firstName: '', lastName: '', dob: '', isCaptain: false }
+                  ])
+                }
+                setCurrentView(team.side)
+              }}>{t('matchSetup.editRoster')}</Button>
+            </div>
+          </div>
+        ))}
+        {typeof window !== 'undefined' && window.electronAPI?.server && (
+          <div className={cn('flex flex-col justify-between gap-4 p-4 sm:p-5', SETUP_BLOCK)} style={{ order: 3 }}>
+            <div>
+              <div className="flex items-center gap-2">
+                <StatusBadge ready={serverRunning} />
+                <h3 className={BLOCK_TITLE}>Live server</h3>
               </div>
               {serverRunning && serverStatus ? (
-                <div style={{ marginTop: 12 }}>
-                  <div className="text-sm" style={{ display: 'grid', gridTemplateColumns: '100px 1fr', rowGap: 8, marginBottom: 2 }}>
-                    <span>Status:</span>
-                    <span style={{ color: '#10b981', fontWeight: 600 }}>● Running</span>
-                    <span>Hostname:</span>
-                    <span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{serverStatus.hostname || 'escoresheet.local'}</span>
-                    <span>IP Address:</span>
-                    <span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{serverStatus.localIP}</span>
-                    <span>Protocol:</span>
-                    <span style={{ textTransform: 'uppercase' }}>{serverStatus.protocol || 'https'}</span>
-                  </div>
-                  <div style={{
-                    background: 'rgba(15, 23, 42, 0.5)',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    marginTop: '12px',
-                    fontSize: '12px'
-                  }}>
-                    <div style={{ fontWeight: 600, marginBottom: 8 }}>Connection URLs:</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontFamily: 'monospace', fontSize: '11px' }}>
+                <div className="mt-3 space-y-3">
+                  <KeyValue variant="detail" className={SUMMARY_KV} items={[
+                    { label: 'Status', value: <span className="inline-flex items-center gap-1.5 font-medium text-emerald-800"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />Running</span> },
+                    { label: 'Hostname', value: <span className="font-mono text-xs">{serverStatus.hostname || 'escoresheet.local'}</span> },
+                    { label: 'IP address', value: <span className="font-mono text-xs tabular-nums">{serverStatus.localIP}</span> },
+                    { label: 'Protocol', value: <span className="uppercase">{serverStatus.protocol || 'https'}</span> }
+                  ]} />
+                  <div className="rounded-lg border border-stone-200 bg-white p-3 text-xs">
+                    <div className="mb-2 font-semibold text-stone-700">Connection URLs</div>
+                    <div className="flex flex-col gap-1.5 font-mono text-[11px] text-stone-800">
                       <div>
-                        <div style={{ color: 'rgba(255,255,255,0.6)' }}>Main:</div>
-                        <div style={{ wordBreak: 'break-all' }}>{serverStatus.urls?.mainIP || `${serverStatus.protocol}://${serverStatus.localIP}:${serverStatus.port}/`}</div>
+                        <div className="text-stone-500">Main</div>
+                        <div className="break-all">{serverStatus.urls?.mainIP || `${serverStatus.protocol}://${serverStatus.localIP}:${serverStatus.port}/`}</div>
                       </div>
                       <div>
-                        <div style={{ color: 'rgba(255,255,255,0.6)' }}>Referee:</div>
-                        <div style={{ wordBreak: 'break-all' }}>{serverStatus.urls?.refereeIP || `${serverStatus.protocol}://${serverStatus.localIP}:${serverStatus.port}/referee`}</div>
+                        <div className="text-stone-500">Referee</div>
+                        <div className="break-all">{serverStatus.urls?.refereeIP || `${serverStatus.protocol}://${serverStatus.localIP}:${serverStatus.port}/referee`}</div>
                       </div>
                       <div>
-                        <div style={{ color: 'rgba(255,255,255,0.6)' }}>WebSocket:</div>
-                        <div style={{ wordBreak: 'break-all' }}>{serverStatus.urls?.websocketIP || `${serverStatus.wsProtocol}://${serverStatus.localIP}:${serverStatus.wsPort}`}</div>
+                        <div className="text-stone-500">WebSocket</div>
+                        <div className="break-all">{serverStatus.urls?.websocketIP || `${serverStatus.wsProtocol}://${serverStatus.localIP}:${serverStatus.wsPort}`}</div>
                       </div>
                     </div>
                   </div>
                 </div>
               ) : (
-                <div style={{ marginTop: 12 }}>
-                  <p className="text-sm" style={{ color: 'rgba(255, 255, 255, 0.6)', marginBottom: 12 }}>
+                <div className="mt-3">
+                  <p className="text-sm text-stone-600">
                     Start the live server to allow referee and livescore apps to connect.
                   </p>
                   {typeof window !== 'undefined' && !window.electronAPI?.server && (
-                    <div style={{
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      padding: '12px',
-                      borderRadius: '8px',
-                      fontSize: '12px',
-                      color: 'rgba(255,255,255,0.7)',
-                      marginTop: '12px'
-                    }}>
-                      <div style={{ marginBottom: '8px', fontWeight: 600 }}>To start from browser/PWA:</div>
-                      <div style={{ fontFamily: 'monospace', fontSize: '11px', lineHeight: '1.6' }}>
-                        Run: <span style={{ color: '#22c55e', fontWeight: 600 }}>npm run start:prod</span> in terminal
+                    <div className="mt-3 rounded-lg border border-stone-200 bg-white p-3 text-xs text-stone-600">
+                      <div className="mb-2 font-semibold text-stone-700">To start from browser/PWA:</div>
+                      <div className="font-mono text-[11px] leading-relaxed">
+                        Run: <span className="font-semibold text-stone-900">npm run start:prod</span> in terminal
                       </div>
                     </div>
                   )}
                 </div>
               )}
             </div>
-            <div className="actions">
+            <div className="flex justify-end">
               {serverRunning ? (
                 typeof window !== 'undefined' && window.electronAPI?.server ? (
-                  <button
-                    className="secondary"
-                    onClick={handleStopServer}
-                    disabled={serverLoading}
-                  >
-                    {serverLoading ? 'Stopping...' : 'Stop Server'}
-                  </button>
+                  <Button variant="secondary" size="xl" onClick={handleStopServer} loading={serverLoading}>
+                    {serverLoading ? 'Stopping...' : 'Stop server'}
+                  </Button>
                 ) : null
               ) : (
-                <button
-                  className="primary"
-                  onClick={handleStartServer}
-                  disabled={serverLoading}
-                >
+                <Button variant="dark" size="xl" onClick={handleStartServer} loading={serverLoading} icon={typeof window !== 'undefined' && window.electronAPI?.server ? undefined : ClipboardList}>
                   {typeof window !== 'undefined' && window.electronAPI?.server
-                    ? (serverLoading ? 'Starting...' : 'Start Server')
-                    : <><ClipboardList /> Copy Start Command</>
-                  }
-                </button>
+                    ? (serverLoading ? 'Starting...' : 'Start server')
+                    : 'Copy start command'}
+                </Button>
               )}
             </div>
           </div>
         )}
-
-
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 1, alignItems: 'center', ...(matchInfoConfirmed ? {} : { opacity: 0.5, pointerEvents: 'none' }) }}>
-        <button
-          className="secondary"
-          style={{
-            background: '#ffe066',
-            color: '#222',
-            border: '1px solid #ffd700',
-            fontWeight: 700
-          }}
+      <div className={cn('flex flex-wrap items-center justify-between gap-3 border-t border-stone-200/70 pt-4', !matchInfoConfirmed && 'pointer-events-none opacity-50')}>
+        <Button
+          variant="secondary"
+          size="xl"
+          icon={Users}
+          aria-pressed={showBothRosters}
           onClick={() => setShowBothRosters(!showBothRosters)}
           disabled={!matchInfoConfirmed}
         >
           {showBothRosters ? t('scoreboard.hideRosters') : t('scoreboard.showRosters')}
-        </button>
+        </Button>
         {isMatchOngoing && onReturn ? (
-          <button onClick={onReturn}>{t('scoreboard.returnToMatch')}</button>
+          <Button variant="dark" size="xl" className="min-w-40" onClick={onReturn}>{t('scoreboard.returnToMatch')}</Button>
         ) : (
-          <button
+          <Button
+            variant="primary"
+            size="xl"
+            className="min-w-40 disabled:cursor-not-allowed"
             disabled={!canProceedToCoinToss}
-            style={{
-              opacity: canProceedToCoinToss ? 1 : 0.5,
-              cursor: canProceedToCoinToss ? 'pointer' : 'not-allowed'
-            }}
             onClick={async () => {
               // Check if match has no data (no sets, no signatures)
               if (matchId && match) {
@@ -5626,7 +5433,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 // No match exists - create new match
                 await createMatch()
               }
-            }}>{t('matchSetup.coinToss')}</button>
+            }}>{t('matchSetup.coinToss')}</Button>
         )}
       </div>
 
@@ -5641,131 +5448,71 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         const paddedteam1Players = [...team1Players, ...Array(maxPlayers - team1Players.length).fill(null)]
         const paddedteam2Players = [...team2Players, ...Array(maxPlayers - team2Players.length).fill(null)]
 
+        // Both rosters as svrz tables: one bordered box, the 11px uppercase
+        // head strip, hairline rows; the captain keeps its C mark.
+        const rosterTable = (players) => (
+          <div className="overflow-x-auto rounded-lg border border-stone-200 bg-white">
+            <table className="w-full border-collapse text-sm">
+              <thead className="bg-stone-50 text-[11px] font-bold uppercase tracking-wide text-stone-500">
+                <tr>
+                  <th className="w-16 px-3 py-2 text-left">#</th>
+                  <th className="px-3 py-2 text-left">{t('roster.name')}</th>
+                  {manageDob && <th className="px-3 py-2 text-left">{t('roster.dob')}</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100">
+                {players.map((player, idx) => (
+                  <tr key={player ? `p-${idx}` : `empty-${idx}`} className="h-11">
+                    {player ? (
+                      <>
+                        <td className="px-3 py-2">
+                          <span className="inline-flex items-center gap-2">
+                            <span className="min-w-6 text-right font-semibold tabular-nums text-stone-900">{player.number ?? '—'}</span>
+                            {player.isCaptain && (
+                              <span className="inline-flex h-5 items-center rounded border border-amber-300 bg-amber-100 px-1.5 text-[11px] font-bold text-amber-800" title={t('matchSetup.captain')}>C</span>
+                            )}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 font-medium text-stone-800">
+                          {player.lastName || ''} {player.firstName || ''}
+                        </td>
+                        {manageDob && <td className="px-3 py-2 text-stone-500 tabular-nums">{player.dob || '—'}</td>}
+                      </>
+                    ) : (
+                      <td colSpan={manageDob ? 3 : 2}>&nbsp;</td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+
         return (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginTop: 24 }}>
-            <div className="panel">
-              <h3>{t('roster.titleWithTeam', { team: team1Name || t('common.team1') })}</h3>
-              {/* Players Section */}
-              <div style={{ marginBottom: 16 }}>
-                <strong style={{ display: 'block', marginBottom: 8 }}>{t('roster.players')}</strong>
-                <table className="roster-table">
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>{t('roster.name')}</th>
-                      {manageDob && <th>{t('roster.dob')}</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paddedteam1Players.map((player, idx) => (
-                      <tr key={player ? `p-${idx}` : `empty-${idx}`}>
-                        {player ? (
-                          <>
-                            <td className="roster-number">
-                              <span>{player.number ?? '—'}</span>
-                              <span className="roster-role">
-                                {player.isCaptain && <span className="roster-badge captain">C</span>}
-                              </span>
-                            </td>
-                            <td className="roster-name">
-                              {player.lastName || ''} {player.firstName || ''}
-                            </td>
-                            {manageDob && <td className="roster-dob">{player.dob || '—'}</td>}
-                          </>
-                        ) : (
-                          <td colSpan={manageDob ? 3 : 2} style={{ height: '36px' }}>&nbsp;</td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="min-w-0 space-y-2">
+              <SectionHeader title={t('roster.titleWithTeam', { team: team1Name || t('common.team1') })} count={team1Players.length} />
+              {rosterTable(paddedteam1Players)}
             </div>
-            <div className="panel">
-              <h3>{t('roster.titleWithTeam', { team: team2Name || t('common.team2') })}</h3>
-              {/* Players Section */}
-              <div style={{ marginBottom: 16 }}>
-                <strong style={{ display: 'block', marginBottom: 8 }}>{t('roster.players')}</strong>
-                <table className="roster-table">
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>{t('roster.name')}</th>
-                      {manageDob && <th>{t('roster.dob')}</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paddedteam2Players.map((player, idx) => (
-                      <tr key={player ? `p-${idx}` : `empty-${idx}`}>
-                        {player ? (
-                          <>
-                            <td className="roster-number">
-                              <span>{player.number ?? '—'}</span>
-                              <span className="roster-role">
-                                {player.isCaptain && <span className="roster-badge captain">C</span>}
-                              </span>
-                            </td>
-                            <td className="roster-name">
-                              {player.lastName || ''} {player.firstName || ''}
-                            </td>
-                            {manageDob && <td className="roster-dob">{player.dob || '—'}</td>}
-                          </>
-                        ) : (
-                          <td colSpan={manageDob ? 3 : 2} style={{ height: '36px' }}>&nbsp;</td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            <div className="min-w-0 space-y-2">
+              <SectionHeader title={t('roster.titleWithTeam', { team: team2Name || t('common.team2') })} count={team2Players.length} />
+              {rosterTable(paddedteam2Players)}
             </div>
           </div>
         )
       })()}
 
-      {/* Color Picker Bubble Modal */}
+      {/* Color Picker Modal: the swatches (frozen shirts) in a kit dialog */}
       {colorPickerModal && (
-        <>
-          {/* Backdrop to close on click outside */}
-          <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              zIndex: 999,
-              background: 'rgba(0, 0, 0, 0.6)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-            onClick={() => setColorPickerModal(null)}
-          />
-          {/* Bubble modal */}
-          <div
-            style={{
-              position: 'fixed',
-              left: '50%',
-              top: '50%',
-              transform: 'translate(-50%, -50%)',
-              zIndex: 1000,
-              background: '#1f2937',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              borderRadius: '12px',
-              padding: '16px',
-              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
-              minWidth: '280px'
-            }}
-            onClick={(e) => e.stopPropagation()}
+        <div className="ov-kit" style={DIALOG_LAYER}>
+          <KitModal
+            open
+            size="sm"
+            onClose={() => setColorPickerModal(null)}
+            closeLabel={t('common.close')}
+            title={t('matchSetup.chooseTeamColor', { team: colorPickerModal.team === 'team1' ? t('common.team1') : t('common.team2') })}
           >
-            <div style={{ marginBottom: '12px', fontSize: '14px', fontWeight: 600, color: 'var(--text)' }}>
-              {t('matchSetup.chooseTeamColor', { team: colorPickerModal.team === 'team1' ? t('common.team1') : t('common.team2') })}
-            </div>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(4, 1fr)',
-                gap: '12px'
-              }}
-            >
+            <div className="grid grid-cols-4 gap-2">
               {teamColors.map((color) => {
                 const isSelected = (colorPickerModal.team === 'team1' ? team1Color : team2Color) === color
                 return (
@@ -5835,31 +5582,14 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                         console.warn('[MatchSetup] Failed to sync team color:', err)
                       }
                     }}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '12px 8px',
-                      background: isSelected ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
-                      border: isSelected ? '2px solid #3b82f6' : '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      minWidth: '60px'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isSelected) {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
-                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isSelected) {
-                        e.currentTarget.style.background = 'transparent'
-                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
-                      }
-                    }}
+                    aria-pressed={isSelected}
+                    aria-label={color}
+                    title={color}
+                    className={cn(
+                      'flex min-h-16 min-w-[60px] items-center justify-center rounded-lg border px-2 py-3 transition-colors',
+                      isSelected ? 'border-slate-900 ring-2 ring-slate-900' : 'border-stone-200 bg-white hover:bg-stone-50',
+                      FOCUS_RING
+                    )}
                   >
                     <div className="shirt" style={{ background: color, transform: 'scale(0.8)' }}>
                       <div className="collar" style={{ background: color }} />
@@ -5869,213 +5599,120 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 )
               })}
             </div>
-          </div>
-        </>
+          </KitModal>
+        </div>
       )}
 
-      {noticeModal && (
-        <Modal
-          title={noticeModal.syncing ? t('matchSetup.modals.syncing') : noticeModal.type === 'success' ? t('matchSetup.modals.success') : t('matchSetup.modals.notice')}
-          open={true}
-          onClose={() => !noticeModal.syncing && setNoticeModal(null)}
-          width={400}
-          hideCloseButton={true}
-        >
-          <div style={{ padding: '24px', textAlign: 'center' }}>
-            {noticeModal.syncing && (
-              <div style={{ fontSize: '48px', marginBottom: '16px', animation: 'spin 1s linear infinite' }}>⟳</div>
-            )}
-            {!noticeModal.syncing && noticeModal.type === 'success' && (
-              <div style={{ fontSize: '48px', marginBottom: '16px', color: '#22c55e' }}>✓</div>
-            )}
-            {!noticeModal.syncing && noticeModal.type === 'error' && (
-              <div style={{ fontSize: '48px', marginBottom: '16px', color: '#ef4444' }}>✕</div>
-            )}
-            <p style={{ marginBottom: '24px', fontSize: '16px', color: 'var(--text)' }}>
-              {noticeModal.message}
-            </p>
-            {!noticeModal.syncing && (
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                <button
-                  onClick={() => setNoticeModal(null)}
-                  style={{
-                    padding: '12px 24px',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    background: noticeModal.type === 'success' ? '#22c55e' : noticeModal.type === 'error' ? '#ef4444' : 'var(--accent)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  OK
-                </button>
-              </div>
-            )}
-          </div>
-        </Modal>
-      )}
+      {renderNoticeModal()}
 
       {/* Match Created Modal - shows Match ID and all PINs for recovery */}
       {matchCreatedModal && (
-        <Modal
-          title={t('matchSetup.modals.matchCreated')}
-          open={true}
-          onClose={() => {
-            setMatchCreatedModal(null)
-            onOpenCoinToss()
-          }}
-          width={500}
-          hideCloseButton={true}
-        >
-          <div style={{ padding: '24px', textAlign: 'center' }}>
-            {/* Match ID and Game PIN */}
-            <div style={{
-              background: 'rgba(34, 197, 94, 0.1)',
-              border: '2px solid rgba(34, 197, 94, 0.3)',
-              borderRadius: '12px',
-              padding: '20px',
-              marginBottom: '16px'
-            }}>
-              <div style={{ marginBottom: '16px' }}>
-                <span style={{ fontSize: '14px', color: 'rgba(255,255,255,0.6)', display: 'block', marginBottom: '4px' }}>
-                  {t('matchSetup.modals.matchId')}
-                </span>
-                <span style={{
-                  fontSize: '24px',
-                  fontWeight: 700,
-                  fontFamily: 'monospace',
-                  color: 'var(--accent)',
-                  letterSpacing: '2px'
-                }}>
-                  {matchCreatedModal.matchId}
-                </span>
-              </div>
-              <div>
-                <span style={{ fontSize: '14px', color: 'rgba(255,255,255,0.6)', display: 'block', marginBottom: '4px' }}>
-                  {t('matchSetup.gamePin')}
-                </span>
-                <span style={{
-                  fontSize: '28px',
-                  fontWeight: 700,
-                  fontFamily: 'monospace',
-                  color: '#22c55e',
-                  letterSpacing: '4px'
-                }}>
-                  {matchCreatedModal.gamePin}
-                </span>
-              </div>
-            </div>
+        <div className="ov-kit" style={DIALOG_LAYER}>
+          <KitModal
+            open
+            decision
+            dismissible={false}
+            size="md"
+            onClose={() => {
+              setMatchCreatedModal(null)
+              onOpenCoinToss()
+            }}
+            closeLabel={t('common.close')}
+          >
+            <div className="text-center">
+              <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                <Check size={24} aria-hidden="true" />
+              </span>
+              <h3 className="text-lg font-bold text-stone-900">{t('matchSetup.modals.matchCreated')}</h3>
 
-            {/* Connection PINs */}
-            <div style={{
-              background: 'rgba(59, 130, 246, 0.1)',
-              border: '1px solid rgba(59, 130, 246, 0.3)',
-              borderRadius: '12px',
-              padding: '16px',
-              marginBottom: '20px'
-            }}>
-              <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px', color: 'rgba(255,255,255,0.9)' }}>
-                {t('matchSetup.modals.connectionPins')}
-              </div>
-              <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '4px' }}>
-                    {t('matchSetup.refereePinLabel')}
-                  </span>
-                  <span style={{
-                    fontSize: '18px',
-                    fontWeight: 700,
-                    fontFamily: 'monospace',
-                    color: '#f59e0b',
-                    letterSpacing: '2px'
-                  }}>
-                    {matchCreatedModal.refereePin}
-                  </span>
+              {/* Match ID and Game PIN */}
+              <dl className="mt-4 grid grid-cols-2 gap-3 rounded-xl border border-stone-200/70 bg-stone-50/60 p-4">
+                <div>
+                  <dt className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">{t('matchSetup.modals.matchId')}</dt>
+                  <dd className="mt-1 font-mono text-xl font-bold tracking-[0.15em] text-stone-900 tabular-nums select-text">{matchCreatedModal.matchId}</dd>
                 </div>
-                <div style={{ textAlign: 'center' }}>
-                  <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '4px' }}>
-                    {t('matchSetup.team1PinLabel')}
-                  </span>
-                  <span style={{
-                    fontSize: '18px',
-                    fontWeight: 700,
-                    fontFamily: 'monospace',
-                    color: '#3b82f6',
-                    letterSpacing: '2px'
-                  }}>
-                    {matchCreatedModal.team1Pin}
-                  </span>
+                <div>
+                  <dt className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">{t('matchSetup.gamePin')}</dt>
+                  <dd className="mt-1 font-mono text-xl font-bold tracking-[0.3em] text-stone-900 tabular-nums select-text">{matchCreatedModal.gamePin}</dd>
                 </div>
-                <div style={{ textAlign: 'center' }}>
-                  <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '4px' }}>
-                    {t('matchSetup.team2PinLabel')}
-                  </span>
-                  <span style={{
-                    fontSize: '18px',
-                    fontWeight: 700,
-                    fontFamily: 'monospace',
-                    color: '#ef4444',
-                    letterSpacing: '2px'
-                  }}>
-                    {matchCreatedModal.team2Pin}
-                  </span>
-                </div>
-              </div>
-            </div>
+              </dl>
 
-            <p style={{
-              fontSize: '13px',
-              color: 'rgba(255,255,255,0.7)',
-              marginBottom: '20px',
-              lineHeight: 1.5
-            }}>
-              {t('matchSetup.modals.saveInfoToRecover')}
-            </p>
-            <button
-              onClick={() => {
-                setMatchCreatedModal(null)
-                onOpenCoinToss()
-              }}
-              style={{
-                padding: '14px 32px',
-                fontSize: '16px',
-                fontWeight: 600,
-                background: 'var(--accent)',
-                color: '#000',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer'
-              }}
-            >
-              {t('matchSetup.modals.continueToCoinToss')}
-            </button>
-          </div>
-        </Modal>
+              {/* Connection PINs */}
+              <div className="mt-3 rounded-xl border border-stone-200 bg-white p-4">
+                <h4 className="text-sm font-semibold text-stone-700">{t('matchSetup.modals.connectionPins')}</h4>
+                <dl className="mt-2 flex flex-wrap justify-center gap-x-6 gap-y-2">
+                  <div>
+                    <dt className="text-[11px] text-stone-500">{t('matchSetup.refereePinLabel')}</dt>
+                    <dd className="font-mono text-base font-semibold tracking-[0.3em] text-stone-900 tabular-nums">{matchCreatedModal.refereePin}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] text-stone-500">{t('matchSetup.team1PinLabel')}</dt>
+                    <dd className="font-mono text-base font-semibold tracking-[0.3em] text-stone-900 tabular-nums">{matchCreatedModal.team1Pin}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] text-stone-500">{t('matchSetup.team2PinLabel')}</dt>
+                    <dd className="font-mono text-base font-semibold tracking-[0.3em] text-stone-900 tabular-nums">{matchCreatedModal.team2Pin}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              <p className="mt-4 text-sm text-stone-600">
+                {t('matchSetup.modals.saveInfoToRecover')}
+              </p>
+              <Button
+                variant="primary"
+                size="xl"
+                block
+                className="mt-4"
+                onClick={() => {
+                  setMatchCreatedModal(null)
+                  onOpenCoinToss()
+                }}
+              >
+                {t('matchSetup.modals.continueToCoinToss')}
+              </Button>
+            </div>
+          </KitModal>
+        </div>
       )}
 
       {/* Edit PIN Modal */}
-      {editPinModal && (
-        <Modal
-          title={editPinType === 'referee' ? t('matchSetup.modals.editRefereePin') : editPinType === 'team1' ? t('matchSetup.modals.editTeam1Pin') : t('matchSetup.modals.editTeam2Pin')}
-          open={true}
-          onClose={() => {
-            setEditPinModal(false)
-            setPinError('')
-            setEditPinType(null)
-          }}
-          width={400}
-        >
-          <div style={{ padding: '24px' }}>
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 600 }}>
+      {editPinModal && (() => {
+        const closeEditPin = () => {
+          setEditPinModal(false)
+          setPinError('')
+          setEditPinType(null)
+        }
+        return (
+          <div className="ov-kit" style={DIALOG_LAYER}>
+            <KitModal
+              open
+              decision
+              size="sm"
+              onClose={closeEditPin}
+              closeLabel={t('common.close')}
+              title={editPinType === 'referee' ? t('matchSetup.modals.editRefereePin') : editPinType === 'team1' ? t('matchSetup.modals.editTeam1Pin') : t('matchSetup.modals.editTeam2Pin')}
+              footer={(
+                <>
+                  <button type="button" onClick={closeEditPin} className={modalCancelClass}>
+                    {t('common.cancel')}
+                  </button>
+                  <button type="button" onClick={handleSavePin} className={modalSaveClass}>
+                    {t('matchSetup.modals.savePin', 'Save PIN')}
+                  </button>
+                </>
+              )}
+            >
+              <label htmlFor="ob-edit-pin" className="mb-1.5 block text-sm font-medium text-stone-700">
                 {t('matchSetup.modals.enterNew6DigitPin')}
               </label>
               <input
+                id="ob-edit-pin"
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
+                autoComplete="off"
+                data-autofocus
                 value={newPin}
                 onChange={(e) => {
                   const value = e.target.value.replace(/\D/g, '')
@@ -6086,66 +5723,22 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 }}
                 placeholder="000000"
                 maxLength={6}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  fontSize: '20px',
-                  fontWeight: 700,
-                  textAlign: 'center',
-                  letterSpacing: '4px',
-                  fontFamily: 'monospace',
-                  background: 'var(--bg)',
-                  border: pinError ? '2px solid #ef4444' : '2px solid rgba(255,255,255,0.2)',
-                  borderRadius: '8px',
-                  color: 'var(--text)'
-                }}
+                aria-invalid={pinError ? true : undefined}
+                aria-describedby={pinError ? 'ob-edit-pin-error' : undefined}
+                className={cn(
+                  'h-11 w-full rounded-lg border bg-white px-3 text-center font-mono text-lg font-semibold tracking-[0.3em] text-stone-900 outline-none focus:ring-2 focus:ring-red-500',
+                  pinError ? 'border-red-400 bg-red-50' : 'border-stone-300'
+                )}
               />
               {pinError && (
-                <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '8px' }}>
+                <p id="ob-edit-pin-error" role="alert" className="mt-1.5 text-xs font-medium text-red-600">
                   {pinError}
                 </p>
               )}
-            </div>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => {
-                  setEditPinModal(false)
-                  setPinError('')
-                  setEditPinType(null)
-                }}
-                style={{
-                  padding: '10px 20px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  background: 'rgba(255,255,255,0.1)',
-                  color: 'var(--text)',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSavePin}
-                style={{
-                  padding: '10px 20px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  background: 'var(--accent)',
-                  color: '#000',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
-                Save PIN
-              </button>
-            </div>
+            </KitModal>
           </div>
-        </Modal>
-      )}
-
+        )
+      })()}
       <SignaturePad
         open={openSignature !== null}
         onClose={() => setOpenSignature(null)}
@@ -6158,29 +5751,29 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   )
 }
 
-// Shared styles for wider layout and sticking to top
-const setupViewStyle = {
-  maxWidth: '1200px',
-  alignSelf: 'flex-start',
-  marginTop: '10px'
+// The setup page card (volleyui Card on the stone page; App_beach paints the
+// page). It is the kit scope (`.ov-kit`): the kit preflight beats the legacy
+// element rules of styles_beach.css for everything inside. Full width up to
+// 1200 px, at the top of the panel; sections stack with space-y-4.
+// `kitScale` carries the user's display scale into the kit steps.
+const SETUP_VIEW = 'ov-kit w-full max-w-[1200px] flex-1 basis-0 min-w-0 self-start mx-auto mt-2.5 rounded-2xl border border-stone-200/70 bg-white p-4 sm:p-5 shadow-card space-y-4'
+
+function MatchSetupMainView({ children, kitScale }) {
+  return <div className={SETUP_VIEW} style={kitScale}>{children}</div>
 }
 
-function MatchSetupMainView({ children }) {
-  return <div className="setup" style={setupViewStyle}>{children}</div>
+function MatchSetupInfoView({ children, kitScale }) {
+  return <div className={SETUP_VIEW} style={kitScale}>{children}</div>
 }
 
-function MatchSetupInfoView({ children }) {
-  return <div className="setup" style={setupViewStyle}>{children}</div>
+function MatchSetupOfficialsView({ children, kitScale }) {
+  return <div className={SETUP_VIEW} style={kitScale}>{children}</div>
 }
 
-function MatchSetupOfficialsView({ children }) {
-  return <div className="setup" style={setupViewStyle}>{children}</div>
+function MatchSetupTeam1View({ children, kitScale }) {
+  return <div className={cn(SETUP_VIEW, 'min-h-[75vh]')} style={kitScale}>{children}</div>
 }
 
-function MatchSetupTeam1View({ children }) {
-  return <div className="setup" style={{ ...setupViewStyle, minHeight: '75vh' }}>{children}</div>
-}
-
-function MatchSetupTeam2View({ children }) {
-  return <div className="setup" style={{ ...setupViewStyle, minHeight: '75vh' }}>{children}</div>
+function MatchSetupTeam2View({ children, kitScale }) {
+  return <div className={cn(SETUP_VIEW, 'min-h-[75vh]')} style={kitScale}>{children}</div>
 }

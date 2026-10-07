@@ -2100,7 +2100,7 @@ export default function App() {
   return (
     // The home page is restyled (volleyui, light); the screens of an open match
     // keep the legacy dark frame until their own restyle.
-    <div className={cn('app-root', !matchId && 'bg-gradient-to-b from-stone-50 to-stone-100')} onClick={(e) => {
+    <div className={cn('app-root', (!matchId || showMatchSetup) && 'bg-gradient-to-b from-stone-50 to-stone-100')} onClick={(e) => {
       // Close connection menu and debug menu when clicking outside
       if (showConnectionMenu && !e.target.closest('[data-connection-menu]')) {
         setShowConnectionMenu(false)

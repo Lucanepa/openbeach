@@ -1,4 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
+import { Loader2, Search } from 'lucide-react'
+import { MENU_PANEL, MENU_ROW } from './chromeClasses_beach'
+import { cn } from '../ui/volleyui/cn.js'
 import { apiFrom } from '../lib_beach/apiClient_beach'
 import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 
@@ -14,6 +18,7 @@ const SPORT_TYPE = 'beach'
  * @param {Object} position - Position config for dropdown placement
  */
 export default function RefereeSelector({ open, onClose, onSelect, position = {} }) {
+  const { t } = useTranslation()
   const [searchQuery, setSearchQuery] = useState('')
   const [referees, setReferees] = useState([])
   const [loading, setLoading] = useState(false)
@@ -108,8 +113,11 @@ export default function RefereeSelector({ open, onClose, onSelect, position = {}
 
   const isOnline = isBackendAvailable()
 
+  // volleyui popover: a white anchored panel (centred), a search field and
+  // kit menu rows. The transparent backdrop and the outside-press close are
+  // unchanged.
   return (
-    <>
+    <div className="ov-kit contents">
       {/* Backdrop */}
       <div
         style={{
@@ -134,99 +142,59 @@ export default function RefereeSelector({ open, onClose, onSelect, position = {}
       >
         <div
           data-referee-selector
-          style={{
-            background: 'rgba(15, 23, 42, 0.95)',
-            border: '2px solid rgba(255, 255, 255, 0.2)',
-            borderRadius: '8px',
-            padding: '8px',
-            minWidth: '300px',
-            maxWidth: '400px',
-            maxHeight: '400px',
-            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            flexDirection: 'column'
-          }}
+          role="dialog"
+          aria-label={t('refereeSelector.searchReferees', 'Search referees')}
+          className={cn(MENU_PANEL, 'flex max-h-[400px] w-[min(92vw,400px)] min-w-[300px] flex-col gap-2 p-2')}
         >
 
           {/* Search Input */}
-          <input
-            type="text"
-            placeholder="Search referees..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '8px 12px',
-              marginBottom: '8px',
-              background: 'rgba(255, 255, 255, 0.1)',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              borderRadius: '4px',
-              color: '#fff',
-              fontSize: '14px',
-              boxSizing: 'border-box'
-            }}
-            autoFocus
-          />
+          <div className="relative">
+            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" aria-hidden="true" />
+            <input
+              type="text"
+              placeholder={t('refereeSelector.searchReferees', 'Search referees')}
+              aria-label={t('refereeSelector.searchReferees', 'Search referees')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-11 w-full rounded-xl border border-stone-200 bg-white pl-9 pr-3 text-base text-stone-800 placeholder:text-stone-400 focus:border-red-700/40 focus:outline-none focus:ring-2 focus:ring-red-700/20"
+              autoFocus
+            />
+          </div>
 
           {/* Referees List */}
-          <div style={{
-            overflowY: 'auto',
-            maxHeight: '280px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '4px'
-          }}>
+          <div className="flex max-h-[280px] flex-col overflow-y-auto">
             {!isOnline ? (
-              <div style={{ padding: '12px', textAlign: 'center', color: 'rgba(255, 255, 255, 0.6)' }}>
-                Connect to internet to load referee history
-              </div>
+              <p className="px-3 py-3 text-center text-sm text-stone-500">
+                {t('refereeSelector.connectToInternet', 'Connect to the internet to load the referee history.')}
+              </p>
             ) : loading ? (
-              <div style={{ padding: '12px', textAlign: 'center', color: 'rgba(255, 255, 255, 0.6)' }}>
-                Loading...
-              </div>
+              <p className="flex items-center justify-center gap-2 px-3 py-3 text-sm text-stone-500" role="status">
+                <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+                {t('common.loading')}
+              </p>
             ) : filteredReferees.length === 0 ? (
-              <div style={{ padding: '12px', textAlign: 'center', color: 'rgba(255, 255, 255, 0.6)' }}>
-                {searchQuery ? 'No referees found' : 'No referee history available'}
-              </div>
+              <p className="px-3 py-3 text-center text-sm text-stone-500">
+                {searchQuery ? t('refereeSelector.noRefereesFound', 'No referees found') : t('refereeSelector.noRefereeHistory', 'No referee history yet')}
+              </p>
             ) : (
               filteredReferees.map((referee) => (
                 <button
+                  type="button"
                   key={referee.id}
                   onClick={() => {
                     onSelect(referee)
                     setSearchQuery('') // Reset search for next use
                     onClose()
                   }}
-                  style={{
-                    padding: '8px 12px',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '4px',
-                    color: '#fff',
-                    fontSize: '14px',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
-                  }}
+                  className={MENU_ROW}
                 >
-                  <span>{referee.lastName}, {referee.firstName}</span>
+                  <span className="truncate">{referee.lastName}, {referee.firstName}</span>
                 </button>
               ))
             )}
           </div>
         </div>
       </div>
-    </>
+    </div>
   )
 }
