@@ -2107,5 +2107,39 @@
     "trayStatus": "Update bereit",
     "copy": "Kopieren",
     "copied": "Kopiert."
+  },
+  "app": {
+    "replaceMatchTitle": "Aktuelles Spiel löschen?",
+    "replaceMatchBody": "Das Spiel auf diesem Gerät und alle seine Daten werden gelöscht, dann beginnt das neue Spiel. Das kann nicht rückgängig gemacht werden.",
+    "replaceMatchConfirm": "Löschen und neu beginnen",
+    "newTestMatchTitle": "Neues Testspiel starten?",
+    "newTestMatchBody": "Auf diesem Gerät läuft noch ein offizielles Spiel. Es bleibt erhalten; das bisherige Testspiel wird gelöscht.",
+    "newTestMatchConfirm": "Testspiel starten",
+    "testMatchFailed": "Das Testspiel konnte nicht vorbereitet werden: {{error}}",
+    "noTestMatch": "Es gibt kein Testspiel. Starte zuerst ein neues.",
+    "deleteTestMatchTitle": "Testspiel löschen?",
+    "deleteTestMatchBody": "Das Testspiel und alle seine Daten werden von diesem Gerät gelöscht.",
+    "deleteTestMatchConfirm": "Testspiel löschen",
+    "testMatchDeleted": "Testspiel gelöscht.",
+    "deleteTestMatchFailed": "Das Testspiel konnte nicht gelöscht werden: {{error}}",
+    "useContinueTestMatch": "Das ist ein Testspiel: Setze es beim Testspiel auf der Startseite fort.",
+    "openMatchFailed": "Das Spiel konnte nicht geöffnet werden. Bitte versuche es erneut."
+  },
+  "restorePreview": {
+    "title": "Dieses Spiel wiederherstellen?",
+    "fromDatabase": "Aus der Datenbank",
+    "fromCloud": "Aus einer Cloud-Sicherung",
+    "fromFile": "Aus einer lokalen Datei",
+    "selectAnother": "Andere wählen",
+    "confirm": "Spiel wiederherstellen",
+    "set": "Satz {{n}}",
+    "serving": "Aufschlag",
+    "serves": "schlägt auf",
+    "noLineup": "Keine Aufstellung",
+    "timeouts": "Auszeiten {{count}}/1",
+    "sets": "Sätze",
+    "sanctions": "Sanktionen",
+    "sanction": "Sanktion",
+    "failed": "Das Spiel konnte nicht wiederhergestellt werden."
   }
 }

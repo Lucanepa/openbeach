@@ -2108,5 +2108,39 @@
     "trayStatus": "Update ready",
     "copy": "Copy",
     "copied": "Copied."
+  },
+  "app": {
+    "replaceMatchTitle": "Delete the current match?",
+    "replaceMatchBody": "The match on this device and all its data are deleted, then the new match starts. This cannot be undone.",
+    "replaceMatchConfirm": "Delete and start new",
+    "newTestMatchTitle": "Start a new test match?",
+    "newTestMatchBody": "An official match is still recording on this device. It stays; the previous test match is deleted.",
+    "newTestMatchConfirm": "Start test match",
+    "testMatchFailed": "Could not prepare the test match: {{error}}",
+    "noTestMatch": "There is no test match. Start a new one first.",
+    "deleteTestMatchTitle": "Delete the test match?",
+    "deleteTestMatchBody": "The test match and all its data are deleted from this device.",
+    "deleteTestMatchConfirm": "Delete test match",
+    "testMatchDeleted": "Test match deleted.",
+    "deleteTestMatchFailed": "Could not delete the test match: {{error}}",
+    "useContinueTestMatch": "This is a test match: continue it from the test match on the home screen.",
+    "openMatchFailed": "Could not open the match. Please try again."
+  },
+  "restorePreview": {
+    "title": "Restore this match?",
+    "fromDatabase": "From the database",
+    "fromCloud": "From a cloud backup",
+    "fromFile": "From a local file",
+    "selectAnother": "Choose another",
+    "confirm": "Restore match",
+    "set": "Set {{n}}",
+    "serving": "Serving",
+    "serves": "serves",
+    "noLineup": "No lineup",
+    "timeouts": "Timeouts {{count}}/1",
+    "sets": "Sets",
+    "sanctions": "Sanctions",
+    "sanction": "sanction",
+    "failed": "Could not restore the match."
   }
 }

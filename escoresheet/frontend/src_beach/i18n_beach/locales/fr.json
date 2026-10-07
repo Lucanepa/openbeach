@@ -2107,5 +2107,39 @@
     "trayStatus": "Mise à jour prête",
     "copy": "Copier",
     "copied": "Copié."
+  },
+  "app": {
+    "replaceMatchTitle": "Supprimer le match en cours ?",
+    "replaceMatchBody": "Le match de cet appareil et toutes ses données sont supprimés, puis le nouveau match commence. Cette action est irréversible.",
+    "replaceMatchConfirm": "Supprimer et recommencer",
+    "newTestMatchTitle": "Commencer un nouveau match test ?",
+    "newTestMatchBody": "Un match officiel est encore en cours sur cet appareil. Il est conservé ; le match test précédent est supprimé.",
+    "newTestMatchConfirm": "Commencer le match test",
+    "testMatchFailed": "Impossible de préparer le match test : {{error}}",
+    "noTestMatch": "Il n'y a pas de match test. Commencez-en d'abord un nouveau.",
+    "deleteTestMatchTitle": "Supprimer le match test ?",
+    "deleteTestMatchBody": "Le match test et toutes ses données sont supprimés de cet appareil.",
+    "deleteTestMatchConfirm": "Supprimer le match test",
+    "testMatchDeleted": "Match test supprimé.",
+    "deleteTestMatchFailed": "Impossible de supprimer le match test : {{error}}",
+    "useContinueTestMatch": "C'est un match test : reprenez-le depuis le match test de l'écran d'accueil.",
+    "openMatchFailed": "Impossible d'ouvrir le match. Veuillez réessayer."
+  },
+  "restorePreview": {
+    "title": "Restaurer ce match ?",
+    "fromDatabase": "Depuis la base de données",
+    "fromCloud": "Depuis une sauvegarde cloud",
+    "fromFile": "Depuis un fichier local",
+    "selectAnother": "En choisir un autre",
+    "confirm": "Restaurer le match",
+    "set": "Set {{n}}",
+    "serving": "Au service",
+    "serves": "sert",
+    "noLineup": "Pas de composition",
+    "timeouts": "Temps morts {{count}}/1",
+    "sets": "Sets",
+    "sanctions": "Sanctions",
+    "sanction": "sanction",
+    "failed": "Impossible de restaurer le match."
   }
 }

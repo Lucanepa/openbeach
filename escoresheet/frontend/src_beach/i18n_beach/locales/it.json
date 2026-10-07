@@ -2107,5 +2107,39 @@
     "trayStatus": "Aggiornamento pronto",
     "copy": "Copia",
     "copied": "Copiato."
+  },
+  "app": {
+    "replaceMatchTitle": "Eliminare la partita attuale?",
+    "replaceMatchBody": "La partita su questo dispositivo e tutti i suoi dati vengono eliminati, poi inizia la nuova partita. Non si può annullare.",
+    "replaceMatchConfirm": "Elimina e inizia nuova",
+    "newTestMatchTitle": "Iniziare una nuova partita di prova?",
+    "newTestMatchBody": "Su questo dispositivo è ancora in corso una partita ufficiale. Rimane; la partita di prova precedente viene eliminata.",
+    "newTestMatchConfirm": "Inizia partita di prova",
+    "testMatchFailed": "Impossibile preparare la partita di prova: {{error}}",
+    "noTestMatch": "Non c'è nessuna partita di prova. Iniziane prima una nuova.",
+    "deleteTestMatchTitle": "Eliminare la partita di prova?",
+    "deleteTestMatchBody": "La partita di prova e tutti i suoi dati vengono eliminati da questo dispositivo.",
+    "deleteTestMatchConfirm": "Elimina partita di prova",
+    "testMatchDeleted": "Partita di prova eliminata.",
+    "deleteTestMatchFailed": "Impossibile eliminare la partita di prova: {{error}}",
+    "useContinueTestMatch": "Questa è una partita di prova: continuala dalla partita di prova nella schermata iniziale.",
+    "openMatchFailed": "Impossibile aprire la partita. Riprova."
+  },
+  "restorePreview": {
+    "title": "Ripristinare questa partita?",
+    "fromDatabase": "Dal database",
+    "fromCloud": "Da un backup cloud",
+    "fromFile": "Da un file locale",
+    "selectAnother": "Scegli un altro",
+    "confirm": "Ripristina partita",
+    "set": "Set {{n}}",
+    "serving": "Al servizio",
+    "serves": "serve",
+    "noLineup": "Nessuna formazione",
+    "timeouts": "Time-out {{count}}/1",
+    "sets": "Set",
+    "sanctions": "Sanzioni",
+    "sanction": "sanzione",
+    "failed": "Impossibile ripristinare la partita."
   }
 }

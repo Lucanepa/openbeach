@@ -7,7 +7,6 @@ import Scoreboard from './components_beach/Scoreboard_beach'
 import CoinToss from './components_beach/CoinToss_beach'
 import MatchEnd from './components_beach/MatchEnd_beach'
 import ManualAdjustments from './components_beach/ManualAdjustments_beach'
-import Modal from './components_beach/Modal_beach'
 import InteractiveGuide from './components_beach/InteractiveGuide_beach'
 import ConnectionStatus from './components_beach/ConnectionStatus_beach'
 import MainHeader from './components_beach/MainHeader_beach'
@@ -44,6 +43,7 @@ import { setExtId } from './utils_beach/syncIds_beach'
 import { isBackendAvailable, getBackendUrl, isServedFromLocalServer, getLocalServerStatusUrl, rememberRelayWsPort } from './utils_beach/backendConfig_beach'
 import { isCapacitorApp, installAppLifecycle, liveOf, setLiveMatch } from './utils_beach/appLifecycle_beach'
 import DesktopUpdateNotice from './components_beach/DesktopUpdateNotice_beach'
+import RestorePreviewModal from './components_beach/RestorePreviewModal_beach'
 import { scorerRelay, scorerPublisher, scorerRelayUrl, readRelayBundle, relayMatchKey } from './utils_beach/relayPublisher_beach'
 import { checkMatchSession, lockMatchSession, unlockMatchSession, verifyGamePin } from './utils_beach/sessionManager_beach'
 
@@ -57,6 +57,7 @@ import { FileUp, Maximize, Search, Smartphone } from 'lucide-react'
 import { Modal as KitModal, modalCancelClass, modalDangerClass } from './ui/volleyui/Modal.jsx'
 import { Button } from './ui/volleyui/Button.jsx'
 import { cn } from './ui/volleyui/cn.js'
+import { confirmDialog, toast } from './ui/volleyui/uiStore.js'
 
 function parseDateTime(dateTime) {
   const [datePart, timePart] = dateTime.split(' ')
@@ -85,7 +86,6 @@ export default function App() {
   const [deleteMatchModal, setDeleteMatchModal] = useState(null)
   const [deletePinInput, setDeletePinInput] = useState('')
   const [deletePinError, setDeletePinError] = useState('')
-  const [newMatchModal, setNewMatchModal] = useState(null)
   const [restoreMatchModal, setRestoreMatchModal] = useState(false)
   const [restoreMatchIdInput, setRestoreMatchIdInput] = useState('')
   const [restorePin, setRestorePin] = useState('')
@@ -98,8 +98,6 @@ export default function App() {
   const [cloudBackupError, setCloudBackupError] = useState('')
   const [restorePreviewData, setRestorePreviewData] = useState(null) // { data, source: 'database'|'cloud'|'local' }
   const [testMatchLoading, setTestMatchLoading] = useState(false)
-  const [alertModal, setAlertModal] = useState(null) // { message: string }
-  const [confirmModal, setConfirmModal] = useState(null) // { message: string, onConfirm: function, onCancel: function }
   const [newMatchMenuOpen, setNewMatchMenuOpen] = useState(false)
   const [homeOptionsModal, setHomeOptionsModal] = useState(false)
   const [interactiveGuideOpen, setInteractiveGuideOpen] = useState(false)
@@ -1323,11 +1321,8 @@ export default function App() {
     // Unconfirmed matches (user started but didn't click "Create Match") should be silently deleted
     if (currentMatch) {
       if (currentMatch.matchInfoConfirmedAt) {
-        // This is a real confirmed match - warn the user
-        setNewMatchModal({
-          type: 'official',
-          message: 'There is an existing match. Do you want to delete it and create a new official match?'
-        })
+        // This is a real confirmed match - ask first
+        if (await askReplaceMatch()) await replaceCurrentMatch({ type: 'official' })
         return
       } else {
         // This is an unconfirmed match - delete it silently
@@ -1357,12 +1352,8 @@ export default function App() {
 
     // If there's a confirmed match, warn first
     if (currentMatch && currentMatch.matchInfoConfirmedAt) {
-      setNewMatchModal({
-        type: 'competition',
-        message: 'There is an existing match. Do you want to delete it and load the competition match?',
-        competitionMatch: compMatch
-      })
       setShowCompetitionPicker(false)
+      if (await askReplaceMatch()) await replaceCurrentMatch({ type: 'competition', competitionMatch: compMatch })
       return
     }
 
@@ -1476,8 +1467,19 @@ export default function App() {
     setShowCompetitionPicker(false)
   }
 
-  async function confirmNewMatch() {
-    if (!newMatchModal) return
+  /** "Delete the current match?" before a new one replaces it. */
+  function askReplaceMatch() {
+    return confirmDialog({
+      title: t('app.replaceMatchTitle', 'Delete the current match?'),
+      message: t('app.replaceMatchBody', 'The match on this device and all its data are deleted, then the new match starts. This cannot be undone.'),
+      confirmLabel: t('app.replaceMatchConfirm', 'Delete and start new'),
+      cancelLabel: t('common.cancel', 'Cancel'),
+      tone: 'danger'
+    })
+  }
+
+  /** Delete the current match, then start the requested one. */
+  async function replaceCurrentMatch(request) {
 
     // Delete current match first
     if (currentMatch) {
@@ -1516,9 +1518,7 @@ export default function App() {
       })
     }
 
-    setNewMatchModal(null)
-
-    if (newMatchModal.type === 'official') {
+    if (request.type === 'official') {
       // Create new blank match
       const newMatchId = await db.matches.add({
         status: 'scheduled',
@@ -1529,17 +1529,13 @@ export default function App() {
       setMatchId(newMatchId)
       setShowMatchSetup(true)
       setShowCoinToss(false) // Ensure we go to match setup, not coin toss
-    } else if (newMatchModal.type === 'test') {
+    } else if (request.type === 'test') {
       // Create test match (reuse the existing createNewTestMatch logic)
       await createTestMatchData()
       setShowCoinToss(false) // Ensure we go to match setup, not coin toss
-    } else if (newMatchModal.type === 'competition' && newMatchModal.competitionMatch) {
-      await createMatchFromCompetition(newMatchModal.competitionMatch)
+    } else if (request.type === 'competition' && request.competitionMatch) {
+      await createMatchFromCompetition(request.competitionMatch)
     }
-  }
-
-  function cancelNewMatch() {
-    setNewMatchModal(null)
   }
 
   useEffect(() => {
@@ -1881,26 +1877,14 @@ export default function App() {
 
     const officialMatchRecording = matchStatus?.status === 'Match recording' && currentOfficialMatch
     if (officialMatchRecording) {
-      setConfirmModal({
-        message: 'An official match is still recording. Starting a new test match will wipe the previous test session. Continue?',
-        onConfirm: async () => {
-          setConfirmModal(null)
-          setTestMatchLoading(true)
-          try {
-            await clearLocalTestData()
-            await createTestMatchData()
-          } catch (error) {
-            console.error('Failed to prepare test match:', error)
-            setAlertModal(`Unable to prepare the test match: ${error.message || error}`)
-          } finally {
-            setTestMatchLoading(false)
-          }
-        },
-        onCancel: () => {
-          setConfirmModal(null)
-        }
+      const ok = await confirmDialog({
+        title: t('app.newTestMatchTitle', 'Start a new test match?'),
+        message: t('app.newTestMatchBody', 'An official match is still recording on this device. It stays; the previous test match is deleted.'),
+        confirmLabel: t('app.newTestMatchConfirm', 'Start test match'),
+        cancelLabel: t('common.cancel', 'Cancel'),
+        tone: 'danger'
       })
-      return
+      if (!ok) return
     }
 
     setTestMatchLoading(true)
@@ -1913,7 +1897,7 @@ export default function App() {
       await createTestMatchData()
     } catch (error) {
       console.error('Failed to prepare test match:', error)
-      setAlertModal(`Unable to prepare the test match: ${error.message || error}`)
+      toast.error(t('app.testMatchFailed', { error: error?.message || String(error), defaultValue: 'Could not prepare the test match: {{error}}' }))
     } finally {
       setTestMatchLoading(false)
     }
@@ -1978,7 +1962,7 @@ export default function App() {
         setShowCoinToss(false)
       }
     } else {
-      setAlertModal('No test match found. Please create a new test match first.')
+      toast.info(t('app.noTestMatch', 'There is no test match. Start a new one first.'))
     }
   }
 
@@ -1987,43 +1971,40 @@ export default function App() {
 
     // Set loading state immediately to disable buttons
     setTestMatchLoading(true)
+    try {
+      const ok = await confirmDialog({
+        title: t('app.deleteTestMatchTitle', 'Delete the test match?'),
+        message: t('app.deleteTestMatchBody', 'The test match and all its data are deleted from this device.'),
+        confirmLabel: t('app.deleteTestMatchConfirm', 'Delete test match'),
+        cancelLabel: t('common.cancel', 'Cancel'),
+        tone: 'danger'
+      })
+      if (!ok) return
 
-    setConfirmModal({
-      message: 'This will delete the test match and all its data. Continue?',
-      onConfirm: async () => {
-        setConfirmModal(null)
-        try {
-          // Find the test match - use toArray and filter to avoid index requirement
-          const matches = await db.matches.orderBy('createdAt').reverse().toArray()
-          const testMatch = matches.find(m => m.test === true && m.status !== 'final')
-          if (!testMatch) {
-            setAlertModal('No test match found. Please create a new test match first.')
-            setTestMatchLoading(false)
-            return
-          }
-
-          // Delete all test match data
-          await clearLocalTestData()
-
-          // Clear matchId to return to home view
-          setMatchId(null)
-          setShowMatchSetup(false)
-          setShowCoinToss(false)
-          setShowManualAdjustments(false)
-
-          setAlertModal('Test match deleted successfully.')
-        } catch (error) {
-          console.error('Failed to delete test match:', error)
-          setAlertModal(`Unable to delete test match: ${error.message || error}`)
-        } finally {
-          setTestMatchLoading(false)
-        }
-      },
-      onCancel: () => {
-        setConfirmModal(null)
-        setTestMatchLoading(false)
+      // Find the test match - use toArray and filter to avoid index requirement
+      const matches = await db.matches.orderBy('createdAt').reverse().toArray()
+      const testMatch = matches.find(m => m.test === true && m.status !== 'final')
+      if (!testMatch) {
+        toast.info(t('app.noTestMatch', 'There is no test match. Start a new one first.'))
+        return
       }
-    })
+
+      // Delete all test match data
+      await clearLocalTestData()
+
+      // Clear matchId to return to home view
+      setMatchId(null)
+      setShowMatchSetup(false)
+      setShowCoinToss(false)
+      setShowManualAdjustments(false)
+
+      toast.success(t('app.testMatchDeleted', 'Test match deleted.'))
+    } catch (error) {
+      console.error('Failed to delete test match:', error)
+      toast.error(t('app.deleteTestMatchFailed', { error: error?.message || String(error), defaultValue: 'Could not delete the test match: {{error}}' }))
+    } finally {
+      setTestMatchLoading(false)
+    }
   }
 
   async function continueMatch(matchIdParam) {
@@ -2073,7 +2054,7 @@ export default function App() {
 
       // Reject test matches for other cases
       if (match.test === true) {
-        setAlertModal('This is a test match. Use "Continue test match" instead.')
+        toast.info(t('app.useContinueTestMatch', 'This is a test match: continue it from the test match on the home screen.'))
         return
       }
 
@@ -2105,7 +2086,7 @@ export default function App() {
       }
     } catch (error) {
       console.error('Error continuing match:', error)
-      setAlertModal('Error opening match. Please try again.')
+      toast.error(t('app.openMatchFailed', 'Could not open the match. Please try again.'))
     }
   }
 
@@ -2614,432 +2595,75 @@ export default function App() {
               )
             })()}
 
-            {/* Restore Preview Modal */}
-            {restorePreviewData && (
-              <Modal
-                title="Restore Preview"
-                open={true}
-                onClose={() => setRestorePreviewData(null)}
-                width={700}
-              >
-                <div style={{ padding: '24px', maxHeight: '80vh', overflowY: 'auto' }}>
-                  {(() => {
-                    // Normalize data from different sources
-                    const d = restorePreviewData.data
-                    const isDbFormat = d.match?.team1_data || d.match?.team1_team || d.liveState
+            {/* Restore Preview (volleyui decision dialog) */}
+            <RestorePreviewModal
+              preview={restorePreviewData}
+              loading={restoreLoading}
+              error={restoreError}
+              onSelectAnother={() => setRestorePreviewData(null)}
+              onCancel={() => {
+                setRestorePreviewData(null)
+                setRestoreMatchModal(false)
+                setRestoreMatchIdInput('')
+                setRestorePin('')
+                setCloudBackups([])
+                setCloudBackupPin('')
+                setCloudBackupGameN('')
+                setCloudBackupError('')
+              }}
+              onConfirm={async () => {
+                setRestoreLoading(true)
+                setRestoreError('')
+                try {
+                  const cloudData = restorePreviewData.data
+                  let newMatchId
 
-                    const team1Name = isDbFormat
-                      ? (d.match?.team1_data?.name || d.match?.team1_team?.name || d.match?.team1Name || 'Team 1')
-                      : (d.team1?.name || d.match?.team1Name || 'Team 1')
-                    const team2Name = isDbFormat
-                      ? (d.match?.team2_data?.name || d.match?.team2_team?.name || d.match?.team2Name || 'Team 2')
-                      : (d.team2?.name || d.match?.team2Name || 'Team 2')
+                  if (restorePreviewData.source === 'database') {
+                    newMatchId = await importMatchFromSupabase(cloudData)
+                  } else {
+                    newMatchId = await restoreMatchFromJson(cloudData)
+                  }
 
-                    const events = d.events || []
-                    const sets = d.sets || []
+                  // Close modals
+                  setRestorePreviewData(null)
+                  setRestoreMatchModal(false)
+                  setRestoreMatchIdInput('')
+                  setRestorePin('')
+                  setCloudBackups([])
+                  setCloudBackupPin('')
+                  setCloudBackupGameN('')
+                  setCloudBackupError('')
+                  setMatchId(newMatchId)
 
-                    // Get latest set
-                    const latestSet = [...sets].sort((a, b) => (b.index || 0) - (a.index || 0))[0]
-                    const currentSetIndex = latestSet?.index || d.liveState?.current_set || 1
-                    const team1Points = latestSet?.team1Points ?? latestSet?.team1_points ?? d.liveState?.points_a ?? 0
-                    const team2Points = latestSet?.team2Points ?? latestSet?.team2_points ?? d.liveState?.points_b ?? 0
+                  // Determine where to go based on match state
+                  const matchStatus = cloudData.match?.status
+                  const hasEvents = cloudData.events && cloudData.events.length > 0
+                  const hasSets = cloudData.sets && cloudData.sets.length > 0
+                  const finishedSets = (cloudData.sets || []).filter(s => s.finished)
+                  const team1SetsWon = finishedSets.filter(s => (s.team1Points ?? s.team1_points ?? 0) > (s.team2Points ?? s.team2_points ?? 0)).length
+                  const team2SetsWon = finishedSets.filter(s => (s.team2Points ?? s.team2_points ?? 0) > (s.team1Points ?? s.team1_points ?? 0)).length
+                  const isMatchFinished = team1SetsWon >= 2 || team2SetsWon >= 2
 
-                    // Get lineups (from events or liveState)
-                    const lineupEvents = events.filter(e => e.type === 'lineup')
-                    const team1Lineup = lineupEvents.find(e => e.payload?.team === 'team1')?.payload?.lineup ||
-                      (isDbFormat ? d.liveState?.lineup_a : null)
-                    const team2Lineup = lineupEvents.find(e => e.payload?.team === 'team2')?.payload?.lineup ||
-                      (isDbFormat ? d.liveState?.lineup_b : null)
-
-                    // Get timeouts for current set
-                    const timeoutEvents = events.filter(e => e.type === 'timeout' && e.setIndex === currentSetIndex)
-                    const team1Timeouts = timeoutEvents.filter(e => e.payload?.team === 'team1').length
-                    const team2Timeouts = timeoutEvents.filter(e => e.payload?.team === 'team2').length
-
-                    // Get sanctions
-                    const sanctionEvents = events.filter(e => e.type === 'sanction')
-
-                    // Get serving team
-                    const pointEvents = events.filter(e => e.type === 'point').sort((a, b) => (b.seq || 0) - (a.seq || 0))
-                    const lastPoint = pointEvents[0]
-                    const servingTeam = lastPoint?.payload?.scoringTeam || d.liveState?.serving_team || 'team1'
-
-                    // Helper to render lineup (beach volleyball: 2 players)
-                    const renderLineup = (lineup, teamName) => {
-                      if (!lineup) return <span style={{ color: 'rgba(255,255,255,0.4)' }}>No lineup data</span>
-                      const positions = ['I', 'II']
-                      return (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '4px' }}>
-                          {positions.map(pos => {
-                            const posData = lineup[pos]
-                            const num = typeof posData === 'object' ? posData?.number : posData
-                            const isServing = typeof posData === 'object' && posData?.isServing
-                            return (
-                              <div key={pos} style={{
-                                padding: '6px 8px',
-                                background: isServing ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255,255,255,0.05)',
-                                borderRadius: '4px',
-                                textAlign: 'center',
-                                fontSize: '13px'
-                              }}>
-                                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px' }}>{pos}</span>
-                                <br />
-                                <span style={{ fontWeight: 600 }}>{num || '-'}</span>
-                                {isServing && <span style={{ color: '#22c55e', marginLeft: '4px' }}>●</span>}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )
-                    }
-
-                    return (
-                      <>
-                        {/* Source indicator */}
-                        <div style={{
-                          display: 'flex',
-                          justifyContent: 'center',
-                          marginBottom: '16px',
-                          gap: '8px'
-                        }}>
-                          <span style={{
-                            padding: '4px 12px',
-                            background: restorePreviewData.source === 'database' ? '#3b82f6' :
-                              restorePreviewData.source === 'cloud' ? '#8b5cf6' : '#f97316',
-                            borderRadius: '12px',
-                            fontSize: '12px',
-                            fontWeight: 600
-                          }}>
-                            {restorePreviewData.source === 'database' ? 'From Database' :
-                              restorePreviewData.source === 'cloud' ? 'Restore from Cloud Backup' : 'From Local File'}
-                          </span>
-                          {restorePreviewData.backupName && (
-                            <span style={{
-                              padding: '4px 12px',
-                              background: 'rgba(255,255,255,0.1)',
-                              borderRadius: '12px',
-                              fontSize: '12px',
-                              fontFamily: 'monospace'
-                            }}>
-                              {restorePreviewData.backupName.replace('.json', '')}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Teams header */}
-                        <div style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          padding: '16px',
-                          background: 'rgba(255,255,255,0.05)',
-                          borderRadius: '8px',
-                          marginBottom: '16px'
-                        }}>
-                          <div style={{ textAlign: 'center', flex: 1 }}>
-                            <div style={{ fontSize: '18px', fontWeight: 700 }}>{team1Name}</div>
-                            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>Team 1</div>
-                          </div>
-                          <div style={{ textAlign: 'center', padding: '0 16px' }}>
-                            <div style={{ fontSize: '24px', fontWeight: 700 }}>{team1Points} - {team2Points}</div>
-                            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>Set {currentSetIndex}</div>
-                          </div>
-                          <div style={{ textAlign: 'center', flex: 1 }}>
-                            <div style={{ fontSize: '18px', fontWeight: 700 }}>{team2Name}</div>
-                            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>Team 2</div>
-                          </div>
-                        </div>
-
-                        {/* Serving indicator */}
-                        <div style={{
-                          textAlign: 'center',
-                          marginBottom: '16px',
-                          fontSize: '14px'
-                        }}>
-                          <span style={{ color: '#22c55e' }}>● </span>
-                          Serving: <strong>{servingTeam === 'team1' ? team1Name : team2Name}</strong>
-                        </div>
-
-                        {/* Lineups */}
-                        <div style={{
-                          display: 'grid',
-                          gridTemplateColumns: '1fr 1fr',
-                          gap: '16px',
-                          marginBottom: '16px'
-                        }}>
-                          <div>
-                            <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: 'var(--text)' }}>
-                              {team1Name} Lineup
-                            </h4>
-                            {renderLineup(team1Lineup)}
-                          </div>
-                          <div>
-                            <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: 'var(--text)' }}>
-                              {team2Name} Lineup
-                            </h4>
-                            {renderLineup(team2Lineup)}
-                          </div>
-                        </div>
-
-                        {/* Timeouts */}
-                        <div style={{
-                          display: 'grid',
-                          gridTemplateColumns: '1fr 1fr',
-                          gap: '16px',
-                          marginBottom: '16px'
-                        }}>
-                          <div style={{
-                            padding: '12px',
-                            background: 'rgba(255,255,255,0.05)',
-                            borderRadius: '8px',
-                            textAlign: 'center'
-                          }}>
-                            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>Timeouts</div>
-                            <div style={{ fontSize: '20px', fontWeight: 700 }}>{team1Timeouts}/1</div>
-                          </div>
-                          <div style={{
-                            padding: '12px',
-                            background: 'rgba(255,255,255,0.05)',
-                            borderRadius: '8px',
-                            textAlign: 'center'
-                          }}>
-                            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>Timeouts</div>
-                            <div style={{ fontSize: '20px', fontWeight: 700 }}>{team2Timeouts}/1</div>
-                          </div>
-                        </div>
-
-                        {/* Sanctions */}
-                        {sanctionEvents.length > 0 && (
-                          <div style={{ marginBottom: '16px' }}>
-                            <h4 style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'rgba(255,255,255,0.7)' }}>
-                              Sanctions ({sanctionEvents.length})
-                            </h4>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                              {sanctionEvents.map((s, i) => (
-                                <div key={i} style={{
-                                  padding: '4px 8px',
-                                  background: s.payload?.type === 'red' ? 'rgba(239, 68, 68, 0.2)' :
-                                    s.payload?.type === 'yellow' ? 'rgba(234, 179, 8, 0.2)' : 'rgba(255,255,255,0.1)',
-                                  borderRadius: '4px',
-                                  fontSize: '12px'
-                                }}>
-                                  {s.payload?.team === 'team1' ? team1Name : team2Name}{s.payload?.playerNumber ? ` #${s.payload.playerNumber}` : ''} - {s.payload?.type || 'sanction'}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Set scores summary */}
-                        {sets.length > 0 && (
-                          <div style={{ marginBottom: '24px' }}>
-                            <h4 style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'rgba(255,255,255,0.7)' }}>
-                              Set Scores
-                            </h4>
-                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                              {[...sets].sort((a, b) => (a.index || 0) - (b.index || 0)).map(s => (
-                                <div key={s.index} style={{
-                                  padding: '8px 12px',
-                                  background: s.finished ? 'rgba(255,255,255,0.1)' : 'rgba(59, 130, 246, 0.2)',
-                                  borderRadius: '6px',
-                                  textAlign: 'center'
-                                }}>
-                                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>Set {s.index}</div>
-                                  <div style={{ fontSize: '14px', fontWeight: 600 }}>
-                                    {s.team1Points ?? s.team1_points ?? 0} - {s.team2Points ?? s.team2_points ?? 0}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Error display */}
-                        {restoreError && (
-                          <div style={{
-                            padding: '12px',
-                            marginBottom: '16px',
-                            background: 'rgba(239, 68, 68, 0.15)',
-                            border: '1px solid rgba(239, 68, 68, 0.4)',
-                            borderRadius: '8px',
-                            color: '#ef4444',
-                            fontSize: '13px'
-                          }}>
-                            {restoreError}
-                          </div>
-                        )}
-
-                        {/* Actions */}
-                        <div style={{
-                          display: 'flex',
-                          gap: '12px',
-                          justifyContent: 'center',
-                          paddingTop: '16px',
-                          borderTop: '1px solid rgba(255,255,255,0.1)'
-                        }}>
-                          <button
-                            onClick={async () => {
-                              setRestoreLoading(true)
-                              setRestoreError('')
-                              try {
-                                const cloudData = restorePreviewData.data
-                                let newMatchId
-
-                                if (restorePreviewData.source === 'database') {
-                                  newMatchId = await importMatchFromSupabase(cloudData)
-                                } else {
-                                  newMatchId = await restoreMatchFromJson(cloudData)
-                                }
-
-                                // Close modals
-                                setRestorePreviewData(null)
-                                setRestoreMatchModal(false)
-                                setRestoreMatchIdInput('')
-                                setRestorePin('')
-                                setCloudBackups([])
-                                setCloudBackupPin('')
-                                setCloudBackupGameN('')
-                                setCloudBackupError('')
-                                setMatchId(newMatchId)
-
-                                // Determine where to go based on match state
-                                const matchStatus = cloudData.match?.status
-                                const hasEvents = cloudData.events && cloudData.events.length > 0
-                                const hasSets = cloudData.sets && cloudData.sets.length > 0
-                                const finishedSets = (cloudData.sets || []).filter(s => s.finished)
-                                const team1SetsWon = finishedSets.filter(s => (s.team1Points ?? s.team1_points ?? 0) > (s.team2Points ?? s.team2_points ?? 0)).length
-                                const team2SetsWon = finishedSets.filter(s => (s.team2Points ?? s.team2_points ?? 0) > (s.team1Points ?? s.team1_points ?? 0)).length
-                                const isMatchFinished = team1SetsWon >= 2 || team2SetsWon >= 2
-
-                                // Priority: finished match → MatchEnd, live with activity → Scoreboard, else → Setup
-                                if (isMatchFinished) {
-                                  // Match is complete - go directly to MatchEnd
-                                  setShowMatchSetup(false)
-                                  setShowMatchEnd(true)
-                                } else if ((matchStatus === 'live' || hasEvents || hasSets) && (hasEvents || hasSets)) {
-                                  // Match in progress with activity - go to Scoreboard
-                                  setShowMatchSetup(false)
-                                } else {
-                                  // New or setup-phase match - go to MatchSetup
-                                  setShowMatchSetup(true)
-                                }
-                              } catch (err) {
-                                console.error('[Restore] Failed to restore match:', err)
-                                setRestoreError(err.message || 'Failed to restore match')
-                              } finally {
-                                setRestoreLoading(false)
-                              }
-                            }}
-                            disabled={restoreLoading}
-                            style={{
-                              padding: '12px 32px',
-                              fontSize: '15px',
-                              fontWeight: 600,
-                              background: restoreLoading ? 'rgba(34, 197, 94, 0.3)' : 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
-                              color: '#fff',
-                              border: 'none',
-                              borderRadius: '8px',
-                              cursor: restoreLoading ? 'not-allowed' : 'pointer'
-                            }}
-                          >
-                            {restoreLoading ? 'Restoring...' : 'Confirm Restore'}
-                          </button>
-                          <button
-                            onClick={() => setRestorePreviewData(null)}
-                            disabled={restoreLoading}
-                            style={{
-                              padding: '12px 24px',
-                              fontSize: '14px',
-                              fontWeight: 600,
-                              background: 'rgba(255,255,255,0.1)',
-                              color: 'var(--text)',
-                              border: '1px solid rgba(255,255,255,0.2)',
-                              borderRadius: '8px',
-                              cursor: restoreLoading ? 'not-allowed' : 'pointer'
-                            }}
-                          >
-                            Select Another
-                          </button>
-                          <button
-                            onClick={() => {
-                              setRestorePreviewData(null)
-                              setRestoreMatchModal(false)
-                              setRestoreMatchIdInput('')
-                              setRestorePin('')
-                              setCloudBackups([])
-                              setCloudBackupPin('')
-                              setCloudBackupGameN('')
-                              setCloudBackupError('')
-                            }}
-                            disabled={restoreLoading}
-                            style={{
-                              padding: '12px 24px',
-                              fontSize: '14px',
-                              fontWeight: 600,
-                              background: 'rgba(239, 68, 68, 0.2)',
-                              color: '#ef4444',
-                              border: '1px solid rgba(239, 68, 68, 0.3)',
-                              borderRadius: '8px',
-                              cursor: restoreLoading ? 'not-allowed' : 'pointer'
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </>
-                    )
-                  })()}
-                </div>
-              </Modal>
-            )}
-
-            {/* New Match Modal */}
-            {newMatchModal && (
-              <Modal
-                title="Create New Match"
-                open={true}
-                onClose={cancelNewMatch}
-                width={400}
-              >
-                <div style={{ padding: '24px', textAlign: 'center' }}>
-                  <p style={{ marginBottom: '24px', fontSize: '16px' }}>
-                    {newMatchModal.message}
-                  </p>
-                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                    <button
-                      onClick={confirmNewMatch}
-                      style={{
-                        padding: '12px 24px',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        background: 'var(--accent)',
-                        color: '#000',
-                        border: 'none',
-                        borderRadius: '8px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Yes
-                    </button>
-                    <button
-                      onClick={cancelNewMatch}
-                      style={{
-                        padding: '12px 24px',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        background: 'rgba(255, 255, 255, 0.1)',
-                        color: 'var(--text)',
-                        border: '1px solid rgba(255, 255, 255, 0.2)',
-                        borderRadius: '8px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </Modal>
-            )}
+                  // Priority: finished match → MatchEnd, live with activity → Scoreboard, else → Setup
+                  if (isMatchFinished) {
+                    // Match is complete - go directly to MatchEnd
+                    setShowMatchSetup(false)
+                    setShowMatchEnd(true)
+                  } else if ((matchStatus === 'live' || hasEvents || hasSets) && (hasEvents || hasSets)) {
+                    // Match in progress with activity - go to Scoreboard
+                    setShowMatchSetup(false)
+                  } else {
+                    // New or setup-phase match - go to MatchSetup
+                    setShowMatchSetup(true)
+                  }
+                } catch (err) {
+                  console.error('[Restore] Failed to restore match:', err)
+                  setRestoreError(err.message || t('restorePreview.failed', 'Could not restore the match.'))
+                } finally {
+                  setRestoreLoading(false)
+                }
+              }}
+            />
 
             {/* Competition Match Picker (off until the backend serves competitions) */}
             {COMPETITIONS_ENABLED && (
@@ -3050,88 +2674,6 @@ export default function App() {
               />
             )}
 
-            {/* Alert Modal */}
-            {alertModal && (
-              <Modal
-                title="Alert"
-                open={true}
-                onClose={() => setAlertModal(null)}
-                width={400}
-                hideCloseButton={true}
-              >
-                <div style={{ padding: '24px', textAlign: 'center' }}>
-                  <p style={{ marginBottom: '24px', fontSize: '16px' }}>
-                    {alertModal}
-                  </p>
-                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                    <button
-                      onClick={() => setAlertModal(null)}
-                      style={{
-                        padding: '12px 24px',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        background: 'var(--accent)',
-                        color: '#000',
-                        border: 'none',
-                        borderRadius: '8px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      OK
-                    </button>
-                  </div>
-                </div>
-              </Modal>
-            )}
-
-            {/* Confirm Modal */}
-            {confirmModal && (
-              <Modal
-                title="Confirm"
-                open={true}
-                onClose={confirmModal.onCancel}
-                width={400}
-                hideCloseButton={true}
-              >
-                <div style={{ padding: '24px', textAlign: 'center' }}>
-                  <p style={{ marginBottom: '24px', fontSize: '16px' }}>
-                    {confirmModal.message}
-                  </p>
-                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                    <button
-                      onClick={confirmModal.onConfirm}
-                      style={{
-                        padding: '12px 24px',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        background: 'var(--accent)',
-                        color: '#000',
-                        border: 'none',
-                        borderRadius: '8px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Yes
-                    </button>
-                    <button
-                      onClick={confirmModal.onCancel}
-                      style={{
-                        padding: '12px 24px',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        background: 'rgba(255, 255, 255, 0.1)',
-                        color: 'var(--text)',
-                        border: '1px solid rgba(255, 255, 255, 0.2)',
-                        borderRadius: '8px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </Modal>
-            )}
 
             {/* Home Options Modal */}
             <HomeOptionsModal
