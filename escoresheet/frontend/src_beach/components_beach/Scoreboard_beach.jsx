@@ -4,7 +4,7 @@ import { useAlert } from '../contexts_beach/AlertContext_beach'
 import { useLiveQuery } from 'dexie-react-hooks'
 import Dexie from 'dexie'
 import { db } from '../db_beach/db_beach'
-import Modal from './Modal_beach'
+import LegacyModal from './Modal_beach'
 
 import MenuList from './MenuList_beach'
 import SyncProgressModal_beach from './SyncProgressModal_beach'
@@ -40,6 +40,7 @@ import { ArrowLeftRight, Card, ChartColumn, ClipboardList, Copy, Download, FileT
 import { ChevronDown, ChevronUp, Ban, Expand, IdCard, KeyRound, ListChecks, Menu as MenuIcon, MessageSquareText, MonitorPlay, ScrollText, SlidersHorizontal, Users } from 'lucide-react'
 import { cn } from '../ui/volleyui/cn.js'
 import { FOCUS_RING } from '../ui/volleyui/Button.jsx'
+import { AppSpinner } from '../ui/volleyui/AppSpinner.jsx'
 
 // ── volleyui chrome for the scoring screen ───────────────────────────────────
 // Only the chrome around the court takes these: the toolbar, the side columns,
@@ -68,6 +69,11 @@ const SB_RALLY_UNDO = `${SB_RALLY_BASE} border-red-200 bg-white text-red-700 hov
 
 /** A label that some locales break with a soft "-\n" (de: "Verzögerungs-\nwarnung"), on one line. */
 const oneLine = (text) => String(text).replace(/-\n/g, '').replace(/\n/g, ' ')
+
+/** Every dialog of the scoring screen is the volleyui one (Modal_beach tone="light"). */
+function Modal(props) {
+  return <LegacyModal tone="light" {...props} />
+}
 
 /** Micro-label over a value (SET, rally status, last action). */
 const SB_EYEBROW = 'text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-500'
@@ -6981,48 +6987,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   }, [data, setTransitionLoading, onFinishSet])
 
   if (!data?.set || setTransitionLoading) {
-    const loadingStep = setTransitionLoading?.step || 'Loading...'
+    const loadingStep = setTransitionLoading?.step || t('common.loading', 'Loading…')
     return (
-      <div style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.85)',
-        zIndex: 9999,
-        gap: '24px'
-      }}>
-        {/* Spinner */}
-        <div style={{
-          width: '64px',
-          height: '64px',
-          border: '4px solid rgba(255, 255, 255, 0.1)',
-          borderTopColor: '#3498db',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite'
-        }} />
-
-        {/* Loading text */}
-        <div style={{
-          color: '#fff',
-          fontSize: '24px',
-          fontWeight: 600,
-          textAlign: 'center'
-        }}>
-          {loadingStep}
-        </div>
-
-        {/* CSS for spinner animation */}
-        <style>{`
-          @keyframes spin {
-            to { transform: rotate(360deg); }
-          }
-        `}</style>
+      <div className="ov-kit fixed inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-stone-50 to-stone-100 px-4" style={{ zIndex: 9999 }}>
+        <AppSpinner size={96} label={loadingStep} />
       </div>
     )
   }
@@ -7043,7 +7011,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         return (
           <div>
             <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px' }}>Recording Points</h3>
-            <div style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '20px', borderRadius: '8px' }}>
+            <div style={{ background: 'var(--ov-sunken)', padding: '20px', borderRadius: '8px' }}>
               <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '12px' }}>What happens when you record a point:</h4>
               <ul style={{ paddingLeft: '20px', lineHeight: '1.8' }}>
                 <li>The score updates automatically for the team that scored</li>
@@ -7065,7 +7033,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         return (
           <div>
             <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px' }}>Timeouts</h3>
-            <div style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '20px', borderRadius: '8px' }}>
+            <div style={{ background: 'var(--ov-sunken)', padding: '20px', borderRadius: '8px' }}>
               <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '12px' }}>What happens when you request a timeout:</h4>
               <ul style={{ paddingLeft: '20px', lineHeight: '1.8' }}>
                 <li>A 45-second countdown timer starts automatically</li>
@@ -7089,7 +7057,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         return (
           <div>
             <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px' }}>Sanctions</h3>
-            <div style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '20px', borderRadius: '8px' }}>
+            <div style={{ background: 'var(--ov-sunken)', padding: '20px', borderRadius: '8px' }}>
               <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '12px' }}>What happens when you record a sanction:</h4>
               <ul style={{ paddingLeft: '20px', lineHeight: '1.8' }}>
                 <li><strong>Warning (Yellow Card)</strong>: First offense, no point penalty</li>
@@ -7112,7 +7080,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         return (
           <div>
             <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px' }}>Ending a Set</h3>
-            <div style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '20px', borderRadius: '8px' }}>
+            <div style={{ background: 'var(--ov-sunken)', padding: '20px', borderRadius: '8px' }}>
               <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '12px' }}>What happens when you end a set:</h4>
               <ul style={{ paddingLeft: '20px', lineHeight: '1.8' }}>
                 <li>You'll be prompted to confirm the set end time</li>
@@ -7137,7 +7105,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         return (
           <div>
             <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px' }}>Match End</h3>
-            <div style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '20px', borderRadius: '8px' }}>
+            <div style={{ background: 'var(--ov-sunken)', padding: '20px', borderRadius: '8px' }}>
               <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '12px' }}>What happens when the match ends:</h4>
               <ul style={{ paddingLeft: '20px', lineHeight: '1.8' }}>
                 <li>The match status is automatically set to "final"</li>
@@ -7163,7 +7131,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         return (
           <div>
             <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px' }}>Undo Actions</h3>
-            <div style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '20px', borderRadius: '8px' }}>
+            <div style={{ background: 'var(--ov-sunken)', padding: '20px', borderRadius: '8px' }}>
               <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '12px' }}>What happens when you undo an action:</h4>
               <ul style={{ paddingLeft: '20px', lineHeight: '1.8' }}>
                 <li>The last action is reversed (point, substitution, timeout, etc.)</li>
@@ -7193,7 +7161,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         return (
           <div>
             <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px' }}>Set 3 (Tie-break)</h3>
-            <div style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '20px', borderRadius: '8px' }}>
+            <div style={{ background: 'var(--ov-sunken)', padding: '20px', borderRadius: '8px' }}>
               <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '12px' }}>What happens in Set 3:</h4>
               <ul style={{ paddingLeft: '20px', lineHeight: '1.8' }}>
                 <li>First team to 15 points wins (instead of 21)</li>
@@ -7675,7 +7643,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         >
           <div style={{ padding: '20px' }}>
             <div style={{
-              color: '#ef4444',
+              color: 'var(--ov-danger-text)',
               fontSize: '16px',
               fontWeight: 600,
               marginBottom: '12px'
@@ -7686,11 +7654,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               <div style={{
                 marginTop: '12px',
                 padding: '12px',
-                background: '#1e293b',
+                background: 'var(--ov-card)',
                 borderRadius: '6px',
                 fontFamily: 'monospace',
                 fontSize: '12px',
-                color: '#cbd5e1',
+                color: 'var(--ov-text-secondary)',
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-word',
                 maxHeight: '400px',
@@ -7704,8 +7672,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 onClick={() => setScoresheetErrorModal(null)}
                 style={{
                   padding: '8px 16px',
-                  background: 'var(--accent)',
-                  color: '#000',
+                  background: 'var(--ov-success)',
+                  color: '#fff',
                   border: 'none',
                   borderRadius: '6px',
                   cursor: 'pointer',
@@ -7813,7 +7781,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 </div>
 
                 {(data?.match?.officials && data.match.officials.length > 0) && (
-                  <div className="officials-section" style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                  <div className="officials-section" style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid var(--ov-hairline)' }}>
                     <h3 style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 600, color: 'var(--text)' }}>Match Officials</h3>
                     <table className="roster-table">
                       <thead>
@@ -10813,20 +10781,20 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           <div style={{ padding: '20px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                background: 'var(--ov-sunken)',
+                border: '1px solid var(--ov-hairline)',
                 borderRadius: '8px',
                 padding: '12px 16px',
                 cursor: 'pointer',
                 transition: 'all 0.2s'
               }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'
+                  e.currentTarget.style.background = 'var(--ov-sunken-strong)'
+                  e.currentTarget.style.borderColor = 'var(--ov-hairline-strong)'
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
+                  e.currentTarget.style.background = 'var(--ov-sunken)'
+                  e.currentTarget.style.borderColor = 'var(--ov-hairline)'
                 }}
                 onClick={() => {
                   setShowLogs(true)
@@ -10835,20 +10803,20 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 {t('scoreboard.menu.showActionLog', 'Show Action Log')}
               </div>
               <div style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                background: 'var(--ov-sunken)',
+                border: '1px solid var(--ov-hairline)',
                 borderRadius: '8px',
                 padding: '12px 16px',
                 cursor: 'pointer',
                 transition: 'all 0.2s'
               }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'
+                  e.currentTarget.style.background = 'var(--ov-sunken-strong)'
+                  e.currentTarget.style.borderColor = 'var(--ov-hairline-strong)'
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
+                  e.currentTarget.style.background = 'var(--ov-sunken)'
+                  e.currentTarget.style.borderColor = 'var(--ov-hairline)'
                 }}
                 onClick={() => {
                   setShowSanctions(true)
@@ -10857,20 +10825,20 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 {t('scoreboard.menu.showSanctionsResults', 'Show Sanctions and Results')}
               </div>
               <div style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                background: 'var(--ov-sunken)',
+                border: '1px solid var(--ov-hairline)',
                 borderRadius: '8px',
                 padding: '12px 16px',
                 cursor: 'pointer',
                 transition: 'all 0.2s'
               }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'
+                  e.currentTarget.style.background = 'var(--ov-sunken-strong)'
+                  e.currentTarget.style.borderColor = 'var(--ov-hairline-strong)'
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
+                  e.currentTarget.style.background = 'var(--ov-sunken)'
+                  e.currentTarget.style.borderColor = 'var(--ov-hairline)'
                 }}
                 onClick={() => {
                   setShowManualPanel(true)
@@ -10879,20 +10847,20 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 {t('scoreboard.menu.manualChanges', 'Manual Changes')}
               </div>
               <div style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                background: 'var(--ov-sunken)',
+                border: '1px solid var(--ov-hairline)',
                 borderRadius: '8px',
                 padding: '12px 16px',
                 cursor: 'pointer',
                 transition: 'all 0.2s'
               }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'
+                  e.currentTarget.style.background = 'var(--ov-sunken-strong)'
+                  e.currentTarget.style.borderColor = 'var(--ov-hairline-strong)'
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
+                  e.currentTarget.style.background = 'var(--ov-sunken)'
+                  e.currentTarget.style.borderColor = 'var(--ov-hairline)'
                 }}
                 onClick={() => {
                   setShowRemarks(true)
@@ -10901,20 +10869,20 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 {t('scoreboard.menu.openRemarksRecording', 'Open Remarks Recording')}
               </div>
               <div style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                background: 'var(--ov-sunken)',
+                border: '1px solid var(--ov-hairline)',
                 borderRadius: '8px',
                 padding: '12px 16px',
                 cursor: 'pointer',
                 transition: 'all 0.2s'
               }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'
+                  e.currentTarget.style.background = 'var(--ov-sunken-strong)'
+                  e.currentTarget.style.borderColor = 'var(--ov-hairline-strong)'
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
+                  e.currentTarget.style.background = 'var(--ov-sunken)'
+                  e.currentTarget.style.borderColor = 'var(--ov-hairline)'
                 }}
                 onClick={() => {
                   setShowRosters(true)
@@ -10923,20 +10891,20 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 {t('scoreboard.showRosters')}
               </div>
               <div style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                background: 'var(--ov-sunken)',
+                border: '1px solid var(--ov-hairline)',
                 borderRadius: '8px',
                 padding: '12px 16px',
                 cursor: 'pointer',
                 transition: 'all 0.2s'
               }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'
+                  e.currentTarget.style.background = 'var(--ov-sunken-strong)'
+                  e.currentTarget.style.borderColor = 'var(--ov-hairline-strong)'
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
+                  e.currentTarget.style.background = 'var(--ov-sunken)'
+                  e.currentTarget.style.borderColor = 'var(--ov-hairline)'
                 }}
                 onClick={() => {
                   setShowPinsModal(true)
@@ -10946,20 +10914,20 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               </div>
               {onOpenMatchSetup && (
                 <div style={{
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  background: 'var(--ov-sunken)',
+                  border: '1px solid var(--ov-hairline)',
                   borderRadius: '8px',
                   padding: '12px 16px',
                   cursor: 'pointer',
                   transition: 'all 0.2s'
                 }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'
+                    e.currentTarget.style.background = 'var(--ov-sunken-strong)'
+                    e.currentTarget.style.borderColor = 'var(--ov-hairline-strong)'
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
+                    e.currentTarget.style.background = 'var(--ov-sunken)'
+                    e.currentTarget.style.borderColor = 'var(--ov-hairline)'
                   }}
                   onClick={() => {
                     onOpenMatchSetup()
@@ -10970,22 +10938,22 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               )}
 
               <div style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                background: 'var(--ov-sunken)',
+                border: '1px solid var(--ov-hairline)',
                 borderRadius: '8px',
                 padding: '12px 16px',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
                 marginTop: '8px',
-                borderTop: '1px solid rgba(255,255,255,0.1)'
+                borderTop: '1px solid var(--ov-hairline)'
               }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'
+                  e.currentTarget.style.background = 'var(--ov-sunken-strong)'
+                  e.currentTarget.style.borderColor = 'var(--ov-hairline-strong)'
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
+                  e.currentTarget.style.background = 'var(--ov-sunken)'
+                  e.currentTarget.style.borderColor = 'var(--ov-hairline)'
                 }}
                 onClick={async () => {
                   try {
@@ -11031,22 +10999,22 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 <Download /> {t('scoreboard.menu.downloadGameData', 'Download Game Data (JSON)')}
               </div>
               <div style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                background: 'var(--ov-sunken)',
+                border: '1px solid var(--ov-hairline)',
                 borderRadius: '8px',
                 padding: '12px 16px',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
                 marginTop: '8px',
-                borderTop: '1px solid rgba(255,255,255,0.1)'
+                borderTop: '1px solid var(--ov-hairline)'
               }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'
+                  e.currentTarget.style.background = 'var(--ov-sunken-strong)'
+                  e.currentTarget.style.borderColor = 'var(--ov-hairline-strong)'
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
+                  e.currentTarget.style.background = 'var(--ov-sunken)'
+                  e.currentTarget.style.borderColor = 'var(--ov-hairline)'
                 }}
                 onClick={() => {
                   setShowOptionsInMenu(true)
@@ -11076,8 +11044,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   width: '100%'
                 }}>
                   <div style={{
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    background: 'var(--ov-sunken)',
+                    border: '1px solid var(--ov-hairline)',
                     borderRadius: '8px',
                     padding: '16px',
                     flex: 1,
@@ -11103,8 +11071,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   width: '100%'
                 }}>
                   <div style={{
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    background: 'var(--ov-sunken)',
+                    border: '1px solid var(--ov-hairline)',
                     borderRadius: '8px',
                     padding: '16px',
                     flex: 1,
@@ -11132,8 +11100,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   }}>
                     {(data?.match?.team1Pin ?? data?.match?.team1TeamPin) && data?.match?.team1TeamConnectionEnabled === true && (
                       <div style={{
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        background: 'var(--ov-sunken)',
+                        border: '1px solid var(--ov-hairline)',
                         borderRadius: '8px',
                         padding: '16px',
                         flex: 1,
@@ -11154,8 +11122,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
                     {(data?.match?.team2Pin ?? data?.match?.team2TeamPin) && data?.match?.team2TeamConnectionEnabled === true && (
                       <div style={{
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        background: 'var(--ov-sunken)',
+                        border: '1px solid var(--ov-hairline)',
                         borderRadius: '8px',
                         padding: '16px',
                         flex: 1,
@@ -11272,21 +11240,21 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       key={topic.id}
                       onClick={() => setSelectedHelpTopic(topic.id)}
                       style={{
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        background: 'var(--ov-sunken)',
+                        border: '1px solid var(--ov-hairline)',
                         borderRadius: '8px',
                         padding: '16px',
                         cursor: 'pointer',
                         transition: 'all 0.2s'
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'
+                        e.currentTarget.style.background = 'var(--ov-sunken-strong)'
+                        e.currentTarget.style.borderColor = 'var(--ov-hairline-strong)'
                         e.currentTarget.style.transform = 'translateY(-2px)'
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
-                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
+                        e.currentTarget.style.background = 'var(--ov-sunken)'
+                        e.currentTarget.style.borderColor = 'var(--ov-hairline)'
                         e.currentTarget.style.transform = 'translateY(0)'
                       }}
                     >
@@ -11307,9 +11275,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   style={{
                     marginBottom: '20px',
                     padding: '8px 16px',
-                    background: 'rgba(255, 255, 255, 0.1)',
+                    background: 'var(--ov-sunken-strong)',
                     color: 'var(--text)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    border: '1px solid var(--ov-hairline-strong)',
                     borderRadius: '6px',
                     cursor: 'pointer',
                     fontSize: '14px'
@@ -11342,8 +11310,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 style={{
                   padding: '8px 12px',
                   fontSize: '14px',
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  background: 'var(--ov-sunken-strong)',
+                  border: '1px solid var(--ov-hairline-strong)',
                   borderRadius: '6px',
                   color: 'var(--text)',
                   width: '100%'
@@ -11619,8 +11587,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   }}>
                     <thead>
                       <tr style={{
-                        borderBottom: '2px solid rgba(255,255,255,0.2)',
-                        background: 'rgba(255,255,255,0.05)'
+                        borderBottom: '2px solid var(--ov-hairline-strong)',
+                        background: 'var(--ov-sunken)'
                       }}>
                         <th style={{ padding: '10px 8px', textAlign: 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>ID</th>
                         <th style={{ padding: '10px 8px', textAlign: 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>Time</th>
@@ -11663,11 +11631,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               <tr
                                 key={event.id}
                                 style={{
-                                  borderBottom: '1px solid rgba(255,255,255,0.1)',
+                                  borderBottom: '1px solid var(--ov-hairline)',
                                   transition: 'background 0.2s'
                                 }}
                                 onMouseEnter={(e) => {
-                                  e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                                  e.currentTarget.style.background = 'var(--ov-sunken)'
                                 }}
                                 onMouseLeave={(e) => {
                                   e.currentTarget.style.background = 'transparent'
@@ -11722,9 +11690,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             {/* Collapsible Section: Current Set */}
             <div style={{
               marginBottom: '12px',
-              background: 'rgba(255,255,255,0.03)',
+              background: 'var(--ov-sunken)',
               borderRadius: '12px',
-              border: '1px solid rgba(255,255,255,0.08)',
+              border: '1px solid var(--ov-hairline)',
               overflow: 'hidden'
             }}>
               <button
@@ -11794,7 +11762,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             flexDirection: 'column',
                             gap: '12px',
                             paddingBottom: '16px',
-                            borderBottom: '1px solid rgba(255,255,255,0.08)'
+                            borderBottom: '1px solid var(--ov-hairline)'
                           }}
                         >
                           <div style={{ fontWeight: 600, marginBottom: '4px' }}>Teams Setup</div>
@@ -11809,9 +11777,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             justifyContent: 'center',
                             gap: '8px',
                             padding: '16px',
-                            background: 'rgba(255,255,255,0.03)',
+                            background: 'var(--ov-sunken)',
                             borderRadius: '12px',
-                            border: '1px solid rgba(255,255,255,0.08)'
+                            border: '1px solid var(--ov-hairline)'
                           }}>
                             {/* Left Team */}
                             <div style={{
@@ -11836,7 +11804,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             <div style={{
                               width: '4px',
                               height: '60px',
-                              background: 'rgba(255,255,255,0.3)',
+                              background: 'var(--ov-hairline)',
                               borderRadius: '2px'
                             }} />
 
@@ -12130,7 +12098,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               flexDirection: 'column',
                               gap: '8px',
                               paddingTop: '16px',
-                              borderTop: '1px solid rgba(255,255,255,0.08)'
+                              borderTop: '1px solid var(--ov-hairline)'
                             }}
                           >
                             <div style={{ fontWeight: 600, marginBottom: '8px' }}>{t('scoreboard.edit.editCurrentSetScore')}</div>
@@ -12169,7 +12137,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     padding: '6px 8px',
                                     fontSize: '14px',
                                     background: 'var(--bg-secondary)',
-                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    border: '1px solid var(--ov-hairline-strong)',
                                     borderRadius: '4px',
                                     color: 'var(--text)'
                                   }}
@@ -12206,7 +12174,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     padding: '6px 8px',
                                     fontSize: '14px',
                                     background: 'var(--bg-secondary)',
-                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    border: '1px solid var(--ov-hairline-strong)',
                                     borderRadius: '4px',
                                     color: 'var(--text)'
                                   }}
@@ -12225,9 +12193,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             {/* Collapsible Section: Score & Sets */}
             <div style={{
               marginBottom: '12px',
-              background: 'rgba(255,255,255,0.03)',
+              background: 'var(--ov-sunken)',
               borderRadius: '12px',
-              border: '1px solid rgba(255,255,255,0.08)',
+              border: '1px solid var(--ov-hairline)',
               overflow: 'hidden'
             }}>
               <button
@@ -12306,7 +12274,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           flexDirection: 'column',
                           gap: '8px',
                           paddingTop: '16px',
-                          borderTop: '1px solid rgba(255,255,255,0.08)'
+                          borderTop: '1px solid var(--ov-hairline)'
                         }}
                       >
                         <div style={{ fontWeight: 600, marginBottom: '8px' }}>{t('scoreboard.edit.editAllSets')}</div>
@@ -12320,7 +12288,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               alignItems: 'center',
                               gap: '12px',
                               padding: '8px',
-                              background: 'rgba(255,255,255,0.03)',
+                              background: 'var(--ov-sunken)',
                               borderRadius: '6px'
                             }}>
                               <div style={{ fontWeight: 600, minWidth: '60px' }}>{t('scoreboard.edit.setNumber', { number: set.index })}</div>
@@ -12346,7 +12314,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     padding: '4px 6px',
                                     fontSize: '12px',
                                     background: 'var(--bg-secondary)',
-                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    border: '1px solid var(--ov-hairline-strong)',
                                     borderRadius: '4px',
                                     color: 'var(--text)'
                                   }}
@@ -12374,7 +12342,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     padding: '4px 6px',
                                     fontSize: '12px',
                                     background: 'var(--bg-secondary)',
-                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    border: '1px solid var(--ov-hairline-strong)',
                                     borderRadius: '4px',
                                     color: 'var(--text)'
                                   }}
@@ -12414,9 +12382,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             {/* Collapsible Section: Match Settings */}
             <div style={{
               marginBottom: '12px',
-              background: 'rgba(255,255,255,0.03)',
+              background: 'var(--ov-sunken)',
               borderRadius: '12px',
-              border: '1px solid rgba(255,255,255,0.08)',
+              border: '1px solid var(--ov-hairline)',
               overflow: 'hidden'
             }}>
               <button
@@ -12455,7 +12423,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         flexDirection: 'column',
                         gap: '8px',
                         paddingTop: '16px',
-                        borderTop: '1px solid rgba(255,255,255,0.08)'
+                        borderTop: '1px solid var(--ov-hairline)'
                       }}
                     >
                       <div style={{ fontWeight: 600, marginBottom: '8px' }}>{t('scoreboard.edit.editMatchInfo')}</div>
@@ -12487,16 +12455,16 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               flex: 1,
                               padding: '6px 8px',
                               fontSize: '12px',
-                              background: '#1e293b',
-                              border: '1px solid rgba(255,255,255,0.2)',
+                              background: 'var(--ov-card)',
+                              border: '1px solid var(--ov-hairline-strong)',
                               borderRadius: '4px',
                               color: 'var(--text)'
                             }}
                           >
-                            <option value="setup" style={{ background: '#1e293b', color: 'var(--text)' }}>{t('scoreboard.edit.setup')}</option>
-                            <option value="live" style={{ background: '#1e293b', color: 'var(--text)' }}>{t('scoreboard.edit.live')}</option>
-                            <option value="final" style={{ background: '#1e293b', color: 'var(--text)' }}>{t('scoreboard.edit.final')}</option>
-                            <option value="paused" style={{ background: '#1e293b', color: 'var(--text)' }}>{t('scoreboard.edit.paused')}</option>
+                            <option value="setup" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>{t('scoreboard.edit.setup')}</option>
+                            <option value="live" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>{t('scoreboard.edit.live')}</option>
+                            <option value="final" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>{t('scoreboard.edit.final')}</option>
+                            <option value="paused" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>{t('scoreboard.edit.paused')}</option>
                           </select>
                         </div>
                         {data?.set?.index === 3 && (
@@ -12511,14 +12479,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 flex: 1,
                                 padding: '6px 8px',
                                 fontSize: '12px',
-                                background: '#1e293b',
-                                border: '1px solid rgba(255,255,255,0.2)',
+                                background: 'var(--ov-card)',
+                                border: '1px solid var(--ov-hairline-strong)',
                                 borderRadius: '4px',
                                 color: 'var(--text)'
                               }}
                             >
-                              <option value="A" style={{ background: '#1e293b', color: 'var(--text)' }}>{t('scoreboard.edit.teamA')}</option>
-                              <option value="B" style={{ background: '#1e293b', color: 'var(--text)' }}>{t('scoreboard.edit.teamB')}</option>
+                              <option value="A" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>{t('scoreboard.edit.teamA')}</option>
+                              <option value="B" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>{t('scoreboard.edit.teamB')}</option>
                             </select>
                           </div>
                         )}
@@ -12534,9 +12502,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             {/* Collapsible Section: Event History */}
             <div style={{
               marginBottom: '12px',
-              background: 'rgba(255,255,255,0.03)',
+              background: 'var(--ov-sunken)',
               borderRadius: '12px',
-              border: '1px solid rgba(255,255,255,0.08)',
+              border: '1px solid var(--ov-hairline)',
               overflow: 'hidden'
             }}>
               <button
@@ -12577,7 +12545,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           flexDirection: 'column',
                           gap: '8px',
                           paddingBottom: '16px',
-                          borderBottom: '1px solid rgba(255,255,255,0.08)'
+                          borderBottom: '1px solid var(--ov-hairline)'
                         }}
                       >
                         <div style={{ fontWeight: 600, marginBottom: '8px' }}>Edit Points ({pointEvents.length} most recent)</div>
@@ -12615,7 +12583,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 alignItems: 'center',
                                 gap: '8px',
                                 padding: '8px',
-                                background: 'rgba(255,255,255,0.03)',
+                                background: 'var(--ov-sunken)',
                                 borderRadius: '4px',
                                 fontSize: '11px'
                               }}>
@@ -12630,15 +12598,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   style={{
                                     padding: '4px 6px',
                                     fontSize: '11px',
-                                    background: '#1e293b',
-                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    background: 'var(--ov-card)',
+                                    border: '1px solid var(--ov-hairline-strong)',
                                     borderRadius: '4px',
                                     color: 'var(--text)',
                                     minWidth: '80px'
                                   }}
                                 >
-                                  <option value="team1" style={{ background: '#1e293b', color: 'var(--text)' }}>Team 1</option>
-                                  <option value="team2" style={{ background: '#1e293b', color: 'var(--text)' }}>Team 2</option>
+                                  <option value="team1" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>Team 1</option>
+                                  <option value="team2" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>Team 2</option>
                                 </select>
                                 <span style={{ minWidth: '50px' }}>Score: {team1Score}-{team2Score}</span>
                                 <button
@@ -12677,7 +12645,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           flexDirection: 'column',
                           gap: '8px',
                           paddingTop: '16px',
-                          borderTop: '1px solid rgba(255,255,255,0.08)'
+                          borderTop: '1px solid var(--ov-hairline)'
                         }}
                       >
                         <div style={{ fontWeight: 600, marginBottom: '8px' }}>Edit Timeouts ({timeoutEvents.length} most recent)</div>
@@ -12715,7 +12683,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 alignItems: 'center',
                                 gap: '8px',
                                 padding: '8px',
-                                background: 'rgba(255,255,255,0.03)',
+                                background: 'var(--ov-sunken)',
                                 borderRadius: '4px',
                                 fontSize: '11px',
                                 flexWrap: 'wrap'
@@ -12731,15 +12699,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   style={{
                                     padding: '4px 6px',
                                     fontSize: '11px',
-                                    background: '#1e293b',
-                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    background: 'var(--ov-card)',
+                                    border: '1px solid var(--ov-hairline-strong)',
                                     borderRadius: '4px',
                                     color: 'var(--text)',
                                     minWidth: '70px'
                                   }}
                                 >
-                                  <option value="team1" style={{ background: '#1e293b', color: '#fff' }}>Team 1</option>
-                                  <option value="team2" style={{ background: '#1e293b', color: '#fff' }}>Team 2</option>
+                                  <option value="team1" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>Team 1</option>
+                                  <option value="team2" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>Team 2</option>
                                 </select>
                                 <span style={{ fontSize: '10px', color: 'var(--muted)' }}>{team1Score}-{team2Score}</span>
                                 <button
@@ -12778,7 +12746,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           flexDirection: 'column',
                           gap: '8px',
                           paddingTop: '16px',
-                          borderTop: '1px solid rgba(255,255,255,0.08)'
+                          borderTop: '1px solid var(--ov-hairline)'
                         }}
                       >
                         <div style={{ fontWeight: 600, marginBottom: '8px' }}>Edit Substitutions ({substitutionEvents.length} most recent)</div>
@@ -12819,7 +12787,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 alignItems: 'center',
                                 gap: '8px',
                                 padding: '8px',
-                                background: 'rgba(255,255,255,0.03)',
+                                background: 'var(--ov-sunken)',
                                 borderRadius: '4px',
                                 fontSize: '11px',
                                 flexWrap: 'wrap'
@@ -12835,15 +12803,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   style={{
                                     padding: '4px 6px',
                                     fontSize: '11px',
-                                    background: '#1e293b',
-                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    background: 'var(--ov-card)',
+                                    border: '1px solid var(--ov-hairline-strong)',
                                     borderRadius: '4px',
                                     color: 'var(--text)',
                                     minWidth: '70px'
                                   }}
                                 >
-                                  <option value="team1" style={{ background: '#1e293b', color: '#fff' }}>Team 1</option>
-                                  <option value="team2" style={{ background: '#1e293b', color: '#fff' }}>Team 2</option>
+                                  <option value="team1" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>Team 1</option>
+                                  <option value="team2" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>Team 2</option>
                                 </select>
                                 <span style={{ fontSize: '10px', color: 'var(--muted)' }}>{team1Score}-{team2Score}</span>
                                 <select
@@ -12856,15 +12824,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   style={{
                                     padding: '4px 6px',
                                     fontSize: '11px',
-                                    background: '#1e293b',
-                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    background: 'var(--ov-card)',
+                                    border: '1px solid var(--ov-hairline-strong)',
                                     borderRadius: '4px',
                                     color: 'var(--text)',
                                     width: '45px'
                                   }}
                                 >
                                   {['I', 'II', 'III', 'IV', 'V', 'VI'].map(pos => (
-                                    <option key={pos} value={pos} style={{ background: '#1e293b', color: '#fff' }}>{pos}</option>
+                                    <option key={pos} value={pos} style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>{pos}</option>
                                   ))}
                                 </select>
                                 <span style={{ fontSize: '10px' }}>Out:</span>
@@ -12883,8 +12851,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     width: '40px',
                                     padding: '4px',
                                     fontSize: '11px',
-                                    background: '#1e293b',
-                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    background: 'var(--ov-card)',
+                                    border: '1px solid var(--ov-hairline-strong)',
                                     borderRadius: '4px',
                                     color: 'var(--text)'
                                   }}
@@ -12905,8 +12873,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     width: '40px',
                                     padding: '4px',
                                     fontSize: '11px',
-                                    background: '#1e293b',
-                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    background: 'var(--ov-card)',
+                                    border: '1px solid var(--ov-hairline-strong)',
                                     borderRadius: '4px',
                                     color: 'var(--text)'
                                   }}
@@ -13048,7 +13016,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           flexDirection: 'column',
                           gap: '8px',
                           paddingTop: '16px',
-                          borderTop: '1px solid rgba(255,255,255,0.08)'
+                          borderTop: '1px solid var(--ov-hairline)'
                         }}
                       >
                         <div style={{ fontWeight: 600, marginBottom: '8px' }}>Edit Sanctions ({sanctionEvents.length} most recent)</div>
@@ -13090,7 +13058,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 alignItems: 'center',
                                 gap: '8px',
                                 padding: '8px',
-                                background: 'rgba(255,255,255,0.03)',
+                                background: 'var(--ov-sunken)',
                                 borderRadius: '4px',
                                 fontSize: '11px',
                                 flexWrap: 'wrap'
@@ -13106,15 +13074,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   style={{
                                     padding: '4px 6px',
                                     fontSize: '11px',
-                                    background: '#1e293b',
-                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    background: 'var(--ov-card)',
+                                    border: '1px solid var(--ov-hairline-strong)',
                                     borderRadius: '4px',
                                     color: 'var(--text)',
                                     minWidth: '70px'
                                   }}
                                 >
-                                  <option value="team1" style={{ background: '#1e293b', color: '#fff' }}>Team 1</option>
-                                  <option value="team2" style={{ background: '#1e293b', color: '#fff' }}>Team 2</option>
+                                  <option value="team1" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>Team 1</option>
+                                  <option value="team2" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>Team 2</option>
                                 </select>
                                 <select
                                   value={sanctionType || 'warning'}
@@ -13126,20 +13094,20 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   style={{
                                     padding: '4px 6px',
                                     fontSize: '11px',
-                                    background: '#1e293b',
-                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    background: 'var(--ov-card)',
+                                    border: '1px solid var(--ov-hairline-strong)',
                                     borderRadius: '4px',
                                     color: 'var(--text)',
                                     minWidth: '90px'
                                   }}
                                 >
-                                  <option value="warning" style={{ background: '#1e293b', color: '#fff' }}>Warning</option>
-                                  <option value="penalty" style={{ background: '#1e293b', color: '#fff' }}>Penalty</option>
-                                  <option value="expulsion" style={{ background: '#1e293b', color: '#fff' }}>Expulsion</option>
-                                  <option value="disqualification" style={{ background: '#1e293b', color: '#fff' }}>Disqualif.</option>
-                                  <option value="improper_request" style={{ background: '#1e293b', color: '#fff' }}>Improper Req</option>
-                                  <option value="delay_warning" style={{ background: '#1e293b', color: '#fff' }}>Delay Warn</option>
-                                  <option value="delay_penalty" style={{ background: '#1e293b', color: '#fff' }}>Delay Pen</option>
+                                  <option value="warning" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>Warning</option>
+                                  <option value="penalty" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>Penalty</option>
+                                  <option value="expulsion" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>Expulsion</option>
+                                  <option value="disqualification" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>Disqualif.</option>
+                                  <option value="improper_request" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>Improper Req</option>
+                                  <option value="delay_warning" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>Delay Warn</option>
+                                  <option value="delay_penalty" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>Delay Pen</option>
                                 </select>
                                 <span style={{ fontSize: '10px', color: 'var(--muted)' }}>{team1Score}-{team2Score}</span>
                                 {playerNumber !== undefined && playerNumber !== null && (
@@ -13160,8 +13128,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                         width: '40px',
                                         padding: '4px',
                                         fontSize: '11px',
-                                        background: '#1e293b',
-                                        border: '1px solid rgba(255,255,255,0.2)',
+                                        background: 'var(--ov-card)',
+                                        border: '1px solid var(--ov-hairline-strong)',
                                         borderRadius: '4px',
                                         color: 'var(--text)'
                                       }}
@@ -13179,15 +13147,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     style={{
                                       padding: '4px',
                                       fontSize: '11px',
-                                      background: '#1e293b',
-                                      border: '1px solid rgba(255,255,255,0.2)',
+                                      background: 'var(--ov-card)',
+                                      border: '1px solid var(--ov-hairline-strong)',
                                       borderRadius: '4px',
                                       color: 'var(--text)',
                                       width: '45px'
                                     }}
                                   >
                                     {['I', 'II', 'III', 'IV', 'V', 'VI'].map(pos => (
-                                      <option key={pos} value={pos} style={{ background: '#1e293b', color: '#fff' }}>{pos}</option>
+                                      <option key={pos} value={pos} style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>{pos}</option>
                                     ))}
                                   </select>
                                 )}
@@ -13221,9 +13189,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             {/* Collapsible Section: Advanced */}
             <div style={{
               marginBottom: '12px',
-              background: 'rgba(255,255,255,0.03)',
+              background: 'var(--ov-sunken)',
               borderRadius: '12px',
-              border: '1px solid rgba(255,255,255,0.08)',
+              border: '1px solid var(--ov-hairline)',
               overflow: 'hidden'
             }}>
               <button
@@ -13260,7 +13228,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         flexDirection: 'column',
                         gap: '8px',
                         paddingBottom: '16px',
-                        borderBottom: '1px solid rgba(255,255,255,0.08)'
+                        borderBottom: '1px solid var(--ov-hairline)'
                       }}
                     >
                       <div style={{ fontWeight: 600, marginBottom: '8px' }}>Edit Set Times</div>
@@ -13274,7 +13242,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             flexDirection: 'column',
                             gap: '8px',
                             padding: '8px',
-                            background: 'rgba(255,255,255,0.03)',
+                            background: 'var(--ov-sunken)',
                             borderRadius: '6px'
                           }}>
                             <div style={{ fontWeight: 600, fontSize: '12px' }}>Set {set.index}</div>
@@ -13302,7 +13270,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     padding: '4px 6px',
                                     fontSize: '11px',
                                     background: 'var(--bg-secondary)',
-                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    border: '1px solid var(--ov-hairline-strong)',
                                     borderRadius: '4px',
                                     color: 'var(--text)'
                                   }}
@@ -13331,7 +13299,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     padding: '4px 6px',
                                     fontSize: '11px',
                                     background: 'var(--bg-secondary)',
-                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    border: '1px solid var(--ov-hairline-strong)',
                                     borderRadius: '4px',
                                     color: 'var(--text)'
                                   }}
@@ -13352,7 +13320,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       flexDirection: 'column',
                       gap: '8px',
                       paddingTop: '16px',
-                      borderTop: '1px solid rgba(255,255,255,0.08)'
+                      borderTop: '1px solid var(--ov-hairline)'
                     }}
                   >
                     <div style={{ fontWeight: 600, marginBottom: '8px' }}>Add New Event</div>
@@ -13368,21 +13336,21 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             flex: 1,
                             padding: '6px 8px',
                             fontSize: '12px',
-                            background: '#1e293b',
-                            border: '1px solid rgba(255,255,255,0.2)',
+                            background: 'var(--ov-card)',
+                            border: '1px solid var(--ov-hairline-strong)',
                             borderRadius: '4px',
                             color: 'var(--text)'
                           }}
                         >
-                          <option value="point" style={{ background: '#1e293b', color: 'var(--text)' }}>Point</option>
-                          <option value="timeout" style={{ background: '#1e293b', color: 'var(--text)' }}>Timeout</option>
-                          <option value="substitution" style={{ background: '#1e293b', color: 'var(--text)' }}>Substitution</option>
-                          <option value="sanction" style={{ background: '#1e293b', color: 'var(--text)' }}>Sanction</option>
-                          <option value="lineup" style={{ background: '#1e293b', color: 'var(--text)' }}>Lineup</option>
-                          <option value="replay" style={{ background: '#1e293b', color: 'var(--text)' }}>Replay</option>
-                          <option value="rally_start" style={{ background: '#1e293b', color: 'var(--text)' }}>Rally Start</option>
-                          <option value="set_start" style={{ background: '#1e293b', color: 'var(--text)' }}>Set Start</option>
-                          <option value="set_end" style={{ background: '#1e293b', color: 'var(--text)' }}>Set End</option>
+                          <option value="point" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>Point</option>
+                          <option value="timeout" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>Timeout</option>
+                          <option value="substitution" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>Substitution</option>
+                          <option value="sanction" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>Sanction</option>
+                          <option value="lineup" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>Lineup</option>
+                          <option value="replay" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>Replay</option>
+                          <option value="rally_start" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>Rally Start</option>
+                          <option value="set_start" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>Set Start</option>
+                          <option value="set_end" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>Set End</option>
                         </select>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -13393,14 +13361,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             flex: 1,
                             padding: '6px 8px',
                             fontSize: '12px',
-                            background: '#1e293b',
-                            border: '1px solid rgba(255,255,255,0.2)',
+                            background: 'var(--ov-card)',
+                            border: '1px solid var(--ov-hairline-strong)',
                             borderRadius: '4px',
                             color: 'var(--text)'
                           }}
                         >
                           {data?.sets?.sort((a, b) => a.index - b.index).map(set => (
-                            <option key={set.id} value={set.index} style={{ background: '#1e293b', color: 'var(--text)' }}>Set {set.index}</option>
+                            <option key={set.id} value={set.index} style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>Set {set.index}</option>
                           ))}
                         </select>
                       </div>
@@ -13412,14 +13380,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             flex: 1,
                             padding: '6px 8px',
                             fontSize: '12px',
-                            background: '#1e293b',
-                            border: '1px solid rgba(255,255,255,0.2)',
+                            background: 'var(--ov-card)',
+                            border: '1px solid var(--ov-hairline-strong)',
                             borderRadius: '4px',
                             color: 'var(--text)'
                           }}
                         >
-                          <option value="team1" style={{ background: '#1e293b', color: 'var(--text)' }}>Team 1</option>
-                          <option value="team2" style={{ background: '#1e293b', color: 'var(--text)' }}>Team 2</option>
+                          <option value="team1" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>Team 1</option>
+                          <option value="team2" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>Team 2</option>
                         </select>
                       </div>
                       <button
@@ -13483,7 +13451,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         flexDirection: 'column',
                         gap: '8px',
                         paddingTop: '16px',
-                        borderTop: '1px solid rgba(255,255,255,0.08)'
+                        borderTop: '1px solid var(--ov-hairline)'
                       }}
                     >
                       <div style={{ fontWeight: 600, marginBottom: '8px' }}>{t('scoreboard.confirm.deleteEventsQuick')}</div>
@@ -13522,7 +13490,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 alignItems: 'center',
                                 justifyContent: 'space-between',
                                 padding: '6px 8px',
-                                background: 'rgba(255,255,255,0.03)',
+                                background: 'var(--ov-sunken)',
                                 borderRadius: '4px',
                                 fontSize: '11px'
                               }}>
@@ -13556,9 +13524,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             {/* Collapsible Section: Manual Changes Summary */}
             <div style={{
               marginBottom: '12px',
-              background: 'rgba(255,255,255,0.03)',
+              background: 'var(--ov-sunken)',
               borderRadius: '12px',
-              border: '1px solid rgba(255,255,255,0.08)',
+              border: '1px solid var(--ov-hairline)',
               overflow: 'hidden'
             }}>
               <button
@@ -13582,7 +13550,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   Manual Changes Summary
                   {manualChangesLog.length > 0 && (
                     <span style={{
-                      background: 'var(--primary)',
+                      background: 'var(--ov-selected)',
                       color: '#fff',
                       fontSize: '11px',
                       padding: '2px 8px',
@@ -13629,9 +13597,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           return (
                             <div key={idx} style={{
                               padding: '10px 12px',
-                              background: 'rgba(255,255,255,0.03)',
+                              background: 'var(--ov-sunken)',
                               borderRadius: '6px',
-                              border: '1px solid rgba(255,255,255,0.06)',
+                              border: '1px solid var(--ov-hairline)',
                               fontSize: '12px'
                             }}>
                               <div style={{
@@ -13682,7 +13650,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       <div style={{
                         marginTop: '8px',
                         paddingTop: '12px',
-                        borderTop: '1px solid rgba(255,255,255,0.08)'
+                        borderTop: '1px solid var(--ov-hairline)'
                       }}>
                         <button
                           className="secondary"
@@ -13774,7 +13742,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   fontSize: '14px',
                   fontFamily: 'monospace',
                   background: 'var(--bg-secondary)',
-                  border: '1px solid rgba(255,255,255,0.2)',
+                  border: '1px solid var(--ov-hairline-strong)',
                   borderRadius: '6px',
                   color: 'var(--text)',
                   resize: 'vertical'
@@ -13937,7 +13905,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   setStopMatchConfirm(null)
                   setShowRemarks(true) // Open the existing remarks modal
                 }}
-                style={{ background: '#ef4444', color: '#fff', border: 'none' }}
+                style={{ background: 'var(--ov-danger)', color: '#fff', border: 'none' }}
               >
                 {t('scoreboard.stopMatch.continueToRemarks', 'Continue to Remarks')}
               </button>
@@ -13970,7 +13938,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               </button>
               <button
                 onClick={completeStopMatchFlow}
-                style={{ background: '#ef4444', color: '#fff', border: 'none' }}
+                style={{ background: 'var(--ov-danger)', color: '#fff', border: 'none' }}
               >
                 {t('scoreboard.stopMatch.endMatch', 'End Match')}
               </button>
@@ -14007,7 +13975,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             width: '28px',
                             height: '28px',
                             borderRadius: '50%',
-                            border: '2px solid rgba(255,255,255,0.3)',
+                            border: '2px solid var(--ov-hairline-strong)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -14024,7 +13992,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 fontSize: '20px',
-                                color: '#ef4444',
+                                color: 'var(--ov-danger-text)',
                                 fontWeight: 900
                               }}>
                                 ✕
@@ -14039,7 +14007,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   {/* Sanctions Table */}
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                     <thead>
-                      <tr style={{ borderBottom: '2px solid rgba(255,255,255,0.2)' }}>
+                      <tr style={{ borderBottom: '2px solid var(--ov-hairline-strong)' }}>
                         <th style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600 }}>Warn</th>
                         <th style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600 }}>Pen</th>
                         <th style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600 }}>Exp</th>
@@ -14094,7 +14062,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           const scoreDisplay = `${sanctionedTeamScore}:${otherTeamScore}`
 
                           return (
-                            <tr key={event.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                            <tr key={event.id || idx} style={{ borderBottom: '1px solid var(--ov-hairline)' }}>
                               <td style={{ padding: '6px 4px', textAlign: 'center' }}>
                                 {sanctionType === 'warning' && identifier}
                                 {sanctionType === 'delay_warning' && !identifier && 'D'}
@@ -14230,7 +14198,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px' }}>
                             <thead>
                               <tr>
-                                <th colSpan="4" style={{ padding: '4px', textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.2)', width: '42%' }}>
+                                <th colSpan="4" style={{ padding: '4px', textAlign: 'center', borderBottom: '1px solid var(--ov-hairline-strong)', width: '42%' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', flexWrap: 'wrap' }}>
                                     <span style={{ fontSize: '10px', wordBreak: 'break-word' }}>{leftTeamName}</span>
                                     <span style={{
@@ -14244,7 +14212,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   </div>
                                 </th>
                                 <th style={{ padding: '4px', fontSize: '8px', width: '16%' }}>Dur</th>
-                                <th colSpan="4" style={{ padding: '4px', textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.2)', width: '42%' }}>
+                                <th colSpan="4" style={{ padding: '4px', textAlign: 'center', borderBottom: '1px solid var(--ov-hairline-strong)', width: '42%' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', flexWrap: 'wrap' }}>
                                     <span style={{ fontSize: '10px', wordBreak: 'break-word' }}>{rightTeamName}</span>
                                     <span style={{
@@ -14258,7 +14226,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   </div>
                                 </th>
                               </tr>
-                              <tr style={{ borderBottom: '2px solid rgba(255,255,255,0.2)' }}>
+                              <tr style={{ borderBottom: '2px solid var(--ov-hairline-strong)' }}>
                                 <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>T</th>
                                 <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>W</th>
                                 <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>P</th>
@@ -14269,7 +14237,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               </tr>
                             </thead>
                             <tbody>
-                              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                              <tr style={{ borderBottom: '1px solid var(--ov-hairline)' }}>
                                 <td style={{ padding: '4px 2px', textAlign: 'center' }}>{leftTotalTimeouts}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center' }}>{leftTotalWins}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center' }}>{leftTotalPoints}</td>
@@ -14284,7 +14252,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           {/* Match time information */}
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px', marginTop: '12px' }}>
                             <tbody>
-                              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                              <tr style={{ borderBottom: '1px solid var(--ov-hairline)' }}>
                                 <td style={{ padding: '4px 2px', textAlign: 'left', fontWeight: 600, fontSize: '8px' }}>Match start time:</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'left', fontSize: '8px' }}>
                                   {matchStartTime ? `${String(matchStartTime.getHours()).padStart(2, '0')}:${String(matchStartTime.getMinutes()).padStart(2, '0')}:${String(matchStartTime.getSeconds()).padStart(2, '0')}` : '—'}
@@ -14314,7 +14282,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 Captain - {team1CaptainPlayer?.name || data?.team1Team?.name || 'team1'}{team1CaptainPlayer ? ` (#${team1CaptainPlayer.number})` : ''}
                               </div>
                               {team1CaptainSignature ? (
-                                <div style={{ border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', padding: '4px', minHeight: '40px', background: 'rgba(255,255,255,0.05)' }}>
+                                <div style={{ border: '1px solid var(--ov-hairline-strong)', borderRadius: '4px', padding: '4px', minHeight: '40px', background: 'var(--ov-sunken)' }}>
                                   <img src={team1CaptainSignature} alt="Signature" style={{ maxWidth: '100%', maxHeight: '40px', objectFit: 'contain' }} />
                                 </div>
                               ) : (
@@ -14324,8 +14292,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     width: '100%',
                                     padding: '8px',
                                     fontSize: '9px',
-                                    background: 'rgba(255,255,255,0.1)',
-                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    background: 'var(--ov-sunken-strong)',
+                                    border: '1px solid var(--ov-hairline-strong)',
                                     borderRadius: '4px',
                                     color: 'var(--text)',
                                     cursor: 'pointer'
@@ -14340,7 +14308,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 Captain - {team2CaptainPlayer?.name || data?.team2Team?.name || 'team2'}{team2CaptainPlayer ? ` (#${team2CaptainPlayer.number})` : ''}
                               </div>
                               {team2CaptainSignature ? (
-                                <div style={{ border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', padding: '4px', minHeight: '40px', background: 'rgba(255,255,255,0.05)' }}>
+                                <div style={{ border: '1px solid var(--ov-hairline-strong)', borderRadius: '4px', padding: '4px', minHeight: '40px', background: 'var(--ov-sunken)' }}>
                                   <img src={team2CaptainSignature} alt="Signature" style={{ maxWidth: '100%', maxHeight: '40px', objectFit: 'contain' }} />
                                 </div>
                               ) : (
@@ -14350,8 +14318,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     width: '100%',
                                     padding: '8px',
                                     fontSize: '9px',
-                                    background: 'rgba(255,255,255,0.1)',
-                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    background: 'var(--ov-sunken-strong)',
+                                    border: '1px solid var(--ov-hairline-strong)',
                                     borderRadius: '4px',
                                     color: 'var(--text)',
                                     cursor: 'pointer'
@@ -14381,7 +14349,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         <thead>
                           <tr>
                             <th style={{ padding: '4px 2px', textAlign: 'center', width: '8%' }}></th>
-                            <th colSpan="4" style={{ padding: '4px', textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.2)', width: '38%' }}>
+                            <th colSpan="4" style={{ padding: '4px', textAlign: 'center', borderBottom: '1px solid var(--ov-hairline-strong)', width: '38%' }}>
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', flexWrap: 'wrap' }}>
                                 <span style={{ fontSize: '10px', wordBreak: 'break-word' }}>{leftTeamName}</span>
                                 <span style={{
@@ -14395,7 +14363,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               </div>
                             </th>
                             <th style={{ padding: '4px 2px', fontSize: '8px', width: '8%' }}>Dur</th>
-                            <th colSpan="4" style={{ padding: '4px', textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.2)', width: '38%' }}>
+                            <th colSpan="4" style={{ padding: '4px', textAlign: 'center', borderBottom: '1px solid var(--ov-hairline-strong)', width: '38%' }}>
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', flexWrap: 'wrap' }}>
                                 <span style={{ fontSize: '10px', wordBreak: 'break-word' }}>{rightTeamName}</span>
                                 <span style={{
@@ -14409,7 +14377,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               </div>
                             </th>
                           </tr>
-                          <tr style={{ borderBottom: '2px solid rgba(255,255,255,0.2)' }}>
+                          <tr style={{ borderBottom: '2px solid var(--ov-hairline-strong)' }}>
                             <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>Set</th>
                             <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>T</th>
                             <th style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>W</th>
@@ -14449,7 +14417,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             }
 
                             return (
-                              <tr key={set.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                              <tr key={set.id} style={{ borderBottom: '1px solid var(--ov-hairline)' }}>
                                 <td style={{ padding: '4px 2px', textAlign: 'center', fontWeight: 600, fontSize: '8px' }}>{toRoman(set.index)}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center', fontSize: '8px' }}>{leftTimeouts || 0}</td>
                                 <td style={{ padding: '4px 2px', textAlign: 'center', fontSize: '8px' }}>{leftWon}</td>
@@ -14473,8 +14441,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 <div style={{ marginTop: '24px' }}>
                   <h4 style={{ marginBottom: '12px', fontSize: '14px', fontWeight: 600 }}>Remarks</h4>
                   <div style={{
-                    background: 'rgba(255,255,255,0.05)',
-                    border: '1px solid rgba(255,255,255,0.2)',
+                    background: 'var(--ov-sunken)',
+                    border: '1px solid var(--ov-hairline-strong)',
                     borderRadius: '8px',
                     padding: '12px',
                     fontSize: '12px',
@@ -14632,12 +14600,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               <div
                 data-player-action-menu
                 style={{
-                  background: 'rgba(15, 23, 42, 0.95)',
-                  border: '2px solid rgba(255, 255, 255, 0.2)',
+                  background: 'var(--ov-card)',
+                  border: '2px solid var(--ov-hairline-strong)',
                   borderRadius: '8px',
                   padding: '8px',
                   minWidth: '140px',
-                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
+                  boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '6px'
@@ -14656,9 +14624,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       padding: '8px 12px',
                       fontSize: '12px',
                       fontWeight: 600,
-                      background: '#000',
-                      color: '#fff',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      background: 'var(--ov-card)',
+                      color: 'var(--ov-text)',
+                      border: '1px solid var(--ov-hairline-strong)',
                       borderRadius: '6px',
                       cursor: 'pointer',
                       textAlign: 'left',
@@ -14674,7 +14642,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       e.currentTarget.style.transform = 'scale(1.02)'
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.background = '#000'
+                      e.currentTarget.style.background = 'var(--ov-card)'
                       e.currentTarget.style.transform = 'scale(1)'
                     }}
                   >
@@ -14690,9 +14658,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           padding: '6px 10px',
                           fontSize: '11px',
                           fontWeight: 600,
-                          background: canGetWarning ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.02)',
+                          background: canGetWarning ? 'var(--ov-card)' : 'var(--ov-sunken)',
                           color: canGetWarning ? 'var(--text)' : 'var(--muted)',
-                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          border: '1px solid var(--ov-hairline)',
                           borderRadius: '4px',
                           cursor: canGetWarning ? 'pointer' : 'not-allowed',
                           textAlign: 'left',
@@ -14712,9 +14680,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           padding: '6px 10px',
                           fontSize: '11px',
                           fontWeight: 600,
-                          background: canGetPenalty ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.02)',
+                          background: canGetPenalty ? 'var(--ov-card)' : 'var(--ov-sunken)',
                           color: canGetPenalty ? 'var(--text)' : 'var(--muted)',
-                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          border: '1px solid var(--ov-hairline)',
                           borderRadius: '4px',
                           cursor: canGetPenalty ? 'pointer' : 'not-allowed',
                           textAlign: 'left',
@@ -14734,9 +14702,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           padding: '6px 10px',
                           fontSize: '11px',
                           fontWeight: 600,
-                          background: canGetExpulsion ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.02)',
+                          background: canGetExpulsion ? 'var(--ov-card)' : 'var(--ov-sunken)',
                           color: canGetExpulsion ? 'var(--text)' : 'var(--muted)',
-                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          border: '1px solid var(--ov-hairline)',
                           borderRadius: '4px',
                           cursor: canGetExpulsion ? 'pointer' : 'not-allowed',
                           textAlign: 'left',
@@ -14755,9 +14723,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           padding: '6px 10px',
                           fontSize: '11px',
                           fontWeight: 600,
-                          background: 'rgba(255, 255, 255, 0.05)',
+                          background: 'var(--ov-sunken)',
                           color: 'var(--text)',
-                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          border: '1px solid var(--ov-hairline)',
                           borderRadius: '4px',
                           cursor: 'pointer',
                           textAlign: 'left',
@@ -14782,9 +14750,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     padding: '8px 12px',
                     fontSize: '12px',
                     fontWeight: 600,
-                    background: '#dc2626',
+                    background: 'var(--ov-danger)',
                     color: '#fff',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    border: '1px solid var(--ov-hairline-strong)',
                     borderRadius: '6px',
                     cursor: 'pointer',
                     textAlign: 'left',
@@ -14796,11 +14764,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     width: '100%'
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#ef4444'
+                    e.currentTarget.style.background = 'var(--ov-danger)'
                     e.currentTarget.style.transform = 'scale(1.02)'
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.background = '#dc2626'
+                    e.currentTarget.style.background = 'var(--ov-danger)'
                     e.currentTarget.style.transform = 'scale(1)'
                   }}
                 >
@@ -14870,15 +14838,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               <div
                 data-sanction-dropdown
                 style={{
-                  background: 'rgba(15, 23, 42, 0.95)',
-                  border: '2px solid rgba(255, 255, 255, 0.2)',
+                  background: 'var(--ov-card)',
+                  border: '2px solid var(--ov-hairline-strong)',
                   borderRadius: '8px',
                   padding: '8px',
                   minWidth: '160px',
-                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)'
+                  boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)'
                 }}
               >
-                <div style={{ marginBottom: '8px', fontSize: '11px', fontWeight: 600, color: 'var(--text)', textAlign: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '6px' }}>
+                <div style={{ marginBottom: '8px', fontSize: '11px', fontWeight: 600, color: 'var(--text)', textAlign: 'center', borderBottom: '1px solid var(--ov-hairline)', paddingBottom: '6px' }}>
                   {sanctionDropdown.role === 'coach' ? 'Sanction for Coach' : sanctionDropdown.playerNumber ? `Sanction for ${sanctionDropdown.playerNumber}` : 'Sanction'}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -14926,9 +14894,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             padding: '4px 8px',
                             fontSize: '11px',
                             fontWeight: 600,
-                            background: canGetWarning ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.02)',
+                            background: canGetWarning ? 'var(--ov-card)' : 'var(--ov-sunken)',
                             color: canGetWarning ? 'var(--text)' : 'var(--muted)',
-                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            border: '1px solid var(--ov-hairline)',
                             borderRadius: '4px',
                             cursor: canGetWarning ? 'pointer' : 'not-allowed',
                             textAlign: 'left',
@@ -14940,14 +14908,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           }}
                           onMouseEnter={(e) => {
                             if (canGetWarning) {
-                              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'
-                              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)'
+                              e.currentTarget.style.background = 'var(--ov-sunken-strong)'
+                              e.currentTarget.style.borderColor = 'var(--ov-hairline-strong)'
                             }
                           }}
                           onMouseLeave={(e) => {
                             if (canGetWarning) {
-                              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
-                              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
+                              e.currentTarget.style.background = 'var(--ov-sunken)'
+                              e.currentTarget.style.borderColor = 'var(--ov-hairline)'
                             }
                           }}
                         >
@@ -14961,9 +14929,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             padding: '4px 8px',
                             fontSize: '11px',
                             fontWeight: 600,
-                            background: canGetPenalty ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.02)',
+                            background: canGetPenalty ? 'var(--ov-card)' : 'var(--ov-sunken)',
                             color: canGetPenalty ? 'var(--text)' : 'var(--muted)',
-                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            border: '1px solid var(--ov-hairline)',
                             borderRadius: '4px',
                             cursor: canGetPenalty ? 'pointer' : 'not-allowed',
                             textAlign: 'left',
@@ -14975,14 +14943,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           }}
                           onMouseEnter={(e) => {
                             if (canGetPenalty) {
-                              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'
-                              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)'
+                              e.currentTarget.style.background = 'var(--ov-sunken-strong)'
+                              e.currentTarget.style.borderColor = 'var(--ov-hairline-strong)'
                             }
                           }}
                           onMouseLeave={(e) => {
                             if (canGetPenalty) {
-                              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
-                              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
+                              e.currentTarget.style.background = 'var(--ov-sunken)'
+                              e.currentTarget.style.borderColor = 'var(--ov-hairline)'
                             }
                           }}
                         >
@@ -14996,9 +14964,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             padding: '4px 8px',
                             fontSize: '11px',
                             fontWeight: 600,
-                            background: canGetExpulsion ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.02)',
+                            background: canGetExpulsion ? 'var(--ov-card)' : 'var(--ov-sunken)',
                             color: canGetExpulsion ? 'var(--text)' : 'var(--muted)',
-                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            border: '1px solid var(--ov-hairline)',
                             borderRadius: '4px',
                             cursor: canGetExpulsion ? 'pointer' : 'not-allowed',
                             textAlign: 'left',
@@ -15010,14 +14978,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           }}
                           onMouseEnter={(e) => {
                             if (canGetExpulsion) {
-                              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'
-                              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)'
+                              e.currentTarget.style.background = 'var(--ov-sunken-strong)'
+                              e.currentTarget.style.borderColor = 'var(--ov-hairline-strong)'
                             }
                           }}
                           onMouseLeave={(e) => {
                             if (canGetExpulsion) {
-                              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
-                              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
+                              e.currentTarget.style.background = 'var(--ov-sunken)'
+                              e.currentTarget.style.borderColor = 'var(--ov-hairline)'
                             }
                           }}
                         >
@@ -15031,9 +14999,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             padding: '4px 8px',
                             fontSize: '11px',
                             fontWeight: 600,
-                            background: 'rgba(255, 255, 255, 0.05)',
+                            background: 'var(--ov-sunken)',
                             color: 'var(--text)',
-                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            border: '1px solid var(--ov-hairline)',
                             borderRadius: '4px',
                             cursor: 'pointer',
                             textAlign: 'left',
@@ -15043,12 +15011,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             transition: 'all 0.2s'
                           }}
                           onMouseEnter={(e) => {
-                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'
-                            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)'
+                            e.currentTarget.style.background = 'var(--ov-sunken-strong)'
+                            e.currentTarget.style.borderColor = 'var(--ov-hairline-strong)'
                           }}
                           onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
-                            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
+                            e.currentTarget.style.background = 'var(--ov-sunken)'
+                            e.currentTarget.style.borderColor = 'var(--ov-hairline)'
                           }}
                         >
                           <div className="sanction-cards-separate" style={{ flexShrink: 0 }}>
@@ -15120,15 +15088,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             <div style={dropdownStyle} className="modal-wrapper-roll-up">
               <div
                 style={{
-                  background: 'rgba(15, 23, 42, 0.95)',
+                  background: 'var(--ov-card)',
                   border: '2px solid rgba(220, 38, 38, 0.5)',
                   borderRadius: '8px',
                   padding: '8px',
                   minWidth: '220px',
-                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)'
+                  boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)'
                 }}
               >
-                <div style={{ marginBottom: '8px', fontSize: '11px', fontWeight: 600, color: 'var(--text)', textAlign: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '6px' }}>
+                <div style={{ marginBottom: '8px', fontSize: '11px', fontWeight: 600, color: 'var(--text)', textAlign: 'center', borderBottom: '1px solid var(--ov-hairline)', paddingBottom: '6px' }}>
                   {t('scoreboard.medical', 'Medical')} - {t('scoreboard.team', 'Team')} {teamLabel} #{playerNumber}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -15140,7 +15108,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       fontSize: '12px',
                       fontWeight: 600,
                       background: 'rgba(59, 130, 246, 0.2)',
-                      color: '#fff',
+                      color: 'var(--ov-text)',
                       border: '1px solid rgba(59, 130, 246, 0.4)',
                       borderRadius: '6px',
                       cursor: 'pointer',
@@ -15160,7 +15128,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     }}
                   >
                     <span style={{ fontWeight: 700 }}>MTO</span>
-                    <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.6)' }}>
+                    <span style={{ fontSize: '10px', color: 'var(--ov-text-muted)' }}>
                       {t('scoreboard.mtoDescription', '5 min recovery - unlimited')}
                     </span>
                   </button>
@@ -15177,7 +15145,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   }}>
                     <span>RIT</span>
                     {ritUsedThisMatch && (
-                      <span style={{ fontSize: '9px', color: '#ef4444' }}>
+                      <span style={{ fontSize: '9px', color: 'var(--ov-danger-text)' }}>
                         {t('scoreboard.ritUsed', 'Already used')}
                       </span>
                     )}
@@ -15192,7 +15160,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       fontSize: '11px',
                       fontWeight: 600,
                       background: ritUsedThisMatch ? 'rgba(100, 100, 100, 0.1)' : 'rgba(249, 115, 22, 0.2)',
-                      color: ritUsedThisMatch ? 'var(--muted)' : '#fff',
+                      color: ritUsedThisMatch ? 'var(--muted)' : 'var(--ov-text)',
                       border: `1px solid ${ritUsedThisMatch ? 'rgba(100, 100, 100, 0.2)' : 'rgba(249, 115, 22, 0.4)'}`,
                       borderRadius: '6px',
                       cursor: ritUsedThisMatch ? 'not-allowed' : 'pointer',
@@ -15225,7 +15193,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       fontSize: '11px',
                       fontWeight: 600,
                       background: ritUsedThisMatch ? 'rgba(100, 100, 100, 0.1)' : 'rgba(249, 115, 22, 0.2)',
-                      color: ritUsedThisMatch ? 'var(--muted)' : '#fff',
+                      color: ritUsedThisMatch ? 'var(--muted)' : 'var(--ov-text)',
                       border: `1px solid ${ritUsedThisMatch ? 'rgba(100, 100, 100, 0.2)' : 'rgba(249, 115, 22, 0.4)'}`,
                       borderRadius: '6px',
                       cursor: ritUsedThisMatch ? 'not-allowed' : 'pointer',
@@ -15258,7 +15226,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       fontSize: '11px',
                       fontWeight: 600,
                       background: ritUsedThisMatch ? 'rgba(100, 100, 100, 0.1)' : 'rgba(249, 115, 22, 0.2)',
-                      color: ritUsedThisMatch ? 'var(--muted)' : '#fff',
+                      color: ritUsedThisMatch ? 'var(--muted)' : 'var(--ov-text)',
                       border: `1px solid ${ritUsedThisMatch ? 'rgba(100, 100, 100, 0.2)' : 'rgba(249, 115, 22, 0.4)'}`,
                       borderRadius: '6px',
                       cursor: ritUsedThisMatch ? 'not-allowed' : 'pointer',
@@ -15295,9 +15263,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       padding: '6px 12px',
                       fontSize: '11px',
                       fontWeight: 500,
-                      background: 'rgba(255, 255, 255, 0.05)',
+                      background: 'var(--ov-sunken)',
                       color: 'var(--muted)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      border: '1px solid var(--ov-hairline)',
                       borderRadius: '4px',
                       cursor: 'pointer',
                       textAlign: 'center',
@@ -15305,10 +15273,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       transition: 'all 0.2s'
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
+                      e.currentTarget.style.background = 'var(--ov-sunken-strong)'
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
+                      e.currentTarget.style.background = 'var(--ov-sunken)'
                     }}
                   >
                     {t('common.cancel', 'Cancel')}
@@ -15346,7 +15314,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               fontSize: '72px',
               fontWeight: 700,
               fontFamily: scoreFont === 'orbitron' ? "'Orbitron', monospace" : 'inherit',
-              color: medicalModal.countdown <= 30 ? '#ef4444' : 'var(--text)',
+              color: medicalModal.countdown <= 30 ? 'var(--ov-danger-text)' : 'var(--text)',
               marginBottom: '8px',
               lineHeight: 1
             }}>
@@ -15357,7 +15325,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             <div style={{
               width: '100%',
               height: '8px',
-              background: 'rgba(255, 255, 255, 0.1)',
+              background: 'var(--ov-sunken-strong)',
               borderRadius: '4px',
               overflow: 'hidden',
               marginBottom: '24px'
@@ -15365,7 +15333,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               <div style={{
                 width: `${(medicalModal.countdown / 300) * 100}%`,
                 height: '100%',
-                background: medicalModal.countdown <= 30 ? '#ef4444' : medicalModal.type === 'mto' ? '#3b82f6' : '#f97316',
+                background: medicalModal.countdown <= 30 ? 'var(--ov-danger)' : medicalModal.type === 'mto' ? '#0284c7' : '#f97316',
                 transition: 'width 0.1s linear'
               }} />
             </div>
@@ -15379,7 +15347,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   padding: '12px 24px',
                   fontSize: '14px',
                   fontWeight: 600,
-                  background: '#22c55e',
+                  background: 'var(--ov-success)',
                   color: '#fff',
                   border: 'none',
                   borderRadius: '8px',
@@ -15390,11 +15358,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   transition: 'all 0.2s'
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#16a34a'
+                  e.currentTarget.style.background = 'var(--ov-success)'
                   e.currentTarget.style.transform = 'scale(1.02)'
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = '#22c55e'
+                  e.currentTarget.style.background = 'var(--ov-success)'
                   e.currentTarget.style.transform = 'scale(1)'
                 }}
               >
@@ -15408,7 +15376,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   padding: '12px 24px',
                   fontSize: '14px',
                   fontWeight: 600,
-                  background: '#dc2626',
+                  background: 'var(--ov-danger)',
                   color: '#fff',
                   border: 'none',
                   borderRadius: '8px',
@@ -15423,7 +15391,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   e.currentTarget.style.transform = 'scale(1.02)'
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = '#dc2626'
+                  e.currentTarget.style.background = 'var(--ov-danger)'
                   e.currentTarget.style.transform = 'scale(1)'
                 }}
               >
@@ -15446,7 +15414,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           width={500}
         >
           <div style={{ padding: '16px', maxHeight: '70vh', overflowY: 'auto' }}>
-            <p style={{ marginBottom: '16px', fontSize: '12px', color: 'rgba(255,255,255,0.6)' }}>
+            <p style={{ marginBottom: '16px', fontSize: '12px', color: 'var(--ov-text-muted)' }}>
               {t('scoreboard.keybindings.instruction', 'Click on a key to change it. Press the new key to assign, or Escape to cancel.')}
             </p>
             {[
@@ -15466,7 +15434,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   padding: '10px 12px',
-                  background: editingKey === key ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                  background: editingKey === key ? 'rgba(59, 130, 246, 0.2)' : 'var(--ov-sunken)',
                   borderRadius: '6px',
                   marginBottom: '8px',
                   border: editingKey === key ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid transparent'
@@ -15474,7 +15442,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               >
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, fontSize: '13px' }}>{t(labelKey, label)}</div>
-                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>{t(descKey, description)}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--ov-text-muted)' }}>{t(descKey, description)}</div>
                 </div>
                 <button
                   onClick={() => {
@@ -15503,9 +15471,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     padding: '6px 12px',
                     fontSize: '12px',
                     fontWeight: 600,
-                    background: editingKey === key ? '#3b82f6' : 'rgba(255, 255, 255, 0.1)',
-                    color: editingKey === key ? '#fff' : 'var(--text)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    background: editingKey === key ? '#0284c7' : 'var(--ov-sunken-strong)',
+                    color: editingKey === key ? 'var(--ov-text)' : 'var(--text)',
+                    border: '1px solid var(--ov-hairline-strong)',
                     borderRadius: '4px',
                     cursor: 'pointer',
                     minWidth: '80px',
@@ -15536,9 +15504,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   padding: '8px 16px',
                   fontSize: '12px',
                   fontWeight: 600,
-                  background: 'rgba(255, 255, 255, 0.1)',
+                  background: 'var(--ov-sunken-strong)',
                   color: 'var(--text)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  border: '1px solid var(--ov-hairline-strong)',
                   borderRadius: '6px',
                   cursor: 'pointer'
                 }}
@@ -15554,8 +15522,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   padding: '8px 16px',
                   fontSize: '12px',
                   fontWeight: 600,
-                  background: 'var(--accent)',
-                  color: '#000',
+                  background: 'var(--ov-success)',
+                  color: '#fff',
                   border: 'none',
                   borderRadius: '6px',
                   cursor: 'pointer'
@@ -15592,8 +15560,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   padding: '12px 24px',
                   fontSize: '14px',
                   fontWeight: 600,
-                  background: 'var(--accent)',
-                  color: '#000',
+                  background: 'var(--ov-success)',
+                  color: '#fff',
                   border: 'none',
                   borderRadius: '8px',
                   cursor: 'pointer'
@@ -15607,9 +15575,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   padding: '12px 24px',
                   fontSize: '14px',
                   fontWeight: 600,
-                  background: 'rgba(255, 255, 255, 0.1)',
+                  background: 'var(--ov-sunken-strong)',
                   color: 'var(--text)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  border: '1px solid var(--ov-hairline-strong)',
                   borderRadius: '8px',
                   cursor: 'pointer'
                 }}
@@ -15645,8 +15613,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   padding: '12px 24px',
                   fontSize: '14px',
                   fontWeight: 600,
-                  background: 'var(--accent)',
-                  color: '#000',
+                  background: 'var(--ov-success)',
+                  color: '#fff',
                   border: 'none',
                   borderRadius: '8px',
                   cursor: 'pointer'
@@ -15660,9 +15628,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   padding: '12px 24px',
                   fontSize: '14px',
                   fontWeight: 600,
-                  background: 'rgba(255, 255, 255, 0.1)',
+                  background: 'var(--ov-sunken-strong)',
                   color: 'var(--text)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  border: '1px solid var(--ov-hairline-strong)',
                   borderRadius: '8px',
                   cursor: 'pointer'
                 }}
@@ -15742,8 +15710,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     padding: '10px 20px',
                     fontSize: '14px',
                     fontWeight: 600,
-                    background: 'var(--accent)',
-                    color: '#000',
+                    background: 'var(--ov-success)',
+                    color: '#fff',
                     border: 'none',
                     borderRadius: '6px',
                     cursor: 'pointer'
@@ -15757,9 +15725,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     padding: '10px 20px',
                     fontSize: '14px',
                     fontWeight: 600,
-                    background: 'rgba(255, 255, 255, 0.1)',
+                    background: 'var(--ov-sunken-strong)',
                     color: 'var(--text)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    border: '1px solid var(--ov-hairline-strong)',
                     borderRadius: '6px',
                     cursor: 'pointer'
                   }}
@@ -15793,7 +15761,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
         return (
           <Modal
-            title={endsMatch ? 'Confirm Match End' : 'Confirm Set End'}
+            title={endsMatch ? t('scoreboard.modals.confirmMatchEnd', 'Confirm match end') : t('scoreboard.modals.confirmSetEnd', 'Confirm set end')}
             open={true}
             onClose={() => setExpulsionConfirmModal(null)}
             width={420}
@@ -15866,7 +15834,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     padding: '12px 24px',
                     fontSize: '14px',
                     fontWeight: 600,
-                    background: '#ef4444',
+                    background: 'var(--ov-danger)',
                     color: '#fff',
                     border: 'none',
                     borderRadius: '6px',
@@ -15881,9 +15849,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     padding: '12px 24px',
                     fontSize: '14px',
                     fontWeight: 600,
-                    background: 'rgba(255, 255, 255, 0.1)',
+                    background: 'var(--ov-sunken-strong)',
                     color: 'var(--text)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    border: '1px solid var(--ov-hairline-strong)',
                     borderRadius: '6px',
                     cursor: 'pointer'
                   }}
@@ -15935,8 +15903,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   padding: '12px 24px',
                   fontSize: '14px',
                   fontWeight: 600,
-                  background: 'var(--accent)',
-                  color: '#000',
+                  background: 'var(--ov-success)',
+                  color: '#fff',
                   border: 'none',
                   borderRadius: '8px',
                   cursor: 'pointer'
@@ -15950,9 +15918,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   padding: '12px 24px',
                   fontSize: '14px',
                   fontWeight: 600,
-                  background: 'rgba(255, 255, 255, 0.1)',
+                  background: 'var(--ov-sunken-strong)',
                   color: 'var(--text)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  border: '1px solid var(--ov-hairline-strong)',
                   borderRadius: '8px',
                   cursor: 'pointer'
                 }}
@@ -16077,8 +16045,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   padding: '12px 24px',
                   fontSize: '14px',
                   fontWeight: 600,
-                  background: 'var(--accent)',
-                  color: '#000',
+                  background: 'var(--ov-success)',
+                  color: '#fff',
                   border: 'none',
                   borderRadius: '8px',
                   cursor: 'pointer'
@@ -16092,9 +16060,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   padding: '12px 24px',
                   fontSize: '14px',
                   fontWeight: 600,
-                  background: 'rgba(255, 255, 255, 0.1)',
+                  background: 'var(--ov-sunken-strong)',
                   color: 'var(--text)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  border: '1px solid var(--ov-hairline-strong)',
                   borderRadius: '8px',
                   cursor: 'pointer'
                 }}
@@ -16129,12 +16097,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               position: 'absolute',
               left: `${connectionModalPosition.x}px`,
               top: `${connectionModalPosition.y}px`,
-              background: 'rgba(15, 23, 42, 0.98)',
-              border: '1px solid rgba(255,255,255,0.2)',
+              background: 'var(--ov-card)',
+              border: '1px solid var(--ov-hairline-strong)',
               borderRadius: '12px',
               padding: '16px',
               minWidth: '200px',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+              boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
               zIndex: 10001
             }}
             onClick={(e) => e.stopPropagation()}
@@ -16158,7 +16126,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               height: 0,
               borderLeft: '8px solid transparent',
               borderRight: '8px solid transparent',
-              borderBottom: '8px solid rgba(255,255,255,0.2)'
+              borderBottom: '8px solid var(--ov-hairline-strong)'
             }} />
 
             <div style={{ marginBottom: '12px' }}>
@@ -16206,7 +16174,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   position: 'relative',
                   width: '44px',
                   height: '24px',
-                  background: (connectionModal === 'referee' ? refereeConnectionEnabled : connectionModal === 'teamA' ? team1TeamConnectionEnabled : team2TeamConnectionEnabled) ? '#22c55e' : '#6b7280',
+                  background: (connectionModal === 'referee' ? refereeConnectionEnabled : connectionModal === 'teamA' ? team1TeamConnectionEnabled : team2TeamConnectionEnabled) ? 'var(--ov-success)' : '#78716c',
                   borderRadius: '12px',
                   transition: 'background 0.2s',
                   cursor: 'pointer'
@@ -16240,7 +16208,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 <div style={{
                   marginTop: '12px',
                   padding: '12px',
-                  background: 'rgba(0,0,0,0.3)',
+                  background: 'var(--ov-sunken)',
                   borderRadius: '8px'
                 }}>
                   <div style={{ fontSize: '10px', color: 'var(--muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -16255,7 +16223,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     <span style={{
                       fontWeight: 700,
                       fontSize: '18px',
-                      color: 'var(--accent)',
+                      color: 'var(--ov-success)',
                       letterSpacing: '2px',
                       fontFamily: 'monospace'
                     }}>
@@ -16275,9 +16243,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         padding: '4px 8px',
                         fontSize: '10px',
                         fontWeight: 600,
-                        background: 'rgba(255,255,255,0.1)',
+                        background: 'var(--ov-sunken-strong)',
                         color: 'var(--text)',
-                        border: '1px solid rgba(255,255,255,0.2)',
+                        border: '1px solid var(--ov-hairline-strong)',
                         borderRadius: '4px',
                         cursor: 'pointer',
                         whiteSpace: 'nowrap'
@@ -16332,14 +16300,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   textAlign: 'center',
                   letterSpacing: '4px',
                   fontFamily: 'monospace',
-                  background: 'var(--bg)',
-                  border: pinError ? '2px solid #ef4444' : '2px solid rgba(255,255,255,0.2)',
+                  background: 'var(--ov-card)',
+                  border: pinError ? '2px solid #ef4444' : '2px solid var(--ov-hairline-strong)',
                   borderRadius: '8px',
                   color: 'var(--text)'
                 }}
               />
               {pinError && (
-                <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '8px' }}>
+                <p style={{ color: 'var(--ov-danger-text)', fontSize: '12px', marginTop: '8px' }}>
                   {pinError}
                 </p>
               )}
@@ -16355,9 +16323,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   padding: '10px 20px',
                   fontSize: '14px',
                   fontWeight: 600,
-                  background: 'rgba(255,255,255,0.1)',
+                  background: 'var(--ov-sunken-strong)',
                   color: 'var(--text)',
-                  border: '1px solid rgba(255,255,255,0.2)',
+                  border: '1px solid var(--ov-hairline-strong)',
                   borderRadius: '8px',
                   cursor: 'pointer'
                 }}
@@ -16370,8 +16338,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   padding: '10px 20px',
                   fontSize: '14px',
                   fontWeight: 600,
-                  background: 'var(--accent)',
-                  color: '#000',
+                  background: 'var(--ov-success)',
+                  color: '#fff',
                   border: 'none',
                   borderRadius: '8px',
                   cursor: 'pointer'
@@ -16395,7 +16363,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           zIndex={2000}
         >
           <div style={{ padding: '24px', textAlign: 'center' }}>
-            <p style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 700, color: 'var(--accent)' }}>
+            <p style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 700, color: 'var(--ov-success)' }}>
               Technical Timeout at 21 points
             </p>
             <div style={{ marginBottom: '16px', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
@@ -16404,7 +16372,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               <span style={{ background: data?.team2Team?.color || '#3b82f6', color: isBrightColor(data?.team2Team?.color || '#3b82f6') ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>{teamAKey === 'team2' ? 'A' : 'B'}</span>
             </div>
             {ttoModal.triggerCourtSwitchAfter && (
-              <p style={{ marginBottom: '16px', fontSize: '13px', color: '#facc15', fontWeight: 500 }}>
+              <p style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--ov-warning-text)', fontWeight: 500 }}>
                 Courts will switch when TTO ends
               </p>
             )}
@@ -16417,13 +16385,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   gap: '16px',
                   padding: '16px 20px',
                   borderRadius: '12px',
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  background: 'var(--ov-sunken)',
+                  border: '1px solid var(--ov-hairline)',
                   cursor: 'pointer',
                   margin: '0 auto'
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--ov-sunken-strong)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'var(--ov-sunken)'}
               >
                 {/* Stop sign icon - left side */}
                 <svg viewBox="0 0 24 24" width="45" height="45" style={{ flexShrink: 0 }}>
@@ -16435,7 +16403,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   <div style={{
                     fontSize: '42px',
                     fontWeight: 700,
-                    color: ttoModal.countdown <= 10 ? '#ef4444' : 'var(--accent)',
+                    color: ttoModal.countdown <= 10 ? 'var(--ov-danger-text)' : 'var(--ov-success)',
                     fontFamily: getScoreFont(),
                     textAlign: 'center',
                     lineHeight: 1
@@ -16446,7 +16414,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   <div style={{
                     width: '100%',
                     height: '6px',
-                    background: 'rgba(255, 255, 255, 0.15)',
+                    background: 'var(--ov-sunken-strong)',
                     borderRadius: '3px',
                     overflow: 'hidden',
                     marginTop: '8px'
@@ -16454,7 +16422,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     <div style={{
                       width: `${(ttoModal.countdown / 45) * 100}%`,
                       height: '100%',
-                      background: ttoModal.countdown <= 10 ? '#ef4444' : 'var(--accent)',
+                      background: ttoModal.countdown <= 10 ? 'var(--ov-danger)' : 'var(--ov-success)',
                       borderRadius: '3px',
                       transition: 'width 1s linear',
                       marginLeft: 'auto'
@@ -16489,8 +16457,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     padding: '12px 32px',
                     fontSize: '16px',
                     fontWeight: 600,
-                    background: 'var(--accent)',
-                    color: '#000',
+                    background: 'var(--ov-success)',
+                    color: '#fff',
                     border: 'none',
                     borderRadius: '8px',
                     cursor: 'pointer'
@@ -16512,7 +16480,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   const losingTeamLabel = losingTeamKey === teamAKey ? 'A' : 'B'
 
                   return (
-                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '16px', marginTop: '16px', display: 'flex', justifyContent: 'center' }}>
+                    <div style={{ borderTop: '1px solid var(--ov-hairline)', paddingTop: '16px', marginTop: '16px', display: 'flex', justifyContent: 'center' }}>
                       <button
                         onClick={() => handleTeamBMP(losingTeamKey)}
                         style={{
@@ -16520,7 +16488,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           fontSize: '13px',
                           fontWeight: 600,
                           background: 'transparent',
-                          color: '#f97316',
+                          color: '#c2410c',
                           border: '2px solid #f97316',
                           borderRadius: '8px',
                           cursor: 'pointer',
@@ -16611,7 +16579,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
         return (
           <Modal
-            title={isReferee ? 'Referee Ball Mark Protocol' : 'Ball Mark Protocol'}
+            title={isReferee ? t('scoreboard.modals.refereeBallMarkProtocol', 'Referee ball mark protocol') : t('scoreboard.modals.ballMarkProtocol', 'Ball mark protocol')}
             open={true}
             onClose={() => setBmpOutcomeModal(null)}
             width={500}
@@ -16685,7 +16653,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 padding: '12px 10px',
                                 fontSize: '16px',
                                 fontWeight: 600,
-                                background: selectedTeam === 'left' ? '#ca8a04' : '#eab308',
+                                background: selectedTeam === 'left' ? '#fbbf24' : '#fcd34d',
                                 color: '#000',
                                 border: selectedTeam === 'left' ? '2px solid #fde047' : '2px solid transparent',
                                 borderRadius: '8px',
@@ -16707,7 +16675,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 padding: '12px 10px',
                                 fontSize: '16px',
                                 fontWeight: 600,
-                                background: selectedTeam === 'unavailable' ? '#6b7280' : '#9ca3af',
+                                background: selectedTeam === 'unavailable' ? '#78716c' : '#a8a29e',
                                 color: '#fff',
                                 border: selectedTeam === 'unavailable' ? '2px solid #d1d5db' : '2px solid transparent',
                                 borderRadius: '8px',
@@ -16724,7 +16692,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 padding: '12px 10px',
                                 fontSize: '16px',
                                 fontWeight: 600,
-                                background: selectedTeam === 'right' ? '#ca8a04' : '#eab308',
+                                background: selectedTeam === 'right' ? '#fbbf24' : '#fcd34d',
                                 color: '#000',
                                 border: selectedTeam === 'right' ? '2px solid #fde047' : '2px solid transparent',
                                 borderRadius: '8px',
@@ -16750,19 +16718,19 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               transition: 'all 0.2s ease'
                             }}>
                               <div style={{ fontSize: '15px', color: 'var(--muted)', marginBottom: '12px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', padding: '6px 10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', padding: '6px 10px', background: 'var(--ov-sunken)', borderRadius: '6px' }}>
                                   <span>Current:</span>
                                   <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
                                 </div>
                                 {selectedTeam === 'unavailable' ? (
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(156, 163, 175, 0.15)', borderRadius: '6px', border: '1px solid rgba(156, 163, 175, 0.3)' }}>
-                                    <span style={{ color: '#9ca3af' }}>No change:</span>
+                                    <span style={{ color: 'var(--ov-text-muted)' }}>No change:</span>
                                     <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
                                   </div>
                                 ) : (
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(234, 179, 8, 0.15)', borderRadius: '6px', border: '1px solid rgba(234, 179, 8, 0.3)' }}>
-                                    <span style={{ color: '#eab308' }}>New:</span>
-                                    <span><strong style={{ color: '#eab308' }}>
+                                    <span style={{ color: 'var(--ov-warning-text)' }}>New:</span>
+                                    <span><strong style={{ color: 'var(--ov-warning-text)' }}>
                                       {selectedTeam === 'left' ? leftTeamScore.team1 : rightTeamScore.team1} : {selectedTeam === 'left' ? leftTeamScore.team2 : rightTeamScore.team2}
                                     </strong> · <Volleyball /> {(selectedTeam === 'left' ? leftTeamScore.serve : rightTeamScore.serve) === 'team1' ? team1Name : team2Name}</span>
                                   </div>
@@ -16776,8 +16744,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     padding: '12px 20px',
                                     fontSize: '17px',
                                     fontWeight: 600,
-                                    background: 'var(--accent)',
-                                    color: '#000',
+                                    background: 'var(--ov-success)',
+                                    color: '#fff',
                                     border: 'none',
                                     borderRadius: '6px',
                                     cursor: 'pointer'
@@ -16794,8 +16762,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                       padding: '12px 16px',
                                       fontSize: '17px',
                                       fontWeight: 600,
-                                      background: '#374151',
-                                      color: '#fff',
+                                      background: 'var(--ov-sunken-strong)',
+                                      color: 'var(--ov-text)',
                                       border: 'none',
                                       borderRadius: '6px',
                                       cursor: 'pointer'
@@ -16810,8 +16778,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                       padding: '12px 16px',
                                       fontSize: '17px',
                                       fontWeight: 600,
-                                      background: '#374151',
-                                      color: '#fff',
+                                      background: 'var(--ov-sunken-strong)',
+                                      color: 'var(--ov-text)',
                                       border: 'none',
                                       borderRadius: '6px',
                                       cursor: 'pointer'
@@ -16839,9 +16807,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           padding: '14px 10px',
                           fontSize: '16px',
                           fontWeight: 600,
-                          background: bmpSelectedOutcome === 'successful' ? '#16a34a' : '#22c55e',
+                          background: 'var(--ov-success)',
                           color: '#fff',
-                          border: bmpSelectedOutcome === 'successful' ? '2px solid #86efac' : '2px solid transparent',
+                          border: '2px solid transparent',
+                          boxShadow: bmpSelectedOutcome === 'successful' ? '0 0 0 3px var(--ov-card), 0 0 0 5px var(--ov-selected)' : 'none',
                           borderRadius: '8px',
                           cursor: 'pointer'
                         }}
@@ -16855,9 +16824,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           padding: '14px 10px',
                           fontSize: '16px',
                           fontWeight: 600,
-                          background: bmpSelectedOutcome === 'unsuccessful' ? '#dc2626' : '#ef4444',
+                          background: 'var(--ov-danger)',
                           color: '#fff',
-                          border: bmpSelectedOutcome === 'unsuccessful' ? '2px solid #fca5a5' : '2px solid transparent',
+                          border: '2px solid transparent',
+                          boxShadow: bmpSelectedOutcome === 'unsuccessful' ? '0 0 0 3px var(--ov-card), 0 0 0 5px var(--ov-selected)' : 'none',
                           borderRadius: '8px',
                           cursor: 'pointer'
                         }}
@@ -16871,9 +16841,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           padding: '14px 10px',
                           fontSize: '16px',
                           fontWeight: 600,
-                          background: bmpSelectedOutcome === 'judgment_impossible' ? '#6b7280' : '#9ca3af',
+                          background: '#78716c',
                           color: '#fff',
-                          border: bmpSelectedOutcome === 'judgment_impossible' ? '2px solid #d1d5db' : '2px solid transparent',
+                          border: '2px solid transparent',
+                          boxShadow: bmpSelectedOutcome === 'judgment_impossible' ? '0 0 0 3px var(--ov-card), 0 0 0 5px var(--ov-selected)' : 'none',
                           borderRadius: '8px',
                           cursor: 'pointer'
                         }}
@@ -16888,31 +16859,31 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         background: bmpSelectedOutcome === 'successful' ? 'rgba(34, 197, 94, 0.15)'
                           : bmpSelectedOutcome === 'unsuccessful' ? 'rgba(239, 68, 68, 0.15)'
                           : 'rgba(156, 163, 175, 0.15)',
-                        border: bmpSelectedOutcome === 'successful' ? '2px solid #22c55e'
-                          : bmpSelectedOutcome === 'unsuccessful' ? '2px solid #ef4444'
-                          : '2px solid #9ca3af',
+                        border: bmpSelectedOutcome === 'successful' ? '2px solid #10b981'
+                          : bmpSelectedOutcome === 'unsuccessful' ? '2px solid #f87171'
+                          : '2px solid #a8a29e',
                         borderRadius: '10px',
                         padding: '12px',
                         transition: 'all 0.2s ease'
                       }}>
                         <div style={{ fontSize: '15px', color: 'var(--muted)', marginBottom: '12px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', padding: '6px 10px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', padding: '6px 10px', background: 'var(--ov-sunken)', borderRadius: '6px' }}>
                             <span>Current:</span>
                             <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
                           </div>
                           {bmpSelectedOutcome === 'successful' ? (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(34, 197, 94, 0.15)', borderRadius: '6px', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
-                              <span style={{ color: '#22c55e' }}>New:</span>
-                              <span><strong style={{ color: '#22c55e' }}>{successScore.team1} : {successScore.team2}</strong> · <Volleyball /> {successServe === 'team1' ? team1Name : team2Name}</span>
+                              <span style={{ color: 'var(--ov-success)' }}>New:</span>
+                              <span><strong style={{ color: 'var(--ov-success)' }}>{successScore.team1} : {successScore.team2}</strong> · <Volleyball /> {successServe === 'team1' ? team1Name : team2Name}</span>
                             </div>
                           ) : bmpSelectedOutcome === 'unsuccessful' ? (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(239, 68, 68, 0.15)', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
-                              <span style={{ color: '#ef4444' }}>No change:</span>
+                              <span style={{ color: 'var(--ov-danger-text)' }}>No change:</span>
                               <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
                             </div>
                           ) : (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(156, 163, 175, 0.15)', borderRadius: '6px', border: '1px solid rgba(156, 163, 175, 0.3)' }}>
-                              <span style={{ color: '#9ca3af' }}>No change:</span>
+                              <span style={{ color: 'var(--ov-text-muted)' }}>No change:</span>
                               <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
                             </div>
                           )}
@@ -16924,8 +16895,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             padding: '12px 20px',
                             fontSize: '17px',
                             fontWeight: 600,
-                            background: 'var(--accent)',
-                            color: '#000',
+                            background: 'var(--ov-success)',
+                            color: '#fff',
                             border: 'none',
                             borderRadius: '6px',
                             cursor: 'pointer'
@@ -16965,7 +16936,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           zIndex={2000}
         >
           <div style={{ padding: '24px', textAlign: 'center' }}>
-            <p style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 700, color: 'var(--accent)' }}>
+            <p style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 700, color: 'var(--ov-success)' }}>
               {t('scoreboard.modals.teamsMustSwitchCourts')}
             </p>
             <div style={{ marginBottom: '16px', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
@@ -16981,8 +16952,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   padding: '12px 32px',
                   fontSize: '16px',
                   fontWeight: 600,
-                  background: 'var(--accent)',
-                  color: '#000',
+                  background: 'var(--ov-success)',
+                  color: '#fff',
                   border: 'none',
                   borderRadius: '8px',
                   cursor: 'pointer'
@@ -17011,7 +16982,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   padding: '12px 32px',
                   fontSize: '16px',
                   fontWeight: 600,
-                  background: '#facc15',
+                  background: '#fcd34d',
                   color: '#000',
                   border: 'none',
                   borderRadius: '8px',
@@ -17036,7 +17007,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               const losingTeamLabel = losingTeamKey === teamAKey ? 'A' : 'B'
 
               return (
-                <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '16px', marginTop: '16px', display: 'flex', justifyContent: 'center' }}>
+                <div style={{ borderTop: '1px solid var(--ov-hairline)', paddingTop: '16px', marginTop: '16px', display: 'flex', justifyContent: 'center' }}>
                   <button
                     onClick={() => handleTeamBMP(losingTeamKey)}
                     style={{
@@ -17044,7 +17015,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       fontSize: '13px',
                       fontWeight: 600,
                       background: 'transparent',
-                      color: '#f97316',
+                      color: '#c2410c',
                       border: '2px solid #f97316',
                       borderRadius: '8px',
                       cursor: 'pointer',
@@ -17125,9 +17096,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   gap: '16px',
                   alignItems: 'center',
                   padding: '16px',
-                  background: 'rgba(255, 255, 255, 0.05)',
+                  background: 'var(--ov-sunken)',
                   borderRadius: '8px',
-                  border: '1px solid rgba(255, 255, 255, 0.1)'
+                  border: '1px solid var(--ov-hairline)'
                 }}>
                   {/* Team A Box */}
                   <div style={{
@@ -17136,13 +17107,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     padding: '16px',
                     background: leftTeamColor,
                     borderRadius: '8px',
-                    border: '2px solid rgba(255, 255, 255, 0.3)',
+                    border: '2px solid var(--ov-hairline-strong)',
                     position: 'relative'
                   }}>
-                    <div style={{ fontSize: '18px', fontWeight: 700, color: '#fff', marginBottom: '4px' }}>
+                    <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--ov-text)', marginBottom: '4px' }}>
                       Team {leftTeamLabel}
                     </div>
-                    <div style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.9)', marginBottom: '8px' }}>
+                    <div style={{ fontSize: '14px', color: 'var(--ov-text-secondary)', marginBottom: '8px' }}>
                       {leftTeamName}
                     </div>
                     {/* Serve ball underneath if serving */}
@@ -17168,13 +17139,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     padding: '16px',
                     background: rightTeamColor,
                     borderRadius: '8px',
-                    border: '2px solid rgba(255, 255, 255, 0.3)',
+                    border: '2px solid var(--ov-hairline-strong)',
                     position: 'relative'
                   }}>
-                    <div style={{ fontSize: '18px', fontWeight: 700, color: '#fff', marginBottom: '4px' }}>
+                    <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--ov-text)', marginBottom: '4px' }}>
                       Team {rightTeamLabel}
                     </div>
-                    <div style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.9)', marginBottom: '8px' }}>
+                    <div style={{ fontSize: '14px', color: 'var(--ov-text-secondary)', marginBottom: '8px' }}>
                       {rightTeamName}
                     </div>
                     {/* Serve ball underneath if serving */}
@@ -17204,9 +17175,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       padding: '8px 16px',
                       fontSize: '14px',
                       fontWeight: 600,
-                      background: 'rgba(255, 255, 255, 0.1)',
+                      background: 'var(--ov-sunken-strong)',
                       color: 'var(--text)',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      border: '1px solid var(--ov-hairline-strong)',
                       borderRadius: '6px',
                       cursor: 'pointer',
                       whiteSpace: 'nowrap'
@@ -17226,9 +17197,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       padding: '8px 16px',
                       fontSize: '14px',
                       fontWeight: 600,
-                      background: 'rgba(255, 255, 255, 0.1)',
+                      background: 'var(--ov-sunken-strong)',
                       color: 'var(--text)',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      border: '1px solid var(--ov-hairline-strong)',
                       borderRadius: '6px',
                       cursor: 'pointer',
                       whiteSpace: 'nowrap'
@@ -17246,8 +17217,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     padding: '12px 32px',
                     fontSize: '16px',
                     fontWeight: 600,
-                    background: 'var(--accent)',
-                    color: '#000',
+                    background: 'var(--ov-success)',
+                    color: '#fff',
                     border: 'none',
                     borderRadius: '8px',
                     cursor: 'pointer'
@@ -17282,8 +17253,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   padding: '12px 24px',
                   fontSize: '14px',
                   fontWeight: 600,
-                  background: 'var(--accent)',
-                  color: '#000',
+                  background: 'var(--ov-success)',
+                  color: '#fff',
                   border: 'none',
                   borderRadius: '8px',
                   cursor: 'pointer'
@@ -17297,9 +17268,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   padding: '12px 24px',
                   fontSize: '14px',
                   fontWeight: 600,
-                  background: 'rgba(255, 255, 255, 0.1)',
+                  background: 'var(--ov-sunken-strong)',
                   color: 'var(--text)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  border: '1px solid var(--ov-hairline-strong)',
                   borderRadius: '8px',
                   cursor: 'pointer'
                 }}
@@ -17353,8 +17324,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         const TeamWithLabel = ({ team, name }) => (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
             <span style={{
-              background: 'var(--accent)',
-              color: '#000',
+              background: 'var(--ov-success)',
+              color: '#fff',
               padding: '1px 5px',
               borderRadius: '4px',
               fontSize: '11px',
@@ -17384,8 +17355,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   style={{
                     flex: 1,
                     padding: '12px 16px',
-                    background: selectedOption === 'swap' ? 'rgba(234, 179, 8, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                    border: selectedOption === 'swap' ? '2px solid #eab308' : '1px solid rgba(255, 255, 255, 0.1)',
+                    background: selectedOption === 'swap' ? 'rgba(234, 179, 8, 0.2)' : 'var(--ov-sunken)',
+                    border: selectedOption === 'swap' ? '2px solid #eab308' : '1px solid var(--ov-hairline)',
                     borderRadius: '8px',
                     cursor: 'pointer',
                     transition: 'all 0.2s',
@@ -17399,8 +17370,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     width: '18px',
                     height: '18px',
                     borderRadius: '50%',
-                    border: selectedOption === 'swap' ? '5px solid #eab308' : '2px solid rgba(255, 255, 255, 0.3)',
-                    background: selectedOption === 'swap' ? '#eab308' : 'transparent',
+                    border: selectedOption === 'swap' ? '5px solid #eab308' : '2px solid var(--ov-hairline-strong)',
+                    background: selectedOption === 'swap' ? '#fcd34d' : 'transparent',
                     flexShrink: 0
                   }} />
                   <span style={{ fontSize: '13px', fontWeight: 600 }}>Assign to other team</span>
@@ -17412,8 +17383,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   style={{
                     flex: 1,
                     padding: '12px 16px',
-                    background: selectedOption === 'replay' ? 'rgba(234, 179, 8, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                    border: selectedOption === 'replay' ? '2px solid #eab308' : '1px solid rgba(255, 255, 255, 0.1)',
+                    background: selectedOption === 'replay' ? 'rgba(234, 179, 8, 0.2)' : 'var(--ov-sunken)',
+                    border: selectedOption === 'replay' ? '2px solid #eab308' : '1px solid var(--ov-hairline)',
                     borderRadius: '8px',
                     cursor: 'pointer',
                     transition: 'all 0.2s',
@@ -17427,8 +17398,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     width: '18px',
                     height: '18px',
                     borderRadius: '50%',
-                    border: selectedOption === 'replay' ? '5px solid #eab308' : '2px solid rgba(255, 255, 255, 0.3)',
-                    background: selectedOption === 'replay' ? '#eab308' : 'transparent',
+                    border: selectedOption === 'replay' ? '5px solid #eab308' : '2px solid var(--ov-hairline-strong)',
+                    background: selectedOption === 'replay' ? '#fcd34d' : 'transparent',
                     flexShrink: 0
                   }} />
                   <span style={{ fontSize: '13px', fontWeight: 600 }}>Replay the rally</span>
@@ -17446,7 +17417,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', fontSize: '13px', color: 'var(--muted)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ width: '55px', textAlign: 'right' }}>Current:</span>
-                    <div style={{ background: 'rgba(255, 255, 255, 0.1)', padding: '6px 12px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.2)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ background: 'var(--ov-sunken-strong)', padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--ov-hairline-strong)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{ background: team1Color, color: isBrightColor(team1Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{team1Label}</span>
                       <strong>{team1TeamName} {currentteam1Points} : {currentteam2Points} {team2TeamName}</strong>
                       <span style={{ background: team2Color, color: isBrightColor(team2Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{team2Label}</span>
@@ -17456,7 +17427,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     <span style={{ width: '55px', textAlign: 'right' }}>New:</span>
                     <div style={{ background: 'rgba(34, 197, 94, 0.15)', padding: '6px 12px', borderRadius: '6px', border: '1px solid rgba(34, 197, 94, 0.4)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{ background: team1Color, color: isBrightColor(team1Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{team1Label}</span>
-                      <strong style={{ color: '#22c55e' }}>
+                      <strong style={{ color: 'var(--ov-success)' }}>
                         {team1TeamName} {selectedOption === 'swap' ? swapteam1Points : replayteam1Points} : {selectedOption === 'swap' ? swapteam2Points : replayteam2Points} {team2TeamName}
                       </strong>
                       <span style={{ background: team2Color, color: isBrightColor(team2Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{team2Label}</span>
@@ -17481,7 +17452,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     padding: '12px 32px',
                     fontSize: '14px',
                     fontWeight: 600,
-                    background: '#eab308',
+                    background: '#fcd34d',
                     color: '#000',
                     border: 'none',
                     borderRadius: '8px',
@@ -17496,9 +17467,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     padding: '12px 32px',
                     fontSize: '14px',
                     fontWeight: 600,
-                    background: 'rgba(255, 255, 255, 0.1)',
+                    background: 'var(--ov-sunken-strong)',
                     color: 'var(--text)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    border: '1px solid var(--ov-hairline-strong)',
                     borderRadius: '8px',
                     cursor: 'pointer'
                   }}
@@ -17577,6 +17548,7 @@ function ScoreboardCourtColumn({ children }) {
 }
 
 function SetStartTimeModal({ setIndex, defaultTime, onConfirm, onCancel }) {
+  const { t } = useTranslation()
   const [time, setTime] = useState(() => {
     // Extract local time from UTC ISO string
     const { time: localTime } = splitLocalDateTime(defaultTime)
@@ -17599,7 +17571,7 @@ function SetStartTimeModal({ setIndex, defaultTime, onConfirm, onCancel }) {
 
   return (
     <Modal
-      title={`Set ${setIndex} Start Time`}
+      title={t('scoreboard.modals.setStartTime', { set: setIndex, defaultValue: 'Set {{set}} start time' })}
       open={true}
       onClose={onCancel}
       width={400}
@@ -17629,8 +17601,8 @@ function SetStartTimeModal({ setIndex, defaultTime, onConfirm, onCancel }) {
               padding: '12px 24px',
               fontSize: '14px',
               fontWeight: 600,
-              background: 'var(--accent)',
-              color: '#000',
+              background: 'var(--ov-success)',
+              color: '#fff',
               border: 'none',
               borderRadius: '8px',
               cursor: 'pointer'
@@ -17644,9 +17616,9 @@ function SetStartTimeModal({ setIndex, defaultTime, onConfirm, onCancel }) {
               padding: '12px 24px',
               fontSize: '14px',
               fontWeight: 600,
-              background: 'rgba(255, 255, 255, 0.1)',
+              background: 'var(--ov-sunken-strong)',
               color: 'var(--text)',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
+              border: '1px solid var(--ov-hairline-strong)',
               borderRadius: '8px',
               cursor: 'pointer'
             }}
@@ -17677,16 +17649,16 @@ function ToSubDetailsModal({ type, side, timeoutDetails, substitutionDetails, te
                     key={index}
                     style={{
                       padding: '12px',
-                      background: 'rgba(255, 255, 255, 0.05)',
+                      background: 'var(--ov-sunken)',
                       borderRadius: '8px',
-                      border: '1px solid rgba(255, 255, 255, 0.1)'
+                      border: '1px solid var(--ov-hairline)'
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div style={{ fontSize: '16px', fontWeight: 600 }}>
                         Timeout {detail.index}
                       </div>
-                      <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--accent)' }}>
+                      <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--ov-success)' }}>
                         {detail.score}
                       </div>
                     </div>
@@ -17708,16 +17680,16 @@ function ToSubDetailsModal({ type, side, timeoutDetails, substitutionDetails, te
                     key={index}
                     style={{
                       padding: '12px',
-                      background: 'rgba(255, 255, 255, 0.05)',
+                      background: 'var(--ov-sunken)',
                       borderRadius: '8px',
-                      border: '1px solid rgba(255, 255, 255, 0.1)'
+                      border: '1px solid var(--ov-hairline)'
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                       <div style={{ fontSize: '16px', fontWeight: 600 }}>
                         Substitution {detail.index}
                       </div>
-                      <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--accent)' }}>
+                      <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--ov-success)' }}>
                         {detail.score}
                       </div>
                     </div>
@@ -17748,6 +17720,7 @@ function ToSubDetailsModal({ type, side, timeoutDetails, substitutionDetails, te
 }
 
 function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTime, teamAKey, leftisTeam1, isMatchEnd, team1TeamName, team2TeamName, team1TeamColor, team2TeamColor, losingTeamBmpRemaining, onBmpRequest, onConfirm, onDecisionChange }) {
+  const { t } = useTranslation()
   const [time, setTime] = useState(() => {
     // Extract local time from UTC ISO string
     const { time: localTime } = splitLocalDateTime(defaultTime)
@@ -17798,7 +17771,7 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
 
   return (
     <Modal
-      title={isMatchEnd ? 'Match End' : `Set ${setIndex} End`}
+      title={isMatchEnd ? t('scoreboard.modals.matchEnd', 'Match end') : t('scoreboard.modals.setEnd', { set: setIndex, defaultValue: 'Set {{set}} end' })}
       open={true}
       onClose={onDecisionChange}
       width={400}
@@ -17828,7 +17801,7 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
             {leftisTeam1 ? (teamAKey === 'team2' ? 'A' : 'B') : (teamAKey === 'team1' ? 'A' : 'B')}
           </span>
         </div>
-        <p style={{ marginBottom: '24px', fontSize: '16px', fontWeight: 600, color: 'var(--accent)' }}>
+        <p style={{ marginBottom: '24px', fontSize: '16px', fontWeight: 600, color: 'var(--ov-success)' }}>
           {isMatchEnd ? `${winnerTeamName} won the Match!` : `${winnerTeamName} wins!`}
         </p>
         <p style={{ marginBottom: '16px', fontSize: '16px' }}>
@@ -17855,7 +17828,7 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
               padding: '12px 24px',
               fontSize: '14px',
               fontWeight: 600,
-              background: isConfirming ? 'var(--muted)' : 'var(--accent)',
+              background: isConfirming ? 'var(--muted)' : 'var(--ov-success)',
               color: '#000',
               border: 'none',
               borderRadius: '8px',
@@ -17872,7 +17845,7 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
               padding: '12px 24px',
               fontSize: '14px',
               fontWeight: 600,
-              background: '#eab308',
+              background: '#fcd34d',
               color: '#000',
               border: 'none',
               borderRadius: '8px',
@@ -17885,7 +17858,7 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
         </div>
         {/* BMP Request button for losing team */}
         {losingTeamBmpRemaining > 0 && (
-          <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '16px' }}>
+          <div style={{ borderTop: '1px solid var(--ov-hairline)', paddingTop: '16px' }}>
             <button
               onClick={() => onBmpRequest(loserTeam)}
               disabled={isConfirming}
@@ -17893,8 +17866,8 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
                 padding: '10px 20px',
                 fontSize: '13px',
                 fontWeight: 600,
-                background: '#000',
-                color: '#f97316',
+                background: 'var(--ov-card)',
+                color: '#c2410c',
                 border: '2px solid #f97316',
                 borderRadius: '8px',
                 cursor: isConfirming ? 'not-allowed' : 'pointer',

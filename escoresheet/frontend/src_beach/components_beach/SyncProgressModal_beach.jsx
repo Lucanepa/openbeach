@@ -59,7 +59,7 @@ export default function SyncProgressModal({
     switch (status) {
       case 'pending':
         return (
-          <span style={{ color: '#6b7280', fontSize: 20 }}>○</span>
+          <span style={{ color: 'var(--ov-text-muted)', fontSize: 20 }}>○</span>
         )
       case 'in_progress':
         return (
@@ -78,15 +78,15 @@ export default function SyncProgressModal({
         )
       case 'done':
         return (
-          <span style={{ color: '#22c55e', fontSize: 20 }}>✓</span>
+          <span style={{ color: 'var(--ov-success)', fontSize: 20 }}>✓</span>
         )
       case 'warning':
         return (
-          <span style={{ color: '#f59e0b', fontSize: 20 }}>⚠</span>
+          <span style={{ color: 'var(--ov-warning-text)', fontSize: 20 }}>⚠</span>
         )
       case 'error':
         return (
-          <span style={{ color: '#ef4444', fontSize: 20 }}>✗</span>
+          <span style={{ color: 'var(--ov-danger-text)', fontSize: 20 }}>✗</span>
         )
       default:
         return null
@@ -102,7 +102,8 @@ export default function SyncProgressModal({
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0,0,0,0.9)',
+        background: 'rgb(28 25 23 / 0.6)',
+        backdropFilter: 'blur(4px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -123,8 +124,10 @@ export default function SyncProgressModal({
 
       <div
         style={{
-          background: '#111827',
-          border: '1px solid rgba(255,255,255,0.1)',
+          background: 'var(--ov-card)',
+          border: '1px solid var(--ov-hairline-soft)',
+          boxShadow: 'var(--ov-shadow-pop)',
+          color: 'var(--ov-text-body)',
           borderRadius: 16,
           padding: 32,
           minWidth: 320,
@@ -134,7 +137,7 @@ export default function SyncProgressModal({
         <h3 style={{
           margin: '0 0 24px 0',
           textAlign: 'center',
-          color: '#fff',
+          color: 'var(--ov-text)',
           fontSize: 18
         }}>
           Syncing...
@@ -155,9 +158,9 @@ export default function SyncProgressModal({
                 {getStatusIcon(step.status)}
               </div>
               <span style={{
-                color: step.status === 'done' ? '#22c55e' :
-                  step.status === 'error' ? '#ef4444' :
-                    step.status === 'warning' ? '#f59e0b' : '#fff',
+                color: step.status === 'done' ? 'var(--ov-success)' :
+                  step.status === 'error' ? 'var(--ov-danger-text)' :
+                    step.status === 'warning' ? 'var(--ov-warning-text)' : 'var(--ov-text)',
                 fontSize: 16
               }}>
                 {getStepLabel(step)}
@@ -174,7 +177,7 @@ export default function SyncProgressModal({
             background: 'rgba(245, 158, 11, 0.1)',
             border: '1px solid rgba(245, 158, 11, 0.3)',
             borderRadius: 8,
-            color: '#f59e0b',
+            color: 'var(--ov-warning-text)',
             fontSize: 14,
             textAlign: 'center'
           }}>
@@ -190,7 +193,7 @@ export default function SyncProgressModal({
             background: 'rgba(239, 68, 68, 0.1)',
             border: '1px solid rgba(239, 68, 68, 0.3)',
             borderRadius: 8,
-            color: '#ef4444',
+            color: 'var(--ov-danger-text)',
             fontSize: 14,
             textAlign: 'center'
           }}>
