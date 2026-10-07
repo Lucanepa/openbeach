@@ -10,6 +10,7 @@ import {
   generateGamePin,
   ensureGamePin,
   readLocalBundle,
+  readRelayBundle,
   relayLiveState,
   liveStateMessage,
   isRelayErrorFor,
@@ -253,6 +254,21 @@ describe('reading the local bundle', () => {
     expect(b.sets.map(s => s.index)).toEqual([1, 2])
     expect(b.events).toHaveLength(1)
     expect(await readLocalBundle(db, 999)).toBeNull()
+  })
+
+  it('readRelayBundle gives an official match without a game PIN one, once, and keys it by its seed', async () => {
+    const id = await db.matches.add({ seed_key: 'match_y', gamePin: null })
+    const first = await readRelayBundle(db, id, { generate: () => '424242' })
+    expect(first.key).toBe('match_y')
+    expect(first.local.match.gamePin).toBe('424242')
+    expect((await db.matches.get(id)).gamePin).toBe('424242')
+    const again = await readRelayBundle(db, id, { generate: () => '000000' })
+    expect(again.local.match.gamePin).toBe('424242')
+    const testId = await db.matches.add({ seedKey: 'test-match-default', test: true })
+    const test = await readRelayBundle(db, testId, { generate: () => '111111' })
+    expect(test.key).toBe('test-match-default')
+    expect(test.local.match.gamePin).toBeUndefined()
+    expect(await readRelayBundle(db, 999)).toBeNull()
   })
 })
 

@@ -219,6 +219,27 @@ export async function readLocalBundle(db, matchId) {
 }
 
 /**
+ * The local bundle a sync publishes (readLocalBundle), with its relay key.
+ * An official match without a game PIN gets one first, stored on the match:
+ * the relays only let the socket that proved it write to the room, and the
+ * next sync must carry the same one.
+ * @param {import('dexie').Dexie} db
+ * @param {number} matchId
+ * @param {{ generate?: () => string }} [options]
+ * @returns {Promise<{ key: string|null, local: object }|null>}
+ */
+export async function readRelayBundle(db, matchId, { generate = generateGamePin } = {}) {
+  const local = await readLocalBundle(db, matchId)
+  if (!local) return null
+  const { gamePin, created } = ensureGamePin(local.match, generate)
+  if (created) {
+    await db.matches.update(matchId, { gamePin })
+    local.match = { ...local.match, gamePin }
+  }
+  return { key: relayMatchKey(local.match), local }
+}
+
+/**
  * The live state the relay carries to the referee, the livescore and the
  * LedBox bridge (point-hub reads serve_player for the server digit). Built
  * from the scorer's local broadcast (team A / B, sides, points, sets won,

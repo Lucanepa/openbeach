@@ -21,7 +21,8 @@ import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { apiFrom } from '../lib_beach/apiClient_beach'
 import { setExtId, eventExtId } from '../utils_beach/syncIds_beach'
 import { buildConnectionPins } from '../utils_beach/connectionPins_beach'
-import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
+import { isBackendAvailable, getApiUrl } from '../utils_beach/backendConfig_beach'
+import { scorerRelay, scorerPublisher, scorerRelayUrl, readRelayBundle, relayMatchKey } from '../utils_beach/relayPublisher_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot } from '../utils_beach/stateSnapshot_beach'
@@ -303,8 +304,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   const isNarrowMode = viewportWidth < 1000
   // Short height mode: < 900px - smaller counters, clickable TO counter, hide TO button
   const isShortHeight = viewportHeight < 900
-  const wsRef = useRef(null) // Store WebSocket connection for use in callbacks
-  const previousMatchIdRef = useRef(null) // Track previous matchId to detect changes
+  const relayKeyRef = useRef(null) // The match's relay room key (seed key), set by the relay sync
   const wakeLockRef = useRef(null) // Wake lock to prevent screen sleep
   const syncFunctionRef = useRef(null) // Store sync function for use in action handlers
   const noSleepVideoRef = useRef(null) // Video element for NoSleep fallback
@@ -781,461 +781,49 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
   }, [matchId])
 
-  // Connect to WebSocket server and sync match data
+  // The match on the relay, where the referee, the livescore and the LedBox
+  // bridge follow it: this screen's share of the scorer's one relay
+  // connection (utils_beach/relayPublisher_beach, shared with App_beach).
+  // Every (re)connect syncs the match; the scoring actions sync through
+  // syncFunctionRef. The relay holds every court's match, so nothing here
+  // ever clears it (clear-all-matches is gone).
+  const hasMatchData = !!data?.match
   useEffect(() => {
-    // If no matchId, clear all matches from server (scoreboard is source of truth)
-    if (!matchId) {
-      const clearAllMatches = () => {
-        const ws = wsRef.current
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          try {
-            ws.send(JSON.stringify({
-              type: 'clear-all-matches'
-            }))
-          } catch (err) {
-            // Silently ignore
-          }
-        }
-      }
+    if (!matchId || !hasMatchData) return undefined
+    let active = true
 
-      // Try to clear immediately if WebSocket is open
-      clearAllMatches()
-
-      // Also set up a connection to clear when WebSocket opens
-      // Only attempt if a backend URL is configured (skip in standalone/dev without backend)
-      const backendUrl = import.meta.env.VITE_BACKEND_URL
-      if (backendUrl) {
-        const url = new URL(backendUrl)
-        const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-        const wsUrl = `${protocol}//${url.host}`
-
-        const tempWs = new WebSocket(wsUrl)
-        tempWs.onopen = () => {
-          tempWs.send(JSON.stringify({ type: 'clear-all-matches' }))
-          tempWs.close()
-        }
-        tempWs.onerror = () => {
-          // Ignore - server might not be running
-        }
-
-        return () => {
-          if (tempWs.readyState === WebSocket.OPEN || tempWs.readyState === WebSocket.CONNECTING) {
-            tempWs.close()
-          }
-        }
-      }
-    }
-
-    if (!data || !data.match) {
-      // Data is still loading - this is expected, wait for it
-      return
-    }
-
-    let ws = null
-    let reconnectTimeout = null
-
-    const connectWebSocket = () => {
-      try {
-        // Check if we have a configured backend URL (cloud backend)
-        const backendUrl = import.meta.env.VITE_BACKEND_URL
-
-        // Skip WebSocket connection if no backend URL is configured (standalone/dev without backend)
-        if (!backendUrl) return
-
-        let wsUrl
-        const url = new URL(backendUrl)
-        const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-        wsUrl = `${protocol}//${url.host}`
-
-        ws = new WebSocket(wsUrl)
-        wsRef.current = ws // Store in ref for use in callbacks
-
-        // Set error handler first to catch any immediate errors
-        ws.onerror = () => {
-          // Suppress - browser will show native errors if needed
-        }
-
-        ws.onopen = () => {
-          // Clear all other matches first (scoreboard is source of truth - only current match should exist)
-          try {
-            ws.send(JSON.stringify({
-              type: 'clear-all-matches',
-              keepMatchId: String(matchId) // Keep only the current match
-            }))
-          } catch (err) {
-            // Silently ignore WebSocket errors
-          }
-
-          // Send initial match data sync (this will overwrite/add the current match)
-          // No periodic sync - data is synced only when actions occur
-          syncMatchData()
-        }
-
-        ws.onmessage = (event) => {
-          try {
-            const message = JSON.parse(event.data)
-
-            if (message.type === 'pin-validation-request') {
-              // Respond to PIN validation request
-              handlePinValidationRequest(message)
-            } else if (message.type === 'match-data-request') {
-              // Respond to match data request
-              handleMatchDataRequest(message)
-            } else if (message.type === 'game-number-request') {
-              // Respond to game number request
-              handleGameNumberRequest(message)
-            } else if (message.type === 'pong') {
-              // Heartbeat response
-            }
-          } catch (err) {
-            // console.error('[WebSocket] Error parsing message:', err)
-          }
-        }
-
-
-        ws.onclose = (event) => {
-          // Don't reconnect on normal closure (code 1000)
-          if (event.code === 1000) {
-            return
-          }
-          // Reconnect after 5 seconds
-          reconnectTimeout = setTimeout(connectWebSocket, 5000)
-        }
-      } catch (err) {
-        // Silently ignore WebSocket connection errors in development/test
-      }
-    }
-
+    // Fresh from IndexedDB (React state may be stale in these closures)
     const syncMatchData = async () => {
-      // Use wsRef.current to always get the current WebSocket (not stale closure)
-      const currentWs = wsRef.current
-      if (!currentWs || currentWs.readyState !== WebSocket.OPEN) {
-        return
-      }
-
+      if (!scorerRelay.isOpen()) return
       try {
-        // Fetch ALL fresh data from IndexedDB (not from React state which may be stale due to closures)
-        const freshMatch = await db.matches.get(matchId)
-        if (!freshMatch) return
-
-        // Support both old and new field names
-        const freshteam1TeamId = freshMatch?.team1Id || freshMatch?.team1TeamId
-        const freshteam2TeamId = freshMatch?.team2Id || freshMatch?.team2TeamId
-        const [freshteam1Team, freshteam2Team, freshSets, freshEvents, freshteam1Players, freshteam2Players] = await Promise.all([
-          freshteam1TeamId ? db.teams.get(freshteam1TeamId) : null,
-          freshteam2TeamId ? db.teams.get(freshteam2TeamId) : null,
-          db.sets.where('matchId').equals(matchId).toArray(),
-          db.events.where('matchId').equals(matchId).toArray(),
-          freshteam1TeamId ? db.players.where('teamId').equals(freshteam1TeamId).toArray() : [],
-          freshteam2TeamId ? db.players.where('teamId').equals(freshteam2TeamId).toArray() : []
-        ])
-
-        // Sync full match data to server - this ALWAYS overwrites existing data (scoreboard is source of truth)
-        // The server will replace all data for this matchId with this data
-        const sendTimestamp = Date.now()
-        const syncPayload = {
-          type: 'sync-match-data',
-          matchId: matchId,
-          match: freshMatch,
-          team1Team: freshteam1Team || null,
-          team2Team: freshteam2Team || null,
-          team1Players: freshteam1Players || [],
-          team2Players: freshteam2Players || [],
-          sets: freshSets || [],
-          events: freshEvents || [],
-          _timestamp: sendTimestamp // Track when sent from scoreboard
-        }
-
-        currentWs.send(JSON.stringify(syncPayload))
+        const bundle = await readRelayBundle(db, matchId)
+        if (!active || !bundle) return
+        relayKeyRef.current = bundle.key
+        scorerPublisher.sync(bundle.key, bundle.local)
       } catch (err) {
-        // console.error('[WebSocket] Error syncing match data:', err)
+        console.warn('[Relay] sync failed:', err?.message)
       }
     }
-
-    // Store sync function in ref so it can be called from action handlers
     syncFunctionRef.current = syncMatchData
 
-    const handlePinValidationRequest = async (request) => {
-      if (!ws || ws.readyState !== WebSocket.OPEN) return
-
-      try {
-        const { pin, pinType, requestId } = request
-        const pinStr = String(pin).trim()
-
-        // Fetch fresh match data from IndexedDB (not from React state which may be stale due to closures)
-        const freshMatch = await db.matches.get(matchId)
-        if (!freshMatch) {
-          ws.send(JSON.stringify({
-            type: 'pin-validation-response',
-            requestId,
-            success: false,
-            error: 'Match not found'
-          }))
-          return
-        }
-
-        // Check if PIN matches
-        let matchPin = null
-        let connectionEnabled = false
-
-        if (pinType === 'referee') {
-          matchPin = freshMatch.refereePin
-          connectionEnabled = freshMatch.refereeConnectionEnabled === true
-        } else if (pinType === 'team1Team') {
-          matchPin = freshMatch.team1Pin ?? freshMatch.team1TeamPin
-          connectionEnabled = freshMatch.team1TeamConnectionEnabled === true
-        } else if (pinType === 'team2Team') {
-          matchPin = freshMatch.team2Pin ?? freshMatch.team2TeamPin
-          connectionEnabled = freshMatch.team2TeamConnectionEnabled === true
-        }
-
-        if (matchPin && String(matchPin).trim() === pinStr && connectionEnabled && freshMatch.status !== 'final') {
-          // Fetch all related data fresh from IndexedDB (support both old and new field names)
-          const pinteam1TeamId = freshMatch?.team1Id || freshMatch?.team1TeamId
-          const pinteam2TeamId = freshMatch?.team2Id || freshMatch?.team2TeamId
-          const [freshteam1Team, freshteam2Team, freshSets, freshEvents, freshteam1Players, freshteam2Players] = await Promise.all([
-            pinteam1TeamId ? db.teams.get(pinteam1TeamId) : null,
-            pinteam2TeamId ? db.teams.get(pinteam2TeamId) : null,
-            db.sets.where('matchId').equals(matchId).toArray(),
-            db.events.where('matchId').equals(matchId).toArray(),
-            pinteam1TeamId ? db.players.where('teamId').equals(pinteam1TeamId).toArray() : [],
-            pinteam2TeamId ? db.players.where('teamId').equals(pinteam2TeamId).toArray() : []
-          ])
-
-          // Send match data with full data
-          ws.send(JSON.stringify({
-            type: 'pin-validation-response',
-            requestId,
-            success: true,
-            match: {
-              id: freshMatch.id,
-              refereePin: freshMatch.refereePin,
-              team1TeamPin: freshMatch.team1Pin ?? freshMatch.team1TeamPin,
-              team2TeamPin: freshMatch.team2Pin ?? freshMatch.team2TeamPin,
-              team1TeamUploadPin: freshMatch.team1TeamUploadPin,
-              team2TeamUploadPin: freshMatch.team2TeamUploadPin,
-              refereeConnectionEnabled: freshMatch.refereeConnectionEnabled,
-              team1TeamConnectionEnabled: freshMatch.team1TeamConnectionEnabled,
-              team2TeamConnectionEnabled: freshMatch.team2TeamConnectionEnabled,
-              status: freshMatch.status,
-              team1TeamId: freshMatch.team1TeamId,
-              team2TeamId: freshMatch.team2TeamId,
-              gameNumber: freshMatch.gameNumber,
-              game_n: freshMatch.game_n,
-              createdAt: freshMatch.createdAt,
-              updatedAt: freshMatch.updatedAt
-            },
-            fullData: {
-              matchId: matchId,
-              match: freshMatch,
-              team1Team: freshteam1Team || null,
-              team2Team: freshteam2Team || null,
-              team1Players: freshteam1Players || [],
-              team2Players: freshteam2Players || [],
-              sets: freshSets || [],
-              events: freshEvents || []
-            }
-          }))
-        } else {
-          // PIN doesn't match or connection disabled
-          ws.send(JSON.stringify({
-            type: 'pin-validation-response',
-            requestId,
-            success: false,
-            error: connectionEnabled === false
-              ? 'Connection is disabled for this match'
-              : 'Invalid PIN code'
-          }))
-        }
-      } catch (err) {
-        // console.error('[WebSocket] Error handling PIN validation:', err)
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: 'pin-validation-response',
-            requestId: request.requestId,
-            success: false,
-            error: 'Error validating PIN'
-          }))
-        }
-      }
-    }
-
-    const handleMatchDataRequest = async (request) => {
-      if (!ws || ws.readyState !== WebSocket.OPEN) return
-
-      try {
-        const { requestId, matchId: requestedMatchId } = request
-
-        if (String(requestedMatchId) !== String(matchId)) {
-          ws.send(JSON.stringify({
-            type: 'match-data-response',
-            requestId,
-            matchId: requestedMatchId,
-            success: false,
-            error: 'Match ID mismatch'
-          }))
-          return
-        }
-
-        // Fetch ALL fresh data from IndexedDB (not from React state which may be stale due to closures)
-        const freshMatch = await db.matches.get(matchId)
-        if (!freshMatch) {
-          ws.send(JSON.stringify({
-            type: 'match-data-response',
-            requestId,
-            matchId: requestedMatchId,
-            success: false,
-            error: 'Match not found in database'
-          }))
-          return
-        }
-
-        // Support both old and new field names
-        const reqteam1TeamId = freshMatch?.team1Id || freshMatch?.team1TeamId
-        const reqteam2TeamId = freshMatch?.team2Id || freshMatch?.team2TeamId
-        const [freshteam1Team, freshteam2Team, freshSets, freshEvents, freshteam1Players, freshteam2Players] = await Promise.all([
-          reqteam1TeamId ? db.teams.get(reqteam1TeamId) : null,
-          reqteam2TeamId ? db.teams.get(reqteam2TeamId) : null,
-          db.sets.where('matchId').equals(matchId).toArray(),
-          db.events.where('matchId').equals(matchId).toArray(),
-          reqteam1TeamId ? db.players.where('teamId').equals(reqteam1TeamId).toArray() : [],
-          reqteam2TeamId ? db.players.where('teamId').equals(reqteam2TeamId).toArray() : []
-        ])
-
-        ws.send(JSON.stringify({
-          type: 'match-data-response',
-          requestId,
-          matchId: matchId,
-          success: true,
-          data: {
-            match: freshMatch,
-            team1Team: freshteam1Team || null,
-            team2Team: freshteam2Team || null,
-            team1Players: freshteam1Players || [],
-            team2Players: freshteam2Players || [],
-            sets: freshSets || [],
-            events: freshEvents || []
-          }
-        }))
-      } catch (err) {
-        // console.error('[WebSocket] Error handling match data request:', err)
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: 'match-data-response',
-            requestId: request.requestId,
-            matchId: request.matchId,
-            success: false,
-            error: 'Error fetching match data'
-          }))
-        }
-      }
-    }
-
-    const handleGameNumberRequest = async (request) => {
-      if (!ws || ws.readyState !== WebSocket.OPEN || !data?.match) return
-
-      try {
-        const { requestId, gameNumber } = request
-        const gameNumStr = String(gameNumber).trim()
-
-        const matchGameNumber = String(data.match.gameNumber || '')
-        const matchGameN = String(data.match.game_n || '')
-        const matchIdStr = String(data.match.id || '')
-
-        if (matchGameNumber === gameNumStr || matchGameN === gameNumStr || matchIdStr === gameNumStr) {
-          ws.send(JSON.stringify({
-            type: 'game-number-response',
-            requestId,
-            success: true,
-            match: data.match,
-            matchId: matchId
-          }))
-        } else {
-          ws.send(JSON.stringify({
-            type: 'game-number-response',
-            requestId,
-            success: false,
-            error: 'Match not found with this game number'
-          }))
-        }
-      } catch (err) {
-        // console.error('[WebSocket] Error handling game number request:', err)
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: 'game-number-response',
-            requestId: request.requestId,
-            success: false,
-            error: 'Error finding match'
-          }))
-        }
-      }
-    }
-
-    // Removed handleMatchUpdateRequest - using sync-match-data instead
-
-    // When matchId changes, clear the old match from server
-    if (previousMatchIdRef.current && previousMatchIdRef.current !== matchId) {
-      const oldMatchId = previousMatchIdRef.current
-      const ws = wsRef.current
-      if (ws && ws.readyState === WebSocket.OPEN) {
+    const detach = scorerRelay.attach(scorerRelayUrl({ wsPort: serverStatus?.wsPort }), {
+      onOpen: () => { syncMatchData() },
+      onMessage: async (message) => {
+        // A desktop relay asks the scoreboard for a match it does not hold
+        if (message.type !== 'match-data-request' && message.type !== 'game-number-request') return
         try {
-          ws.send(JSON.stringify({
-            type: 'delete-match',
-            matchId: String(oldMatchId)
-          }))
-        } catch (err) {
-          // Silently ignore
-        }
+          const bundle = await readRelayBundle(db, matchId)
+          if (active && bundle) scorerPublisher.answer(message, bundle.key, bundle.local)
+        } catch { /* the relay times the request out */ }
       }
-    }
-    previousMatchIdRef.current = matchId
-
-    // Connect to WebSocket
-    connectWebSocket()
+    })
 
     return () => {
-      if (reconnectTimeout) clearTimeout(reconnectTimeout)
-
-      // Clear all matches from server when component unmounts (scoreboard is source of truth)
-      if (wsRef.current) {
-        const ws = wsRef.current
-        const readyState = ws.readyState
-
-        // Clear all matches from server before closing
-        if (readyState === WebSocket.OPEN) {
-          try {
-            ws.send(JSON.stringify({
-              type: 'clear-all-matches'
-            }))
-          } catch (err) {
-            // Silently ignore errors during cleanup
-          }
-        }
-
-        // Remove all handlers first to prevent error logs
-        try {
-          ws.onerror = null
-          ws.onclose = null
-          ws.onopen = null
-          ws.onmessage = null
-        } catch (err) {
-          // Ignore if handlers can't be set
-        }
-
-        // Only try to close if connection is OPEN
-        // Don't close if CONNECTING - let it fail naturally to avoid browser errors
-        if (readyState === WebSocket.OPEN) {
-          try {
-            ws.close(1000, 'Component unmounting')
-          } catch (err) {
-            // Ignore errors during cleanup
-          }
-        }
-        // For CONNECTING or CLOSING states, just null the ref
-        wsRef.current = null
-      }
+      active = false
+      if (syncFunctionRef.current === syncMatchData) syncFunctionRef.current = null
+      detach()
     }
-  }, [matchId, serverStatus])
+  }, [matchId, hasMatchData, serverStatus?.wsPort])
 
   // Sync when connection settings change (e.g., referee dashboard enabled/disabled)
   useEffect(() => {
@@ -1245,15 +833,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   }, [data?.match?.refereeConnectionEnabled, data?.match?.team1TeamConnectionEnabled, data?.match?.team2TeamConnectionEnabled])
 
   // Sync data to referee - call this after any action that changes match data
-  // If WebSocket isn't ready, retry after a short delay
+  // If the relay socket isn't ready, retry after a short delay
   const syncToReferee = useCallback(() => {
     if (syncFunctionRef.current) {
       syncFunctionRef.current()
     }
-    // If WebSocket isn't connected, try again after a short delay
-    // This handles cases where lineup is saved while WebSocket is temporarily disconnected
-    const ws = wsRef.current
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
+    // Not connected: try again shortly (a lineup saved while the socket is
+    // reconnecting); every reconnect syncs anyway
+    if (!scorerRelay.isOpen()) {
       setTimeout(() => {
         if (syncFunctionRef.current) {
           syncFunctionRef.current()
@@ -1264,23 +851,20 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
   // Send action to referee for showing modals/countdowns
   const sendActionToReferee = useCallback((actionType, actionData) => {
-    const ws = wsRef.current
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      return
-    }
+    // The match's relay room (its seed key, known after the first sync)
+    const key = relayKeyRef.current
+    if (!key || !scorerRelay.isOpen()) return
 
     const sendTimestamp = Date.now()
-    const actionPayload = {
+    scorerRelay.send({
       type: 'match-action',
-      matchId: matchId,
+      matchId: key,
       action: actionType,
       data: actionData,
       timestamp: sendTimestamp,
       _timestamp: sendTimestamp // For latency tracking
-    }
-
-    ws.send(JSON.stringify(actionPayload))
-  }, [matchId])
+    })
+  }, [])
 
   // Broadcast match state to local scoreboard windows via BroadcastChannel (works offline, no Supabase)
   const broadcastToScoreboard = useCallback(async (cachedSnapshot = null) => {
@@ -1335,6 +919,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         broadcastServingTeam: broadcastData.serving_team,
         rallyInProgress: broadcastData.rally_in_progress
       })
+
+      // The relay (referee, livescore, LedBox on the venue network): the
+      // same state with serve_player, under the match's room key. Sent again
+      // after every sync (relayPublisher_beach), works without the cloud.
+      const relayKey = relayMatchKey(match)
+      if (relayKey) scorerPublisher.liveState(relayKey, { ...broadcastData, match_id: relayKey })
 
       const ch = new BroadcastChannel('openbeach-scoreboard')
       ch.postMessage({ type: 'LIVE_STATE_UPDATE', data: broadcastData })
@@ -1602,25 +1192,19 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
     const debugInfo = {}
 
-    // Get the backend URL - use VITE_BACKEND_URL if configured, otherwise relative URL
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || ''
-    const isStaticHosting = !import.meta.env.DEV && (
-      window.location.hostname.includes('github.io') ||
-      window.location.hostname.endsWith('.openvolley.app') // All openvolley.app subdomains are static
-    )
+    // The relay the match goes to (backendConfig: the venue relay, or the
+    // cloud): its match list answers
+    const listUrl = getApiUrl('/api/match/list')
 
-    // Skip API checks if on static hosting AND no backend URL configured
-    if (isStaticHosting && !backendUrl) {
+    if (!listUrl) {
       statuses.api = 'n/a'
       statuses.server = 'n/a'
       statuses.websocket = 'n/a'
-      debugInfo.api = { status: 'n/a', message: 'Static hosting - no backend configured' }
-      debugInfo.server = { status: 'n/a', message: 'Static hosting - no backend configured' }
-      debugInfo.websocket = { status: 'n/a', message: 'Static hosting - no WebSocket configured' }
+      debugInfo.api = { status: 'n/a', message: 'No relay for this page' }
+      debugInfo.server = { status: 'n/a', message: 'No relay for this page' }
+      debugInfo.websocket = { status: 'n/a', message: 'No relay for this page' }
     } else try {
-      // Use configured backend URL or relative URL
-      const apiUrl = backendUrl ? `${backendUrl}/api/match/list` : '/api/match/list'
-      const response = await fetch(apiUrl)
+      const response = await fetch(listUrl)
       if (response.ok) {
         statuses.api = 'connected'
         statuses.server = 'connected'
@@ -1642,88 +1226,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       debugInfo.server = { status: 'disconnected', message: errMsg }
     }
 
-    // Check WebSocket connection
-    if (wsRef.current) {
-      const ws = wsRef.current
-      if (ws.readyState === WebSocket.OPEN) {
+    // The scorer's own relay socket (shared with App_beach); no probe socket
+    if (statuses.websocket !== 'n/a') {
+      const relaySocket = scorerRelay.socket
+      if (relaySocket && relaySocket.readyState === 1) {
         statuses.websocket = 'connected'
-      } else if (ws.readyState === WebSocket.CONNECTING) {
+      } else if (relaySocket && relaySocket.readyState === 0) {
         statuses.websocket = 'connecting'
       } else {
-        statuses.websocket = 'disconnected'
-      }
-    } else if (statuses.websocket !== 'n/a') {
-      // Only test WebSocket if a backend URL is configured (avoid console errors in dev/standalone)
-      const backendUrlForWs = import.meta.env.VITE_BACKEND_URL
-      if (backendUrlForWs) {
-        try {
-          const url = new URL(backendUrlForWs)
-          const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-          const wsUrl = `${protocol}//${url.host}`
-
-          const wsTest = new WebSocket(wsUrl)
-          let resolved = false
-
-          await new Promise((resolve) => {
-            const timeout = setTimeout(() => {
-              if (!resolved) {
-                resolved = true
-                try {
-                  if (wsTest.readyState === WebSocket.CONNECTING || wsTest.readyState === WebSocket.OPEN) {
-                    wsTest.close()
-                  }
-                } catch (e) {
-                  // Ignore errors when closing
-                }
-                statuses.websocket = 'disconnected'
-                resolve()
-              }
-            }, 2000)
-
-            wsTest.onopen = () => {
-              if (!resolved) {
-                resolved = true
-                clearTimeout(timeout)
-                try {
-                  wsTest.close()
-                } catch (e) {
-                  // Ignore errors when closing
-                }
-                statuses.websocket = 'connected'
-                resolve()
-              }
-            }
-
-            wsTest.onerror = () => {
-              if (!resolved) {
-                resolved = true
-                clearTimeout(timeout)
-                try {
-                  if (wsTest.readyState === WebSocket.CONNECTING || wsTest.readyState === WebSocket.OPEN) {
-                    wsTest.close()
-                  }
-                } catch (e) {
-                  // Ignore errors when closing
-                }
-                statuses.websocket = 'disconnected'
-                resolve()
-              }
-            }
-
-            wsTest.onclose = () => {
-              if (!resolved) {
-                resolved = true
-                clearTimeout(timeout)
-                statuses.websocket = 'disconnected'
-                resolve()
-              }
-            }
-          })
-        } catch (err) {
-          statuses.websocket = 'disconnected'
-        }
-      } else {
-        statuses.websocket = 'n/a'
+        statuses.websocket = scorerRelayUrl() ? 'disconnected' : 'n/a'
       }
     }
 
@@ -4407,18 +3918,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
         // NOTE: Match update sync is now done in STEP 8 (sequential sync) above
 
-        // Notify server to delete match from matchDataStore (since it's now final)
-        const currentWs = wsRef.current
-        if (currentWs && currentWs.readyState === WebSocket.OPEN) {
-          try {
-            currentWs.send(JSON.stringify({
-              type: 'delete-match',
-              matchId: String(matchId)
-            }))
-          } catch (err) {
-            // Silently ignore WebSocket errors
-          }
-        }
+        // The final result stays on the relay: the referee, the livescore and
+        // the LedBox keep showing it (as OpenVolley does). The relay drops the
+        // room once no scoreboard holds it any more.
+        syncFunctionRef.current?.()
 
         // Trigger event backup for Safari/Firefox (match end)
         onTriggerEventBackup?.('match_end')

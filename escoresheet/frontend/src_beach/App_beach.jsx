@@ -39,7 +39,8 @@ import {
 } from './constants_beach/testSeeds_beach'
 import { apiFrom } from './lib_beach/apiClient_beach'
 import { setExtId } from './utils_beach/syncIds_beach'
-import { isBackendAvailable, getBackendUrl, getWebSocketUrl, isServedFromLocalServer, getLocalServerStatusUrl, rememberRelayWsPort } from './utils_beach/backendConfig_beach'
+import { isBackendAvailable, getBackendUrl, isServedFromLocalServer, getLocalServerStatusUrl, rememberRelayWsPort } from './utils_beach/backendConfig_beach'
+import { scorerRelay, scorerPublisher, scorerRelayUrl, readRelayBundle, relayMatchKey } from './utils_beach/relayPublisher_beach'
 import { checkMatchSession, lockMatchSession, unlockMatchSession, verifyGamePin } from './utils_beach/sessionManager_beach'
 
 // Sport type for beach volleyball
@@ -517,122 +518,27 @@ export default function App() {
       }
     }
 
-    // Check WebSocket server availability
-    // Skip WebSocket check for static deployments without backend URL
-    if (isStaticDeployment && !hasBackendUrl) {
+    // The relay WebSocket: the scorer's own relay socket (shared with the
+    // Scoreboard, see relayPublisher_beach), never a throwaway probe socket
+    const relayUrl = scorerRelayUrl({ wsPort: serverStatus?.wsPort })
+    const relaySocket = scorerRelay.socket
+    if (!relayUrl) {
       statuses.websocket = 'not_available'
-      debugInfo.websocket = {
-        status: 'not_available',
-        message: 'WebSocket not available in static deployment (using local database only)'
-      }
-    } else if (typeof wsRef !== 'undefined' && wsRef.current?.readyState === WebSocket.OPEN) {
-      // Reuse main WebSocket connection status - no need to create test connection
+      debugInfo.websocket = { status: 'not_available', message: 'No WebSocket relay for this page (using local database only)' }
+    } else if (relaySocket && relaySocket.readyState === 1) {
       statuses.websocket = 'connected'
-      debugInfo.websocket = { status: 'connected', message: 'WebSocket server is reachable (active connection)' }
-    } else if (!isBackendAvailable()) {
-      // No backend configured — skip WebSocket check entirely
+      debugInfo.websocket = { status: 'connected', message: 'WebSocket relay is reachable (active connection)', details: `Relay: ${relayUrl}` }
+    } else if (relaySocket && relaySocket.readyState === 0) {
+      statuses.websocket = 'connecting'
+      debugInfo.websocket = { status: 'connecting', message: 'Connecting to the WebSocket relay...', details: `Relay: ${relayUrl}` }
+    } else if (!scorerRelay.url) {
+      // No match is published yet: nothing to connect
       statuses.websocket = 'not_configured'
-      debugInfo.websocket = { status: 'not_configured', message: 'No VITE_BACKEND_URL configured' }
+      debugInfo.websocket = { status: 'not_configured', message: 'No match on the relay yet', details: `Relay: ${relayUrl}` }
     } else {
-      try {
-        const wsUrl = getWebSocketUrl()
-        if (!wsUrl) {
-          statuses.websocket = 'not_configured'
-          debugInfo.websocket = { status: 'not_configured', message: 'No backend URL configured for WebSocket' }
-          setConnectionStatuses(statuses)
-          setConnectionDebugInfo(debugInfo)
-          return
-        }
-
-        const wsTest = new WebSocket(wsUrl)
-        let resolved = false
-        let errorMessage = ''
-
-        // Use longer timeout for cloud backends (may need more time to wake up)
-        const connectionTimeout = isBackendAvailable() ? 10000 : 2000
-
-        await new Promise((resolve) => {
-          const timeout = setTimeout(() => {
-            if (!resolved) {
-              resolved = true
-              try {
-                if (wsTest.readyState === WebSocket.CONNECTING || wsTest.readyState === WebSocket.OPEN) {
-                  wsTest.close()
-                }
-              } catch (e) {
-                // Ignore errors when closing
-              }
-              statuses.websocket = 'disconnected'
-              debugInfo.websocket = {
-                status: 'disconnected',
-                message: `Connection timeout after ${connectionTimeout / 1000} seconds. WebSocket server may not be available.`,
-                details: `Attempted to connect to ${wsUrl}, readyState: ${wsTest.readyState}`
-              }
-              resolve()
-            }
-          }, connectionTimeout)
-
-          wsTest.onopen = () => {
-            if (!resolved) {
-              resolved = true
-              clearTimeout(timeout)
-              try {
-                wsTest.close()
-              } catch (e) {
-                // Ignore errors when closing
-              }
-              statuses.websocket = 'connected'
-              debugInfo.websocket = { status: 'connected', message: 'WebSocket server is reachable' }
-              resolve()
-            }
-          }
-
-          wsTest.onerror = () => {
-            if (!resolved) {
-              resolved = true
-              clearTimeout(timeout)
-              try {
-                if (wsTest.readyState === WebSocket.CONNECTING || wsTest.readyState === WebSocket.OPEN) {
-                  wsTest.close()
-                }
-              } catch (e) {
-                // Ignore errors when closing
-              }
-              statuses.websocket = 'disconnected'
-              debugInfo.websocket = {
-                status: 'disconnected',
-                message: `WebSocket connection error. Server may not be available.`,
-                details: `Failed to connect to ${wsUrl}`
-              }
-              resolve()
-            }
-          }
-
-          wsTest.onclose = (event) => {
-            if (!resolved) {
-              resolved = true
-              clearTimeout(timeout)
-              statuses.websocket = 'disconnected'
-              if (!debugInfo.websocket) {
-                debugInfo.websocket = {
-                  status: 'disconnected',
-                  message: `Connection closed unexpectedly (code: ${event.code}).`,
-                  details: `WebSocket server on port ${wsPort} may not be running`
-                }
-              }
-              resolve()
-            }
-          }
-        })
-      } catch (err) {
-        statuses.websocket = 'disconnected'
-        debugInfo.websocket = {
-          status: 'disconnected',
-          message: `Error creating WebSocket connection: ${err.message || 'Unknown error'}`,
-          details: 'Check if WebSocket server is running'
-        }
-      }
-    } // end of else block for static deployment check
+      statuses.websocket = 'disconnected'
+      debugInfo.websocket = { status: 'disconnected', message: 'Not connected to the WebSocket relay (retrying in the background)', details: `Relay: ${relayUrl}` }
+    }
 
     // Check Scoreboard connection (same as server for now)
     statuses.scoreboard = statuses.server
@@ -1011,467 +917,52 @@ export default function App() {
     }
   }, [currentMatch])
 
-  // Connect to WebSocket server and sync match data (works from any view)
-  // Use refs to prevent unnecessary reconnections
-  const wsRef = useRef(null)
-  const syncIntervalRef = useRef(null)
-  const reconnectTimeoutRef = useRef(null)
-  const currentMatchIdRef = useRef(null)
-  const currentMatchRef = useRef(null)
-  const isIntentionallyClosedRef = useRef(false)
-
-  // Update currentMatch ref whenever it changes
+  // The current match on the relay, from every view (home page, setup), so
+  // the referee, the livescore and the LedBox keep it: App's share of the
+  // scorer's one relay connection (relayPublisher_beach, shared with
+  // Scoreboard_beach). It syncs on every (re)connect and every 30 s; when the
+  // scorer switches matches, the previous one leaves the relay. The relay
+  // holds every court's match, so nothing here clears it.
+  const publishedRelayKeyRef = useRef(null)
+  const activeRelayMatchId = matchId || currentMatch?.id || null
   useEffect(() => {
-    currentMatchRef.current = currentMatch
-  }, [currentMatch])
-
-  useEffect(() => {
-    // Keep WebSocket connection alive even when on home screen (for dashboards)
-    // Use matchId or fall back to currentMatch?.id for background sync
-    const activeMatchId = matchId || currentMatch?.id
-    if (!activeMatchId || !currentMatch) {
-      // Clean up if we had a connection for a different match
-      if (wsRef.current) {
-        isIntentionallyClosedRef.current = true
-        wsRef.current.close()
-        wsRef.current = null
-      }
-      if (syncIntervalRef.current) {
-        clearInterval(syncIntervalRef.current)
-        syncIntervalRef.current = null
-      }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current)
-        reconnectTimeoutRef.current = null
-      }
-      currentMatchIdRef.current = null
-      return
-    }
-
-    // Only reconnect if matchId actually changed
-    if (currentMatchIdRef.current === activeMatchId && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      return
-    }
-
-    // If matchId changed, close old connection and clear old match from server
-    if (currentMatchIdRef.current !== activeMatchId && currentMatchIdRef.current && wsRef.current) {
-      const oldMatchId = currentMatchIdRef.current
-
-      // Clear old match from server
-      if (wsRef.current.readyState === WebSocket.OPEN) {
-        try {
-          wsRef.current.send(JSON.stringify({
-            type: 'delete-match',
-            matchId: String(oldMatchId)
-          }))
-        } catch (err) {
-          console.error('[App WebSocket] Error deleting old match:', err)
-        }
-      }
-
-      isIntentionallyClosedRef.current = true
-      wsRef.current.close()
-      wsRef.current = null
-      if (syncIntervalRef.current) {
-        clearInterval(syncIntervalRef.current)
-        syncIntervalRef.current = null
-      }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current)
-        reconnectTimeoutRef.current = null
-      }
-    }
-
-    // Don't clear matches when going to home - keep dashboards connected
-    // Only clear on explicit delete (handled in confirmDeleteMatch)
-
-    currentMatchIdRef.current = activeMatchId
-    isIntentionallyClosedRef.current = false
-
-    const connectWebSocket = async () => {
-      // Don't reconnect if intentionally closed or matchId changed
-      if (isIntentionallyClosedRef.current || currentMatchIdRef.current !== activeMatchId) {
-        return
-      }
-
-      // Skip WebSocket if no backend URL configured (avoids console spam in dev)
-      if (!isBackendAvailable()) {
-        return
-      }
-
-      // Close existing connection if any
-      if (wsRef.current) {
-        const oldWs = wsRef.current
-        const oldState = oldWs.readyState
-
-        // Remove all handlers first to prevent error logs
-        try {
-          oldWs.onerror = null
-          oldWs.onclose = null
-          oldWs.onopen = null
-          oldWs.onmessage = null
-        } catch (err) {
-          // Ignore if handlers can't be set
-        }
-
-        // Only try to close if not already closed/closing
-        if (oldState === WebSocket.OPEN) {
-          try {
-            oldWs.close(1000, 'Reconnecting')
-          } catch (err) {
-            // Ignore errors when closing
-          }
-        } else if (oldState === WebSocket.CONNECTING) {
-          // For connecting state, just null the ref - let it fail naturally
-          // Don't try to close as it causes browser errors
-        }
-        wsRef.current = null
-      }
-
-      try {
-        const wsUrl = getWebSocketUrl()
-        if (!wsUrl) {
-          return
-        }
-
-        wsRef.current = new WebSocket(wsUrl)
-
-        // Set error handler first to catch any immediate errors
-        wsRef.current.onerror = () => {
-          // Suppress - browser will show native errors if needed
-        }
-
-        wsRef.current.onopen = () => {
-          // Verify we're still on the same match
-          if (isIntentionallyClosedRef.current || currentMatchIdRef.current !== activeMatchId) {
-            if (wsRef.current) {
-              wsRef.current.close()
-            }
-            return
-          }
-
-          // Clear all other matches first (scoreboard is source of truth - only current match should exist)
-          try {
-            wsRef.current.send(JSON.stringify({
-              type: 'clear-all-matches',
-              keepMatchId: String(activeMatchId) // Keep only the current match
-            }))
-          } catch (err) {
-            console.error('[App WebSocket] Error clearing other matches:', err)
-          }
-
-          syncMatchData()
-          // Periodic sync as backup only (every 30 seconds)
-          // Primary sync happens via data change detection in Scoreboard component
-          syncIntervalRef.current = setInterval(syncMatchData, 30000)
-        }
-
-        wsRef.current.onmessage = (event) => {
-          try {
-            const message = JSON.parse(event.data)
-
-            if (message.type === 'pin-validation-request') {
-              handlePinValidationRequest(message)
-            } else if (message.type === 'match-data-request') {
-              handleMatchDataRequest(message)
-            } else if (message.type === 'game-number-request') {
-              handleGameNumberRequest(message)
-            }
-            // Removed match-update-request handling - using sync-match-data instead
-          } catch (err) {
-            console.error('[App WebSocket] Error parsing message:', err)
-          }
-        }
-
-        wsRef.current.onclose = (event) => {
-          // Don't reconnect if intentionally closed or matchId changed
-          if (isIntentionallyClosedRef.current || currentMatchIdRef.current !== activeMatchId) {
-            return
-          }
-
-          // Don't reconnect on normal closure
-          if (event.code === 1000) {
-            return
-          }
-
-          if (syncIntervalRef.current) {
-            clearInterval(syncIntervalRef.current)
-            syncIntervalRef.current = null
-          }
-
-          // Reconnect after 5 seconds
-          reconnectTimeoutRef.current = setTimeout(connectWebSocket, 5000)
-        }
-      } catch (err) {
-        console.error('[App WebSocket] Connection error:', err)
-        if (!isIntentionallyClosedRef.current && currentMatchIdRef.current === activeMatchId) {
-          reconnectTimeoutRef.current = setTimeout(connectWebSocket, 5000)
-        }
-      }
-    }
+    if (!activeRelayMatchId) return undefined
+    let active = true
 
     const syncMatchData = async () => {
-      // Use current values from refs
-      const ws = wsRef.current
-      const currentActiveMatchId = currentMatchIdRef.current
-      const currentMatchData = currentMatchRef.current // Use ref to get latest value
-
-      if (!ws || ws.readyState !== WebSocket.OPEN || !currentMatchData || currentActiveMatchId !== activeMatchId) {
-        return
-      }
-
+      if (!scorerRelay.isOpen()) return
       try {
-        // Load full match data
-        const [team1, team2, sets, events, team1Players, team2Players] = await Promise.all([
-          currentMatchData.team1Id ? db.teams.get(currentMatchData.team1Id) : null,
-          currentMatchData.team2Id ? db.teams.get(currentMatchData.team2Id) : null,
-          db.sets.where('matchId').equals(currentActiveMatchId).sortBy('index'),
-          db.events.where('matchId').equals(currentActiveMatchId).toArray(),
-          currentMatchData.team1Id ? db.players.where('teamId').equals(currentMatchData.team1Id).sortBy('number') : [],
-          currentMatchData.team2Id ? db.players.where('teamId').equals(currentMatchData.team2Id).sortBy('number') : []
-        ])
-
-        // Prepare full match object - scoreboard is source of truth, always overwrite
-        const fullMatch = {
-          ...currentMatchData,
-          id: currentMatchData.id,
-          // Ensure all fields are included for complete overwrite
-          refereePin: currentMatchData.refereePin,
-          team1Pin: currentMatchData.team1Pin,
-          team2Pin: currentMatchData.team2Pin,
-          refereeConnectionEnabled: currentMatchData.refereeConnectionEnabled,
-          team1TeamConnectionEnabled: currentMatchData.team1TeamConnectionEnabled,
-          team2TeamConnectionEnabled: currentMatchData.team2TeamConnectionEnabled,
-          status: currentMatchData.status,
-          gameNumber: currentMatchData.gameNumber,
-          game_n: currentMatchData.game_n,
-          externalId: currentMatchData.externalId,
-          scheduledAt: currentMatchData.scheduledAt
-        }
-
-        // Sync full match data to server - this ALWAYS overwrites existing data (scoreboard is source of truth)
-        const syncPayload = {
-          type: 'sync-match-data',
-          matchId: currentActiveMatchId,
-          match: fullMatch,
-          team1,
-          team2,
-          team1Players,
-          team2Players,
-          sets,
-          events
-        }
-
-        // Periodic sync - don't log every time to reduce noise
-
-        ws.send(JSON.stringify(syncPayload))
+        const bundle = await readRelayBundle(db, activeRelayMatchId)
+        if (!active || !bundle?.key) return
+        const previous = publishedRelayKeyRef.current
+        if (previous && previous !== bundle.key) scorerPublisher.remove(previous)
+        publishedRelayKeyRef.current = bundle.key
+        scorerPublisher.sync(bundle.key, bundle.local)
       } catch (err) {
-        console.error('[App WebSocket] Error syncing match data:', err)
+        console.warn('[App relay] sync failed:', err?.message)
       }
     }
 
-    const handlePinValidationRequest = async (request) => {
-      const ws = wsRef.current
-      const currentActiveMatchId = currentMatchIdRef.current
-      const currentMatchData = currentMatchRef.current // Use ref to get latest value
-
-      if (!ws || ws.readyState !== WebSocket.OPEN || !currentMatchData) return
-
-      try {
-        const { pin, pinType, requestId } = request
-        const pinStr = String(pin).trim()
-
-        let matchPin = null
-        let connectionEnabled = false
-
-        if (pinType === 'referee') {
-          matchPin = currentMatchData.refereePin
-          connectionEnabled = currentMatchData.refereeConnectionEnabled === true
-        } else if (pinType === 'team1') {
-          matchPin = currentMatchData.team1Pin
-          connectionEnabled = currentMatchData.team1TeamConnectionEnabled === true
-        } else if (pinType === 'team2') {
-          matchPin = currentMatchData.team2Pin
-          connectionEnabled = currentMatchData.team2TeamConnectionEnabled === true
-        }
-
-        if (matchPin && String(matchPin).trim() === pinStr && connectionEnabled && currentMatchData.status !== 'final') {
-          // Load full data for response
-          const [team1, team2, sets, events, team1Players, team2Players] = await Promise.all([
-            currentMatchData.team1Id ? db.teams.get(currentMatchData.team1Id) : null,
-            currentMatchData.team2Id ? db.teams.get(currentMatchData.team2Id) : null,
-            db.sets.where('matchId').equals(currentActiveMatchId).sortBy('index'),
-            db.events.where('matchId').equals(currentActiveMatchId).toArray(),
-            currentMatchData.team1Id ? db.players.where('teamId').equals(currentMatchData.team1Id).sortBy('number') : [],
-            currentMatchData.team2Id ? db.players.where('teamId').equals(currentMatchData.team2Id).sortBy('number') : []
-          ])
-
-          ws.send(JSON.stringify({
-            type: 'pin-validation-response',
-            requestId,
-            success: true,
-            match: currentMatchData,
-            fullData: {
-              match: currentMatchData,
-              team1,
-              team2,
-              team1Players,
-              team2Players,
-              sets,
-              events
-            }
-          }))
-        } else {
-          ws.send(JSON.stringify({
-            type: 'pin-validation-response',
-            requestId,
-            success: false,
-            error: connectionEnabled === false ? 'Connection is disabled' : 'Invalid PIN code'
-          }))
-        }
-      } catch (err) {
-        console.error('[App WebSocket] Error handling PIN validation:', err)
+    const detach = scorerRelay.attach(scorerRelayUrl({ wsPort: serverStatus?.wsPort }), {
+      onOpen: () => { syncMatchData() },
+      onMessage: async (message) => {
+        // A desktop relay asks the scoreboard for a match it does not hold
+        if (message.type !== 'match-data-request' && message.type !== 'game-number-request') return
+        try {
+          const bundle = await readRelayBundle(db, activeRelayMatchId)
+          if (active && bundle) scorerPublisher.answer(message, bundle.key, bundle.local)
+        } catch { /* the relay times the request out */ }
       }
-    }
-
-    const handleMatchDataRequest = async (request) => {
-      const ws = wsRef.current
-      const currentActiveMatchId = currentMatchIdRef.current
-      const currentMatchData = currentMatchRef.current // Use ref to get latest value
-
-      if (!ws || ws.readyState !== WebSocket.OPEN || !currentMatchData) return
-
-      try {
-        const { requestId, matchId: requestedMatchId } = request
-
-        if (String(requestedMatchId) !== String(currentActiveMatchId)) {
-          ws.send(JSON.stringify({
-            type: 'match-data-response',
-            requestId,
-            success: false,
-            error: 'Match ID mismatch'
-          }))
-          return
-        }
-
-        const [team1, team2, sets, events, team1Players, team2Players] = await Promise.all([
-          currentMatchData.team1Id ? db.teams.get(currentMatchData.team1Id) : null,
-          currentMatchData.team2Id ? db.teams.get(currentMatchData.team2Id) : null,
-          db.sets.where('matchId').equals(currentActiveMatchId).sortBy('index'),
-          db.events.where('matchId').equals(currentActiveMatchId).toArray(),
-          currentMatchData.team1Id ? db.players.where('teamId').equals(currentMatchData.team1Id).sortBy('number') : [],
-          currentMatchData.team2Id ? db.players.where('teamId').equals(currentMatchData.team2Id).sortBy('number') : []
-        ])
-
-        ws.send(JSON.stringify({
-          type: 'match-data-response',
-          requestId,
-          matchId: currentActiveMatchId,
-          success: true,
-          matchData: {
-            match: currentMatchData,
-            team1,
-            team2,
-            team1Players,
-            team2Players,
-            sets,
-            events
-          }
-        }))
-      } catch (err) {
-        console.error('[App WebSocket] Error handling match data request:', err)
-      }
-    }
-
-    const handleGameNumberRequest = async (request) => {
-      const ws = wsRef.current
-      const currentActiveMatchId = currentMatchIdRef.current
-      const currentMatchData = currentMatchRef.current // Use ref to get latest value
-
-      if (!ws || ws.readyState !== WebSocket.OPEN || !currentMatchData) return
-
-      try {
-        const { requestId, gameNumber } = request
-        const gameNumStr = String(gameNumber).trim()
-        const matchGameNumber = String(currentMatchData.gameNumber || '')
-        const matchGameN = String(currentMatchData.game_n || '')
-        const matchIdStr = String(currentMatchData.id || '')
-
-        if (matchGameNumber === gameNumStr || matchGameN === gameNumStr || matchIdStr === gameNumStr) {
-          ws.send(JSON.stringify({
-            type: 'game-number-response',
-            requestId,
-            success: true,
-            match: currentMatchData,
-            matchId: currentActiveMatchId
-          }))
-        } else {
-          ws.send(JSON.stringify({
-            type: 'game-number-response',
-            requestId,
-            success: false,
-            error: 'Match not found'
-          }))
-        }
-      } catch (err) {
-        console.error('[App WebSocket] Error handling game number request:', err)
-      }
-    }
-
-    // Removed handleMatchUpdateRequest - using sync-match-data instead
-
-    connectWebSocket()
+    })
+    // Backup only: the Scoreboard syncs on every action
+    const interval = setInterval(syncMatchData, 30000)
 
     return () => {
-      isIntentionallyClosedRef.current = true
-
-      // Clear all matches from server when component unmounts (scoreboard is source of truth)
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        try {
-          wsRef.current.send(JSON.stringify({
-            type: 'clear-all-matches'
-          }))
-        } catch (err) {
-          // Ignore error on unmount
-        }
-      }
-
-      if (syncIntervalRef.current) {
-        clearInterval(syncIntervalRef.current)
-        syncIntervalRef.current = null
-      }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current)
-        reconnectTimeoutRef.current = null
-      }
-      if (wsRef.current) {
-        const ws = wsRef.current
-        const readyState = ws.readyState
-
-        // Remove all handlers first to prevent error logs
-        try {
-          ws.onerror = null
-          ws.onclose = null
-          ws.onopen = null
-          ws.onmessage = null
-        } catch (err) {
-          // Ignore if handlers can't be set
-        }
-
-        // Only try to close if connection is OPEN
-        // Don't close if CONNECTING - let it fail naturally to avoid browser errors
-        if (readyState === WebSocket.OPEN) {
-          try {
-            ws.close(1000, 'Component unmounting')
-          } catch (err) {
-            // Ignore errors during cleanup
-          }
-        }
-        // For CONNECTING or CLOSING states, just null the ref
-        wsRef.current = null
-      }
+      active = false
+      clearInterval(interval)
+      detach()
     }
-  }, [matchId, currentMatch?.id, serverStatus?.wsPort]) // Only depend on matchId and wsPort, not the full objects
+  }, [activeRelayMatchId, serverStatus?.wsPort])
 
   async function finishSet(cur) {
     const matchRecord = await db.matches.get(cur.matchId)
@@ -1532,18 +1023,8 @@ export default function App() {
         })
       }
 
-      // Notify server to delete match from matchDataStore (since it's now final)
-      const ws = wsRef.current
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        try {
-          ws.send(JSON.stringify({
-            type: 'delete-match',
-            matchId: String(cur.matchId)
-          }))
-        } catch (err) {
-          // Ignore error
-        }
-      }
+      // The final result stays on the relay: the referee, the livescore and
+      // the LedBox keep showing it (the Scoreboard syncs the final state)
 
       // Show match end screen
       setShowMatchEnd(true)
@@ -1769,17 +1250,11 @@ export default function App() {
       await db.matches.delete(matchIdToDelete)
     })
 
-    // Notify server to delete match from matchDataStore
-    const ws = wsRef.current
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      try {
-        ws.send(JSON.stringify({
-          type: 'delete-match',
-          matchId: String(matchIdToDelete)
-        }))
-      } catch (err) {
-        // Ignore error
-      }
+    // Take the deleted match off the relay (its own room only)
+    const deletedRelayKey = relayMatchKey(matchToDelete)
+    if (deletedRelayKey) {
+      scorerPublisher.remove(deletedRelayKey)
+      if (publishedRelayKeyRef.current === deletedRelayKey) publishedRelayKeyRef.current = null
     }
 
     // Delete from Supabase if match hasn't ended (not 'final')

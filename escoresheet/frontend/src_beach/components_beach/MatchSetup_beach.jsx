@@ -11,7 +11,8 @@ import CountrySelect from './CountrySelect_beach'
 import CountryFlag from './CountryFlag_beach'
 // Beach volleyball ball image
 const ballImage = '/beachball.png'
-import { getWebSocketUrl, getBackendUrl, isBackendAvailable } from '../utils_beach/backendConfig_beach'
+import { isBackendAvailable, getCloudApiUrl } from '../utils_beach/backendConfig_beach'
+import { scorerPublisher, readRelayBundle } from '../utils_beach/relayPublisher_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { uploadBackupToCloud, uploadLogsToCloud } from '../utils_beach/logger_beach'
 import { apiFrom } from '../lib_beach/apiClient_beach'
@@ -1966,10 +1967,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           league: league || ''
         }
 
-        // Get backend URL from environment or use default
-        const backendUrl = getBackendUrl()
+        // The e-mail goes out from the cloud backend (a venue relay has none)
+        const sendInfoUrl = getCloudApiUrl('/api/match/send-info')
 
-        fetch(`${backendUrl}/api/match/send-info`, {
+        if (sendInfoUrl) fetch(sendInfoUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(emailData)
@@ -3056,8 +3057,9 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                           }
                           setSendingEmail(true)
                           try {
-                            const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
-                            const res = await fetch(`${backendUrl}/api/match/send-info`, {
+                            const sendInfoUrl = getCloudApiUrl('/api/match/send-info')
+                            if (!sendInfoUrl) throw new Error('No cloud backend')
+                            const res = await fetch(sendInfoUrl, {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({
@@ -4878,57 +4880,17 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     return generatePinCode(existingPins)
   }
 
-  // Sync match data to server (for when Scoreboard is not mounted)
-  // If fullSync is true, fetches all data (teams, players, sets, events) from IndexedDB
-  const syncMatchToServer = async (matchData, fullSync = false) => {
-    const wsUrl = getWebSocketUrl()
-    if (!wsUrl) return
-
+  // Sync the match to the relay (when the Scoreboard is not mounted), on the
+  // scorer's one relay connection (relayPublisher_beach): the whole match
+  // fresh from IndexedDB, in the relay's home/away shape. Without an open
+  // socket nothing is sent; App_beach syncs on the next (re)connect.
+  const syncMatchToServer = async (matchData) => {
+    if (!matchData?.id) return
     try {
-      // For full sync, fetch all data from IndexedDB
-      let team1 = null, team2 = null, team1Players = [], team2Players = [], sets = [], events = []
-
-      if (fullSync && matchData) {
-        const [fetchedTeam1, fetchedTeam2, fetchedSets, fetchedEvents, fetchedTeam1Players, fetchedTeam2Players] = await Promise.all([
-          matchData.team1Id ? db.teams.get(matchData.team1Id) : null,
-          matchData.team2Id ? db.teams.get(matchData.team2Id) : null,
-          db.sets.where('matchId').equals(matchData.id).toArray(),
-          db.events.where('matchId').equals(matchData.id).toArray(),
-          matchData.team1Id ? db.players.where('teamId').equals(matchData.team1Id).toArray() : [],
-          matchData.team2Id ? db.players.where('teamId').equals(matchData.team2Id).toArray() : []
-        ])
-        team1 = fetchedTeam1
-        team2 = fetchedTeam2
-        team1Players = fetchedTeam1Players
-        team2Players = fetchedTeam2Players
-        sets = fetchedSets
-        events = fetchedEvents
-      }
-
-      // Create a temporary WebSocket connection to sync the data
-      const ws = new WebSocket(wsUrl)
-
-      ws.onopen = () => {
-        const syncPayload = {
-          type: 'sync-match-data',
-          matchId: matchData.id,
-          match: matchData,
-          team1: team1,
-          team2: team2,
-          team1Players: team1Players,
-          team2Players: team2Players,
-          sets: sets,
-          events: events,
-          _timestamp: Date.now()
-        }
-        ws.send(JSON.stringify(syncPayload))
-        // Close after a short delay to ensure message is sent
-        setTimeout(() => ws.close(), 500)
-      }
-
-      ws.onerror = () => { }
+      const bundle = await readRelayBundle(db, matchData.id)
+      if (bundle?.key) scorerPublisher.sync(bundle.key, bundle.local)
     } catch (error) {
-      console.error('[MatchSetup] Failed to sync to server:', error)
+      console.error('[MatchSetup] Failed to sync to the relay:', error)
     }
   }
 
