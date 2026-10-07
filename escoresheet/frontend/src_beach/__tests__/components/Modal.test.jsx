@@ -334,4 +334,54 @@ describe('Modal', () => {
       expect(onClose).not.toHaveBeenCalled()
     })
   })
+
+  describe('a real dialog (keyboard on the desktop app)', () => {
+    const Scoring = ({ open, tone }) => (
+      <>
+        <button type="button">Point A</button>
+        <Modal open={open} onClose={() => {}} title="Confirm point" tone={tone}>
+          <button type="button">Cancel</button>
+          <button type="button">Give point</button>
+        </Modal>
+      </>
+    )
+
+    for (const tone of ['light', 'dark']) {
+      it(`${tone}: named by its title, focus moves in, Tab stays inside, focus and scroll come back`, () => {
+        const behind = document.createElement('button')
+        document.body.appendChild(behind)
+        behind.focus()
+        const { rerender } = render(<Scoring open tone={tone} />)
+        const dialog = screen.getByRole('dialog', { name: 'Confirm point' })
+        expect(dialog).toHaveAttribute('aria-modal', 'true')
+        expect(dialog.contains(document.activeElement)).toBe(true)
+        expect(document.body.style.overflow).toBe('hidden')
+
+        const buttons = Array.from(dialog.querySelectorAll('button'))
+        const last = buttons[buttons.length - 1]
+        last.focus()
+        fireEvent.keyDown(document, { key: 'Tab' })
+        expect(document.activeElement).toBe(buttons[0])
+        buttons[0].focus()
+        fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
+        expect(document.activeElement).toBe(last)
+        // focus that escaped behind the scrim is pulled back in
+        screen.getByText('Point A').focus()
+        fireEvent.keyDown(document, { key: 'Tab' })
+        expect(dialog.contains(document.activeElement)).toBe(true)
+
+        rerender(<Scoring open={false} tone={tone} />)
+        expect(document.activeElement).toBe(behind)
+        expect(document.body.style.overflow).toBe('')
+        behind.remove()
+      })
+    }
+
+    it('Escape still does nothing (scoring depends on it)', () => {
+      const onClose = vi.fn()
+      render(<Modal open onClose={onClose} title="T" tone="light"><button type="button">x</button></Modal>)
+      fireEvent.keyDown(document, { key: 'Escape' })
+      expect(onClose).not.toHaveBeenCalled()
+    })
+  })
 })
