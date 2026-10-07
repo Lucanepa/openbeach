@@ -1,10 +1,11 @@
 # Reference copy of the fdroiddata recipe (metadata/com.openvolley.beach.yml),
 # adapted from OpenVolley's (android/fdroid/com.openvolley.escoresheet.yml).
-# Before submitting it:
-#   - commit: the full hash the tag android-v2.0.0 points at
-#   - AllowedAPKSigningKeys: the SHA-256 of the OpenBeach signing certificate
-#     (~/.config/openbeach-android/release.p12; never OpenVolley's key):
-#     apksigner verify --print-certs <signed apk> | grep SHA-256
+# Before submitting it, set commit to the full hash the tag android-v2.0.0
+# points at (the tag does not exist yet; fdroid lint refuses the placeholder).
+# AllowedAPKSigningKeys is the SHA-256 of the OpenBeach signing certificate
+# (~/.config/openbeach-android/cert.sha256; never OpenVolley's 2c7f9db4…).
+# Check a signed APK against it:
+#   apksigner verify --print-certs <signed apk> | grep SHA-256
 # The owner-signed APK must be on the GitHub release android-v<versionName>
 # as com.openvolley.beach_<versionCode>.apk (Binaries below), so F-Droid can
 # check its own build against it byte for byte (ANDROID.md).
@@ -48,7 +49,7 @@ Builds:
     scandelete:
       - escoresheet/frontend/node_modules
 
-AllowedAPKSigningKeys: TODO-sha256-of-the-OpenBeach-signing-certificate
+AllowedAPKSigningKeys: 9faf8e1947e491a769a6da717afaa553c44de6fa9576dbceee19f099dae1deae
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^android-v[\d.]+$

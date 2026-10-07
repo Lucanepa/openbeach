@@ -56,7 +56,13 @@ allowlists = [
 ]
 
 # Lockfiles, vendored deps and build output are noise, not history worth purging.
+# The F-Droid recipe's AllowedAPKSigningKeys is the SHA-256 of the app's public
+# signing certificate (apksigner verify --print-certs), not a secret.
 [allowlist]
+regexTarget = "line"
+regexes = [
+  '''^AllowedAPKSigningKeys:\s*[0-9a-f]{64}$''',
+]
 paths = [
   '''(^|/)node_modules/''',
   '''(^|/)vendor/''',

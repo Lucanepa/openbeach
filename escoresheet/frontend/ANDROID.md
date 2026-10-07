@@ -47,8 +47,10 @@ The F-Droid metadata for the repos (`com.openvolley.beach.yml` and
 `/srv/fdroid/desktop-calendar/metadata/` and
 `~/.config/openvolley-pkgs/fdroid/metadata/`; the store texts and the icon are
 in `fastlane/metadata/android/en-US/` at the repo root. A reference copy of
-the f-droid.org recipe is `android/fdroid/com.openvolley.beach.yml` (fill in
-the commit and the signing certificate before submitting it).
+the f-droid.org recipe is `android/fdroid/com.openvolley.beach.yml`: its
+signing certificate is filled in (OpenBeach's own key); set `commit` to the
+full hash of the tag `android-v2.0.0` before submitting it or copying it into
+the metadata folders.
 
 Needs JDK 21 and the Android SDK in `~/Android/Sdk` (the script sets
 `ANDROID_HOME`).
