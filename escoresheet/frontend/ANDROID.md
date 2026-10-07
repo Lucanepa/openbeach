@@ -7,7 +7,7 @@ script and F-Droid pipeline) but is a separate app with its own id and its
 own signing key.
 
 - Package: `com.openvolley.beach`, name **OpenBeach**
-- Version 2.0.0 = versionCode `20000000`
+- Version 2.0.1 = versionCode `20000010` (2.0.0 = `20000000`)
 - The APK **bundles** the web app (`dist-capacitor/`): it works with no
   internet at all. Every web change that should reach the tablets needs a new
   release.
@@ -17,6 +17,11 @@ own signing key.
 - No `.env` files in this build (`envDir: false`): only the variables given on
   the command line reach the bundle, so the owner's build and F-Droid's are
   the same byte for byte.
+- A fixed stylesheet order (the `stable-css-order` plugin in `vite.config.js`,
+  since 2.0.1): Vite injects the `<link rel="stylesheet">` tags of the CSS
+  chunks several pages share (`tailwind_beach`, `flag-icons`) in an order that
+  depends on timing, so 2.0.0's `admin_beach.html` / `index.html` differed
+  between builds of the same commit. The plugin sorts them by file name.
 
 Planned channels, as for OpenVolley: the public F-Droid repo
 `https://get.openvolley.app/fdroid/repo`, the owner's private F-Droid repo
@@ -49,7 +54,7 @@ The F-Droid metadata for the repos (`com.openvolley.beach.yml` and
 in `fastlane/metadata/android/en-US/` at the repo root. A reference copy of
 the f-droid.org recipe is `android/fdroid/com.openvolley.beach.yml`: its
 signing certificate is filled in (OpenBeach's own key); set `commit` to the
-full hash of the tag `android-v2.0.0` before submitting it or copying it into
+full hash of the tag `android-v<version>` before submitting it or copying it into
 the metadata folders.
 
 Needs JDK 21 and the Android SDK in `~/Android/Sdk` (the script sets

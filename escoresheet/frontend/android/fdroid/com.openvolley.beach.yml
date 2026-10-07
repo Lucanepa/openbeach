@@ -47,9 +47,33 @@ Builds:
     scandelete:
       - escoresheet/frontend/node_modules
 
+  - versionName: 2.0.1
+    versionCode: 20000010
+    commit: TODO
+    subdir: escoresheet/frontend/android/app
+    sudo:
+      - curl -Lo node.tar.xz https://nodejs.org/dist/v22.23.3/node-v22.23.3-linux-x64.tar.xz
+      - echo "df450af89261115ef9f9e3830c3eeb2cc9213b63c720b1af623cb5dcbe2e02de node.tar.xz"
+        | sha256sum -c -
+      - tar xJf node.tar.xz --strip-components=1 -C /usr/local/
+    init:
+      - cd ../..
+      - npm ci --ignore-scripts
+    gradle:
+      - yes
+    prebuild:
+      - cd ../..
+      - CAPACITOR=true VITE_BACKEND_URL=https://backend.openvolley.app npx vite build
+        --outDir dist-capacitor --emptyOutDir
+      - npx cap sync android
+    scanignore:
+      - escoresheet/frontend/node_modules/pdfjs-dist/iccs
+    scandelete:
+      - escoresheet/frontend/node_modules
+
 AllowedAPKSigningKeys: 9faf8e1947e491a769a6da717afaa553c44de6fa9576dbceee19f099dae1deae
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^android-v[\d.]+$
-CurrentVersion: 2.0.0
-CurrentVersionCode: 20000000
+CurrentVersion: 2.0.1
+CurrentVersionCode: 20000010
