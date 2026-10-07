@@ -1348,7 +1348,16 @@
     "loadingScoresheets": "Spiilprotokoll wärde glade...",
     "errorLoadingScoresheets": "Fehler bim Lade vo de Spiilprotokoll",
     "scoresheetArchive": "Spiilprotokoll-Archiv",
-    "noScoresheetsYet": "No kei Spiilprotokoll ueglade"
+    "noScoresheetsYet": "No kei Spiilprotokoll ueglade",
+    "scoresheetCount": "{{count}} Spiilprotokoll",
+    "scoresheetCount_other": "{{count}} Spiilprotokoll",
+    "backToArchive": "Zrugg zum Archiv",
+    "downloadPdf": "PDF abelade",
+    "viewPdf": "PDF aaluege",
+    "noPdf": "Kei PDF",
+    "hideSidebar": "Siiteleischte uusblände",
+    "showSidebar": "Siiteleischte iiblände",
+    "selectCompetition": "Wähled Sie links en Wettbewerb"
   },
   "auth": {
     "signIn": "Aamälde",

@@ -1344,12 +1344,21 @@
   },
   "scoresheetApp": {
     "loadingScoresheet": "Loading scoresheet...",
-    "scoresheetNotFound": "Scoresheet Not Found",
-    "backToList": "Back to List",
+    "scoresheetNotFound": "Scoresheet not found",
+    "backToList": "Back to list",
     "loadingScoresheets": "Loading scoresheets...",
-    "errorLoadingScoresheets": "Error Loading Scoresheets",
-    "scoresheetArchive": "Scoresheet Archive",
-    "noScoresheetsYet": "No scoresheets uploaded yet"
+    "errorLoadingScoresheets": "Error loading scoresheets",
+    "scoresheetArchive": "Scoresheet archive",
+    "noScoresheetsYet": "No scoresheets uploaded yet",
+    "scoresheetCount": "{{count}} scoresheet",
+    "scoresheetCount_other": "{{count}} scoresheets",
+    "backToArchive": "Back to archive",
+    "downloadPdf": "Download PDF",
+    "viewPdf": "View PDF",
+    "noPdf": "No PDF",
+    "hideSidebar": "Hide sidebar",
+    "showSidebar": "Show sidebar",
+    "selectCompetition": "Select a competition from the sidebar"
   },
   "auth": {
     "signIn": "Sign In",

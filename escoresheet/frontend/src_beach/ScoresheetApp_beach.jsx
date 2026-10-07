@@ -3,6 +3,16 @@ import { useTranslation } from 'react-i18next'
 import { apiStorage } from './lib_beach/apiClient_beach'
 import { isBackendAvailable } from './utils_beach/backendConfig_beach'
 import { BEACH_SCORESHEET_PREFIX, parseFinalScoresheetName } from './utils_beach/scoresheetUploader_beach'
+import { ArrowLeft, ChevronRight, Download, FileText, FileX2, PanelLeft } from 'lucide-react'
+import { cn } from './ui/volleyui/cn.js'
+import { FOCUS_RING } from './ui/volleyui/Button.jsx'
+import { Card } from './ui/volleyui/Card.jsx'
+import { Row, RowList } from './ui/volleyui/Row.jsx'
+import { Chip, CountBadge } from './ui/volleyui/Chip.jsx'
+import { EmptyState } from './ui/volleyui/EmptyState.jsx'
+import { GateMessage } from './ui/volleyui/ErrorScreen.jsx'
+import { AppSpinner } from './ui/volleyui/AppSpinner.jsx'
+import { dayLabel } from './ui/volleyui/format.js'
 
 // Beach scoresheets live under beach/{date}/ in the shared bucket (indoor
 // writes {date}/ at the root)
@@ -140,12 +150,12 @@ const getUrlParams = () => {
   return { date, game }
 }
 
-// Label maps for display
+// Label maps for display (sentence case)
 const genderLabels = { men: 'Men', women: 'Women' }
-const phaseLabels = { main: 'Main Draw', main_draw: 'Main Draw', qualification: 'Qualification' }
+const phaseLabels = { main: 'Main draw', main_draw: 'Main draw', qualification: 'Qualification' }
 const roundLabels = {
-  pool: 'Pool Play', pool_play: 'Pool Play',
-  winner: 'Winner Bracket', winner_bracket: 'Winner Bracket',
+  pool: 'Pool play', pool_play: 'Pool play',
+  winner: 'Winner bracket', winner_bracket: 'Winner bracket',
   class: 'Classification', classification: 'Classification',
   semi_final: 'Semifinals', semifinals: 'Semifinals',
   finals: 'Finals'
@@ -176,6 +186,19 @@ const buildGroupedTree = (scoresheets) => {
 
   return years
 }
+
+// Full-page loading state (kit spinner on the warm stone page)
+const PageLoading = ({ label }) => (
+  <div className="ov-kit flex min-h-screen items-center justify-center bg-gradient-to-br from-stone-100 via-stone-50 to-stone-100 p-4">
+    <AppSpinner label={label} />
+  </div>
+)
+
+// An <a> styled as an h-11 kit button (toolbar, row tools)
+const TOOLBAR_LINK = cn(
+  'inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 text-sm font-semibold transition-colors',
+  FOCUS_RING
+)
 
 // Scoresheet PDF viewer — embeds the PDF from Supabase storage
 const ScoresheetViewer = ({ date, game }) => {
@@ -214,106 +237,128 @@ const ScoresheetViewer = ({ date, game }) => {
   }, [date, game])
 
   if (loading) {
-    return (
-      <div className="scoresheet-fullscreen-center">
-        <div className="scoresheet-loading-text">{t('scoresheetApp.loadingScoresheet')}</div>
-      </div>
-    )
+    return <PageLoading label={t('scoresheetApp.loadingScoresheet')} />
   }
 
   if (error) {
     return (
-      <div className="scoresheet-fullscreen-center scoresheet-fullscreen-col">
-        <div className="scoresheet-error-title">{t('scoresheetApp.scoresheetNotFound')}</div>
-        <div className="scoresheet-error-detail">{error}</div>
-        <button
-          onClick={() => window.location.href = '/'}
-          className="scoresheet-btn-back"
-        >
-          {t('scoresheetApp.backToList')}
-        </button>
+      <div className="ov-kit">
+        <GateMessage
+          icon={FileX2}
+          title={t('scoresheetApp.scoresheetNotFound')}
+          body={error}
+          action={{ label: t('scoresheetApp.backToList'), icon: <ArrowLeft className="h-4 w-4" aria-hidden />, onClick: () => { window.location.href = '/' } }}
+        />
       </div>
     )
   }
 
   return (
-    <div className="scoresheet-pdf-viewer">
-      <div className="scoresheet-pdf-toolbar">
-        <a href="/" className="scoresheet-btn-back">Back to archive</a>
-        <a href={pdfUrl} download={`game${game}.pdf`} className="scoresheet-btn-view">Download PDF</a>
+    <div className="ov-kit flex h-screen flex-col bg-stone-100">
+      <div className="flex shrink-0 items-center gap-2 border-b border-stone-200/70 bg-white px-4 py-2">
+        <a href="/" className={cn(TOOLBAR_LINK, 'border border-stone-300 bg-white text-stone-700 hover:bg-stone-50')}>
+          <ArrowLeft size={16} aria-hidden="true" />
+          {t('scoresheetApp.backToArchive', 'Back to archive')}
+        </a>
+        <a href={pdfUrl} download={`game${game}.pdf`} className={cn(TOOLBAR_LINK, 'ml-auto bg-slate-900 text-white hover:bg-slate-800')}>
+          <Download size={16} aria-hidden="true" />
+          {t('scoresheetApp.downloadPdf', 'Download PDF')}
+        </a>
       </div>
-      <iframe src={pdfUrl} className="scoresheet-pdf-frame" title={`Game ${game} scoresheet`} />
+      <iframe src={pdfUrl} className="w-full flex-1 border-0 bg-white" title={`Game ${game} scoresheet`} />
     </div>
   )
 }
 
-// Match card component
-const MatchCard = ({ item }) => (
-  <div className="scoresheet-match-card">
-    <div className="scoresheet-match-info">
-      <div className="scoresheet-match-badges">
-        <span className="scoresheet-badge-game">
-          #{item.gameN || item.game}
-        </span>
-        {item.finalScore && (
-          <span className="scoresheet-badge-score">
-            {item.finalScore}
-          </span>
-        )}
-      </div>
-      <div className="scoresheet-match-teams">
-        {item.team1 || 'Team A'} vs {item.team2 || 'Team B'}
-      </div>
-    </div>
-    <div className="scoresheet-match-actions">
-      {item.pdfPath ? (
+// One archived match: game number and final score chips, team 1 vs team 2, View PDF
+const MatchCard = ({ item }) => {
+  const { t } = useTranslation()
+  const team1 = item.team1 || 'Team A'
+  const team2 = item.team2 || 'Team B'
+  return (
+    <Row
+      stripe={false}
+      title={
+        <div className="min-w-0 text-left">
+          <p className="text-sm font-semibold leading-snug break-words text-stone-900 sm:text-[15px]">{team1}</p>
+          <p className="text-sm leading-snug break-words text-stone-600 sm:text-[15px]">
+            <span className="sr-only">{t('common.vs', 'vs')} </span>{team2}
+          </p>
+        </div>
+      }
+      chips={
+        <>
+          <Chip><span className="tabular-nums">#{item.gameN || item.game}</span></Chip>
+          {item.finalScore && <Chip tone="emerald"><span className="tabular-nums">{item.finalScore}</span></Chip>}
+        </>
+      }
+      status={item.pdfPath ? (
         <a
           href={`?date=${item.date}&game=${item.game}`}
-          className="scoresheet-btn-view"
+          className={cn('inline-flex h-11 items-center gap-1.5 rounded-lg bg-slate-900 px-3 text-xs font-medium text-white transition-colors hover:bg-slate-800', FOCUS_RING)}
         >
-          View PDF
+          <FileText size={14} aria-hidden="true" />
+          {t('scoresheetApp.viewPdf', 'View PDF')}
         </a>
       ) : (
-        <span className="scoresheet-no-pdf">No PDF</span>
+        <span className="text-xs text-stone-500">{t('scoresheetApp.noPdf', 'No PDF')}</span>
       )}
-    </div>
-  </div>
-)
+      className="min-h-11"
+    />
+  )
+}
 
-// Collapsible section component — collapsed by default
+// Collapsible section component — collapsed by default (gender > phase > round)
 const Section = ({ label, badge, level, defaultOpen = false, children }) => {
   const [open, setOpen] = useState(defaultOpen)
+  const sizes = ['text-base font-bold', 'text-sm font-semibold', 'text-sm font-medium']
 
   return (
-    <div className={`scoresheet-section scoresheet-section-l${level}`}>
+    <div className="mb-2" style={{ marginLeft: level > 0 ? 12 : 0 }}>
       <button
+        type="button"
         onClick={() => setOpen(!open)}
-        className={`scoresheet-section-btn scoresheet-section-btn-l${level}`}
-      >
-        <span className="scoresheet-section-arrow">{open ? '▼' : '▶'}</span>
-        <span>{label}</span>
-        {badge != null && (
-          <span className="scoresheet-section-badge">{badge}</span>
+        aria-expanded={open}
+        className={cn(
+          'flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-xl border border-stone-200/70 bg-white px-3 py-2 text-left shadow-card transition-colors hover:bg-stone-50',
+          FOCUS_RING
         )}
+      >
+        <ChevronRight
+          size={16}
+          className={cn('shrink-0 text-stone-400 transition-transform duration-200', open && 'rotate-90')}
+          aria-hidden
+        />
+        <span className={cn('min-w-0 text-stone-900', sizes[level] || sizes[2])}>{label}</span>
+        {badge != null && <CountBadge tone="stone">{badge}</CountBadge>}
       </button>
-      {open && <div className="scoresheet-section-content">{children}</div>}
+      {open && <div className="mt-1">{children}</div>}
     </div>
   )
 }
 
-// Sidebar navigation item
+// Sidebar navigation item: the chosen competition is slate-900
 const SidebarItem = ({ label, dateRange, count, active, onClick }) => (
   <button
+    type="button"
     onClick={onClick}
-    className={`scoresheet-sidebar-item ${active ? 'active' : ''}`}
+    aria-current={active || undefined}
+    className={cn(
+      'flex min-h-11 w-full flex-col gap-0.5 rounded-lg px-3 py-2 text-left transition-colors',
+      FOCUS_RING,
+      active ? 'bg-slate-900 text-white' : 'text-stone-700 hover:bg-stone-100'
+    )}
   >
-    <div className="scoresheet-sidebar-item-row">
-      <span className="scoresheet-sidebar-item-label">{label}</span>
-      <span className={`scoresheet-sidebar-item-count ${active ? 'active' : ''}`}>
+    <span className="flex w-full items-center gap-2">
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold">{label}</span>
+      <span className={cn(
+        'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums',
+        active ? 'bg-white/15 text-white' : 'bg-stone-100 text-stone-600'
+      )}>
         {count}
       </span>
-    </div>
-    {dateRange && <div className="scoresheet-sidebar-item-date">{dateRange}</div>}
+    </span>
+    {dateRange && <span className={cn('text-xs tabular-nums', active ? 'text-white/70' : 'text-stone-500')}>{dateRange}</span>}
   </button>
 )
 
@@ -356,18 +401,13 @@ const ScoresheetList = () => {
   }, [tree, selectedComp])
 
   if (loading) {
-    return (
-      <div className="scoresheet-fullscreen-center">
-        <div className="scoresheet-loading-text">{t('scoresheetApp.loadingScoresheets')}</div>
-      </div>
-    )
+    return <PageLoading label={t('scoresheetApp.loadingScoresheets')} />
   }
 
   if (error) {
     return (
-      <div className="scoresheet-fullscreen-center scoresheet-fullscreen-col">
-        <div className="scoresheet-error-title">{t('scoresheetApp.errorLoadingScoresheets')}</div>
-        <div className="scoresheet-error-detail">{error}</div>
+      <div className="ov-kit">
+        <GateMessage icon={FileX2} title={t('scoresheetApp.errorLoadingScoresheets')} body={error} />
       </div>
     )
   }
@@ -387,92 +427,102 @@ const ScoresheetList = () => {
     , 0)
 
   return (
-    <div className="scoresheet-archive-layout">
-      {/* Sidebar */}
-      <aside className={`scoresheet-sidebar ${sidebarOpen ? 'open' : ''}`}>
-        {/* Sidebar header */}
-        <div className="scoresheet-sidebar-header">
-          <img src="/openbeach_no_bg.png" alt="openBeach" style={{ width: 32, height: 32 }} />
-          <div style={{ minWidth: 0 }}>
-            <h1 className="scoresheet-sidebar-title">{t('scoresheetApp.scoresheetArchive')}</h1>
-            <p className="scoresheet-sidebar-subtitle">
-              {scoresheets.length} scoresheet{scoresheets.length !== 1 ? 's' : ''}
-            </p>
+    <div className="ov-kit flex h-screen overflow-hidden bg-stone-100 text-stone-800">
+      {/* Sidebar: beside the list from sm, a drawer over it on phones */}
+      {sidebarOpen && (
+        <div
+          aria-hidden="true"
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 z-40 bg-stone-900/40 sm:hidden"
+        />
+      )}
+      {sidebarOpen && (
+        <aside className="fixed inset-y-0 left-0 z-40 flex w-72 max-w-[85vw] shrink-0 flex-col border-r border-stone-200/70 bg-white shadow-xl sm:static sm:z-auto sm:shadow-none">
+          {/* Sidebar header */}
+          <div className="flex items-center gap-3 border-b border-stone-200/70 px-4 py-3">
+            <img src="/openbeach_no_bg.png" alt="OpenBeach" className="h-8 w-8 shrink-0" />
+            <div className="min-w-0">
+              <h1 className="truncate text-sm font-semibold text-stone-900">{t('scoresheetApp.scoresheetArchive')}</h1>
+              <p className="text-xs tabular-nums text-stone-500">
+                {t('scoresheetApp.scoresheetCount', { count: scoresheets.length })}
+              </p>
+            </div>
           </div>
-        </div>
 
-        {/* Sidebar body — scrollable */}
-        <nav className="scoresheet-sidebar-nav">
-          {scoresheets.length === 0 ? (
-            <div className="scoresheet-sidebar-empty">{t('scoresheetApp.noScoresheetsYet')}</div>
-          ) : (
-            sortedYears.map(year => {
-              const comps = Object.entries(tree[year])
-                .sort(([, a], [, b]) => {
-                  const aMin = [...a.dates].sort()[0] || ''
-                  const bMin = [...b.dates].sort()[0] || ''
-                  return bMin.localeCompare(aMin)
-                })
+          {/* Sidebar body — scrollable */}
+          <nav className="flex-1 overflow-y-auto p-3">
+            {scoresheets.length === 0 ? (
+              <p className="px-1 py-4 text-sm text-stone-500">{t('scoresheetApp.noScoresheetsYet')}</p>
+            ) : (
+              sortedYears.map(year => {
+                const comps = Object.entries(tree[year])
+                  .sort(([, a], [, b]) => {
+                    const aMin = [...a.dates].sort()[0] || ''
+                    const bMin = [...b.dates].sort()[0] || ''
+                    return bMin.localeCompare(aMin)
+                  })
 
-              return (
-                <div key={year} className="scoresheet-sidebar-year">
-                  <div className="scoresheet-sidebar-year-label">{year}</div>
-                  <div className="scoresheet-sidebar-comps">
-                    {comps.map(([compName, comp]) => {
-                      const sortedDates = [...comp.dates].sort()
-                      const dateRange = sortedDates.length === 1
-                        ? formatCompDate(sortedDates[0])
-                        : `${formatCompDate(sortedDates[0])} — ${formatCompDate(sortedDates[sortedDates.length - 1])}`
-                      const isActive = selectedComp?.year === year && selectedComp?.compName === compName
+                return (
+                  <div key={year} className="mb-4">
+                    <div className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-500 tabular-nums">{year}</div>
+                    <div className="flex flex-col gap-1">
+                      {comps.map(([compName, comp]) => {
+                        const sortedDates = [...comp.dates].sort()
+                        const dateRange = sortedDates.length === 1
+                          ? formatCompDate(sortedDates[0])
+                          : `${formatCompDate(sortedDates[0])} – ${formatCompDate(sortedDates[sortedDates.length - 1])}`
+                        const isActive = selectedComp?.year === year && selectedComp?.compName === compName
 
-                      return (
-                        <SidebarItem
-                          key={compName}
-                          label={compName}
-                          dateRange={dateRange}
-                          count={countCompMatches(comp)}
-                          active={isActive}
-                          onClick={() => setSelectedComp({ year, compName })}
-                        />
-                      )
-                    })}
+                        return (
+                          <SidebarItem
+                            key={compName}
+                            label={compName}
+                            dateRange={dateRange}
+                            count={countCompMatches(comp)}
+                            active={isActive}
+                            onClick={() => setSelectedComp({ year, compName })}
+                          />
+                        )
+                      })}
+                    </div>
                   </div>
-                </div>
-              )
-            })
-          )}
-        </nav>
-      </aside>
+                )
+              })
+            )}
+          </nav>
+        </aside>
+      )}
 
       {/* Main content */}
-      <main className="scoresheet-main">
+      <main className="flex min-w-0 flex-1 flex-col">
         {/* Top bar with sidebar toggle */}
-        <div className="scoresheet-topbar">
+        <div className="flex shrink-0 items-center gap-3 border-b border-stone-200/70 bg-white px-4 py-2">
           <button
+            type="button"
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="scoresheet-topbar-toggle"
-            title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+            aria-pressed={sidebarOpen}
+            className={cn('inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-600 transition-colors hover:bg-stone-100', FOCUS_RING)}
+            aria-label={sidebarOpen ? t('scoresheetApp.hideSidebar', 'Hide sidebar') : t('scoresheetApp.showSidebar', 'Show sidebar')}
+            title={sidebarOpen ? t('scoresheetApp.hideSidebar', 'Hide sidebar') : t('scoresheetApp.showSidebar', 'Show sidebar')}
           >
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <line x1="3" y1="5" x2="17" y2="5" />
-              <line x1="3" y1="10" x2="17" y2="10" />
-              <line x1="3" y1="15" x2="17" y2="15" />
-            </svg>
+            <PanelLeft size={18} aria-hidden="true" />
           </button>
           {selectedComp && (
-            <div>
-              <h2 className="scoresheet-topbar-title">{selectedComp.compName}</h2>
-              <p className="scoresheet-topbar-subtitle">{selectedComp.year}</p>
+            <div className="min-w-0">
+              <h2 className="truncate text-base font-bold tracking-tight text-stone-900">{selectedComp.compName}</h2>
+              <p className="text-xs tabular-nums text-stone-500">{selectedComp.year}</p>
             </div>
           )}
         </div>
 
         {/* Match content */}
-        <div className="scoresheet-content-area">
+        <div className="flex-1 overflow-y-auto px-4 py-6">
           {!selectedCompData ? (
-            <div className="scoresheet-empty-state">Select a competition from the sidebar</div>
+            <Card className="mx-auto max-w-md">
+              <EmptyState icon={FileText}>{t('scoresheetApp.selectCompetition', 'Select a competition from the sidebar')}</EmptyState>
+            </Card>
           ) : (
-            <div className="scoresheet-matches-container">
+            <div className="mx-auto max-w-3xl">
               {(() => {
                 const genderEntries = Object.entries(selectedCompData.genders)
                   .sort(([a], [b]) => {
@@ -503,11 +553,13 @@ const ScoresheetList = () => {
 
                               return (
                                 <Section key={round} label={roundLabel} badge={matches.length} level={2}>
-                                  <div className="scoresheet-match-list">
-                                    {sortedMatches.map(item => (
-                                      <MatchCard key={item.path} item={item} />
-                                    ))}
-                                  </div>
+                                  <Card pad="flush" stack={false} className="mb-2 ml-3 px-2">
+                                    <RowList soft>
+                                      {sortedMatches.map(item => (
+                                        <MatchCard key={item.path} item={item} />
+                                      ))}
+                                    </RowList>
+                                  </Card>
                                 </Section>
                               )
                             })}
@@ -526,15 +578,8 @@ const ScoresheetList = () => {
   )
 }
 
-// Format date for competition date range (short format)
-const formatCompDate = (dateStr) => {
-  try {
-    const date = new Date(dateStr + 'T12:00:00')
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  } catch {
-    return dateStr
-  }
-}
+// Format date for competition date range (Swiss short form, "06.10.")
+const formatCompDate = (dateStr) => dayLabel(dateStr) || dateStr
 
 // Main app component
 export default function ScoresheetApp() {

@@ -1348,7 +1348,16 @@
     "loadingScoresheets": "Caricamento referti...",
     "errorLoadingScoresheets": "Errore nel caricamento dei referti",
     "scoresheetArchive": "Archivio referti",
-    "noScoresheetsYet": "Nessun referto caricato"
+    "noScoresheetsYet": "Nessun referto caricato",
+    "scoresheetCount": "{{count}} referto",
+    "scoresheetCount_other": "{{count}} referti",
+    "backToArchive": "Torna all'archivio",
+    "downloadPdf": "Scarica PDF",
+    "viewPdf": "Vedi PDF",
+    "noPdf": "Nessun PDF",
+    "hideSidebar": "Nascondi pannello",
+    "showSidebar": "Mostra pannello",
+    "selectCompetition": "Scegli una competizione nel pannello"
   },
   "auth": {
     "signIn": "Accedi",

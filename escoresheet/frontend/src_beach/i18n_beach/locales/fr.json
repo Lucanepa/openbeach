@@ -1348,7 +1348,16 @@
     "loadingScoresheets": "Chargement des feuilles de match...",
     "errorLoadingScoresheets": "Erreur lors du chargement des feuilles de match",
     "scoresheetArchive": "Archive des feuilles de match",
-    "noScoresheetsYet": "Aucune feuille de match téléchargée"
+    "noScoresheetsYet": "Aucune feuille de match téléchargée",
+    "scoresheetCount": "{{count}} feuille de match",
+    "scoresheetCount_other": "{{count}} feuilles de match",
+    "backToArchive": "Retour à l'archive",
+    "downloadPdf": "Télécharger le PDF",
+    "viewPdf": "Voir le PDF",
+    "noPdf": "Pas de PDF",
+    "hideSidebar": "Masquer le panneau",
+    "showSidebar": "Afficher le panneau",
+    "selectCompetition": "Choisissez une compétition dans le panneau"
   },
   "auth": {
     "signIn": "Se connecter",
