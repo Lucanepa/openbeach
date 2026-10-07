@@ -27,7 +27,8 @@ import {
   applyServerParam,
   relayWsPortFor,
   rememberRelayWsPort,
-  normalizeRelayAddress
+  normalizeRelayAddress,
+  isVenueMode
 } from '../../utils_beach/backendConfig_beach'
 import { useMemoryLocalStorage } from '../helpers/memoryStorage'
 
@@ -270,5 +271,20 @@ describe('normalizeRelayAddress (the connection screen)', () => {
     const url = normalizeRelayAddress('evil.example.com')
     expect(isAllowedBackendUrl(url)).toBe(false)
     expect(normalizeRelayAddress('')).toBe('')
+  })
+})
+
+describe('isVenueMode: a missing cloud is the normal state', () => {
+  it('a page a relay serves (tablet or desktop window), or a LAN relay chosen', () => {
+    setLocation('http://192.168.1.20:5174/referee')
+    expect(isVenueMode()).toBe(true)
+    setLocation('http://localhost:5174/')
+    expect(isVenueMode()).toBe(true)
+    setLocation('https://beach.openvolley.app/')
+    expect(isVenueMode()).toBe(false)
+    setBackendOverride('http://192.168.1.20:5174')
+    expect(isVenueMode()).toBe(true)
+    setBackendOverride('https://backend.openvolley.app')
+    expect(isVenueMode()).toBe(false)
   })
 })

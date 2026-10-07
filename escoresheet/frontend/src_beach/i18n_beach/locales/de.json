@@ -1619,7 +1619,11 @@
     "statusInformation": "Statusinformationen",
     "statusLabel": "Status:",
     "messageLabel": "Nachricht:",
-    "connectionIssueDetected": "Verbindungsproblem erkannt"
+    "connectionIssueDetected": "Verbindungsproblem erkannt",
+    "venueMode": "Hallenmodus",
+    "venueNoRelay": "Kein Relay",
+    "notUsedHere": "Hier nicht genutzt",
+    "keptOnDevice": "Auf diesem Gerät gespeichert:"
   },
   "gameList": {
     "loadingGames": "Lade Spiele...",
@@ -2101,7 +2105,9 @@
     "dismiss": "Schliessen",
     "goOffline": "Offline gehen",
     "continue": "Weiter",
-    "goOfflineHint": "«Offline gehen» stoppt jeden Aufruf an die Cloud, bis die App neu geladen wird. Der Online-Schalter in der Kopfzeile behält die Wahl auch für spätere Besuche."
+    "goOfflineHint": "«Offline gehen» stoppt jeden Aufruf an die Cloud, bis die App neu geladen wird. Der Online-Schalter in der Kopfzeile behält die Wahl auch für spätere Besuche.",
+    "readyLocal": "Bereit: Spiele bleiben auf diesem Gerät",
+    "noCloud": "Keine Cloud-Verbindung"
   },
   "savedTeams": {
     "load": "Gespeichertes Team laden",

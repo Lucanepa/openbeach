@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import StartupConnectivityModal from '../../components_beach/StartupConnectivityModal_beach'
+import StartupConnectivityModal, { startupTitleKey } from '../../components_beach/StartupConnectivityModal_beach'
 
 // (a) With the cloud still connecting (or down) the only way out was "Go
 // offline", which also stored offline mode for good. "Continue" is always
@@ -34,5 +34,24 @@ describe('StartupConnectivityModal', () => {
   it('a venue tablet (no cloud there) is fine too', () => {
     render(<StartupConnectivityModal open connectionStatuses={{ db: 'connected', supabase: 'not_configured' }} onDismiss={() => {}} />)
     expect(screen.queryByRole('button', { name: /go offline/i })).toBeNull()
+  })
+
+  it('the title follows the rows: no internet on the desktop window is not "Connecting…"', () => {
+    render(<StartupConnectivityModal open connectionStatuses={{ db: 'connected', supabase: 'offline' }} />)
+    const title = screen.getByRole('heading')
+    expect(title).toHaveTextContent('No cloud connection')
+    expect(title).not.toHaveTextContent(/connecting/i)
+    expect(screen.getByText('Offline')).toBeInTheDocument()
+  })
+
+  it('title keys', () => {
+    expect(startupTitleKey({ db: 'connected', supabase: 'connecting' })).toBe('connecting')
+    expect(startupTitleKey({ db: 'connected', supabase: 'unknown' })).toBe('connecting')
+    expect(startupTitleKey({ db: 'connected', supabase: 'offline' })).toBe('noCloud')
+    expect(startupTitleKey({ db: 'connected', supabase: 'error' })).toBe('noCloud')
+    expect(startupTitleKey({ db: 'connecting', supabase: 'error' })).toBe('noCloud')
+    expect(startupTitleKey({ db: 'connected', supabase: 'connected' })).toBe('allConnected')
+    // A venue tablet: Not configured is not "all services connected"
+    expect(startupTitleKey({ db: 'connected', supabase: 'not_configured' })).toBe('readyLocal')
   })
 })

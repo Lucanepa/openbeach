@@ -1,9 +1,30 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '../ui/volleyui/cn.js'
 import { FOCUS_RING, MENU_TITLE, POPOVER_PANEL, STATUS_PILL, STATUS_TONES } from './chromeClasses_beach'
 
+/**
+ * The header badge in venue mode (backendConfig_beach isVenueMode: a page a
+ * relay serves, or a LAN relay chosen) while the cloud is not connected:
+ * the relay carries the match, so that is the normal state. A calm 'Venue
+ * mode' instead of 'Error' (no viable path without the cloud) or a
+ * 'Syncing…' that never ends (jobs wait for a cloud that is not there).
+ * Null when the usual badge applies (no venue, or the cloud is connected).
+ * Only a relay that does not answer is still an error.
+ * @param {{ connectionStatuses?: object, venueMode?: boolean }} p
+ * @returns {null|{ key: 'venue'|'venue_no_relay' }}
+ */
+export function venueBadge({ connectionStatuses = {}, venueMode = false } = {}) {
+  if (!venueMode) return null
+  const cloud = connectionStatuses.supabase
+  if (cloud === 'connected' || cloud === 'synced' || cloud === 'syncing') return null
+  if (connectionStatuses.server === 'disconnected' || connectionStatuses.server === 'error') return { key: 'venue_no_relay' }
+  return { key: 'venue' }
+}
+
 export default function ConnectionStatus({
+  venueMode = false,
   connectionStatuses = {},
   connectionDebugInfo = {},
   onCheckStatus,
@@ -12,6 +33,7 @@ export default function ConnectionStatus({
   position = 'right', // 'left' | 'right' | 'center'
   size = 'normal' // 'normal' | 'small' | 'large'
 }) {
+  const { t } = useTranslation()
 
   const [showConnectionMenu, setShowConnectionMenu] = useState(false)
   const [showDebugMenu, setShowDebugMenu] = useState(null) // Which connection type to show debug for
@@ -183,8 +205,13 @@ export default function ConnectionStatus({
     return 'connected'
   }
 
+  const venue = queueStats.error > 0 ? null : venueBadge({ connectionStatuses, venueMode })
   const overallStatus = queueStats.error > 0 ? 'attention' : getOverallStatus()
-  const statusInfo = getStatusColor(overallStatus)
+  const statusInfo = venue
+    ? (venue.key === 'venue'
+        ? { tone: 'ok', text: t('connectionStatus.venueMode', 'Venue mode') }
+        : { tone: 'error', text: t('connectionStatus.venueNoRelay', 'No relay') })
+    : getStatusColor(overallStatus)
 
   // Trigger sizes: the header uses 'normal' (h-8, the bar's button height).
   const sizeClasses = {
@@ -213,9 +240,10 @@ export default function ConnectionStatus({
       >
         <span className={cn('inline-block shrink-0 rounded-full', currentSize.dot, overallTone.dot)}></span>
         <span className="inline-flex items-center">
-          {overallStatus === 'connected' ? (queueStats.pending > 0 ? 'Syncing...' : 'Connected') :
-            overallStatus === 'awaiting_match' ? 'Ready' :
-              'Error'}
+          {venue ? statusInfo.text :
+            overallStatus === 'connected' ? (queueStats.pending > 0 ? 'Syncing...' : 'Connected') :
+              overallStatus === 'awaiting_match' ? 'Ready' :
+                'Error'}
           {queueStats.error > 0 && (
             <span className="ml-1 inline-flex min-w-[1.125rem] h-[1.125rem] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold tabular-nums text-white">
               {queueStats.error}
@@ -243,7 +271,10 @@ export default function ConnectionStatus({
           </div>
           <div className="space-y-1">
           {Object.entries(connectionStatuses).map(([key, status]) => {
-            const itemStatusInfo = getStatusColor(status, key)
+            const calmCloud = venue && key === 'supabase'
+            const itemStatusInfo = calmCloud
+              ? { tone: 'neutral', text: status === 'offline' ? 'Offline' : t('connectionStatus.notUsedHere', 'Not used here') }
+              : getStatusColor(status, key)
             const itemTone = STATUS_TONES[itemStatusInfo.tone]
 
             let displayText = itemStatusInfo.text
@@ -295,7 +326,7 @@ export default function ConnectionStatus({
                   <div className="mx-2 mb-2 mt-1 flex flex-col gap-1 rounded-lg bg-stone-50 p-2 text-[11px]">
                     {queueStats.pending > 0 && (
                       <div className="flex justify-between text-sky-800">
-                        <span>Pending background sync:</span>
+                        <span>{venue ? t('connectionStatus.keptOnDevice', 'Kept on this device:') : 'Pending background sync:'}</span>
                         <span className="font-bold tabular-nums">{queueStats.pending}</span>
                       </div>
                     )}
@@ -324,9 +355,9 @@ export default function ConnectionStatus({
                 {expandable && showDebugMenu === key && (
                   <div
                     onClick={(e) => e.stopPropagation()}
-                    className="mx-1 mb-2 mt-1 break-words rounded-lg border border-red-100 bg-red-50 p-2.5 text-[11px] leading-relaxed text-stone-700"
+                    className={cn('mx-1 mb-2 mt-1 break-words rounded-lg border p-2.5 text-[11px] leading-relaxed text-stone-700', calmCloud ? 'border-stone-200 bg-stone-50' : 'border-red-100 bg-red-50')}
                   >
-                    <div className="mb-1.5 text-xs font-semibold text-red-700">
+                    <div className={cn('mb-1.5 text-xs font-semibold', calmCloud ? 'text-stone-700' : 'text-red-700')}>
                       Status information
                     </div>
                     <div className="mb-1">

@@ -1619,7 +1619,11 @@
     "statusInformation": "Informations d'état",
     "statusLabel": "État :",
     "messageLabel": "Message :",
-    "connectionIssueDetected": "Problème de connexion détecté"
+    "connectionIssueDetected": "Problème de connexion détecté",
+    "venueMode": "Mode salle",
+    "venueNoRelay": "Pas de relais",
+    "notUsedHere": "Non utilisé ici",
+    "keptOnDevice": "Gardé sur cet appareil :"
   },
   "gameList": {
     "loadingGames": "Chargement des matchs...",
@@ -2101,7 +2105,9 @@
     "dismiss": "Fermer",
     "goOffline": "Passer hors ligne",
     "continue": "Continuer",
-    "goOfflineHint": "« Passer hors ligne » arrête tout appel au cloud jusqu’au rechargement de l’app. L’interrupteur En ligne de l’en-tête garde ce choix pour les prochaines visites."
+    "goOfflineHint": "« Passer hors ligne » arrête tout appel au cloud jusqu’au rechargement de l’app. L’interrupteur En ligne de l’en-tête garde ce choix pour les prochaines visites.",
+    "readyLocal": "Prêt : les matchs restent sur cet appareil",
+    "noCloud": "Pas de connexion au cloud"
   },
   "savedTeams": {
     "load": "Charger une équipe enregistrée",

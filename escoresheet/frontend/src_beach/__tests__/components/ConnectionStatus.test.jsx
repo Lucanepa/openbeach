@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import ConnectionStatus from '../../components_beach/ConnectionStatus_beach'
+import ConnectionStatus, { venueBadge } from '../../components_beach/ConnectionStatus_beach'
 
 // Mock db import
 vi.mock('../../db_beach/db_beach', () => ({
@@ -474,6 +474,39 @@ describe('ConnectionStatus', () => {
       await waitFor(() => {
         expect(screen.queryByText('Connection status')).not.toBeInTheDocument()
       })
+    })
+  })
+
+  // A venue tablet (a page the relay serves): the badge cycled between
+  // 'Error' (no viable path without the cloud) and 'Syncing…' (jobs waiting
+  // for a cloud that is not there)
+  describe('venue mode', () => {
+    const venue = { server: 'connected', websocket: 'not_configured', supabase: 'not_configured', match: 'no_match' }
+
+    it('a calm Venue mode instead of Error / Syncing…', () => {
+      const { rerender } = render(<ConnectionStatus {...defaultProps} venueMode connectionStatuses={venue} queueStats={{ pending: 3, error: 0 }} />)
+      const button = screen.getByRole('button')
+      expect(button).toHaveTextContent('Venue mode')
+      expect(button).not.toHaveTextContent(/Error|Syncing/)
+      rerender(<ConnectionStatus {...defaultProps} venueMode connectionStatuses={{ ...venue, websocket: 'disconnected', supabase: 'offline' }} queueStats={{ pending: 3, error: 0 }} />)
+      expect(screen.getByRole('button')).toHaveTextContent('Venue mode')
+      // Without venue mode the same states read as an error
+      rerender(<ConnectionStatus {...defaultProps} connectionStatuses={venue} queueStats={{ pending: 3, error: 0 }} />)
+      expect(screen.getByRole('button')).toHaveTextContent('Error')
+    })
+
+    it('the menu keeps the rows; the cloud row is not an alarm', () => {
+      render(<ConnectionStatus {...defaultProps} venueMode connectionStatuses={venue} queueStats={{ pending: 2, error: 0 }} />)
+      fireEvent.click(screen.getByRole('button'))
+      expect(screen.getByText('Not used here')).toBeInTheDocument()
+      expect(screen.getByText('Kept on this device:')).toBeInTheDocument()
+    })
+
+    it('venueBadge: the cloud connected, or a relay that does not answer, are not "venue mode"', () => {
+      expect(venueBadge({ venueMode: false, connectionStatuses: venue })).toBeNull()
+      expect(venueBadge({ venueMode: true, connectionStatuses: venue })).toEqual({ key: 'venue' })
+      expect(venueBadge({ venueMode: true, connectionStatuses: { ...venue, supabase: 'connected' } })).toBeNull()
+      expect(venueBadge({ venueMode: true, connectionStatuses: { ...venue, server: 'disconnected' } })).toEqual({ key: 'venue_no_relay' })
     })
   })
 })

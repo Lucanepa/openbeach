@@ -2,7 +2,7 @@ import { useEffect, useCallback, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db_beach/db_beach'
 import { apiFrom, apiMatchRestore, apiMatchClaim, AUTH_TOKEN_CHANGE_EVENT, AUTH_TOKEN_STORAGE_KEY } from '../lib_beach/apiClient_beach'
-import { getCloudApiUrl, isCloudOffline } from '../utils_beach/backendConfig_beach'
+import { getCloudApiUrl, isCloudOffline, isRelayOriginPage } from '../utils_beach/backendConfig_beach'
 import { ACCESS_CHANGED_EVENT } from '../lib_beach/access_beach'
 import { parseExtId, resolveJobExternalId, jobMatchKey } from '../utils_beach/syncIds_beach'
 import { buildConnectionPins } from '../utils_beach/connectionPins_beach'
@@ -308,6 +308,20 @@ const safeLog = {
 // a programming TypeError must not be mistaken for being offline.
 function isNetworkException(err) {
   return NETWORK_ERROR_MESSAGE.test(err?.message || '')
+}
+
+/**
+ * The /api/db the queue writes to, or null when there is none to try: offline
+ * mode (no cloud URL at all), or a page a venue relay serves to a tablet on
+ * the hall network. That page's "cloud" is the relay itself, which has no
+ * database: probing it every few seconds only made the header badge cycle
+ * between 'Error' and 'Syncing…'. The matches stay on the tablet (and reach
+ * the other screens through the relay).
+ * @returns {string|null}
+ */
+export function syncDbUrl() {
+  if (isRelayOriginPage()) return null
+  return getCloudApiUrl('/api/db')
 }
 
 /**
@@ -1246,6 +1260,8 @@ let currentSyncStatus = initialSyncStatus()
 function initialSyncStatus() {
   if (isCloudOffline()) return 'offline'
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'offline'
+  // A venue relay's page: no cloud to connect to (syncDbUrl)
+  if (isRelayOriginPage()) return 'online_no_supabase'
   return 'connecting'
 }
 /** The sync status every mounted useSyncQueue shows now. */
@@ -1278,7 +1294,7 @@ export function useSyncQueue() {
   const CONNECTION_CHECK_INTERVAL = 30000 // Only recheck every 30 seconds
 
   // Check backend/Supabase connection (with caching)
-  const hasBackend = () => !!getCloudApiUrl('/api/db')
+  const hasBackend = () => !!syncDbUrl()
   // Offline mode switched the cloud off: 'offline', not "no cloud here"
   const noBackendStatus = () => (isCloudOffline() ? 'offline' : 'online_no_supabase')
   const checkSupabaseConnection = useCallback(async (forceCheck = false) => {

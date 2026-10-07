@@ -15,7 +15,8 @@ import { SkeletonRows } from './ui/volleyui/Skeleton.jsx'
 import { Modal as KitModal } from './ui/volleyui/Modal.jsx'
 import { EntryPage, EntryCard, PinInput, ListLabel, GameRow } from './components_beach/dashboards/EntryKit_beach.jsx'
 import { db } from './db_beach/db_beach'
-import { getRelayWebSocketUrl, isLanBackendUrl } from './utils_beach/backendConfig_beach'
+import { getRelayWebSocketUrl, isLanBackendUrl, isRelayOriginPage } from './utils_beach/backendConfig_beach'
+import { loadRefereeMatches } from './utils_beach/refereeMatches_beach'
 
 // A relay on the internet (the cloud) may need longer to answer than one on the venue LAN
 const isCloudRelayUrl = (wsUrl) => !isLanBackendUrl(String(wsUrl).replace(/^ws/, 'http'))
@@ -226,18 +227,11 @@ export default function RefereeApp() {
   const loadMatches = useCallback(async () => {
     setLoadingMatches(true)
     try {
-      // Try Supabase first (cloud database)
-      let result = await listAvailableMatchesSupabase()
-      let source = 'supabase'
-
-      // If Supabase fails or returns no matches, try WebSocket server
-      if (!result.success || (result.matches && result.matches.length === 0)) {
-        const wsResult = await listAvailableMatches()
-        if (wsResult.success && wsResult.matches && wsResult.matches.length > 0) {
-          result = wsResult
-          source = 'websocket'
-        }
-      }
+      const { result } = await loadRefereeMatches({
+        relayOrigin: isRelayOriginPage(),
+        listCloud: listAvailableMatchesSupabase,
+        listRelay: listAvailableMatches
+      })
 
       if (result.success && result.matches) {
         console.debug('[RefereeApp] Loaded matches:', result.matches.map(m => ({

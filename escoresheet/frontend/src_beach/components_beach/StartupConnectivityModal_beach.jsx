@@ -23,6 +23,23 @@ export const isStatusOk = (status) => {
 }
 
 const isPending = (status) => !status || status === 'unknown' || status === 'connecting'
+const isConnected = (status) => status === 'connected' || status === 'synced' || status === 'syncing' || status === 'live'
+
+/**
+ * Which title the rows below it support: 'connecting' while one still
+ * checks, 'noCloud' once one failed (the desktop window without internet:
+ * the cloud row says Offline, the title said "Connecting…" for good),
+ * 'allConnected' only when every row is connected, else 'readyLocal' (a
+ * venue tablet, a build without a cloud: rows that say Not configured).
+ * @param {Record<string, string>} connectionStatuses
+ * @returns {'connecting'|'noCloud'|'allConnected'|'readyLocal'}
+ */
+export function startupTitleKey(connectionStatuses = {}) {
+  const statuses = PRIMARY_KEYS.map(key => connectionStatuses[key])
+  if (statuses.some(s => !isPending(s) && !isStatusOk(s))) return 'noCloud'
+  if (statuses.some(isPending)) return 'connecting'
+  return statuses.every(isConnected) ? 'allConnected' : 'readyLocal'
+}
 
 export default function StartupConnectivityModal({
   open,
@@ -130,9 +147,12 @@ export default function StartupConnectivityModal({
         className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
       >
         <h3 id="ob-startup-title" className="mb-5 text-center text-lg font-bold text-stone-900">
-          {primaryOk
-            ? t('startupConnectivity.allConnected', 'All services connected')
-            : t('startupConnectivity.connecting', 'Connecting…')}
+          {{
+            allConnected: () => t('startupConnectivity.allConnected', 'All services connected'),
+            readyLocal: () => t('startupConnectivity.readyLocal', 'Ready: matches are kept on this device'),
+            noCloud: () => t('startupConnectivity.noCloud', 'No cloud connection'),
+            connecting: () => t('startupConnectivity.connecting', 'Connecting…')
+          }[startupTitleKey(connectionStatuses)]()}
         </h3>
 
         <div className="divide-y divide-stone-100 rounded-xl border border-stone-200/70">

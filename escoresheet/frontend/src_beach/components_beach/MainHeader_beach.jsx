@@ -6,7 +6,7 @@ import TabletStatusIndicator from './TabletStatusIndicator_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { Bell, BookOpen, ChevronDown, ChevronUp, ClipboardList, House, Maximize, Menu, Minimize, Power, SatelliteDish, X, ZoomIn } from 'lucide-react'
 import { isDesktopScoretable, requestDesktopQuit } from '../utils_beach/appLifecycle_beach'
-import { getCloudApiUrl, isRelayOriginPage } from '../utils_beach/backendConfig_beach'
+import { getCloudApiUrl, isRelayOriginPage, isVenueMode } from '../utils_beach/backendConfig_beach'
 import UserButton from './auth/UserButton_beach'
 import { cn } from '../ui/volleyui/cn.js'
 import { SwitchTrack } from '../ui/volleyui/Switch.jsx'
@@ -622,6 +622,7 @@ export default function MainHeader({
           {/* Connection Status - only show in online mode */}
           {!offlineMode && (
             <ConnectionStatus
+              venueMode={isVenueMode()}
               connectionStatuses={connectionStatuses}
               connectionDebugInfo={connectionDebugInfo}
               queueStats={queueStats}

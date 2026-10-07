@@ -110,9 +110,11 @@ vi.mock('../../lib_beach/apiClient_beach', () => {
   }
 })
 
-vi.mock('../../utils_beach/backendConfig_beach', () => ({ getApiUrl: (p) => `http://backend.test${p}`, getCloudApiUrl: (p) => `http://backend.test${p}`, isCloudOffline: () => false, isRelayOriginPage: () => false }))
+const venue = vi.hoisted(() => ({ relayOrigin: false }))
+vi.mock('../../utils_beach/backendConfig_beach', () => ({ getApiUrl: (p) => `http://backend.test${p}`, getCloudApiUrl: (p) => `http://backend.test${p}`, isCloudOffline: () => false, isRelayOriginPage: () => venue.relayOrigin }))
 
 import {
+  syncDbUrl,
   runQueuePass,
   retryErrorsInternal,
   payloadCovers,
@@ -851,6 +853,25 @@ describe('useSyncQueue flush loop', () => {
     unmount()
   })
 
+  it('a venue relay\'s page: no /api/db probe at all, a calm no-cloud status', async () => {
+    venue.relayOrigin = true
+    try {
+      fakeDb.sync_queue.reset([
+        { id: 1, resource: 'match', action: 'insert', status: 'queued', payload: { external_id: 'match_100_aaa' } }
+      ])
+      api.calls.length = 0
+      const { result, unmount } = renderHook(() => useSyncQueue())
+      await act(async () => { await vi.advanceTimersByTimeAsync(60000) })
+      expect(api.calls).toHaveLength(0)
+      expect(result.current.syncStatus).toBe('online_no_supabase')
+      // Kept on the tablet
+      expect(fakeDb.sync_queue.map.get(1)).toMatchObject({ status: 'queued' })
+      unmount()
+    } finally {
+      venue.relayOrigin = false
+    }
+  })
+
   it('reports synced while signed out with nothing waiting', async () => {
     localStorage.removeItem('api_auth_token')
     fakeDb.sync_queue.reset([])
@@ -899,5 +920,17 @@ describe('useSyncQueue flush loop', () => {
     expect(fakeDb.sync_queue.map.get(1).status).toBe('sent')
     expect(result.current.syncStatus).toBe('synced')
     unmount()
+  })
+})
+
+describe('syncDbUrl: where the queue writes', () => {
+  it('the cloud /api/db; none on a page a venue relay serves (no probe of the relay)', () => {
+    expect(syncDbUrl()).toBe('http://backend.test/api/db')
+    venue.relayOrigin = true
+    try {
+      expect(syncDbUrl()).toBeNull()
+    } finally {
+      venue.relayOrigin = false
+    }
   })
 })

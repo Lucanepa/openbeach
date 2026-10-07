@@ -1619,7 +1619,11 @@
     "statusInformation": "Status-Information",
     "statusLabel": "Status:",
     "messageLabel": "Nachricht:",
-    "connectionIssueDetected": "Verbindigsproblem erkannt"
+    "connectionIssueDetected": "Verbindigsproblem erkannt",
+    "venueMode": "Hallemodus",
+    "venueNoRelay": "Kei Relay",
+    "notUsedHere": "Da nöd bruucht",
+    "keptOnDevice": "Uf däm Grät gspeicheret:"
   },
   "gameList": {
     "loadingGames": "Spiil werdet glade...",
@@ -2101,7 +2105,9 @@
     "dismiss": "Schliesse",
     "goOffline": "Offline gah",
     "continue": "Wiiter",
-    "goOfflineHint": "«Offline gah» stoppt jede Ufruef a d Cloud, bis d App neu glade wird. De Online-Schalter i de Chopfziile bhaltet d Wahl au für spöteri Bsüech."
+    "goOfflineHint": "«Offline gah» stoppt jede Ufruef a d Cloud, bis d App neu glade wird. De Online-Schalter i de Chopfziile bhaltet d Wahl au für spöteri Bsüech.",
+    "readyLocal": "Parat: Spiel bliibed uf däm Grät",
+    "noCloud": "Kei Cloud-Verbindig"
   },
   "savedTeams": {
     "load": "Gespeichertes Team laden",

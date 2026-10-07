@@ -15,7 +15,7 @@ import SimpleHeader from './SimpleHeader_beach'
 import DonutCountdown from './DonutCountdown_beach'
 import { supabase } from '../lib_beach/supabaseClient_beach'  // Realtime only
 import { apiFrom } from '../lib_beach/apiClient_beach'
-import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
+import { isBackendAvailable, isVenueMode } from '../utils_beach/backendConfig_beach'
 import { useSyncQueue } from '../hooks_beach/useSyncQueue_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { Bell, ChevronDown, Database, Loader2, Maximize, Moon, RefreshCw, SatelliteDish, Sun, TriangleAlert, X } from 'lucide-react'
@@ -1704,6 +1704,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             </button>
 
             <ConnectionStatus
+              venueMode={isVenueMode()}
               connectionStatuses={connectionStatuses}
               connectionDebugInfo={{
                 ...connectionDebugInfo,

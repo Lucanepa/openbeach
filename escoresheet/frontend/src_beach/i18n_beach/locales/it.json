@@ -1619,7 +1619,11 @@
     "statusInformation": "Stato",
     "statusLabel": "Stato:",
     "messageLabel": "Messaggio:",
-    "connectionIssueDetected": "Problema di connessione rilevato"
+    "connectionIssueDetected": "Problema di connessione rilevato",
+    "venueMode": "Modalità palestra",
+    "venueNoRelay": "Nessun relay",
+    "notUsedHere": "Non usato qui",
+    "keptOnDevice": "Tenuto su questo dispositivo:"
   },
   "gameList": {
     "loadingGames": "Caricamento partite...",
@@ -2101,7 +2105,9 @@
     "dismiss": "Chiudi",
     "goOffline": "Vai offline",
     "continue": "Continua",
-    "goOfflineHint": "«Vai offline» ferma ogni chiamata al cloud fino al ricaricamento dell’app. L’interruttore Online nell’intestazione mantiene la scelta anche per le visite successive."
+    "goOfflineHint": "«Vai offline» ferma ogni chiamata al cloud fino al ricaricamento dell’app. L’interruttore Online nell’intestazione mantiene la scelta anche per le visite successive.",
+    "readyLocal": "Pronto: le partite restano su questo dispositivo",
+    "noCloud": "Nessuna connessione al cloud"
   },
   "savedTeams": {
     "load": "Carica squadra salvata",

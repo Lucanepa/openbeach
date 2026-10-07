@@ -38,7 +38,9 @@ vi.mock('../../utils_beach/backendConfig_beach', () => ({
   getWebSocketUrl: () => null,
   getCloudWebSocketUrl: () => null,
   getRelayWebSocketUrl: () => process.env.OB_BACKEND_URL.replace(/^http/, 'ws'),
-  getBackendUrl: () => process.env.OB_BACKEND_URL
+  getBackendUrl: () => process.env.OB_BACKEND_URL,
+  isCloudOffline: () => false,
+  isRelayOriginPage: () => false
 }))
 
 const tag = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`

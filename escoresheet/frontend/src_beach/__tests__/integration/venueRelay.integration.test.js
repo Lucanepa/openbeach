@@ -35,7 +35,9 @@ vi.mock('../../utils_beach/backendConfig_beach', () => ({
   getBackendUrl: () => relay.base,
   getRelayWebSocketUrl: () => relay.base.replace(/^http/, 'ws'),
   getWebSocketUrl: () => relay.base.replace(/^http/, 'ws'),
-  getCloudWebSocketUrl: () => null
+  getCloudWebSocketUrl: () => null,
+  isCloudOffline: () => false,
+  isRelayOriginPage: () => false
 }))
 // The referee's cloud reads: none at this venue
 vi.mock('../../lib_beach/apiClient_beach', () => ({ apiFrom: vi.fn(() => { throw new Error('no cloud at the venue') }) }))

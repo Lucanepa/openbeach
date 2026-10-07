@@ -578,6 +578,20 @@ export function isRelayOriginPage() {
 }
 
 /**
+ * Is this device working through a venue relay: a page a local relay serves
+ * (a tablet on the hall network, or the desktop window itself), or a relay
+ * chosen on the connection screen (a LAN address)? The relay then carries
+ * the match to the other screens with or without the internet, so a missing
+ * cloud is the normal state there ("Venue mode"), not an error.
+ * @returns {boolean}
+ */
+export function isVenueMode() {
+  if (isServedFromLocalServer()) return true
+  const override = getBackendOverride()
+  return !!override && isLanBackendUrl(override)
+}
+
+/**
  * Base URL of the CLOUD API: /api/db, /api/auth/*, /api/storage/*, the match
  * restore / claim / PIN endpoints, saved teams and the database realtime
  * socket. Kept apart from the relay (getBackendUrl / getRelayWebSocketUrl),

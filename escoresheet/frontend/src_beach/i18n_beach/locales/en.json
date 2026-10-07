@@ -1620,7 +1620,11 @@
     "statusInformation": "Status Information",
     "statusLabel": "Status:",
     "messageLabel": "Message:",
-    "connectionIssueDetected": "Connection issue detected"
+    "connectionIssueDetected": "Connection issue detected",
+    "venueMode": "Venue mode",
+    "venueNoRelay": "No relay",
+    "notUsedHere": "Not used here",
+    "keptOnDevice": "Kept on this device:"
   },
   "gameList": {
     "loadingGames": "Loading games...",
@@ -2102,7 +2106,9 @@
     "dismiss": "Dismiss",
     "goOffline": "Go offline",
     "continue": "Continue",
-    "goOfflineHint": "Go offline stops every cloud call until the app is reloaded. The Online switch in the header keeps it for later visits."
+    "goOfflineHint": "Go offline stops every cloud call until the app is reloaded. The Online switch in the header keeps it for later visits.",
+    "readyLocal": "Ready: matches are kept on this device",
+    "noCloud": "No cloud connection"
   },
   "savedTeams": {
     "load": "Load saved team",
