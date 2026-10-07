@@ -20,6 +20,7 @@ import { debugLogger, createStateSnapshot } from '../utils_beach/debugLogger_bea
 import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { apiFrom } from '../lib_beach/apiClient_beach'
 import { setExtId, eventExtId } from '../utils_beach/syncIds_beach'
+import { changesSetScore, isLiveSetInterval, queueSetScoreSync } from '../utils_beach/eventSync_beach'
 import { buildConnectionPins } from '../utils_beach/connectionPins_beach'
 import { isBackendAvailable, getApiUrl, isNativeApp } from '../utils_beach/backendConfig_beach'
 import { lockLandscape as lockNativeLandscape, unlockOrientation as unlockNativeOrientation } from '../utils_beach/nativeOrientation_beach'
@@ -1017,6 +1018,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const match = await db.matches.get(matchId)
       if (!match || match.test) return
 
+      // The cloud sets row follows the score during the set (as OpenVolley):
+      // queued, so it reaches the cloud offline-first
+      if (changesSetScore(eventType)) void queueSetScoreSync(db, { matchId })
+
       // Get the Supabase match UUID
       let supabaseMatchId = null
       const externalId = match.externalId
@@ -1054,7 +1059,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       if (!snapshot) return
 
       // Determine match status from event type and current state
-      const isSetInterval = eventType === 'set_end' || (match?.status === 'interval' && !isSetFinished)
+      // Was the set the snapshot shows finished already (then it counts it)?
+      const snapshotSet = match?.status === 'interval'
+        ? await db.sets.where('matchId').equals(matchId).and(s => s.index === snapshot.currentSetIndex).first()
+        : null
+      const isSetInterval = isLiveSetInterval({
+        eventType,
+        matchStatus: match?.status,
+        snapshotSetFinished: snapshotSet?.finished === true
+      })
       const isTimeout = eventType === 'timeout' || (timeoutModal !== null)
       const isTto = eventType !== 'end_tto' && (eventType === 'technical_to' || eventType === 'tto_start' || (ttoModal !== null && ttoModal.started))
 
