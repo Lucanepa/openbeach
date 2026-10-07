@@ -1510,25 +1510,6 @@
     "messageLabel": "Nachricht:",
     "connectionIssueDetected": "Verbindigsproblem erkannt"
   },
-  "dashboardOptions": {
-    "supabase": "OpenVolley Cloud",
-    "webSocket": "WebSocket",
-    "none": "Keis",
-    "options": "Optione",
-    "connection": "Verbindig",
-    "fallback": "Fallback",
-    "active": "Aktiv:",
-    "connectionType": "Verbindigstyp",
-    "autoRecommended": "Auto (Empfohle)",
-    "supabasePrimaryFallback": "OpenVolley Cloud primär, WebSocket Fallback",
-    "supabaseOnly": "Nur OpenVolley Cloud",
-    "databaseRealtimeOnly": "Nur Datebank-Echtziit",
-    "webSocketOnly": "Nur WebSocket",
-    "directServerConnection": "Direkti Server-Verbindig",
-    "clearing": "Lösche...",
-    "clearCacheAndData": "Cache & Date lösche",
-    "clearCacheConfirmation": "Das löscht alli cachte Date inkl. Spiilständ. Sind Sie sicher?"
-  },
   "gameList": {
     "loadingGames": "Spiil werdet glade...",
     "noGamesAvailable": "Kei Spiil verfüegbar.",

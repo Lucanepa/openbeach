@@ -1510,25 +1510,6 @@
     "messageLabel": "Message :",
     "connectionIssueDetected": "Problème de connexion détecté"
   },
-  "dashboardOptions": {
-    "supabase": "OpenVolley Cloud",
-    "webSocket": "WebSocket",
-    "none": "Aucun",
-    "options": "Options",
-    "connection": "Connexion",
-    "fallback": "Fallback",
-    "active": "Actif :",
-    "connectionType": "Type de connexion",
-    "autoRecommended": "Auto (Recommandé)",
-    "supabasePrimaryFallback": "OpenVolley Cloud principal, WebSocket fallback",
-    "supabaseOnly": "OpenVolley Cloud uniquement",
-    "databaseRealtimeOnly": "Base de données temps réel uniquement",
-    "webSocketOnly": "WebSocket uniquement",
-    "directServerConnection": "Connexion serveur directe",
-    "clearing": "Suppression...",
-    "clearCacheAndData": "Effacer cache et données",
-    "clearCacheConfirmation": "Cela supprimera toutes les données en cache, y compris les états de match. Êtes-vous sûr ?"
-  },
   "gameList": {
     "loadingGames": "Chargement des matchs...",
     "noGamesAvailable": "Aucun match disponible.",
