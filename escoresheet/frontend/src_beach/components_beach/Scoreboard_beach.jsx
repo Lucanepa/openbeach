@@ -41,6 +41,7 @@ import { ChevronDown, ChevronUp, Ban, Expand, IdCard, KeyRound, ListChecks, Menu
 import { cn } from '../ui/volleyui/cn.js'
 import { FOCUS_RING } from '../ui/volleyui/Button.jsx'
 import { AppSpinner } from '../ui/volleyui/AppSpinner.jsx'
+import { dayLabel, timeSecondsLabel } from '../ui/volleyui/format.js'
 
 // ── volleyui chrome for the scoring screen ───────────────────────────────────
 // Only the chrome around the court takes these: the toolbar, the side columns,
@@ -2255,17 +2256,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
   // Get players for each team
  
-  const formatTimestamp = useCallback(date => {
-    return date.toLocaleString(undefined, {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
-    })
-  }, [])
+  // The Zürich clock, 24-hour, day first: the same on every device on a court
+  const formatTimestamp = useCallback(date => `${dayLabel(date, { year: true })} ${timeSecondsLabel(date)}`, [])
 
   const isBrightColor = useCallback(color => {
     if (!color || color === 'image.png') return false
@@ -13656,7 +13648,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           className="secondary"
                           onClick={() => {
                             const logText = manualChangesLog.map(c => {
-                              const time = new Date(c.ts).toLocaleTimeString()
+                              const time = timeSecondsLabel(c.ts)
                               return `[${time}] ${c.category} - ${c.field}: "${c.before}" → "${c.after}"`
                             }).join('\n')
                             navigator.clipboard.writeText(logText)

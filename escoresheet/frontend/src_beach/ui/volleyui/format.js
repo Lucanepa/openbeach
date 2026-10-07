@@ -101,6 +101,19 @@ export function timeLabel(value) {
   return p.valid && p.timed ? `${pad(p.hour)}:${pad(p.minute)}` : '';
 }
 
+// Seconds only for live clocks (the scoring toolbar, an event's time).
+const secondsFmt = new Intl.DateTimeFormat('en-GB', {
+  timeZone: APP_TZ, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+});
+
+/** "20:45:07", the Zürich clock with seconds (24-hour), '' for no instant. */
+export function timeSecondsLabel(value) {
+  const d = value instanceof Date ? value : new Date(typeof value === 'string' ? value.replace(' ', 'T') : value);
+  if (Number.isNaN(d.getTime())) return '';
+  const part = Object.fromEntries(secondsFmt.formatToParts(d).map((x) => [x.type, x.value]));
+  return `${part.hour === '24' ? '00' : part.hour}:${part.minute}:${part.second}`;
+}
+
 /** "Di 21.09.": the date shorthand list rows use. */
 export function shortDayLabel(value, lang = 'DE') {
   const p = zonedParts(value);

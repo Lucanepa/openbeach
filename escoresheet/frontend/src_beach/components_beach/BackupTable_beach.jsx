@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { loadCloudBackup } from '../utils_beach/logger_beach'
 import { formatBackupDateTime } from '../utils_beach/dateFormatter_beach'
+import { dayTimeLabel } from '../ui/volleyui/format.js'
 import { useTranslation } from 'react-i18next'
 import { cn } from '../ui/volleyui/cn.js'
 import { FOCUS_RING_INSET } from '../ui/volleyui/Button.jsx'
@@ -179,7 +180,7 @@ export default function BackupTable({
       }).map((backup, index) => {
         const formattedTime = backup.date && backup.time
           ? formatBackupDateTime(backup.date, backup.time, backup.ms)
-          : (backup.created_at || backup.updated_at ? new Date(backup.created_at || backup.updated_at).toLocaleString() : 'Unknown')
+          : (backup.created_at || backup.updated_at ? dayTimeLabel(backup.created_at || backup.updated_at) : 'Unknown')
 
         const lastAction = loadingActions[backup.path]
           ? 'Loading...'

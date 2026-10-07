@@ -1,23 +1,11 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { formatTimeLocal } from '../utils_beach/timeUtils_beach'
+import { dayTimeLabel } from '../ui/volleyui/format.js'
 
+/** "15.06.2024 16:00", the Zürich clock (24-hour, day first) on every device. */
 function formatDateTime(iso, fallback) {
   if (!iso) return fallback
-  try {
-    const date = new Date(iso)
-    // Format date in local timezone
-    const datePart = date.toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: '2-digit'
-    })
-    // Format time using utility for consistency
-    const timePart = formatTimeLocal(iso)
-    return `${datePart}, ${timePart}`
-  } catch (error) {
-    return iso
-  }
+  return dayTimeLabel(iso) || iso
 }
 
 export default function GameList({ matches, loading, onSelectMatch, onDeleteMatchData, onLoadTestData }) {

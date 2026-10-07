@@ -26,6 +26,7 @@ import { StatusPill } from '../ui/volleyui/StatusPill.jsx'
 import { Modal as KitModal } from '../ui/volleyui/Modal.jsx'
 import { NarrowScreenOverlay } from './dashboards/EntryKit_beach.jsx'
 import { HEADER_BAR, HEADER_BTN, HEADER_BTN_ON, MENU_PANEL, MENU_SUBROW, MENU_ROW_ON } from './chromeClasses_beach'
+import { timeSecondsLabel } from '../ui/volleyui/format.js'
 
 // Get current version from package.json (injected by Vite at build time)
 const currentVersion = __APP_VERSION__
@@ -2984,7 +2985,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             {lastEvent ? (
               <>
                 <span style={{ color: 'var(--ov-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-                  {new Date(lastEvent.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  {timeSecondsLabel(lastEvent.timestamp)}
                 </span>
                 <span style={{ fontWeight: 600, color: 'var(--ov-text-body)' }}>
                   {(() => {
