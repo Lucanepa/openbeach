@@ -7,7 +7,6 @@ import { apiFrom } from '../lib_beach/apiClient_beach'
 import { setExtId, eventExtId } from '../utils_beach/syncIds_beach'
 import { isBackendAvailable, getBackendUrl } from '../utils_beach/backendConfig_beach'
 import SignaturePad from './SignaturePad_beach'
-import Modal from './Modal_beach'
 import MenuList from './MenuList_beach'
 import CountryFlag from './CountryFlag_beach'
 // Beach volleyball ball image
@@ -16,7 +15,24 @@ import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { uploadBackupToCloud, uploadLogsToCloud } from '../utils_beach/logger_beach'
 import { uploadScoresheetAsync } from '../utils_beach/scoresheetUploader_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
-import { FileText, OctagonX, Search, Trash, Volleyball } from './Icons_beach'
+import { ArrowLeft, ArrowLeftRight, Check, FileText, Loader2, OctagonX, PenLine, Plus, Search, Trash2 } from 'lucide-react'
+import { Volleyball } from '@phosphor-icons/react'
+import { cn } from '../ui/volleyui/cn.js'
+import { Button, FOCUS_RING } from '../ui/volleyui/Button.jsx'
+import { Modal as KitModal, modalCancelClass, modalPrimaryClass, modalSaveClass, modalDangerClass } from '../ui/volleyui/Modal.jsx'
+import { NOTICE } from '../ui/volleyui/tones.js'
+
+// The coin toss page: one kit page card on the stone page (App_beach paints
+// it), full width, in the `.ov-kit` scope.
+const COIN_TOSS_VIEW = 'ov-kit w-full min-w-0 self-start mx-auto mt-2.5 rounded-2xl border border-stone-200/70 bg-white p-4 shadow-card sm:p-6'
+// A sunken section inside the page card (kit Block).
+const SETUP_BLOCK = 'rounded-xl border border-stone-200/70 bg-stone-50/60'
+// Dialogs sit above the legacy header (z-index 1000), like the legacy
+// modals they replace.
+const DIALOG_LAYER = { position: 'relative', zIndex: 1000 }
+// A 44 px kit field.
+const FIELD_INPUT = 'h-11 w-full rounded-xl border border-stone-200 bg-white px-3 text-base text-stone-800 placeholder:text-stone-400 focus:border-red-700/40 focus:outline-none focus:ring-2 focus:ring-red-700/20'
+const FIELD_LABEL = 'mb-1.5 block text-sm font-medium text-stone-700'
 
 // Generate a placeholder signature image (wavy line) for test matches
 function generatePlaceholderSignature() {
@@ -1523,14 +1539,14 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
       })
 
 
-  // Volleyball images - responsive size
+  // Volleyball images - responsive size (the serve marker: frozen)
   const volleyballImage = (
     <div style={{
       width: '15vmin', height: '15vmin', display: 'flex',
       alignItems: 'center', justifyContent: 'center', flexShrink: 0
     }}>
       <img
-        src={ballImage}        alt="Volleyball"
+        src={ballImage}        alt={t('coinToss.serve', 'Serve')}
         style={{ maxWidth: '100%', maxHeight: '100%' }}
       />
     </div>
@@ -1543,163 +1559,131 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
   )
 
   if (!match) {
-    return <div className="setup"><p>{t('common.loading')}</p></div>
+    return (
+      <div className={COIN_TOSS_VIEW}>
+        <p className="flex items-center justify-center gap-2 py-10 text-sm text-stone-500" role="status">
+          <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+          {t('common.loading')}
+        </p>
+      </div>
+    )
   }
 
-  return (
-    <div className="setup" style={{
-      width: '95vw',
-      maxWidth: '100vw',
-      alignSelf: 'flex-start',
-      marginTop: '10px',
-      padding: isCompact ? '0 12px' : '5px 24px',
-      boxSizing: 'border-box'
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isCompact ? 16 : 24 }}>
-        <button className="secondary" onClick={onBack}>← Back</button>
-        <h1 style={{ margin: 0, fontSize: '50px', fontWeight: 700, textAlign: 'center' }}>Coin Toss</h1>
+  // One team column (A or B): label, the team-colour band (frozen), the coin
+  // toss winner toggle, the serve ball (frozen) and Order & signature.
+  const renderTeamColumn = (side) => {
+    const isA = side === 'A'
+    const info = isA ? teamAInfo : teamBInfo
+    const key = isA ? teamA : teamB
+    const serves = isA ? serveA : serveB
+    const captainSig = isA ? teamACaptainSig : teamBCaptainSig
+    const coachSig = isA ? teamACoachSig : teamBCoachSig
+    const won = coinTossWinner === key
+    const signedState = captainSig ? (hasCoach && !coachSig ? 'half' : 'full') : 'none'
+    return (
+      <div className="flex min-w-0 flex-col items-center text-center">
+        <h2 className={cn('m-0 font-bold tracking-tight text-stone-900', isCompact ? 'text-lg' : 'text-2xl')}>{isA ? t('coinToss.teamA') : t('coinToss.teamB')}</h2>
+        <div className={cn('flex w-full items-center justify-center gap-2', isCompact ? 'mb-3 mt-2 min-h-10' : 'mb-4 mt-3 min-h-20')}>
+          {/* Team-colour band: frozen (team colour, contrast text, flag) */}
+          <div
+            style={{
+              background: info.color,
+              color: isBrightColor(info.color) ? '#000' : '#fff',
+              flex: 1, padding: sizes.teamButtonPadding, fontSize: sizes.teamButtonFont, width: '100%',
+              fontWeight: 600, border: 'none', borderRadius: '8px',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              cursor: 'default',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+            }}
+            title={info.name}
+          >
+            {info.country && <CountryFlag countryCode={info.country} size="md" />}
+            {getDisplayName(info.name)}
+          </div>
+        </div>
+        {/* Coin toss winner: a two-way choice between the teams (slate-900 when chosen) */}
         <button
-          onClick={() => setForfaitModal(true)}
-          style={{
-            background: 'transparent',
-            border: '1px solid var(--danger)',
-            color: 'var(--danger)',
-            borderRadius: '8px',
-            padding: '6px 12px',
-            fontSize: '13px',
-            fontWeight: 600,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px'
-          }}
+          type="button"
+          aria-pressed={won}
+          onClick={() => setCoinTossWinner(key)}
+          className={cn(
+            'mb-10 inline-flex min-h-11 max-w-full items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition-colors sm:px-4',
+            won ? 'border-slate-900 bg-slate-900 text-white hover:bg-slate-800' : 'border-stone-300 bg-white text-stone-600 hover:bg-stone-50',
+            FOCUS_RING
+          )}
         >
-          <OctagonX /> Forfait
+          {won && <Check size={16} aria-hidden="true" />}
+          {t('coinToss.wonCoinToss', 'Won the coin toss')}
         </button>
+
+        <div className={cn('flex items-center justify-center', isCompact ? 'mb-3' : 'mb-4')} style={{ height: sizes.volleyballSize }}>
+          {serves ? volleyballImage : volleyballPlaceholder}
+        </div>
+
+        {/* Order & signature: outline until signed, then the emerald done state (½ while the coach is missing) */}
+        <div className={cn('flex w-full justify-center', isCompact ? 'mt-4' : 'mt-5')}>
+          <button
+            type="button"
+            onClick={() => setOrderSignatureModal(isA ? 'teamA' : 'teamB')}
+            className={cn(
+              'inline-flex min-h-12 w-full flex-wrap items-center justify-center gap-x-2 rounded-xl border-2 px-3 py-1.5 font-semibold transition-colors sm:px-4',
+              isCompact ? 'text-sm' : 'text-base',
+              signedState === 'full' ? 'border-emerald-600 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                : signedState === 'half' ? 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100'
+                  : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50',
+              FOCUS_RING
+            )}
+          >
+            <PenLine size={18} aria-hidden="true" />
+            {t('coinToss.orderAndSignature', 'Order & signature')}
+            {signedState === 'full' && <Check size={18} aria-label={t('coinToss.signed', 'Signed')} />}
+            {signedState === 'half' && <span aria-label={t('coinToss.halfSigned', 'Coach signature missing')}>½</span>}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // The serve / switch keys between the teams: the dark neutral key action,
+  // courtside size.
+  const SWITCH_BTN = cn('inline-flex min-h-14 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-slate-900 px-5 text-base font-semibold text-white transition-colors hover:bg-slate-800', FOCUS_RING)
+
+  return (
+    <div className={COIN_TOSS_VIEW}>
+      <div className={cn('grid grid-cols-[1fr_auto_1fr] items-center gap-3', isCompact ? 'mb-4' : 'mb-6')}>
+        <div>
+          <Button variant="ghost" size="xl" icon={ArrowLeft} className="bg-white" onClick={onBack}>{t('common.back')}</Button>
+        </div>
+        <h1 className="m-0 text-center text-2xl font-bold tracking-tight text-stone-900 sm:text-3xl">{t('coinToss.title')}</h1>
+        <div className="flex justify-end">
+          <Button variant="danger-outline" size="xl" icon={OctagonX} onClick={() => setForfaitModal(true)}>
+            {t('coinToss.forfait.button', 'Forfait')}
+          </Button>
+        </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)', gap: sizes.gap, marginBottom: sizes.marginBottom, alignItems: 'start' }}>
-        {/* Team A */}
-        <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-          <h1 style={{ margin: 2, fontSize: sizes.headerFont, fontWeight: 700, textAlign: 'center' }}>{t('coinToss.teamA')}</h1>
-          <div style={{ marginBottom: isCompact ? 12 : 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: isCompact ? '40px' : '80px', width: '100%' }}>
-            <div
-              style={{
-                background: teamAInfo.color,
-                color: isBrightColor(teamAInfo.color) ? '#000' : '#fff',
-                flex: 1, padding: sizes.teamButtonPadding, fontSize: sizes.teamButtonFont, width: '100%',
-                fontWeight: 600, border: 'none', borderRadius: '8px',
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                cursor: 'default',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
-              }}
-              title={teamAInfo.name}
-            >
-              {teamAInfo.country && <CountryFlag countryCode={teamAInfo.country} size="md" />}
-              {getDisplayName(teamAInfo.name)}
-            </div>
-          </div>
-          {/* Coin Toss Winner Toggle for Team A */}
-          <button
-            onClick={() => setCoinTossWinner(teamA)}
-            style={{
-              padding: '6px 12px',
-              marginBottom: '40px',
-              fontSize: '13px',
-              fontWeight: 600,
-              background: coinTossWinner === teamA ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255, 255, 255, 0.1)',
-              border: coinTossWinner === teamA ? '2px solid #22c55e' : '1px solid rgba(255, 255, 255, 0.2)',
-              borderRadius: '8px',
-              color: coinTossWinner === teamA ? '#22c55e' : 'var(--muted)',
-              cursor: 'pointer'
-            }}
-          >
-            {coinTossWinner === teamA ? 'Won Coin Toss ✓' : 'Won Coin Toss'}
-          </button>
-
-          <div style={{ marginBottom: isCompact ? 12 : 16, display: 'flex', justifyContent: 'center', height: sizes.volleyballSize, alignItems: 'center' }}>
-            {serveA ? volleyballImage : volleyballPlaceholder}
-          </div>
-
-          {/* Team A Order & Signature Button */}
-          <div style={{ marginTop: isCompact ? 16 : 20, display: 'flex', justifyContent: 'center' }}>
-            <button
-              onClick={() => setOrderSignatureModal('teamA')}
-              className={`sign ${teamACaptainSig ? 'signed' : ''}`}
-              style={{ fontSize: sizes.signButtonFont, padding: sizes.signButtonPadding, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >
-              Order & Signature {teamACaptainSig ? (hasCoach && !teamACoachSig ? '½' : '✓') : ''}
-            </button>
-          </div>
-        </div>
+      {/* Team A | switch keys | team B. On a phone the two teams sit side by
+          side and the switch keys go under them. */}
+      <div className="mb-8 grid grid-cols-2 items-start sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]" style={{ gap: sizes.gap }}>
+        {renderTeamColumn('A')}
 
         {/* Middle buttons */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: isCompact ? 12 : 35, alignItems: 'center', alignSelf: 'stretch', padding: '0 4px' }}>
-          <div style={{ height: isCompact ? '40px' : '56px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: isCompact ? '24px' : '52px' }}>
-            <button className="secondary" onClick={switchTeams} style={{ padding: sizes.switchButtonPadding, fontSize: '20px', fontWeight: 700, whiteSpace: 'nowrap' }}>
-              ⇄ Switch Teams
+        <div className={cn('order-last col-span-2 flex flex-row flex-wrap items-center justify-center gap-3 self-stretch px-1 sm:order-none sm:col-span-1 sm:flex-col sm:flex-nowrap', isCompact ? 'sm:gap-3' : 'sm:gap-9')}>
+          <div className={cn('flex items-center justify-center', isCompact ? 'sm:mt-6 sm:h-10' : 'sm:mt-[52px] sm:h-14')}>
+            <button type="button" className={SWITCH_BTN} onClick={switchTeams}>
+              <ArrowLeftRight size={18} aria-hidden="true" />
+              {t('coinToss.switchTeamsButton', 'Switch teams')}
             </button>
           </div>
-          <div style={{ height: sizes.volleyballSize, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <button className="secondary" onClick={switchServe} style={{ padding: sizes.switchButtonPadding, fontSize: '20px', fontWeight: 700, whiteSpace: 'nowrap' }}>
-              ⇄ Switch Serve
-            </button>
-          </div>
-        </div>
-
-        {/* Team B */}
-        <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-          <h1 style={{ margin: 2, fontSize: sizes.headerFont, fontWeight: 700, textAlign: 'center' }}>{t('coinToss.teamB')}</h1>
-          <div style={{ marginBottom: isCompact ? 12 : 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: isCompact ? '40px' : '80px', width: '100%' }}>
-            <div
-              style={{
-                background: teamBInfo.color,
-                color: isBrightColor(teamBInfo.color) ? '#000' : '#fff',
-                flex: 1, padding: sizes.teamButtonPadding, fontSize: sizes.teamButtonFont, width: '100%',
-                fontWeight: 600, border: 'none', borderRadius: '8px',
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                cursor: 'default',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
-              }}
-              title={teamBInfo.name}
-            >
-              {teamBInfo.country && <CountryFlag countryCode={teamBInfo.country} size="md" />}
-              {getDisplayName(teamBInfo.name)}
-            </div>
-          </div>
-          {/* Coin Toss Winner Toggle for Team B */}
-          <button
-            onClick={() => setCoinTossWinner(teamB)}
-            style={{
-              padding: '6px 12px',
-              marginBottom: '40px',
-              fontSize: '13px',
-              fontWeight: 600,
-              background: coinTossWinner === teamB ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255, 255, 255, 0.1)',
-              border: coinTossWinner === teamB ? '2px solid #22c55e' : '1px solid rgba(255, 255, 255, 0.2)',
-              borderRadius: '8px',
-              color: coinTossWinner === teamB ? '#22c55e' : 'var(--muted)',
-              cursor: 'pointer'
-            }}
-          >
-            {coinTossWinner === teamB ? 'Won Coin Toss ✓' : 'Won Coin Toss'}
-          </button>
-
-          <div style={{ marginBottom: isCompact ? 12 : 16, display: 'flex', justifyContent: 'center', height: sizes.volleyballSize, alignItems: 'center' }}>
-            {serveB ? volleyballImage : volleyballPlaceholder}
-          </div>
-
-          {/* Team B Order & Signature Button */}
-          <div style={{ marginTop: isCompact ? 16 : 20, display: 'flex', justifyContent: 'center' }}>
-            <button
-              onClick={() => setOrderSignatureModal('teamB')}
-              className={`sign ${teamBCaptainSig ? 'signed' : ''}`}
-              style={{ fontSize: sizes.signButtonFont, padding: sizes.signButtonPadding, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >
-              Order & Signature {teamBCaptainSig ? (hasCoach && !teamBCoachSig ? '½' : '✓') : ''}
+          <div className="flex items-center justify-center sm:h-[var(--ball-h)]" style={{ '--ball-h': sizes.volleyballSize }}>
+            <button type="button" className={SWITCH_BTN} onClick={switchServe}>
+              <ArrowLeftRight size={18} aria-hidden="true" />
+              {t('coinToss.switchServeButton', 'Switch serve')}
             </button>
           </div>
         </div>
+
+        {renderTeamColumn('B')}
       </div>
 
       {/* Service Order Display */}
@@ -1730,40 +1714,30 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           return { teamLabel, num, isCaptain: player.isCaptain, nameStr }
         }
 
+        // Service order line: the roman position, the team, the number (the
+        // captain's number circled, as on the scoresheet) and the name.
         const renderServiceLine = (roman, teamLabel, player) => {
           const data = formatPlayer(teamLabel, player)
           return (
             <>
-              <span style={{ fontWeight: 700, color: 'var(--accent)' }}>{roman}:</span>
-              <span style={{ textAlign: 'center' }}>{data.teamLabel}</span>
-              <span style={{ display: 'flex', justifyContent: 'center' }}>
-                <span style={data.isCaptain ? {
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: '22px',
-                  height: '22px',
-                  borderRadius: '50%',
-                  border: '2px solid var(--accent)',
-                  fontWeight: 700
-                } : {}}>{data.num}</span>
+              <span className="font-bold text-stone-900">{roman}</span>
+              <span className="text-center font-semibold text-stone-700">{data.teamLabel}</span>
+              <span className="flex justify-center">
+                <span
+                  className={cn('inline-flex h-6 min-w-6 items-center justify-center font-semibold tabular-nums text-stone-900', data.isCaptain && 'rounded-full border-2 border-emerald-600 text-emerald-800')}
+                  title={data.isCaptain ? t('coinToss.captain') : undefined}
+                >{data.num}</span>
               </span>
-              <span>{data.nameStr}</span>
+              <span className="text-stone-800">{data.nameStr}</span>
             </>
           )
         }
 
         return (
-          <div style={{ display: 'flex', justifyContent: 'center', marginTop: sizes.marginBottom }}>
-            <div style={{
-              padding: '16px 24px',
-              background: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              borderRadius: '12px',
-              width: 'auto'
-            }}>
-              <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: 700, textAlign: 'center' }}>Service Order</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'auto auto auto auto', gap: '8px 16px', fontSize: '14px', alignItems: 'center' }}>
+          <div className="flex justify-center">
+            <div className={cn('w-auto px-6 py-4', SETUP_BLOCK)}>
+              <h3 className="mb-3 text-center text-sm font-semibold text-stone-700">{t('coinToss.serviceOrder', 'Service order')}</h3>
+              <div className="grid grid-cols-[auto_auto_auto_auto] items-center gap-x-4 gap-y-2 text-sm">
                 {renderServiceLine('I', servingTeamLabel, servingFirstPlayer)}
                 {renderServiceLine('II', receivingTeamLabel, receivingFirstPlayer)}
                 {renderServiceLine('III', servingTeamLabel, servingSecondPlayer)}
@@ -1774,26 +1748,21 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         )
       })()}
 
-      {/* Confirm Button */}
-
-      <div style={{ display: 'flex', justifyContent: 'center', margin: '1px 0' }}>
+      <div className="mt-6 flex flex-col items-center gap-4 border-t border-stone-200/70 pt-6">
         <MenuList
-          buttonLabel={isCompact ? <FileText /> : <><FileText /> Scoresheet</>}
-          buttonClassName="secondary"
-          buttonStyle={{
-            background: '#22c55e',
-            color: '#000',
-            fontWeight: 600,
-            padding: isCompact ? '4px 8px' : '8px 16px',
-            fontSize: isCompact ? '12px' : '14px'
-          }}
+          tone="light"
+          buttonLabel={isCompact
+            ? <FileText size={16} aria-label={t('coinToss.scoresheet')} />
+            : <><FileText size={16} aria-hidden="true" /> {t('coinToss.scoresheet')}</>}
+          buttonTitle={t('coinToss.scoresheet')}
+          buttonClassName={cn('inline-flex min-h-11 items-center gap-2 rounded-xl border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 transition-colors hover:bg-stone-50', FOCUS_RING)}
           showArrow={true}
           position="center"
           items={[
             {
               key: 'scoresheet-preview',
-              icon: <Search />,
-              label: 'Preview',
+              icon: <Search size={16} aria-hidden="true" />,
+              label: t('coinToss.preview'),
               onClick: async () => {
                 try {
                   if (!match) {
@@ -1875,18 +1844,17 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                   showAlert(`Failed to open scoresheet: ${error.message || 'Unknown error'}`, 'error')
                 }
               }
+
             }
           ]}
         />
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'center', marginTop: sizes.marginBottom }}>
         {isCoinTossConfirmed ? (
-          <button onClick={handleReturnToMatch} style={{ padding: sizes.confirmButtonPadding, fontSize: sizes.confirmButtonFont }}>
-            Return to Match
+          <button type="button" onClick={handleReturnToMatch} className={cn('inline-flex min-h-14 min-w-64 items-center justify-center rounded-xl bg-slate-900 px-8 text-base font-semibold text-white transition-colors hover:bg-slate-800', FOCUS_RING)}>
+            {t('coinToss.returnToMatch')}
           </button>
         ) : (
-          <button onClick={confirmCoinToss} style={{ padding: sizes.confirmButtonPadding, fontSize: sizes.confirmButtonFont }}>
-            Confirm Result
+          <button type="button" onClick={confirmCoinToss} className={cn('inline-flex min-h-14 min-w-64 items-center justify-center rounded-xl bg-red-600 px-8 text-base font-semibold text-white transition-colors hover:bg-red-700', FOCUS_RING)}>
+            {t('coinToss.confirmResult')}
           </button>
         )}
       </div>
@@ -1927,221 +1895,203 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           setRosterModal(null)
         }
 
-        return (
-          <Modal
-            title={`Roster - ${teamInfo.name}`}
-            open={true}
-            onClose={handleCloseOrModify}
-            width={800}
-            hideCloseButton={true}
-          >
-            <div style={{ maxHeight: '70vh', overflowY: 'auto', padding: '0 16px' }}>
-              {/* Players Section */}
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600 }}>Players ({roster.length})</h4>
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => setAddPlayerModal(rosterModal)}
-                    style={{ padding: '4px 8px', fontSize: '12px' }}
-                  >
-                    Add Player
-                  </button>
-                </div>
-                <table className="roster-table" style={{ width: '100%' }}>
-                  <thead>
-                    <tr>
-                      <th>{t('roster.number')}</th>
-                      <th>{t('roster.name')}</th>
-                      {manageDob && <th style={{ width: '90px' }}>{t('roster.dob')}</th>}
-                      <th>{t('coinToss.captain')}</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rosterEntries.map(({ player: p, index: originalIdx }) => {
-                      // Check for duplicate jersey number
-                      const isDuplicate = p.number != null && p.number !== '' &&
-                        roster.some((other, idx) => idx !== originalIdx && other.number === p.number)
+        const cellInput = 'h-11 w-full rounded-lg border border-transparent bg-transparent px-2 text-sm text-stone-800 hover:border-stone-200 focus:border-red-700/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-700/20'
 
-                      return (
-                        <tr key={`roster-${originalIdx}`}>
-                          <td style={{ verticalAlign: 'middle', padding: '6px' }}>
-                            <input
-                              type="number"
-                              inputMode="numeric"
-                              min="1" max="99"
-                              value={p.number ?? ''}
-                              onChange={e => {
-                                const val = e.target.value ? Number(e.target.value) : null
-                                if (val !== null && (val < 1 || val > 99)) return
-                                const updated = [...roster]
-                                updated[originalIdx] = { ...updated[originalIdx], number: val }
-                                setRoster(updated)
-                              }}
-                              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
-                              title={isDuplicate ? t('roster.duplicateNumber') : ''}
-                              style={{
-                                width: p.isCaptain ? '24px' : '28px',
-                                height: p.isCaptain ? '24px' : 'auto',
-                                padding: '0', margin: '0',
-                                background: isDuplicate ? 'rgba(239, 68, 68, 0.2)' : 'transparent',
-                                border: isDuplicate ? '2px solid #ef4444' : (p.isCaptain ? '2px solid var(--accent)' : 'none'),
-                                borderRadius: p.isCaptain ? '50%' : (isDuplicate ? '4px' : '0'),
-                                color: isDuplicate ? '#ef4444' : 'var(--text)',
-                                textAlign: 'center', fontSize: '12px'
-                              }}
-                            />
-                          </td>
-                          <td style={{ verticalAlign: 'middle', padding: '6px' }}>
-                            <input
-                              type="text"
-                              value={`${p.lastName || ''} ${p.firstName || ''}`.trim() || ''}
-                              onChange={e => {
-                                const parts = e.target.value.split(' ').filter(p => p)
-                                const lastName = parts.length > 0 ? parts[0] : ''
-                                const firstName = parts.length > 1 ? parts.slice(1).join(' ') : ''
-                                const updated = [...roster]
-                                updated[originalIdx] = { ...updated[originalIdx], lastName, firstName }
-                                setRoster(updated)
-                              }}
-                              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
-                              style={{ width: '100%', padding: '0', background: 'transparent', border: 'none', color: 'var(--text)', fontSize: '12px' }}
-                            />
-                          </td>
-                          {manageDob && <td style={{ verticalAlign: 'middle', padding: '6px', width: '90px' }}>
-                            <input
-                              type="date"
-                              value={p.dob ? formatDateToISO(p.dob) : ''}
-                              onChange={e => {
-                                const value = e.target.value ? formatDateToDDMMYYYY(e.target.value) : ''
-                                const updated = [...roster]
-                                updated[originalIdx] = { ...updated[originalIdx], dob: value }
-                                setRoster(updated)
-                              }}
-                              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
-                              className="coin-toss-date-input"
-                              style={{ width: '100%', padding: '0', background: 'transparent', border: 'none', color: 'var(--text)', fontSize: '12px' }}
-                            />
-                          </td>}
-                          <td style={{ verticalAlign: 'middle', padding: '6px' }}>
-                            <div
-                              onClick={() => {
-                                const updated = roster.map((player, idx) => ({
-                                  ...player,
-                                  isCaptain: idx === originalIdx ? !player.isCaptain : false
-                                }))
-                                setRoster(updated)
-                              }}
-                              style={{
-                                width: '20px',
-                                height: '20px',
-                                borderRadius: '4px',
-                                border: p.isCaptain ? '2px solid #22c55e' : '2px solid rgba(255,255,255,0.3)',
-                                background: p.isCaptain ? 'rgba(34, 197, 94, 0.15)' : 'transparent',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                cursor: 'pointer',
-                                fontSize: '10px',
-                                fontWeight: 700,
-                                color: p.isCaptain ? '#22c55e' : 'rgba(255,255,255,0.3)',
-                                userSelect: 'none',
-                                margin: '0 auto'
-                              }}
-                            >
-                              C
-                            </div>
-                          </td>
-                          <td style={{ verticalAlign: 'middle', padding: '4px' }}>
-                            <button
-                              type="button"
-                              className="secondary"
-                              onClick={() => setDeletePlayerModal({ team: rosterModal, index: originalIdx })}
-                              style={{ padding: '2px', fontSize: '10px', minWidth: 'auto', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                            >
-                              <Trash />
-                            </button>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+        return (
+          <div className="ov-kit" style={DIALOG_LAYER}>
+            <KitModal
+              open
+              size="xl"
+              layout="sections"
+              dismissible={false}
+              onClose={handleCloseOrModify}
+              closeLabel={t('common.close')}
+              title={t('coinToss.rosterTitle', { team: teamInfo.name, defaultValue: 'Roster – {{team}}' })}
+              footer={(
+                <>
+                  {hasChanges && (
+                    <button
+                      type="button"
+                      className={modalCancelClass}
+                      onClick={() => {
+                        // Revert to original data
+                        if (originalRosterDataRef.current) {
+                          setRoster(JSON.parse(JSON.stringify(originalRosterDataRef.current.roster)))
+                        }
+                        originalRosterDataRef.current = null
+                        setRosterModalSignature(null)
+                        setRosterModal(null)
+                      }}
+                    >
+                      {t('common.cancel')}
+                    </button>
+                  )}
+                  <button type="button" className={hasChanges ? modalSaveClass : modalPrimaryClass} onClick={handleCloseOrModify}>
+                    {hasChanges ? t('roster.modify') : t('common.close')}
+                  </button>
+                </>
+              )}
+            >
+              {/* Players Section */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2 border-b-[1.5px] border-stone-800 pb-1.5">
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-stone-800">{t('roster.playersCount', { count: roster.length })}</h4>
+                  <Button variant="ghost" size="sm" icon={Plus} onClick={() => setAddPlayerModal(rosterModal)}>
+                    {t('roster.addPlayerButton')}
+                  </Button>
+                </div>
+                <div className="overflow-x-auto rounded-lg border border-stone-200">
+                  <table className="w-full border-collapse text-sm">
+                    <thead className="bg-stone-50 text-[11px] font-bold uppercase tracking-wide text-stone-500">
+                      <tr>
+                        <th className="px-2 py-2 text-left">{t('roster.number')}</th>
+                        <th className="px-2 py-2 text-left">{t('roster.name')}</th>
+                        {manageDob && <th className="w-[140px] px-2 py-2 text-left">{t('roster.dob')}</th>}
+                        <th className="px-2 py-2 text-center">{t('coinToss.captain')}</th>
+                        <th className="w-12"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-100">
+                      {rosterEntries.map(({ player: p, index: originalIdx }) => {
+                        // Check for duplicate jersey number
+                        const isDuplicate = p.number != null && p.number !== '' &&
+                          roster.some((other, idx) => idx !== originalIdx && other.number === p.number)
+
+                        return (
+                          <tr key={`roster-${originalIdx}`}>
+                            <td className="w-16 px-2 py-1 align-middle">
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                min="1" max="99"
+                                value={p.number ?? ''}
+                                aria-label={t('roster.numberLabel')}
+                                aria-invalid={isDuplicate || undefined}
+                                onChange={e => {
+                                  const val = e.target.value ? Number(e.target.value) : null
+                                  if (val !== null && (val < 1 || val > 99)) return
+                                  const updated = [...roster]
+                                  updated[originalIdx] = { ...updated[originalIdx], number: val }
+                                  setRoster(updated)
+                                }}
+                                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
+                                title={isDuplicate ? t('roster.duplicateNumber') : ''}
+                                className={cn(
+                                  'h-11 w-11 border-2 text-center text-sm font-semibold tabular-nums [appearance:textfield] focus:outline-none focus:ring-2 focus:ring-red-700/20 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none',
+                                  isDuplicate ? 'rounded-lg border-red-400 bg-red-50 text-red-700'
+                                    : p.isCaptain ? 'rounded-full border-emerald-600 bg-white text-emerald-800'
+                                      : 'rounded-lg border-transparent bg-transparent text-stone-900 hover:border-stone-200'
+                                )}
+                              />
+                            </td>
+                            <td className="px-2 py-1 align-middle">
+                              <input
+                                type="text"
+                                aria-label={t('roster.name')}
+                                value={`${p.lastName || ''} ${p.firstName || ''}`.trim() || ''}
+                                onChange={e => {
+                                  const parts = e.target.value.split(' ').filter(p => p)
+                                  const lastName = parts.length > 0 ? parts[0] : ''
+                                  const firstName = parts.length > 1 ? parts.slice(1).join(' ') : ''
+                                  const updated = [...roster]
+                                  updated[originalIdx] = { ...updated[originalIdx], lastName, firstName }
+                                  setRoster(updated)
+                                }}
+                                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
+                                className={cellInput}
+                              />
+                            </td>
+                            {manageDob && <td className="w-[140px] px-2 py-1 align-middle">
+                              <input
+                                type="date"
+                                aria-label={t('roster.dob')}
+                                value={p.dob ? formatDateToISO(p.dob) : ''}
+                                onChange={e => {
+                                  const value = e.target.value ? formatDateToDDMMYYYY(e.target.value) : ''
+                                  const updated = [...roster]
+                                  updated[originalIdx] = { ...updated[originalIdx], dob: value }
+                                  setRoster(updated)
+                                }}
+                                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
+                                className={cn('coin-toss-date-input tabular-nums', cellInput)}
+                              />
+                            </td>}
+                            <td className="px-2 py-1 text-center align-middle">
+                              <button
+                                type="button"
+                                aria-pressed={!!p.isCaptain}
+                                aria-label={t('coinToss.captain')}
+                                title={t('coinToss.captain')}
+                                onClick={() => {
+                                  const updated = roster.map((player, idx) => ({
+                                    ...player,
+                                    isCaptain: idx === originalIdx ? !player.isCaptain : false
+                                  }))
+                                  setRoster(updated)
+                                }}
+                                className={cn(
+                                  'mx-auto inline-flex h-11 w-11 select-none items-center justify-center rounded-lg border-2 text-sm font-bold transition-colors',
+                                  p.isCaptain ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-stone-300 bg-white text-stone-400 hover:bg-stone-50',
+                                  FOCUS_RING
+                                )}
+                              >
+                                C
+                              </button>
+                            </td>
+                            <td className="px-1 py-1 align-middle">
+                              <button
+                                type="button"
+                                aria-label={t('common.delete')}
+                                title={t('common.delete')}
+                                onClick={() => setDeletePlayerModal({ team: rosterModal, index: originalIdx })}
+                                className={cn('inline-flex h-11 w-11 items-center justify-center rounded-lg border border-stone-200 text-stone-500 transition-colors hover:bg-red-50 hover:text-red-700', FOCUS_RING)}
+                              >
+                                <Trash2 size={16} aria-hidden="true" />
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
               {/* Signatures Section - Beach volleyball: captain only */}
-              <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 16, marginTop: 16 }}>
-                <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600 }}>{t('matchSetup.captainSignature')}</h4>
-                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    className={`sign ${captainSig ? 'signed' : ''}`}
-                    onClick={() => setRosterModalSignature('captain')}
-                    style={{ padding: '8px 16px', fontSize: '13px', flex: 1, minWidth: '120px' }}
-                  >
-                    Captain {captainSig ? '✓' : ''}
-                  </button>
-                </div>
+              <div className="space-y-2">
+                <h4 className="border-b-[1.5px] border-stone-800 pb-1.5 text-[11px] font-bold uppercase tracking-wider text-stone-800">{t('matchSetup.captainSignature')}</h4>
+                <button
+                  type="button"
+                  onClick={() => setRosterModalSignature('captain')}
+                  className={cn(
+                    'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border-2 px-4 text-sm font-semibold transition-colors',
+                    captainSig ? 'border-emerald-600 bg-emerald-50 text-emerald-800' : 'border-dashed border-stone-300 bg-white text-stone-700 hover:bg-stone-50',
+                    FOCUS_RING
+                  )}
+                >
+                  {t('coinToss.captain')}
+                  {captainSig && <Check size={16} aria-label={t('coinToss.signed', 'Signed')} />}
+                </button>
               </div>
 
               {/* Signature Pad Modal */}
               {rosterModalSignature && (
-                <div style={{
-                  position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100
-                }}>
-                  <div style={{
-                    background: '#111827', padding: 16, borderRadius: 12,
-                    border: '1px solid rgba(255,255,255,0.1)', maxWidth: '90vw'
-                  }}>
-                    <h3 style={{ margin: '0 0 12px 0' }}>
-                      {t('coinToss.captainSignatureTeam', { team: teamInfo.name })}
-                    </h3>
-                    <SignaturePad
-                      onSave={(sig) => {
-                        setCaptainSig(sig)
-                        setRosterModalSignature(null)
-                      }}
-                      onCancel={() => setRosterModalSignature(null)}
-                      title={t('matchSetup.captainSignature')}
-                    />
-                  </div>
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold text-stone-800">
+                    {t('coinToss.captainSignatureTeam', { team: teamInfo.name })}
+                  </h3>
+                  <SignaturePad
+                    onSave={(sig) => {
+                      setCaptainSig(sig)
+                      setRosterModalSignature(null)
+                    }}
+                    onCancel={() => setRosterModalSignature(null)}
+                    title={t('matchSetup.captainSignature')}
+                  />
                 </div>
               )}
-            </div>
-
-            {/* Custom Close/Modify Button */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-              {hasChanges && (
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => {
-                    // Revert to original data
-                    if (originalRosterDataRef.current) {
-                      setRoster(JSON.parse(JSON.stringify(originalRosterDataRef.current.roster)))
-                    }
-                    originalRosterDataRef.current = null
-                    setRosterModalSignature(null)
-                    setRosterModal(null)
-                  }}
-                  style={{ padding: '8px 20px', fontSize: '14px' }}
-                >
-                  Cancel
-                </button>
-              )}
-              <button
-                type="button"
-                className={hasChanges ? 'primary' : 'secondary'}
-                onClick={handleCloseOrModify}
-                style={{ padding: '8px 20px', fontSize: '14px' }}
-              >
-                {hasChanges ? 'Modify' : 'Close'}
-              </button>
-            </div>
-          </Modal>
+            </KitModal>
+          </div>
         )
       })()}
 
@@ -2155,97 +2105,107 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         const dob = currentTeam === 'team1' ? team1Dob : team2Dob
         const captain = currentTeam === 'team1' ? team1Captain : team2Captain
 
+        const addPlayer = () => {
+          if (!last || !first) {
+            showAlert(t('roster.enterNames'), 'warning')
+            return
+          }
+          const newPlayer = { number: num ? Number(num) : null, lastName: last, firstName: first, dob, isCaptain: captain }
+
+          if (currentTeam === 'team1') {
+            setTeam1Roster(list => {
+              const cleared = captain ? list.map(p => ({ ...p, isCaptain: false })) : [...list]
+              return [...cleared, newPlayer].sort((a, b) => (a.number ?? 999) - (b.number ?? 999))
+            })
+            setTeam1Num(''); setTeam1First(''); setTeam1Last(''); setTeam1Dob(''); setTeam1CaptainBool(false)
+          } else {
+            setTeam2Roster(list => {
+              const cleared = captain ? list.map(p => ({ ...p, isCaptain: false })) : [...list]
+              return [...cleared, newPlayer].sort((a, b) => (a.number ?? 999) - (b.number ?? 999))
+            })
+            setTeam2Num(''); setTeam2First(''); setTeam2Last(''); setTeam2Dob(''); setTeam2CaptainBool(false)
+          }
+          setAddPlayerModal(null)
+        }
+
         return (
-          <Modal
-            title={`Add Player - ${isTeamA ? 'Team A' : 'Team B'}`}
-            open={true}
-            onClose={() => setAddPlayerModal(null)}
-            width={500}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: 4 }}>Jersey Number</label>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={num}
-                  onChange={e => currentTeam === 'team1' ? setTeam1Num(e.target.value) : setTeam2Num(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
-                  style={{ width: '100%', padding: '8px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', color: 'var(--text)' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: 4 }}>{t('roster.lastName')}</label>
-                <input
-                  type="text"
-                  className="capitalize"
-                  value={last}
-                  onChange={e => currentTeam === 'team1' ? setTeam1Last(e.target.value) : setTeam2Last(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
-                  style={{ width: '100%', padding: '8px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', color: 'var(--text)' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: 4 }}>{t('roster.firstName')}</label>
-                <input
-                  type="text"
-                  className="capitalize"
-                  value={first}
-                  onChange={e => currentTeam === 'team1' ? setTeam1First(e.target.value) : setTeam2First(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
-                  style={{ width: '100%', padding: '8px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', color: 'var(--text)' }}
-                />
-              </div>
-              {manageDob && <div>
-                <label style={{ display: 'block', marginBottom: 4 }}>{t('roster.dateOfBirth')}</label>
-                <input
-                  type="date"
-                  value={dob ? formatDateToISO(dob) : ''}
-                  onChange={e => {
-                    const value = e.target.value ? formatDateToDDMMYYYY(e.target.value) : ''
-                    currentTeam === 'team1' ? setTeam1Dob(value) : setTeam2Dob(value)
-                  }}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
-                  style={{ width: '100%', padding: '8px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', color: 'var(--text)' }}
-                />
-              </div>}
-              <div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+          <div className="ov-kit" style={{ position: 'relative', zIndex: 1001 }}>
+            <KitModal
+              open
+              decision
+              dismissible={false}
+              size="md"
+              onClose={() => setAddPlayerModal(null)}
+              closeLabel={t('common.close')}
+              title={t('roster.addPlayerTitle', { team: isTeamA ? t('coinToss.teamA') : t('coinToss.teamB') })}
+              footer={(
+                <>
+                  <button type="button" className={modalCancelClass} onClick={() => setAddPlayerModal(null)}>{t('common.cancel')}</button>
+                  <button type="button" className={modalSaveClass} onClick={addPlayer}>{t('roster.addPlayerButton')}</button>
+                </>
+              )}
+            >
+              <div className="flex flex-col gap-3">
+                <div>
+                  <label htmlFor="ob-ct-add-num" className={FIELD_LABEL}>{t('roster.numberLabel')}</label>
+                  <input
+                    id="ob-ct-add-num"
+                    type="number"
+                    inputMode="numeric"
+                    value={num}
+                    onChange={e => currentTeam === 'team1' ? setTeam1Num(e.target.value) : setTeam2Num(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
+                    className={cn(FIELD_INPUT, 'tabular-nums')}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="ob-ct-add-last" className={FIELD_LABEL}>{t('roster.lastName')}</label>
+                  <input
+                    id="ob-ct-add-last"
+                    type="text"
+                    value={last}
+                    onChange={e => currentTeam === 'team1' ? setTeam1Last(e.target.value) : setTeam2Last(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
+                    className={cn(FIELD_INPUT, 'capitalize')}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="ob-ct-add-first" className={FIELD_LABEL}>{t('roster.firstName')}</label>
+                  <input
+                    id="ob-ct-add-first"
+                    type="text"
+                    value={first}
+                    onChange={e => currentTeam === 'team1' ? setTeam1First(e.target.value) : setTeam2First(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
+                    className={cn(FIELD_INPUT, 'capitalize')}
+                  />
+                </div>
+                {manageDob && <div>
+                  <label htmlFor="ob-ct-add-dob" className={FIELD_LABEL}>{t('roster.dateOfBirth')}</label>
+                  <input
+                    id="ob-ct-add-dob"
+                    type="date"
+                    value={dob ? formatDateToISO(dob) : ''}
+                    onChange={e => {
+                      const value = e.target.value ? formatDateToDDMMYYYY(e.target.value) : ''
+                      currentTeam === 'team1' ? setTeam1Dob(value) : setTeam2Dob(value)
+                    }}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
+                    className={cn(FIELD_INPUT, 'tabular-nums')}
+                  />
+                </div>}
+                <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm text-stone-700">
                   <input
                     type="checkbox"
+                    className="h-4 w-4 accent-slate-900"
                     checked={captain}
                     onChange={e => currentTeam === 'team1' ? setTeam1CaptainBool(e.target.checked) : setTeam2CaptainBool(e.target.checked)}
                   />
                   <span>{t('coinToss.captain')}</span>
                 </label>
               </div>
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
-                <button className="secondary" onClick={() => setAddPlayerModal(null)}>{t('common.cancel')}</button>
-                <button onClick={() => {
-                  if (!last || !first) {
-                    showAlert(t('roster.enterNames'), 'warning')
-                    return
-                  }
-                  const newPlayer = { number: num ? Number(num) : null, lastName: last, firstName: first, dob, isCaptain: captain }
-
-                  if (currentTeam === 'team1') {
-                    setTeam1Roster(list => {
-                      const cleared = captain ? list.map(p => ({ ...p, isCaptain: false })) : [...list]
-                      return [...cleared, newPlayer].sort((a, b) => (a.number ?? 999) - (b.number ?? 999))
-                    })
-                    setTeam1Num(''); setTeam1First(''); setTeam1Last(''); setTeam1Dob(''); setTeam1CaptainBool(false)
-                  } else {
-                    setTeam2Roster(list => {
-                      const cleared = captain ? list.map(p => ({ ...p, isCaptain: false })) : [...list]
-                      return [...cleared, newPlayer].sort((a, b) => (a.number ?? 999) - (b.number ?? 999))
-                    })
-                    setTeam2Num(''); setTeam2First(''); setTeam2Last(''); setTeam2Dob(''); setTeam2CaptainBool(false)
-                  }
-                  setAddPlayerModal(null)
-                }}>Add Player</button>
-              </div>
-            </div>
-          </Modal>
+            </KitModal>
+          </div>
         )
       })()}
 
@@ -2261,6 +2221,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         const captainSig = currentTeam === 'team1' ? team1CaptainSignature : team2CaptainSignature
         const setCaptainSig = currentTeam === 'team1' ? setTeam1CaptainSignature : setTeam2CaptainSignature
         const teamLabel = isTeamA ? 'A' : 'B'
+        const coachSig = currentTeam === 'team1' ? team1CoachSignature : team2CoachSignature
 
         // Get captain
         const captain = roster.find(p => p.isCaptain)
@@ -2308,232 +2269,173 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           setOpenSignature(currentTeam === 'team1' ? 'team1-captain' : 'team2-captain')
         }
 
+        // A signature button: dashed "tap to sign" until signed, then the emerald done state.
+        const signBtn = (signed) => cn(
+          'inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl border-2 px-4 text-base font-semibold transition-colors',
+          signed ? 'border-emerald-600 bg-emerald-50 text-emerald-800 hover:bg-emerald-100' : 'border-dashed border-stone-300 bg-white text-stone-700 hover:bg-stone-50',
+          FOCUS_RING
+        )
+        // A two-state toggle in a player card: the chosen state carries its marker colour and a check.
+        const toggleBtn = (on, onCls) => cn(
+          'inline-flex min-h-12 flex-1 items-center justify-center gap-1.5 rounded-xl border-2 px-3 text-sm font-semibold transition-colors',
+          on ? onCls : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50',
+          FOCUS_RING
+        )
+
         return (
-          <Modal
-            title={`Order & Signature - Team ${teamLabel}`}
-            open={true}
-            onClose={() => setOrderSignatureModal(null)}
-            width={550}
-          >
-            <div style={{ padding: '16px' }}>
-              {/* Team Name */}
-              <div style={{
-                marginBottom: '20px',
-                padding: '12px',
-                background: teamInfo.color,
-                color: isBrightColor(teamInfo.color) ? '#000' : '#fff',
-                borderRadius: '8px',
-                textAlign: 'center',
-                fontWeight: 700,
-                fontSize: '16px'
-              }}>
-                {teamInfo.name}
-              </div>
+          <div className="ov-kit" style={DIALOG_LAYER}>
+            <KitModal
+              open
+              decision
+              size="lg"
+              dismissible={false}
+              onClose={() => setOrderSignatureModal(null)}
+              closeLabel={t('common.close')}
+              title={t('coinToss.orderAndSignatureTitle', { team: teamLabel, defaultValue: 'Order & signature – team {{team}}' })}
+            >
+              <div className="space-y-4">
+                {/* Team-colour band: frozen */}
+                <div style={{
+                  padding: '12px',
+                  background: teamInfo.color,
+                  color: isBrightColor(teamInfo.color) ? '#000' : '#fff',
+                  borderRadius: '8px',
+                  textAlign: 'center',
+                  fontWeight: 700,
+                  fontSize: '16px'
+                }}>
+                  {teamInfo.name}
+                </div>
 
-              {/* Players */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '20px' }}>
-                {roster.map((p, index) => {
-                  const isFirstServe = firstServe === p.number || (!firstServe && index === 0)
-                  return (
-                    <div key={index} style={{
-                      padding: '16px',
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      border: p.isCaptain ? '2px solid #22c55e' : '1px solid rgba(255, 255, 255, 0.2)',
-                      borderRadius: '12px'
-                    }}>
-                      {/* Row 1: Number toggle + Names */}
-                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '12px' }}>
-                        {/* Number toggle */}
-                        <div style={{ display: 'flex', gap: '4px' }}>
-                          {[1, 2].map(num => (
-                            <button
-                              key={num}
-                              onClick={() => handleNumberToggle(index, num)}
-                              style={{
-                                width: '36px',
-                                height: '36px',
-                                fontSize: '16px',
-                                fontWeight: 700,
-                                background: p.number === num ? 'var(--accent)' : 'rgba(255, 255, 255, 0.1)',
-                                color: p.number === num ? '#000' : 'var(--text)',
-                                border: 'none',
-                                borderRadius: '8px',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                padding: 0
-                              }}
-                            >
-                              {num}
-                            </button>
-                          ))}
+                {/* Players */}
+                <div className="flex flex-col gap-3">
+                  {roster.map((p, index) => {
+                    const isFirstServe = firstServe === p.number || (!firstServe && index === 0)
+                    return (
+                      <div key={index} className={cn('rounded-xl border p-3', p.isCaptain ? 'border-2 border-emerald-600 bg-emerald-50/40' : 'border-stone-200/70 bg-stone-50/60')}>
+                        {/* Row 1: Number toggle + Names */}
+                        <div className="mb-3 flex flex-wrap items-center gap-2 sm:flex-nowrap">
+                          {/* Number toggle */}
+                          <div className="flex gap-1" role="group" aria-label={t('roster.numberLabel')}>
+                            {[1, 2].map(num => (
+                              <button
+                                type="button"
+                                key={num}
+                                aria-pressed={p.number === num}
+                                onClick={() => handleNumberToggle(index, num)}
+                                className={cn(
+                                  'inline-flex h-11 w-11 items-center justify-center rounded-lg border text-base font-bold tabular-nums transition-colors',
+                                  p.number === num ? 'border-slate-900 bg-slate-900 text-white' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50',
+                                  FOCUS_RING
+                                )}
+                              >
+                                {num}
+                              </button>
+                            ))}
+                          </div>
+                          {/* Last Name */}
+                          <input
+                            type="text"
+                            placeholder={t('roster.lastName')}
+                            aria-label={t('roster.lastName')}
+                            value={p.lastName || ''}
+                            onChange={e => handlePlayerUpdate(index, 'lastName', e.target.value)}
+                            className={cn(FIELD_INPUT, 'min-w-0 flex-1 capitalize')}
+                          />
+                          {/* First Name */}
+                          <input
+                            type="text"
+                            placeholder={t('roster.firstName')}
+                            aria-label={t('roster.firstName')}
+                            value={p.firstName || ''}
+                            onChange={e => handlePlayerUpdate(index, 'firstName', e.target.value)}
+                            className={cn(FIELD_INPUT, 'min-w-0 flex-1 capitalize')}
+                          />
                         </div>
-                        {/* Last Name */}
-                        <input
-                          type="text"
-                          placeholder="Last Name"
-                          value={p.lastName || ''}
-                          onChange={e => handlePlayerUpdate(index, 'lastName', e.target.value)}
-                          style={{
-                            flex: 1,
-                            padding: '8px 12px',
-                            fontSize: '14px',
-                            background: 'rgba(255, 255, 255, 0.1)',
-                            border: '1px solid rgba(255, 255, 255, 0.2)',
-                            borderRadius: '6px',
-                            color: 'var(--text)',
-                            textTransform: 'capitalize'
-                          }}
-                        />
-                        {/* First Name */}
-                        <input
-                          type="text"
-                          placeholder="First Name"
-                          value={p.firstName || ''}
-                          onChange={e => handlePlayerUpdate(index, 'firstName', e.target.value)}
-                          style={{
-                            flex: 1,
-                            padding: '8px 12px',
-                            fontSize: '14px',
-                            background: 'rgba(255, 255, 255, 0.1)',
-                            border: '1px solid rgba(255, 255, 255, 0.2)',
-                            borderRadius: '6px',
-                            color: 'var(--text)',
-                            textTransform: 'capitalize'
-                          }}
-                        />
+                        {/* Row 2: Captain + First Serve toggles */}
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            aria-pressed={!!p.isCaptain}
+                            onClick={() => handleCaptainToggle(index)}
+                            className={toggleBtn(p.isCaptain, 'border-emerald-600 bg-emerald-50 text-emerald-800')}
+                          >
+                            {t('coinToss.captain')}
+                            {p.isCaptain && <Check size={16} aria-hidden="true" />}
+                          </button>
+                          <button
+                            type="button"
+                            aria-pressed={isFirstServe}
+                            onClick={() => handleFirstServeToggle(p.number)}
+                            className={toggleBtn(isFirstServe, 'border-sky-600 bg-sky-50 text-sky-800')}
+                          >
+                            <Volleyball size={18} aria-hidden="true" />
+                            {t('coinToss.firstServe', 'First serve')}
+                            {isFirstServe && <Check size={16} aria-hidden="true" />}
+                          </button>
+                        </div>
                       </div>
-                      {/* Row 2: Captain + First Serve toggles */}
-                      <div style={{ display: 'flex', gap: '12px' }}>
-                        <button
-                          onClick={() => handleCaptainToggle(index)}
-                          style={{
-                            flex: 1,
-                            padding: '10px',
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            background: p.isCaptain ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255, 255, 255, 0.1)',
-                            border: p.isCaptain ? '2px solid #22c55e' : '1px solid rgba(255, 255, 255, 0.2)',
-                            borderRadius: '8px',
-                            color: p.isCaptain ? '#22c55e' : 'var(--text)',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          {p.isCaptain ? 'Captain ✓' : 'Captain'}
-                        </button>
-                        <button
-                          onClick={() => handleFirstServeToggle(p.number)}
-                          style={{
-                            flex: 1,
-                            padding: '10px',
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            background: isFirstServe ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255, 255, 255, 0.1)',
-                            border: isFirstServe ? '2px solid #3b82f6' : '1px solid rgba(255, 255, 255, 0.2)',
-                            borderRadius: '8px',
-                            color: isFirstServe ? '#3b82f6' : 'var(--text)',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          {isFirstServe ? <><Volleyball /> First Serve ✓</> : <><Volleyball /> First Serve</>}
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
+                    )
+                  })}
+                </div>
 
-              {/* Captain Signature */}
-              <div style={{ marginBottom: '16px' }}>
-                <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600, color: 'var(--muted)' }}>{t('matchSetup.captainSignature')}</h4>
-                {captain ? (
-                  <button
-                    onClick={handleOpenSignature}
-                    className={`sign ${captainSig ? 'signed' : ''}`}
-                    style={{
-                      width: '100%',
-                      padding: '16px',
-                      fontSize: '16px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px'
-                    }}
-                  >
-                    {captainSig ? (
-                      <>
-                        <span>Signed by #{captain.number}</span>
-                        <span style={{ color: '#22c55e' }}>✓</span>
-                      </>
-                    ) : (
-                      <>Sign (Captain #{captain.number})</>
-                    )}
-                  </button>
-                ) : (
-                  <div style={{
-                    padding: '16px',
-                    background: 'rgba(239, 68, 68, 0.1)',
-                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                    borderRadius: '8px',
-                    textAlign: 'center',
-                    color: '#ef4444',
-                    fontSize: '14px'
-                  }}>
-                    Please select a captain first
+                {/* Captain Signature */}
+                <div>
+                  <h4 className="mb-2 text-sm font-semibold text-stone-700">{t('matchSetup.captainSignature')}</h4>
+                  {captain ? (
+                    <button type="button" onClick={handleOpenSignature} className={signBtn(!!captainSig)}>
+                      {captainSig ? (
+                        <>
+                          <span>{t('coinToss.signedBy', { number: captain.number, defaultValue: 'Signed by #{{number}}' })}</span>
+                          <Check size={18} aria-hidden="true" />
+                        </>
+                      ) : (
+                        <>
+                          <PenLine size={18} aria-hidden="true" />
+                          {t('coinToss.signCaptain', { number: captain.number, defaultValue: 'Sign (captain #{{number}})' })}
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    <div role="alert" className={cn(NOTICE.error, 'py-3 text-center text-sm')}>
+                      {t('coinToss.selectCaptainFirst', 'Choose a captain first.')}
+                    </div>
+                  )}
+                </div>
+
+                {/* Coach Signature - only when hasCoach is enabled */}
+                {hasCoach && (
+                  <div>
+                    <h4 className="mb-2 text-sm font-semibold text-stone-700">{t('coinToss.coachSignature', 'Coach signature')}</h4>
+                    <button
+                      type="button"
+                      onClick={() => setOpenSignature(currentTeam === 'team1' ? 'team1-coach' : 'team2-coach')}
+                      className={signBtn(!!coachSig)}
+                    >
+                      {coachSig ? (
+                        <>
+                          <span>{t('coinToss.coachSigned', 'Coach signed')}</span>
+                          <Check size={18} aria-hidden="true" />
+                        </>
+                      ) : (
+                        <>
+                          <PenLine size={18} aria-hidden="true" />
+                          {t('coinToss.signCoach', 'Sign (coach)')}
+                        </>
+                      )}
+                    </button>
                   </div>
                 )}
-              </div>
 
-              {/* Coach Signature - only when hasCoach is enabled */}
-              {hasCoach && (
-                <div style={{ marginBottom: '16px' }}>
-                  <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600, color: 'var(--muted)' }}>Coach Signature</h4>
-                  <button
-                    onClick={() => setOpenSignature(currentTeam === 'team1' ? 'team1-coach' : 'team2-coach')}
-                    className={`sign ${(currentTeam === 'team1' ? team1CoachSignature : team2CoachSignature) ? 'signed' : ''}`}
-                    style={{
-                      width: '100%',
-                      padding: '16px',
-                      fontSize: '16px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px'
-                    }}
-                  >
-                    {(currentTeam === 'team1' ? team1CoachSignature : team2CoachSignature) ? (
-                      <>
-                        <span>Coach Signed</span>
-                        <span style={{ color: '#22c55e' }}>✓</span>
-                      </>
-                    ) : (
-                      <>Sign (Coach)</>
-                    )}
+                {/* Close Button */}
+                <div className="flex justify-center pt-1">
+                  <button type="button" onClick={() => setOrderSignatureModal(null)} className={cn(modalPrimaryClass, 'min-h-12 min-w-40 text-base')}>
+                    {t('coinToss.done', 'Done')}
                   </button>
                 </div>
-              )}
-
-              {/* Close Button */}
-              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
-                <button
-                  onClick={() => setOrderSignatureModal(null)}
-                  style={{
-                    padding: '12px 32px',
-                    fontSize: '16px',
-                    fontWeight: 600,
-                    background: 'var(--accent)',
-                    color: '#000',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Done
-                </button>
               </div>
-            </div>
-          </Modal>
+            </KitModal>
+          </div>
         )
       })()}
 
@@ -2541,406 +2443,340 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
       {deletePlayerModal && (() => {
         const isTeamA = deletePlayerModal.team === 'teamA'
         const currentTeam = isTeamA ? teamA : teamB
-        const roster = currentTeam === 'team1' ? team1Roster : team2Roster
-        const player = roster[deletePlayerModal.index]
-        const playerName = player ? `${player.lastName || ''} ${player.firstName || ''}`.trim() || `Player #${player.number || '?'}` : 'Player'
 
         return (
-          <Modal
-            title="Delete Player"
-            open={true}
-            onClose={() => setDeletePlayerModal(null)}
-            width={400}
-          >
-            <div style={{ padding: '16px 0' }}>
-              <p style={{ marginBottom: 16 }}>
+          <div className="ov-kit" style={{ position: 'relative', zIndex: 1001 }}>
+            <KitModal
+              open
+              decision
+              size="sm"
+              dismissible={false}
+              onClose={() => setDeletePlayerModal(null)}
+              closeLabel={t('common.close')}
+              title={t('coinToss.deletePlayerTitle', 'Delete the player?')}
+              footer={(
+                <>
+                  <button type="button" className={modalCancelClass} onClick={() => setDeletePlayerModal(null)}>{t('common.cancel')}</button>
+                  <button
+                    type="button"
+                    className={modalDangerClass}
+                    onClick={() => {
+                      if (currentTeam === 'team1') {
+                        setTeam1Roster(list => list.filter((_, idx) => idx !== deletePlayerModal.index))
+                      } else {
+                        setTeam2Roster(list => list.filter((_, idx) => idx !== deletePlayerModal.index))
+                      }
+                      setDeletePlayerModal(null)
+                    }}
+                  >
+                    {t('common.delete')}
+                  </button>
+                </>
+              )}
+            >
+              <p className="text-sm text-stone-600">
                 {t('modal.deletePlayerConfirm')}
               </p>
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button className="secondary" onClick={() => setDeletePlayerModal(null)}>{t('common.cancel')}</button>
-                <button onClick={() => {
-                  if (currentTeam === 'team1') {
-                    setTeam1Roster(list => list.filter((_, idx) => idx !== deletePlayerModal.index))
-                  } else {
-                    setTeam2Roster(list => list.filter((_, idx) => idx !== deletePlayerModal.index))
-                  }
-                  setDeletePlayerModal(null)
-                }}>{t('common.delete')}</button>
-              </div>
-            </div>
-          </Modal>
+            </KitModal>
+          </div>
         )
       })()}
 
       {/* Notice Modal */}
       {noticeModal && (
-        <Modal
-          title="Notice"
-          open={true}
-          onClose={() => setNoticeModal(null)}
-          width={400}
-          hideCloseButton={true}
-        >
-          <div style={{ padding: '24px', textAlign: 'center' }}>
-            <p style={{ marginBottom: '24px', fontSize: '16px', color: 'var(--text)', whiteSpace: 'pre-line' }}>
-              {noticeModal.message}
-            </p>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-              <button
-                onClick={() => setNoticeModal(null)}
-                style={{
-                  padding: '12px 24px', fontSize: '14px', fontWeight: 600,
-                  background: 'var(--accent)', color: '#000',
-                  border: 'none', borderRadius: '8px', cursor: 'pointer'
-                }}
-              >
-                OK
+        <div className="ov-kit" style={DIALOG_LAYER}>
+          <KitModal
+            open
+            decision
+            dismissible={false}
+            size="sm"
+            onClose={() => setNoticeModal(null)}
+            closeLabel={t('common.close')}
+          >
+            <div className="flex flex-col items-center text-center" role="status">
+              <h3 className="text-lg font-bold text-stone-900">{t('matchSetup.modals.notice')}</h3>
+              <p className="mt-2 whitespace-pre-line text-sm text-stone-600">
+                {noticeModal.message}
+              </p>
+              <button type="button" onClick={() => setNoticeModal(null)} className={cn(modalPrimaryClass, 'mt-5 min-h-11 min-w-28')}>
+                {t('common.ok')}
               </button>
             </div>
-          </div>
-        </Modal>
+          </KitModal>
+        </div>
       )}
 
       {/* Initialization Modal */}
       {initModal && (
-        <Modal
-          title={initModal.status === 'success' ? 'Match Initialized' :
-            initModal.status === 'error' ? 'Initialization Error' :
-              initModal.status === 'checking' || initModal.status === 'check_results' ? 'Connection Checks' :
-              'Initializing Match'}
-          open={true}
-          onClose={initModal.status === 'error' ? () => setInitModal(null) : undefined}
-          width={450}
-          hideCloseButton={initModal.status !== 'error'}
-        >
-          <div style={{ padding: '24px', textAlign: 'center' }}>
-            {/* Status Icon */}
-            <div style={{ marginBottom: '20px' }}>
-              {(initModal.status === 'syncing' || initModal.status === 'checking') && (
-                <div style={{
-                  width: '60px', height: '60px', margin: '0 auto',
-                  border: '4px solid rgba(59, 130, 246, 0.3)',
-                  borderTop: '4px solid #3b82f6',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite'
-                }} />
+        <div className="ov-kit" style={DIALOG_LAYER}>
+          <KitModal
+            open
+            decision
+            dismissible={false}
+            size="md"
+            onClose={() => { if (initModal.status === 'error') setInitModal(null) }}
+            closeLabel={t('common.close')}
+          >
+            <div className="text-center">
+              {/* Status Icon */}
+              <div className="mb-4 flex justify-center">
+                {(initModal.status === 'syncing' || initModal.status === 'checking' || initModal.status === 'verifying') && (
+                  <span className="flex h-14 w-14 items-center justify-center rounded-full bg-stone-100 text-stone-500">
+                    <Loader2 size={28} className="animate-spin" aria-hidden="true" />
+                  </span>
+                )}
+                {initModal.status === 'success' && (
+                  <span className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                    <Check size={28} aria-hidden="true" />
+                  </span>
+                )}
+                {initModal.status === 'error' && (
+                  <span className="flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-2xl font-bold text-red-600" aria-hidden="true">{'✕'}</span>
+                )}
+              </div>
+              <h3 className="text-lg font-bold text-stone-900">
+                {initModal.status === 'success' ? t('coinToss.initialized') :
+                  initModal.status === 'error' ? t('coinToss.initError') :
+                    initModal.status === 'checking' || initModal.status === 'check_results' ? t('coinToss.connectionChecks', 'Connection checks') :
+                      t('coinToss.initializing')}
+              </h3>
+
+              {/* Connection checks checklist */}
+              {(initModal.status === 'checking' || initModal.status === 'check_results') && initModal.checks && (
+                <ul className="mt-4 divide-y divide-stone-100 rounded-xl border border-stone-200/70 text-left">
+                  {Object.entries(initModal.checks).map(([key, check]) => {
+                    const icons = { pending: '⏳', pass: '✓', warn: '⚠', fail: '✕', skip: '—' }
+                    const tones = {
+                      pending: 'bg-stone-100 text-stone-500',
+                      pass: 'bg-emerald-100 text-emerald-700',
+                      warn: 'bg-amber-100 text-amber-800',
+                      fail: 'bg-red-50 text-red-700',
+                      skip: 'bg-stone-100 text-stone-500'
+                    }
+                    return (
+                      <li key={key} className="flex items-center gap-3 px-3 py-2.5">
+                        <span className={cn('flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold', tones[check.status] || tones.pending)} title={check.status}>
+                          {icons[check.status] || '⏳'}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium text-stone-800">{check.label}</div>
+                          {check.detail && (
+                            <div className="text-xs text-stone-500">{check.detail}</div>
+                          )}
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
               )}
-              {initModal.status === 'verifying' && (
-                <div style={{
-                  width: '60px', height: '60px', margin: '0 auto',
-                  border: '4px solid rgba(234, 179, 8, 0.3)',
-                  borderTop: '4px solid #eab308',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite'
-                }} />
+
+              {/* Proceed Anyway button for failed checks */}
+              {initModal.status === 'check_results' && Object.values(initModal.checks).some(c => c.status === 'fail') && (
+                <button
+                  type="button"
+                  onClick={() => { if (window.__coinTossCheckResolve) window.__coinTossCheckResolve() }}
+                  className={cn(modalPrimaryClass, 'mt-4 min-h-11')}
+                >
+                  {t('coinToss.proceedAnyway', 'Proceed anyway')}
+                </button>
               )}
-              {initModal.status === 'success' && (
-                <div style={{
-                  width: '60px', height: '60px', margin: '0 auto',
-                  background: 'rgba(34, 197, 94, 0.2)',
-                  borderRadius: '50%',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}>
-                  <span style={{ fontSize: '32px', color: '#22c55e' }}>{'\u2713'}</span>
-                </div>
+
+              {/* Message */}
+              {initModal.status !== 'checking' && initModal.status !== 'check_results' && (
+                <p className={cn('mt-2 text-sm', initModal.status === 'error' ? 'font-medium text-red-700' : initModal.status === 'success' ? 'font-medium text-emerald-800' : 'text-stone-600')}>
+                  {initModal.message}
+                </p>
               )}
+
+              {/* Error button */}
               {initModal.status === 'error' && (
-                <div style={{
-                  width: '60px', height: '60px', margin: '0 auto',
-                  background: 'rgba(239, 68, 68, 0.2)',
-                  borderRadius: '50%',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}>
-                  <span style={{ fontSize: '32px', color: '#ef4444' }}>{'\u2715'}</span>
-                </div>
+                <button type="button" onClick={() => setInitModal(null)} className={cn(modalPrimaryClass, 'mt-5 min-h-11 min-w-28')}>
+                  {t('common.back')}
+                </button>
               )}
             </div>
-
-            {/* Connection checks checklist */}
-            {(initModal.status === 'checking' || initModal.status === 'check_results') && initModal.checks && (
-              <div style={{ textAlign: 'left', marginBottom: 16 }}>
-                {Object.entries(initModal.checks).map(([key, check]) => {
-                  const icons = { pending: '\u23F3', pass: '\u2713', warn: '\u26A0', fail: '\u2715', skip: '\u2014' }
-                  const colors = { pending: '#6b7280', pass: '#22c55e', warn: '#eab308', fail: '#ef4444', skip: '#6b7280' }
-                  return (
-                    <div key={key} style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.08)'
-                    }}>
-                      <span style={{ fontSize: 16, color: colors[check.status] || '#6b7280', width: 24, textAlign: 'center' }}>
-                        {icons[check.status] || '\u23F3'}
-                      </span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 500 }}>{check.label}</div>
-                        {check.detail && (
-                          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{check.detail}</div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-
-            {/* Proceed Anyway button for failed checks */}
-            {initModal.status === 'check_results' && Object.values(initModal.checks).some(c => c.status === 'fail') && (
-              <button
-                onClick={() => { if (window.__coinTossCheckResolve) window.__coinTossCheckResolve() }}
-                style={{
-                  padding: '10px 24px', fontSize: '14px', fontWeight: 600,
-                  background: 'rgba(234, 179, 8, 0.2)', color: '#eab308',
-                  border: '1px solid #eab308', borderRadius: '8px', cursor: 'pointer',
-                  marginBottom: 16
-                }}
-              >
-                Proceed Anyway
-              </button>
-            )}
-
-            {/* Message */}
-            {initModal.status !== 'checking' && initModal.status !== 'check_results' && (
-              <p style={{
-                marginBottom: '24px',
-                fontSize: '16px',
-                color: initModal.status === 'error' ? '#ef4444' :
-                  initModal.status === 'success' ? '#22c55e' : 'var(--text)'
-              }}>
-                {initModal.message}
-              </p>
-            )}
-
-            {/* Error button */}
-            {initModal.status === 'error' && (
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                <button
-                  onClick={() => setInitModal(null)}
-                  style={{
-                    padding: '12px 24px', fontSize: '14px', fontWeight: 600,
-                    background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444',
-                    border: '1px solid #ef4444', borderRadius: '8px', cursor: 'pointer'
-                  }}
-                >
-                  Back
-                </button>
-              </div>
-            )}
-          </div>
-        </Modal>
+          </KitModal>
+        </div>
       )}
-
-      {/* CSS for spinner animation */}
-      <style>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `}</style>
 
       {/* Birthdate Confirmation Modal */}
       {birthdateConfirmModal && (
-        <Modal
-          title="Confirm Birthdates"
-          open={true}
-          onClose={() => setBirthdateConfirmModal(null)}
-          width={500}
-          hideCloseButton={true}
-        >
-          <div style={{ padding: '24px' }}>
-            <p style={{ marginBottom: '16px', fontSize: '14px', color: '#eab308' }}>
-              The following people have birthdates on January 1st, which may indicate import errors:
-            </p>
-            <div style={{
-              background: 'rgba(234, 179, 8, 0.1)',
-              border: '1px solid rgba(234, 179, 8, 0.3)',
-              borderRadius: '8px',
-              padding: '12px',
-              marginBottom: '20px',
-              maxHeight: '200px',
-              overflowY: 'auto'
-            }}>
+        <div className="ov-kit" style={DIALOG_LAYER}>
+          <KitModal
+            open
+            decision
+            dismissible={false}
+            size="md"
+            onClose={() => setBirthdateConfirmModal(null)}
+            closeLabel={t('common.close')}
+            title={t('coinToss.birthdates.title', 'Are these dates of birth correct?')}
+            footer={(
+              <>
+                <button type="button" onClick={() => setBirthdateConfirmModal(null)} className={modalCancelClass}>
+                  {t('coinToss.birthdates.goBack', 'No, go back')}
+                </button>
+                <button type="button" onClick={birthdateConfirmModal.onConfirm} className={modalSaveClass}>
+                  {t('coinToss.birthdates.continue', 'Yes, continue')}
+                </button>
+              </>
+            )}
+          >
+            <div className={cn(NOTICE.warning, 'text-sm')}>
+              {t('coinToss.birthdates.warning', 'These people were born on 1 January, which can mean an import error:')}
+            </div>
+            <ul className="mt-3 max-h-[200px] divide-y divide-stone-100 overflow-y-auto rounded-xl border border-stone-200/70">
               {birthdateConfirmModal.suspiciousDates.map((date, idx) => (
-                <div key={idx} style={{ fontSize: '13px', color: 'var(--text)', padding: '4px 0' }}>
+                <li key={idx} className="px-3 py-2 text-sm tabular-nums text-stone-800">
                   {date}
-                </div>
+                </li>
               ))}
-            </div>
-            <p style={{ marginBottom: '20px', fontSize: '14px', color: 'var(--text)' }}>
-              Are these dates correct?
-            </p>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-              <button
-                onClick={() => setBirthdateConfirmModal(null)}
-                className="secondary"
-                style={{ padding: '12px 24px', fontSize: '14px' }}
-              >
-                No, go back
-              </button>
-              <button
-                onClick={birthdateConfirmModal.onConfirm}
-                style={{
-                  padding: '12px 24px', fontSize: '14px', fontWeight: 600,
-                  background: 'var(--accent)', color: '#000',
-                  border: 'none', borderRadius: '8px', cursor: 'pointer'
-                }}
-              >
-                Yes, continue
-              </button>
-            </div>
-          </div>
-        </Modal>
+            </ul>
+          </KitModal>
+        </div>
       )}
 
       {/* Forfait Team Selection Modal */}
       {forfaitModal && (
-        <Modal
-          title="Forfait"
-          open={true}
-          onClose={() => setForfaitModal(false)}
-          width={400}
-        >
-          <div style={{ padding: '16px', textAlign: 'center' }}>
-            <p style={{ marginBottom: '20px', fontSize: '14px', color: 'var(--muted)' }}>
-              Which team forfeits?
+        <div className="ov-kit" style={DIALOG_LAYER}>
+          <KitModal
+            open
+            decision
+            dismissible={false}
+            size="sm"
+            onClose={() => setForfaitModal(false)}
+            closeLabel={t('common.close')}
+            title={t('coinToss.forfait.title', 'Forfait')}
+          >
+            <p className="mb-4 text-sm text-stone-600">
+              {t('coinToss.forfait.whichTeam', 'Which team forfeits?')}
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div className="flex flex-col gap-3">
+              {/* The team buttons wear the team colours (frozen) */}
               <button
+                type="button"
                 onClick={() => { setForfaitModal(false); setForfaitTypeModal('team1') }}
-                style={{
-                  padding: '14px 24px', fontSize: '16px', fontWeight: 600,
-                  background: team1Color, color: isBrightColor(team1Color) ? '#000' : '#fff',
-                  border: 'none', borderRadius: '8px', cursor: 'pointer'
-                }}
+                className={cn('min-h-14 rounded-xl px-6 text-base font-semibold', FOCUS_RING)}
+                style={{ background: team1Color, color: isBrightColor(team1Color) ? '#000' : '#fff' }}
               >
                 {team1Name}
               </button>
               <button
+                type="button"
                 onClick={() => { setForfaitModal(false); setForfaitTypeModal('team2') }}
-                style={{
-                  padding: '14px 24px', fontSize: '16px', fontWeight: 600,
-                  background: team2Color, color: isBrightColor(team2Color) ? '#000' : '#fff',
-                  border: 'none', borderRadius: '8px', cursor: 'pointer'
-                }}
+                className={cn('min-h-14 rounded-xl px-6 text-base font-semibold', FOCUS_RING)}
+                style={{ background: team2Color, color: isBrightColor(team2Color) ? '#000' : '#fff' }}
               >
                 {team2Name}
               </button>
             </div>
-          </div>
-        </Modal>
+          </KitModal>
+        </div>
       )}
 
       {/* Forfait Reason Selection Modal */}
       {forfaitTypeModal && (
-        <Modal
-          title="Forfait Reason"
-          open={true}
-          onClose={() => { setForfaitTypeModal(null); setForfaitType('no_show'); setForfaitPlayerNumber('') }}
-          width={400}
-        >
-          <div style={{ padding: '16px', textAlign: 'center' }}>
-            <p style={{ marginBottom: '20px', fontSize: '14px', color: 'var(--muted)' }}>
-              Why is {forfaitTypeModal === 'team1' ? team1Name : team2Name} forfeiting?
+        <div className="ov-kit" style={DIALOG_LAYER}>
+          <KitModal
+            open
+            decision
+            dismissible={false}
+            size="sm"
+            onClose={() => { setForfaitTypeModal(null); setForfaitType('no_show'); setForfaitPlayerNumber('') }}
+            closeLabel={t('common.close')}
+            title={t('coinToss.forfait.reasonTitle', 'Forfait reason')}
+          >
+            <p className="mb-4 text-sm text-stone-600">
+              {t('coinToss.forfait.why', { team: forfaitTypeModal === 'team1' ? team1Name : team2Name, defaultValue: 'Why does {{team}} forfeit?' })}
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <button
+            <div className="flex flex-col gap-3">
+              <Button
+                variant="secondary"
+                size="xl"
+                className="min-h-14 text-base"
                 onClick={() => {
                   setForfaitType('no_show')
                   setForfaitPlayerNumber('')
                   setForfaitTypeModal(null)
                   setForfaitConfirmModal(forfaitTypeModal)
                 }}
-                className="secondary"
-                style={{ padding: '14px 24px', fontSize: '16px', fontWeight: 600 }}
               >
-                No Show
-              </button>
-              <button
+                {t('coinToss.forfait.noShow', 'No show')}
+              </Button>
+              <Button
+                variant="secondary"
+                size="xl"
+                className="min-h-14 text-base"
                 onClick={() => {
                   setForfaitType('injury')
                   setForfaitTypeModal(null)
                   setForfaitConfirmModal(forfaitTypeModal)
                 }}
-                className="secondary"
-                style={{ padding: '14px 24px', fontSize: '16px', fontWeight: 600 }}
               >
-                Injury
-              </button>
+                {t('coinToss.forfait.injury', 'Injury')}
+              </Button>
             </div>
-          </div>
-        </Modal>
+          </KitModal>
+        </div>
       )}
 
       {/* Forfait Confirmation Modal */}
-      {forfaitConfirmModal && (
-        <Modal
-          title="Confirm Forfait"
-          open={true}
-          onClose={() => { setForfaitConfirmModal(null); setForfaitType('no_show'); setForfaitPlayerNumber('') }}
-          width={450}
-        >
-          <div style={{ padding: '16px' }}>
-            <p style={{ marginBottom: '8px', fontSize: '16px', fontWeight: 600, color: 'var(--text)', textAlign: 'center' }}>
-              {forfaitConfirmModal === 'team1' ? team1Name : team2Name} forfeits.
-            </p>
-            <p style={{ marginBottom: '16px', fontSize: '14px', color: 'var(--muted)', textAlign: 'center' }}>
-              {forfaitConfirmModal === 'team1' ? team2Name : team1Name} wins 2-0 (21-0, 21-0).
-            </p>
+      {forfaitConfirmModal && (() => {
+        const closeForfaitConfirm = () => { setForfaitConfirmModal(null); setForfaitType('no_show'); setForfaitPlayerNumber('') }
+        return (
+          <div className="ov-kit" style={DIALOG_LAYER}>
+            <KitModal
+              open
+              decision
+              dismissible={false}
+              size="md"
+              onClose={closeForfaitConfirm}
+              closeLabel={t('common.close')}
+              title={t('coinToss.forfait.confirmTitle', { team: forfaitConfirmModal === 'team1' ? team1Name : team2Name, defaultValue: '{{team}} forfeits?' })}
+              footer={(
+                <>
+                  <button type="button" onClick={closeForfaitConfirm} className={modalCancelClass}>
+                    {t('common.cancel')}
+                  </button>
+                  <button type="button" onClick={() => handleForfait(forfaitConfirmModal)} className={modalDangerClass}>
+                    {t('coinToss.forfait.confirm', 'Confirm forfait')}
+                  </button>
+                </>
+              )}
+            >
+              <p className="text-sm text-stone-600">
+                {t('coinToss.forfait.result', { team: forfaitConfirmModal === 'team1' ? team2Name : team1Name, defaultValue: '{{team}} wins 2-0 (21-0, 21-0).' })}
+              </p>
 
-            {/* Player number input for injury forfait */}
-            {forfaitType === 'injury' && (
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '13px', color: 'var(--muted)', marginBottom: '6px' }}>
-                  Injured player number
-                </label>
-                <input
-                  type="text"
-                  value={forfaitPlayerNumber}
-                  onChange={e => setForfaitPlayerNumber(e.target.value)}
-                  placeholder="#"
-                  style={{
-                    width: '100%', padding: '10px 12px', fontSize: '14px',
-                    border: '1px solid var(--muted)', borderRadius: '6px',
-                    background: 'var(--panel)', color: 'var(--text)',
-                    boxSizing: 'border-box'
-                  }}
-                />
+              {/* Player number input for injury forfait */}
+              {forfaitType === 'injury' && (
+                <div className="mt-4">
+                  <label htmlFor="ob-forfait-player" className={FIELD_LABEL}>
+                    {t('coinToss.forfait.injuredPlayer', 'Injured player number')}
+                  </label>
+                  <input
+                    id="ob-forfait-player"
+                    type="text"
+                    inputMode="numeric"
+                    value={forfaitPlayerNumber}
+                    onChange={e => setForfaitPlayerNumber(e.target.value)}
+                    placeholder="#"
+                    className={cn(FIELD_INPUT, 'max-w-[140px] tabular-nums')}
+                  />
+                </div>
+              )}
+
+              {/* FIVB remark preview (the remark text goes onto the scoresheet as is) */}
+              <div className="mt-4 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2.5 text-xs leading-snug text-stone-600">
+                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-stone-500">{t('coinToss.forfait.remark', 'Remark')}</div>
+                {forfaitType === 'injury'
+                  ? `Team ${forfaitConfirmModal === 'team1' ? team1Name : team2Name} forfeits the match due to injury (injury as confirmed by the official medical personnel) of player # ${forfaitPlayerNumber || '...'}. Appropriate official medical personnel came to the court. Both teams and players were present`
+                  : `Team ${forfaitConfirmModal === 'team1' ? team1Name : team2Name} forfeits the match due to no show`
+                }
               </div>
-            )}
-
-            {/* FIVB remark preview */}
-            <div style={{
-              padding: '10px 12px', marginBottom: '16px', fontSize: '12px',
-              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-              borderRadius: '6px', color: 'var(--muted)', lineHeight: 1.4
-            }}>
-              <div style={{ fontSize: '11px', fontWeight: 600, marginBottom: '4px', color: 'var(--text)' }}>Remark:</div>
-              {forfaitType === 'injury'
-                ? `Team ${forfaitConfirmModal === 'team1' ? team1Name : team2Name} forfeits the match due to injury (injury as confirmed by the official medical personnel) of player # ${forfaitPlayerNumber || '...'}. Appropriate official medical personnel came to the court. Both teams and players were present`
-                : `Team ${forfaitConfirmModal === 'team1' ? team1Name : team2Name} forfeits the match due to no show`
-              }
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-              <button
-                onClick={() => { setForfaitConfirmModal(null); setForfaitType('no_show'); setForfaitPlayerNumber('') }}
-                className="secondary"
-                style={{ padding: '12px 24px', fontSize: '14px' }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleForfait(forfaitConfirmModal)}
-                style={{
-                  padding: '12px 24px', fontSize: '14px', fontWeight: 600,
-                  background: 'var(--danger)', color: '#fff',
-                  border: 'none', borderRadius: '8px', cursor: 'pointer'
-                }}
-              >
-                Confirm Forfait
-              </button>
-            </div>
+            </KitModal>
           </div>
-        </Modal>
-      )}
+        )
+      })()}
 
       {/* Signature Pad */}
       <SignaturePad

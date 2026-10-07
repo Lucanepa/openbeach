@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
+import { ChevronDown } from 'lucide-react'
+import { MENU_PANEL, MENU_ROW, MENU_SEP, MENU_ICON, MENU_TITLE } from './chromeClasses_beach'
+import { cn } from '../ui/volleyui/cn.js'
 
 export default function MenuList({
   items = [],
@@ -9,7 +12,11 @@ export default function MenuList({
   menuTitle = '',
   buttonStyle = {},
   buttonClassName = '',
-  showArrow = true
+  showArrow = true,
+  // 'light': the volleyui face (kit menu panel and rows, `buttonClassName`
+  // carries the trigger's kit classes). The default keeps the legacy dark
+  // look for the screens not restyled yet.
+  tone = 'dark'
 }) {
   const [showMenu, setShowMenu] = useState(false)
   const menuRef = useRef(null)
@@ -79,6 +86,63 @@ export default function MenuList({
   const getPositionStyle = () => {
     // Will be set dynamically via useEffect
     return {}
+  }
+
+  if (tone === 'light') {
+    return (
+      <div className="ov-kit relative">
+        <button
+          type="button"
+          ref={buttonRef}
+          className={buttonClassName}
+          title={buttonTitle || undefined}
+          aria-haspopup="menu"
+          aria-expanded={showMenu}
+          onClick={(e) => {
+            e.stopPropagation()
+            setShowMenu(!showMenu)
+          }}
+          style={buttonStyle}
+        >
+          {buttonLabel}
+          {showArrow && (
+            <ChevronDown size={16} aria-hidden="true" className={cn('transition-transform', showMenu && 'rotate-180')} />
+          )}
+        </button>
+
+        {showMenu && (
+          <div
+            ref={menuRef}
+            role="menu"
+            onClick={(e) => e.stopPropagation()}
+            className={cn(MENU_PANEL, 'fixed z-[1000] min-w-[200px]')}
+          >
+            {menuTitle && <div className={cn(MENU_TITLE, 'px-3 pb-2 pt-1')}>{menuTitle}</div>}
+            {items.map((item, index) => {
+              if (item.separator) return <div key={`separator-${index}`} className={MENU_SEP} />
+              return (
+                <button
+                  type="button"
+                  role="menuitem"
+                  key={item.key || index}
+                  onClick={() => {
+                    if (item.onClick) {
+                      item.onClick()
+                    }
+                    setShowMenu(false)
+                  }}
+                  className={MENU_ROW}
+                  style={item.style}
+                >
+                  {item.icon && <span className={MENU_ICON}>{item.icon}</span>}
+                  <span>{item.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
   }
 
   return (

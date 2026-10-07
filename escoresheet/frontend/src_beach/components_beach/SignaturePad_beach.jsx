@@ -1,6 +1,8 @@
 import { useRef, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import Modal from './Modal_beach'
+import { Modal as KitModal, modalCancelClass, modalPrimaryClass, modalSaveClass } from '../ui/volleyui/Modal.jsx'
+import { FOCUS_RING } from '../ui/volleyui/Button.jsx'
+import { cn } from '../ui/volleyui/cn.js'
 
 export default function SignaturePad({ open, onClose, onSave, title, existingSignature = null, readOnly = false }) {
   const { t } = useTranslation()
@@ -183,16 +185,31 @@ export default function SignaturePad({ open, onClose, onSave, title, existingSig
     onClose()
   }
 
+  // volleyui decision dialog (above the legacy header like the modal it
+  // replaces; a backdrop tap does not close it, so a stroke near the edge
+  // cannot lose the signature). The pad itself stays white with black ink.
+  if (!open) return null
   return (
-    <Modal title={title} open={open} onClose={onClose} width={600}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div style={{
-          border: '2px solid rgba(0,0,0,.3)',
-          borderRadius: 8,
-          background: '#ffffff',
-          position: 'relative',
-          touchAction: 'none'
-        }}>
+    <div className="ov-kit" style={{ position: 'relative', zIndex: 1000 }}>
+      <KitModal
+        open
+        decision
+        dismissible={false}
+        size="xl"
+        title={title}
+        onClose={onClose}
+        closeLabel={t('signature.close')}
+        footer={readOnly ? (
+          <button type="button" onClick={onClose} className={cn(modalPrimaryClass, 'min-h-11')}>{t('signature.close')}</button>
+        ) : (
+          <>
+            <button type="button" onClick={clear} className={cn('mr-auto inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-stone-600 underline-offset-2 hover:underline', FOCUS_RING)}>{t('signature.clear')}</button>
+            <button type="button" onClick={handleCancel} className={cn(modalCancelClass, 'min-h-11')}>{t('signature.cancel')}</button>
+            <button type="button" onClick={save} disabled={!hasSignature} className={cn(modalSaveClass, 'min-h-11 disabled:cursor-not-allowed disabled:bg-stone-300')}>{t('signature.save')}</button>
+          </>
+        )}
+      >
+        <div className="relative overflow-hidden rounded-xl border-2 border-dashed border-stone-300 bg-white" style={{ touchAction: 'none' }}>
           <canvas
             ref={canvasRef}
             style={{
@@ -208,19 +225,7 @@ export default function SignaturePad({ open, onClose, onSave, title, existingSig
             onMouseLeave={readOnly ? undefined : stopDrawing}
           />
         </div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          {readOnly ? (
-            <button onClick={onClose}>{t('signature.close')}</button>
-          ) : (
-            <>
-              <button className="secondary" onClick={clear}>{t('signature.clear')}</button>
-              <button className="secondary" onClick={handleCancel}>{t('signature.cancel')}</button>
-              <button onClick={save} disabled={!hasSignature}>{t('signature.save')}</button>
-            </>
-          )}
-        </div>
-      </div>
-    </Modal>
+      </KitModal>
+    </div>
   )
 }
-
