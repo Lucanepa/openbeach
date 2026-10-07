@@ -2256,5 +2256,9 @@
     "sanctions": "Sanctions",
     "sanction": "sanction",
     "failed": "Could not restore the match."
+  },
+  "appWindow": {
+    "pdfSaveUnsupported": "The tablet app cannot save PDF files: the match-end approval uploads the scoresheet, or open it on a computer.",
+    "savingPdf": "Saving the PDF…"
   }
 }

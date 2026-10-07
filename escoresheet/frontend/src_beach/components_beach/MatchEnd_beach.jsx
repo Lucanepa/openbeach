@@ -17,6 +17,7 @@ import { exportLogsAsNDJSON } from '../utils_beach/comprehensiveLogger_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 
 import { sanitizeForFilename } from '../utils_beach/stringUtils_beach'
+import { openAppWindow } from '../utils_beach/openAppWindow_beach'
 import { formatTimeLocal } from '../utils_beach/timeUtils_beach'
 import CountryFlag from './CountryFlag_beach'
 import { ChartColumn, FileText, Save, Search } from './Icons_beach'
@@ -762,7 +763,8 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
     const url = action === 'preview' ? '/scoresheet_beach.html'
       : `/scoresheet_beach.html?action=${action}`
-    window.open(url, 'scoresheet_beach', 'width=1600,height=1200')
+    // a popup, a desktop app window, or the Android app's in-app view
+    openAppWindow(url, { features: 'width=1600,height=1200', title: t('matchEnd.scoresheet') })
   }
 
   // Handle downloading comprehensive interaction logs
@@ -879,8 +881,9 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
             reject(new Error('PDF generation timed out'))
           }, 30000)
           // Open scoresheet window with getBlob action
-          const win = window.open('/scoresheet_beach.html?action=getBlob', '_blank', 'width=1600,height=1200')
-          if (!win) {
+          // In the Android app an in-app view (a window.open replaced this page)
+          const opened = openAppWindow('/scoresheet_beach.html?action=getBlob', { features: 'width=1600,height=1200', title: t('matchEnd.scoresheet') })
+          if (!opened.ok) {
             clearTimeout(timeout)
             window.removeEventListener('message', handler)
             reject(new Error('The scoresheet window was blocked'))

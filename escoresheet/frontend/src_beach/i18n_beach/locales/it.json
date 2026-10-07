@@ -2255,5 +2255,9 @@
     "sanctions": "Sanzioni",
     "sanction": "sanzione",
     "failed": "Impossibile ripristinare la partita."
+  },
+  "appWindow": {
+    "pdfSaveUnsupported": "L'app per tablet non può salvare file PDF: l'approvazione a fine partita carica il referto, oppure aprilo su un computer.",
+    "savingPdf": "Salvataggio del PDF…"
   }
 }

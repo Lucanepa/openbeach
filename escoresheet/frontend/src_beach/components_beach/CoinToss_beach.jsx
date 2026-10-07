@@ -9,6 +9,7 @@ import { isBackendAvailable, getBackendUrl } from '../utils_beach/backendConfig_
 import SignaturePad from './SignaturePad_beach'
 import MenuList from './MenuList_beach'
 import CountryFlag from './CountryFlag_beach'
+import { openAppWindow } from '../utils_beach/openAppWindow_beach'
 // Beach volleyball ball image
 const ballImage = '/beachball.png'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
@@ -1835,9 +1836,9 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                   }
 
                   sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
-                  const scoresheetWindow = window.open('/scoresheet_beach.html', 'scoresheet_beach', 'width=1200,height=900')
+                  const opened = openAppWindow('/scoresheet_beach.html', { features: 'width=1200,height=900' })
 
-                  if (!scoresheetWindow) {
+                  if (!opened.ok) {
                     showAlert(t('coinToss.allowPopups'), 'warning')
                   }
                 } catch (error) {

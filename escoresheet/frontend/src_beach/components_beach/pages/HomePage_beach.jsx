@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { openAppWindow } from '../../utils_beach/openAppWindow_beach'
 import { ChevronDown, LifeBuoy, Loader2, MonitorPlay, Settings } from 'lucide-react'
 import SupportFeedbackModal from '../SupportFeedbackModal_beach'
 import { Button, FOCUS_RING_INSET } from '../../ui/volleyui/Button.jsx'
@@ -154,7 +155,7 @@ export default function HomePage({
             icon={MonitorPlay}
             className="col-span-2"
             onClick={() => {
-              window.open('/scoreboard_beach.html?mode=local', '_blank', 'width=1280,height=720')
+              openAppWindow('/scoreboard_beach.html?mode=local', { features: 'width=1280,height=720' })
             }}
           >
             {t('home.openScoreboard', 'Open scoreboard')}

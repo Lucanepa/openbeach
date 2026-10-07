@@ -2255,5 +2255,9 @@
     "sanctions": "Sanktionen",
     "sanction": "Sanktion",
     "failed": "Das Spiel konnte nicht wiederhergestellt werden."
+  },
+  "appWindow": {
+    "pdfSaveUnsupported": "Die Tablet-App kann keine PDF-Dateien speichern: Die Genehmigung am Spielende lädt das Matchblatt hoch, oder öffne es auf einem Computer.",
+    "savingPdf": "PDF wird gespeichert…"
   }
 }

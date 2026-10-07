@@ -2255,5 +2255,9 @@
     "sanctions": "Sanctions",
     "sanction": "sanction",
     "failed": "Impossible de restaurer le match."
+  },
+  "appWindow": {
+    "pdfSaveUnsupported": "L'application tablette ne peut pas enregistrer de PDF : l'approbation en fin de match téléverse la feuille, ou ouvrez-la sur un ordinateur.",
+    "savingPdf": "Enregistrement du PDF…"
   }
 }

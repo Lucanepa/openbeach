@@ -43,6 +43,7 @@ import { FOCUS_RING } from '../ui/volleyui/Button.jsx'
 import { AppSpinner } from '../ui/volleyui/AppSpinner.jsx'
 import { modalCancelClass, modalPrimaryClass } from '../ui/volleyui/Modal.jsx'
 import { dayLabel, timeSecondsLabel } from '../ui/volleyui/format.js'
+import { openAppWindow } from '../utils_beach/openAppWindow_beach'
 
 // ── volleyui chrome for the scoring screen ───────────────────────────────────
 // Only the chrome around the court takes these: the toolbar, the side columns,
@@ -7200,9 +7201,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     }
 
                     sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
-                    const scoresheetWindow = window.open('/scoresheet_beach.html', 'scoresheet_beach', 'width=1200,height=900')
+                    const opened = openAppWindow('/scoresheet_beach.html', { features: 'width=1200,height=900' })
+                    const scoresheetWindow = opened.window
 
-                    if (!scoresheetWindow) {
+                    if (!opened.ok) {
                       showAlert(t('header.allowPopups'), 'warning')
                       return
                     }
@@ -7259,9 +7261,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     }
 
                     sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
-                    const scoresheetWindow = window.open('/scoresheet_beach.html?action=save', 'scoresheet_beach', 'width=1200,height=900')
+                    const opened = openAppWindow('/scoresheet_beach.html?action=save', { features: 'width=1200,height=900' })
 
-                    if (!scoresheetWindow) {
+                    if (!opened.ok) {
                       showAlert(t('header.allowPopups'), 'warning')
                       return
                     }
@@ -7299,8 +7301,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 icon: <MonitorPlay size={18} />,
                 label: t('scoreboard.menu.openScoreboard', 'Open scoreboard'),
                 onClick: () => {
-                  const scoreboardWindow = window.open('/scoreboard_beach.html?mode=local', '_blank', 'width=1280,height=720')
-                  if (!scoreboardWindow) {
+                  const opened = openAppWindow('/scoreboard_beach.html?mode=local', { features: 'width=1280,height=720' })
+                  if (!opened.ok) {
                     showAlert(t('header.allowPopups'), 'warning')
                   }
                 }

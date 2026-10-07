@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CircleCheck, Paperclip, Send, X } from 'lucide-react'
 import { getCloudApiUrl } from '../utils_beach/backendConfig_beach'
+import { openAppWindow } from '../utils_beach/openAppWindow_beach'
 import { Modal as KitModal } from '../ui/volleyui/Modal.jsx'
 import { Button } from '../ui/volleyui/Button.jsx'
 import { IconButton } from '../ui/volleyui/IconButton.jsx'
@@ -198,7 +199,7 @@ ${files.length > 0 ? `\nNote: ${files.length} file(s) were selected but cannot b
 `.trim()
 
         const mailto = `mailto:volleyball@lucanepa.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-        window.open(mailto, '_blank')
+        openAppWindow(mailto)
       }
 
       setSent(true)

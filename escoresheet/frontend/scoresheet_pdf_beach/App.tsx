@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import jsPDF from 'jspdf';
 import OpenbeachScoresheet from './components_beach/eScoresheet_beach';
+// Opened as a popup, a desktop app window or the Android app's in-app view
+import { closeAppWindow, deliverPdfToOpener, getOpenerWindow, savePdfThroughApp } from '../src_beach/utils_beach/appWindowGuest_beach.js';
 
 // Count actual pages in the DOM
 const countPages = (): number => {
@@ -145,7 +147,7 @@ export default function App({ matchData }: { matchData?: any }) {
         await handleSavePDF(action === 'getBlob');
         // Auto-close the window after saving (only for action-triggered saves)
         if (action === 'save') {
-          setTimeout(() => window.close(), 1000);
+          setTimeout(() => closeAppWindow(), 1000);
         }
       }, 1500);
     }
@@ -258,17 +260,22 @@ export default function App({ matchData }: { matchData?: any }) {
     setZoom(state.savedZoom);
   };
 
+  // Save a PDF: a download, or in the Android app's in-app view (no blob
+  // downloads in a WebView) handed to the app's bar
+  const savePdf = (pdf: any, filename: string) => {
+    savePdfThroughApp(pdf.output('blob'), filename).then((handled: boolean) => {
+      if (!handled) pdf.save(filename);
+    });
+  };
+
   // Shared: finish PDF (save or send blob to parent)
   const finishPDF = (pdf: any, returnBlob: boolean) => {
     const filename = generateFilename();
     if (returnBlob) {
-      const pdfBlob = pdf.output('arraybuffer');
-      if (window.opener && !window.opener.closed) {
-        window.opener.postMessage({ type: 'pdfBlob', arrayBuffer: pdfBlob, filename }, '*');
-      }
-      setTimeout(() => window.close(), 500);
+      // back to the match-end approval (opener, or the scorer under the in-app view)
+      deliverPdfToOpener({ arrayBuffer: pdf.output('arraybuffer'), filename });
     } else {
-      pdf.save(filename);
+      savePdf(pdf, filename);
     }
   };
 
@@ -324,15 +331,14 @@ export default function App({ matchData }: { matchData?: any }) {
       if (returnBlob) {
         finishPDF(pdf, true);
       } else {
-        pdf.save(generateFilename());
+        savePdf(pdf, generateFilename());
       }
     } catch (error) {
       console.error('Error generating PDF:', error);
       const message = error instanceof Error ? error.message : 'Unknown error';
-      if (returnBlob && window.opener && !window.opener.closed) {
+      if (returnBlob && getOpenerWindow()) {
         // The approval waits for this window: say so at once (no blocking alert)
-        window.opener.postMessage({ type: 'pdfError', message }, window.location.origin);
-        setTimeout(() => window.close(), 500);
+        deliverPdfToOpener({ error: message });
       } else {
         alert('Error generating PDF: ' + message);
       }

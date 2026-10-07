@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useTranslation } from 'react-i18next'
+import { openAppWindow } from '../utils_beach/openAppWindow_beach'
 import { useAlert } from '../contexts_beach/AlertContext_beach'
 import { useAuth } from '../contexts_beach/AuthContext_beach'
 import { db } from '../db_beach/db_beach'
@@ -2457,9 +2458,9 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
 
     // Open scoresheet in new window
-    const scoresheetWindow = window.open('/scoresheet_beach.html', 'scoresheet_beach', 'width=1200,height=900')
+    const opened = openAppWindow('/scoresheet_beach.html', { features: 'width=1200,height=900' })
 
-    if (!scoresheetWindow) {
+    if (!opened.ok) {
       setNoticeModal({ message: t('matchSetup.validation.allowPopups') })
     }
   }

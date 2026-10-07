@@ -1,13 +1,15 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { closeAppWindow, getOpenerWindow } from '../src_beach/utils_beach/appWindowGuest_beach.js';
 import './scoresheet_beach.css'; // compiled Tailwind (was cdn.tailwindcss.com: unstyled offline)
 
 // Helper function to send errors to parent window
 const sendErrorToParent = (error: Error | string, details?: string) => {
   try {
-    if (window.opener && !window.opener.closed) {
-      window.opener.postMessage({
+    const opener = getOpenerWindow();
+    if (opener) {
+      opener.postMessage({
         type: 'SCORESHEET_ERROR',
         error: typeof error === 'string' ? error : error.message,
         details: details || (error instanceof Error ? error.stack : ''),
@@ -161,7 +163,7 @@ class ErrorBoundary extends React.Component<
             </details>
           )}
           <button 
-            onClick={() => window.close()}
+            onClick={() => closeAppWindow()}
             style={{
               padding: '10px 20px',
               fontSize: '16px',
@@ -210,7 +212,7 @@ try {
         {error instanceof Error ? error.message : String(error)}
       </div>
       <button 
-        onClick={() => window.close()}
+        onClick={() => closeAppWindow()}
         style={{
           padding: '10px 20px',
           fontSize: '16px',
