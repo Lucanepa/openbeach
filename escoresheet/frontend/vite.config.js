@@ -42,6 +42,26 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    // Vite injects the stylesheets of the CSS chunks that several pages share
+    // (tailwind_beach, flag-icons) in a racy order, so two builds of the same
+    // commit could differ in admin_beach.html / index.html. F-Droid rebuilds
+    // the tag and needs the same bytes as the signed APK (Binaries in the
+    // recipe): put the injected <link rel="stylesheet"> tags in a fixed order
+    // (by file name; flag-icons and the Tailwind layers do not overlap).
+    {
+      name: 'stable-css-order',
+      transformIndexHtml: {
+        order: 'post',
+        handler(html) {
+          const re = /^[ \t]*<link rel="stylesheet" crossorigin href="[^"]+">\n/gm
+          const links = html.match(re)
+          if (!links || links.length < 2) return html
+          const sorted = [...links].sort()
+          let i = 0
+          return html.replace(re, () => sorted[i++])
+        },
+      },
+    },
     // The PDF scoresheet's own Tailwind v3 (was the CDN); before v4 sees it
     scoresheetTailwind(),
     // Tailwind v4 + the volleyui tokens (src_beach/tailwind_beach.css)
