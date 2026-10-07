@@ -6,7 +6,6 @@ vi.mock('../../contexts_beach/AuthContext_beach', () => ({ useAuth: () => auth }
 vi.mock('../../components_beach/auth/LoginModal_beach', () => ({
   default: ({ open }) => (open ? <div>login-modal</div> : null)
 }))
-vi.mock('../../components_beach/auth/SignUpModal_beach', () => ({ default: () => null }))
 
 import SyncSignInBanner, { shouldShowSyncSignIn } from '../../components_beach/auth/SyncSignInBanner_beach'
 

@@ -16,7 +16,12 @@ const get = (obj, path) => path.split('.').reduce((o, k) => o?.[k], obj)
 const SCREENS = [
   'components_beach/ServerConnectionScreen_beach.jsx',
   'components_beach/StartupConnectivityModal_beach.jsx',
-  'LivescoreApp_beach.jsx'
+  'LivescoreApp_beach.jsx',
+  'contexts_beach/AlertContext_beach.jsx',
+  'components_beach/auth/LoginModal_beach.jsx',
+  'components_beach/auth/ProfileModal_beach.jsx',
+  'components_beach/auth/UserButton_beach.jsx',
+  'components_beach/auth/InviteCodeForm_beach.jsx'
 ]
 
 function keysOf(file) {

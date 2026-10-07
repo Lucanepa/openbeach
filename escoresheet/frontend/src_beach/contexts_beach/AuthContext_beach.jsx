@@ -1,7 +1,11 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { apiFrom, apiAuth } from '../lib_beach/apiClient_beach'
+import { apiFrom, apiAuth, apiMe, apiRedeemInvite } from '../lib_beach/apiClient_beach'
 import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
-import { accessFromRoles, NO_ACCESS } from '../lib_beach/access_beach'
+import { accessFromMe, accessFromRoles, NO_ACCESS } from '../lib_beach/access_beach'
+
+// A pending account re-reads its access this often, so an admin's approval
+// (or an invite redeemed on another device) shows without a reload.
+export const PENDING_PROFILE_POLL_MS = 60000
 import { clearSavedTeams, clearSavedTeamsOfOtherAccount, refreshSavedTeams } from '../db_beach/savedTeams_beach'
 
 function readCachedProfile() {
@@ -18,6 +22,9 @@ const AuthContext = createContext(null)
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
+  // /api/me (apps.beach: the OpenBeach access of the account), when the
+  // backend has it; null keeps the access derived from profiles.roles
+  const [me, setMe] = useState(null)
   // Only show loading if backend is configured (otherwise show sign-in immediately)
   const [loading, setLoading] = useState(isBackendAvailable())
   // Prevent duplicate profile fetches
@@ -60,6 +67,12 @@ export function AuthProvider({ children }) {
       setProfile(data)
       // Cache profile in localStorage for offline auto-fill
       localStorage.setItem('cachedProfile', JSON.stringify(data))
+      // The per-app access, where the backend reports it (never blocks)
+      apiMe().then(({ data: meData, error: meError }) => {
+        // Tagged with the account it was asked for (a late answer after a
+        // switch of account is never used for the next one)
+        if (!meError && meData && typeof meData === 'object') setMe({ ...meData, _for: userId })
+      }).catch(() => { /* older backend or offline: roles decide */ })
       return data
     } catch (err) {
       console.error('[AuthContext] Profile fetch error:', err.message, err)
@@ -139,29 +152,8 @@ export function AuthProvider({ children }) {
     return { data, error }
   }, [fetchProfile])
 
-  // Sign up with email/password
-  const signUp = useCallback(async (email, password, profileData = {}) => {
-    if (!isBackendAvailable()) {
-      return { error: { message: 'Backend not configured' } }
-    }
-
-    // Pass profile data in user metadata - the database trigger will read it
-    const { data, error } = await apiAuth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          first_name: profileData.firstName || null,
-          last_name: profileData.lastName || null,
-          country: profileData.country || 'CHE',
-          dob: profileData.dob || null
-          // No roles: the backend ignores them (only an admin assigns roles)
-        }
-      }
-    })
-
-    return { data, error }
-  }, [])
+  // No sign-up here: OpenBeach accounts are created on
+  // manager-beach.openvolley.app/#signup (lib_beach/accountLinks_beach)
 
   // Sign out
   const signOut = useCallback(async () => {
@@ -173,6 +165,7 @@ export function AuthProvider({ children }) {
     if (!error) {
       setUser(null)
       setProfile(null)
+      setMe(null)
       localStorage.removeItem('cachedProfile')
       // The saved teams cache holds personal data of this account
       await clearSavedTeams()
@@ -257,6 +250,7 @@ export function AuthProvider({ children }) {
       // Clear local state
       setUser(null)
       setProfile(null)
+      setMe(null)
       localStorage.removeItem('cachedProfile')
       await clearSavedTeams()
 
@@ -281,10 +275,52 @@ export function AuthProvider({ children }) {
   }, [userId, profile])
   const rolesKey = JSON.stringify(accessSource?.roles ?? [])
   const known = !!accessSource
+  // /api/me's apps.beach wins over the roles when the backend reports it
+  // (and only for this account)
+  const meKey = me && me._for === userId ? JSON.stringify(me.apps?.beach ?? null) : 'null'
   const access = useMemo(() => {
     if (!userId) return NO_ACCESS
-    return { ...accessFromRoles(JSON.parse(rolesKey)), known }
-  }, [userId, rolesKey, known])
+    const roles = JSON.parse(rolesKey)
+    const beach = JSON.parse(meKey)
+    const fromMe = beach ? accessFromMe({ apps: { beach } }, roles) : null
+    return { ...(fromMe || accessFromRoles(roles)), known: known || !!fromMe }
+  }, [userId, rolesKey, known, meKey])
+
+  // A pending account re-reads its profile (and /api/me): every minute, on
+  // focus and when the connection comes back
+  const isPending = access.isPending && access.known
+  useEffect(() => {
+    if (!userId || !isPending || !isBackendAvailable()) return undefined
+    const refresh = () => {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) return
+      fetchProfile(userId)
+    }
+    const timer = setInterval(refresh, PENDING_PROFILE_POLL_MS)
+    window.addEventListener('focus', refresh)
+    window.addEventListener('online', refresh)
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('focus', refresh)
+      window.removeEventListener('online', refresh)
+    }
+  }, [userId, isPending, fetchProfile])
+
+  // Redeem an OpenBeach invite code: the granted roles apply at once, then
+  // the profile and /api/me are read again from the server
+  const redeemInvite = useCallback(async (code) => {
+    if (!isBackendAvailable() || !userId) return { data: null, error: { message: 'Not authenticated', status: 401 }, status: 401 }
+    const result = await apiRedeemInvite(code)
+    if (!result.error && Array.isArray(result.data?.roles)) {
+      setProfile(prev => {
+        const next = { ...(prev || readCachedProfile() || { user_id: userId }), roles: result.data.roles }
+        try { localStorage.setItem('cachedProfile', JSON.stringify(next)) } catch { /* storage blocked */ }
+        return next
+      })
+      setMe(null)
+      fetchProfile(userId)
+    }
+    return result
+  }, [userId, fetchProfile])
 
   // Another account, or none (sign-out, a login the server rejected or that
   // expired): drop the previous account's saved teams (personal data) and its
@@ -294,6 +330,7 @@ export function AuthProvider({ children }) {
     const prev = previousUserId.current
     previousUserId.current = userId
     if (prev === undefined || prev === null || prev === userId) return
+    setMe(null)
     clearSavedTeams()
     if (!userId) {
       try { localStorage.removeItem('cachedProfile') } catch { /* storage blocked */ }
@@ -321,10 +358,10 @@ export function AuthProvider({ children }) {
     user,
     profile,
     access,
+    redeemInvite,
     loading,
     isAuthenticated: !!user,
     signIn,
-    signUp,
     signOut,
     updateProfile,
     updateEmail,

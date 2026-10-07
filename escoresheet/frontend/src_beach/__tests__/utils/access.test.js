@@ -61,3 +61,43 @@ describe('accessChanged', () => {
     expect(accessChanged(NO_ACCESS, accessFromRoles([]))).toBe(true)
   })
 })
+
+// The OpenBeach / OpenVolley account separation: per-app roles (beach:*) and
+// /api/me's apps.beach, which wins when the backend reports it.
+import { accessFromMe, BEACH_ROLES, formatInviteCode } from '../../lib_beach/access_beach'
+
+describe('beach roles', () => {
+  it('beach:scorer scores and reads teams; beach:competition_manager manages', () => {
+    expect(BEACH_ROLES).toEqual(['beach:scorer', 'beach:referee', 'beach:competition_manager'])
+    expect(accessFromRoles(['beach:scorer'])).toMatchObject({ canScore: true, canReadTeams: true, isPending: false, isAdmin: false })
+    expect(accessFromRoles(['beach:competition_manager'])).toMatchObject({ canScore: false, canManageTeams: true, isPending: false })
+    expect(accessFromRoles(['beach:referee'])).toMatchObject({ canScore: false, isPending: false })
+  })
+})
+
+describe('accessFromMe', () => {
+  it('null without apps.beach (a backend before the per-app roles)', () => {
+    expect(accessFromMe(null)).toBeNull()
+    expect(accessFromMe({ roles: ['scorer'] })).toBeNull()
+    expect(accessFromMe({ apps: { indoor: { canScore: true } } })).toBeNull()
+  })
+
+  it('apps.beach wins over the roles', () => {
+    // An indoor scorer who is not an OpenBeach member: pending here
+    const a = accessFromMe({ apps: { beach: { canScore: false, canManageTeams: false, isPending: true, member: false } } }, ['scorer'])
+    expect(a).toMatchObject({ canScore: false, canReadTeams: false, isPending: true, member: false, roles: ['scorer'] })
+    const b = accessFromMe({ apps: { beach: { canScore: true, member: true } } }, [])
+    expect(b).toMatchObject({ canScore: true, canReadTeams: true, isPending: false, member: true })
+  })
+
+  it('fills what apps.beach leaves out from the roles', () => {
+    expect(accessFromMe({ roles: ['admin'], apps: { beach: {} } })).toMatchObject({ isAdmin: true, canScore: true, isPending: false })
+  })
+})
+
+describe('formatInviteCode', () => {
+  it('uppercase groups of four, twelve characters at most', () => {
+    expect(formatInviteCode('abcd1234efgh9')).toBe('ABCD-1234-EFGH')
+    expect(formatInviteCode(' ab-cd ')).toBe('ABCD')
+  })
+})

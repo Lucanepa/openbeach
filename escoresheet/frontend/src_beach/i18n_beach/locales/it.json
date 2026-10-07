@@ -2263,5 +2263,53 @@
   "appWindow": {
     "pdfSaveUnsupported": "L'app per tablet non può salvare file PDF: l'approvazione a fine partita carica il referto, oppure aprilo su un computer.",
     "savingPdf": "Salvataggio del PDF…"
+  },
+  "account": {
+    "title": "Il tuo account",
+    "signIn": "Accedi",
+    "signInTitle": "Accesso",
+    "signingIn": "Accesso in corso…",
+    "signInLead": "Accedi con il tuo account OpenBeach per salvare le partite nel cloud.",
+    "email": "E-mail",
+    "password": "Password",
+    "forgotPassword": "Password dimenticata?",
+    "noAccount": "Non hai ancora un account?",
+    "createAccount": "Crea un account",
+    "competitionsAdmin": "Gestione competizioni",
+    "signedInAs": "Accesso come",
+    "pendingTitle": "In attesa di approvazione",
+    "pendingBody": "Il tuo account può segnare su questo dispositivo, ma le partite arrivano nel cloud solo dopo l’approvazione. Hai un codice d’invito? Inseriscilo qui.",
+    "inviteCodeLabel": "Codice d’invito",
+    "redeem": "Usa il codice",
+    "redeemed": "Codice accettato. Il tuo account è approvato.",
+    "firstName": "Nome",
+    "lastName": "Cognome",
+    "saveName": "Salva il nome",
+    "saved": "Salvato.",
+    "signOut": "Esci",
+    "signOutHint": "Su un tablet di campo condiviso, esci alla fine. Le partite restano su questo dispositivo.",
+    "signedOut": "Disconnesso. Le partite restano su questo dispositivo.",
+    "deleteAccount": "Elimina l’account",
+    "deleteConfirmTitle": "Eliminare il tuo account?",
+    "deleteConfirmBody": "L’account {{email}} e il suo profilo vengono eliminati definitivamente. Le partite su questo dispositivo restano qui.",
+    "deleteConfirm": "Elimina l’account",
+    "deleted": "Account eliminato.",
+    "button": "Account {{email}}",
+    "buttonPending": "Account {{email}}: in attesa di approvazione",
+    "roles": {
+      "admin": "Admin",
+      "scorer": "Segnapunti",
+      "referee": "Arbitro",
+      "competitionManager": "Gestione competizioni"
+    },
+    "errors": {
+      "offline": "Nessuna connessione: serve internet.",
+      "signInFailed": "Accesso non riuscito.",
+      "signOutFailed": "Uscita non riuscita.",
+      "saveFailed": "Il tuo nome non è stato salvato.",
+      "deleteFailed": "L’account non è stato eliminato.",
+      "inviteRejected": "Questo codice non è valido (errato, esaurito o scaduto).",
+      "tooManyTries": "Troppi tentativi. Attendi qualche minuto e riprova."
+    }
   }
 }

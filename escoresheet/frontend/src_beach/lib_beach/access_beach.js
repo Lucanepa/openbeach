@@ -39,11 +39,48 @@ export function accessFromRoles(rawRoles) {
   const roles = normalizeRoles(rawRoles)
   const isAdmin = roles.some(r => ADMIN_ROLES.includes(r))
   const isSuperAdmin = roles.includes('super_admin')
-  const canScore = isAdmin || roles.includes('scorer')
-  const canManageTeams = isAdmin || roles.includes('competition_manager')
+  // OpenBeach's own roles (beach:scorer...) count like the plain ones, which
+  // accounts made before the per-app roles still hold
+  const canScore = isAdmin || roles.includes('scorer') || roles.includes('beach:scorer')
+  const canManageTeams = isAdmin || roles.includes('competition_manager') || roles.includes('beach:competition_manager')
   const canReadTeams = canScore || canManageTeams
-  const isPending = !roles.some(r => KNOWN_ROLES.includes(r))
+  const isPending = !roles.some(r => KNOWN_ROLES.includes(r) || BEACH_ROLES.includes(r))
   return { roles, isAdmin, isSuperAdmin, canScore, canManageTeams, canReadTeams, isPending }
+}
+
+/**
+ * OpenBeach's per-app roles (the separation of the OpenVolley and OpenBeach
+ * accounts: one login, a membership and roles per app). The backend checks
+ * them against the sport of the row; global admin counts for both apps.
+ */
+export const BEACH_ROLES = ['beach:scorer', 'beach:referee', 'beach:competition_manager']
+
+const FLAG_KEYS = ['canScore', 'canManageTeams', 'canReadTeams', 'isPending', 'isAdmin']
+
+/**
+ * The beach access /api/me reports (apps.beach: { canScore, canManageTeams,
+ * canReadTeams, isPending, member, ... }) over the one derived from the
+ * roles. Null when the answer has no apps.beach (a backend before the
+ * per-app roles): the caller then keeps accessFromRoles.
+ * @param {unknown} me  the /api/me body
+ * @param {unknown} [rawRoles]  the profile's roles (for `roles` and the flags /api/me leaves out)
+ */
+export function accessFromMe(me, rawRoles = []) {
+  const beach = me && typeof me === 'object' ? me.apps?.beach : null
+  if (!beach || typeof beach !== 'object') return null
+  const base = accessFromRoles(me.roles ?? rawRoles)
+  const out = { ...base }
+  for (const k of FLAG_KEYS) if (typeof beach[k] === 'boolean') out[k] = beach[k]
+  if (typeof beach.canReadTeams !== 'boolean') out.canReadTeams = out.canScore || out.canManageTeams
+  if (typeof beach.isPending !== 'boolean') out.isPending = !(out.canScore || out.canManageTeams || out.isAdmin || beach.member === true)
+  out.member = beach.member === true || !out.isPending
+  return out
+}
+
+/** A typed invite code for display: uppercase, groups of four (as OpenVolley). */
+export function formatInviteCode(raw) {
+  const clean = String(raw || '').toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 12)
+  return clean.replace(/(.{4})(?=.)/g, '$1-')
 }
 
 /** Access of a signed-out device: nothing, and not "pending" either. */

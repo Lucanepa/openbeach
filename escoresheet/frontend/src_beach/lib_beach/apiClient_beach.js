@@ -283,6 +283,24 @@ export async function apiGet(path, { timeoutMs = DB_REQUEST_TIMEOUT_MS, fallback
 }
 
 /**
+ * GET /api/me: the signed-in account with its per-app access
+ * ({ apps: { beach: { canScore, isPending, member, ... } } }). A backend
+ * before the per-app roles has no such route (404): the caller keeps the
+ * access derived from profiles.roles.
+ */
+export function apiMe() {
+  return apiGet('/api/me', { timeoutMs: 10000, fallbackError: 'Account load failed' })
+}
+
+/**
+ * POST /api/account/redeem-invite { code, app: 'beach' } -> { roles, role_granted }.
+ * A beach invite code grants a beach role (and the OpenBeach membership).
+ */
+export function apiRedeemInvite(code) {
+  return postJson('/api/account/redeem-invite', { code: String(code || '').trim(), app: 'beach' }, { fallbackError: 'Invite code not accepted' })
+}
+
+/**
  * Saved teams, read-only here: the beach competitions and teams the OpenVolley
  * admin console manages. Needs an approved account (scorer, competition
  * manager or admin): anonymous 401, pending 403.

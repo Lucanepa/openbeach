@@ -2263,5 +2263,53 @@
   "appWindow": {
     "pdfSaveUnsupported": "L'application tablette ne peut pas enregistrer de PDF : l'approbation en fin de match téléverse la feuille, ou ouvrez-la sur un ordinateur.",
     "savingPdf": "Enregistrement du PDF…"
+  },
+  "account": {
+    "title": "Ton compte",
+    "signIn": "Se connecter",
+    "signInTitle": "Connexion",
+    "signingIn": "Connexion…",
+    "signInLead": "Connecte-toi avec ton compte OpenBeach pour enregistrer les matchs dans le cloud.",
+    "email": "E-mail",
+    "password": "Mot de passe",
+    "forgotPassword": "Mot de passe oublié ?",
+    "noAccount": "Pas encore de compte ?",
+    "createAccount": "Créer un compte",
+    "competitionsAdmin": "Gérer les compétitions",
+    "signedInAs": "Connecté en tant que",
+    "pendingTitle": "En attente de validation",
+    "pendingBody": "Ton compte peut saisir sur cet appareil, mais les matchs n’arrivent dans le cloud qu’après validation. Tu as un code d’invitation ? Saisis-le ici.",
+    "inviteCodeLabel": "Code d’invitation",
+    "redeem": "Utiliser le code",
+    "redeemed": "Code accepté. Ton compte est validé.",
+    "firstName": "Prénom",
+    "lastName": "Nom",
+    "saveName": "Enregistrer le nom",
+    "saved": "Enregistré.",
+    "signOut": "Se déconnecter",
+    "signOutHint": "Sur une tablette de terrain partagée, déconnecte-toi à la fin. Les matchs restent sur cet appareil.",
+    "signedOut": "Déconnecté. Les matchs restent sur cet appareil.",
+    "deleteAccount": "Supprimer le compte",
+    "deleteConfirmTitle": "Supprimer ton compte ?",
+    "deleteConfirmBody": "Le compte {{email}} et son profil sont supprimés définitivement. Les matchs de cet appareil restent ici.",
+    "deleteConfirm": "Supprimer le compte",
+    "deleted": "Compte supprimé.",
+    "button": "Compte {{email}}",
+    "buttonPending": "Compte {{email}} : en attente de validation",
+    "roles": {
+      "admin": "Admin",
+      "scorer": "Marqueur",
+      "referee": "Arbitre",
+      "competitionManager": "Gestion des compétitions"
+    },
+    "errors": {
+      "offline": "Pas de connexion : il faut internet pour cela.",
+      "signInFailed": "La connexion a échoué.",
+      "signOutFailed": "La déconnexion a échoué.",
+      "saveFailed": "Ton nom n’a pas été enregistré.",
+      "deleteFailed": "Le compte n’a pas été supprimé.",
+      "inviteRejected": "Ce code n’est pas valable (faux, épuisé ou expiré).",
+      "tooManyTries": "Trop d’essais. Attends quelques minutes et réessaie."
+    }
   }
 }

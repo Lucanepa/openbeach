@@ -6,6 +6,8 @@ import TabletStatusIndicator from './TabletStatusIndicator_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { Bell, BookOpen, ChevronDown, ChevronUp, ClipboardList, House, Maximize, Menu, Minimize, Power, SatelliteDish, X, ZoomIn } from 'lucide-react'
 import { isDesktopScoretable, requestDesktopQuit } from '../utils_beach/appLifecycle_beach'
+import { getCloudApiUrl, isRelayOriginPage } from '../utils_beach/backendConfig_beach'
+import UserButton from './auth/UserButton_beach'
 import { cn } from '../ui/volleyui/cn.js'
 import { SwitchTrack } from '../ui/volleyui/Switch.jsx'
 import {
@@ -798,6 +800,14 @@ export default function MainHeader({
           alignSelf: 'stretch',
           position: 'relative'
         }}>
+          {/* The account: sign in / out on a shared court tablet. Only where
+              the cloud is there (not offline, not a venue relay's page) */}
+          {!offlineMode && !isRelayOriginPage() && getCloudApiUrl('/api/auth/sign-in') && (
+            <span className={KIT_SCOPE}>
+              <UserButton buttonClass={cn(HEADER_BTN, 'min-w-9')} />
+            </span>
+          )}
+
           {/* Compact Mode: Collapsible Actions Menu */}
           {isCompactMode ? (
             <div style={{ position: 'relative' }}>

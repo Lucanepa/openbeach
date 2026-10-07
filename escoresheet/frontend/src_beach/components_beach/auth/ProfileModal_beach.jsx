@@ -1,610 +1,190 @@
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { Clock, LogOut, Trash2, UserRound } from 'lucide-react'
 import { useAuth } from '../../contexts_beach/AuthContext_beach'
+import { Modal } from '../../ui/volleyui/Modal.jsx'
+import { Field, FormError } from '../../ui/volleyui/Field.jsx'
+import { Input } from '../../ui/volleyui/Input.jsx'
+import { Button } from '../../ui/volleyui/Button.jsx'
+import { Chip } from '../../ui/volleyui/Chip.jsx'
+import { confirmDialog, toast } from '../../ui/volleyui/uiStore.js'
+import AuthLayer from './AuthLayer_beach'
+import InviteCodeForm from './InviteCodeForm_beach'
 
+const ROLE_WORDS = {
+  admin: ['account.roles.admin', 'Admin'],
+  super_admin: ['account.roles.admin', 'Admin'],
+  scorer: ['account.roles.scorer', 'Scorer'],
+  'beach:scorer': ['account.roles.scorer', 'Scorer'],
+  referee: ['account.roles.referee', 'Referee'],
+  'beach:referee': ['account.roles.referee', 'Referee'],
+  competition_manager: ['account.roles.competitionManager', 'Competition manager'],
+  'beach:competition_manager': ['account.roles.competitionManager', 'Competition manager']
+}
+
+/** The account's roles as words, once each (beach:scorer and scorer are one). */
+export function roleLabels(roles, t) {
+  const out = []
+  for (const r of roles || []) {
+    const word = ROLE_WORDS[r]
+    if (!word) continue
+    const label = t(word[0], word[1])
+    if (!out.includes(label)) out.push(label)
+  }
+  return out
+}
+
+/**
+ * The account of this device: who is signed in, the approval state (with
+ * the invite code for a pending account), the name, sign out (court tablets
+ * are shared) and delete account.
+ */
 export default function ProfileModal({ open, onClose }) {
-  const { user, profile, updateProfile, updateEmail, deleteAccount } = useAuth()
-
+  const { t } = useTranslation()
+  const { user, profile, access, updateProfile, signOut, deleteAccount } = useAuth()
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
-  const [country, setCountry] = useState('CHE')
-  const [dob, setDob] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const [busy, setBusy] = useState(null) // 'signout' | 'delete'
+  const [actionError, setActionError] = useState('')
 
-  // Email change state
-  const [isEditingEmail, setIsEditingEmail] = useState(false)
-  const [newEmail, setNewEmail] = useState('')
-  const [emailLoading, setEmailLoading] = useState(false)
-  const [emailSuccess, setEmailSuccess] = useState(false)
-  const [emailError, setEmailError] = useState('')
-
-  // Delete account state
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [deleteEmailInput, setDeleteEmailInput] = useState('')
-  const [deleteLoading, setDeleteLoading] = useState(false)
-  const [deleteError, setDeleteError] = useState('')
-
-  // Track if form has been initialized to avoid resetting on profile refetch
-  const formInitialized = useRef(false)
-
-  // Load profile data when modal opens OR when profile arrives (for late-loading profiles)
   useEffect(() => {
-
-    // Reset initialization flag when modal closes
-    if (!open) {
-      formInitialized.current = false
-      return
-    }
-
-    // If modal is open and we have profile data, populate the form
-    if (open && profile && !formInitialized.current) {
-      setFirstName(profile.first_name || '')
-      setLastName(profile.last_name || '')
-      setCountry(profile.country || 'CHE')
-      setDob(profile.dob || '')
-      setError('')
-      setSuccess(false)
-      // Reset email change state
-      setIsEditingEmail(false)
-      setNewEmail('')
-      setEmailError('')
-      setEmailSuccess(false)
-      // Reset delete state
-      setShowDeleteConfirm(false)
-      setDeleteEmailInput('')
-      setDeleteError('')
-      formInitialized.current = true
-    } else if (open && !profile) {
-      console.warn('[ProfileModal] Modal opened but profile is null/undefined - will update when profile loads')
-    }
+    if (!open) return
+    setFirstName(profile?.first_name || '')
+    setLastName(profile?.last_name || '')
+    setSaveError('')
+    setActionError('')
   }, [open, profile])
 
-  const handleEmailChange = async () => {
-    if (!newEmail || newEmail === user?.email) {
-      setEmailError('Please enter a new email address')
-      return
-    }
+  if (!open || !user) return null
 
-    setEmailLoading(true)
-    setEmailError('')
+  const email = user.email || profile?.email || ''
+  const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ')
+  const changed = firstName.trim() !== (profile?.first_name || '') || lastName.trim() !== (profile?.last_name || '')
+  const roles = roleLabels(access?.roles, t)
 
-    const { error: emailErr } = await updateEmail(newEmail)
-
-    if (emailErr) {
-      setEmailError(emailErr.message)
-    } else {
-      setEmailSuccess(true)
-      setIsEditingEmail(false)
-    }
-    setEmailLoading(false)
-  }
-
-  const handleDeleteAccount = async () => {
-    if (deleteEmailInput !== user?.email) {
-      setDeleteError('Email does not match')
-      return
-    }
-
-    setDeleteLoading(true)
-    setDeleteError('')
-
-    const { error: delError } = await deleteAccount()
-
-    if (delError) {
-      setDeleteError(delError.message)
-      setDeleteLoading(false)
-    } else {
-      // Account deleted, close modal
-      onClose()
-    }
-  }
-
-  if (!open) return null
-
-  // Check if any field has changed
-  const hasChanges =
-    firstName !== (profile?.first_name || '') ||
-    lastName !== (profile?.last_name || '') ||
-    country !== (profile?.country || 'CHE') ||
-    dob !== (profile?.dob || '')
-
-  const handleSubmit = async (e) => {
+  const save = async (e) => {
     e.preventDefault()
-    setError('')
-    setSuccess(false)
-    setLoading(true)
-
-    const { error: updateError } = await updateProfile({
-      firstName,
-      lastName,
-      country,
-      dob: dob || null
-    })
-
-    if (updateError) {
-      setError(updateError.message)
-    } else {
-      setSuccess(true)
-      setTimeout(() => setSuccess(false), 3000)
+    if (!changed || saving) return
+    setSaving(true)
+    setSaveError('')
+    const { error } = await updateProfile({ firstName: firstName.trim(), lastName: lastName.trim() })
+    setSaving(false)
+    if (error) {
+      setSaveError(error.message || t('account.errors.saveFailed', 'Your name was not saved.'))
+      return
     }
-    setLoading(false)
+    toast.success(t('account.saved', 'Saved.'))
   }
 
-  const modalStyle = {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0,0,0,.85)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 2000
+  const handleSignOut = async () => {
+    setBusy('signout')
+    setActionError('')
+    const { error } = await signOut()
+    setBusy(null)
+    if (error) {
+      setActionError(error.message || t('account.errors.signOutFailed', 'Sign-out failed.'))
+      return
+    }
+    toast.info(t('account.signedOut', 'Signed out. Matches stay on this device.'))
+    onClose?.()
   }
 
-  const contentStyle = {
-    width: 'min(90vw, 440px)',
-    maxHeight: '90vh',
-    background: '#111827',
-    border: '2px solid #3b82f6',
-    borderRadius: 12,
-    overflow: 'hidden',
-    display: 'flex',
-    flexDirection: 'column'
-  }
-
-  const headerStyle = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '16px 20px',
-    background: 'rgba(59, 130, 246, 0.1)',
-    borderBottom: '1px solid rgba(59, 130, 246, 0.3)'
-  }
-
-  const inputStyle = {
-    width: '100%',
-    padding: '12px 16px',
-    background: '#1f2937',
-    border: '1px solid #374151',
-    borderRadius: 8,
-    color: '#e5e7eb',
-    fontSize: 16,
-    outline: 'none',
-    boxSizing: 'border-box'
-  }
-
-  const buttonStyle = {
-    width: '100%',
-    padding: '12px 16px',
-    background: '#3b82f6',
-    color: '#fff',
-    border: 'none',
-    borderRadius: 8,
-    fontWeight: 600,
-    fontSize: 16,
-    cursor: 'pointer'
+  const handleDelete = async () => {
+    const ok = await confirmDialog({
+      title: t('account.deleteConfirmTitle', 'Delete your account?'),
+      message: t('account.deleteConfirmBody', { email, defaultValue: 'The account {{email}} and its profile are deleted for good. Matches on this device stay here.' }),
+      confirmLabel: t('account.deleteConfirm', 'Delete account'),
+      cancelLabel: t('common.cancel', 'Cancel'),
+      tone: 'danger'
+    })
+    if (!ok) return
+    setBusy('delete')
+    setActionError('')
+    const { error } = await deleteAccount()
+    setBusy(null)
+    if (error) {
+      setActionError(error.message || t('account.errors.deleteFailed', 'The account was not deleted.'))
+      return
+    }
+    toast.success(t('account.deleted', 'Account deleted.'))
+    onClose?.()
   }
 
   return (
-    <div style={modalStyle} onClick={onClose}>
-      <div style={contentStyle} onClick={e => e.stopPropagation()}>
-        {/* Header */}
-        <div style={headerStyle}>
-          <h2 style={{ margin: 0, color: '#fff', fontSize: 20, fontWeight: 600 }}>
-            Profile
-          </h2>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#9ca3af',
-              fontSize: 24,
-              cursor: 'pointer',
-              padding: 0,
-              lineHeight: 1
-            }}
-          >
-            x
-          </button>
-        </div>
-
-        {/* Body */}
-        <div style={{ padding: 20, overflowY: 'auto' }}>
-          {error && (
-            <div style={{
-              padding: '10px 14px',
-              background: 'rgba(239, 68, 68, 0.15)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              borderRadius: 8,
-              color: '#ef4444',
-              marginBottom: 16,
-              fontSize: 14
-            }}>
-              {error}
-            </div>
-          )}
-
-          {success && (
-            <div style={{
-              padding: '10px 14px',
-              background: 'rgba(34, 197, 94, 0.15)',
-              border: '1px solid rgba(34, 197, 94, 0.3)',
-              borderRadius: 8,
-              color: '#22c55e',
-              marginBottom: 16,
-              fontSize: 14
-            }}>
-              Profile updated successfully
-            </div>
-          )}
-
-          {/* Email */}
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ color: '#9ca3af', fontSize: 13, marginBottom: 4, display: 'block' }}>
-              Email
-            </label>
-
-            {emailSuccess && (
-              <div style={{
-                padding: '10px 14px',
-                background: 'rgba(34, 197, 94, 0.15)',
-                border: '1px solid rgba(34, 197, 94, 0.3)',
-                borderRadius: 8,
-                color: '#22c55e',
-                marginBottom: 8,
-                fontSize: 13
-              }}>
-                Check your new email to confirm the change
-              </div>
-            )}
-
-            {emailError && (
-              <div style={{
-                padding: '10px 14px',
-                background: 'rgba(239, 68, 68, 0.15)',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
-                borderRadius: 8,
-                color: '#ef4444',
-                marginBottom: 8,
-                fontSize: 13
-              }}>
-                {emailError}
-              </div>
-            )}
-
-            {isEditingEmail ? (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input
-                  type="email"
-                  value={newEmail}
-                  onChange={e => setNewEmail(e.target.value)}
-                  placeholder="New email address"
-                  style={{ ...inputStyle, flex: 1 }}
-                  autoFocus
-                />
-                <button
-                  onClick={handleEmailChange}
-                  disabled={emailLoading || !newEmail}
-                  style={{
-                    padding: '12px 16px',
-                    background: (!newEmail || emailLoading) ? '#4b5563' : '#3b82f6',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 8,
-                    fontWeight: 500,
-                    cursor: (!newEmail || emailLoading) ? 'not-allowed' : 'pointer',
-                    fontSize: 14,
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  {emailLoading ? '...' : 'Save'}
-                </button>
-                <button
-                  onClick={() => {
-                    setIsEditingEmail(false)
-                    setNewEmail('')
-                    setEmailError('')
-                  }}
-                  style={{
-                    padding: '12px 16px',
-                    background: '#374151',
-                    color: '#e5e7eb',
-                    border: 'none',
-                    borderRadius: 8,
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    fontSize: 14
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <div style={{
-                  ...inputStyle,
-                  flex: 1,
-                  background: '#0f172a',
-                  color: '#6b7280'
-                }}>
-                  {user?.email}
-                </div>
-                <button
-                  onClick={() => setIsEditingEmail(true)}
-                  style={{
-                    padding: '12px 16px',
-                    background: 'transparent',
-                    color: '#3b82f6',
-                    border: '1px solid #3b82f6',
-                    borderRadius: 8,
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    fontSize: 14
-                  }}
-                >
-                  Change
-                </button>
+    <AuthLayer>
+      <Modal
+        open={open}
+        onClose={onClose}
+        layout="sections"
+        size="md"
+        icon={UserRound}
+        title={t('account.title', 'Your account')}
+        closeLabel={t('common.close', 'Close')}
+      >
+        <div className="space-y-4">
+          {/* Who is signed in */}
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-400">{t('account.signedInAs', 'Signed in as')}</div>
+            {name && <div className="mt-0.5 text-sm font-semibold text-stone-900 break-words">{name}</div>}
+            <div className="text-sm text-stone-600 break-all" data-testid="account-email">{email}</div>
+            {roles.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {roles.map(r => <Chip key={r}>{r}</Chip>)}
               </div>
             )}
           </div>
 
-          {/* Roles (read-only) */}
-          {profile?.roles && profile.roles.length > 0 && (
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ color: '#9ca3af', fontSize: 13, marginBottom: 4, display: 'block' }}>
-                Roles
-              </label>
-              <div style={{ display: 'flex', gap: 6 }}>
-                {profile.roles.map(role => (
-                  <span
-                    key={role}
-                    style={{
-                      padding: '6px 12px',
-                      background: role === 'admin' || role === 'super_admin' ? '#7c3aed' : '#22c55e',
-                      color: '#fff',
-                      borderRadius: 6,
-                      fontSize: 13,
-                      textTransform: 'capitalize'
-                    }}
-                  >
-                    {role.replace('_', ' ')}
-                  </span>
-                ))}
+          {/* Waiting for approval: the invite code */}
+          {access?.known && access.isPending && (
+            <section aria-labelledby="ob-pending-title" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-amber-900" data-testid="pending-approval">
+              <div className="flex items-start gap-2">
+                <Clock size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-amber-700" />
+                <div className="min-w-0 flex-1">
+                  <h3 id="ob-pending-title" className="text-sm font-semibold">{t('account.pendingTitle', 'Waiting for approval')}</h3>
+                  <p className="mt-0.5 text-xs text-amber-900/90">
+                    {t('account.pendingBody', 'Your account can score on this device, but matches reach the cloud only once it is approved. Have an invite code? Enter it here.')}
+                  </p>
+                  <InviteCodeForm className="mt-3" />
+                </div>
               </div>
-            </div>
+            </section>
           )}
 
-          <form onSubmit={handleSubmit}>
-            {/* Name fields */}
-            <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ color: '#9ca3af', fontSize: 13, marginBottom: 4, display: 'block' }}>
-                  First name
-                </label>
-                <input
-                  type="text"
-                  value={firstName}
-                  onChange={e => setFirstName(e.target.value)}
-                  style={inputStyle}
-                />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ color: '#9ca3af', fontSize: 13, marginBottom: 4, display: 'block' }}>
-                  Last name
-                </label>
-                <input
-                  type="text"
-                  value={lastName}
-                  onChange={e => setLastName(e.target.value)}
-                  style={inputStyle}
-                />
-              </div>
+          {/* Name */}
+          <form onSubmit={save} className="space-y-3" noValidate>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={t('account.firstName', 'First name')}>
+                <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="given-name" />
+              </Field>
+              <Field label={t('account.lastName', 'Last name')}>
+                <Input value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="family-name" />
+              </Field>
             </div>
-
-            {/* Country and DOB */}
-            <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ color: '#9ca3af', fontSize: 13, marginBottom: 4, display: 'block' }}>
-                  Country
-                </label>
-                <input
-                  type="text"
-                  value={country}
-                  onChange={e => setCountry(e.target.value.toUpperCase())}
-                  placeholder="CHE"
-                  maxLength={3}
-                  style={{ ...inputStyle, textTransform: 'uppercase' }}
-                />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ color: '#9ca3af', fontSize: 13, marginBottom: 4, display: 'block' }}>
-                  Date of birth
-                </label>
-                <input
-                  type="date"
-                  value={dob}
-                  onChange={e => setDob(e.target.value)}
-                  style={inputStyle}
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              style={{
-                ...buttonStyle,
-                background: success ? '#22c55e' : (!hasChanges ? '#4b5563' : '#3b82f6'),
-                cursor: (!hasChanges || loading) ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.7 : 1
-              }}
-              disabled={!hasChanges || loading}
-            >
-              {loading
-                ? 'Saving...'
-                : success
-                  ? 'Info saved'
-                  : 'Save Profile'}
-            </button>
+            {saveError && <FormError>{saveError}</FormError>}
+            <Button type="submit" variant="positive" loading={saving} disabled={!changed}>
+              {t('account.saveName', 'Save name')}
+            </Button>
           </form>
 
-
-          {/* Danger Zone - Delete Account */}
-          <div style={{
-            marginTop: 24,
-            padding: '16px',
-            background: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            borderRadius: 8
-          }}>
-            <div style={{ color: '#ef4444', fontWeight: 600, marginBottom: 8 }}>
-              Danger Zone
-            </div>
-            <p style={{ color: '#fca5a5', fontSize: 13, marginBottom: 12 }}>
-              Deleting your account is permanent and cannot be undone.
+          {/* Sign out / delete */}
+          <div className="space-y-3 border-t border-stone-100 pt-4">
+            <p className="text-xs text-stone-500">
+              {t('account.signOutHint', 'On a shared court tablet, sign out when you are done. Matches stay on this device.')}
             </p>
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              style={{
-                padding: '10px 16px',
-                background: 'transparent',
-                color: '#ef4444',
-                border: '1px solid #ef4444',
-                borderRadius: 6,
-                fontWeight: 500,
-                cursor: 'pointer',
-                fontSize: 14
-              }}
-            >
-              Delete Account
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,.9)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 2100
-          }}
-          onClick={() => setShowDeleteConfirm(false)}
-        >
-          <div
-            style={{
-              width: 'min(90vw, 400px)',
-              background: '#111827',
-              border: '2px solid #ef4444',
-              borderRadius: 12,
-              overflow: 'hidden'
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div style={{
-              padding: '16px 20px',
-              background: 'rgba(239, 68, 68, 0.15)',
-              borderBottom: '1px solid rgba(239, 68, 68, 0.3)'
-            }}>
-              <h3 style={{ margin: 0, color: '#ef4444', fontSize: 18, fontWeight: 600 }}>
-                Confirm Account Deletion
-              </h3>
-            </div>
-
-            {/* Body */}
-            <div style={{ padding: 20 }}>
-              <p style={{ color: '#fca5a5', fontSize: 14, marginBottom: 16 }}>
-                This action is permanent. All your data will be deleted.
-              </p>
-
-              <p style={{ color: '#9ca3af', fontSize: 13, marginBottom: 8 }}>
-                Type your email to confirm:
-              </p>
-              <p style={{ color: '#6b7280', fontSize: 12, marginBottom: 8, fontFamily: 'monospace' }}>
-                {user?.email}
-              </p>
-
-              {deleteError && (
-                <div style={{
-                  padding: '10px 14px',
-                  background: 'rgba(239, 68, 68, 0.15)',
-                  border: '1px solid rgba(239, 68, 68, 0.3)',
-                  borderRadius: 8,
-                  color: '#ef4444',
-                  marginBottom: 12,
-                  fontSize: 14
-                }}>
-                  {deleteError}
-                </div>
-              )}
-
-              <input
-                type="email"
-                value={deleteEmailInput}
-                onChange={e => setDeleteEmailInput(e.target.value)}
-                placeholder={user?.email}
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  background: '#1f2937',
-                  border: '1px solid #374151',
-                  borderRadius: 8,
-                  color: '#e5e7eb',
-                  fontSize: 14,
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                  marginBottom: 16
-                }}
-              />
-
-              <div style={{ display: 'flex', gap: 12 }}>
-                <button
-                  onClick={() => setShowDeleteConfirm(false)}
-                  style={{
-                    flex: 1,
-                    padding: '12px 16px',
-                    background: '#374151',
-                    color: '#e5e7eb',
-                    border: 'none',
-                    borderRadius: 8,
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    fontSize: 14
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDeleteAccount}
-                  disabled={deleteLoading || deleteEmailInput !== user?.email}
-                  style={{
-                    flex: 1,
-                    padding: '12px 16px',
-                    background: deleteEmailInput === user?.email ? '#ef4444' : '#4b5563',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 8,
-                    fontWeight: 600,
-                    cursor: deleteEmailInput === user?.email ? 'pointer' : 'not-allowed',
-                    fontSize: 14,
-                    opacity: deleteLoading ? 0.7 : 1
-                  }}
-                >
-                  {deleteLoading
-                    ? 'Deleting...'
-                    : 'Delete My Account'}
-                </button>
-              </div>
+            {actionError && <FormError>{actionError}</FormError>}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="dark" size="lg" icon={LogOut} loading={busy === 'signout'} disabled={!!busy} onClick={handleSignOut}>
+                {t('account.signOut', 'Sign out')}
+              </Button>
+              <Button variant="danger-outline" size="lg" icon={Trash2} loading={busy === 'delete'} disabled={!!busy} onClick={handleDelete} className="ml-auto">
+                {t('account.deleteAccount', 'Delete account')}
+              </Button>
             </div>
           </div>
         </div>
-      )}
-    </div>
+      </Modal>
+    </AuthLayer>
   )
 }

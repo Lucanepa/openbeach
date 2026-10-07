@@ -1,280 +1,115 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { ExternalLink, LogIn } from 'lucide-react'
 import { useAuth } from '../../contexts_beach/AuthContext_beach'
 import { COMPETITIONS_ENABLED } from '../../utils_beach/features_beach'
+import { SIGNUP_URL, RESET_PASSWORD_URL } from '../../lib_beach/accountLinks_beach'
+import { Modal } from '../../ui/volleyui/Modal.jsx'
+import { Field, FormError } from '../../ui/volleyui/Field.jsx'
+import { Input } from '../../ui/volleyui/Input.jsx'
+import { Button } from '../../ui/volleyui/Button.jsx'
+import AuthLayer from './AuthLayer_beach'
 
-export default function LoginModal({ open, onClose, onSwitchToSignUp }) {
-  const { signIn, resetPassword } = useAuth()
+const LINK = 'font-medium text-red-700 underline underline-offset-2 hover:text-red-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60 rounded-sm'
+
+/**
+ * Sign in to OpenBeach (volleyui decision dialog). Accounts are created and
+ * passwords reset on the OpenBeach manager (lib_beach/accountLinks_beach):
+ * "Create account" and "Forgot password?" open it in the browser.
+ */
+export default function LoginModal({ open, onClose }) {
+  const { t } = useTranslation()
+  const { signIn } = useAuth()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [showForgotPassword, setShowForgotPassword] = useState(false)
-  const [resetSent, setResetSent] = useState(false)
 
-  if (!open) return null
+  const close = () => {
+    setPassword('')
+    setError('')
+    onClose?.()
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setError('')
-    setLoading(true)
-
-    const { error: signInError } = await signIn(email, password)
-
-    if (signInError) {
-      setError(signInError.message)
-      setLoading(false)
-    } else {
-      setLoading(false)
-      onClose()
-    }
-  }
-
-  const handleForgotPassword = async (e) => {
-    e.preventDefault()
-    if (!email) {
-      setError('Please enter your email')
+    if (loading) return
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      setError(t('account.errors.offline', 'No connection: this needs the internet.'))
       return
     }
     setError('')
     setLoading(true)
-
-    const { error: resetError } = await resetPassword(email)
-
-    if (resetError) {
-      setError(resetError.message)
-    } else {
-      setResetSent(true)
-    }
+    const { error: signInError } = await signIn(email.trim(), password)
     setLoading(false)
+    if (signInError) {
+      setError(signInError.message || t('account.errors.signInFailed', 'Sign-in failed.'))
+      return
+    }
+    setPassword('')
+    onClose?.()
   }
 
-  const modalStyle = {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0,0,0,.85)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 2000
-  }
-
-  const contentStyle = {
-    width: 'min(90vw, 400px)',
-    background: '#111827',
-    border: '2px solid #3b82f6',
-    borderRadius: 12,
-    padding: 0,
-    overflow: 'hidden'
-  }
-
-  const headerStyle = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '16px 20px',
-    background: 'rgba(59, 130, 246, 0.1)',
-    borderBottom: '1px solid rgba(59, 130, 246, 0.3)'
-  }
-
-  const inputStyle = {
-    width: '100%',
-    padding: '12px 16px',
-    background: '#1f2937',
-    border: '1px solid #374151',
-    borderRadius: 8,
-    color: '#e5e7eb',
-    fontSize: 16,
-    outline: 'none',
-    boxSizing: 'border-box'
-  }
-
-  const buttonStyle = {
-    width: '100%',
-    padding: '12px 16px',
-    background: '#3b82f6',
-    color: '#fff',
-    border: 'none',
-    borderRadius: 8,
-    fontWeight: 600,
-    fontSize: 16,
-    cursor: 'pointer'
-  }
+  if (!open) return null
 
   return (
-    <div style={modalStyle} onClick={onClose}>
-      <div style={contentStyle} onClick={e => e.stopPropagation()}>
-        {/* Header */}
-        <div style={headerStyle}>
-          <h2 style={{ margin: 0, color: '#fff', fontSize: 20, fontWeight: 600 }}>
-            {showForgotPassword
-              ? 'Reset Password'
-              : 'Sign In'}
-          </h2>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#9ca3af',
-              fontSize: 24,
-              cursor: 'pointer',
-              padding: 0,
-              lineHeight: 1
-            }}
-          >
-            x
-          </button>
-        </div>
-
-        {/* Body */}
-        <div style={{ padding: 20 }}>
-          {error && (
-            <div style={{
-              padding: '10px 14px',
-              background: 'rgba(239, 68, 68, 0.15)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              borderRadius: 8,
-              color: '#ef4444',
-              marginBottom: 16,
-              fontSize: 14
-            }}>
-              {error}
-            </div>
-          )}
-
-          {resetSent ? (
-            <div style={{ textAlign: 'center', color: '#22c55e', padding: '20px 0' }}>
-              <div style={{ fontSize: 40, marginBottom: 12 }}>✓</div>
-              <p>Check your email for a reset link</p>
-              <button
-                onClick={() => {
-                  setShowForgotPassword(false)
-                  setResetSent(false)
-                }}
-                style={{ ...buttonStyle, marginTop: 16 }}
-              >
-                Back to Sign In
-              </button>
-            </div>
-          ) : showForgotPassword ? (
-            <form onSubmit={handleForgotPassword}>
-              <p style={{ color: '#9ca3af', marginBottom: 16, fontSize: 14 }}>
-                Enter your email and we'll send you a reset link
-              </p>
-              <div style={{ marginBottom: 16 }}>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="Email"
-                  style={inputStyle}
-                  required
-                />
-              </div>
-              <button type="submit" style={buttonStyle} disabled={loading}>
-                {loading ? 'Sending...' : 'Send Reset Link'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowForgotPassword(false)}
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  background: 'transparent',
-                  color: '#9ca3af',
-                  border: 'none',
-                  cursor: 'pointer',
-                  marginTop: 8
-                }}
-              >
-                Back to Sign In
-              </button>
-            </form>
-          ) : (
-            <>
-              <form onSubmit={handleSubmit}>
-                <div style={{ marginBottom: 12 }}>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="Email"
-                    style={inputStyle}
-                    required
-                  />
-                </div>
-                <div style={{ marginBottom: 16 }}>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    placeholder="Password"
-                    style={inputStyle}
-                    required
-                  />
-                </div>
-                <button type="submit" style={buttonStyle} disabled={loading}>
-                  {loading ? 'Signing in...' : 'Sign In'}
-                </button>
-              </form>
-
-              <button
-                onClick={() => setShowForgotPassword(true)}
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  background: 'transparent',
-                  color: '#3b82f6',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: 14,
-                  marginTop: 8
-                }}
-              >
-                Forgot password?
-              </button>
-
-              <div style={{
-                marginTop: 20,
-                textAlign: 'center',
-                color: '#9ca3af',
-                fontSize: 14
-              }}>
-                Don't have an account?{' '}
-                <button
-                  onClick={onSwitchToSignUp}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#3b82f6',
-                    cursor: 'pointer',
-                    fontSize: 14,
-                    textDecoration: 'underline'
-                  }}
-                >
-                  Sign Up
-                </button>
-              </div>
-
-              {COMPETITIONS_ENABLED && (
-              <div style={{ marginTop: 12, textAlign: 'center' }}>
-                <a
-                  href="/admin_beach.html"
-                  style={{
-                    color: '#7c3aed',
-                    fontSize: 13,
-                    textDecoration: 'underline'
-                  }}
-                >
-                  Competitions Admin
-                </a>
-              </div>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-    </div>
+    <AuthLayer>
+      <Modal
+        open={open}
+        onClose={close}
+        decision
+        dismissible={false}
+        size="sm"
+        icon={LogIn}
+        title={t('account.signInTitle', 'Sign in')}
+        closeLabel={t('common.close', 'Close')}
+      >
+        <form onSubmit={handleSubmit} className="space-y-3" noValidate>
+          <p className="text-sm text-stone-600">
+            {t('account.signInLead', 'Sign in with your OpenBeach account to save matches to the cloud.')}
+          </p>
+          <Field label={t('account.email', 'Email')}>
+            <Input
+              type="email"
+              autoComplete="username"
+              inputMode="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              data-autofocus
+            />
+          </Field>
+          <Field label={t('account.password', 'Password')}>
+            <Input
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </Field>
+          {error && <FormError>{error}</FormError>}
+          <Button type="submit" size="lg" block loading={loading} disabled={!email.trim() || !password}>
+            {loading ? t('account.signingIn', 'Signing in…') : t('account.signIn', 'Sign in')}
+          </Button>
+          <div className="flex flex-col gap-2 pt-1 text-sm text-stone-600">
+            <a href={RESET_PASSWORD_URL} target="_blank" rel="noopener noreferrer" className={LINK}>
+              {t('account.forgotPassword', 'Forgot password?')}
+            </a>
+            <p>
+              {t('account.noAccount', 'No account yet?')}{' '}
+              <a href={SIGNUP_URL} target="_blank" rel="noopener noreferrer" className={LINK} data-testid="create-account-link">
+                {t('account.createAccount', 'Create account')}
+                <ExternalLink size={12} aria-hidden="true" className="ml-1 inline align-[-1px]" />
+              </a>
+            </p>
+            {COMPETITIONS_ENABLED && (
+              <a href="/admin_beach.html" className={LINK}>{t('account.competitionsAdmin', 'Competitions admin')}</a>
+            )}
+          </div>
+        </form>
+      </Modal>
+    </AuthLayer>
   )
 }

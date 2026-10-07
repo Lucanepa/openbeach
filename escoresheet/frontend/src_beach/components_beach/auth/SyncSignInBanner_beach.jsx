@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../contexts_beach/AuthContext_beach'
 import LoginModal from './LoginModal_beach'
-import SignUpModal from './SignUpModal_beach'
 import { cn } from '../../ui/volleyui/cn.js'
 import { FOCUS_RING } from '../../ui/volleyui/Button.jsx'
 
@@ -37,7 +36,6 @@ export default function SyncSignInBanner({ syncStatus, compact = false }) {
   const { user, loading } = useAuth()
   const [dismissed, setDismissed] = useState(readDismissed)
   const [showLogin, setShowLogin] = useState(false)
-  const [showSignUp, setShowSignUp] = useState(false)
 
   const visible = shouldShowSyncSignIn({ syncStatus, loading, dismissed })
   // Signed in as far as the app knows, but the backend refused the session
@@ -53,7 +51,7 @@ export default function SyncSignInBanner({ syncStatus, compact = false }) {
 
   return (
     <>
-      {visible && !showLogin && !showSignUp && (
+      {visible && !showLogin && (
         <div
           role="status"
           aria-live="polite"
@@ -106,23 +104,7 @@ export default function SyncSignInBanner({ syncStatus, compact = false }) {
         </div>
       )}
 
-      <LoginModal
-        open={showLogin}
-        onClose={() => setShowLogin(false)}
-        onSwitchToSignUp={() => {
-          setShowLogin(false)
-          setShowSignUp(true)
-        }}
-      />
-
-      <SignUpModal
-        open={showSignUp}
-        onClose={() => setShowSignUp(false)}
-        onSwitchToLogin={() => {
-          setShowSignUp(false)
-          setShowLogin(true)
-        }}
-      />
+      <LoginModal open={showLogin} onClose={() => setShowLogin(false)} />
     </>
   )
 }

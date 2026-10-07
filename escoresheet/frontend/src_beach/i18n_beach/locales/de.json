@@ -2263,5 +2263,53 @@
   "appWindow": {
     "pdfSaveUnsupported": "Die Tablet-App kann keine PDF-Dateien speichern: Die Genehmigung am Spielende lädt das Matchblatt hoch, oder öffne es auf einem Computer.",
     "savingPdf": "PDF wird gespeichert…"
+  },
+  "account": {
+    "title": "Dein Konto",
+    "signIn": "Anmelden",
+    "signInTitle": "Anmelden",
+    "signingIn": "Anmeldung läuft…",
+    "signInLead": "Melde dich mit deinem OpenBeach-Konto an, um Spiele in der Cloud zu speichern.",
+    "email": "E-Mail",
+    "password": "Passwort",
+    "forgotPassword": "Passwort vergessen?",
+    "noAccount": "Noch kein Konto?",
+    "createAccount": "Konto erstellen",
+    "competitionsAdmin": "Wettbewerbe verwalten",
+    "signedInAs": "Angemeldet als",
+    "pendingTitle": "Wartet auf Freigabe",
+    "pendingBody": "Dein Konto kann auf diesem Gerät schreiben, Spiele gelangen aber erst nach der Freigabe in die Cloud. Hast du einen Einladungscode? Gib ihn hier ein.",
+    "inviteCodeLabel": "Einladungscode",
+    "redeem": "Code einlösen",
+    "redeemed": "Code angenommen. Dein Konto ist freigegeben.",
+    "firstName": "Vorname",
+    "lastName": "Nachname",
+    "saveName": "Namen speichern",
+    "saved": "Gespeichert.",
+    "signOut": "Abmelden",
+    "signOutHint": "Auf einem geteilten Court-Tablet meldest du dich am Schluss ab. Die Spiele bleiben auf diesem Gerät.",
+    "signedOut": "Abgemeldet. Die Spiele bleiben auf diesem Gerät.",
+    "deleteAccount": "Konto löschen",
+    "deleteConfirmTitle": "Dein Konto löschen?",
+    "deleteConfirmBody": "Das Konto {{email}} und sein Profil werden endgültig gelöscht. Spiele auf diesem Gerät bleiben hier.",
+    "deleteConfirm": "Konto löschen",
+    "deleted": "Konto gelöscht.",
+    "button": "Konto {{email}}",
+    "buttonPending": "Konto {{email}}: wartet auf Freigabe",
+    "roles": {
+      "admin": "Admin",
+      "scorer": "Schreiber",
+      "referee": "Schiedsrichter",
+      "competitionManager": "Wettbewerbsleitung"
+    },
+    "errors": {
+      "offline": "Keine Verbindung: dafür braucht es Internet.",
+      "signInFailed": "Anmeldung fehlgeschlagen.",
+      "signOutFailed": "Abmeldung fehlgeschlagen.",
+      "saveFailed": "Dein Name wurde nicht gespeichert.",
+      "deleteFailed": "Das Konto wurde nicht gelöscht.",
+      "inviteRejected": "Dieser Code gilt nicht (falsch, aufgebraucht oder abgelaufen).",
+      "tooManyTries": "Zu viele Versuche. Warte ein paar Minuten und versuche es nochmals."
+    }
   }
 }

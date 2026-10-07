@@ -2263,5 +2263,53 @@
   "appWindow": {
     "pdfSaveUnsupported": "Die Tablet-App kann keine PDF-Dateien speichern: Die Genehmigung am Spielende lädt das Matchblatt hoch, oder öffne es auf einem Computer.",
     "savingPdf": "PDF wird gespeichert…"
+  },
+  "account": {
+    "title": "Dis Konto",
+    "signIn": "Aamälde",
+    "signInTitle": "Aamälde",
+    "signingIn": "Aamäldig lauft…",
+    "signInLead": "Mäld di mit dim OpenBeach-Konto aa, zum Spiel i de Cloud speichere.",
+    "email": "E-Mail",
+    "password": "Passwort",
+    "forgotPassword": "Passwort vergässe?",
+    "noAccount": "No kei Konto?",
+    "createAccount": "Konto erstelle",
+    "competitionsAdmin": "Wettbewerb verwalte",
+    "signedInAs": "Aagmäldet als",
+    "pendingTitle": "Wartet uf Freigab",
+    "pendingBody": "Dis Konto cha uf däm Grät schriibe, aber Spiel chömed erscht nach de Freigab i d Cloud. Häsch en Iiladigscode? Gib en da ii.",
+    "inviteCodeLabel": "Iiladigscode",
+    "redeem": "Code iilöse",
+    "redeemed": "Code aagnoh. Dis Konto isch freigäh.",
+    "firstName": "Vorname",
+    "lastName": "Nachname",
+    "saveName": "Name speichere",
+    "saved": "Gspeicheret.",
+    "signOut": "Abmälde",
+    "signOutHint": "Uf emne teilte Court-Tablet mäldsch di am Schluss ab. D Spiel bliibed uf däm Grät.",
+    "signedOut": "Abgmäldet. D Spiel bliibed uf däm Grät.",
+    "deleteAccount": "Konto lösche",
+    "deleteConfirmTitle": "Dis Konto lösche?",
+    "deleteConfirmBody": "S Konto {{email}} und sis Profil werded für immer glöscht. Spiel uf däm Grät bliibed da.",
+    "deleteConfirm": "Konto lösche",
+    "deleted": "Konto glöscht.",
+    "button": "Konto {{email}}",
+    "buttonPending": "Konto {{email}}: wartet uf Freigab",
+    "roles": {
+      "admin": "Admin",
+      "scorer": "Schriiber",
+      "referee": "Schiri",
+      "competitionManager": "Wettbewerbsleitig"
+    },
+    "errors": {
+      "offline": "Kei Verbindig: defür bruucht's Internet.",
+      "signInFailed": "Aamäldig het nöd klappt.",
+      "signOutFailed": "Abmäldig het nöd klappt.",
+      "saveFailed": "Din Name isch nöd gspeicheret worde.",
+      "deleteFailed": "S Konto isch nöd glöscht worde.",
+      "inviteRejected": "De Code gilt nöd (falsch, ufbruucht oder abglaufe).",
+      "tooManyTries": "Z vill Versüech. Wart es paar Minute und probier's nomal."
+    }
   }
 }

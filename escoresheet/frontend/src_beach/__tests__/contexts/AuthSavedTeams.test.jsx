@@ -7,7 +7,7 @@ import { useMemoryLocalStorage } from '../helpers/memoryStorage'
 // data) is cleared on sign-out, account deletion, account switch and when the
 // login goes away without a sign-out (rejected or expired).
 
-const h = vi.hoisted(() => ({ authCb: null, profileRoles: {}, profileFail: new Set(), profileGate: null }))
+const h = vi.hoisted(() => ({ authCb: null, profileRoles: {}, profileFail: new Set(), profileGate: null, me: null, redeem: null }))
 
 vi.mock('../../utils_beach/backendConfig_beach', () => ({ isBackendAvailable: () => true }))
 vi.mock('../../db_beach/savedTeams_beach', () => ({
@@ -16,6 +16,9 @@ vi.mock('../../db_beach/savedTeams_beach', () => ({
   refreshSavedTeams: vi.fn(async () => ({ status: 'refreshed', teams: [] }))
 }))
 vi.mock('../../lib_beach/apiClient_beach', () => ({
+  // /api/me: none (404) unless a test sets one
+  apiMe: async () => (h.me ? { data: h.me, error: null, status: 200 } : { data: null, error: { message: 'Not found' }, status: 404 }),
+  apiRedeemInvite: async (code) => h.redeem(code),
   apiAuth: {
     onAuthStateChange: (cb) => { h.authCb = cb; return { data: { subscription: { unsubscribe: () => {} } } } },
     getSession: async () => ({ data: { session: null } }),
@@ -57,6 +60,8 @@ beforeEach(() => {
   refreshSavedTeams.mockClear()
   h.profileFail = new Set()
   h.profileGate = null
+  h.me = null
+  h.redeem = async () => ({ data: { roles: ['beach:scorer'] }, error: null, status: 200 })
   h.profileRoles = { scorer1: ['scorer'], scorer2: ['scorer'], pending: [], referee: ['referee'] }
   render(<AuthProvider><Probe /></AuthProvider>)
 })
@@ -144,5 +149,28 @@ describe('AuthContext_beach saved teams wiring', () => {
     expect(ctx.access).toMatchObject({ known: false, isPending: true, canReadTeams: false })
     await act(async () => { release(); await pending })
     expect(ctx.access).toMatchObject({ known: true, isPending: false, canReadTeams: true })
+  })
+
+  it('/api/me apps.beach wins over the roles (an indoor scorer who is not an OpenBeach member)', async () => {
+    h.me = { apps: { beach: { canScore: false, canManageTeams: false, isPending: true, member: false } } }
+    await signInAs('scorer1')
+    await waitFor(() => expect(ctx.access.isPending).toBe(true))
+    expect(ctx.access).toMatchObject({ canScore: false, canReadTeams: false, known: true })
+  })
+
+  it('without /api/me the roles decide (an older backend)', async () => {
+    await signInAs('scorer1')
+    await waitFor(() => expect(ctx.access.canScore).toBe(true))
+    expect(ctx.access.isPending).toBe(false)
+  })
+
+  it('a redeemed invite code applies its roles at once', async () => {
+    await signInAs('pending')
+    await waitFor(() => expect(ctx.access.isPending).toBe(true))
+    h.profileRoles.pending = ['beach:scorer']
+    let result
+    await act(async () => { result = await ctx.redeemInvite('ABCD-1234-EFGH') })
+    expect(result.error).toBeNull()
+    await waitFor(() => expect(ctx.access).toMatchObject({ isPending: false, canScore: true }))
   })
 })

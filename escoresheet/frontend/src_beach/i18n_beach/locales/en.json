@@ -2264,5 +2264,53 @@
   "appWindow": {
     "pdfSaveUnsupported": "The tablet app cannot save PDF files: the match-end approval uploads the scoresheet, or open it on a computer.",
     "savingPdf": "Saving the PDF…"
+  },
+  "account": {
+    "title": "Your account",
+    "signIn": "Sign in",
+    "signInTitle": "Sign in",
+    "signingIn": "Signing in…",
+    "signInLead": "Sign in with your OpenBeach account to save matches to the cloud.",
+    "email": "Email",
+    "password": "Password",
+    "forgotPassword": "Forgot password?",
+    "noAccount": "No account yet?",
+    "createAccount": "Create account",
+    "competitionsAdmin": "Competitions admin",
+    "signedInAs": "Signed in as",
+    "pendingTitle": "Waiting for approval",
+    "pendingBody": "Your account can score on this device, but matches reach the cloud only once it is approved. Have an invite code? Enter it here.",
+    "inviteCodeLabel": "Invite code",
+    "redeem": "Redeem code",
+    "redeemed": "Code accepted. Your account is approved.",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "saveName": "Save name",
+    "saved": "Saved.",
+    "signOut": "Sign out",
+    "signOutHint": "On a shared court tablet, sign out when you are done. Matches stay on this device.",
+    "signedOut": "Signed out. Matches stay on this device.",
+    "deleteAccount": "Delete account",
+    "deleteConfirmTitle": "Delete your account?",
+    "deleteConfirmBody": "The account {{email}} and its profile are deleted for good. Matches on this device stay here.",
+    "deleteConfirm": "Delete account",
+    "deleted": "Account deleted.",
+    "button": "Account {{email}}",
+    "buttonPending": "Account {{email}}: waiting for approval",
+    "roles": {
+      "admin": "Admin",
+      "scorer": "Scorer",
+      "referee": "Referee",
+      "competitionManager": "Competition manager"
+    },
+    "errors": {
+      "offline": "No connection: this needs the internet.",
+      "signInFailed": "Sign-in failed.",
+      "signOutFailed": "Sign-out failed.",
+      "saveFailed": "Your name was not saved.",
+      "deleteFailed": "The account was not deleted.",
+      "inviteRejected": "This code is not valid (wrong, used up or expired).",
+      "tooManyTries": "Too many tries. Wait a few minutes and try again."
+    }
   }
 }
