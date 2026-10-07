@@ -1,14 +1,20 @@
 /**
  * openbeach against a REAL OpenVolley backend (server.js + Postgres), opt-in:
  *
- *   OB_BACKEND_URL=http://127.0.0.1:<port> npx vitest run src_beach/__tests__/integration
+ *   OB_BACKEND_URL=http://127.0.0.1:<port> \
+ *   OB_SCORER_EMAIL=… OB_SCORER_PASSWORD=… OB_SCORER2_EMAIL=… OB_SCORER2_PASSWORD=… \
+ *     npx vitest run src_beach/__tests__/integration/backend.integration.test.js
  *
- * Point it at a LOCAL throwaway backend only (it signs up accounts and writes
- * matches); never at backend.openvolley.app. Skipped without OB_BACKEND_URL.
+ * Point it at a LOCAL throwaway backend only (it writes matches and signs up
+ * and deletes a throwaway account); never at backend.openvolley.app.
+ * Since OpenVolley db/007 a new account is pending (it may write test
+ * matches only): the two scorers must be APPROVED accounts (roles granted by
+ * SQL or an admin, e.g. tests/helpers/pgTestDb.js grantRoles). Skipped
+ * without OB_BACKEND_URL and both scorers.
  * A local backend: in the openvolley repo, escoresheet/backend's
- * tests/helpers/e2eServer.js (provisionDatabase with OV_E2E_DOCKER=1, then
- * bootServer with DATABASE_URL, STORAGE_ROOT, STATUS_DIR, OV_PIN_SECRET).
- * The backend limits sign-ups per IP: use a fresh backend for each run.
+ * tests/helpers/e2eServer.js (provisionDatabase, then bootServer with
+ * DATABASE_URL, STORAGE_ROOT, STATUS_DIR, OV_PIN_SECRET). The backend limits
+ * sign-ups per IP: use a fresh backend for each run.
  *
  * Covers the Phase 1 contract end to end with the real client code
  * (apiClient_beach, useSyncQueue_beach's queue pass, Dexie on fake-indexeddb):
@@ -21,6 +27,9 @@ import Dexie from 'dexie'
 import { IDBFactory, IDBKeyRange } from 'fake-indexeddb'
 
 const BASE = process.env.OB_BACKEND_URL || ''
+// Approved scorers (pending accounts may not write official matches)
+const SCORER = { email: process.env.OB_SCORER_EMAIL || '', password: process.env.OB_SCORER_PASSWORD || '' }
+const SCORER2 = { email: process.env.OB_SCORER2_EMAIL || '', password: process.env.OB_SCORER2_PASSWORD || '' }
 
 vi.mock('../../utils_beach/backendConfig_beach', () => ({
   getApiUrl: (p) => `${process.env.OB_BACKEND_URL}${p.startsWith('/') ? p : `/${p}`}`,
@@ -38,18 +47,22 @@ const GAME_PIN = String(100000 + Math.floor(Math.random() * 800000))
 const REF_PIN = String(100000 + Math.floor(Math.random() * 800000))
 const T1_PIN = String(100000 + Math.floor(Math.random() * 800000))
 
-describe.skipIf(!BASE)('openbeach on a local OpenVolley backend', () => {
+describe.skipIf(!BASE || !SCORER.email || !SCORER2.email)('openbeach on a local OpenVolley backend', () => {
   let db, api, queue, sync, ids, scoresheets, savedDeps
   const store = new Map()
 
-  const signUpAndIn = async (name) => {
-    const email = `${name}-${tag}@example.ch`
-    const password = `t-${tag}-${Math.random().toString(36).slice(2)}` // throwaway account on a local backend
-    const up = await api.apiAuth.signUp({ email, password, options: { data: { first_name: name } } })
-    expect(up.error, JSON.stringify(up.error)).toBeNull()
+  const signIn = async ({ email, password }) => {
     const inn = await api.apiAuth.signInWithPassword({ email, password })
     expect(inn.error, JSON.stringify(inn.error)).toBeNull()
     return inn.data.user
+  }
+  // A throwaway account (pending: no roles) on a local backend
+  const signUpAndIn = async (name) => {
+    const email = `${name}-${tag}@example.ch`
+    const password = `t-${tag}-${Math.random().toString(36).slice(2)}`
+    const up = await api.apiAuth.signUp({ email, password, options: { data: { first_name: name } } })
+    expect(up.error, JSON.stringify(up.error)).toBeNull()
+    return signIn({ email, password })
   }
   const signOutLocally = () => store.delete('api_auth_token')
 
@@ -105,7 +118,7 @@ describe.skipIf(!BASE)('openbeach on a local OpenVolley backend', () => {
   })
 
   it('signed in: the queue drains; rows are beach rows with match-scoped ids', async () => {
-    await signUpAndIn('alice')
+    await signIn(SCORER)
     const outcome = await queue.runQueuePass()
     expect(outcome.authRequired).toBe(false)
     const left = await db.sync_queue.where('status').noneOf(['sent']).toArray()
@@ -161,10 +174,10 @@ describe.skipIf(!BASE)('openbeach on a local OpenVolley backend', () => {
     vi.stubGlobal('WebSocket', NodeWebSocket)
     const scorer = new NodeWebSocket(BASE.replace(/^http/, 'ws'))
     await new Promise((resolve, reject) => { scorer.onopen = resolve; scorer.onerror = reject })
-    // The scorer's sync as Scoreboard_beach sends it (Dexie match, team1/team2)
-    const push = (team1Points) => scorer.send(JSON.stringify({
-      type: 'sync-match-data',
-      matchId: localMatchId,
+    // The scorer's sync as the app sends it (relayPublisher_beach: the Dexie
+    // match in the relay's home/away shape, keyed by the seed)
+    const { syncMatchMessage } = await import('../../utils_beach/relayPublisher_beach')
+    const push = (team1Points) => scorer.send(JSON.stringify(syncMatchMessage(seed, {
       match: {
         id: localMatchId, seed_key: seed, status: 'live', gamePin: GAME_PIN, refereePin: REF_PIN, team1Pin: T1_PIN,
         refereeConnectionEnabled: true, team1TeamConnectionEnabled: true,
@@ -176,7 +189,7 @@ describe.skipIf(!BASE)('openbeach on a local OpenVolley backend', () => {
       team2Players: [{ number: 1, lastName: 'Rossi' }, { number: 2, lastName: 'Bianchi' }],
       sets: [{ index: 1, team1Points, team2Points: 2, finished: false }],
       events: [{ id: 1, matchId: localMatchId, type: 'point', setIndex: 1, seq: 1, payload: { team: 'team1' } }]
-    }))
+    })))
     let unsubscribe
     try {
       push(3)
@@ -222,8 +235,8 @@ describe.skipIf(!BASE)('openbeach on a local OpenVolley backend', () => {
     }
   }, 20000)
 
-  it('a second account is refused (403) until it proves the game PIN, then takes over', async () => {
-    await signUpAndIn('bob')
+  it('a second scorer is refused (403) until it proves the game PIN, then takes over', async () => {
+    await signIn(SCORER2)
     // Wrong game PIN on this device: the take-over is refused, the job parked
     await db.matches.update(localMatchId, { gamePin: '999999' })
     const jobId = await db.sync_queue.add({ resource: 'match', action: 'update', status: 'queued', ts: new Date().toISOString(), payload: { id: seed, status: 'ended' } })
@@ -294,6 +307,8 @@ describe.skipIf(!BASE)('openbeach on a local OpenVolley backend', () => {
   })
 
   it('delete account works and signs out', async () => {
+    // A throwaway account, never one of the approved scorers
+    await signUpAndIn('carol')
     const r = await api.apiAuth.deleteUser()
     expect(r.error, JSON.stringify(r.error)).toBeNull()
     expect(store.has('api_auth_token')).toBe(false)
