@@ -18,7 +18,7 @@ import { apiFrom } from '../lib_beach/apiClient_beach'
 import { isBackendAvailable, isVenueMode } from '../utils_beach/backendConfig_beach'
 import { useSyncQueue } from '../hooks_beach/useSyncQueue_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
-import { Bell, ChevronDown, Database, Loader2, Maximize, Moon, RefreshCw, SatelliteDish, Sun, TriangleAlert, X } from 'lucide-react'
+import { Bell, ChevronDown, Loader2, Maximize, Moon, RefreshCw, Sun, TriangleAlert, X } from 'lucide-react'
 import { cn } from '../ui/volleyui/cn.js'
 import { Card } from '../ui/volleyui/Card.jsx'
 import { Button } from '../ui/volleyui/Button.jsx'
@@ -209,7 +209,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   const prevSetIndexRef = useRef(null)
 
   // Connection type state (auto, supabase, websocket)
-  const [connectionType, setConnectionType] = useState(CONNECTION_TYPES.AUTO)
+  const [connectionType] = useState(CONNECTION_TYPES.AUTO)
 
 
   // Connection state
@@ -2125,31 +2125,9 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             keepOpen: true
           },
           { divider: true },
-          // Connection (only if not master mode)
-          ...(!isMasterMode ? [
-            { header: t('refereeDashboard.connection.title') },
-            {
-              icon: <RefreshCw size={14} aria-hidden="true" />,
-              label: t('refereeDashboard.connection.auto'),
-              onClick: () => setConnectionType(CONNECTION_TYPES.AUTO),
-              active: connectionType === CONNECTION_TYPES.AUTO
-            },
-            {
-              icon: <Database size={14} aria-hidden="true" />,
-              label: t('refereeDashboard.connection.dbOnly'),
-              onClick: () => setConnectionType(CONNECTION_TYPES.SUPABASE),
-              active: connectionType === CONNECTION_TYPES.SUPABASE,
-              color: '#22c55e'
-            },
-            {
-              icon: <SatelliteDish size={14} aria-hidden="true" />,
-              label: t('refereeDashboard.connection.directOnly'),
-              onClick: () => setConnectionType(CONNECTION_TYPES.WEBSOCKET),
-              active: connectionType === CONNECTION_TYPES.WEBSOCKET,
-              color: '#3b82f6'
-            },
-            { divider: true }
-          ] : []),
+          // No connection choice: OpenBeach's referee always picks its
+          // connection itself (CONNECTION_TYPES are all 'auto'), so the three
+          // former options showed as selected at once and did nothing.
           // Test mode indicator
           ...(isMasterMode ? [
             {

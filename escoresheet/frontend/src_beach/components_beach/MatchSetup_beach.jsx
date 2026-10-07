@@ -11,7 +11,7 @@ import CountrySelect from './CountrySelect_beach'
 import CountryFlag from './CountryFlag_beach'
 // Beach volleyball ball image
 const ballImage = '/beachball.png'
-import { isBackendAvailable, getCloudApiUrl, BEACH_DESKTOP_HTTP_PORT } from '../utils_beach/backendConfig_beach'
+import { isBackendAvailable, isRelayOriginPage, getCloudApiUrl, BEACH_DESKTOP_HTTP_PORT } from '../utils_beach/backendConfig_beach'
 import { scorerPublisher, readRelayBundle, ensureGamePin } from '../utils_beach/relayPublisher_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { uploadBackupToCloud, uploadLogsToCloud } from '../utils_beach/logger_beach'
@@ -761,8 +761,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   // Check Supabase availability and sync status periodically
   useEffect(() => {
     const checkSupabaseAndSyncStatus = async () => {
-      // Check if Supabase is available
-      if (!isBackendAvailable()) {
+      // Check if the cloud is available. A page a venue relay serves to a
+      // tablet has none (the relay has no /api/db, and the sync queue does
+      // not write from there, syncDbUrl): no probe every 5 s that only 404s.
+      if (!isBackendAvailable() || isRelayOriginPage()) {
         setIsSupabaseAvailable(false)
         return
       }
