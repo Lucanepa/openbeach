@@ -45,7 +45,7 @@ import { isCapacitorApp, installAppLifecycle, liveOf, setLiveMatch } from './uti
 import DesktopUpdateNotice from './components_beach/DesktopUpdateNotice_beach'
 import { smallScreenGate } from './utils_beach/screenGate_beach'
 import RestorePreviewModal from './components_beach/RestorePreviewModal_beach'
-import { scorerRelay, scorerPublisher, scorerRelayUrl, readRelayBundle, relayMatchKey } from './utils_beach/relayPublisher_beach'
+import { scorerRelay, scorerPublisher, scorerRelayUrl, readRelayBundle, relayMatchKey, generateGamePin } from './utils_beach/relayPublisher_beach'
 import { checkMatchSession, lockMatchSession, unlockMatchSession, verifyGamePin } from './utils_beach/sessionManager_beach'
 
 // Sport type for beach volleyball
@@ -1199,7 +1199,8 @@ export default function App() {
     setDeleteMatchModal({
       matchName,
       matchId: matchToDelete.id,
-      gamePin: matchToDelete.gamePin || null
+      // A test match needs no PIN to delete (its PIN only guards its relay room)
+      gamePin: matchToDelete.test ? null : (matchToDelete.gamePin || null)
     })
   }
 
@@ -1821,6 +1822,8 @@ export default function App() {
         round: TEST_MATCH_DEFAULTS.round || 'pool',
         scheduledAt,
         refereePin: generateRefereePin(),
+        // Its relay room is only writable by the socket that proves it
+        gamePin: existingMatch?.gamePin || generateGamePin(),
         officials,
         team1CaptainSignature: 'xxxxx',
         team2CaptainSignature: 'xxxxx',

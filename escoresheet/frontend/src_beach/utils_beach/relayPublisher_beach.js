@@ -174,14 +174,16 @@ export function generateGamePin(random = Math.random) {
 }
 
 /**
- * The game PIN a sync of this match carries: its own, or a new one when an
- * official match has none yet (the caller stores it). A test match has none.
+ * The game PIN a sync of this match carries: its own, or a new one when the
+ * match has none yet (the caller stores it). A test match gets one too: its
+ * per-device relay room is then writable only by the socket that proved it,
+ * like an official match's (it is never sent to the cloud).
  * @param {object} match
  * @param {() => string} [generate]
  * @returns {{ gamePin: string|null, created: boolean }}
  */
 export function ensureGamePin(match, generate = generateGamePin) {
-  if (!match || match.test === true) return { gamePin: null, created: false }
+  if (!match) return { gamePin: null, created: false }
   const own = pinText(match.gamePin) ?? pinText(match.game_pin)
   if (own) return { gamePin: own, created: false }
   return { gamePin: generate(), created: true }
@@ -220,7 +222,7 @@ export async function readLocalBundle(db, matchId) {
 
 /**
  * The local bundle a sync publishes (readLocalBundle), with its relay key.
- * An official match without a game PIN gets one first, stored on the match:
+ * A match without a game PIN (an official or a test match) gets one first, stored on the match:
  * the relays only let the socket that proved it write to the room, and the
  * next sync must carry the same one.
  * @param {import('dexie').Dexie} db

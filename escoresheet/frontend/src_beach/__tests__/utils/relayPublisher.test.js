@@ -130,11 +130,12 @@ describe('the game PIN', () => {
     expect(generateGamePin(() => 0.999999)).toBe('999999')
   })
 
-  it('an official match keeps its own or gets one; a test match has none', () => {
+  it('a match keeps its own or gets one; a test match too', () => {
     expect(ensureGamePin(localMatch())).toEqual({ gamePin: '987654', created: false })
     expect(ensureGamePin(localMatch({ gamePin: null, game_pin: '555555' }))).toEqual({ gamePin: '555555', created: false })
     expect(ensureGamePin(localMatch({ gamePin: null }), () => '123456')).toEqual({ gamePin: '123456', created: true })
-    expect(ensureGamePin(localMatch({ gamePin: '', test: true }))).toEqual({ gamePin: null, created: false })
+    expect(ensureGamePin(localMatch({ gamePin: '', test: true }), () => '222222')).toEqual({ gamePin: '222222', created: true })
+    expect(ensureGamePin(localMatch({ gamePin: '333333', test: true }))).toEqual({ gamePin: '333333', created: false })
     expect(ensureGamePin(null)).toEqual({ gamePin: null, created: false })
   })
 })
@@ -267,7 +268,10 @@ describe('reading the local bundle', () => {
     const testId = await db.matches.add({ seedKey: 'test-match-default', test: true })
     const test = await readRelayBundle(db, testId, { generate: () => '111111' })
     expect(test.key).toBe('test-match-default')
-    expect(test.local.match.gamePin).toBeUndefined()
+    // A test room is guarded by a game PIN too (it was null: any socket could write it)
+    expect(test.local.match.gamePin).toBe('111111')
+    expect((await db.matches.get(testId)).gamePin).toBe('111111')
+    expect(toWireMatch(test.local.match).gamePin).toBe('111111')
     expect(await readRelayBundle(db, 999)).toBeNull()
   })
 })
