@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { apiFrom, apiAuth, apiMe, apiRedeemInvite, apiJoinBeach } from '../lib_beach/apiClient_beach'
 import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
-import { accessFromMe, accessFromRoles, accessChanged, ACCESS_CHANGED_EVENT, NO_ACCESS } from '../lib_beach/access_beach'
+import { accessFromMe, accessFromRoles, accessChanged, publishAccess, ACCESS_CHANGED_EVENT, NO_ACCESS } from '../lib_beach/access_beach'
 
 // A pending account re-reads its access this often, so an admin's approval
 // (or an invite redeemed on another device) shows without a reload.
@@ -343,6 +343,8 @@ export function AuthProvider({ children }) {
   // before (useSyncQueue_beach listens)
   const lastAccess = useRef(null)
   useEffect(() => {
+    // For cloudSyncWaitNow: no screen waits on a sync the backend refuses
+    publishAccess(userId ? access : null)
     const prev = lastAccess.current
     lastAccess.current = access
     if (!prev || !userId || !access.known || !accessChanged(prev, access)) return

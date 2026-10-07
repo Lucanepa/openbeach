@@ -121,3 +121,23 @@ export function accessChanged(a, b) {
 }
 
 export const ACCESS_CHANGED_EVENT = 'ob-access-changed'
+
+// The signed-in account's access as AuthContext knows it now (null: nobody
+// signed in), for code outside React (cloudStatus_beach cloudSyncWaitNow).
+let currentAccess = null
+
+/** AuthContext only: the access of the account signed in now, or null. */
+export function publishAccess(access) {
+  currentAccess = access || null
+}
+
+/**
+ * May the signed-in account write to OpenBeach's cloud? False only when its
+ * access is known and it cannot score there: an OpenVolley account that has
+ * not joined OpenBeach, or one waiting for approval. The backend refuses its
+ * matches (403) until then, so no screen should wait for that sync.
+ * Unknown access (signed out, /api/me not answered yet) does not block.
+ */
+export function accountMayWriteCloud() {
+  return !(currentAccess && currentAccess.known && !currentAccess.canScore)
+}

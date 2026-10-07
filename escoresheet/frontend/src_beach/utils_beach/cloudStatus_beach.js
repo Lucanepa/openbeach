@@ -11,6 +11,7 @@
  */
 import { getCloudApiUrl, isCloudOffline, isRelayOriginPage } from './backendConfig_beach'
 import { getSyncStatus } from '../hooks_beach/useSyncQueue_beach'
+import { accountMayWriteCloud } from '../lib_beach/access_beach'
 
 /** Cloud statuses that count as fine for the startup check. */
 const CLOUD_OK = new Set(['connected', 'not_configured', 'not_applicable', 'not_available'])
@@ -74,24 +75,28 @@ export function isCloudStatusOk(status) {
 /**
  * May a screen show "Syncing to database…" and wait (up to 10–15 s) for the
  * sync queue? Only when the sync can actually finish now: the cloud is on, it
- * is not a venue relay's page, and the queue is connected and signed in.
+ * is not a venue relay's page, the queue is connected and signed in, and the
+ * account may write there (canWrite: not an OpenVolley account that has not
+ * joined OpenBeach, not one waiting for approval; the backend refuses those
+ * matches, and each setup step used to wait ~9 s for nothing).
  * Anywhere else the save is local and the sync runs in the background.
- * @param {{ syncStatus?: string|null, offlineMode?: boolean, relayOrigin?: boolean, hasCloud?: boolean }} p
+ * @param {{ syncStatus?: string|null, offlineMode?: boolean, relayOrigin?: boolean, hasCloud?: boolean, canWrite?: boolean }} p
  */
-export function shouldWaitForCloudSync({ syncStatus = null, offlineMode = false, relayOrigin = false, hasCloud = true } = {}) {
-  if (offlineMode || relayOrigin || !hasCloud) return false
+export function shouldWaitForCloudSync({ syncStatus = null, offlineMode = false, relayOrigin = false, hasCloud = true, canWrite = true } = {}) {
+  if (offlineMode || relayOrigin || !hasCloud || !canWrite) return false
   return syncStatus === 'synced' || syncStatus === 'syncing'
 }
 
 /**
  * shouldWaitForCloudSync for this page now: the sync queue's current status,
- * offline mode, a venue relay's page, a cloud URL at all.
+ * offline mode, a venue relay's page, a cloud URL at all, the account's access.
  */
 export function cloudSyncWaitNow() {
   return shouldWaitForCloudSync({
     syncStatus: getSyncStatus(),
     offlineMode: isCloudOffline(),
     relayOrigin: isRelayOriginPage(),
-    hasCloud: !!getCloudApiUrl('/api/db')
+    hasCloud: !!getCloudApiUrl('/api/db'),
+    canWrite: accountMayWriteCloud()
   })
 }

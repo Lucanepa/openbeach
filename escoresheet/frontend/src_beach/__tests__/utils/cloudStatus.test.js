@@ -8,6 +8,7 @@ import {
   isRelayOriginPage
 } from '../../utils_beach/backendConfig_beach'
 import { cloudStatusFor, isCloudStatusOk, shouldWaitForCloudSync } from '../../utils_beach/cloudStatus_beach'
+import { publishAccess, accountMayWriteCloud, NO_ACCESS } from '../../lib_beach/access_beach'
 import { useMemoryLocalStorage } from '../helpers/memoryStorage'
 
 const realLocation = window.location
@@ -145,6 +146,30 @@ describe('shouldWaitForCloudSync', () => {
     for (const s of ['auth_required', 'online_no_supabase', 'offline', 'error', 'connecting']) {
       expect(shouldWaitForCloudSync({ syncStatus: s }), s).toBe(false)
     }
+  })
+
+  // An OpenVolley account not in OpenBeach yet (or one waiting for approval):
+  // the backend refuses its matches, each setup step waited ~9 s for nothing
+  it('never for an account that may not write to the cloud yet', () => {
+    expect(shouldWaitForCloudSync({ syncStatus: 'syncing', canWrite: false })).toBe(false)
+    expect(shouldWaitForCloudSync({ syncStatus: 'synced', canWrite: true })).toBe(true)
+  })
+})
+
+describe('accountMayWriteCloud', () => {
+  afterEach(() => publishAccess(null))
+
+  it('blocks only a known access that cannot score', () => {
+    publishAccess(null)
+    expect(accountMayWriteCloud()).toBe(true)
+    publishAccess({ ...NO_ACCESS })
+    expect(accountMayWriteCloud()).toBe(true) // not known yet
+    publishAccess({ ...NO_ACCESS, known: true, needsJoin: true, isPending: true })
+    expect(accountMayWriteCloud()).toBe(false)
+    publishAccess({ ...NO_ACCESS, known: true, isPending: true })
+    expect(accountMayWriteCloud()).toBe(false)
+    publishAccess({ ...NO_ACCESS, known: true, canScore: true, roles: ['beach:scorer'] })
+    expect(accountMayWriteCloud()).toBe(true)
   })
 })
 
