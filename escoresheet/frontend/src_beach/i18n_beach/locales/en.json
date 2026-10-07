@@ -737,14 +737,14 @@
     "viewportEdit": "Click to edit and resize the viewport"
   },
   "home": {
-    "title": "openBeach eScoresheet",
-    "newMatch": "New Match",
-    "officialMatch": "Official Match",
-    "testMatch": "Test Match",
+    "title": "OpenBeach eScoresheet",
+    "newMatch": "New match",
+    "officialMatch": "Official match",
+    "testMatch": "Test match",
     "preparing": "Preparing…",
-    "continueMatch": "Continue Match",
-    "deleteMatch": "Delete Match",
-    "restoreMatch": "Restore Match",
+    "continueMatch": "Continue match",
+    "deleteMatch": "Delete match",
+    "restoreMatch": "Restore match",
     "loadCompetitionMatch": "Load Competition Match",
     "gamePin": "Game PIN",
     "options": "Options",
@@ -764,9 +764,25 @@
       "enter6DigitPin": "Please enter a 6-digit Game PIN",
       "matchNotFound": "Match not found"
     },
-    "openScoreboard": "Open Scoreboard",
+    "openScoreboard": "Open scoreboard",
     "exitFullscreen": "Exit Fullscreen",
-    "fullscreen": "Fullscreen"
+    "fullscreen": "Fullscreen",
+    "deleteModal": {
+      "title": "Delete «{{name}}»?",
+      "body": "This deletes all sets, events, players and team data of this match, on this device and in the cloud. It cannot be undone.",
+      "pinLabel": "Enter the game PIN to confirm",
+      "confirm": "Delete"
+    },
+    "restoreModal": {
+      "title": "Restore match",
+      "cloudTitle": "From a cloud backup",
+      "cloudHint": "Enter the match number and the game PIN to look for cloud backups.",
+      "matchNumber": "Match number",
+      "search": "Search cloud backups",
+      "or": "or",
+      "fileTitle": "From a backup file",
+      "selectFile": "Select backup file"
+    }
   },
   "options": {
     "title": "Options",
@@ -866,8 +882,8 @@
     "currentVersion": "Current Version",
     "checkForUpdates": "Check for Updates",
     "checking": "Checking...",
-    "updateAvailable": "Update Available!",
-    "refreshToUpdate": "Refresh to Update",
+    "updateAvailable": "Update available",
+    "refreshToUpdate": "Refresh to update",
     "latestVersion": "You're on the latest version!",
     "couldNotCheckUpdates": "Could not check for updates. Please try again.",
     "cacheManagement": "Cache Management",
@@ -1037,7 +1053,7 @@
   },
   "supportFeedback": {
     "title": "Support & Feedback",
-    "button": "Support & Feedback",
+    "button": "Support & feedback",
     "contactTypeLabel": "What can we help you with?",
     "selectType": "Select type...",
     "types": {
@@ -1346,11 +1362,11 @@
   "backupTable": {
     "noActions": "No actions",
     "error": "Error",
-    "gameN": "Game N",
+    "gameN": "Match",
     "set": "Set",
     "score": "Score",
-    "lastAction": "Last Action",
-    "createdAt": "Created At",
+    "lastAction": "Last action",
+    "createdAt": "Saved",
     "eventTypes": {
       "point": "Point",
       "timeout": "Timeout",
@@ -1371,8 +1387,8 @@
     "ready": "Ready",
     "offline": "Offline",
     "disconnected": "Disconnected",
-    "notConfigured": "Not Configured",
-    "naStatic": "N/A (Static)",
+    "notConfigured": "Not configured",
+    "naStatic": "N/A (static)",
     "connecting": "Connecting",
     "testMode": "Test Mode",
     "unknown": "Unknown",
@@ -1880,12 +1896,12 @@
     }
   },
   "startupConnectivity": {
-    "connecting": "Connecting...",
-    "allConnected": "All services connected!",
-    "serverUnavailable": "Scoring works fully offline. Referee and livescore sync via OpenVolley Cloud — server is only needed as fallback.",
+    "connecting": "Connecting…",
+    "allConnected": "All services connected",
+    "serverUnavailable": "Scoring works fully offline. The referee view and the livescore sync through OpenVolley Cloud; a venue server is only needed as a fallback.",
     "backgroundRetry": "Connection will keep retrying in the background.",
     "dismiss": "Dismiss",
-    "goOffline": "Go Offline"
+    "goOffline": "Go offline"
   },
   "savedTeams": {
     "load": "Load saved team",
@@ -1940,5 +1956,9 @@
       "stale": "Delayed",
       "disconnected": "Disconnected"
     }
+  },
+  "updateBanner": {
+    "later": "Later",
+    "newVersion": "new version"
   }
 }

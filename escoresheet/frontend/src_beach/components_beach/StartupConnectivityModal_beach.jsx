@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Check, Loader2, Minus, WifiOff, X } from 'lucide-react'
+import { Button } from '../ui/volleyui/Button.jsx'
+import { cn } from '../ui/volleyui/cn.js'
 
 // Primary services shown to the user — these are what matters
 const PRIMARY_KEYS = ['db', 'supabase']
@@ -79,119 +82,69 @@ export default function StartupConnectivityModal({
     supabase: t('connectionStatus.supabase', 'OpenVolley Cloud')
   }
 
+  // State -> icon and word colour (the word always says it too).
   const getStatusIcon = (status) => {
     if (status === 'unknown' || status === 'connecting') {
-      return (
-        <span
-          style={{
-            display: 'inline-block',
-            width: 20,
-            height: 20,
-            border: '2px solid #3b82f6',
-            borderTopColor: 'transparent',
-            borderRadius: '50%',
-            animation: 'startup-spin 1s linear infinite'
-          }}
-        />
-      )
+      return <Loader2 size={18} className="animate-spin text-sky-600" aria-hidden="true" />
     }
     if (status === 'not_available' || status === 'not_configured') {
-      return <span style={{ color: '#9ca3af', fontSize: 20, lineHeight: '20px' }}>—</span>
+      return <Minus size={18} className="text-stone-400" aria-hidden="true" />
     }
     if (isStatusOk(status)) {
-      return <span style={{ color: '#22c55e', fontSize: 20 }}>✓</span>
+      return <Check size={18} className="text-emerald-600" aria-hidden="true" />
     }
-    return <span style={{ color: '#ef4444', fontSize: 20 }}>✗</span>
+    return <X size={18} className="text-red-600" aria-hidden="true" />
   }
 
   const getStatusText = (status) => {
     if (status === 'unknown' || status === 'connecting') return t('connectionStatus.connecting', 'Connecting')
     if (status === 'connected' || status === 'synced' || status === 'syncing' || status === 'live') return t('connectionStatus.connected', 'Connected')
-    if (status === 'not_available') return t('connectionStatus.naStatic', 'N/A (Static)')
-    if (status === 'not_configured') return t('connectionStatus.notConfigured', 'Not Configured')
+    if (status === 'not_available') return t('connectionStatus.naStatic', 'N/A (static)')
+    if (status === 'not_configured') return t('connectionStatus.notConfigured', 'Not configured')
     if (status === 'disconnected') return t('connectionStatus.disconnected', 'Disconnected')
     if (status === 'error') return t('connectionStatus.error', 'Error')
     if (status === 'offline') return t('connectionStatus.offline', 'Offline')
     return t('connectionStatus.unknown', 'Unknown')
   }
 
-  const getTextColor = (status) => {
-    if (status === 'unknown' || status === 'connecting') return '#3b82f6'
-    if (status === 'not_available' || status === 'not_configured') return '#9ca3af'
-    if (isStatusOk(status)) return '#22c55e'
-    return '#ef4444'
+  const getTextClass = (status) => {
+    if (status === 'unknown' || status === 'connecting') return 'text-sky-800'
+    if (status === 'not_available' || status === 'not_configured') return 'text-stone-500'
+    if (isStatusOk(status)) return 'text-emerald-800'
+    return 'text-red-700'
   }
 
   return (
     <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.9)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 2000,
-        pointerEvents: 'auto'
-      }}
+      className="ov-kit no-print fixed inset-0 flex items-center justify-center bg-stone-900/60 p-4 backdrop-blur-sm"
+      style={{ zIndex: 2000, pointerEvents: 'auto' }}
       onClick={(e) => e.stopPropagation()}
       onTouchStart={(e) => e.stopPropagation()}
     >
-      <style>
-        {`
-          @keyframes startup-spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-          }
-        `}
-      </style>
-
       <div
-        style={{
-          background: '#111827',
-          border: '1px solid rgba(255,255,255,0.1)',
-          borderRadius: 16,
-          padding: 32,
-          minWidth: 320,
-          maxWidth: '90vw'
-        }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ob-startup-title"
+        className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
       >
-        <h3 style={{
-          margin: '0 0 24px 0',
-          textAlign: 'center',
-          color: '#fff',
-          fontSize: 18
-        }}>
+        <h3 id="ob-startup-title" className="mb-5 text-center text-lg font-bold text-stone-900">
           {primaryOk
-            ? t('startupConnectivity.allConnected', 'All services connected!')
-            : t('startupConnectivity.connecting', 'Connecting...')}
+            ? t('startupConnectivity.allConnected', 'All services connected')
+            : t('startupConnectivity.connecting', 'Connecting…')}
         </h3>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="divide-y divide-stone-100 rounded-xl border border-stone-200/70">
           {visibleKeys.map((key) => {
             const status = connectionStatuses[key] || 'unknown'
             return (
-              <div
-                key={key}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  opacity: status === 'unknown' ? 0.7 : 1,
-                  transition: 'opacity 0.3s'
-                }}
-              >
-                <div style={{ width: 24, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+              <div key={key} className="flex min-h-12 items-center gap-3 px-3 py-2.5">
+                <div className="flex w-6 shrink-0 justify-center">
                   {getStatusIcon(status)}
                 </div>
-                <span style={{ fontWeight: 600, color: '#fff', fontSize: 14, minWidth: 90 }}>
+                <span className="text-sm font-semibold text-stone-800">
                   {labelMap[key] || key}
                 </span>
-                <span style={{
-                  color: getTextColor(status),
-                  fontSize: 13,
-                  marginLeft: 'auto'
-                }}>
+                <span className={cn('ml-auto text-xs font-medium', getTextClass(status))}>
                   {getStatusText(status)}
                 </span>
               </div>
@@ -199,82 +152,27 @@ export default function StartupConnectivityModal({
           })}
         </div>
 
-        {/* Info when some connections failed */}
+        {/* Info when some connections failed: offline is a normal state */}
         {hasErrors && (
-          <div style={{
-            marginTop: 20,
-            padding: 12,
-            background: 'rgba(245, 158, 11, 0.1)',
-            border: '1px solid rgba(245, 158, 11, 0.3)',
-            borderRadius: 8,
-            color: '#f59e0b',
-            fontSize: 13,
-            textAlign: 'center',
-            lineHeight: 1.5
-          }}>
-            {t('startupConnectivity.serverUnavailable', 'Scoring works fully offline. Referee and livescore sync via Supabase — server is only needed as fallback.')}
-            <br />
-            <span style={{ color: '#9ca3af', fontSize: 12 }}>
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-center text-xs leading-relaxed text-amber-900">
+            {t('startupConnectivity.serverUnavailable', 'Scoring works fully offline. Referee and livescore sync via OpenVolley Cloud — server is only needed as fallback.')}
+            <span className="mt-1 block text-stone-600">
               {t('startupConnectivity.backgroundRetry', 'Connection will keep retrying in the background.')}
             </span>
           </div>
         )}
 
-        {/* Buttons */}
-        <div style={{
-          marginTop: 24,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 10,
-          alignItems: 'center'
-        }}>
+        {/* One action */}
+        <div className="mt-5 flex justify-center">
           {primaryOk ? (
-            <button
-              onClick={onDismiss}
-              style={{
-                padding: '10px 24px',
-                background: 'rgba(34, 197, 94, 0.15)',
-                color: '#22c55e',
-                border: '1px solid rgba(34, 197, 94, 0.4)',
-                borderRadius: 8,
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: 'pointer',
-                width: '100%',
-                maxWidth: 240,
-                transition: 'all 0.2s'
-              }}
-            >
+            <Button variant="dark" size="xl" onClick={onDismiss} className="w-full sm:w-auto sm:min-w-[200px]">
               {t('startupConnectivity.dismiss', 'Dismiss')}
-              <span style={{ fontSize: 12, fontWeight: 400, marginLeft: 8, opacity: 0.7 }}>
-                ({countdown}s)
-              </span>
-            </button>
+              <span className="font-normal tabular-nums opacity-70">({countdown}s)</span>
+            </Button>
           ) : (
-            <button
-              onClick={onGoOffline}
-              style={{
-                padding: '10px 24px',
-                background: 'transparent',
-                color: '#ef4444',
-                border: '1px solid rgba(239, 68, 68, 0.5)',
-                borderRadius: 8,
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: 'pointer',
-                width: '100%',
-                maxWidth: 240,
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent'
-              }}
-            >
-              {t('startupConnectivity.goOffline', 'Go Offline')}
-            </button>
+            <Button variant="dark" size="xl" icon={WifiOff} onClick={onGoOffline} className="w-full sm:w-auto sm:min-w-[200px]">
+              {t('startupConnectivity.goOffline', 'Go offline')}
+            </Button>
           )}
         </div>
       </div>

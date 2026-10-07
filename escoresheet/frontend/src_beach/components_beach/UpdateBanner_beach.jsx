@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
+import { Download, RefreshCw } from 'lucide-react'
 import useServiceWorker from '../hooks_beach/useServiceWorker_beach'
+import { cn } from '../ui/volleyui/cn.js'
+import { FOCUS_RING } from '../ui/volleyui/Button.jsx'
 
 // Get current version from package.json (injected by Vite at build time)
 const currentVersion = __APP_VERSION__
@@ -9,6 +13,7 @@ const currentVersion = __APP_VERSION__
  * Place this on home/landing pages where it's safe to refresh
  */
 export default function UpdateBanner() {
+  const { t } = useTranslation()
   const { needRefresh, updateServiceWorker, dismissUpdate } = useServiceWorker()
   const [newVersion, setNewVersion] = useState(null)
 
@@ -26,84 +31,40 @@ export default function UpdateBanner() {
   if (!needRefresh) return null
   if (newVersion && newVersion === currentVersion) return null
 
+  // A sky banner (pending: nothing changes until the scorer refreshes),
+  // floating over the top edge; one dark action, Later as the quiet one.
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      zIndex: 10000,
-      background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-      padding: '12px 16px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: '16px',
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
-      flexWrap: 'wrap'
-    }}>
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        color: '#fff',
-        fontSize: '14px',
-        fontWeight: 500
-      }}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-          <polyline points="7 10 12 15 17 10" />
-          <line x1="12" y1="15" x2="12" y2="3" />
-        </svg>
-        <span>{currentVersion} → {newVersion || 'New version'} available!</span>
+    <div
+      role="status"
+      aria-live="polite"
+      className="ov-kit no-print fixed left-1/2 flex w-[min(560px,calc(100vw-24px))] -translate-x-1/2 flex-wrap items-center gap-3 rounded-xl border border-sky-200 bg-sky-50 px-3.5 py-2.5 shadow-lg"
+      style={{ top: 'calc(env(safe-area-inset-top, 0px) + 8px)', zIndex: 10000 }}
+    >
+      <div className="flex min-w-0 flex-[1_1_220px] items-center gap-2 text-sm font-medium text-sky-900">
+        <Download size={16} aria-hidden="true" className="shrink-0 text-sky-700" />
+        <span className="min-w-0">
+          {t('options.updateAvailable', 'Update available')}{' '}
+          <span className="font-mono text-xs tabular-nums text-sky-800">
+            {currentVersion} → {newVersion || t('updateBanner.newVersion', 'new version')}
+          </span>
+        </span>
       </div>
 
-      <div style={{ display: 'flex', gap: '8px' }}>
+      <div className="flex shrink-0 gap-2">
         <button
-          onClick={() => updateServiceWorker()}
-          style={{
-            padding: '8px 16px',
-            fontSize: '13px',
-            fontWeight: 600,
-            background: '#fff',
-            color: '#1d4ed8',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            transition: 'transform 0.1s, box-shadow 0.1s'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'scale(1.02)'
-            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'scale(1)'
-            e.currentTarget.style.boxShadow = 'none'
-          }}
+          type="button"
+          onClick={dismissUpdate}
+          className={cn('inline-flex h-9 items-center rounded-lg border border-sky-200 bg-white px-3 text-xs font-medium text-sky-800 transition-colors hover:bg-sky-100', FOCUS_RING)}
         >
-          Refresh to Update
+          {t('updateBanner.later', 'Later')}
         </button>
         <button
-          onClick={dismissUpdate}
-          style={{
-            padding: '8px 12px',
-            fontSize: '13px',
-            fontWeight: 500,
-            background: 'rgba(255, 255, 255, 0.2)',
-            color: '#fff',
-            border: '1px solid rgba(255, 255, 255, 0.3)',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            transition: 'background 0.1s'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)'
-          }}
+          type="button"
+          onClick={() => updateServiceWorker()}
+          className={cn('inline-flex h-9 items-center gap-1.5 rounded-lg bg-slate-900 px-3 text-xs font-semibold text-white transition-colors hover:bg-slate-800', FOCUS_RING)}
         >
-          Later
+          <RefreshCw size={13} aria-hidden="true" />
+          {t('options.refreshToUpdate', 'Refresh to update')}
         </button>
       </div>
     </div>

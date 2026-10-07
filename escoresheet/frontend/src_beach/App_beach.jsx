@@ -51,7 +51,8 @@ import { fetchMatchByPin, importMatchFromSupabase, restoreMatchFromJson, selectB
 import UpdateBanner from './components_beach/UpdateBanner_beach'
 import CompetitionMatchPicker from './components_beach/CompetitionMatchPicker_beach'
 import { COMPETITIONS_ENABLED } from './utils_beach/features_beach'
-import { Maximize, Smartphone } from 'lucide-react'
+import { FileUp, Maximize, Search, Smartphone } from 'lucide-react'
+import { Modal as KitModal, modalCancelClass, modalDangerClass } from './ui/volleyui/Modal.jsx'
 import { Button } from './ui/volleyui/Button.jsx'
 import { cn } from './ui/volleyui/cn.js'
 
@@ -2345,321 +2346,258 @@ export default function App() {
               )}
             </div>
 
-            {/* Delete Match Modal */}
+            {/* Delete Match Modal (volleyui decision dialog; above the header, like the legacy modals) */}
             {deleteMatchModal && (
-              <Modal
-                title="Delete Match"
-                open={true}
-                onClose={cancelDeleteMatch}
-                width={420}
-              >
-                <div style={{ padding: '24px', textAlign: 'center' }}>
-                  <p style={{ marginBottom: '16px', fontSize: '16px' }}>
-                    Are you sure you want to delete all data for: <strong>{deleteMatchModal.matchName}</strong>?
-                  </p>
-                  <p style={{ marginBottom: '20px', fontSize: '14px', color: 'var(--muted)' }}>
-                    This will delete all sets, events, players, and team data for this match from local storage and from the cloud database.
+              <div className="ov-kit" style={{ position: 'relative', zIndex: 1000 }}>
+                <KitModal
+                  open
+                  decision
+                  dismissible={false}
+                  size="sm"
+                  onClose={cancelDeleteMatch}
+                  closeLabel={t('common.close')}
+                  title={t('home.deleteModal.title', { defaultValue: 'Delete «{{name}}»?', name: deleteMatchModal.matchName })}
+                  footer={(
+                    <>
+                      <button type="button" onClick={cancelDeleteMatch} className={modalCancelClass}>
+                        {t('common.cancel')}
+                      </button>
+                      <button type="button" onClick={confirmDeleteMatch} className={modalDangerClass} data-testid="delete-match-confirm">
+                        {t('home.deleteModal.confirm', 'Delete')}
+                      </button>
+                    </>
+                  )}
+                >
+                  <p className="text-sm text-stone-600">
+                    {t('home.deleteModal.body', 'This deletes all sets, events, players and team data of this match, on this device and in the cloud. It cannot be undone.')}
                   </p>
 
                   {/* PIN confirmation for matches with gamePin */}
                   {deleteMatchModal.gamePin && (
-                    <div style={{ marginBottom: '20px' }}>
-                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 600, color: '#ef4444' }}>
-                        Enter Game PIN to confirm deletion:
+                    <div className="mt-4">
+                      <label htmlFor="ob-delete-pin" className="mb-1.5 block text-sm font-medium text-stone-700">
+                        {t('home.deleteModal.pinLabel', 'Enter the game PIN to confirm')}
                       </label>
                       <input
+                        id="ob-delete-pin"
                         type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        data-autofocus
                         value={deletePinInput}
                         onChange={(e) => {
                           setDeletePinInput(e.target.value)
                           setDeletePinError('')
                         }}
-                        placeholder="Game PIN"
-                        style={{
-                          width: '100%',
-                          maxWidth: '200px',
-                          padding: '12px',
-                          fontSize: '18px',
-                          fontWeight: 600,
-                          textAlign: 'center',
-                          letterSpacing: '4px',
-                          background: 'rgba(255, 255, 255, 0.1)',
-                          border: deletePinError ? '2px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.2)',
-                          borderRadius: '8px',
-                          color: 'var(--text)'
-                        }}
+                        placeholder={t('home.gamePin')}
+                        aria-invalid={deletePinError ? true : undefined}
+                        aria-describedby={deletePinError ? 'ob-delete-pin-error' : undefined}
+                        className={cn(
+                          'h-11 w-full max-w-[220px] rounded-lg border bg-white px-3 text-center font-mono text-lg font-semibold tracking-[0.3em] text-stone-900 outline-none focus:ring-2 focus:ring-red-500',
+                          deletePinError ? 'border-red-400 bg-red-50' : 'border-stone-300'
+                        )}
                       />
                       {deletePinError && (
-                        <p style={{ marginTop: '8px', fontSize: '13px', color: '#ef4444' }}>
+                        <p id="ob-delete-pin-error" role="alert" className="mt-1.5 text-xs font-medium text-red-600">
                           {deletePinError}
                         </p>
                       )}
                     </div>
                   )}
-
-                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                    <button
-                      onClick={confirmDeleteMatch}
-                      style={{
-                        padding: '12px 24px',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        background: '#ef4444',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '8px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Delete
-                    </button>
-                    <button
-                      onClick={cancelDeleteMatch}
-                      style={{
-                        padding: '12px 24px',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        background: 'rgba(255, 255, 255, 0.1)',
-                        color: 'var(--text)',
-                        border: '1px solid rgba(255, 255, 255, 0.2)',
-                        borderRadius: '8px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </Modal>
+                </KitModal>
+              </div>
             )}
 
-            {/* Restore Match Modal */}
-            {restoreMatchModal && (
-              <Modal
-                title="Restore Match"
-                open={true}
-                onClose={() => {
-                  setRestoreMatchModal(false)
-                  setRestoreMatchIdInput('')
-                  setRestorePin('')
-                  setRestoreError('')
-                  setCloudBackups([])
-                  setCloudBackupPin('')
-                  setCloudBackupGameN('')
-                  setCloudBackupError('')
-                }}
-                width={500}
-              >
-                <div style={{ padding: '24px' }}>
-                  {/* Restore from Cloud Backup */}
-                  {!offlineMode && (
-                    <div style={{ marginBottom: '24px' }}>
-                      <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px', color: 'var(--text)' }}>
-                        Restore from Cloud Backup
-                      </h3>
-                      <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', marginBottom: '12px' }}>
-                        Enter the match number and PIN to search for cloud backups.
-                      </p>
-                      <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
-                        <div style={{ flex: 1 }}>
-                          <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: 'rgba(255,255,255,0.7)' }}>
-                            Match #:
-                          </label>
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            pattern="[0-9]*"
-                            value={cloudBackupGameN}
-                            onChange={(e) => {
-                              const value = e.target.value.replace(/\D/g, '')
-                              setCloudBackupGameN(value)
-                            }}
-                            placeholder="123456"
-                            style={{
-                              width: '100%',
-                              padding: '12px',
-                              fontSize: '20px',
-                              fontWeight: 700,
-                              textAlign: 'center',
-                              fontFamily: 'monospace',
-                              background: 'var(--bg)',
-                              border: '2px solid rgba(255,255,255,0.2)',
-                              borderRadius: '8px',
-                              color: 'var(--text)',
-                              outline: 'none'
-                            }}
-                          />
+            {/* Restore Match Modal (volleyui content dialog) */}
+            {restoreMatchModal && (() => {
+              const closeRestore = () => {
+                setRestoreMatchModal(false)
+                setRestoreMatchIdInput('')
+                setRestorePin('')
+                setRestoreError('')
+                setCloudBackups([])
+                setCloudBackupPin('')
+                setCloudBackupGameN('')
+                setCloudBackupError('')
+              }
+              const searchDisabled = cloudBackupLoading || cloudBackupPin.length !== 6
+              return (
+                <div className="ov-kit" style={{ position: 'relative', zIndex: 1000 }}>
+                  <KitModal
+                    open
+                    dismissible={false}
+                    size="lg"
+                    layout="sections"
+                    onClose={closeRestore}
+                    closeLabel={t('common.close')}
+                    title={t('home.restoreModal.title', 'Restore match')}
+                  >
+                    {/* Restore from Cloud Backup */}
+                    {!offlineMode && (
+                      <section className="space-y-3">
+                        <div>
+                          <h3 className="text-sm font-semibold text-stone-800">{t('home.restoreModal.cloudTitle', 'From a cloud backup')}</h3>
+                          <p className="mt-0.5 text-xs text-stone-500">
+                            {t('home.restoreModal.cloudHint', 'Enter the match number and the game PIN to look for cloud backups.')}
+                          </p>
                         </div>
-                        <div style={{ flex: 1.5 }}>
-                          <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: 'rgba(255,255,255,0.7)' }}>
-                            Game PIN:
-                          </label>
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            pattern="[0-9]*"
-                            value={cloudBackupPin}
-                            onChange={(e) => {
-                              const value = e.target.value.replace(/\D/g, '')
-                              if (value.length <= 6) {
-                                setCloudBackupPin(value)
-                              }
-                            }}
-                            placeholder="000000"
-                            maxLength={6}
-                            style={{
-                              width: '100%',
-                              padding: '12px',
-                              fontSize: '20px',
-                              fontWeight: 700,
-                              textAlign: 'center',
-                              letterSpacing: '4px',
-                              fontFamily: 'monospace',
-                              background: 'var(--bg)',
-                              border: '2px solid rgba(255,255,255,0.2)',
-                              borderRadius: '8px',
-                              color: 'var(--text)',
-                              outline: 'none'
-                            }}
-                          />
+                        <div className="flex gap-3">
+                          <div className="min-w-0 flex-1">
+                            <label htmlFor="ob-restore-game-n" className="mb-1.5 block text-xs font-medium text-stone-600">
+                              {t('home.restoreModal.matchNumber', 'Match number')}
+                            </label>
+                            <input
+                              id="ob-restore-game-n"
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              value={cloudBackupGameN}
+                              onChange={(e) => {
+                                const value = e.target.value.replace(/\D/g, '')
+                                setCloudBackupGameN(value)
+                              }}
+                              placeholder="123456"
+                              className="h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-center font-mono text-lg font-semibold tabular-nums text-stone-900 outline-none focus:ring-2 focus:ring-red-500"
+                            />
+                          </div>
+                          <div className="min-w-0 flex-[1.5]">
+                            <label htmlFor="ob-restore-pin" className="mb-1.5 block text-xs font-medium text-stone-600">
+                              {t('home.gamePin')}
+                            </label>
+                            <input
+                              id="ob-restore-pin"
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              value={cloudBackupPin}
+                              onChange={(e) => {
+                                const value = e.target.value.replace(/\D/g, '')
+                                if (value.length <= 6) {
+                                  setCloudBackupPin(value)
+                                }
+                              }}
+                              placeholder="000000"
+                              maxLength={6}
+                              className="h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-center font-mono text-lg font-semibold tracking-[0.3em] text-stone-900 outline-none focus:ring-2 focus:ring-red-500"
+                            />
+                          </div>
                         </div>
-                      </div>
-                      <button
-                        onClick={async () => {
-                          if (cloudBackupPin.length !== 6) {
-                            setCloudBackupError('Please enter a 6-digit PIN')
-                            return
-                          }
-                          setCloudBackupLoading(true)
-                          setCloudBackupError('')
-                          try {
-                            const gameN = parseInt(cloudBackupGameN) || 1
-                            // Cloud backups (backend 'backup' bucket)
-                            const cloudResults = await listCloudBackups(cloudBackupPin, gameN).catch(() => [])
-                            const taggedCloud = cloudResults.map(b => ({ ...b, source: b.source || 'cloud' }))
-                            // Most recent first
-                            const merged = [...taggedCloud].sort((a, b) => {
-                              const dateA = a.created || a.updated_at || ''
-                              const dateB = b.created || b.updated_at || ''
-                              return dateB.localeCompare(dateA)
-                            })
-                            setCloudBackups(merged)
-                            if (merged.length === 0) {
-                              setCloudBackupError('No backups found for this Game Number')
+                        <Button
+                          variant="dark"
+                          size="xl"
+                          block
+                          icon={Search}
+                          loading={cloudBackupLoading}
+                          disabled={searchDisabled}
+                          onClick={async () => {
+                            if (cloudBackupPin.length !== 6) {
+                              setCloudBackupError('Please enter a 6-digit PIN')
+                              return
                             }
+                            setCloudBackupLoading(true)
+                            setCloudBackupError('')
+                            try {
+                              const gameN = parseInt(cloudBackupGameN) || 1
+                              // Cloud backups (backend 'backup' bucket)
+                              const cloudResults = await listCloudBackups(cloudBackupPin, gameN).catch(() => [])
+                              const taggedCloud = cloudResults.map(b => ({ ...b, source: b.source || 'cloud' }))
+                              // Most recent first
+                              const merged = [...taggedCloud].sort((a, b) => {
+                                const dateA = a.created || a.updated_at || ''
+                                const dateB = b.created || b.updated_at || ''
+                                return dateB.localeCompare(dateA)
+                              })
+                              setCloudBackups(merged)
+                              if (merged.length === 0) {
+                                setCloudBackupError('No backups found for this Game Number')
+                              }
+                            } catch (err) {
+                              setCloudBackupError(err.message || 'Failed to list backups')
+                            } finally {
+                              setCloudBackupLoading(false)
+                            }
+                          }}
+                        >
+                          {t('home.restoreModal.search', 'Search cloud backups')}
+                        </Button>
+                        {cloudBackupError && (
+                          <p role="alert" className="text-xs font-medium text-red-600">{cloudBackupError}</p>
+                        )}
+                        {cloudBackups.length > 0 && (
+                          <div className="max-h-[300px] overflow-y-auto rounded-xl border border-stone-200">
+                            <BackupTable
+                              backups={cloudBackups}
+                              onBackupSelect={async (backup) => {
+                                setRestoreLoading(true)
+                                setRestoreError('')
+                                try {
+                                  const cloudData = await fetchCloudBackup(backup.path)
+                                  if (!cloudData) {
+                                    setRestoreError('Failed to fetch backup data')
+                                    setRestoreLoading(false)
+                                    return
+                                  }
+                                  setRestorePreviewData({ data: cloudData, source: backup.source || 'cloud', backupName: backup.name })
+                                } catch (err) {
+                                  setRestoreError(err.message || 'Failed to load backup')
+                                } finally {
+                                  setRestoreLoading(false)
+                                }
+                              }}
+                              loading={restoreLoading}
+                              mode="button"
+                            />
+                          </div>
+                        )}
+                      </section>
+                    )}
+
+                    {/* Divider before the local backup */}
+                    {!offlineMode && (
+                      <div className="flex items-center gap-3" aria-hidden="true">
+                        <div className="h-px flex-1 bg-stone-200" />
+                        <span className="text-xs text-stone-500">{t('home.restoreModal.or', 'or')}</span>
+                        <div className="h-px flex-1 bg-stone-200" />
+                      </div>
+                    )}
+
+                    {/* Offline/File restore */}
+                    <section className="space-y-3">
+                      <h3 className="text-sm font-semibold text-stone-800">{t('home.restoreModal.fileTitle', 'From a backup file')}</h3>
+                      <Button
+                        variant="secondary"
+                        size="xl"
+                        block
+                        icon={FileUp}
+                        loading={restoreLoading}
+                        onClick={async () => {
+                          setRestoreLoading(true)
+                          setRestoreError('')
+                          try {
+                            const jsonData = await selectBackupFile()
+                            if (!jsonData) {
+                              setRestoreLoading(false)
+                              return // User cancelled
+                            }
+                            // Show preview instead of immediately restoring
+                            setRestorePreviewData({ data: jsonData, source: 'local' })
                           } catch (err) {
-                            setCloudBackupError(err.message || 'Failed to list backups')
+                            setRestoreError(err.message || 'Failed to restore from file')
                           } finally {
-                            setCloudBackupLoading(false)
+                            setRestoreLoading(false)
                           }
-                        }}
-                        disabled={cloudBackupLoading || cloudBackupPin.length !== 6}
-                        style={{
-                          width: '100%',
-                          padding: '12px 24px',
-                          fontSize: '14px',
-                          fontWeight: 600,
-                          background: cloudBackupLoading || cloudBackupPin.length !== 6 ? 'rgba(139, 92, 246, 0.3)' : 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
-                          color: '#fff',
-                          border: 'none',
-                          borderRadius: '8px',
-                          cursor: cloudBackupLoading || cloudBackupPin.length !== 6 ? 'not-allowed' : 'pointer'
                         }}
                       >
-                        {cloudBackupLoading ? 'Loading...' : 'Search Cloud Backups'}
-                      </button>
-                      {cloudBackupError && (
-                        <p style={{ color: '#ef4444', fontSize: '13px', marginTop: '8px', marginBottom: '0' }}>{cloudBackupError}</p>
+                        {t('home.restoreModal.selectFile', 'Select backup file')}
+                      </Button>
+                      {restoreError && !restorePreviewData && (
+                        <p role="alert" className="text-xs font-medium text-red-600">{restoreError}</p>
                       )}
-                      {cloudBackups.length > 0 && (
-                        <div style={{
-                          border: '1px solid rgba(255,255,255,0.2)',
-                          borderRadius: '8px',
-                          marginTop: '8px',
-                          maxHeight: '300px',
-                          overflowY: 'auto'
-                        }}>
-                          <BackupTable
-                            backups={cloudBackups}
-                            onBackupSelect={async (backup) => {
-                              setRestoreLoading(true)
-                              setRestoreError('')
-                              try {
-                                const cloudData = await fetchCloudBackup(backup.path)
-                                if (!cloudData) {
-                                  setRestoreError('Failed to fetch backup data')
-                                  setRestoreLoading(false)
-                                  return
-                                }
-                                setRestorePreviewData({ data: cloudData, source: backup.source || 'cloud', backupName: backup.name })
-                              } catch (err) {
-                                setRestoreError(err.message || 'Failed to load backup')
-                              } finally {
-                                setRestoreLoading(false)
-                              }
-                            }}
-                            loading={restoreLoading}
-                            mode="button"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Divider before local backup */}
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '16px',
-                    marginBottom: '24px'
-                  }}>
-                    <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.2)' }} />
-                    <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)' }}>or</span>
-                    <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.2)' }} />
-                  </div>
-
-                  {/* Offline/File restore */}
-                  <div>
-                    <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px', color: 'var(--text)' }}>
-                      Restore from Local File
-                    </h3>
-                    <button
-                      onClick={async () => {
-                        setRestoreLoading(true)
-                        setRestoreError('')
-                        try {
-                          const jsonData = await selectBackupFile()
-                          if (!jsonData) {
-                            setRestoreLoading(false)
-                            return // User cancelled
-                          }
-                          // Show preview instead of immediately restoring
-                          setRestorePreviewData({ data: jsonData, source: 'local' })
-                        } catch (err) {
-                          setRestoreError(err.message || 'Failed to restore from file')
-                        } finally {
-                          setRestoreLoading(false)
-                        }
-                      }}
-                      disabled={restoreLoading}
-                      style={{
-                        width: '100%',
-                        padding: '12px 24px',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        background: restoreLoading ? 'rgba(249, 115, 22, 0.3)' : 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '8px',
-                        cursor: restoreLoading ? 'not-allowed' : 'pointer'
-                      }}
-                    >
-                      {restoreLoading ? 'Loading...' : 'Select Backup File'}
-                    </button>
-                  </div>
+                    </section>
+                  </KitModal>
                 </div>
-              </Modal>
-            )}
+              )
+            })()}
 
             {/* Restore Preview Modal */}
             {restorePreviewData && (

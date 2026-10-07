@@ -734,11 +734,11 @@
     "viewportEdit": "Klicken, um die Fenstergrösse zu ändern"
   },
   "home": {
-    "title": "Openvolley eScoresheet",
+    "title": "OpenBeach eScoresheet",
     "newMatch": "Neues Spiel",
     "officialMatch": "Offizielles Spiel",
     "testMatch": "Testspiel",
-    "preparing": "Vorbereitung...",
+    "preparing": "Wird vorbereitet…",
     "continueMatch": "Spiel fortsetzen",
     "deleteMatch": "Spiel löschen",
     "restoreMatch": "Spiel wiederherstellen",
@@ -763,7 +763,23 @@
     },
     "openScoreboard": "Anzeigetafel öffnen",
     "exitFullscreen": "Vollbild beenden",
-    "fullscreen": "Vollbild"
+    "fullscreen": "Vollbild",
+    "deleteModal": {
+      "title": "«{{name}}» löschen?",
+      "body": "Das löscht alle Sätze, Ereignisse, Spieler und Teamdaten dieses Spiels, auf diesem Gerät und in der Cloud. Das kann nicht rückgängig gemacht werden.",
+      "pinLabel": "Spiel-PIN zur Bestätigung eingeben",
+      "confirm": "Löschen"
+    },
+    "restoreModal": {
+      "title": "Spiel wiederherstellen",
+      "cloudTitle": "Aus einer Cloud-Sicherung",
+      "cloudHint": "Spielnummer und Spiel-PIN eingeben, um nach Cloud-Sicherungen zu suchen.",
+      "matchNumber": "Spielnummer",
+      "search": "Cloud-Sicherungen suchen",
+      "or": "oder",
+      "fileTitle": "Aus einer Sicherungsdatei",
+      "selectFile": "Sicherungsdatei wählen"
+    }
   },
   "options": {
     "title": "Optionen",
@@ -863,8 +879,8 @@
     "currentVersion": "Aktuelle Version",
     "checkForUpdates": "Nach Updates suchen",
     "checking": "Prüfe...",
-    "updateAvailable": "Update verfügbar!",
-    "refreshToUpdate": "Aktualisieren zum Update",
+    "updateAvailable": "Update verfügbar",
+    "refreshToUpdate": "Neu laden und aktualisieren",
     "latestVersion": "Sie haben die neueste Version!",
     "couldNotCheckUpdates": "Updates konnten nicht überprüft werden. Bitte erneut versuchen.",
     "cacheManagement": "Cache-Verwaltung",
@@ -1343,11 +1359,11 @@
   "backupTable": {
     "noActions": "Keine Aktionen",
     "error": "Fehler",
-    "gameN": "Spiel Nr.",
+    "gameN": "Spiel",
     "set": "Satz",
-    "score": "Punkte",
+    "score": "Stand",
     "lastAction": "Letzte Aktion",
-    "createdAt": "Erstellt am",
+    "createdAt": "Gesichert",
     "eventTypes": {
       "point": "Punkt",
       "timeout": "Timeout",
@@ -1369,7 +1385,7 @@
     "offline": "Offline",
     "disconnected": "Getrennt",
     "notConfigured": "Nicht konfiguriert",
-    "naStatic": "K.A. (Statisch)",
+    "naStatic": "K. A. (statisch)",
     "connecting": "Verbinde",
     "testMode": "Testmodus",
     "unknown": "Unbekannt",
@@ -1877,9 +1893,9 @@
     }
   },
   "startupConnectivity": {
-    "connecting": "Verbindung wird hergestellt...",
-    "allConnected": "Alle Dienste verbunden!",
-    "serverUnavailable": "Scoring works fully offline. Referee and livescore sync via OpenVolley Cloud — server is only needed as fallback.",
+    "connecting": "Verbindung wird hergestellt…",
+    "allConnected": "Alle Dienste verbunden",
+    "serverUnavailable": "Das Schreiben funktioniert vollständig offline. Schiedsrichteransicht und Livescore laufen über die OpenVolley Cloud; ein Server vor Ort ist nur als Rückfall nötig.",
     "backgroundRetry": "Die Verbindung wird im Hintergrund weiter versucht.",
     "dismiss": "Schliessen",
     "goOffline": "Offline gehen"
@@ -1937,5 +1953,9 @@
       "stale": "Verzögert",
       "disconnected": "Getrennt"
     }
+  },
+  "updateBanner": {
+    "later": "Später",
+    "newVersion": "neue Version"
   }
 }

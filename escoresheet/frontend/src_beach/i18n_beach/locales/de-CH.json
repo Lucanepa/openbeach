@@ -734,11 +734,11 @@
     "viewportEdit": "Klicke, zum d Fänstergrössi ändere"
   },
   "home": {
-    "title": "Openvolley eScoresheet",
+    "title": "OpenBeach eScoresheet",
     "newMatch": "Neus Spiil",
     "officialMatch": "Offiziells Spiil",
     "testMatch": "Testspiil",
-    "preparing": "Vorbereitig...",
+    "preparing": "Wird vorbereitet…",
     "continueMatch": "Spiil wiiterfüehre",
     "deleteMatch": "Spiil lösche",
     "restoreMatch": "Spiil widerherstelle",
@@ -761,9 +761,25 @@
       "enter6DigitPin": "Bitte gänd Sie en 6-stellige PIN ii",
       "matchNotFound": "Spiil nöd gfunde"
     },
-    "openScoreboard": "Azeigetafele öffne",
+    "openScoreboard": "Aazeigetafele öffne",
     "exitFullscreen": "Vollbildmodus beenden",
-    "fullscreen": "Vollbildschirm"
+    "fullscreen": "Vollbildschirm",
+    "deleteModal": {
+      "title": "«{{name}}» lösche?",
+      "body": "Das löscht alli Sätz, Ereignis, Spieler und Teamdate vo dem Spiil, uf dem Grät und i de Cloud. Das cha nöd rückgängig gmacht werde.",
+      "pinLabel": "Spiil-PIN zur Bestätigung iigäh",
+      "confirm": "Lösche"
+    },
+    "restoreModal": {
+      "title": "Spiil widerherstelle",
+      "cloudTitle": "Us ere Cloud-Sicherig",
+      "cloudHint": "Spiilnummere und Spiil-PIN iigäh, zum nach Cloud-Sicherige sueche.",
+      "matchNumber": "Spiilnummere",
+      "search": "Cloud-Sicherige sueche",
+      "or": "oder",
+      "fileTitle": "Us ere Sicherigsdatei",
+      "selectFile": "Sicherigsdatei wähle"
+    }
   },
   "options": {
     "title": "Optione",
@@ -863,8 +879,8 @@
     "currentVersion": "Aktuelli Version",
     "checkForUpdates": "Nach Updates sueche",
     "checking": "Prüefe...",
-    "updateAvailable": "Update verfügbar!",
-    "refreshToUpdate": "Aktualisiere zum Update",
+    "updateAvailable": "Update verfüegbar",
+    "refreshToUpdate": "Neu lade und aktualisiere",
     "latestVersion": "Sie händ die neust Version!",
     "couldNotCheckUpdates": "Updates händ nöd chönne überprüft werde. Bitte nomal probiere.",
     "cacheManagement": "Cache-Verwaltig",
@@ -1343,11 +1359,11 @@
   "backupTable": {
     "noActions": "Kei Aktione",
     "error": "Fähler",
-    "gameN": "Spiil N",
+    "gameN": "Spiil",
     "set": "Satz",
     "score": "Stand",
     "lastAction": "Letschti Aktion",
-    "createdAt": "Erstellt am",
+    "createdAt": "Gsicheret",
     "eventTypes": {
       "point": "Punkt",
       "timeout": "Timeout",
@@ -1369,7 +1385,7 @@
     "offline": "Offline",
     "disconnected": "Trennt",
     "notConfigured": "Nöd konfiguriert",
-    "naStatic": "N/A (Statisch)",
+    "naStatic": "N/A (statisch)",
     "connecting": "Verbinde",
     "testMode": "Testmodus",
     "unknown": "Unbekannt",
@@ -1877,9 +1893,9 @@
     }
   },
   "startupConnectivity": {
-    "connecting": "Verbindig wird hergstellt...",
-    "allConnected": "Alli Dienscht verbunde!",
-    "serverUnavailable": "Scoring works fully offline. Referee and livescore sync via OpenVolley Cloud — server is only needed as fallback.",
+    "connecting": "Verbindig wird hergstellt…",
+    "allConnected": "Alli Dienscht verbunde",
+    "serverUnavailable": "S Schriibe gaht vollständig offline. Schiri-Asicht und Livescore laufed über d OpenVolley Cloud; en Server vor Ort bruucht's nur als Rückfall.",
     "backgroundRetry": "D'Verbindig wird im Hintergrund witer probiert.",
     "dismiss": "Schliesse",
     "goOffline": "Offline gah"
@@ -1937,5 +1953,9 @@
       "stale": "Verzögeret",
       "disconnected": "Trännt"
     }
+  },
+  "updateBanner": {
+    "later": "Spöter",
+    "newVersion": "neui Version"
   }
 }

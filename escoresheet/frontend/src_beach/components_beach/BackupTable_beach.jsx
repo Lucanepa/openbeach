@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { loadCloudBackup } from '../utils_beach/logger_beach'
 import { formatBackupDateTime } from '../utils_beach/dateFormatter_beach'
+import { useTranslation } from 'react-i18next'
+import { cn } from '../ui/volleyui/cn.js'
+import { FOCUS_RING_INSET } from '../ui/volleyui/Button.jsx'
 
 /**
  * Format event type for display
@@ -55,6 +58,7 @@ export default function BackupTable({
   loadingBackupPath = null,
   restoreButtonText = 'Restore'
 }) {
+  const { t } = useTranslation()
   const [lastActions, setLastActions] = useState({})
   const [loadingActions, setLoadingActions] = useState({})
 
@@ -109,7 +113,22 @@ export default function BackupTable({
 
   return (
     <>
-      {/* Table Header */}
+      {/* Table Header. 'button' mode (home > Restore match) is restyled
+          (volleyui, light); 'row' mode still sits in the dark scoreboard
+          options and keeps its legacy look until that screen moves. */}
+      {mode === 'button' ? (
+        <div
+          className="sticky top-0 z-10 grid items-center gap-0.5 border-b border-stone-200 bg-stone-50 px-2.5 py-2 text-[11px] font-bold uppercase tracking-wide text-stone-500"
+          style={{ gridTemplateColumns: gridColumns }}
+        >
+          <span className="text-center">{t('backupTable.gameN', 'Match')}</span>
+          <span className="text-center">{t('backupTable.set', 'Set')}</span>
+          <span className="text-center">{t('backupTable.score', 'Score')}</span>
+          <span>{t('backupTable.lastAction', 'Last action')}</span>
+          <span className="text-right">{t('backupTable.createdAt', 'Saved')}</span>
+          {showRestoreButton && <span></span>}
+        </div>
+      ) : (
       <div style={{
         display: 'grid',
         gridTemplateColumns: gridColumns,
@@ -129,6 +148,7 @@ export default function BackupTable({
         <span style={{ textAlign: 'right' }}>Created At</span>
         {showRestoreButton && <span></span>}
       </div>
+      )}
 
       {/* Table Rows - sorted by created_at descending (newest first) */}
       {[...backups].sort((a, b) => {
@@ -179,32 +199,30 @@ export default function BackupTable({
         }
 
         if (mode === 'button') {
-          // App.jsx mode - entire row is a button
+          // Home > Restore match: the entire row is a button (volleyui row)
           return (
             <button
+              type="button"
               key={backup.match_id || backup.name}
               onClick={() => !isDisabled && onBackupSelect(backup)}
               disabled={isDisabled}
-              style={{
-                ...rowStyle,
-                width: '100%',
-                color: 'var(--text)',
-                border: 'none',
-                borderBottom: index < backups.length - 1 ? '1px solid rgba(255,255,255,0.1)' : 'none',
-                fontSize: '12px'
-              }}
+              className={cn(
+                'grid w-full min-h-11 items-center gap-0.5 border-b border-stone-100 bg-white px-2.5 py-2 text-left text-xs text-stone-800 transition-colors last:border-b-0 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60',
+                FOCUS_RING_INSET
+              )}
+              style={{ gridTemplateColumns: gridColumns }}
             >
-              <span style={{ fontWeight: 600, textAlign: 'center' }}>{backup.gameN || 'N/A'}</span>
-              <span style={{ textAlign: 'center' }}>{backup.setIndex || 'N/A'}</span>
-              <span style={{ fontWeight: 600, color: '#22c55e', textAlign: 'center' }}>
+              <span className="text-center font-semibold tabular-nums">{backup.gameN || 'N/A'}</span>
+              <span className="text-center tabular-nums">{backup.setIndex || 'N/A'}</span>
+              <span className="text-center font-semibold tabular-nums text-stone-900">
                 {backup.leftScore !== undefined && backup.rightScore !== undefined
                   ? `${backup.leftScore}:${backup.rightScore}`
                   : 'N/A'}
               </span>
-              <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '11px' }}>
+              <span className="truncate text-[11px] text-stone-600">
                 {lastAction}
               </span>
-              <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', textAlign: 'right' }}>
+              <span className="text-right text-[11px] tabular-nums text-stone-500">
                 {formattedTime}
               </span>
               {showRestoreButton && <div></div>}
