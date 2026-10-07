@@ -1589,16 +1589,17 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
             style={{
               background: info.color,
               color: isBrightColor(info.color) ? '#000' : '#fff',
-              flex: 1, padding: sizes.teamButtonPadding, fontSize: sizes.teamButtonFont, width: '100%',
+              flex: 1, padding: sizes.teamButtonPadding, fontSize: sizes.teamButtonFont, width: '100%', minWidth: 0,
               fontWeight: 600, border: 'none', borderRadius: '8px',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              overflow: 'hidden',
               cursor: 'default',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
             }}
             title={info.name}
           >
+            {/* The flag keeps its size; the name is cut with an ellipsis on a phone */}
             {info.country && <CountryFlag countryCode={info.country} size="md" />}
-            {getDisplayName(info.name)}
+            <span className="min-w-0 truncate">{getDisplayName(info.name)}</span>
           </div>
         </div>
         {/* Coin toss winner: a two-way choice between the teams (slate-900 when chosen) */}

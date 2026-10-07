@@ -42,6 +42,11 @@ export default function CountryFlag({ countryCode, size = 'sm', style = {} }) {
         lineHeight: 1,
         display: 'inline-block',
         verticalAlign: 'middle',
+        // A flag in a flex row (a team band on a phone) must never be
+        // squeezed to a speck: its own 4:3 box, never shrunk
+        width: '1.333333em',
+        height: '1em',
+        flexShrink: 0,
         ...style
       }}
       title={countryCode}

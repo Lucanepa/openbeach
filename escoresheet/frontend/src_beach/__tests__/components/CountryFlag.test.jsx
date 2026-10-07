@@ -126,4 +126,12 @@ describe('CountryFlag_beach', () => {
       expect(span).toHaveStyle({ borderRadius: '2px' })
     })
   })
+
+  it('keeps its 4:3 box in a flex row (never squeezed to a dot on a phone)', () => {
+    const { container } = render(<div style={{ display: 'flex', width: 40 }}><CountryFlag countryCode="CHE" size="md" /><span>Müller / Weber</span></div>)
+    const flag = container.querySelector('.fi')
+    expect(flag.style.flexShrink).toBe('0')
+    expect(flag.style.width).toBe('1.333333em')
+    expect(flag.style.height).toBe('1em')
+  })
 })
