@@ -1197,7 +1197,7 @@
   },
   "refereeDashboard": {
     "title": "Arbitro",
-    "dashboardTitle": "Dashboard Arbitro",
+    "dashboardTitle": "Dashboard arbitro",
     "status": "Stato",
     "wakeLockOn": "On",
     "wakeLockOff": "Off",
@@ -1233,7 +1233,7 @@
       "title": "Connessione",
       "auto": "Auto",
       "autoDesc": "DB → Fallback diretto",
-      "dbOnly": "Solo DB",
+      "dbOnly": "Solo database",
       "dbDesc": "OpenVolley Cloud tempo reale",
       "directOnly": "Solo diretto",
       "directDesc": "WebSocket diretto"
@@ -1261,7 +1261,8 @@
       "sanction": "Sanzione",
       "courtCaptainDesignation": "Capitano di corte",
       "noAction": "—"
-    }
+    },
+    "selected": "Selezionato"
   },
   "connection": {
     "title": "Configurazione connessione",

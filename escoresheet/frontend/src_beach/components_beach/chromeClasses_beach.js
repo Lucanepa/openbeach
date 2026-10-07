@@ -22,6 +22,12 @@ export const KIT_SCOPE = 'ov-kit contents'
 /** Top bar: white with a stone hairline (svrz console header). */
 export const HEADER_BAR = 'bg-white border-b border-stone-200/70'
 
+/** Title in a dashboard bar (referee, livescore). */
+export const HEADER_TITLE = 'truncate text-sm font-semibold tracking-normal text-stone-900'
+
+/** Quieter detail beside the title (subtitle, game count). */
+export const HEADER_META = 'truncate text-[11px] font-medium tracking-normal text-stone-500'
+
 /** Small header button (menu, match info). 32 px: the bar is 40 px. */
 export const HEADER_BTN = `inline-flex shrink-0 items-center justify-center gap-1.5 h-8 px-2.5 rounded-lg border border-stone-200 bg-white text-xs font-medium tracking-normal text-stone-600 hover:bg-stone-100 transition-colors cursor-pointer ${FOCUS_RING}`
 
@@ -40,6 +46,9 @@ export const POPOVER_PANEL = 'rounded-xl border border-stone-200 bg-white p-3 sh
 /** Eyebrow over a popover: stone-500 (it names the panel, so it carries information). */
 export const MENU_TITLE = 'text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-500'
 
+/** Section label inside a dropdown (Connection, Status, Screen). */
+export const MENU_SECTION = 'px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-500'
+
 /** Menu row: 48 px tall, full width, stone text, stone-100 hover (svrz menu row). */
 export const MENU_ROW = `flex w-full min-h-12 items-center gap-3 px-3 py-2 rounded-lg border-0 bg-transparent text-left text-sm font-medium tracking-normal text-stone-700 hover:bg-stone-100 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent ${FOCUS_RING}`
 
@@ -48,6 +57,12 @@ export const MENU_SUBROW = `flex w-full min-h-11 items-center gap-2.5 px-3 py-2 
 
 /** The chosen row in a choice list (language, scale). */
 export const MENU_ROW_ON = 'bg-slate-900 text-white hover:bg-slate-800'
+
+/** A row with nothing to do (a status, the test-mode flag): static, full opacity. */
+export const MENU_INFO_ROW = 'flex w-full min-h-11 items-center gap-3 px-3 py-2 rounded-lg text-left text-sm font-medium tracking-normal cursor-default select-none'
+
+/** Destructive / leave row (Back, Exit). */
+export const MENU_ROW_DANGER = 'text-red-600 hover:bg-red-50'
 
 /** Nested choice list under a row. */
 export const MENU_NEST = 'my-1 rounded-lg bg-stone-50 p-1'
@@ -81,4 +96,41 @@ export const STATUS_TONES = {
   info: { pill: 'text-sky-800', dot: 'bg-sky-500', text: 'text-sky-800', tint: 'bg-sky-100 text-sky-800' },
   neutral: { pill: 'text-stone-700', dot: 'bg-stone-400', text: 'text-stone-600', tint: 'bg-stone-100 text-stone-600' },
   violet: { pill: 'text-violet-800', dot: 'bg-violet-500', text: 'text-violet-800', tint: 'bg-violet-100 text-violet-800' },
+}
+
+/**
+ * Legacy menu-item colours passed in by callers (Referee, the dashboards)
+ * mapped to the kit's text tones. Unknown values fall back to the inline colour.
+ */
+const ITEM_TONES = {
+  '#22c55e': 'text-emerald-700',
+  '#10b981': 'text-emerald-700',
+  '#3b82f6': 'text-sky-700',
+  '#60a5fa': 'text-sky-700',
+  '#fbbf24': 'text-amber-700',
+  '#f59e0b': 'text-amber-700',
+  '#eab308': 'text-amber-700',
+  '#ef4444': 'text-red-600',
+  '#dc2626': 'text-red-600',
+}
+
+/** The same legacy colours as a STATUS_TONES key, for informational rows. */
+const ITEM_STATUS_TONES = {
+  'text-emerald-700': 'ok',
+  'text-sky-700': 'info',
+  'text-amber-700': 'warn',
+  'text-red-600': 'error',
+}
+
+/** STATUS_TONES key for a caller-supplied menu item colour (neutral when unknown). */
+export function itemStatusTone(color) {
+  const cls = color ? ITEM_TONES[String(color).toLowerCase()] : undefined
+  return ITEM_STATUS_TONES[cls] || 'neutral'
+}
+
+/** { className, style } for a caller-supplied menu item colour. */
+export function itemTone(color) {
+  if (!color) return { className: '', style: undefined }
+  const cls = ITEM_TONES[String(color).toLowerCase()]
+  return cls ? { className: cls, style: undefined } : { className: '', style: { color } }
 }

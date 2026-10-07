@@ -1233,7 +1233,7 @@
       "title": "Verbindig",
       "auto": "Auto",
       "autoDesc": "DB → Direkte Fallback",
-      "dbOnly": "Nur DB",
+      "dbOnly": "Nur Datebank",
       "dbDesc": "OpenVolley Cloud Echtziit",
       "directOnly": "Nur direkt",
       "directDesc": "WebSocket direkt"
@@ -1261,7 +1261,8 @@
       "sanction": "Sanktion",
       "courtCaptainDesignation": "Hofkapitän",
       "noAction": "Kei Aktion"
-    }
+    },
+    "selected": "Uusgwählt"
   },
   "connection": {
     "title": "Verbindigsiirichtig",

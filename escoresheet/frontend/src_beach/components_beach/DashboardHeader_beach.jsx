@@ -1,7 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import i18n from '../i18n'
-import { Check, ClipboardList, Database, Monitor, Moon, RefreshCw, SatelliteDish, Sun, X } from './Icons_beach'
+import { ChevronDown, ClipboardList, Database, Maximize, Menu, Monitor, Moon, RefreshCw, SatelliteDish, Sun, X } from 'lucide-react'
+import { cn } from '../ui/volleyui/cn.js'
+import {
+  HEADER_BAR, HEADER_BTN, HEADER_BTN_ON, HEADER_TITLE, HEADER_META, MENU_PANEL, MENU_SECTION, MENU_ROW,
+  MENU_SUBROW, MENU_ROW_ON, MENU_NEST, MENU_SEP, MENU_ICON
+} from './chromeClasses_beach'
+import HeaderMenuItem from './HeaderMenuItem_beach'
 
 // Flag SVG components for language selector
 const FlagGB = () => (
@@ -51,10 +57,14 @@ const languages = [
 ]
 
 /**
- * DashboardHeader - 3-column header for dashboard views 
+ * DashboardHeader - 3-column header for dashboard views (referee, livescore)
  * Left: Title/version
  * Middle: Hamburger menu (collapsible)
  * Right: Fullscreen button
+ *
+ * volleyui chrome (as OpenVolley's DashboardHeader): white bar with a stone
+ * hairline, kit header buttons and the menu as a white anchored dropdown with
+ * 48 px rows.
  */
 export default function DashboardHeader({
   title,
@@ -88,7 +98,7 @@ export default function DashboardHeader({
   const [versionExpanded, setVersionExpanded] = useState(false)
   const [languageExpanded, setLanguageExpanded] = useState(false)
 
-  // Close menu on outside click
+  // Close menu on outside click and on Escape
   useEffect(() => {
     if (!menuOpen) return
     const handleClick = (e) => {
@@ -96,8 +106,15 @@ export default function DashboardHeader({
         setMenuOpen(false)
       }
     }
+    const handleKey = (e) => {
+      if (e.key === 'Escape') setMenuOpen(false)
+    }
     document.addEventListener('click', handleClick)
-    return () => document.removeEventListener('click', handleClick)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('click', handleClick)
+      document.removeEventListener('keydown', handleKey)
+    }
   }, [menuOpen])
 
   // Build menu items based on props
@@ -106,22 +123,19 @@ export default function DashboardHeader({
   // Load games button
   if (onLoadGames) {
     menuItems.push({
-      icon: <RefreshCw />,
-      label: loadingMatches ? t('common.loading', 'Loading...') : t('refereeDashboard.loadGames', 'Load Games'),
+      icon: <RefreshCw size={14} aria-hidden="true" />,
+      label: loadingMatches ? t('common.loading', 'Loading...') : t('refereeDashboard.loadGames', 'Load games'),
       onClick: onLoadGames,
       disabled: loadingMatches,
-      color: '#3b82f6',
-      badge: matchCount > 0 ? `${matchCount}` : null,
-      badgeColor: 'rgba(34, 197, 94, 0.3)',
-      badgeTextColor: '#22c55e'
+      badge: matchCount > 0 ? `${matchCount}` : null
     })
   }
 
   // Wake lock toggle
   if (showWakeLock && onToggleWakeLock) {
     menuItems.push({
-      icon: wakeLockActive ? <Sun /> : <Moon />,
-      label: t('refereeDashboard.keepScreenOn', 'Keep Screen On'),
+      icon: wakeLockActive ? <Sun size={14} aria-hidden="true" /> : <Moon size={14} aria-hidden="true" />,
+      label: t('refereeDashboard.keepScreenOn', 'Keep screen on'),
       onClick: onToggleWakeLock,
       toggle: wakeLockActive,
       keepOpen: true
@@ -133,24 +147,22 @@ export default function DashboardHeader({
     if (menuItems.length > 0) menuItems.push({ divider: true })
     menuItems.push({ header: t('refereeDashboard.connection.title', 'Connection') })
     menuItems.push({
-      icon: <RefreshCw />,
+      icon: <RefreshCw size={14} aria-hidden="true" />,
       label: t('refereeDashboard.connection.auto', 'Auto'),
       onClick: () => onConnectionModeChange('auto'),
       active: connectionMode === 'auto'
     })
     menuItems.push({
-      icon: <Database />,
-      label: t('refereeDashboard.connection.dbOnly', 'Database Only'),
+      icon: <Database size={14} aria-hidden="true" />,
+      label: t('refereeDashboard.connection.dbOnly', 'Database only'),
       onClick: () => onConnectionModeChange('supabase'),
-      active: connectionMode === 'supabase',
-      color: '#22c55e'
+      active: connectionMode === 'supabase'
     })
     menuItems.push({
-      icon: <SatelliteDish />,
-      label: t('refereeDashboard.connection.directOnly', 'Direct Only'),
+      icon: <SatelliteDish size={14} aria-hidden="true" />,
+      label: t('refereeDashboard.connection.directOnly', 'Direct only'),
       onClick: () => onConnectionModeChange('websocket'),
-      active: connectionMode === 'websocket',
-      color: '#3b82f6'
+      active: connectionMode === 'websocket'
     })
   }
 
@@ -160,18 +172,26 @@ export default function DashboardHeader({
     menuItems.push({ header: t('refereeDashboard.status', 'Status') })
 
     const statusLabels = {
-      server: <><Monitor /> Server</>,
-      websocket: <><SatelliteDish /> WebSocket</>,
-      supabase: <><Database /> Database</>
+      server: { icon: <Monitor size={14} aria-hidden="true" />, label: 'Server' },
+      websocket: { icon: <SatelliteDish size={14} aria-hidden="true" />, label: 'WebSocket' },
+      supabase: { icon: <Database size={14} aria-hidden="true" />, label: 'Database' }
+    }
+    // A status row: the service, then its state as a tinted word
+    const statusInfo = (status) => {
+      if (status === 'connected') return { tone: 'ok', word: t('connectionStatus.connected', 'Connected') }
+      if (status === 'connecting') return { tone: 'warn', word: t('connectionStatus.connecting', 'Connecting') }
+      if (status === 'unknown') return { tone: 'neutral', word: t('connectionStatus.unknown', 'Unknown') }
+      if (status === 'error') return { tone: 'error', word: t('connectionStatus.error', 'Error') }
+      return { tone: 'error', word: t('connectionStatus.disconnected', 'Disconnected') }
     }
 
     Object.entries(connectionStatuses).forEach(([key, status]) => {
       if (statusLabels[key]) {
         menuItems.push({
-          icon: status === 'connected' ? <Check /> : status === 'connecting' ? <RefreshCw /> : <X />,
-          label: statusLabels[key],
-          disabled: true,
-          color: status === 'connected' ? '#22c55e' : status === 'connecting' ? '#fbbf24' : '#ef4444'
+          icon: statusLabels[key].icon,
+          label: statusLabels[key].label,
+          info: true,
+          status: statusInfo(status)
         })
       }
     })
@@ -181,99 +201,53 @@ export default function DashboardHeader({
   if (onBack) {
     if (menuItems.length > 0) menuItems.push({ divider: true })
     menuItems.push({
-      icon: '✕',
+      icon: <X size={14} aria-hidden="true" />,
       label: backLabel || t('common.back', 'Back'),
       onClick: onBack,
       color: '#ef4444'
     })
   }
 
+  const currentLanguage = languages.find(l => l.code === i18n.language)
+  const CurrentFlag = currentLanguage ? currentLanguage.Flag : FlagGB
+
   return (
-    <div style={{
-      height: '40px',
-      minHeight: '40px',
-      maxHeight: '40px',
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      padding: '0 12px',
-      background: 'rgba(0, 0, 0, 0.3)',
-      borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
-    }}>
+    <div
+      className={cn('ov-kit', HEADER_BAR, 'flex items-center justify-between')}
+      style={{ height: '40px', minHeight: '40px', maxHeight: '40px', padding: '0 12px' }}
+    >
       {/* LEFT: Title/Version */}
-      <div style={{
-        flex: '1 1 0',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        minWidth: 0
-      }}>
-        <span style={{
-          fontSize: 'clamp(12px, 3vw, 15px)',
-          fontWeight: 700,
-          color: '#fff',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis'
-        }}>
+      <div className="flex min-w-0 flex-1 basis-0 items-center gap-2">
+        <span className={cn(HEADER_TITLE, 'min-w-0')}>
           {title}
         </span>
+        {/* Below sm the screen's name has the row: subtitle and version are detail */}
         {subtitle && (
-          <span style={{
-            fontSize: '11px',
-            color: 'rgba(255, 255, 255, 0.6)',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis'
-          }}>
+          <span className={cn(HEADER_META, 'hidden min-w-0 sm:inline')}>
             {subtitle}
           </span>
         )}
-        <span style={{
-          fontSize: '9px',
-          color: 'rgba(255, 255, 255, 0.5)',
-          flexShrink: 0
-        }}>
+        <span className="hidden shrink-0 text-[10px] tabular-nums tracking-normal text-stone-500 sm:inline">
           v{currentVersion}
         </span>
       </div>
 
       {/* MIDDLE: Hamburger Menu */}
-      <div
-        className="dashboard-header-menu"
-        style={{
-          flex: '0 0 auto',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          position: 'relative'
-        }}
-      >
+      <div className="dashboard-header-menu relative flex flex-none items-center justify-center">
         {menuItems.length > 0 && (
           <>
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation()
                 setMenuOpen(!menuOpen)
               }}
-              style={{
-                padding: '6px 14px',
-                fontSize: '16px',
-                background: menuOpen ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.1)',
-                color: '#fff',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                height: '28px',
-                minWidth: '44px',
-                transition: 'all 0.15s'
-              }}
-              title="Menu"
+              aria-expanded={menuOpen}
+              className={cn(HEADER_BTN, 'min-w-11 px-3', menuOpen && HEADER_BTN_ON)}
+              aria-label={t('header.menu', 'Menu')}
+              title={t('header.menu', 'Menu')}
             >
-              {menuOpen ? '✕' : '☰'}
+              {menuOpen ? <X size={16} aria-hidden="true" /> : <Menu size={16} aria-hidden="true" />}
             </button>
 
             {/* Dropdown Menu */}
@@ -282,217 +256,59 @@ export default function DashboardHeader({
                 {/* Backdrop */}
                 <div
                   onClick={() => setMenuOpen(false)}
-                  style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    zIndex: 998
-                  }}
+                  className="fixed inset-0"
+                  style={{ zIndex: 998 }}
                 />
-                <div style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  marginTop: '6px',
-                  background: '#1a1a2e',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: '10px',
-                  overflow: 'hidden',
-                  zIndex: 1000,
-                  minWidth: '200px',
-                  maxWidth: '280px',
-                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)'
-                }}>
+                <div
+                  className={cn('absolute left-1/2 top-full mt-1.5 flex w-max min-w-[220px] max-w-[280px] -translate-x-1/2 flex-col', MENU_PANEL)}
+                  style={{ zIndex: 1000 }}
+                >
                   {menuItems.map((item, index) => {
-                    // Divider
                     if (item.divider) {
-                      return (
-                        <div
-                          key={`divider-${index}`}
-                          style={{
-                            height: '1px',
-                            background: 'rgba(255, 255, 255, 0.1)',
-                            margin: '4px 0'
-                          }}
-                        />
-                      )
+                      return <div key={`divider-${index}`} className={MENU_SEP} />
                     }
-
-                    // Section header
                     if (item.header) {
                       return (
-                        <div
-                          key={`header-${index}`}
-                          style={{
-                            padding: '8px 14px 4px',
-                            fontSize: '10px',
-                            fontWeight: 700,
-                            color: 'rgba(255, 255, 255, 0.4)',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.5px'
-                          }}
-                        >
+                        <div key={`header-${index}`} className={MENU_SECTION}>
                           {item.header}
                         </div>
                       )
                     }
-
-                    return (
-                      <button
-                        key={index}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (!item.disabled && item.onClick) {
-                            item.onClick()
-                          }
-                          if (!item.keepOpen) {
-                            setMenuOpen(false)
-                          }
-                        }}
-                        disabled={item.disabled}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '10px',
-                          width: '100%',
-                          padding: '12px 14px',
-                          fontSize: '13px',
-                          fontWeight: 500,
-                          background: item.active
-                            ? (item.color ? `${item.color}20` : 'rgba(255, 255, 255, 0.1)')
-                            : 'transparent',
-                          color: item.disabled
-                            ? 'rgba(255, 255, 255, 0.3)'
-                            : (item.color || '#fff'),
-                          border: 'none',
-                          cursor: item.disabled ? 'not-allowed' : 'pointer',
-                          textAlign: 'left',
-                          opacity: item.disabled ? 0.5 : 1,
-                          transition: 'background 0.15s'
-                        }}
-                      >
-                        {item.icon && <span style={{ fontSize: '15px', width: '20px', textAlign: 'center' }}>{item.icon}</span>}
-                        <span style={{ flex: 1 }}>{item.label}</span>
-
-                        {/* Badge */}
-                        {item.badge && (
-                          <span style={{
-                            padding: '2px 6px',
-                            fontSize: '9px',
-                            fontWeight: 700,
-                            background: item.badgeColor || 'rgba(255, 255, 255, 0.2)',
-                            color: item.badgeTextColor || '#fff',
-                            borderRadius: '4px'
-                          }}>
-                            {item.badge}
-                          </span>
-                        )}
-
-                        {/* Toggle switch */}
-                        {item.toggle !== undefined && (
-                          <span style={{
-                            width: '36px',
-                            height: '20px',
-                            background: item.toggle ? '#22c55e' : 'rgba(255, 255, 255, 0.2)',
-                            borderRadius: '10px',
-                            position: 'relative',
-                            transition: 'background 0.2s',
-                            flexShrink: 0
-                          }}>
-                            <span style={{
-                              position: 'absolute',
-                              top: '2px',
-                              left: item.toggle ? '18px' : '2px',
-                              width: '16px',
-                              height: '16px',
-                              background: '#fff',
-                              borderRadius: '50%',
-                              transition: 'left 0.2s'
-                            }} />
-                          </span>
-                        )}
-                      </button>
-                    )
+                    return <HeaderMenuItem key={index} item={item} onClose={() => setMenuOpen(false)} />
                   })}
 
                   {/* Language selector */}
-                  <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.1)', margin: '4px 0' }} />
+                  <div className={MENU_SEP} />
                   <button
+                    type="button"
+                    aria-expanded={languageExpanded}
                     onClick={(e) => {
                       e.stopPropagation()
                       setLanguageExpanded(!languageExpanded)
                     }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                      width: '100%',
-                      padding: '10px 14px',
-                      fontSize: '11px',
-                      fontWeight: 500,
-                      background: 'transparent',
-                      color: 'rgba(255, 255, 255, 0.6)',
-                      border: 'none',
-                      cursor: 'pointer',
-                      textAlign: 'left'
-                    }}
+                    className={cn(MENU_ROW, languageExpanded && 'bg-stone-100')}
                   >
-                    <span style={{ fontSize: '13px', width: '20px', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {(() => { const current = languages.find(l => l.code === i18n.language); return current ? <current.Flag /> : <FlagGB /> })()}
-                    </span>
-                    <span style={{ flex: 1 }}>{t('header.language', 'Language')}</span>
-                    <span style={{
-                      fontSize: '8px',
-                      transform: languageExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                      transition: 'transform 0.2s'
-                    }}>▼</span>
+                    <span className={MENU_ICON}><CurrentFlag /></span>
+                    <span className="flex-1">{t('header.language', 'Language')}</span>
+                    <ChevronDown size={14} aria-hidden="true" className={cn('text-stone-400 transition-transform', languageExpanded && 'rotate-180')} />
                   </button>
 
                   {/* Language options */}
                   {languageExpanded && (
-                    <div style={{
-                      borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-                      background: 'rgba(0, 0, 0, 0.2)'
-                    }}>
+                    <div className={MENU_NEST}>
                       {languages.map((lang) => (
                         <button
+                          type="button"
                           key={lang.code}
+                          aria-pressed={i18n.language === lang.code}
                           onClick={(e) => {
                             e.stopPropagation()
                             i18n.changeLanguage(lang.code)
                             setLanguageExpanded(false)
                           }}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            width: '100%',
-                            padding: '10px 14px 10px 44px',
-                            fontSize: '12px',
-                            fontWeight: i18n.language === lang.code ? 600 : 400,
-                            background: i18n.language === lang.code ? 'rgba(74, 222, 128, 0.15)' : 'transparent',
-                            color: i18n.language === lang.code ? '#4ade80' : 'rgba(255, 255, 255, 0.8)',
-                            border: 'none',
-                            borderLeft: i18n.language === lang.code ? '3px solid #22c55e' : '3px solid transparent',
-                            cursor: 'pointer',
-                            textAlign: 'left',
-                            transition: 'all 0.15s'
-                          }}
-                          onMouseEnter={(e) => {
-                            if (i18n.language !== lang.code) {
-                              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            if (i18n.language !== lang.code) {
-                              e.currentTarget.style.background = 'transparent'
-                            }
-                          }}
+                          className={cn(MENU_SUBROW, i18n.language === lang.code && MENU_ROW_ON)}
                         >
-                          <span style={{ display: 'flex', alignItems: 'center' }}><lang.Flag /></span>
+                          <span className="flex w-5 items-center justify-center"><lang.Flag /></span>
                           <span>{lang.label}</span>
                         </button>
                       ))}
@@ -500,37 +316,18 @@ export default function DashboardHeader({
                   )}
 
                   {/* Version info at bottom */}
-                  <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.1)', margin: '4px 0' }} />
+                  <div className={MENU_SEP} />
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation()
                       setVersionExpanded(!versionExpanded)
                     }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                      width: '100%',
-                      padding: '10px 14px',
-                      fontSize: '11px',
-                      fontWeight: 500,
-                      background: 'transparent',
-                      color: 'rgba(255, 255, 255, 0.6)',
-                      border: 'none',
-                      cursor: 'pointer',
-                      textAlign: 'left'
-                    }}
+                    className={cn(MENU_ROW, 'text-stone-500')}
                   >
-                    <span style={{ fontSize: '13px', width: '20px', textAlign: 'center' }}><ClipboardList /></span>
-                    <span style={{ flex: 1 }}>Version {currentVersion}</span>
-                    <span style={{
-                      fontSize: '8px',
-                      transform: versionExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                      transition: 'transform 0.2s'
-                    }}>▼</span>
+                    <span className={MENU_ICON}><ClipboardList size={14} aria-hidden="true" /></span>
+                    <span className="flex-1 tabular-nums">Version {currentVersion}</span>
                   </button>
-
-                  {/* Version history removed */}
                 </div>
               </>
             )}
@@ -539,37 +336,19 @@ export default function DashboardHeader({
       </div>
 
       {/* RIGHT: Fullscreen Button + Custom content */}
-      <div style={{
-        flex: '1 1 0',
-        display: 'flex',
-        justifyContent: 'flex-end',
-        alignItems: 'center',
-        gap: '8px'
-      }}>
+      <div className="flex flex-1 basis-0 items-center justify-end gap-2">
         {rightContent}
 
         {showFullscreen && onToggleFullscreen && (
           <button
+            type="button"
             onClick={onToggleFullscreen}
-            style={{
-              padding: '6px 12px',
-              fontSize: '14px',
-              fontWeight: 600,
-              background: isFullscreen ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255, 255, 255, 0.1)',
-              color: isFullscreen ? '#22c55e' : '#fff',
-              border: isFullscreen ? '1px solid rgba(34, 197, 94, 0.4)' : '1px solid rgba(255, 255, 255, 0.2)',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              height: '28px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              transition: 'all 0.15s'
-            }}
-            title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+            aria-pressed={isFullscreen}
+            className={cn(HEADER_BTN, 'w-9 px-0', isFullscreen && HEADER_BTN_ON)}
+            aria-label={isFullscreen ? t('header.exitFullscreen', 'Exit fullscreen') : t('header.fullscreen', 'Fullscreen')}
+            title={isFullscreen ? t('header.exitFullscreen', 'Exit fullscreen') : t('header.fullscreen', 'Fullscreen')}
           >
-            ⛶
+            <Maximize size={15} aria-hidden="true" />
           </button>
         )}
       </div>

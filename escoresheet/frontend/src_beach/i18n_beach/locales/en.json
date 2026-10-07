@@ -1198,7 +1198,7 @@
   },
   "refereeDashboard": {
     "title": "Referee",
-    "dashboardTitle": "Referee Dashboard",
+    "dashboardTitle": "Referee dashboard",
     "status": "Status",
     "wakeLockOn": "On",
     "wakeLockOff": "Off",
@@ -1218,7 +1218,7 @@
     "connectionPin": "Connection PIN",
     "connecting": "Connecting...",
     "enter": "Enter",
-    "selectGameTitle": "Select Game",
+    "selectGameTitle": "Select game",
     "loadingGames": "Loading games...",
     "noAvailableGames": "No available games.",
     "testMode": "TEST MODE",
@@ -1234,9 +1234,9 @@
       "title": "Connection",
       "auto": "Auto",
       "autoDesc": "DB → Direct fallback",
-      "dbOnly": "DB Only",
+      "dbOnly": "Database only",
       "dbDesc": "OpenVolley Cloud realtime",
-      "directOnly": "Direct Only",
+      "directOnly": "Direct only",
       "directDesc": "WebSocket direct"
     },
     "awaitingCoinToss": "Awaiting Coin Toss",
@@ -1244,7 +1244,7 @@
     "matchHasEnded": "The match has ended",
     "lineupSet": "Line-up set",
     "showLineup": "Show Line-up",
-    "loadGames": "Load Games",
+    "loadGames": "Load games",
     "title1R": "1st Referee",
     "title2R": "2nd Referee",
     "refAbbr": "REF",
@@ -1252,7 +1252,7 @@
     "firstReferee": "1st Referee",
     "secondReferee": "2nd Referee",
     "screenOptions": "Screen",
-    "keepScreenOn": "Keep Screen On",
+    "keepScreenOn": "Keep screen on",
     "exit": "Exit",
     "lastAction": "Last Action",
     "events": {
@@ -1262,7 +1262,8 @@
       "sanction": "Sanction",
       "courtCaptainDesignation": "Court captain",
       "noAction": "—"
-    }
+    },
+    "selected": "Selected"
   },
   "connection": {
     "title": "Connection Setup",

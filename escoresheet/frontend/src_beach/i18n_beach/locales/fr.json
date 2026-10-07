@@ -1197,7 +1197,7 @@
   },
   "refereeDashboard": {
     "title": "Espace Arbitre",
-    "dashboardTitle": "Tableau de bord Arbitre",
+    "dashboardTitle": "Tableau de bord arbitre",
     "status": "Statut",
     "wakeLockOn": "On",
     "wakeLockOff": "Off",
@@ -1261,7 +1261,8 @@
       "sanction": "Sanction",
       "courtCaptainDesignation": "Capitaine de la Cour",
       "noAction": "-"
-    }
+    },
+    "selected": "Sélectionné"
   },
   "connection": {
     "title": "Configuration de connexion",
