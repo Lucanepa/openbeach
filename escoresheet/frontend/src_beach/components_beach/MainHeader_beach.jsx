@@ -4,7 +4,8 @@ import i18n from '../i18n'
 import ConnectionStatus from './ConnectionStatus_beach'
 import TabletStatusIndicator from './TabletStatusIndicator_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
-import { Bell, BookOpen, ChevronDown, ChevronUp, ClipboardList, House, Maximize, Menu, Minimize, SatelliteDish, X, ZoomIn } from 'lucide-react'
+import { Bell, BookOpen, ChevronDown, ChevronUp, ClipboardList, House, Maximize, Menu, Minimize, Power, SatelliteDish, X, ZoomIn } from 'lucide-react'
+import { isDesktopScoretable, requestDesktopQuit } from '../utils_beach/appLifecycle_beach'
 import { cn } from '../ui/volleyui/cn.js'
 import { SwitchTrack } from '../ui/volleyui/Switch.jsx'
 import {
@@ -557,6 +558,28 @@ export default function MainHeader({
     </button>
   )
 
+  // Desktop app: the window's close button hides to the tray (the tablets
+  // stay connected), so quitting is a menu row that asks first
+  // (utils_beach/appLifecycle_beach.js, src-tauri/src/lifecycle.rs).
+  const quitRow = isDesktopScoretable() && (
+    <>
+      <div className={MENU_SEP} />
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          setActionsMenuOpen(false)
+          requestDesktopQuit()
+        }}
+        className={MENU_ROW}
+        data-testid="header-quit-app"
+      >
+        <span className={MENU_ICON}><Power size={15} /></span>
+        <span>{t('appLifecycle.trayQuit', 'Quit OpenBeach…')}</span>
+      </button>
+    </>
+  )
+
   return (
     <div className="no-print" style={{ position: 'relative', zIndex: 1000 }}>
       <div
@@ -808,6 +831,7 @@ export default function MainHeader({
                   {scaleMenuOpen && scaleOptionsList}
                   {homeRow}
                   {guideRow}
+                  {quitRow}
                 </div>
               )}
             </div>
@@ -897,6 +921,7 @@ export default function MainHeader({
                     {versionRow}
                     <div className={MENU_SEP} />
                     {fullscreenRow}
+                    {quitRow}
                   </div>
                 )}
               </div>

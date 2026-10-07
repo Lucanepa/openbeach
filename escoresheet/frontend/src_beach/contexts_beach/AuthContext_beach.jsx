@@ -97,6 +97,11 @@ export function AuthProvider({ children }) {
           setProfile(null)
         }
         setLoading(false)
+        // The desktop app checks for updates on a sign-in (at most every
+        // 15 min, hooks_beach/useDesktopUpdate_beach.js). Once per sign-in.
+        if (event === 'SIGNED_IN' && typeof window !== 'undefined') {
+          try { window.dispatchEvent(new CustomEvent('ov-signed-in')) } catch { /* no window events */ }
+        }
       }
     )
 

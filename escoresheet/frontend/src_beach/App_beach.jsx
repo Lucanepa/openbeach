@@ -42,7 +42,8 @@ import {
 import { apiFrom } from './lib_beach/apiClient_beach'
 import { setExtId } from './utils_beach/syncIds_beach'
 import { isBackendAvailable, getBackendUrl, isServedFromLocalServer, getLocalServerStatusUrl, rememberRelayWsPort } from './utils_beach/backendConfig_beach'
-import { isCapacitorApp } from './utils_beach/appLifecycle_beach'
+import { isCapacitorApp, installAppLifecycle, liveOf, setLiveMatch } from './utils_beach/appLifecycle_beach'
+import DesktopUpdateNotice from './components_beach/DesktopUpdateNotice_beach'
 import { scorerRelay, scorerPublisher, scorerRelayUrl, readRelayBundle, relayMatchKey } from './utils_beach/relayPublisher_beach'
 import { checkMatchSession, lockMatchSession, unlockMatchSession, verifyGamePin } from './utils_beach/sessionManager_beach'
 
@@ -372,6 +373,14 @@ export default function App() {
       return null
     }
   }, [])
+
+  // The desktop app (Tauri): close hides to the tray, quit asks first, the
+  // tray shows tablets and a live match, and the updater starts once the page
+  // has reported (utils_beach/appLifecycle_beach.js). Nothing elsewhere.
+  useEffect(() => installAppLifecycle(), [])
+  useEffect(() => {
+    setLiveMatch(liveOf(activeMatch))
+  }, [activeMatch?.status, activeMatch?.test]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Get current match (most recent match that's not final)
   const currentMatch = useLiveQuery(async () => {
@@ -2320,6 +2329,8 @@ export default function App() {
               ) : !matchId ? (
                 <>
                   <UpdateBanner showClearDataOption={true} />
+                  {/* desktop app: "Update x is ready" (home screen only, never during a match) */}
+                  <DesktopUpdateNotice />
                   <HomePage
                     favicon={openbeachLogo}
                     newMatchMenuOpen={newMatchMenuOpen}
