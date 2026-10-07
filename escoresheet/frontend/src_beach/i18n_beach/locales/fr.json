@@ -718,7 +718,7 @@
     "localMode": "Local",
     "localModeDesc": "Même appareil que le marqueur. Connexion instantanée via le navigateur.",
     "remoteMode": "Distant",
-    "remoteModeDesc": "Appareil différent. Connexion via internet avec OpenVolley Cloud.",
+    "remoteModeDesc": "Un autre appareil. Via le serveur sur place ou OpenVolley Cloud.",
     "selectGame": "Sélectionner un match",
     "selectGameDesc": "Choisir un match en direct à afficher",
     "waiting": "En attente du marqueur...",
@@ -1488,7 +1488,8 @@
       "failedToLoadDataConnection": "Échec du chargement des données. Vérifiez que la eScoresheet principale est en cours."
     },
     "gameShort": "Match",
-    "setsWon": "Sets {{left}}–{{right}}"
+    "setsWon": "Sets {{left}}–{{right}}",
+    "relayUnavailable": "Le serveur sur place ne répond pas"
   },
   "scoresheetApp": {
     "loadingScoresheet": "Chargement de la feuille de match...",

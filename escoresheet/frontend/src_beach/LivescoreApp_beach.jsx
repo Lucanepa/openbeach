@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { supabase } from './lib_beach/supabaseClient_beach'
 import { apiFrom } from './lib_beach/apiClient_beach'
-import { isBackendAvailable } from './utils_beach/backendConfig_beach'
+import { isBackendAvailable, getApiUrl } from './utils_beach/backendConfig_beach'
+import { createRelayLivescoreFeed, fetchRelayLivescoreList, relayLivescoreNow, relayLivescoreWsUrl } from './utils_beach/relayLivescore_beach'
 import UpdateBanner from './components_beach/UpdateBanner_beach'
 import DashboardHeader from './components_beach/DashboardHeader_beach'
 import { Radio, RefreshCw } from 'lucide-react'
@@ -20,7 +21,9 @@ const ballImage = '/beachball.png'
 
 /**
  * Livescore App for Beach Volleyball
- * - Subscribes to match_live_state table via Supabase Realtime
+ * - Subscribes to match_live_state (cloud), or on a venue relay (desktop app,
+ *   venue server, no internet) to the relay's public match summaries
+ *   (utils_beach/relayLivescore_beach: no PIN, never more than the summary)
  * - Shows all live games with scores, TOs, BMP, serving player
  * - Select a game to view fullscreen
  */
@@ -31,6 +34,8 @@ export default function LivescoreApp() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const channelRef = useRef(null)
+  // The venue relay feed (relay mode)
+  const relayFeedRef = useRef(null)
   const [viewportWidth, setViewportWidth] = useState(() => typeof window !== 'undefined' ? window.innerWidth : 400)
   const [viewportHeight, setViewportHeight] = useState(() => typeof window !== 'undefined' ? window.innerHeight : 700)
 
@@ -44,6 +49,10 @@ export default function LivescoreApp() {
   }, [])
 
   const fetchLiveGames = useCallback(async () => {
+    if (relayFeedRef.current) {
+      await relayFeedRef.current.refresh()
+      return
+    }
     if (!isBackendAvailable()) {
       setError(t('errors.supabaseNotConfigured'))
       setLoading(false)
@@ -75,8 +84,35 @@ export default function LivescoreApp() {
   }, [])
 
   useEffect(() => {
+    if (relayLivescoreNow()) {
+      // The relay's list (every 10 s) and one socket for every match's
+      // summary. Rehearsal (test) matches are not shown to spectators.
+      let loaded = false
+      const feed = createRelayLivescoreFeed({
+        listMatches: () => fetchRelayLivescoreList(getApiUrl('/api/match/list?finished=1')),
+        getWsUrl: () => relayLivescoreWsUrl(),
+        onChange: (rows) => setLiveGames(rows.filter(r => !r.test)),
+        onList: ({ ok, error: listError }) => {
+          if (ok) {
+            loaded = true
+            setError(null)
+          } else if (!loaded) {
+            setError(listError || t('livescore.relayUnavailable', 'The venue server does not answer'))
+          }
+          setLoading(false)
+        }
+      })
+      relayFeedRef.current = feed
+      feed.start()
+      return () => {
+        feed.stop()
+        if (relayFeedRef.current === feed) relayFeedRef.current = null
+      }
+    }
+
     fetchLiveGames()
 
+    if (!supabase) return undefined
     const channel = supabase
       .channel('livescore-all-games')
       .on(

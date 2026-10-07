@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { supabase } from './lib_beach/supabaseClient_beach'
 import { apiFrom } from './lib_beach/apiClient_beach'
-import { isBackendAvailable } from './utils_beach/backendConfig_beach'
+import { isBackendAvailable, getApiUrl } from './utils_beach/backendConfig_beach'
+import { createRelayLivescoreFeed, fetchRelayLivescoreList, relayLivescoreNow, relayLivescoreWsUrl } from './utils_beach/relayLivescore_beach'
 import { ArrowLeft, ChevronRight, Globe, Monitor, Radio } from 'lucide-react'
 import { cn } from './ui/volleyui/cn.js'
 import { FOCUS_RING, Button } from './ui/volleyui/Button.jsx'
@@ -55,7 +56,9 @@ function normalizeState(raw) {
 /**
  * Arena Scoreboard App for Beach Volleyball
  * - Local mode: receives data from scorer via BroadcastChannel (same device)
- * - Remote mode: subscribes to match_live_state via Supabase Realtime (different device)
+ * - Remote mode: subscribes to match_live_state (cloud, different device), or
+ *   on a venue relay (desktop app, venue server, no internet) to the relay's
+ *   public match summaries (utils_beach/relayLivescore_beach)
  */
 export default function ScoreboardApp() {
   const { t } = useTranslation()
@@ -66,6 +69,10 @@ export default function ScoreboardApp() {
   const [availableGames, setAvailableGames] = useState([])
   const [loadingGames, setLoadingGames] = useState(false)
   const channelRef = useRef(null)
+  // Remote mode on a venue relay: the relay feed (list + every match's summary)
+  const [relayMode] = useState(() => relayLivescoreNow())
+  const selectedRef = useRef(null)
+  selectedRef.current = selectedMatchId
 
   // Check URL params for auto-connect (opened from scorer menu)
   useEffect(() => {
@@ -105,9 +112,42 @@ export default function ScoreboardApp() {
     return () => channel.close()
   }, [connectionMode])
 
+  // Remote mode on a venue relay: the games and the shown game's state come
+  // from the relay feed
+  useEffect(() => {
+    if (connectionMode !== 'remote' || !relayMode) return undefined
+    setLoadingGames(true)
+    const feed = createRelayLivescoreFeed({
+      listMatches: () => fetchRelayLivescoreList(getApiUrl('/api/match/list?finished=1')),
+      getWsUrl: () => relayLivescoreWsUrl(),
+      onChange: (rows) => {
+        setAvailableGames(rows)
+        const shown = selectedRef.current && rows.find(r => r.match_id === selectedRef.current)
+        if (shown) {
+          setGameState(shown)
+          setConnectionStatus('connected')
+        }
+      },
+      onList: () => setLoadingGames(false),
+      onLive: (on) => { if (selectedRef.current) setConnectionStatus(on ? 'connected' : 'waiting') }
+    })
+    feed.start()
+    return () => feed.stop()
+  }, [connectionMode, relayMode])
+
+  // The game picked from the relay list shows at once
+  useEffect(() => {
+    if (!relayMode || !selectedMatchId) return
+    const shown = availableGames.find(g => g.match_id === selectedMatchId)
+    if (shown) {
+      setGameState(shown)
+      setConnectionStatus('connected')
+    }
+  }, [relayMode, selectedMatchId, availableGames])
+
   // Remote mode: fetch available games
   const fetchGames = useCallback(async () => {
-    if (!isBackendAvailable()) return
+    if (relayMode || !isBackendAvailable()) return
     setLoadingGames(true)
     try {
       // Beach rows only: the live-state table is shared with indoor
@@ -122,7 +162,7 @@ export default function ScoreboardApp() {
     } finally {
       setLoadingGames(false)
     }
-  }, [])
+  }, [relayMode])
 
   useEffect(() => {
     if (connectionMode === 'remote' && !selectedMatchId) {
@@ -132,7 +172,7 @@ export default function ScoreboardApp() {
 
   // Remote mode: subscribe to selected match
   useEffect(() => {
-    if (connectionMode !== 'remote' || !selectedMatchId || !isBackendAvailable() || !supabase) return
+    if (relayMode || connectionMode !== 'remote' || !selectedMatchId || !isBackendAvailable() || !supabase) return
 
     setConnectionStatus('waiting')
 
@@ -170,7 +210,7 @@ export default function ScoreboardApp() {
         supabase.removeChannel(channelRef.current)
       }
     }
-  }, [connectionMode, selectedMatchId])
+  }, [connectionMode, selectedMatchId, relayMode])
 
   const normalized = normalizeState(gameState)
 
@@ -216,7 +256,7 @@ export default function ScoreboardApp() {
       <EntryCard width="md" title={t('scoreboard.title', 'Scoreboard')} subtitle={t('scoreboard.setup', 'Choose how to connect to the match')}>
         <div className="flex flex-col gap-3 sm:flex-row">
           {modeCard('local', Monitor, t('scoreboard.localMode', 'Local'), t('scoreboard.localModeDesc', 'Same device as the scorer. Connect instantly via browser.'))}
-          {modeCard('remote', Globe, t('scoreboard.remoteMode', 'Remote'), t('scoreboard.remoteModeDesc', 'Different device. Connect via internet using Supabase.'))}
+          {modeCard('remote', Globe, t('scoreboard.remoteMode', 'Remote'), t('scoreboard.remoteModeDesc', 'Another device. Through the venue server or OpenVolley Cloud.'))}
         </div>
       </EntryCard>
     )

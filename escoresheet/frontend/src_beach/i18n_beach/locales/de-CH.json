@@ -718,7 +718,7 @@
     "localMode": "Lokal",
     "localModeDesc": "Gliichs Grät wie de Schriber. Sofortigi Verbindig über Browser.",
     "remoteMode": "Fernzuegriff",
-    "remoteModeDesc": "Anders Grät. Verbindig über Internet mit OpenVolley Cloud.",
+    "remoteModeDesc": "Anders Grät. Über de Server vor Ort oder d OpenVolley Cloud.",
     "selectGame": "Spiil uswähle",
     "selectGameDesc": "Wähled Sie es Live-Spiil zum Aazeige",
     "waiting": "Warte uf de Schriber...",
@@ -1488,7 +1488,8 @@
       "failedToLoadDataConnection": "Date händ nöd chönne glade werde. Stelled Sie sicher, dass de HaupteScoresheet lauft."
     },
     "gameShort": "Spiil",
-    "setsWon": "Sätz {{left}}–{{right}}"
+    "setsWon": "Sätz {{left}}–{{right}}",
+    "relayUnavailable": "De Server vor Ort git kei Antwort"
   },
   "scoresheetApp": {
     "loadingScoresheet": "Spiilprotokoll wird glade...",

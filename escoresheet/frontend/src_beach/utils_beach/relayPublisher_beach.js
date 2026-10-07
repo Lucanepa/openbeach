@@ -131,6 +131,16 @@ export function publicWireMatch(match) {
 }
 
 /**
+ * A set in the relay's names: the score also as homePoints / awayPoints
+ * (team1 / team2), the only score fields a relay keeps in the public summary
+ * the livescore and the display read without a PIN.
+ */
+export function toWireSet(set) {
+  if (!set || typeof set !== 'object') return set
+  return { ...set, homePoints: set.team1Points ?? 0, awayPoints: set.team2Points ?? 0 }
+}
+
+/**
  * The bundle of a sync in the relay's names: home = team1, away = team2.
  * @param {{ match: object, team1Team?: object|null, team2Team?: object|null,
  *   team1Players?: object[], team2Players?: object[], sets?: object[], events?: object[] }} local
@@ -143,7 +153,7 @@ export function toWireBundle({ match, team1Team = null, team2Team = null, team1P
     awayTeam: team2Team || null,
     homePlayers: Array.isArray(team1Players) ? team1Players : [],
     awayPlayers: Array.isArray(team2Players) ? team2Players : [],
-    sets: Array.isArray(sets) ? sets : [],
+    sets: Array.isArray(sets) ? sets.map(toWireSet) : [],
     events: Array.isArray(events) ? events : []
   }
 }

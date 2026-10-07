@@ -719,7 +719,7 @@
     "localMode": "Local",
     "localModeDesc": "Same device as the scorer. Connect instantly via browser.",
     "remoteMode": "Remote",
-    "remoteModeDesc": "Different device. Connect via internet using OpenVolley cloud.",
+    "remoteModeDesc": "Another device. Through the venue server or OpenVolley Cloud.",
     "selectGame": "Select a game",
     "selectGameDesc": "Choose a live match to display",
     "waiting": "Waiting for scorer...",
@@ -1489,7 +1489,8 @@
       "failedToLoadDataConnection": "Failed to load match data. Make sure the main scoresheet is running."
     },
     "gameShort": "Game",
-    "setsWon": "Sets {{left}}–{{right}}"
+    "setsWon": "Sets {{left}}–{{right}}",
+    "relayUnavailable": "The venue server does not answer"
   },
   "scoresheetApp": {
     "loadingScoresheet": "Loading scoresheet...",

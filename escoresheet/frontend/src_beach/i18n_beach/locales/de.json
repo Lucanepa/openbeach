@@ -718,7 +718,7 @@
     "localMode": "Lokal",
     "localModeDesc": "Gleiches Gerät wie der Schreiber. Sofortige Verbindung über Browser.",
     "remoteMode": "Fernzugriff",
-    "remoteModeDesc": "Anderes Gerät. Verbindung über Internet mit OpenVolley Cloud.",
+    "remoteModeDesc": "Anderes Gerät. Über den Server vor Ort oder die OpenVolley Cloud.",
     "selectGame": "Spiel auswählen",
     "selectGameDesc": "Wählen Sie ein Live-Spiel zum Anzeigen",
     "waiting": "Warte auf den Schreiber...",
@@ -1488,7 +1488,8 @@
       "failedToLoadDataConnection": "Daten konnten nicht geladen werden. Stellen Sie sicher, dass der Haupt-eMatchblatt läuft."
     },
     "gameShort": "Spiel",
-    "setsWon": "Sätze {{left}}–{{right}}"
+    "setsWon": "Sätze {{left}}–{{right}}",
+    "relayUnavailable": "Der Server vor Ort antwortet nicht"
   },
   "scoresheetApp": {
     "loadingScoresheet": "Spielprotokoll wird geladen...",
