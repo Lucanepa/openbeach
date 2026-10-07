@@ -67,7 +67,7 @@ beforeEach(async () => {
 
 async function openTeam1View() {
   render(<MatchSetup onStart={() => {}} onReturn={() => {}} onOpenOptions={() => {}} onOpenCoinToss={() => {}} />)
-  const edit = await screen.findAllByRole('button', { name: 'Edit Roster' })
+  const edit = await screen.findAllByRole('button', { name: 'Edit roster' })
   await act(async () => { fireEvent.click(edit[0]) })
   await screen.findByText('Roster')
 }

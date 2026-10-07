@@ -97,10 +97,11 @@
     "firstName": "Prénom",
     "dateOfBirth": "Date de naissance",
     "enterNames": "Veuillez entrer le nom et le prénom",
-    "deleteRoster": "Supprimer effectif",
-    "loadTestRoster": "Charger effectif TEST",
-    "confirmLoadTestRoster": "Charger effectif test?",
-    "confirmLoadTestRosterMessage": "Ceci remplacera l'effectif actuel par des données de test ({{team}})."
+    "deleteRoster": "Supprimer l'effectif",
+    "loadTestRoster": "Charger l'effectif test",
+    "confirmLoadTestRoster": "Charger l'effectif test ?",
+    "confirmLoadTestRosterMessage": "Ceci remplacera l'effectif actuel par des données de test ({{team}}).",
+    "autoName": "Auto"
   },
   "validation": {
     "team1NotSet": "Team 1 name is not set",
@@ -377,7 +378,8 @@
       "complete": "Complet",
       "readyToConfirm": "Prêt à confirmer",
       "incomplete": "Incomplet"
-    }
+    },
+    "selectCountry": "Choisir le pays"
   },
   "scoreboard": {
     "set": "Set",
@@ -1966,5 +1968,9 @@
   "updateBanner": {
     "later": "Plus tard",
     "newVersion": "nouvelle version"
+  },
+  "countrySelect": {
+    "search": "Rechercher un pays",
+    "noResults": "Aucun pays trouvé"
   }
 }

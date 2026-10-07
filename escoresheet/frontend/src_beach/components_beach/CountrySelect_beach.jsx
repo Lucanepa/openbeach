@@ -1,4 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
+import { ChevronDown, Search } from 'lucide-react'
+import { MENU_PANEL, MENU_SUBROW } from './chromeClasses_beach'
+import { FOCUS_RING } from '../ui/volleyui/Button.jsx'
+import { cn } from '../ui/volleyui/cn.js'
 import countries from 'i18n-iso-countries'
 import enLocale from 'i18n-iso-countries/langs/en.json'
 
@@ -6,6 +11,7 @@ import enLocale from 'i18n-iso-countries/langs/en.json'
 countries.registerLocale(enLocale)
 
 export default function CountrySelect({ value, onChange, placeholder = "Select Country", fontSize = '14px', triggerStyle = {} }) {
+    const { t } = useTranslation()
     const [isOpen, setIsOpen] = useState(false)
     const [search, setSearch] = useState('')
     const wrapperRef = useRef(null)
@@ -63,106 +69,69 @@ export default function CountrySelect({ value, onChange, placeholder = "Select C
         }
     }, [isOpen])
 
+    // volleyui: the trigger is a white h-11 select face, the list a white
+    // anchored panel with a search field and kit rows. Same open / pick /
+    // outside-press behaviour. `.ov-kit` scopes the kit preflight to it.
     return (
-        <div className="country-select" ref={wrapperRef} style={{ position: 'relative', minWidth: '120px' }}>
-            <div
-                className="country-select-trigger"
+        <div className="country-select ov-kit relative inline-block min-w-[120px]" ref={wrapperRef}>
+            <button
+                type="button"
+                className={cn('country-select-trigger inline-flex min-h-11 w-full items-center gap-2 rounded-xl border border-stone-200 bg-white px-3 text-stone-800 hover:bg-stone-50 transition-colors cursor-pointer', FOCUS_RING)}
                 onClick={() => setIsOpen(!isOpen)}
-                style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '4px 8px',
-                    background: 'rgba(255, 255, 255, 0.1)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    minHeight: '28px',
-                    fontSize,
-                    boxSizing: 'border-box',
-                    ...triggerStyle
-                }}
+                aria-haspopup="listbox"
+                aria-expanded={isOpen}
+                style={{ fontSize, ...triggerStyle }}
             >
                 {selectedCountry ? (
                     <>
                         <span className={`fi fi-${selectedCountry.iso2}`} style={{ borderRadius: '2px' }}></span>
-                        <span style={{ fontWeight: 600 }}>{selectedCountry.iso3}</span>
+                        <span className="font-semibold">{selectedCountry.iso3}</span>
                     </>
                 ) : (
-                    <span style={{ color: 'rgba(255, 255, 255, 0.5)' }}>{placeholder}</span>
+                    <span className="text-stone-400">{placeholder}</span>
                 )}
-                <span style={{ marginLeft: 'auto', fontSize: '10px', opacity: 0.7 }}>▼</span>
-            </div>
+                <ChevronDown size={16} className={cn('ml-auto shrink-0 text-stone-400 transition-transform', isOpen && 'rotate-180')} aria-hidden="true" />
+            </button>
 
             {isOpen && (
-                <div className="country-dropdown" style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    right: 0, // Expand to at least width of container
-                    width: 'max-content', // Allow to be wider if needed
-                    minWidth: '100%',
-                    maxWidth: '300px',
-                    background: '#1f2937',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '4px',
-                    marginTop: '4px',
-                    zIndex: 1000,
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-                    maxHeight: '300px',
-                    display: 'flex',
-                    flexDirection: 'column'
-                }}>
-                    <div style={{ padding: '8px', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                <div className={cn('country-dropdown absolute left-0 top-full z-[1000] mt-1 flex max-h-[300px] w-max min-w-full max-w-[300px] flex-col p-1.5', MENU_PANEL)}>
+                    <div className="relative mb-1.5">
+                        <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" aria-hidden="true" />
                         <input
                             ref={inputRef}
                             type="text"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Search country..."
-                            style={{
-                                width: '100%',
-                                padding: '6px 8px',
-                                background: 'rgba(0, 0, 0, 0.2)',
-                                border: '1px solid rgba(255, 255, 255, 0.1)',
-                                borderRadius: '4px',
-                                color: 'white',
-                                fontSize: '14px'
-                            }}
+                            placeholder={t('countrySelect.search', 'Search country')}
+                            aria-label={t('countrySelect.search', 'Search country')}
+                            className="h-11 w-full rounded-xl border border-stone-200 bg-white pl-9 pr-3 text-base text-stone-800 placeholder:text-stone-400 focus:border-red-700/40 focus:outline-none focus:ring-2 focus:ring-red-700/20"
                             onClick={(e) => e.stopPropagation()}
                         />
                     </div>
-                    <div style={{ overflowY: 'auto', flex: 1 }}>
+                    <div className="flex-1 overflow-y-auto" role="listbox">
                         {filteredCountries.length > 0 ? (
                             filteredCountries.map(country => (
-                                <div
+                                <button
+                                    type="button"
+                                    role="option"
+                                    aria-selected={country.iso3 === value}
                                     key={country.iso3}
                                     onClick={() => {
                                         onChange(country.iso3)
                                         setIsOpen(false)
                                         setSearch('')
                                     }}
-                                    style={{
-                                        padding: '6px 12px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '10px',
-                                        cursor: 'pointer',
-                                        transition: 'background 0.1s',
-                                        fontSize: '13px'
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'}
-                                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                    className={MENU_SUBROW}
                                 >
                                     <span className={`fi fi-${country.iso2}`} style={{ fontSize: '1.2em', borderRadius: '2px' }}></span>
-                                    <span style={{ flex: 1 }}>{country.name}</span>
-                                    <span style={{ opacity: 0.5, fontSize: '0.9em' }}>[{country.iso3}]</span>
-                                </div>
+                                    <span className="flex-1">{country.name}</span>
+                                    <span className="text-xs tabular-nums text-stone-500">{country.iso3}</span>
+                                </button>
                             ))
                         ) : (
-                            <div style={{ padding: '12px', textAlign: 'center', opacity: 0.5, fontSize: '13px' }}>
-                                No countries found
-                            </div>
+                            <p className="px-3 py-3 text-center text-sm text-stone-500">
+                                {t('countrySelect.noResults', 'No countries found')}
+                            </p>
                         )}
                     </div>
                 </div>

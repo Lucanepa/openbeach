@@ -98,9 +98,10 @@
     "dateOfBirth": "Geburtsdatum",
     "enterNames": "Bitte Nachname und Vorname eingeben",
     "deleteRoster": "Kader löschen",
-    "loadTestRoster": "TEST Kader laden",
-    "confirmLoadTestRoster": "Test Kader laden?",
-    "confirmLoadTestRosterMessage": "Dies ersetzt das aktuelle Kader mit Testdaten ({{team}})."
+    "loadTestRoster": "Testkader laden",
+    "confirmLoadTestRoster": "Testkader laden?",
+    "confirmLoadTestRosterMessage": "Dies ersetzt das aktuelle Kader mit Testdaten ({{team}}).",
+    "autoName": "Automatisch"
   },
   "validation": {
     "team1NotSet": "Team 1 name is not set",
@@ -377,7 +378,8 @@
       "complete": "Vollständig",
       "readyToConfirm": "Bereit zum Bestätigen",
       "incomplete": "Unvollständig"
-    }
+    },
+    "selectCountry": "Land wählen"
   },
   "scoreboard": {
     "set": "Satz",
@@ -1966,5 +1968,9 @@
   "updateBanner": {
     "later": "Später",
     "newVersion": "neue Version"
+  },
+  "countrySelect": {
+    "search": "Land suchen",
+    "noResults": "Kein Land gefunden"
   }
 }

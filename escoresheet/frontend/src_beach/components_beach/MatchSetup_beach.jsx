@@ -61,6 +61,11 @@ const DIALOG_LAYER = { position: 'relative', zIndex: 1000 }
 // kept from the legacy green), a quiet outline otherwise.
 const CAPTAIN_ON = 'border-emerald-600 bg-emerald-50 text-emerald-700'
 const CAPTAIN_OFF = 'border-stone-300 bg-white text-stone-400 hover:bg-stone-50'
+// One roster row: number toggles, last / first name, (date of birth), C,
+// Clear. On a phone the row stacks: numbers, C and Clear on top, one field
+// per line under them (the fields carry their names as placeholders).
+const ROSTER_GRID = 'grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:grid-cols-[96px_minmax(0,1fr)_minmax(0,1fr)_44px_auto]'
+const ROSTER_GRID_DOB = 'sm:grid-cols-[96px_minmax(0,1fr)_minmax(0,1fr)_170px_44px_auto]'
 
 // Date formatting helpers (outside component to avoid recreation)
 function formatDateToDDMMYYYY(dateStr) {
@@ -2861,6 +2866,87 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     </div>
   )
 
+  // Roster preview of an uploaded roster (kit content dialog, svrz table).
+  const renderRosterPreview = () => rosterPreview && (
+    <div className="ov-kit" style={DIALOG_LAYER}>
+      <KitModal
+        open
+        size="lg"
+        layout="sections"
+        dismissible={false}
+        onClose={() => setRosterPreview(null)}
+        closeLabel={t('common.close')}
+        title={t('matchSetup.rosterPreviewTitle')}
+        footer={(
+          <button type="button" onClick={() => setRosterPreview(null)} className={modalPrimaryClass}>
+            {t('common.close')}
+          </button>
+        )}
+      >
+        {(() => {
+          const roster = rosterPreview === 'team1' ? match?.pendingTeam1Roster : match?.pendingTeam2Roster
+          if (!roster) return <p className="text-sm text-stone-500">{t('matchSetup.noRosterFound')}</p>
+          return (
+            <>
+              <SectionHeader title={t('matchSetup.playersCount')} count={roster.players?.length || 0} />
+              <div className="overflow-x-auto rounded-lg border border-stone-200">
+                <table className="w-full border-collapse text-sm">
+                  <thead className="bg-stone-50 text-[11px] font-bold uppercase tracking-wide text-stone-500">
+                    <tr>
+                      <th className="px-3 py-2 text-left">#</th>
+                      <th className="px-3 py-2 text-left">{t('rosterSetup.lastName')}</th>
+                      <th className="px-3 py-2 text-left">{t('rosterSetup.firstName')}</th>
+                      <th className="px-3 py-2 text-center">C</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100 text-stone-800">
+                    {(roster.players || []).map((p, i) => (
+                      <tr key={i}>
+                        <td className="px-3 py-1.5 tabular-nums">{p.number}</td>
+                        <td className="px-3 py-1.5">{p.lastName || ''}</td>
+                        <td className="px-3 py-1.5">{p.firstName || ''}</td>
+                        <td className="px-3 py-1.5 text-center">{p.isCaptain ? 'C' : ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )
+        })()}
+      </KitModal>
+    </div>
+  )
+
+  // "Load test roster?" (kit decision dialog: Cancel left, dark Load right).
+  const renderTestRosterConfirm = (teamName, onLoad) => (
+    <div className="ov-kit" style={DIALOG_LAYER}>
+      <KitModal
+        open
+        decision
+        size="sm"
+        dismissible={false}
+        onClose={() => setTestRosterConfirm(null)}
+        closeLabel={t('common.close')}
+        title={t('roster.confirmLoadTestRoster')}
+        footer={(
+          <>
+            <button type="button" onClick={() => setTestRosterConfirm(null)} className={modalCancelClass}>
+              {t('common.cancel')}
+            </button>
+            <button type="button" onClick={onLoad} className={modalPrimaryClass}>
+              {t('roster.loadTestRoster')}
+            </button>
+          </>
+        )}
+      >
+        <p className="text-sm text-stone-600">
+          {t('roster.confirmLoadTestRosterMessage', { team: teamName })}
+        </p>
+      </KitModal>
+    </div>
+  )
+
   const savedTeamsModals = (
     <>
       <SavedTeamPickerModal
@@ -3408,192 +3494,122 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   if (currentView === 'team1') {
     return (
       <MatchSetupTeam1View kitScale={kitScale}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <button className="secondary" onClick={() => { restoreTeam1(); setCurrentView('main') }}>← {t('common.back')}</button>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+        <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-3">
+          <div>
+            <Button variant="ghost" size="xl" icon={ArrowLeft} className="bg-white" onClick={() => { restoreTeam1(); setCurrentView('main') }}>{t('common.back')}</Button>
+          </div>
+          <div className="flex min-w-0 flex-col items-center gap-1.5">
             <input
               type="text"
               spellCheck={false}
               autoCorrect="off"
               autoCapitalize="off"
+              aria-label={t('matchSetup.teamName')}
               value={team1Name || getTeamDisplayName(team1Roster, 'team1', team1Country)}
               onChange={e => setTeam1Name(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
-              style={{
-                fontSize: '20px', fontWeight: 700, color: 'var(--text)', padding: '10px',
-                border: '0.5px solid white', borderRadius: '10px', background: 'rgba(255, 255, 255, 0.1)',
-                outline: 'none', textAlign: 'center', minWidth: '100px',
-                maxWidth: '500px', width: 'auto'
-              }}
+              className="h-12 w-auto min-w-[100px] max-w-full rounded-xl border border-stone-200 bg-white px-3 text-center text-xl font-bold tracking-tight text-stone-900 sm:max-w-[500px] focus:border-red-700/40 focus:outline-none focus:ring-2 focus:ring-red-700/20"
               size={Math.max(10, (team1Name || getTeamDisplayName(team1Roster, 'team1', team1Country)).length)}
             />
             {team1Name && team1Name !== getTeamDisplayName(team1Roster, 'team1', team1Country) && (
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <button
-                  type="button"
-                  onClick={() => setTeam1Name(getTeamDisplayName(team1Roster, 'team1', team1Country))}
-                  style={{
-                    padding: '4px 10px', fontSize: '11px', fontWeight: 600,
-                    background: 'transparent', color: 'var(--muted)',
-                    border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px',
-                    cursor: 'pointer', whiteSpace: 'nowrap'
-                  }}
-                >
-                  ↺ Auto
-                </button>
-              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={RotateCcw}
+                className="bg-white"
+                onClick={() => setTeam1Name(getTeamDisplayName(team1Roster, 'team1', team1Country))}
+              >
+                {t('roster.autoName', 'Auto')}
+              </Button>
             )}
           </div>
-          <div style={{ width: 80 }}></div>
+          <div />
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
-          <h1 style={{ margin: 0 }}>{t('roster.title')}</h1>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="m-0 text-xl font-bold tracking-tight text-stone-900 sm:text-2xl">{t('roster.title')}</h2>
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {renderSavedTeamControl('team1')}
-            <button
+            <Button
+              variant="danger-soft"
+              size="xl"
               onClick={() => {
                 setTeam1Roster([
                   { number: 1, firstName: '', lastName: '', dob: '', isCaptain: false },
                   { number: 2, firstName: '', lastName: '', dob: '', isCaptain: false }
                 ])
               }}
-              style={{
-                padding: '6px 12px',
-                fontSize: '12px',
-                fontWeight: 600,
-                background: '#dc2626',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer'
-              }}
             >
               {t('roster.deleteRoster')}
-            </button>
-            <button
-              onClick={() => setTestRosterConfirm('team1')}
-              style={{
-                padding: '6px 12px',
-                fontSize: '12px',
-                fontWeight: 600,
-                background: '#000',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer'
-              }}
-            >
+            </Button>
+            <Button variant="dark" size="xl" onClick={() => setTestRosterConfirm('team1')}>
               {t('roster.loadTestRoster')}
-            </button>
+            </Button>
           </div>
         </div>
         {renderSuggestionStrip('team1')}
-        {/* Player Stats for Team 1 Team */}
-        <div style={{ marginBottom: '12px', display: 'flex', gap: '12px' }}>
-          {/* Player Stats */}
-          {(() => {
-            const team1CaptainForm = team1Roster.find(p => p.isCaptain)
-            const team1HasError = !team1CaptainForm || team1Roster.length !== 2 || !team1Country
-            return (
-              <div style={{
-                border: team1HasError ? '1px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.2)',
-                borderRadius: '8px',
-                padding: '12px',
-                background: team1HasError ? 'rgba(239, 68, 68, 0.15)' : 'rgba(15, 23, 42, 0.2)',
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '16px'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '21px', fontWeight: 600, color: !team1CaptainForm ? '#ef4444' : 'rgba(255, 255, 255, 0.7)' }}>{t('matchSetup.captain')}:</span>
-                  {team1CaptainForm ? (
-                    <span style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: '42px',
-                      height: '42px',
-                      borderRadius: '50%',
-                      border: '2px solid #22c55e',
-                      fontSize: '21px',
-                      fontWeight: 700,
-                      color: '#22c55e'
-                    }}>{team1CaptainForm.number || '?'}</span>
-                  ) : (
-                    <span style={{ fontSize: '21px', fontStyle: 'italic', color: '#ef4444' }}>—</span>
-                  )}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '21px', fontWeight: 600, color: !team1Country ? '#ef4444' : 'rgba(255, 255, 255, 0.7)' }}>{t('matchSetup.country')}:</span>
-                  <CountrySelect
-                    value={team1Country}
-                    onChange={setTeam1Country}
-                    placeholder={t('matchSetup.selectCountry')}
-                    fontSize="21px"
-                  />
-                </div>
+        {/* Captain and country of the team (red notice while one is missing) */}
+        {(() => {
+          const team1CaptainForm = team1Roster.find(p => p.isCaptain)
+          const team1HasError = !team1CaptainForm || team1Roster.length !== 2 || !team1Country
+          return (
+            <div className={cn(
+              'flex flex-wrap items-center justify-center gap-x-8 gap-y-3 rounded-xl border p-3',
+              team1HasError ? 'border-red-100 bg-red-50' : 'border-stone-200/70 bg-stone-50/60'
+            )}>
+              <div className="flex items-center gap-2">
+                <span className={cn('text-base font-semibold', !team1CaptainForm ? 'text-red-700' : 'text-stone-700')}>{t('matchSetup.captain')}</span>
+                {team1CaptainForm ? (
+                  <span className="inline-flex h-11 w-11 items-center justify-center rounded-full border-2 border-emerald-600 bg-white text-xl font-bold tabular-nums text-emerald-700">
+                    {team1CaptainForm.number || '?'}
+                  </span>
+                ) : (
+                  <span className="text-xl font-semibold text-red-700" aria-label={t('matchSetup.notSet')}>—</span>
+                )}
               </div>
-            )
-          })()}
-        </div>
+              <div className="flex items-center gap-2">
+                <span className={cn('text-base font-semibold', !team1Country ? 'text-red-700' : 'text-stone-700')}>{t('matchSetup.country')}</span>
+                <CountrySelect
+                  value={team1Country}
+                  onChange={setTeam1Country}
+                  placeholder={t('matchSetup.selectCountry')}
+                  fontSize="18px"
+                />
+              </div>
+            </div>
+          )
+        })()}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {/* Roster Header Row */}
-          <div className="row" style={{ alignItems: 'center', fontWeight: 600, fontSize: '16px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: 6, padding: '8px 8px', border: '2px solid transparent' }}>
-            <div className="w-num" style={{ textAlign: 'center' }}>#</div>
-            <div className="w-name">{t('matchSetup.lastName')}</div>
-            <div className="w-name">{t('matchSetup.firstName')}</div>
-            {manageDob && <div className="w-dob">{t('matchSetup.dateOfBirth')}</div>}
-            <div className="w-captain">C</div>
-            <div className="w-actions"></div>
+        <div className="rounded-lg border border-stone-200 bg-white">
+          {/* Roster Header Row (landscape; on a phone each row stacks and the fields carry placeholders) */}
+          <div className={cn(ROSTER_GRID, manageDob && ROSTER_GRID_DOB, 'hidden rounded-t-[7px] border-b border-stone-200 bg-stone-50 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-stone-500 sm:grid')}>
+            <div className="text-center">#</div>
+            <div>{t('matchSetup.lastName')}</div>
+            <div>{t('matchSetup.firstName')}</div>
+            {manageDob && <div>{t('matchSetup.dateOfBirth')}</div>}
+            <div className="text-center" title={t('matchSetup.captain')}>C</div>
+            <div />
           </div>
+          <div className="divide-y divide-stone-100">
           {team1Roster.map((p, i) => {
-            // Determine border style based on captain status
+            // Captain row: the emerald outline (the captain marker)
             const isCaptain = p.isCaptain || false
-            // Base style for all rows (transparent border for alignment)
-            let borderStyle = {
-              borderRadius: '6px',
-              padding: '6px 8px',
-              border: '2px solid transparent'
-            }
-            if (isCaptain) {
-              // Captain: green border
-              borderStyle = {
-                border: '2px solid #22c55e',
-                borderRadius: '6px',
-                padding: '6px 8px',
-                background: 'rgba(34, 197, 94, 0.1)'
-              }
-            }
 
             return (
-              <div key={`h-${i}`} className="row" style={{ alignItems: 'center', ...borderStyle }}>
-                {/* Replaced input with Toggle Buttons [1] [2] */}
-                <div className="w-num" style={{ display: 'flex', gap: '4px' }}>
+              <div key={`h-${i}`} className={cn(ROSTER_GRID, manageDob && ROSTER_GRID_DOB, 'px-3 py-2.5', isCaptain && 'bg-emerald-50/60 ring-2 ring-inset ring-emerald-600', i === team1Roster.length - 1 && 'rounded-b-[7px]')}>
+                {/* Shirt number: 1 or 2 (the other player takes the other number) */}
+                <div className="order-1 flex gap-1 sm:order-none" role="group" aria-label={t('roster.numberLabel')}>
                   {[1, 2].map(num => {
                     const isSelected = p.number === num
                     return (
                       <button
                         key={num}
                         type="button"
-                        className={isSelected ? 'toggle-num selected' : 'toggle-num'}
-                        style={{
-                          padding: '0',
-                          flex: 1,
-                          height: '32px',
-                          fontSize: '16px',
-                          fontWeight: 'bold',
-                          borderRadius: '4px',
-                          border: isSelected ? '1px solid #22c55e' : '1px solid rgba(255,255,255,0.2)',
-                          background: isSelected ? 'rgba(34, 197, 94, 0.2)' : 'transparent',
-                          color: isSelected ? '#22c55e' : 'white',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}
+                        aria-pressed={isSelected}
+                        className={cn(
+                          'toggle-num inline-flex h-11 w-11 items-center justify-center rounded-lg border text-base font-bold tabular-nums transition-colors',
+                          isSelected ? 'selected border-slate-900 bg-slate-900 text-white' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50',
+                          FOCUS_RING
+                        )}
                         onClick={() => {
                           setTeam1Roster(prev => {
                             const newRoster = [...prev]
@@ -3615,8 +3631,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     )
                   })}
                 </div>
-                <input
-                  className="w-name capitalize"
+                <Input
+                  size="lg"
+                  className="order-4 col-span-full capitalize sm:order-none sm:col-span-1"
+                  aria-label={t('matchSetup.lastName')}
                   placeholder={t('matchSetup.lastName')}
                   value={p.lastName || ''}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
@@ -3626,8 +3644,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     setTeam1Roster(updated)
                   }}
                 />
-                <input
-                  className="w-name capitalize"
+                <Input
+                  size="lg"
+                  className="order-5 col-span-full capitalize sm:order-none sm:col-span-1"
+                  aria-label={t('matchSetup.firstName')}
                   placeholder={t('matchSetup.firstName')}
                   value={p.firstName || ''}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
@@ -3637,8 +3657,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     setTeam1Roster(updated)
                   }}
                 />
-                {manageDob && <input
-                  className="w-dob"
+                {manageDob && <Input
+                  size="lg"
+                  className="order-6 col-span-full sm:order-none sm:col-span-1"
+                  aria-label={t('matchSetup.dateOfBirth')}
                   placeholder={t('matchSetup.dateOfBirthPlaceholder')}
                   type="date"
                   value={p.dob ? formatDateToISO(p.dob) : ''}
@@ -3649,8 +3671,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     setTeam1Roster(updated)
                   }}
                 />}
-                <div className="w-captain" style={{ display: 'flex', justifyContent: 'center' }}>
-                  <div
+                <div className="order-2 flex justify-end sm:order-none sm:justify-center">
+                  <button
+                    type="button"
+                    data-captain-toggle
+                    aria-pressed={isCaptain}
+                    aria-label={t('matchSetup.captain')}
+                    title={t('matchSetup.captain')}
                     onClick={() => {
                       const updated = team1Roster.map((player, idx) => ({
                         ...player,
@@ -3658,27 +3685,14 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                       }))
                       setTeam1Roster(updated)
                     }}
-                    style={{
-                      width: '30px',
-                      height: '30px',
-                      borderRadius: '4px',
-                      border: (p.isCaptain || false) ? '2px solid #22c55e' : '2px solid rgba(255,255,255,0.3)',
-                      background: (p.isCaptain || false) ? 'rgba(34, 197, 94, 0.15)' : 'transparent',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      fontSize: '16px',
-                      fontWeight: 700,
-                      color: (p.isCaptain || false) ? '#22c55e' : 'rgba(255,255,255,0.3)',
-                      userSelect: 'none'
-                    }}
-                  >C</div>
+                    className={cn('inline-flex h-11 w-11 select-none items-center justify-center rounded-lg border-2 text-base font-bold transition-colors', isCaptain ? CAPTAIN_ON : CAPTAIN_OFF, FOCUS_RING)}
+                  >C</button>
                 </div>
-                <div className="w-actions">
-                  <button
-                    type="button"
-                    className="secondary"
+                <div className="order-3 sm:order-none">
+                  <Button
+                    variant="ghost"
+                    size="xl"
+                    className="bg-white"
                     onClick={() => setTeam1Roster(list => {
                       const updated = [...list]
                       updated[i] = { number: p.number, firstName: '', lastName: '', dob: '', isCaptain: false }
@@ -3686,15 +3700,15 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     })}
                   >
                     {t('common.clear', 'Clear')}
-                  </button>
+                  </Button>
                 </div>
               </div>
             )
           })}
+          </div>
         </div>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16, alignSelf: 'start' }}>
-          <button onClick={async () => {
+        <div className="flex justify-end border-t border-stone-200/70 pt-4">
+          <Button variant="primary" size="xl" className="min-w-40" onClick={async () => {
 
             // Check if any changes were made (skip sync if no changes)
             const hasChanges = hasRosterChanged(
@@ -3889,169 +3903,21 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               checkSyncStatus()
             }
             setCurrentView('main')
-          }}>{t('common.confirm')}</button>
+          }}>{t('common.confirm')}</Button>
         </div>
-        {/* Notice Modal - must be rendered in this view since early return prevents main render */}
-        {
-          noticeModal && (
-            <Modal
-              title={noticeModal.syncing ? t('matchSetup.modals.syncing') : noticeModal.type === 'success' ? t('matchSetup.modals.success') : t('matchSetup.modals.notice')}
-              open={true}
-              onClose={() => !noticeModal.syncing && setNoticeModal(null)}
-              width={400}
-              hideCloseButton={true}
-            >
-              <div style={{ padding: '24px', textAlign: 'center' }}>
-                {noticeModal.syncing && (
-                  <div style={{ fontSize: '48px', marginBottom: '16px', animation: 'spin 1s linear infinite' }}>⟳</div>
-                )}
-                {!noticeModal.syncing && noticeModal.type === 'success' && (
-                  <div style={{ fontSize: '48px', marginBottom: '16px', color: '#22c55e' }}>✓</div>
-                )}
-                {!noticeModal.syncing && noticeModal.type === 'error' && (
-                  <div style={{ fontSize: '48px', marginBottom: '16px', color: '#ef4444' }}>✕</div>
-                )}
-                <p style={{ marginBottom: '24px', fontSize: '16px', color: 'var(--text)', whiteSpace: 'pre-line' }}>
-                  {noticeModal.message}
-                </p>
-                {!noticeModal.syncing && (
-                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                    <button
-                      onClick={() => setNoticeModal(null)}
-                      style={{
-                        padding: '12px 24px',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        background: noticeModal.type === 'success' ? '#22c55e' : noticeModal.type === 'error' ? '#ef4444' : 'var(--accent)',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '8px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      OK
-                    </button>
-                  </div>
-                )}
-              </div>
-            </Modal>
-          )
-        }
+        {renderNoticeModal()}
 
-        {/* Roster Preview Modal */}
-        {
-          rosterPreview && (
-            <Modal
-              title={t('matchSetup.rosterPreviewTitle')}
-              open={true}
-              onClose={() => setRosterPreview(null)}
-              width={600}
-            >
-              <div style={{ padding: '16px', maxHeight: '70vh', overflowY: 'auto' }}>
-                {(() => {
-                  const roster = rosterPreview === 'team1' ? match?.pendingTeam1Roster : match?.pendingTeam2Roster
-                  if (!roster) return <p>{t('matchSetup.noRosterFound')}</p>
-                  return (
-                    <>
-                      <h3 style={{ marginTop: 0, marginBottom: '12px', fontSize: '16px' }}>
-                        {t('matchSetup.playersCount')}: {roster.players?.length || 0}
-                      </h3>
-                      <div style={{ marginBottom: '16px' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                          <thead>
-                            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
-                              <th style={{ padding: '8px', textAlign: 'left' }}>#</th>
-                              <th style={{ padding: '8px', textAlign: 'left' }}>{t('rosterSetup.lastName')}</th>
-                              <th style={{ padding: '8px', textAlign: 'left' }}>{t('rosterSetup.firstName')}</th>
-                              <th style={{ padding: '8px', textAlign: 'center' }}>C</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {(roster.players || []).map((p, i) => (
-                              <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                                <td style={{ padding: '6px 8px' }}>{p.number}</td>
-                                <td style={{ padding: '6px 8px' }}>{p.lastName || ''}</td>
-                                <td style={{ padding: '6px 8px' }}>{p.firstName || ''}</td>
-                                <td style={{ padding: '6px 8px', textAlign: 'center' }}>{p.isCaptain ? 'C' : ''}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                      
-                    </>
-                  )
-                })()}
-                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
-                  <button
-                    onClick={() => setRosterPreview(null)}
-                    style={{
-                      padding: '10px 24px',
-                      fontSize: '14px',
-                      fontWeight: 600,
-                      background: 'var(--accent)',
-                      color: '#000',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {t('common.close')}
-                  </button>
-                </div>
-              </div>
-            </Modal>
-          )
-        }
+        {renderRosterPreview()}
 
         {/* Test Roster Confirmation Modal */}
-        {
-          testRosterConfirm === 'team1' && (
-            <Modal
-              title={t('roster.confirmLoadTestRoster')}
-              open={true}
-              onClose={() => setTestRosterConfirm(null)}
-              width={400}
-            >
-              <div style={{ padding: '20px', textAlign: 'center' }}>
-                <p style={{ marginBottom: '24px', fontSize: '16px', color: 'var(--text)' }}>
-                  {t('roster.confirmLoadTestRosterMessage', { team: TEST_TEAM_1.name })}
-                </p>
-                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                  <button
-                    onClick={() => {
-                      if (!TEST_TEAM_1) return
-                      setTeam1Roster([...TEST_TEAM_1.players])
-                      if (!team1Name || team1Name === 'Team 1') setTeam1Name(TEST_TEAM_1.name)
-                      if (!team1ShortName) setTeam1ShortName(TEST_TEAM_1.shortName)
-                      setTeam1Country(TEST_TEAM_1.country || '')
-                      setTestRosterConfirm(null)
-                    }}
-                    style={{
-                      padding: '12px 24px',
-                      fontSize: '14px',
-                      fontWeight: 600,
-                      background: '#000',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {t('roster.loadTestRoster')}
-                  </button>
-                  <button
-                    onClick={() => setTestRosterConfirm(null)}
-                    className="secondary"
-                    style={{ padding: '12px 24px', fontSize: '14px', fontWeight: 600 }}
-                  >
-                    {t('common.cancel')}
-                  </button>
-                </div>
-              </div>
-            </Modal>
-          )
-        }
+        {testRosterConfirm === 'team1' && renderTestRosterConfirm(TEST_TEAM_1.name, () => {
+          if (!TEST_TEAM_1) return
+          setTeam1Roster([...TEST_TEAM_1.players])
+          if (!team1Name || team1Name === 'Team 1') setTeam1Name(TEST_TEAM_1.name)
+          if (!team1ShortName) setTeam1ShortName(TEST_TEAM_1.shortName)
+          setTeam1Country(TEST_TEAM_1.country || '')
+          setTestRosterConfirm(null)
+        })}
 
         {savedTeamsModals}
 
@@ -4070,192 +3936,122 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   if (currentView === 'team2') {
     return (
       <MatchSetupTeam2View kitScale={kitScale}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <button className="secondary" onClick={() => { restoreTeam2(); setCurrentView('main') }}>← {t('common.back')}</button>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+        <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-3">
+          <div>
+            <Button variant="ghost" size="xl" icon={ArrowLeft} className="bg-white" onClick={() => { restoreTeam2(); setCurrentView('main') }}>{t('common.back')}</Button>
+          </div>
+          <div className="flex min-w-0 flex-col items-center gap-1.5">
             <input
               type="text"
               spellCheck={false}
               autoCorrect="off"
               autoCapitalize="off"
+              aria-label={t('matchSetup.teamName')}
               value={team2Name || getTeamDisplayName(team2Roster, 'team2', team2Country)}
               onChange={e => setTeam2Name(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
-              style={{
-                fontSize: '20px', fontWeight: 700, color: 'var(--text)', padding: '10px',
-                border: '0.5px solid white', borderRadius: '10px', background: 'rgba(255, 255, 255, 0.1)',
-                outline: 'none', textAlign: 'center', minWidth: '100px',
-                maxWidth: '500px', width: 'auto'
-              }}
+              className="h-12 w-auto min-w-[100px] max-w-full rounded-xl border border-stone-200 bg-white px-3 text-center text-xl font-bold tracking-tight text-stone-900 sm:max-w-[500px] focus:border-red-700/40 focus:outline-none focus:ring-2 focus:ring-red-700/20"
               size={Math.max(10, (team2Name || getTeamDisplayName(team2Roster, 'team2', team2Country)).length)}
             />
             {team2Name && team2Name !== getTeamDisplayName(team2Roster, 'team2', team2Country) && (
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <button
-                  type="button"
-                  onClick={() => setTeam2Name(getTeamDisplayName(team2Roster, 'team2', team2Country))}
-                  style={{
-                    padding: '4px 10px', fontSize: '11px', fontWeight: 600,
-                    background: 'transparent', color: 'var(--muted)',
-                    border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px',
-                    cursor: 'pointer', whiteSpace: 'nowrap'
-                  }}
-                >
-                  ↺ Auto
-                </button>
-              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={RotateCcw}
+                className="bg-white"
+                onClick={() => setTeam2Name(getTeamDisplayName(team2Roster, 'team2', team2Country))}
+              >
+                {t('roster.autoName', 'Auto')}
+              </Button>
             )}
           </div>
-          <div style={{ width: 80 }}></div>
+          <div />
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
-          <h1 style={{ margin: 0 }}>{t('roster.title')}</h1>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="m-0 text-xl font-bold tracking-tight text-stone-900 sm:text-2xl">{t('roster.title')}</h2>
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {renderSavedTeamControl('team2')}
-            <button
+            <Button
+              variant="danger-soft"
+              size="xl"
               onClick={() => {
                 setTeam2Roster([
                   { number: 1, firstName: '', lastName: '', dob: '', isCaptain: false },
                   { number: 2, firstName: '', lastName: '', dob: '', isCaptain: false }
                 ])
               }}
-              style={{
-                padding: '6px 12px',
-                fontSize: '12px',
-                fontWeight: 600,
-                background: '#dc2626',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer'
-              }}
             >
               {t('roster.deleteRoster')}
-            </button>
-            <button
-              onClick={() => setTestRosterConfirm('team2')}
-              style={{
-                padding: '6px 12px',
-                fontSize: '12px',
-                fontWeight: 600,
-                background: '#000',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer'
-              }}
-            >
+            </Button>
+            <Button variant="dark" size="xl" onClick={() => setTestRosterConfirm('team2')}>
               {t('roster.loadTestRoster')}
-            </button>
+            </Button>
           </div>
         </div>
         {renderSuggestionStrip('team2')}
-        {/* Player Stats for team2 Team */}
-        <div style={{ marginBottom: '12px', display: 'flex', gap: '12px' }}>
-          {/* Player Stats */}
-          {(() => {
-            const team2CaptainForm = team2Roster.find(p => p.isCaptain)
-            const team2HasError = !team2CaptainForm || team2Roster.length !== 2 || !team2Country
-            return (
-              <div style={{
-                border: team2HasError ? '1px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.2)',
-                borderRadius: '8px',
-                padding: '12px',
-                background: team2HasError ? 'rgba(239, 68, 68, 0.15)' : 'rgba(15, 23, 42, 0.2)',
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '16px'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '21px', fontWeight: 600, color: !team2CaptainForm ? '#ef4444' : 'rgba(255, 255, 255, 0.7)' }}>{t('matchSetup.captain')}:</span>
-                  {team2CaptainForm ? (
-                    <span style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: '42px',
-                      height: '42px',
-                      borderRadius: '50%',
-                      border: '2px solid #22c55e',
-                      fontSize: '21px',
-                      fontWeight: 700,
-                      color: '#22c55e'
-                    }}>{team2CaptainForm.number || '?'}</span>
-                  ) : (
-                    <span style={{ fontSize: '21px', fontStyle: 'italic', color: '#ef4444' }}>—</span>
-                  )}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '21px', fontWeight: 600, color: !team2Country ? '#ef4444' : 'rgba(255, 255, 255, 0.7)' }}>{t('matchSetup.country')}:</span>
-                  <CountrySelect
-                    value={team2Country}
-                    onChange={setTeam2Country}
-                    placeholder={t('matchSetup.selectCountry')}
-                    fontSize="21px"
-                  />
-                </div>
+        {/* Captain and country of the team (red notice while one is missing) */}
+        {(() => {
+          const team2CaptainForm = team2Roster.find(p => p.isCaptain)
+          const team2HasError = !team2CaptainForm || team2Roster.length !== 2 || !team2Country
+          return (
+            <div className={cn(
+              'flex flex-wrap items-center justify-center gap-x-8 gap-y-3 rounded-xl border p-3',
+              team2HasError ? 'border-red-100 bg-red-50' : 'border-stone-200/70 bg-stone-50/60'
+            )}>
+              <div className="flex items-center gap-2">
+                <span className={cn('text-base font-semibold', !team2CaptainForm ? 'text-red-700' : 'text-stone-700')}>{t('matchSetup.captain')}</span>
+                {team2CaptainForm ? (
+                  <span className="inline-flex h-11 w-11 items-center justify-center rounded-full border-2 border-emerald-600 bg-white text-xl font-bold tabular-nums text-emerald-700">
+                    {team2CaptainForm.number || '?'}
+                  </span>
+                ) : (
+                  <span className="text-xl font-semibold text-red-700" aria-label={t('matchSetup.notSet')}>—</span>
+                )}
               </div>
-            )
-          })()}
-        </div>
+              <div className="flex items-center gap-2">
+                <span className={cn('text-base font-semibold', !team2Country ? 'text-red-700' : 'text-stone-700')}>{t('matchSetup.country')}</span>
+                <CountrySelect
+                  value={team2Country}
+                  onChange={setTeam2Country}
+                  placeholder={t('matchSetup.selectCountry')}
+                  fontSize="18px"
+                />
+              </div>
+            </div>
+          )
+        })()}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {/* Roster Header Row */}
-          <div className="row" style={{ alignItems: 'center', fontWeight: 600, fontSize: '16px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: 6, padding: '8px 8px', border: '2px solid transparent' }}>
-            <div className="w-num" style={{ textAlign: 'center' }}>#</div>
-            <div className="w-name">{t('matchSetup.lastName')}</div>
-            <div className="w-name">{t('matchSetup.firstName')}</div>
-            {manageDob && <div className="w-dob">{t('matchSetup.dateOfBirth')}</div>}
-            <div className="w-captain">C</div>
-            <div className="w-actions"></div>
+        <div className="rounded-lg border border-stone-200 bg-white">
+          {/* Roster Header Row (landscape; on a phone each row stacks and the fields carry placeholders) */}
+          <div className={cn(ROSTER_GRID, manageDob && ROSTER_GRID_DOB, 'hidden rounded-t-[7px] border-b border-stone-200 bg-stone-50 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-stone-500 sm:grid')}>
+            <div className="text-center">#</div>
+            <div>{t('matchSetup.lastName')}</div>
+            <div>{t('matchSetup.firstName')}</div>
+            {manageDob && <div>{t('matchSetup.dateOfBirth')}</div>}
+            <div className="text-center" title={t('matchSetup.captain')}>C</div>
+            <div />
           </div>
+          <div className="divide-y divide-stone-100">
           {team2Roster.map((p, i) => {
-            // Determine border style based on captain status
+            // Captain row: the emerald outline (the captain marker)
             const isCaptain = p.isCaptain || false
-            // Base style for all rows (transparent border for alignment)
-            let borderStyle = {
-              borderRadius: '6px',
-              padding: '6px 8px',
-              border: '2px solid transparent'
-            }
-            if (isCaptain) {
-              // Captain: green border
-              borderStyle = {
-                border: '2px solid #22c55e',
-                borderRadius: '6px',
-                padding: '6px 8px',
-                background: 'rgba(34, 197, 94, 0.1)'
-              }
-            }
 
             return (
-              <div key={`a-${i}`} className="row" style={{ alignItems: 'center', ...borderStyle }}>
-                {/* Toggle Buttons [1] [2] */}
-                <div className="w-num" style={{ display: 'flex', gap: '4px' }}>
+              <div key={`a-${i}`} className={cn(ROSTER_GRID, manageDob && ROSTER_GRID_DOB, 'px-3 py-2.5', isCaptain && 'bg-emerald-50/60 ring-2 ring-inset ring-emerald-600', i === team2Roster.length - 1 && 'rounded-b-[7px]')}>
+                {/* Shirt number: 1 or 2 (the other player takes the other number) */}
+                <div className="order-1 flex gap-1 sm:order-none" role="group" aria-label={t('roster.numberLabel')}>
                   {[1, 2].map(num => {
                     const isSelected = p.number === num
                     return (
                       <button
                         key={num}
                         type="button"
-                        className={isSelected ? 'toggle-num selected' : 'toggle-num'}
-                        style={{
-                          padding: '0',
-                          flex: 1,
-                          height: '32px',
-                          fontSize: '16px',
-                          fontWeight: 'bold',
-                          borderRadius: '4px',
-                          border: isSelected ? '1px solid #22c55e' : '1px solid rgba(255,255,255,0.2)',
-                          background: isSelected ? 'rgba(34, 197, 94, 0.2)' : 'transparent',
-                          color: isSelected ? '#22c55e' : 'white',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}
+                        aria-pressed={isSelected}
+                        className={cn(
+                          'toggle-num inline-flex h-11 w-11 items-center justify-center rounded-lg border text-base font-bold tabular-nums transition-colors',
+                          isSelected ? 'selected border-slate-900 bg-slate-900 text-white' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50',
+                          FOCUS_RING
+                        )}
                         onClick={() => {
                           setTeam2Roster(prev => {
                             const newRoster = [...prev]
@@ -4277,8 +4073,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     )
                   })}
                 </div>
-                <input
-                  className="w-name capitalize"
+                <Input
+                  size="lg"
+                  className="order-4 col-span-full capitalize sm:order-none sm:col-span-1"
+                  aria-label={t('matchSetup.lastName')}
                   placeholder={t('matchSetup.lastName')}
                   value={p.lastName || ''}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
@@ -4288,8 +4086,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     setTeam2Roster(updated)
                   }}
                 />
-                <input
-                  className="w-name capitalize"
+                <Input
+                  size="lg"
+                  className="order-5 col-span-full capitalize sm:order-none sm:col-span-1"
+                  aria-label={t('matchSetup.firstName')}
                   placeholder={t('matchSetup.firstName')}
                   value={p.firstName || ''}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
@@ -4299,8 +4099,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     setTeam2Roster(updated)
                   }}
                 />
-                {manageDob && <input
-                  className="w-dob"
+                {manageDob && <Input
+                  size="lg"
+                  className="order-6 col-span-full sm:order-none sm:col-span-1"
+                  aria-label={t('matchSetup.dateOfBirth')}
                   placeholder={t('matchSetup.dateOfBirthPlaceholder')}
                   type="date"
                   value={p.dob ? formatDateToISO(p.dob) : ''}
@@ -4311,8 +4113,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     setTeam2Roster(updated)
                   }}
                 />}
-                <div className="w-captain" style={{ display: 'flex', justifyContent: 'center' }}>
-                  <div
+                <div className="order-2 flex justify-end sm:order-none sm:justify-center">
+                  <button
+                    type="button"
+                    data-captain-toggle
+                    aria-pressed={isCaptain}
+                    aria-label={t('matchSetup.captain')}
+                    title={t('matchSetup.captain')}
                     onClick={() => {
                       const updated = team2Roster.map((player, idx) => ({
                         ...player,
@@ -4320,27 +4127,14 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                       }))
                       setTeam2Roster(updated)
                     }}
-                    style={{
-                      width: '30px',
-                      height: '30px',
-                      borderRadius: '4px',
-                      border: (p.isCaptain || false) ? '2px solid #22c55e' : '2px solid rgba(255,255,255,0.3)',
-                      background: (p.isCaptain || false) ? 'rgba(34, 197, 94, 0.15)' : 'transparent',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      fontSize: '16px',
-                      fontWeight: 700,
-                      color: (p.isCaptain || false) ? '#22c55e' : 'rgba(255,255,255,0.3)',
-                      userSelect: 'none'
-                    }}
-                  >C</div>
+                    className={cn('inline-flex h-11 w-11 select-none items-center justify-center rounded-lg border-2 text-base font-bold transition-colors', isCaptain ? CAPTAIN_ON : CAPTAIN_OFF, FOCUS_RING)}
+                  >C</button>
                 </div>
-                <div className="w-actions">
-                  <button
-                    type="button"
-                    className="secondary"
+                <div className="order-3 sm:order-none">
+                  <Button
+                    variant="ghost"
+                    size="xl"
+                    className="bg-white"
                     onClick={() => setTeam2Roster(list => {
                       const updated = [...list]
                       updated[i] = { number: p.number, firstName: '', lastName: '', dob: '', isCaptain: false }
@@ -4348,14 +4142,15 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     })}
                   >
                     {t('common.clear', 'Clear')}
-                  </button>
+                  </Button>
                 </div>
               </div>
             )
           })}
+          </div>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16, alignSelf: 'start' }}>
-          <button onClick={async () => {
+        <div className="flex justify-end border-t border-stone-200/70 pt-4">
+          <Button variant="primary" size="xl" className="min-w-40" onClick={async () => {
 
             // Check if any changes were made (skip sync if no changes)
             const hasChanges = hasRosterChanged(
@@ -4551,159 +4346,17 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               checkSyncStatus()
             }
             setCurrentView('main')
-          }}>{t('common.confirm')}</button>
+          }}>{t('common.confirm')}</Button>
         </div>
-        {/* Notice Modal - must be rendered in this view since early return prevents main render */}
-        {noticeModal && (
-          <Modal
-            title={noticeModal.syncing ? t('matchSetup.modals.syncing') : noticeModal.type === 'success' ? t('matchSetup.modals.success') : t('matchSetup.modals.notice')}
-            open={true}
-            onClose={() => !noticeModal.syncing && setNoticeModal(null)}
-            width={400}
-            hideCloseButton={true}
-          >
-            <div style={{ padding: '24px', textAlign: 'center' }}>
-              {noticeModal.syncing && (
-                <div style={{ fontSize: '48px', marginBottom: '16px', animation: 'spin 1s linear infinite' }}>⟳</div>
-              )}
-              {!noticeModal.syncing && noticeModal.type === 'success' && (
-                <div style={{ fontSize: '48px', marginBottom: '16px', color: '#22c55e' }}>✓</div>
-              )}
-              {!noticeModal.syncing && noticeModal.type === 'error' && (
-                <div style={{ fontSize: '48px', marginBottom: '16px', color: '#ef4444' }}>✕</div>
-              )}
-              <p style={{ marginBottom: '24px', fontSize: '16px', color: 'var(--text)', whiteSpace: 'pre-line' }}>
-                {noticeModal.message}
-              </p>
-              {!noticeModal.syncing && (
-                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                  <button
-                    onClick={() => setNoticeModal(null)}
-                    style={{
-                      padding: '12px 24px',
-                      fontSize: '14px',
-                      fontWeight: 600,
-                      background: noticeModal.type === 'success' ? '#22c55e' : noticeModal.type === 'error' ? '#ef4444' : 'var(--accent)',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    OK
-                  </button>
-                </div>
-              )}
-            </div>
-          </Modal>
-        )}
+        {renderNoticeModal()}
 
-        {/* Roster Preview Modal */}
-        {rosterPreview && (
-          <Modal
-            title={t('matchSetup.rosterPreviewTitle')}
-            open={true}
-            onClose={() => setRosterPreview(null)}
-            width={600}
-          >
-            <div style={{ padding: '16px', maxHeight: '70vh', overflowY: 'auto' }}>
-              {(() => {
-                const roster = rosterPreview === 'team1' ? match?.pendingTeam1Roster : match?.pendingTeam2Roster
-                if (!roster) return <p>{t('matchSetup.noRosterFound')}</p>
-                return (
-                  <>
-                    <h3 style={{ marginTop: 0, marginBottom: '12px', fontSize: '16px' }}>
-                      {t('matchSetup.playersCount')}: {roster.players?.length || 0}
-                    </h3>
-                    <div style={{ marginBottom: '16px' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                        <thead>
-                          <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
-                            <th style={{ padding: '8px', textAlign: 'left' }}>#</th>
-                            <th style={{ padding: '8px', textAlign: 'left' }}>{t('rosterSetup.lastName')}</th>
-                            <th style={{ padding: '8px', textAlign: 'left' }}>{t('rosterSetup.firstName')}</th>
-                            <th style={{ padding: '8px', textAlign: 'center' }}>C</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(roster.players || []).map((p, i) => (
-                            <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                              <td style={{ padding: '6px 8px' }}>{p.number}</td>
-                              <td style={{ padding: '6px 8px' }}>{p.lastName || ''}</td>
-                              <td style={{ padding: '6px 8px' }}>{p.firstName || ''}</td>
-                              <td style={{ padding: '6px 8px', textAlign: 'center' }}>{p.isCaptain ? 'C' : ''}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                   
-                  </>
-                )
-              })()}
-              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
-                <button
-                  onClick={() => setRosterPreview(null)}
-                  style={{
-                    padding: '10px 24px',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    background: 'var(--accent)',
-                    color: '#000',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {t('common.close')}
-                </button>
-              </div>
-            </div>
-          </Modal>
-        )}
+        {renderRosterPreview()}
 
         {/* Test Roster Confirmation Modal */}
-        {testRosterConfirm === 'team2' && (
-          <Modal
-            title={t('roster.confirmLoadTestRoster')}
-            open={true}
-            onClose={() => setTestRosterConfirm(null)}
-            width={400}
-          >
-            <div style={{ padding: '20px', textAlign: 'center' }}>
-              <p style={{ marginBottom: '24px', fontSize: '16px', color: 'var(--text)' }}>
-                {t('roster.confirmLoadTestRosterMessage', { team: TEST_TEAM_2.name })}
-              </p>
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                <button
-                  onClick={() => {
-                    if (!TEST_TEAM_2) return
-                    setTeam2Roster([...TEST_TEAM_2.players])
-                  }}
-                  style={{
-                    padding: '12px 24px',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    background: '#000',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {t('roster.loadTestRoster')}
-                </button>
-                <button
-                  onClick={() => setTestRosterConfirm(null)}
-                  className="secondary"
-                  style={{ padding: '12px 24px', fontSize: '14px', fontWeight: 600 }}
-                >
-                  {t('common.cancel')}
-                </button>
-              </div>
-            </div>
-          </Modal>
-        )}
+        {testRosterConfirm === 'team2' && renderTestRosterConfirm(TEST_TEAM_2.name, () => {
+          if (!TEST_TEAM_2) return
+          setTeam2Roster([...TEST_TEAM_2.players])
+        })}
 
         {savedTeamsModals}
 

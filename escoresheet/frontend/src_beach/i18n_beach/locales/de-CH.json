@@ -98,9 +98,10 @@
     "dateOfBirth": "Geburtsdatum",
     "enterNames": "Bitte Nachname und Vorname iigäh",
     "deleteRoster": "Kader lösche",
-    "loadTestRoster": "TEST Kader lade",
-    "confirmLoadTestRoster": "Test Kader lade?",
-    "confirmLoadTestRosterMessage": "Das tuet s aktuelle Kader mit Testdate ersetze ({{team}})."
+    "loadTestRoster": "Testkader lade",
+    "confirmLoadTestRoster": "Testkader lade?",
+    "confirmLoadTestRosterMessage": "Das tuet s aktuelle Kader mit Testdate ersetze ({{team}}).",
+    "autoName": "Automatisch"
   },
   "validation": {
     "team1NotSet": "Team 1 name is not set",
@@ -377,7 +378,8 @@
       "complete": "Vollständig",
       "readyToConfirm": "Parat zum Bestätige",
       "incomplete": "Unvollständig"
-    }
+    },
+    "selectCountry": "Land wähle"
   },
   "scoreboard": {
     "set": "Satz",
@@ -1966,5 +1968,9 @@
   "updateBanner": {
     "later": "Spöter",
     "newVersion": "neui Version"
+  },
+  "countrySelect": {
+    "search": "Land sueche",
+    "noResults": "Kei Land gfunde"
   }
 }

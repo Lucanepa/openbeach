@@ -97,10 +97,11 @@
     "firstName": "First Name",
     "dateOfBirth": "Date of Birth",
     "enterNames": "Please enter last name and first name",
-    "deleteRoster": "Delete Roster",
-    "loadTestRoster": "Load TEST Roster",
-    "confirmLoadTestRoster": "Load Test Roster?",
-    "confirmLoadTestRosterMessage": "This will replace the current roster with test data ({{team}})."
+    "deleteRoster": "Delete roster",
+    "loadTestRoster": "Load test roster",
+    "confirmLoadTestRoster": "Load the test roster?",
+    "confirmLoadTestRosterMessage": "This will replace the current roster with test data ({{team}}).",
+    "autoName": "Auto"
   },
   "validation": {
     "team1NotSet": "Team 1 name is not set",
@@ -193,7 +194,7 @@
     "startMatch": "Start Match",
     "testMatch": "Test Match",
     "createMatch": "Create match",
-    "editRoster": "Edit Roster",
+    "editRoster": "Edit roster",
     "selectColour": "Select colour",
     "alreadyAssigned": "already assigned",
     "dashboards": "Dashboards",
@@ -217,12 +218,12 @@
     "noRosterFound": "No pending roster found for this match.",
     "errorSearchingRoster": "Error searching for roster. Please try again.",
     "previewRoster": "Preview",
-    "rosterPreviewTitle": "Roster Preview",
+    "rosterPreviewTitle": "Roster preview",
     "dateTime": "Date & Time",
     "location": "Location",
     "category": "Category",
     "enterTeamName": "Enter team name",
-    "selectCountry": "Select Country",
+    "selectCountry": "Select country",
     "enterCity": "Enter city",
     "matchType": "Match Type",
     "championship": "Championship",
@@ -1968,5 +1969,9 @@
   "updateBanner": {
     "later": "Later",
     "newVersion": "new version"
+  },
+  "countrySelect": {
+    "search": "Search country",
+    "noResults": "No countries found"
   }
 }

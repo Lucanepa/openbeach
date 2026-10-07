@@ -98,9 +98,10 @@
     "dateOfBirth": "Data di nascita",
     "enterNames": "Inserisci cognome e nome",
     "deleteRoster": "Elimina rosa",
-    "loadTestRoster": "Carica rosa TEST",
-    "confirmLoadTestRoster": "Caricare rosa test?",
-    "confirmLoadTestRosterMessage": "Questo sostituirà la rosa attuale con i dati di test ({{team}})."
+    "loadTestRoster": "Carica rosa di test",
+    "confirmLoadTestRoster": "Caricare la rosa di test?",
+    "confirmLoadTestRosterMessage": "Questo sostituirà la rosa attuale con i dati di test ({{team}}).",
+    "autoName": "Auto"
   },
   "validation": {
     "team1NotSet": "Team 1 name is not set",
@@ -193,7 +194,7 @@
     "startMatch": "Inizia Partita",
     "testMatch": "Partita Test",
     "createMatch": "Crea partita",
-    "editRoster": "Modifica Roster",
+    "editRoster": "Modifica rosa",
     "selectColour": "Seleziona colore",
     "alreadyAssigned": "già assegnato",
     "dashboards": "Dashboard",
@@ -377,7 +378,8 @@
       "complete": "Completo",
       "readyToConfirm": "Pronto da confermare",
       "incomplete": "Incompleto"
-    }
+    },
+    "selectCountry": "Scegli il paese"
   },
   "scoreboard": {
     "set": "Set",
@@ -1966,5 +1968,9 @@
   "updateBanner": {
     "later": "Più tardi",
     "newVersion": "nuova versione"
+  },
+  "countrySelect": {
+    "search": "Cerca paese",
+    "noResults": "Nessun paese trovato"
   }
 }
