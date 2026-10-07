@@ -2071,7 +2071,9 @@
     "current": "Current: {{width}} × {{height}} px",
     "hint": "Try rotating your device or entering fullscreen mode.",
     "enterFullscreen": "Enter fullscreen",
-    "fullscreenNote": "Fullscreen removes the browser bars to make the most of the screen."
+    "fullscreenNote": "Fullscreen removes the browser bars to make the most of the screen.",
+    "scoringHint": "The scoring screen needs at least 800×600: score on a tablet or a laptop. The match is saved on this device.",
+    "home": "Back to the home screen"
   },
   "Home": "Home",
   "tabletStatus": {

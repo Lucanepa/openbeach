@@ -2070,7 +2070,9 @@
     "current": "Attuale: {{width}} × {{height}} px",
     "hint": "Ruota il dispositivo o passa a schermo intero.",
     "enterFullscreen": "Schermo intero",
-    "fullscreenNote": "Lo schermo intero nasconde le barre del browser per sfruttare tutto lo spazio."
+    "fullscreenNote": "Lo schermo intero nasconde le barre del browser per sfruttare tutto lo spazio.",
+    "scoringHint": "La schermata di refertazione richiede almeno 800×600: usa un tablet o un portatile. La partita è salvata su questo dispositivo.",
+    "home": "Torna alla schermata iniziale"
   },
   "Home": "Home",
   "tabletStatus": {

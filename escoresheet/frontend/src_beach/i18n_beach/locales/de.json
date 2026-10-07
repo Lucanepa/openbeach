@@ -2070,7 +2070,9 @@
     "current": "Aktuell: {{width}} × {{height}} px",
     "hint": "Drehen Sie das Gerät oder wechseln Sie in den Vollbildmodus.",
     "enterFullscreen": "Vollbild",
-    "fullscreenNote": "Im Vollbild verschwinden die Leisten des Browsers, so bleibt mehr Platz."
+    "fullscreenNote": "Im Vollbild verschwinden die Leisten des Browsers, so bleibt mehr Platz.",
+    "scoringHint": "Das Schreiben braucht mindestens 800×600: Schreibe auf einem Tablet oder Laptop. Das Spiel ist auf diesem Gerät gespeichert.",
+    "home": "Zurück zur Startseite"
   },
   "Home": "Startseite",
   "tabletStatus": {

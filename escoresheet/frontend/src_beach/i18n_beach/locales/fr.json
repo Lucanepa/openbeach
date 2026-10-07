@@ -2070,7 +2070,9 @@
     "current": "Actuel : {{width}} × {{height}} px",
     "hint": "Tournez l’appareil ou passez en plein écran.",
     "enterFullscreen": "Plein écran",
-    "fullscreenNote": "Le plein écran masque les barres du navigateur pour gagner de la place."
+    "fullscreenNote": "Le plein écran masque les barres du navigateur pour gagner de la place.",
+    "scoringHint": "L'écran de marque demande au moins 800×600 : marquez sur une tablette ou un ordinateur portable. Le match est enregistré sur cet appareil.",
+    "home": "Retour à l'accueil"
   },
   "Home": "Accueil",
   "tabletStatus": {
