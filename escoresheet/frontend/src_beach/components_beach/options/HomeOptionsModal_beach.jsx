@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useAlert } from '../../contexts_beach/AlertContext_beach'
 import Modal from '../Modal_beach'
 import SupportFeedbackModal from '../SupportFeedbackModal_beach'
+import NativeServerSection from './NativeServerSection_beach'
 import { copyToClipboard, generateQRCodeUrl } from '../../utils_beach/networkInfo_beach'
 
 const currentVersion = __APP_VERSION__
@@ -508,6 +509,9 @@ export default function HomeOptionsModal({
             />
           </Row>
         </Section>
+
+        {/* Android app only: which server (cloud or a venue relay), and the referee / livescore views */}
+        <NativeServerSection Section={Section} Row={Row} />
 
         <Section title={t('options.displayMode')}>
           <Row style={{ marginBottom: '12px', alignItems: 'flex-start' }}>

@@ -930,7 +930,15 @@
       "failedToLoadBackupData": "Failed to load backup data",
       "failedToRestoreBackup": "Failed to restore backup: {{error}}",
       "failedToClearCache": "Failed to clear cache: {{error}}"
-    }
+    },
+    "nativeServerTitle": "Server",
+    "nativeServerOnline": "Online",
+    "nativeServerLocal": "Local server",
+    "nativeServerCloud": "Cloud (backend.openvolley.app)",
+    "nativeServerChange": "Change server",
+    "nativeOpenView": "Use this tablet as",
+    "nativeReferee": "Referee",
+    "nativeLivescore": "Livescore"
   },
   "matchEnd": {
     "title": "Match Complete",
@@ -1208,7 +1216,22 @@
     "noCloudBackend": "No cloud backend configured. Set VITE_BACKEND_URL environment variable.",
     "shareWithRemote": "Share with Remote Devices",
     "refereeUrl": "Referee URL",
-    "gamePin": "Game PIN"
+    "gamePin": "Game PIN",
+    "connectToServer": "Connect to server",
+    "selectServerMode": "Choose how to connect",
+    "onlineAutomatic": "Online (automatic)",
+    "localServer": "Local server",
+    "enterIPAddress": "Enter IP address",
+    "connect": "Connect",
+    "lastUsed": "Last used",
+    "checking": "Connecting...",
+    "connectedSuccess": "Connected!",
+    "connectionFailed": "Could not reach server",
+    "connectionTimeout": "Connection timed out",
+    "serverNotResponding": "Server not responding",
+    "retry": "Retry",
+    "noBackendConfigured": "No backend server configured",
+    "invalidUrl": "Invalid server URL"
   },
   "livescore": {
     "title": "Live Scoring",
@@ -1881,5 +1904,11 @@
     "dismiss": "Not now",
     "signInNote": "Sign in with an approved account to load saved teams.",
     "noAccessNote": "Saved teams are for approved scorers. Ask an admin to approve your account."
+  },
+  "appLifecycle": {
+    "exitTitle": "Exit OpenBeach?",
+    "exitBody": "Matches are saved on this device: open OpenBeach again to continue.",
+    "exitConfirm": "Exit",
+    "stay": "Stay"
   }
 }

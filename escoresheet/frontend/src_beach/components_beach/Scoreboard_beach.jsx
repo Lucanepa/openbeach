@@ -21,7 +21,8 @@ import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { apiFrom } from '../lib_beach/apiClient_beach'
 import { setExtId, eventExtId } from '../utils_beach/syncIds_beach'
 import { buildConnectionPins } from '../utils_beach/connectionPins_beach'
-import { isBackendAvailable, getApiUrl } from '../utils_beach/backendConfig_beach'
+import { isBackendAvailable, getApiUrl, isNativeApp } from '../utils_beach/backendConfig_beach'
+import { lockLandscape as lockNativeLandscape, unlockOrientation as unlockNativeOrientation } from '../utils_beach/nativeOrientation_beach'
 import { scorerRelay, scorerPublisher, scorerRelayUrl, readRelayBundle, relayMatchKey } from '../utils_beach/relayPublisher_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
@@ -537,8 +538,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  // Auto-lock orientation to landscape for scoreboard on mount
+  // Auto-lock orientation to landscape for scoreboard on mount. The Android
+  // app locks the activity natively (its WebView ignores
+  // screen.orientation.lock()); a browser tries the web API.
   useEffect(() => {
+    if (isNativeApp()) {
+      lockNativeLandscape().catch(() => {})
+      return () => { unlockNativeOrientation().catch(() => {}) }
+    }
     const lockLandscape = async () => {
       try {
         if (screen.orientation && screen.orientation.lock) {

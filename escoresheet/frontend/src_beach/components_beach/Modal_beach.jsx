@@ -31,12 +31,14 @@ export default function Modal({ title, open, onClose, children, width = 800, hei
             padding:16,
             ...customStyle
           }}
+          role="dialog"
+          aria-modal="true"
           onClick={(e) => e.stopPropagation()}
         >
           {(title || !hideCloseButton) && (
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
               <h3 style={{ margin:0 }}>{title}</h3>
-              {!hideCloseButton && <button className="secondary" onClick={onClose}>{t('common.close')}</button>}
+              {!hideCloseButton && <button className="secondary" data-modal-close onClick={onClose}>{t('common.close')}</button>}
             </div>
           )}
           {children}
@@ -58,12 +60,14 @@ export default function Modal({ title, open, onClose, children, width = 800, hei
     >
       <div
         style={{ width: widthStyle, maxHeight: heightStyle, overflow:'auto', background:'#111827', border:'1px solid rgba(255,255,255,.08)', borderRadius:12, padding:16 }}
+        role="dialog"
+        aria-modal="true"
         onClick={(e) => e.stopPropagation()}
       >
         {(title || !hideCloseButton) && (
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
             <h3 style={{ margin:0 }}>{title}</h3>
-            {!hideCloseButton && <button className="secondary" onClick={onClose}>{t('common.close')}</button>}
+            {!hideCloseButton && <button className="secondary" data-modal-close onClick={onClose}>{t('common.close')}</button>}
           </div>
         )}
         {children}

@@ -56,6 +56,8 @@ function AlertModal({ alert, onClose }) {
           padding: 0,
           overflow: 'hidden'
         }}
+        role="alertdialog"
+        aria-modal="true"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -98,6 +100,7 @@ function AlertModal({ alert, onClose }) {
         {/* Footer */}
         <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
           <button
+            data-modal-close
             onClick={onClose}
             style={{
               padding: '8px 24px',

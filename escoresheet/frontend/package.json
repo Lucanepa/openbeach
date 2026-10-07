@@ -12,6 +12,11 @@
     "ngrok": "ngrok http 6173",
     "build": "vite build",
     "build:subdomains": "node scripts/build-subdomains.js",
+    "build:android": "CAPACITOR=true vite build --emptyOutDir",
+    "cap:sync": "cap sync android",
+    "cap:open:android": "cap open android",
+    "android:icons": "python3 scripts/make-android-icons.py",
+    "release:android": "scripts/release-android.sh",
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
@@ -25,6 +30,7 @@
     "electron:build:linux": "npm run build && electron-builder --linux"
   },
   "dependencies": {
+    "@capacitor/screen-orientation": "^8.0.2",
     "dexie": "^4.0.8",
     "dexie-react-hooks": "^4.2.0",
     "flag-icons": "^7.5.0",
@@ -43,6 +49,9 @@
     "read-excel-file": "^7.0.0"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",

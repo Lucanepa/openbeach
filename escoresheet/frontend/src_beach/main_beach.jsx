@@ -9,6 +9,7 @@ import { AlertProvider } from './contexts_beach/AlertContext_beach'
 import { AuthProvider } from './contexts_beach/AuthContext_beach'
 import { LoggingProvider } from './contexts_beach/LoggingContext_beach'
 import { ScaleProvider } from './contexts_beach/ScaleContext_beach'
+import AndroidExitPrompt from './components_beach/AndroidExitPrompt_beach'
 
 // Initialize logger to capture console output
 initLogger()
@@ -20,6 +21,8 @@ createRoot(document.getElementById('root')).render(
         <AlertProvider>
           <LoggingProvider>
             <App />
+            {/* Android app: "Exit OpenBeach?" on the Back button */}
+            <AndroidExitPrompt />
           </LoggingProvider>
         </AlertProvider>
       </AuthProvider>

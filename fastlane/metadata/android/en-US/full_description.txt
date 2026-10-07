@@ -1,0 +1,24 @@
+OpenBeach is an electronic scoresheet for beach volleyball, made for the scorer at the court. It replaces the paper scoresheet and works on a tablet with no internet at all.
+
+Scoring
+- Match setup: teams of two, players, referees and match details; saved teams for competitions
+- Coin toss, service order and court sides
+- Rally-by-rally scoring with undo
+- Court switches, timeouts and technical timeouts
+- Sanctions, injuries and manual corrections
+- Set and match end, signatures
+- Scoresheet PDF of the finished match
+- Test matches to practise
+
+Offline first
+Every match is stored on the tablet. Scoring never waits for the network: the app keeps working with no connection and catches up when it is back online.
+
+Courts at a venue
+At a tournament without internet, the tablets connect to a local server on the same network (the OpenBeach desktop app, the OpenVolley desktop app or a venue box). Enter its address under Options, Server: for the OpenBeach desktop app its IP address is enough, for example 192.168.1.20. The same app opens the referee and livescore views, so a second tablet can follow the match on the court.
+
+Cloud sync
+With internet, matches are synchronised with the OpenVolley backend (backend.openvolley.app), so the referee and livescore views on other devices follow the match. The backend is free software and can be self-hosted. Test matches are never uploaded.
+
+Languages: English, German, Swiss German, French, Italian.
+
+The scoreboard is built for tablets in landscape orientation.

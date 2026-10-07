@@ -926,7 +926,15 @@
       "failedToLoadBackupData": "Backup-Daten konnten nicht geladen werden",
       "failedToRestoreBackup": "Backup konnte nicht wiederhergestellt werden: {{error}}",
       "failedToClearCache": "Cache konnte nicht geleert werden: {{error}}"
-    }
+    },
+    "nativeServerTitle": "Server",
+    "nativeServerOnline": "Online",
+    "nativeServerLocal": "Lokaler Server",
+    "nativeServerCloud": "Cloud (backend.openvolley.app)",
+    "nativeServerChange": "Server wechseln",
+    "nativeOpenView": "Dieses Tablet verwenden als",
+    "nativeReferee": "Schiedsrichter",
+    "nativeLivescore": "Live-Ergebnis"
   },
   "matchEnd": {
     "title": "Spiel beendet",
@@ -1204,7 +1212,22 @@
     "noCloudBackend": "Kein Cloud-Backend konfiguriert. VITE_BACKEND_URL Umgebungsvariable setzen.",
     "shareWithRemote": "Mit entfernten Geräten teilen",
     "refereeUrl": "Schiedsrichter-URL",
-    "gamePin": "Spiel-PIN"
+    "gamePin": "Spiel-PIN",
+    "connectToServer": "Mit Server verbinden",
+    "selectServerMode": "Verbindungsart wählen",
+    "onlineAutomatic": "Online (automatisch)",
+    "localServer": "Lokaler Server",
+    "enterIPAddress": "IP-Adresse eingeben",
+    "connect": "Verbinden",
+    "lastUsed": "Zuletzt verwendet",
+    "checking": "Verbinden...",
+    "connectedSuccess": "Verbunden!",
+    "connectionFailed": "Server nicht erreichbar",
+    "connectionTimeout": "Zeitüberschreitung der Verbindung",
+    "serverNotResponding": "Server antwortet nicht",
+    "retry": "Erneut versuchen",
+    "noBackendConfigured": "Kein Backend-Server konfiguriert",
+    "invalidUrl": "Ungültige Server-URL"
   },
   "livescore": {
     "title": "Live-Ergebnis",
@@ -1877,5 +1900,11 @@
     "dismiss": "Nicht jetzt",
     "signInNote": "Melden Sie sich mit einem freigegebenen Konto an, um gespeicherte Teams zu laden.",
     "noAccessNote": "Gespeicherte Teams sind für freigegebene Schreiber/innen. Bitten Sie einen Admin, Ihr Konto freizugeben."
+  },
+  "appLifecycle": {
+    "exitTitle": "OpenBeach beenden?",
+    "exitBody": "Die Spiele sind auf diesem Gerät gespeichert: OpenBeach wieder öffnen, um weiterzumachen.",
+    "exitConfirm": "Beenden",
+    "stay": "Bleiben"
   }
 }

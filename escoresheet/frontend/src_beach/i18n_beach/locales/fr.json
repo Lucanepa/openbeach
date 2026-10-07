@@ -926,7 +926,15 @@
       "failedToLoadBackupData": "Échec du chargement des données de sauvegarde",
       "failedToRestoreBackup": "Échec de la restauration de la sauvegarde : {{error}}",
       "failedToClearCache": "Échec de l'effacement du cache : {{error}}"
-    }
+    },
+    "nativeServerTitle": "Serveur",
+    "nativeServerOnline": "En ligne",
+    "nativeServerLocal": "Serveur local",
+    "nativeServerCloud": "Cloud (backend.openvolley.app)",
+    "nativeServerChange": "Changer de serveur",
+    "nativeOpenView": "Utiliser cette tablette comme",
+    "nativeReferee": "Arbitre",
+    "nativeLivescore": "Livescore"
   },
   "matchEnd": {
     "title": "Match Terminé",
@@ -1204,7 +1212,22 @@
     "noCloudBackend": "Aucun backend cloud configuré. Définir la variable VITE_BACKEND_URL.",
     "shareWithRemote": "Partager avec appareils distants",
     "refereeUrl": "URL Arbitre",
-    "gamePin": "PIN du match"
+    "gamePin": "PIN du match",
+    "connectToServer": "Se connecter au serveur",
+    "selectServerMode": "Choisissez comment vous connecter",
+    "onlineAutomatic": "En ligne (automatique)",
+    "localServer": "Serveur local",
+    "enterIPAddress": "Saisir l'adresse IP",
+    "connect": "Connecter",
+    "lastUsed": "Dernier utilisé",
+    "checking": "Connexion...",
+    "connectedSuccess": "Connecté !",
+    "connectionFailed": "Serveur injoignable",
+    "connectionTimeout": "Délai de connexion dépassé",
+    "serverNotResponding": "Le serveur ne répond pas",
+    "retry": "Réessayer",
+    "noBackendConfigured": "Aucun serveur backend configuré",
+    "invalidUrl": "URL du serveur invalide"
   },
   "livescore": {
     "title": "Score en direct",
@@ -1877,5 +1900,11 @@
     "dismiss": "Pas maintenant",
     "signInNote": "Connectez-vous avec un compte approuvé pour charger les équipes enregistrées.",
     "noAccessNote": "Les équipes enregistrées sont réservées aux marqueurs approuvés. Demandez à un administrateur d'approuver votre compte."
+  },
+  "appLifecycle": {
+    "exitTitle": "Quitter OpenBeach ?",
+    "exitBody": "Les matchs sont enregistrés sur cet appareil : rouvrez OpenBeach pour continuer.",
+    "exitConfirm": "Quitter",
+    "stay": "Rester"
   }
 }
