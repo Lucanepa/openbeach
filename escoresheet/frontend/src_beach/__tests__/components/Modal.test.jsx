@@ -294,4 +294,44 @@ describe('Modal', () => {
       expect(container.querySelector('h3')).toBeNull()
     })
   })
+
+  describe('tones', () => {
+    it('pins the legacy dark palette on the default panel', () => {
+      render(
+        <Modal open={true} onClose={() => {}} title="Dark">
+          <div>Content</div>
+        </Modal>
+      )
+
+      expect(screen.getByRole('dialog')).toHaveClass('legacy-dark')
+    })
+
+    it('draws the light (volleyui) panel with an icon close button', () => {
+      const onClose = vi.fn()
+      render(
+        <Modal open={true} onClose={onClose} title="Light" tone="light">
+          <div>Content</div>
+        </Modal>
+      )
+
+      const dialog = screen.getByRole('dialog')
+      expect(dialog).toHaveClass('bg-white')
+      expect(dialog).not.toHaveClass('legacy-dark')
+      expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('Light')
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+      expect(onClose).toHaveBeenCalledTimes(1)
+    })
+
+    it('keeps the light backdrop from closing the modal', () => {
+      const onClose = vi.fn()
+      const { container } = render(
+        <Modal open={true} onClose={onClose} tone="light">
+          <div>Content</div>
+        </Modal>
+      )
+
+      fireEvent.click(container.firstChild)
+      expect(onClose).not.toHaveBeenCalled()
+    })
+  })
 })

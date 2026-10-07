@@ -485,7 +485,7 @@
       "stopTimeout": "Timeout beenden",
       "endSetInterval": "Satzpause beenden",
       "enterFullscreen": "Vollbild",
-      "fullscreenHint": "Vollbild entfernt Browser-Kopfzeilen für maximalen Platz.",
+      "fullscreenHint": "Der Vollbildmodus blendet die Browserleisten aus und nutzt den ganzen Bildschirm.",
       "pointTeam": "Punkt {{team}}",
       "toLeft": "TO Links",
       "toRight": "TO Rechts",
@@ -586,8 +586,9 @@
       "actionLog": "Aktionsprotokoll",
       "manualChanges": "Manuelle Änderungen",
       "keyboardShortcuts": "Tastaturkürzel",
-      "searchEvents": "Ereignisse suchen...",
-      "openScoreboard": "Anzeigetafel öffnen"
+      "searchEvents": "Ereignisse suchen…",
+      "openScoreboard": "Anzeigetafel öffnen",
+      "showRosters": "Mannschaftslisten anzeigen"
     },
     "stopMatch": {
       "title": "Spiel abbrechen",
@@ -707,7 +708,18 @@
     "waitingHint": "Starten Sie ein Spiel in der Schreiber-App auf diesem Gerät",
     "connecting": "Verbindung wird hergestellt...",
     "displayTimeout": "AUSZEIT",
-    "displayFinal": "ENDERGEBNIS"
+    "displayFinal": "ENDERGEBNIS",
+    "showHeader": "Kopfzeile einblenden",
+    "hideHeader": "Kopfzeile ausblenden",
+    "duplicateTab": {
+      "body": "Dieses Spiel ist bereits in einem anderen Tab oder Fenster geöffnet. Schliesse diesen Tab und erfasse im anderen weiter, damit sich die beiden nicht überschreiben.",
+      "close": "Diesen Tab schliessen"
+    },
+    "rotate": {
+      "title": "Gerät drehen",
+      "body": "Die Spielerfassung funktioniert im Querformat. Drehe das Gerät, um weiterzufahren.",
+      "tip": "Für die automatischen Backups Chrome oder Edge auf einem Laptop oder Desktop-Computer verwenden."
+    }
   },
   "settings": {
     "title": "Einstellungen",

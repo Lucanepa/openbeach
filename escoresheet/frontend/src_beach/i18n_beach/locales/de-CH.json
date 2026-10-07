@@ -485,7 +485,7 @@
       "stopTimeout": "Timeout beände",
       "endSetInterval": "Satzpause beände",
       "enterFullscreen": "Vollbild",
-      "fullscreenHint": "Vollbild entfernt Browser-Chopfziile für maximale Platz.",
+      "fullscreenHint": "Im Vollbildmodus verschwinded d Browserleischte und de ganz Bildschirm wird bruucht.",
       "pointTeam": "Punkt {{team}}",
       "toLeft": "TO Links",
       "toRight": "TO Rechts",
@@ -521,7 +521,7 @@
       "set3ChooseSideService": "Set 3 - Choose Side and Service",
       "reopenSet": "Satz wieder öffne",
       "scoresheetError": "eScoresheetfähler",
-      "scoresheetAlreadyOpen": "eMatchblatt bereits offe",
+      "scoresheetAlreadyOpen": "eMatchblatt scho offe",
       "remarksRecording": "Bemerkigserfassig",
       "sanctionsAndResults": "Sanktione und Ergebnis",
       "forfait": "Forfait"
@@ -573,7 +573,7 @@
       "menu": "Menü",
       "showActionLog": "Aktionsprotokoll aazeige",
       "showSanctionsResults": "Sanktione und Ergebnis aazeige",
-      "openRemarksRecording": "Bemerkigserfassig öffne",
+      "openRemarksRecording": "Bemerkige erfasse",
       "stopMatch": "Spiil abbreche",
       "showPins": "PINs aazeige",
       "showMatchSetup": "Spiiliihrichtig aazeige",
@@ -586,8 +586,9 @@
       "actionLog": "Aktionsprotokoll",
       "manualChanges": "Manuelli Änderige",
       "keyboardShortcuts": "Tastaturchürzel",
-      "searchEvents": "Ereignis sueche...",
-      "openScoreboard": "Aazeigetafle öffne"
+      "searchEvents": "Ereignis sueche…",
+      "openScoreboard": "Aazeigetafle öffne",
+      "showRosters": "Mannschaftslischte aazeige"
     },
     "stopMatch": {
       "title": "Spiil abbreche",
@@ -707,7 +708,18 @@
     "waitingHint": "Started Sie es Spiil i de Schriber-App uf dem Grät",
     "connecting": "Verbindig wird hergstellt...",
     "displayTimeout": "USZIIT",
-    "displayFinal": "ENDRESULTAT"
+    "displayFinal": "ENDRESULTAT",
+    "showHeader": "Chopfziile iiblände",
+    "hideHeader": "Chopfziile usblände",
+    "duplicateTab": {
+      "body": "Das Spiil isch scho imene andere Tab oder Fänschter offe. Schliess dä Tab und erfass im andere wiiter, damit sich die beide nöd überschriibed.",
+      "close": "Dä Tab schliesse"
+    },
+    "rotate": {
+      "title": "Grät drähe",
+      "body": "D Spiilerfassig funktioniert im Querformat. Drähj s Grät, zum wiiterzmache.",
+      "tip": "Für di automatische Backups Chrome oder Edge uf emne Laptop oder Desktop-Computer bruuche."
+    }
   },
   "settings": {
     "title": "Iistellige",

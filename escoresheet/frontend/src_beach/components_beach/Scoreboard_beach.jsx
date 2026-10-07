@@ -37,6 +37,24 @@ import { TimeInput24 } from './TimeInput24_beach'
 import { uploadScoresheetAsync } from '../utils_beach/scoresheetUploader_beach'
 import { useConnectionHealthMonitor } from '../hooks_beach/useConnectionHealthMonitor_beach'
 import { ArrowLeftRight, Card, ChartColumn, ClipboardList, Copy, Download, FileText, NotebookPen, RefreshCw, Save, Search, Settings, Smartphone, TriangleAlert, Volleyball, Wrench } from './Icons_beach'
+import { ChevronDown, ChevronUp, Ban, Expand, IdCard, KeyRound, ListChecks, Menu as MenuIcon, MessageSquareText, MonitorPlay, ScrollText, SlidersHorizontal, Users } from 'lucide-react'
+import { cn } from '../ui/volleyui/cn.js'
+import { FOCUS_RING } from '../ui/volleyui/Button.jsx'
+
+// ── volleyui chrome for the scoring screen ───────────────────────────────────
+// Only the chrome around the court takes these: the toolbar, the side columns,
+// the rally controls, menus and dialogs. Team colours, the score digits, the
+// court and its players, and the serve / BMP / time-out / sanction markers keep
+// their meaning and their colours (volleyui §7). Sizes stay as they were, so
+// every tap target keeps its courtside size.
+
+/** Toolbar trigger (Scoresheet, Menu): white, stone hairline, lucide glyph. Not
+ *  inside the toolbar's flow change: h-9 like before, and the ::before pad grows
+ *  the hit area to 44px+ without moving the layout. */
+const SB_TOOLBAR_BTN = `relative inline-flex items-center justify-center gap-1 h-9 min-w-11 px-3 rounded-lg border border-stone-200 bg-white text-sm font-semibold tracking-normal text-stone-700 hover:bg-stone-50 transition-colors cursor-pointer before:absolute before:-inset-x-1 before:-inset-y-2 before:content-[''] ${FOCUS_RING}`
+
+/** Micro-label over a value (SET, rally status, last action). */
+const SB_EYEBROW = 'text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-500'
 
 /**
  * SYNC ARCHITECTURE NOTE:
@@ -7187,51 +7205,25 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   // Show duplicate tab error if scoresheet is already open in another tab
   if (duplicateTabError) {
     return (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100vh',
-        background: 'var(--bg)',
-        color: 'var(--text)',
-        padding: '20px',
-        textAlign: 'center'
-      }}>
-        <div style={{
-          fontSize: '48px',
-          marginBottom: '20px'
-        }}><TriangleAlert /></div>
-        <h1 style={{
-          fontSize: '24px',
-          fontWeight: 600,
-          marginBottom: '12px',
-          color: '#f59e0b'
-        }}>Scoresheet Already Open</h1>
-        <p style={{
-          fontSize: '16px',
-          color: 'rgba(255,255,255,0.7)',
-          marginBottom: '24px',
-          maxWidth: '400px'
-        }}>
-          This match scoresheet is already open in another tab or browser window.
-          Please close this tab and use the existing one to avoid data conflicts.
-        </p>
-        <button
-          onClick={() => window.close()}
-          style={{
-            padding: '12px 24px',
-            fontSize: '16px',
-            fontWeight: 600,
-            background: '#3b82f6',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: 'pointer'
-          }}
-        >
-          Close This Tab
-        </button>
+      <div className="ov-kit flex h-screen flex-col items-center justify-center bg-gradient-to-br from-stone-100 via-stone-50 to-stone-100 px-4">
+        <div className="w-full max-w-md rounded-2xl border border-stone-200/70 bg-white p-6 text-center shadow-card-lg">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+            <TriangleAlert size={24} />
+          </div>
+          <h1 className="text-lg font-bold text-stone-900">
+            {t('scoreboard.modals.scoresheetAlreadyOpen', 'Scoresheet already open')}
+          </h1>
+          <p className="mt-2 text-sm text-stone-600">
+            {t('scoreboard.duplicateTab.body', 'This match is already open in another tab or window. Close this tab and keep scoring in the other one, so the two do not overwrite each other.')}
+          </p>
+          <button
+            type="button"
+            onClick={() => window.close()}
+            className={cn('mt-6 inline-flex h-11 w-full items-center justify-center rounded-xl bg-red-600 px-4 text-sm font-semibold text-white hover:bg-red-700 transition-colors', FOCUS_RING)}
+          >
+            {t('scoreboard.duplicateTab.close', 'Close this tab')}
+          </button>
+        </div>
       </div>
     )
   }
@@ -7240,106 +7232,53 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     <div className="match-record">
       {/* Portrait mode warning overlay for devices that don't support orientation lock (iOS) */}
       {!isLandscape && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.95)',
-          zIndex: 99999,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '24px',
-          textAlign: 'center'
-        }}>
-          <div style={{
-            fontSize: '64px',
-            marginBottom: '24px',
-            animation: 'rotate90 1.5s ease-in-out infinite'
-          }}>
-            <Smartphone />
-          </div>
-          <style>{`
-            @keyframes rotate90 {
-              0%, 100% { transform: rotate(0deg); }
-              50% { transform: rotate(-90deg); }
-            }
-          `}</style>
-          <h2 style={{
-            fontSize: '24px',
-            fontWeight: 700,
-            color: '#ffffff',
-            marginBottom: '16px'
-          }}>
-            Please Rotate Your Device
-          </h2>
-          <p style={{
-            fontSize: '16px',
-            color: '#9ca3af',
-            maxWidth: '300px',
-            lineHeight: 1.5,
-            marginBottom: '24px'
-          }}>
-            The Scoreboard works best in landscape mode. Please rotate your device horizontally to continue.
-          </p>
-          <div style={{
-            padding: '12px 16px',
-            background: 'rgba(59, 130, 246, 0.15)',
-            border: '1px solid rgba(59, 130, 246, 0.3)',
-            borderRadius: '8px',
-            maxWidth: '320px'
-          }}>
-            <p style={{
-              fontSize: '13px',
-              color: '#93c5fd',
-              lineHeight: 1.4,
-              margin: 0
-            }}>
-              <strong>Tip:</strong> For auto-backup features, use Chrome or Edge on a desktop/laptop computer.
+        <div className="ov-kit fixed inset-0 flex flex-col items-center justify-center overflow-y-auto bg-gradient-to-br from-stone-100 via-stone-50 to-stone-100 px-4 py-6" style={{ zIndex: 99999 }}>
+          <div className="w-full max-w-sm rounded-2xl border border-stone-200/70 bg-white p-6 text-center shadow-card-lg">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-stone-100 text-stone-600">
+              <Smartphone size={28} style={{ animation: 'rotate90 1.5s ease-in-out infinite' }} />
+            </div>
+            <style>{`
+              @keyframes rotate90 {
+                0%, 100% { transform: rotate(0deg); }
+                50% { transform: rotate(-90deg); }
+              }
+              @media (prefers-reduced-motion: reduce) {
+                [style*="rotate90"] { animation: none !important; }
+              }
+            `}</style>
+            <h2 className="text-lg font-bold text-stone-900">
+              {t('scoreboard.rotate.title', 'Rotate your device')}
+            </h2>
+            <p className="mt-2 text-sm text-stone-600">
+              {t('scoreboard.rotate.body', 'The scoring screen works in landscape. Turn your device sideways to continue.')}
+            </p>
+            <p className="mt-4 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-left text-xs text-sky-800">
+              {t('scoreboard.rotate.tip', 'For the automatic backups, use Chrome or Edge on a laptop or desktop computer.')}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                if (document.documentElement.requestFullscreen) {
+                  document.documentElement.requestFullscreen().catch(err => {
+                    // Fullscreen not supported
+                  })
+                }
+              }}
+              className={cn('mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800 transition-colors', FOCUS_RING)}
+            >
+              <Expand size={16} aria-hidden="true" />
+              {t('scoreboard.buttons.enterFullscreen', 'Enter fullscreen')}
+            </button>
+            <p className="mt-2 text-xs text-stone-500">
+              {t('scoreboard.buttons.fullscreenHint', 'Fullscreen removes the browser bars to make the most of the screen.')}
             </p>
           </div>
-          <button
-            onClick={() => {
-              if (document.documentElement.requestFullscreen) {
-                document.documentElement.requestFullscreen().catch(err => {
-                  // Fullscreen not supported
-                })
-              }
-            }}
-            style={{
-              marginTop: '24px',
-              padding: '12px 24px',
-              fontSize: '16px',
-              fontWeight: 600,
-              background: 'var(--accent)',
-              color: '#000',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}
-          >
-            <span>⛶</span>
-            <span>Enter Fullscreen</span>
-          </button>
-          <p style={{
-            fontSize: '12px',
-            color: '#6b7280',
-            marginTop: '12px'
-          }}>
-            Fullscreen removes browser headers to maximize screen space.
-          </p>
         </div>
       )}
       <ScoreboardToolbar collapsed={headerCollapsed} onToggle={() => setHeaderCollapsed(!headerCollapsed)}>
         {/* Column 1: Date/Time */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
-          <span className="toolbar-clock" style={{ fontSize: isCompactMode ? '11px' : '14px' }}>{formatTimestamp(now)}</span>
+          <span className="toolbar-clock tabular-nums" style={{ fontSize: isCompactMode ? '12px' : '14px' }}>{formatTimestamp(now)}</span>
         </div>
 
         {/* Column 2: Left team */}
@@ -7351,10 +7290,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             gap: '8px',
             overflow: 'hidden'
           }}>
-            <span style={{
+            <span className="text-stone-900 tracking-normal" style={{
               fontSize: `${DESIGN_VMIN * 0.018 * scaleFactor}px`,
               fontWeight: 600,
-              color: 'var(--text)',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap'
@@ -7382,7 +7320,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           justifyContent: 'center',
           gap: isCompactMode ? '6px' : '12px'
         }}>
-          <span style={{
+          <span className="tabular-nums" style={{
             padding: isCompactMode ? '2px 6px' : '4px 10px',
             borderRadius: '4px',
             fontSize: isCompactMode ? '12px' : '16px',
@@ -7392,16 +7330,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           }}>
             {setsWon?.left || 0}
           </span>
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            fontSize: isCompactMode ? '10px' : '14px'
-          }}>
-            <span style={{ color: 'var(--muted)', fontWeight: 600 }}>SET</span>
-            <span style={{ fontWeight: 700 }}>{data?.set?.index || 1}</span>
+          <div className="flex flex-col items-center leading-tight">
+            <span className={SB_EYEBROW}>{t('scoreboard.set', 'Set')}</span>
+            <span className="text-base font-bold tabular-nums text-stone-900">{data?.set?.index || 1}</span>
           </div>
-          <span style={{
+          <span className="tabular-nums" style={{
             padding: isCompactMode ? '2px 6px' : '4px 10px',
             borderRadius: '4px',
             fontSize: isCompactMode ? '12px' : '16px',
@@ -7433,10 +7366,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             }}>
               {teamBLabel}
             </div>
-            <span style={{
+            <span className="text-stone-900 tracking-normal" style={{
               fontSize: `${DESIGN_VMIN * 0.018 * scaleFactor}px`,
               fontWeight: 600,
-              color: 'var(--text)',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap'
@@ -7450,23 +7382,17 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         <div className="toolbar-actions" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: isCompactMode ? '4px' : '12px' }}>
           {/* Scoresheet dropdown menu */}
           <MenuList
-            buttonLabel={<FileText />}
+            tone="light"
+            buttonLabel={<FileText size={18} />}
             buttonTitle={t('header.scoresheet')}
             menuTitle={t('header.scoresheet')}
-            buttonClassName="secondary"
-            buttonStyle={{
-              background: '#22c55e',
-              color: '#000',
-              fontWeight: 600,
-              padding: '6px 10px',
-              fontSize: '16px'
-            }}
+            buttonClassName={SB_TOOLBAR_BTN}
             showArrow={true}
             position="right"
             items={[
               {
                 key: 'scoresheet-preview',
-                icon: <Search />,
+                icon: <Search size={18} />,
                 label: t('header.preview'),
                 onClick: async () => {
                   try {
@@ -7525,7 +7451,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               },
               {
                 key: 'scoresheet-save',
-                icon: <Save />,
+                icon: <Save size={18} />,
                 label: t('header.savePdf'),
                 onClick: async () => {
                   try {
@@ -7582,25 +7508,18 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             ]}
           />
           <MenuList
-            buttonLabel="☰"
-            buttonTitle="Menu"
-            menuTitle="Menu"
-            buttonClassName="secondary"
-            buttonStyle={{
-              background: '#22c55e',
-              color: '#000',
-              fontWeight: 600,
-              width: isCompactMode ? 'auto' : 'auto',
-              padding: isCompactMode ? '4px 8px' : (isNarrowMode ? '4px 8px' : '8px 16px'),
-              fontSize: isCompactMode ? '14px' : (isNarrowMode ? '12px' : '14px'),
-              textAlign: 'center'
-            }}
+            tone="light"
+            buttonLabel={<MenuIcon size={18} aria-hidden="true" />}
+            buttonTitle={t('scoreboard.menu.menu', 'Menu')}
+            menuTitle={t('scoreboard.menu.menu', 'Menu')}
+            buttonClassName={SB_TOOLBAR_BTN}
             showArrow={false}
             position="right"
             items={[
               {
                 key: 'open-scoreboard',
-                label: t('scoreboard.menu.openScoreboard', 'Open Scoreboard'),
+                icon: <MonitorPlay size={18} />,
+                label: t('scoreboard.menu.openScoreboard', 'Open scoreboard'),
                 onClick: () => {
                   const scoreboardWindow = window.open('/scoreboard_beach.html?mode=local', '_blank', 'width=1280,height=720')
                   if (!scoreboardWindow) {
@@ -7610,58 +7529,65 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               },
               {
                 key: 'action-log',
-                label: 'Show Action Log',
+                icon: <ScrollText size={18} />,
+                label: t('scoreboard.menu.showActionLog', 'Show action log'),
                 onClick: () => {
                   setShowLogs(true)
                 }
               },
               {
                 key: 'sanctions',
-                label: 'Show Sanctions and Results',
+                icon: <ListChecks size={18} />,
+                label: t('scoreboard.menu.showSanctionsResults', 'Show sanctions and results'),
                 onClick: () => {
                   setShowSanctions(true)
                 }
               },
               {
                 key: 'manual',
-                label: 'Manual Changes',
+                icon: <SlidersHorizontal size={18} />,
+                label: t('scoreboard.menu.manualChanges', 'Manual changes'),
                 onClick: () => {
                   setShowManualPanel(true)
                 }
               },
               {
                 key: 'remarks',
-                label: 'Open Remarks Recording',
+                icon: <MessageSquareText size={18} />,
+                label: t('scoreboard.menu.openRemarksRecording', 'Open remarks recording'),
                 onClick: () => {
                   setShowRemarks(true)
                 }
               },
               {
                 key: 'stop-match',
-                label: t('scoreboard.menu.stopMatch', 'Stop the Match'),
-                icon: '⛔',
+                label: t('scoreboard.menu.stopMatch', 'Stop the match'),
+                icon: <Ban size={18} className="text-red-600" />,
                 onClick: () => {
                   setStopMatchModal('select')
                 },
-                style: { color: '#ef4444' }
+                className: 'text-red-600 hover:bg-red-50'
               },
               {
                 key: 'rosters',
-                label: 'Show Rosters',
+                icon: <Users size={18} />,
+                label: t('scoreboard.menu.showRosters', 'Show rosters'),
                 onClick: () => {
                   setShowRosters(true)
                 }
               },
               {
                 key: 'pins',
-                label: 'Show PINs',
+                icon: <KeyRound size={18} />,
+                label: t('scoreboard.menu.showPins', 'Show PINs'),
                 onClick: () => {
                   setShowPinsModal(true)
                 }
               },
               ...(onOpenMatchSetup ? [{
                 key: 'match-setup',
-                label: 'Show Match Setup',
+                icon: <IdCard size={18} />,
+                label: t('scoreboard.menu.showMatchSetup', 'Show match setup'),
                 onClick: () => {
                   onOpenMatchSetup()
                 }
@@ -7669,8 +7595,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               { separator: true },
               {
                 key: 'export',
-                icon: <Download />,
-                label: 'Download Game Data (JSON)',
+                icon: <Download size={18} />,
+                label: t('scoreboard.menu.downloadGameData', 'Download game data (JSON)'),
                 onClick: async () => {
                   try {
                     // Export all database data
@@ -7713,8 +7639,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               },
               {
                 key: 'options',
-                icon: <Settings />,
-                label: 'Options',
+                icon: <Settings size={18} />,
+                label: t('scoreboard.menu.options', 'Options'),
                 onClick: () => {
                   setShowOptionsInMenu(true)
                 }
@@ -17621,6 +17547,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 }
 
 function ScoreboardToolbar({ children, collapsed, onToggle }) {
+  const { t } = useTranslation()
+  const label = collapsed
+    ? t('scoreboard.showHeader', 'Show the header')
+    : t('scoreboard.hideHeader', 'Hide the header')
+  const Chevron = collapsed ? ChevronDown : ChevronUp
   return (
     <div style={{ position: 'relative', zIndex: 101 }}>
       <div
@@ -17632,46 +17563,19 @@ function ScoreboardToolbar({ children, collapsed, onToggle }) {
       >
         {children}
       </div>
-      {/* Thin collapse/expand bar at bottom center */}
-      {collapsed ? (
-        <div
-          onClick={onToggle}
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            width: '100%',
-            height: '16px',
-            cursor: 'pointer',
-            background: 'rgba(0, 0, 0, 0.3)',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-            transition: 'all 0.2s'
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(34, 197, 94, 0.2)'}
-          onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.3)'}
-        >
-          <span style={{ fontSize: '10px', color: '#22c55e', fontWeight: 700 }}>▼</span>
-        </div>
-      ) : (
-        <div
-          onClick={onToggle}
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            width: '100%',
-            height: '16px',
-            cursor: 'pointer',
-            background: 'rgba(0, 0, 0, 0.3)',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-            transition: 'all 0.2s'
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(34, 197, 94, 0.2)'}
-          onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.3)'}
-        >
-          <span style={{ fontSize: '10px', color: '#22c55e', fontWeight: 700 }}>▲</span>
-        </div>
-      )}
+      {/* Thin collapse/expand strip at bottom center (same 16px height) */}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={label}
+        title={label}
+        aria-expanded={!collapsed}
+        onClick={onToggle}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle() } }}
+        className={cn('flex w-full h-4 items-center justify-center cursor-pointer text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 transition-colors', FOCUS_RING)}
+      >
+        <Chevron size={14} strokeWidth={2.5} aria-hidden="true" />
+      </div>
     </div>
   )
 }

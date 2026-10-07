@@ -2098,9 +2098,10 @@ export default function App() {
   }
 
   return (
-    // The home page is restyled (volleyui, light); the screens of an open match
-    // keep the legacy dark frame until their own restyle.
-    <div className={cn('app-root', (!matchId || showMatchSetup || showCoinToss) && 'bg-gradient-to-b from-stone-50 to-stone-100')} onClick={(e) => {
+    // Home, setup, coin toss and the scoring screen are restyled (volleyui,
+    // light); manual adjustments and match end keep the legacy dark frame
+    // until their own restyle.
+    <div className={cn('app-root', !(matchId && !showCoinToss && !showMatchSetup && (showManualAdjustments || showMatchEnd)) && 'bg-gradient-to-b from-stone-50 to-stone-100')} onClick={(e) => {
       // Close connection menu and debug menu when clicking outside
       if (showConnectionMenu && !e.target.closest('[data-connection-menu]')) {
         setShowConnectionMenu(false)

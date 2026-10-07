@@ -485,7 +485,7 @@
       "stopTimeout": "Ferma timeout",
       "endSetInterval": "Termina intervallo",
       "enterFullscreen": "Schermo intero",
-      "fullscreenHint": "Lo schermo intero rimuove le intestazioni del browser per massimizzare lo spazio.",
+      "fullscreenHint": "Lo schermo intero nasconde le barre del browser per sfruttare tutto lo schermo.",
       "pointTeam": "Punto {{team}}",
       "toLeft": "TO Sinistra",
       "toRight": "TO Destra",
@@ -573,21 +573,22 @@
       "menu": "Menu",
       "showActionLog": "Mostra registro azioni",
       "showSanctionsResults": "Mostra sanzioni e risultati",
-      "openRemarksRecording": "Registrazione delle osservazioni aperte",
+      "openRemarksRecording": "Registra le osservazioni",
       "stopMatch": "Interrompi partita",
       "showPins": "Mostra PIN",
-      "showMatchSetup": "Impostazione delle partite dello spettacolo",
-      "downloadGameData": "Scarica i dati di gioco (JSON)",
+      "showMatchSetup": "Mostra impostazioni partita",
+      "downloadGameData": "Scarica i dati della partita (JSON)",
       "options": "Opzioni",
       "gamePins": "PIN partita",
       "refereePin": "PIN arbitro",
       "gameNumber": "Numero partita",
-      "helpVideoGuides": "Aiuto & Guide video",
+      "helpVideoGuides": "Aiuto & guide video",
       "actionLog": "Registro azioni",
       "manualChanges": "Modifiche manuali",
-      "keyboardShortcuts": "Scorciatoie tastiera",
-      "searchEvents": "Cerca eventi...",
-      "openScoreboard": "Apri tabellone"
+      "keyboardShortcuts": "Scorciatoie da tastiera",
+      "searchEvents": "Cerca eventi…",
+      "openScoreboard": "Apri tabellone",
+      "showRosters": "Mostra le formazioni"
     },
     "stopMatch": {
       "title": "Interrompi partita",
@@ -707,7 +708,18 @@
     "waitingHint": "Avvia una partita nell'app segnapunti su questo dispositivo",
     "connecting": "Connessione in corso...",
     "displayTimeout": "TIMEOUT",
-    "displayFinal": "FINALE"
+    "displayFinal": "FINALE",
+    "showHeader": "Mostra l’intestazione",
+    "hideHeader": "Nascondi l’intestazione",
+    "duplicateTab": {
+      "body": "Questa partita è già aperta in un’altra scheda o finestra. Chiudi questa scheda e continua nell’altra, così non si sovrascrivono a vicenda.",
+      "close": "Chiudi questa scheda"
+    },
+    "rotate": {
+      "title": "Ruota il dispositivo",
+      "body": "La schermata di refertazione funziona in orizzontale. Ruota il dispositivo per continuare.",
+      "tip": "Per i backup automatici, usa Chrome o Edge su un portatile o un computer fisso."
+    }
   },
   "settings": {
     "title": "Impostazioni",

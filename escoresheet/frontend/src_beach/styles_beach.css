@@ -707,8 +707,19 @@ button:disabled {
   }
 }
 
-/* Match record layout */
+/* Match record layout: the scoring screen (Scoreboard_beach.jsx), on the light
+   volleyui palette. The legacy colour names are re-pointed at the stone tokens
+   here, so every inline var(--text) / var(--muted) inside the screen (and the
+   dialogs it renders in place) reads dark on light. A legacy dark panel that is
+   rendered inside it (ScoreboardOptionsModal, ConnectionSetupModal) carries
+   .legacy-dark, which pins the old palette back on itself. */
 .match-record {
+  --bg: var(--ov-page);
+  --panel: var(--ov-card);
+  --bg-secondary: var(--ov-sunken);
+  --text: var(--ov-text);
+  --muted: var(--ov-text-muted);
+  color: var(--ov-text-body);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -731,15 +742,65 @@ button:disabled {
   box-sizing: border-box;
 }
 
+/* The legacy dark palette, pinned on a dark panel that is still rendered inside
+   the light scoring screen (Modal_beach without tone="light"). */
+.legacy-dark {
+  --bg: #0b1220;
+  --panel: #111827;
+  --bg-secondary: #1f2937;
+  --text: #e5e7eb;
+  --muted: #9ca3af;
+  color: var(--text);
+}
+
+/* Controls in the scoring screen that carry no colour of their own: the legacy
+   scoring-green button becomes the emerald confirm, .secondary the white outline
+   button, .danger the brand red, and fields are white with a stone border.
+   Inline styles and utilities still win; .legacy-dark panels keep the old look. */
+.match-record button:not(.legacy-dark *) {
+  background: var(--ov-success);
+  color: #fff;
+}
+
+.match-record button.secondary:not(.legacy-dark *) {
+  background: var(--ov-card);
+  color: var(--ov-text-body);
+  border: 1px solid var(--ov-hairline-strong);
+}
+
+.match-record button.danger:not(.legacy-dark *) {
+  background: var(--ov-danger);
+  color: #fff;
+}
+
+.match-record :is(input, select, textarea):not(.legacy-dark *) {
+  background: var(--ov-card);
+  color: var(--ov-text);
+  border: 1px solid var(--ov-hairline-strong);
+}
+
+.match-record :is(input, select, textarea):not(.legacy-dark *):focus {
+  outline: none;
+  border-color: rgb(226 0 26 / 0.4);
+  box-shadow: 0 0 0 2px rgb(190 0 20 / 0.2);
+}
+
+.match-record select:not(.legacy-dark *) option {
+  background: var(--ov-card);
+  color: var(--ov-text);
+}
+
 .match-toolbar {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
   align-items: center;
   gap: 0.76cqw;
   padding: 0.6cqw 0.85cqw;
-  background: rgba(15, 23, 42, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: calc(12px * var(--scale-factor));
+  background: var(--ov-card);
+  border: 1px solid var(--ov-hairline-soft);
+  border-radius: var(--ov-radius-xl);
+  box-shadow: var(--ov-shadow-card);
+  color: var(--ov-text);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -752,65 +813,6 @@ button:disabled {
   .match-toolbar {
     padding: 0.42cqw 0.6cqw;
   }
-}
-
-.toolbar-left {
-  display: inline-flex;
-  align-items: center;
-  gap: 1.2cqw;
-  flex-wrap: wrap;
-}
-
-.status-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5cqw;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  font-size: 1.2cqw;
-}
-
-.status-dot {
-  width: 0.85cqw;
-  height: 0.85cqw;
-  border-radius: 999px;
-  background: var(--danger);
-  box-shadow: 0 0 0.8cqw rgba(239, 68, 68, 0.6);
-  flex-shrink: 0;
-}
-
-.status-indicator.status-offline .status-dot {
-  background: var(--danger);
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
-}
-
-.status-indicator.status-online_no_supabase .status-dot {
-  background: #f59e0b;
-  box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
-}
-
-.status-indicator.status-connecting .status-dot {
-  background: #eab308;
-  box-shadow: 0 0 8px rgba(234, 179, 8, 0.6);
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-.status-indicator.status-syncing .status-dot {
-  background: #3b82f6;
-  box-shadow: 0 0 8px rgba(59, 130, 246, 0.6);
-  animation: pulse 1s ease-in-out infinite;
-}
-
-.status-indicator.status-synced .status-dot {
-  background: var(--accent);
-  box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
-}
-
-.status-indicator.status-error .status-dot {
-  background: var(--danger);
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
-  animation: pulse 1s ease-in-out infinite;
 }
 
 @keyframes pulse {
@@ -837,79 +839,10 @@ button:disabled {
   }
 }
 
-.toolbar-divider {
-  width: 1px;
-  height: 1cqw;
-  background: rgba(255, 255, 255, 0.08);
-}
-
 .toolbar-clock {
   font-variant-numeric: tabular-nums;
   font-weight: 500;
-  color: var(--muted);
-}
-
-.toolbar-center {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25cqw;
-  align-items: center;
-  flex: 1;
-  min-width: 12cqw;
-}
-
-.toolbar-title {
-  margin: 0;
-  font-size: 1cqw;
-}
-
-.toolbar-score-section {
-  display: flex;
-  align-items: center;
-  gap: 1cqw;
-  width: 100%;
-  justify-content: space-between;
-}
-
-.toolbar-team-left,
-.toolbar-team-right {
-  display: flex;
-  align-items: center;
-  gap: 0.5cqw;
-  flex: 1;
-}
-
-.toolbar-team-right {
-  justify-content: flex-end;
-}
-
-.toolbar-team-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.7cqw;
-  height: 1.7cqw;
-  border-radius: 0.34cqw;
-  font-weight: 700;
-  font-size: 0.85cqw;
-  box-shadow: 0 0.1cqw 0.5cqw rgba(0, 0, 0, 0.2);
-}
-
-.toolbar-team-name {
-  font-weight: 600;
-  font-size: 0.85cqw;
-}
-
-.toolbar-score-display {
-  font-size: 2.55cqw;
-  font-weight: 800;
-  letter-spacing: 0.1cqw;
-  background: rgba(15, 23, 42, 0.8);
-  padding: 0.6cqw 1.3cqw;
-  border-radius: 0.6cqw;
-  border: 0.1cqw solid rgba(255, 255, 255, 0.1);
-  min-width: 7.2cqw;
-  text-align: center;
+  color: var(--ov-text-muted);
 }
 
 .toolbar-actions {
@@ -1362,7 +1295,7 @@ button:disabled {
   justify-content: center;
   font-size: 13cqh;
   font-weight: 700;
-  color: var(--text);
+  color: #e5e7eb; /* players keep their light number on the team colour */
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.6);
   flex-shrink: 0;
 }
@@ -1370,7 +1303,7 @@ button:disabled {
 .court-player-number {
   font-size: 13cqh;
   font-weight: 700;
-  color: var(--text);
+  color: #e5e7eb;
 }
 
 .court-player-position {
@@ -1387,7 +1320,7 @@ button:disabled {
   justify-content: center;
   font-size: 3.2cqh;
   font-weight: 700;
-  color: var(--text) !important;
+  color: #e5e7eb !important; /* the court marker keeps its dark chip */
 }
 
 .court-player-captain {

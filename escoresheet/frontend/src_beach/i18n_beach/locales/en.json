@@ -485,8 +485,8 @@
       "startSet": "Start Set",
       "stopTimeout": "Stop Timeout",
       "endSetInterval": "End Set Interval",
-      "enterFullscreen": "Enter Fullscreen",
-      "fullscreenHint": "Fullscreen removes browser headers to maximize screen space.",
+      "enterFullscreen": "Enter fullscreen",
+      "fullscreenHint": "Fullscreen removes the browser bars to make the most of the screen.",
       "pointTeam": "Point {{team}}",
       "toLeft": "TO Left",
       "toRight": "TO Right",
@@ -522,7 +522,7 @@
       "set3ChooseSideService": "Set 3 - Choose Side and Service",
       "reopenSet": "Reopen Set",
       "scoresheetError": "Scoresheet Error",
-      "scoresheetAlreadyOpen": "Scoresheet Already Open",
+      "scoresheetAlreadyOpen": "Scoresheet already open",
       "remarksRecording": "Remarks Recording",
       "sanctionsAndResults": "Sanctions and Results",
       "forfait": "Forfait"
@@ -572,23 +572,24 @@
     "menu": {
       "scoresheet": "Scoresheet",
       "menu": "Menu",
-      "showActionLog": "Show Action Log",
-      "showSanctionsResults": "Show Sanctions and Results",
-      "openRemarksRecording": "Open Remarks Recording",
-      "stopMatch": "Stop the Match",
+      "showActionLog": "Show action log",
+      "showSanctionsResults": "Show sanctions and results",
+      "openRemarksRecording": "Open remarks recording",
+      "stopMatch": "Stop the match",
       "showPins": "Show PINs",
-      "showMatchSetup": "Show Match Setup",
-      "downloadGameData": "Download Game Data (JSON)",
+      "showMatchSetup": "Show match setup",
+      "downloadGameData": "Download game data (JSON)",
       "options": "Options",
       "gamePins": "Game PINs",
       "refereePin": "Referee PIN",
-      "gameNumber": "Game Number",
-      "helpVideoGuides": "Help & Video Guides",
-      "actionLog": "Action Log",
-      "manualChanges": "Manual Changes",
-      "keyboardShortcuts": "Keyboard Shortcuts",
-      "searchEvents": "Search events...",
-      "openScoreboard": "Open Scoreboard"
+      "gameNumber": "Game number",
+      "helpVideoGuides": "Help & video guides",
+      "actionLog": "Action log",
+      "manualChanges": "Manual changes",
+      "keyboardShortcuts": "Keyboard shortcuts",
+      "searchEvents": "Search events…",
+      "openScoreboard": "Open scoreboard",
+      "showRosters": "Show rosters"
     },
     "stopMatch": {
       "title": "Stop the Match",
@@ -708,7 +709,18 @@
     "waitingHint": "Start scoring a match in the scorer app on this device",
     "connecting": "Connecting...",
     "displayTimeout": "TIMEOUT",
-    "displayFinal": "FINAL"
+    "displayFinal": "FINAL",
+    "showHeader": "Show the header",
+    "hideHeader": "Hide the header",
+    "duplicateTab": {
+      "body": "This match is already open in another tab or window. Close this tab and keep scoring in the other one, so the two do not overwrite each other.",
+      "close": "Close this tab"
+    },
+    "rotate": {
+      "title": "Rotate your device",
+      "body": "The scoring screen works in landscape. Turn your device sideways to continue.",
+      "tip": "For the automatic backups, use Chrome or Edge on a laptop or desktop computer."
+    }
   },
   "settings": {
     "title": "Settings",

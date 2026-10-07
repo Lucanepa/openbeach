@@ -96,6 +96,7 @@ export default function MenuList({
           ref={buttonRef}
           className={buttonClassName}
           title={buttonTitle || undefined}
+          aria-label={typeof buttonLabel === 'string' ? undefined : (buttonTitle || undefined)}
           aria-haspopup="menu"
           aria-expanded={showMenu}
           onClick={(e) => {
@@ -131,7 +132,7 @@ export default function MenuList({
                     }
                     setShowMenu(false)
                   }}
-                  className={MENU_ROW}
+                  className={cn(MENU_ROW, item.className)}
                   style={item.style}
                 >
                   {item.icon && <span className={MENU_ICON}>{item.icon}</span>}
