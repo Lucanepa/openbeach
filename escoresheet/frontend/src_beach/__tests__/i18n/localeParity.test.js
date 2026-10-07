@@ -9,17 +9,18 @@ import it_ from '../../i18n_beach/locales/it.json'
 // in all 5 locales OpenBeach ships, non-empty, with the same placeholders;
 // German is written the Swiss way (ss, never ß).
 
-const NAMESPACES = ['app', 'restorePreview', 'update', 'appLifecycle', 'options', 'supportFeedback', 'connection']
+const NAMESPACES = ['app', 'restorePreview', 'update', 'appLifecycle', 'options', 'supportFeedback', 'connection', 'scoreboard.manual', 'scoreboard.sanctionConfirm', 'scoreboard.tto', 'scoreboard.editPin', 'scoreboard.sanctions']
 const LOCALES = { de, 'de-CH': deCH, fr, it: it_ }
 const placeholders = (s) => (String(s).match(/\{\{\w+\}\}/g) || []).sort()
+
+const get = (obj, path) => path.split('.').reduce((o, k) => o?.[k], obj)
 
 const flatten = (obj, prefix = '') => Object.entries(obj || {}).flatMap(([k, v]) =>
   v && typeof v === 'object' ? flatten(v, `${prefix}${k}.`) : [[`${prefix}${k}`, v]])
 
-const get = (obj, path) => path.split('.').reduce((o, k) => o?.[k], obj)
 
 describe.each(NAMESPACES)('locale keys: %s', (ns) => {
-  const enKeys = flatten(en[ns], `${ns}.`)
+  const enKeys = flatten(get(en, ns), `${ns}.`)
 
   it('exists in English', () => {
     expect(enKeys.length).toBeGreaterThan(0)
@@ -38,7 +39,7 @@ describe.each(NAMESPACES)('locale keys: %s', (ns) => {
 
   it('no ß in German', () => {
     for (const loc of [de, deCH]) {
-      for (const [, v] of flatten(loc[ns])) expect(v).not.toContain('ß')
+      for (const [, v] of flatten(get(loc, ns))) expect(v).not.toContain('ß')
     }
   })
 })

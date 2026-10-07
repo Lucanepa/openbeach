@@ -1383,8 +1383,10 @@ button:disabled {
 }
 
 .rally-point-button {
-  min-width: calc(138px * var(--scale-factor));
-  min-height: calc(92px * var(--scale-factor));
+  /* scoring actions: as big as the layout allows, never under 64 × 140 px
+     whatever the scale (volleyui §7) */
+  min-width: max(140px, calc(138px * var(--scale-factor)));
+  min-height: max(64px, calc(92px * var(--scale-factor)));
   font-size: calc(24px * var(--scale-factor));
   font-weight: 700;
   padding: calc(18px * var(--scale-factor)) calc(28px * var(--scale-factor));
@@ -1408,8 +1410,8 @@ button.start-rally-button {
   }
 
   .rally-point-button {
-    min-width: calc(115px * var(--scale-factor));
-    min-height: calc(75px * var(--scale-factor));
+    min-width: max(140px, calc(115px * var(--scale-factor)));
+    min-height: max(64px, calc(75px * var(--scale-factor)));
     font-size: calc(22px * var(--scale-factor));
     padding: calc(14px * var(--scale-factor)) calc(23px * var(--scale-factor));
   }

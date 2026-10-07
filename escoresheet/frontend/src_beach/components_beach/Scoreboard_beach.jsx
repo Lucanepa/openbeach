@@ -37,10 +37,11 @@ import { TimeInput24 } from './TimeInput24_beach'
 import { uploadScoresheetAsync } from '../utils_beach/scoresheetUploader_beach'
 import { useConnectionHealthMonitor } from '../hooks_beach/useConnectionHealthMonitor_beach'
 import { ArrowLeftRight, Card, ChartColumn, ClipboardList, Copy, Download, FileText, NotebookPen, RefreshCw, Save, Search, Settings, Smartphone, TriangleAlert, Volleyball, Wrench } from './Icons_beach'
-import { ChevronDown, ChevronUp, Ban, Expand, IdCard, KeyRound, ListChecks, Menu as MenuIcon, MessageSquareText, MonitorPlay, ScrollText, SlidersHorizontal, Users } from 'lucide-react'
+import { ChevronDown, ChevronUp, Ban, Expand, IdCard, KeyRound, ListChecks, Menu as MenuIcon, MessageSquareText, MonitorPlay, ScrollText, SlidersHorizontal, Users, Zap } from 'lucide-react'
 import { cn } from '../ui/volleyui/cn.js'
 import { FOCUS_RING } from '../ui/volleyui/Button.jsx'
 import { AppSpinner } from '../ui/volleyui/AppSpinner.jsx'
+import { modalCancelClass, modalPrimaryClass } from '../ui/volleyui/Modal.jsx'
 import { dayLabel, timeSecondsLabel } from '../ui/volleyui/format.js'
 
 // ── volleyui chrome for the scoring screen ───────────────────────────────────
@@ -60,7 +61,13 @@ const SB_TOOLBAR_BTN = `relative inline-flex items-center justify-center gap-1 h
  *  the dark key action, a point is the emerald confirm, Replay the white
  *  outline, Decision change amber (a decision), Undo the red outline (it goes
  *  through a confirm). The Referee BMP keeps its orange (a domain marker). */
-const SB_RALLY_BASE = `inline-flex items-center justify-center rounded-xl border font-bold tracking-normal transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS_RING}`
+/** The rally controls scale with the screen, but never below this: at 0.53
+ *  (a 1024×600 tablet) Undo came out 22 px tall, Start set 49 px. With the
+ *  floor and the min sizes below, Undo stays ≥ 44 px and a point button
+ *  ≥ 54 px on that screen (volleyui §7). */
+const RALLY_MIN_SCALE = 0.85
+
+const SB_RALLY_BASE = `inline-flex min-h-12 items-center justify-center rounded-xl border font-bold tracking-normal transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS_RING}`
 const SB_RALLY_START = `${SB_RALLY_BASE} border-slate-900 bg-slate-900 text-white hover:bg-slate-800`
 const SB_RALLY_POINT = `${SB_RALLY_BASE} border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800`
 const SB_RALLY_OUTLINE = `${SB_RALLY_BASE} border-stone-300 bg-white text-stone-700 hover:bg-stone-50`
@@ -305,8 +312,6 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   const [leftDelaysDropdownOpen, setLeftDelaysDropdownOpen] = useState(false) // Narrow mode dropdown for left team delays/sanctions buttons
   const [rightDelaysDropdownOpen, setRightDelaysDropdownOpen] = useState(false) // Narrow mode dropdown for right team delays/sanctions buttons
   const [toSubDetailsModal, setToSubDetailsModal] = useState(null) // { type: 'timeout', side: 'left'|'right' } | null
-  const [showHelpModal, setShowHelpModal] = useState(false)
-  const [selectedHelpTopic, setSelectedHelpTopic] = useState(null)
   const [replayRallyConfirm, setReplayRallyConfirm] = useState(null) // { event: Event, description: string, selectedOption: 'swap'|'replay' } | null
   const [stopMatchModal, setStopMatchModal] = useState(null) // 'select' | null - Stop the match modal selection
   const [stopMatchTeamSelect, setStopMatchTeamSelect] = useState(null) // { pendingAction: 'forfeit' } | null - Team selection for forfeit
@@ -6616,38 +6621,17 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     accidentalPointConfirmModal, undoConfirm, replayRallyConfirm, handleReplayRally, handleDecisionChange
   ])
 
-  const sanctionButtonStyles = useMemo(() => ({
-    improper: {
-      flex: 1,
-      fontSize: '10px',
-      padding: '8px 4px',
-      background: 'rgba(156, 163, 175, 0.25)',
-      border: '1px solid rgba(156, 163, 175, 0.5)',
-      color: '#d1d5db',
-      fontWeight: 600,
-      boxShadow: '0 0 0 1px rgba(255,255,255,0.05)'
-    },
-    delayWarning: {
-      flex: 1,
-      fontSize: '10px',
-      padding: '8px 4px',
-      background: 'rgba(234, 179, 8, 0.2)',
-      border: '1px solid rgba(234, 179, 8, 0.4)',
-      color: '#facc15',
-      fontWeight: 600,
-      boxShadow: '0 0 0 1px rgba(250, 204, 21, 0.15)'
-    },
-    delayPenalty: {
-      flex: 1,
-      fontSize: '10px',
-      padding: '8px 4px',
-      background: 'rgba(239, 68, 68, 0.2)',
-      border: '1px solid rgba(239, 68, 68, 0.4)',
-      color: '#f87171',
-      fontWeight: 600,
-      boxShadow: '0 0 0 1px rgba(248, 113, 113, 0.2)'
+  // Team-column sanctions: scoring actions, so at least 44 px (volleyui §7),
+  // on the light screen; the delay ones keep the official card colours
+  // (yellow warning, red penalty), each with its word.
+  const sanctionButtonStyles = useMemo(() => {
+    const base = { flex: 1, minHeight: '48px', fontSize: '13px', lineHeight: 1.15, padding: '6px 8px', fontWeight: 600, borderRadius: 'var(--ov-radius)', borderWidth: '1px', borderStyle: 'solid' }
+    return {
+      improper: { ...base, background: 'var(--ov-card)', borderColor: 'var(--ov-hairline-strong)', color: 'var(--ov-text-body)' },
+      delayWarning: { ...base, background: '#fef9c3', borderColor: '#eab308', color: '#713f12' },
+      delayPenalty: { ...base, background: 'var(--ov-danger-soft)', borderColor: '#dc2626', color: 'var(--ov-danger-text)' }
     }
-  }), [])
+  }, [])
 
   // Check if referees are connected (heartbeat within last 15 seconds)
   // Must be before any early returns to comply with Rules of Hooks
@@ -6995,188 +6979,6 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   const teamBShortName = leftisTeam1
     ? (data?.match?.team2ShortName || rightTeam.name?.trim().toUpperCase() || 'B')
     : (data?.match?.team1ShortName || rightTeam.name?.trim().toUpperCase() || 'B')
-
-  // Help content function
-  const getHelpContent = (topicId) => {
-    switch (topicId) {
-      case 'recording-points':
-        return (
-          <div>
-            <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px' }}>Recording Points</h3>
-            <div style={{ background: 'var(--ov-sunken)', padding: '20px', borderRadius: '8px' }}>
-              <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '12px' }}>What happens when you record a point:</h4>
-              <ul style={{ paddingLeft: '20px', lineHeight: '1.8' }}>
-                <li>The score updates automatically for the team that scored</li>
-                <li>The point is logged in the event history</li>
-                <li>The serving team indicator updates</li>
-                <li>If a team reaches 21 points (or 15 in set 3) with a 2-point lead, you'll be prompted to end the set</li>
-                <li>All actions are saved automatically to the database</li>
-              </ul>
-              <h4 style={{ fontSize: '18px', fontWeight: 600, marginTop: '20px', marginBottom: '12px' }}>Keyboard Shortcuts:</h4>
-              <ul style={{ paddingLeft: '20px', lineHeight: '1.8' }}>
-                <li><strong>Space</strong>: Award point to Team 1</li>
-                <li><strong>Enter</strong>: Award point to Team 2</li>
-              </ul>
-            </div>
-          </div>
-        )
-
-      case 'timeouts':
-        return (
-          <div>
-            <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px' }}>Timeouts</h3>
-            <div style={{ background: 'var(--ov-sunken)', padding: '20px', borderRadius: '8px' }}>
-              <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '12px' }}>What happens when you request a timeout:</h4>
-              <ul style={{ paddingLeft: '20px', lineHeight: '1.8' }}>
-                <li>A 45-second countdown timer starts automatically</li>
-                <li>The timeout is recorded in the event log</li>
-                <li>Each team is limited to 1 timeout per set</li>
-                <li>The timeout countdown is displayed on screen</li>
-                <li>You can see timeout history in the timeout details panel</li>
-              </ul>
-              <h4 style={{ fontSize: '18px', fontWeight: 600, marginTop: '20px', marginBottom: '12px' }}>Important Notes:</h4>
-              <ul style={{ paddingLeft: '20px', lineHeight: '1.8' }}>
-                <li>Timeouts cannot be requested if the team has already used both timeouts in the set</li>
-                <li>The timer continues even if you navigate away from the scoreboard</li>
-                <li>Timeouts are automatically saved to the database</li>
-              </ul>
-            </div>
-          </div>
-        )
-
-
-      case 'sanctions':
-        return (
-          <div>
-            <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px' }}>Sanctions</h3>
-            <div style={{ background: 'var(--ov-sunken)', padding: '20px', borderRadius: '8px' }}>
-              <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '12px' }}>What happens when you record a sanction:</h4>
-              <ul style={{ paddingLeft: '20px', lineHeight: '1.8' }}>
-                <li><strong>Warning (Yellow Card)</strong>: First offense, no point penalty</li>
-                <li><strong>Penalty (Red Card)</strong>: Second offense, point awarded to opponent</li>
-                <li><strong>Expulsion</strong>: Player must leave the set, can return next set</li>
-                <li><strong>Disqualification</strong>: Player must leave the match entirely</li>
-                <li>Sanctions are recorded with the score at the time of the sanction</li>
-                <li>All sanctions appear in the sanctions table on the match end screen</li>
-              </ul>
-              <h4 style={{ fontSize: '18px', fontWeight: 600, marginTop: '20px', marginBottom: '12px' }}>Who Can Receive Sanctions:</h4>
-              <ul style={{ paddingLeft: '20px', lineHeight: '1.8' }}>
-                <li>Players</li>
-                <li>Team (delay warnings/penalties)</li>
-              </ul>
-            </div>
-          </div>
-        )
-
-      case 'ending-set':
-        return (
-          <div>
-            <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px' }}>Ending a Set</h3>
-            <div style={{ background: 'var(--ov-sunken)', padding: '20px', borderRadius: '8px' }}>
-              <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '12px' }}>What happens when you end a set:</h4>
-              <ul style={{ paddingLeft: '20px', lineHeight: '1.8' }}>
-                <li>You'll be prompted to confirm the set end time</li>
-                <li>The set is marked as finished in the database</li>
-                <li>Set statistics are calculated (timeouts, duration)</li>
-                <li>If it's set 2, you'll be asked to choose sides and first serve for set 3 (new coin toss)</li>
-                <li>If it's set 3, the match ends automatically</li>
-                <li>If a team wins 2 sets, the match ends and you go to the Match End screen</li>
-                <li>Otherwise, the next set begins automatically</li>
-              </ul>
-              <h4 style={{ fontSize: '18px', fontWeight: 600, marginTop: '20px', marginBottom: '12px' }}>Set End Conditions:</h4>
-              <ul style={{ paddingLeft: '20px', lineHeight: '1.8' }}>
-                <li><strong>Sets 1-2</strong>: First team to 21 points with 2-point lead</li>
-                <li><strong>Set 3</strong>: First team to 15 points with 2-point lead</li>
-                <li>No cap - sets continue until a team wins by 2 points</li>
-              </ul>
-            </div>
-          </div>
-        )
-
-      case 'match-end':
-        return (
-          <div>
-            <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px' }}>Match End</h3>
-            <div style={{ background: 'var(--ov-sunken)', padding: '20px', borderRadius: '8px' }}>
-              <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '12px' }}>What happens when the match ends:</h4>
-              <ul style={{ paddingLeft: '20px', lineHeight: '1.8' }}>
-                <li>The match status is automatically set to "final"</li>
-                <li>You're taken to the Match End screen</li>
-                <li>All match data is preserved (sets, events, players, teams)</li>
-                <li>For official matches, the match is queued for sync to Supabase</li>
-                <li>The session lock is released</li>
-                <li>You can review results, sanctions, and match statistics</li>
-              </ul>
-              <h4 style={{ fontSize: '18px', fontWeight: 600, marginTop: '20px', marginBottom: '12px' }}>Match End Screen:</h4>
-              <ul style={{ paddingLeft: '20px', lineHeight: '1.8' }}>
-                <li>View final score and set-by-set breakdown</li>
-                <li>Review all sanctions issued</li>
-                <li>Collect signatures from captains and officials</li>
-                <li>Approve and export match data (PDF, JPG, JSON)</li>
-                <li>Return to team1 screen when done</li>
-              </ul>
-            </div>
-          </div>
-        )
-
-      case 'undo':
-        return (
-          <div>
-            <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px' }}>Undo Actions</h3>
-            <div style={{ background: 'var(--ov-sunken)', padding: '20px', borderRadius: '8px' }}>
-              <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '12px' }}>What happens when you undo an action:</h4>
-              <ul style={{ paddingLeft: '20px', lineHeight: '1.8' }}>
-                <li>The last action is reversed (point, substitution, timeout, etc.)</li>
-                <li>The score or state returns to what it was before</li>
-                <li>The undo event is logged in the action history</li>
-                <li>You can undo multiple actions in sequence</li>
-                <li>Undo works for most actions except set/match end</li>
-              </ul>
-              <h4 style={{ fontSize: '18px', fontWeight: 600, marginTop: '20px', marginBottom: '12px' }}>How to Undo:</h4>
-              <ul style={{ paddingLeft: '20px', lineHeight: '1.8' }}>
-                <li>Click the <strong>Undo</strong> button in the rally controls</li>
-                <li>Or use the keyboard shortcut (if available)</li>
-                <li>Confirm the undo action when prompted</li>
-                <li>Check the action log to see undo history</li>
-              </ul>
-              <h4 style={{ fontSize: '18px', fontWeight: 600, marginTop: '20px', marginBottom: '12px' }}>Limitations:</h4>
-              <ul style={{ paddingLeft: '20px', lineHeight: '1.8' }}>
-                <li>Cannot undo set end or match end</li>
-                <li>Cannot undo actions from previous sets</li>
-                <li>Undo only affects the current set</li>
-              </ul>
-            </div>
-          </div>
-        )
-
-      case 'set-3':
-        return (
-          <div>
-            <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px' }}>Set 3 (Tie-break)</h3>
-            <div style={{ background: 'var(--ov-sunken)', padding: '20px', borderRadius: '8px' }}>
-              <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '12px' }}>What happens in Set 3:</h4>
-              <ul style={{ paddingLeft: '20px', lineHeight: '1.8' }}>
-                <li>First team to 15 points wins (instead of 21)</li>
-                <li>Must win by 2 points (no cap)</li>
-                <li>Teams switch sides every 5 points (not 7 like sets 1-2)</li>
-                <li>New coin toss determines sides and first serve</li>
-                <li>All other rules remain the same (timeouts, etc.)</li>
-              </ul>
-              <h4 style={{ fontSize: '18px', fontWeight: 600, marginTop: '20px', marginBottom: '12px' }}>Court Switch at 5 Points:</h4>
-              <ul style={{ paddingLeft: '20px', lineHeight: '1.8' }}>
-                <li>When teams reach a combined 5 points, the app will prompt for court switch</li>
-                <li>You'll confirm which team is now on which side</li>
-                <li>The scoreboard updates to reflect the new positions</li>
-                <li>Play continues without interruption</li>
-              </ul>
-            </div>
-          </div>
-        )
-
-      default:
-        return <div>Topic not found</div>
-    }
-  }
 
   // Show duplicate tab error if scoresheet is already open in another tab
   if (duplicateTabError) {
@@ -7907,7 +7709,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   onClick={() => setLeftDelaysDropdownOpen(!leftDelaysDropdownOpen)}
                   style={{ width: '100%', fontSize: '10px', padding: '8px 4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 >
-                  {t('scoreboard.sanctions.irAndDelays')} {leftDelaysDropdownOpen ? '▲' : '▼'}
+                  {t('scoreboard.sanctions.irAndDelays')} <ChevronDown size={14} aria-hidden="true" style={{ display: 'inline', verticalAlign: 'middle', transform: leftDelaysDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                 </button>
                 {leftDelaysDropdownOpen && (
                   <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -8262,7 +8064,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             disabled={isRallyOngoing || toUsed >= 1}
                             style={{
                               flex: 1,
-                              height: `${DESIGN_VMIN * 0.045 * scaleFactor}px`,
+                              // a scoring action: never under 48 px, whatever the scale (volleyui §7)
+                              height: `max(48px, ${DESIGN_VMIN * 0.045 * scaleFactor}px)`,
                               fontSize: `${DESIGN_VMIN * 0.018 * scaleFactor}px`,
                               fontWeight: 700,
                               background: bg,
@@ -8286,7 +8089,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 disabled={!bmpAvailable}
                                 style={{
                                   flex: 1,
-                                  height: `${DESIGN_VMIN * 0.045 * scaleFactor}px`,
+                                  // a scoring action: never under 48 px, whatever the scale (volleyui §7)
+                              height: `max(48px, ${DESIGN_VMIN * 0.045 * scaleFactor}px)`,
                                   fontSize: `${DESIGN_VMIN * 0.018 * scaleFactor}px`,
                                   fontWeight: 700,
                                   background: bmpExhausted ? 'var(--ov-danger-soft)' : (bmpAvailable ? 'var(--ov-card)' : 'var(--ov-sunken-strong)'),
@@ -8323,8 +8127,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         onClick={() => handleTeamSanction(leftisTeam1 ? 'team1' : 'team2', 'improper_request')}
                         style={{
                           width: '100%',
-                          height: `${DESIGN_VMIN * 0.028 * scaleFactor}px`,
-                          fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px`,
+                          height: `max(44px, ${DESIGN_VMIN * 0.028 * scaleFactor}px)`,
+                          fontSize: `max(12px, ${DESIGN_VMIN * 0.016 * scaleFactor}px)`,
                           fontWeight: 600,
                           background: 'var(--ov-card)',
                           color: 'var(--ov-text-secondary)',
@@ -8351,8 +8155,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             onClick={() => handleTeamSanction(leftTeamKey, 'delay_penalty')}
                             style={{
                               width: '100%',
-                              height: `${DESIGN_VMIN * 0.028 * scaleFactor}px`,
-                              fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px`,
+                              height: `max(44px, ${DESIGN_VMIN * 0.028 * scaleFactor}px)`,
+                              fontSize: `max(12px, ${DESIGN_VMIN * 0.016 * scaleFactor}px)`,
                               fontWeight: 600,
                               background: 'var(--ov-danger-soft)',
                               color: 'var(--ov-danger-text)',
@@ -8375,8 +8179,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             onClick={() => handleTeamSanction(leftTeamKey, 'delay_warning')}
                             style={{
                               width: '100%',
-                              height: `${DESIGN_VMIN * 0.028 * scaleFactor}px`,
-                              fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px`,
+                              height: `max(44px, ${DESIGN_VMIN * 0.028 * scaleFactor}px)`,
+                              fontSize: `max(12px, ${DESIGN_VMIN * 0.016 * scaleFactor}px)`,
                               fontWeight: 600,
                               background: 'var(--ov-warning-soft)',
                               color: 'var(--ov-warning-text)',
@@ -8416,8 +8220,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           }}
                           style={{
                             width: '100%',
-                            height: `${DESIGN_VMIN * 0.028 * scaleFactor}px`,
-                            fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px`,
+                            height: `max(44px, ${DESIGN_VMIN * 0.028 * scaleFactor}px)`,
+                            fontSize: `max(12px, ${DESIGN_VMIN * 0.016 * scaleFactor}px)`,
                             fontWeight: 600,
                             background: '#f5f3ff',
                             color: '#6d28d9',
@@ -9846,7 +9650,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       width: '100%',
                       minHeight: `${(isCompactMode ? 80 : 120) * scaleFactor}px`
                     }}>
-                      <div className="rally-controls" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', transform: `scale(${scaleFactor})`, transformOrigin: 'center center', gap: '6px', marginTop: '12px' }}>
+                      <div className="rally-controls" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', transform: `scale(${Math.max(scaleFactor, RALLY_MIN_SCALE)})`, transformOrigin: 'center center', gap: '6px', marginTop: '12px' }}>
                         {/* Show timeout countdown if timeout is active */}
                         {timeoutModal && timeoutModal.started ? (
                           <div
@@ -9956,7 +9760,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                         <button
                                           className={cn('rally-btn start', SB_RALLY_START)}
                                           onClick={endSetInterval}
-                                          style={{ marginTop: '8px', padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'calc(92px * var(--scale-factor, 1))' }}
+                                          style={{ marginTop: '8px', padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'max(64px, calc(92px * var(--scale-factor, 1)))' }}
                                         >
                                           {t('scoreboard.buttons.endSetInterval', 'End set interval')}
                                         </button>
@@ -9971,7 +9775,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     <button
                                       className={cn('rally-btn start', SB_RALLY_START)}
                                       onClick={handleStartRally}
-                                      style={{ padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'calc(92px * var(--scale-factor, 1))' }}
+                                      style={{ padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'max(64px, calc(92px * var(--scale-factor, 1)))' }}
                                     >
                                       {t('scoreboard.buttons.startSet', 'Start set')} {(data?.set?.index || 1)}
                                     </button>
@@ -9984,7 +9788,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     className={cn('rally-btn start', SB_RALLY_START)}
                                     onClick={handleStartRally}
                                     disabled={data?.match?.status === 'complete'}
-                                    style={{ padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'calc(92px * var(--scale-factor, 1))' }}
+                                    style={{ padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'max(64px, calc(92px * var(--scale-factor, 1)))' }}
                                   >
                                     {data?.match?.status === 'not_started'
                                       ? t('scoreboard.buttons.startMatch', 'Start match')
@@ -10015,7 +9819,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     className={cn('rally-point-button tabular-nums', SB_RALLY_POINT)}
                                     onClick={() => handlePoint('left')}
                                     style={{
-                                      padding: '12px 16px'
+                                      padding: '12px 16px',
+                                      // the point buttons as big as the row allows (volleyui §7):
+                                      // wider, and on a 1024×600 tablet as tall as fits above Undo
+                                      minHeight: `${Math.max(58, 110 * scaleFactor)}px`,
+                                      minWidth: '150px',
+                                      fontSize: '24px'
                                     }}
                                   >
                                     {t('scoreboard.buttons.pointTeam', { team: teamALabel || teamAShortName })}
@@ -10024,7 +9833,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     className={cn('rally-point-button tabular-nums', SB_RALLY_POINT)}
                                     onClick={() => handlePoint('right')}
                                     style={{
-                                      padding: '12px 16px'
+                                      padding: '12px 16px',
+                                      // the point buttons as big as the row allows (volleyui §7):
+                                      // wider, and on a 1024×600 tablet as tall as fits above Undo
+                                      minHeight: `${Math.max(58, 110 * scaleFactor)}px`,
+                                      minWidth: '150px',
+                                      fontSize: '24px'
                                     }}
                                   >
                                     {t('scoreboard.buttons.pointTeam', { team: teamBLabel || teamBShortName })}
@@ -10065,7 +9879,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 disabled={!canUndo}
                                 style={{
                                   padding: '8px 36px',
-                                  fontSize: '20px'
+                                  fontSize: '20px',
+                                  minHeight: 'max(52px, calc(60px * var(--scale-factor, 1)))',
+                                  minWidth: '160px'
                                 }}
                               >
                                 {t('scoreboard.buttons.undo', 'Undo')}
@@ -10163,7 +9979,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             disabled={isRallyOngoing || toUsed >= 1}
                             style={{
                               flex: 1,
-                              height: `${DESIGN_VMIN * 0.045 * scaleFactor}px`,
+                              // a scoring action: never under 48 px, whatever the scale (volleyui §7)
+                              height: `max(48px, ${DESIGN_VMIN * 0.045 * scaleFactor}px)`,
                               fontSize: `${DESIGN_VMIN * 0.018 * scaleFactor}px`,
                               fontWeight: 700,
                               background: bg,
@@ -10187,7 +10004,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 disabled={!bmpAvailable}
                                 style={{
                                   flex: 1,
-                                  height: `${DESIGN_VMIN * 0.045 * scaleFactor}px`,
+                                  // a scoring action: never under 48 px, whatever the scale (volleyui §7)
+                              height: `max(48px, ${DESIGN_VMIN * 0.045 * scaleFactor}px)`,
                                   fontSize: `${DESIGN_VMIN * 0.018 * scaleFactor}px`,
                                   fontWeight: 700,
                                   background: bmpExhausted ? 'var(--ov-danger-soft)' : (bmpAvailable ? 'var(--ov-card)' : 'var(--ov-sunken-strong)'),
@@ -10224,8 +10042,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         onClick={() => handleTeamSanction(leftisTeam1 ? 'team2' : 'team1', 'improper_request')}
                         style={{
                           width: '100%',
-                          height: `${DESIGN_VMIN * 0.028 * scaleFactor}px`,
-                          fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px`,
+                          height: `max(44px, ${DESIGN_VMIN * 0.028 * scaleFactor}px)`,
+                          fontSize: `max(12px, ${DESIGN_VMIN * 0.016 * scaleFactor}px)`,
                           fontWeight: 600,
                           background: 'var(--ov-card)',
                           color: 'var(--ov-text-secondary)',
@@ -10252,8 +10070,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             onClick={() => handleTeamSanction(rightTeamKey, 'delay_penalty')}
                             style={{
                               width: '100%',
-                              height: `${DESIGN_VMIN * 0.028 * scaleFactor}px`,
-                              fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px`,
+                              height: `max(44px, ${DESIGN_VMIN * 0.028 * scaleFactor}px)`,
+                              fontSize: `max(12px, ${DESIGN_VMIN * 0.016 * scaleFactor}px)`,
                               fontWeight: 600,
                               background: 'var(--ov-danger-soft)',
                               color: 'var(--ov-danger-text)',
@@ -10276,8 +10094,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             onClick={() => handleTeamSanction(rightTeamKey, 'delay_warning')}
                             style={{
                               width: '100%',
-                              height: `${DESIGN_VMIN * 0.028 * scaleFactor}px`,
-                              fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px`,
+                              height: `max(44px, ${DESIGN_VMIN * 0.028 * scaleFactor}px)`,
+                              fontSize: `max(12px, ${DESIGN_VMIN * 0.016 * scaleFactor}px)`,
                               fontWeight: 600,
                               background: 'var(--ov-warning-soft)',
                               color: 'var(--ov-warning-text)',
@@ -10317,8 +10135,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           }}
                           style={{
                             width: '100%',
-                            height: `${DESIGN_VMIN * 0.028 * scaleFactor}px`,
-                            fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px`,
+                            height: `max(44px, ${DESIGN_VMIN * 0.028 * scaleFactor}px)`,
+                            fontSize: `max(12px, ${DESIGN_VMIN * 0.016 * scaleFactor}px)`,
                             fontWeight: 600,
                             background: '#f5f3ff',
                             color: '#6d28d9',
@@ -10655,7 +10473,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   onClick={() => setRightDelaysDropdownOpen(!rightDelaysDropdownOpen)}
                   style={{ width: '100%', fontSize: '10px', padding: '8px 4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 >
-                  {t('scoreboard.sanctions.irAndDelays')} {rightDelaysDropdownOpen ? '▲' : '▼'}
+                  {t('scoreboard.sanctions.irAndDelays')} <ChevronDown size={14} aria-hidden="true" style={{ display: 'inline', verticalAlign: 'middle', transform: rightDelaysDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                 </button>
                 {rightDelaysDropdownOpen && (
                   <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -11028,6 +10846,19 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         >
           <div style={{ padding: '24px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* None to show (always so for a test match): say why, not a blank card */}
+              {!(
+                (data?.match?.refereePin && data?.match?.refereeConnectionEnabled === true) ||
+                data?.match?.gamePin ||
+                ((data?.match?.team1Pin ?? data?.match?.team1TeamPin) && data?.match?.team1TeamConnectionEnabled === true) ||
+                ((data?.match?.team2Pin ?? data?.match?.team2TeamPin) && data?.match?.team2TeamConnectionEnabled === true)
+              ) && (
+                <p className="ov-kit m-0 py-6 text-center text-sm text-stone-500" data-testid="pins-empty">
+                  {data?.match?.test
+                    ? t('scoreboard.pinsEmptyTest', 'No PINs: a test match has no referee or team connection.')
+                    : t('scoreboard.pinsEmpty', 'No PINs yet: switch on the referee or a team connection in the connection setup.')}
+                </p>
+              )}
               {/* Referee PIN */}
               {data?.match?.refereePin && data?.match?.refereeConnectionEnabled === true && (
                 <div style={{
@@ -11047,7 +10878,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     alignItems: 'flex-start',
                     minWidth: 0
                   }}>
-                    <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>Referee PIN</div>
+                    <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>{t('scoreboard.refereePin', 'Referee PIN')}</div>
                     <div style={{ fontSize: '20px', fontWeight: 600, fontFamily: 'monospace', letterSpacing: '2px', wordBreak: 'break-all' }}>
                       {String(data.match.refereePin).padStart(6, '0')}
                     </div>
@@ -11074,7 +10905,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     alignItems: 'flex-start',
                     minWidth: 0
                   }}>
-                    <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>Game PIN</div>
+                    <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>{t('scoreboard.gamePin', 'Game PIN')}</div>
                     <div style={{ fontSize: '20px', fontWeight: 600, fontFamily: 'monospace', letterSpacing: '2px', wordBreak: 'break-all' }}>
                       {String(data.match.gamePin).padStart(6, '0')}
                     </div>
@@ -11104,7 +10935,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         minWidth: 0
                       }}>
                         <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>
-                          {data?.team1Team?.name || 'Team 1'} PIN
+                          {t('scoreboard.teamPin', { team: data?.team1Team?.name || t('common.team1', 'Team 1'), defaultValue: '{{team}} PIN' })}
                         </div>
                         <div style={{ fontSize: '20px', fontWeight: 600, fontFamily: 'monospace', letterSpacing: '2px', wordBreak: 'break-all' }}>
                           {String(data.match.team1Pin ?? data.match.team1TeamPin).padStart(6, '0')}
@@ -11126,7 +10957,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         minWidth: 0
                       }}>
                         <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>
-                          {data?.team2Team?.name || 'Team 2'} PIN
+                          {t('scoreboard.teamPin', { team: data?.team2Team?.name || t('common.team2', 'Team 2'), defaultValue: '{{team}} PIN' })}
                         </div>
                         <div style={{ fontSize: '20px', fontWeight: 600, fontFamily: 'monospace', letterSpacing: '2px', wordBreak: 'break-all' }}>
                           {String(data.match.team2Pin ?? data.match.team2TeamPin).padStart(6, '0')}
@@ -11200,89 +11031,6 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         gameNumber={data?.match?.gameNumber}
       />
 
-      {/* Help & Video Guides Modal */}
-      {showHelpModal && (
-        <Modal
-          title={t('scoreboard.menu.helpVideoGuides')}
-          open={true}
-          onClose={() => {
-            setShowHelpModal(false)
-            setSelectedHelpTopic(null)
-          }}
-          width={800}
-        >
-          <div style={{ padding: '24px' }}>
-            {!selectedHelpTopic ? (
-              <div>
-                <p style={{ marginBottom: '24px', fontSize: '16px', color: 'var(--muted)' }}>
-                  Select a topic to view video guides and explanations:
-                </p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '12px' }}>
-                  {[
-                    { id: 'recording-points', title: 'Recording Points', description: 'How to record points and update the score' },
-                    { id: 'timeouts', title: 'Timeouts', description: 'How to request and manage timeouts' },
-                    { id: 'sanctions', title: 'Sanctions', description: 'How to record warnings, penalties, and expulsions' },
-                    { id: 'ending-set', title: 'Ending a Set', description: 'What happens when you end a set' },
-                    { id: 'match-end', title: 'Match End', description: 'What happens when the match ends' },
-                    { id: 'undo', title: 'Undo Actions', description: 'How to undo mistakes' },
-                    { id: 'lineup', title: 'Setting Lineup', description: 'How to set initial lineup' },
-                    { id: 'set-5', title: 'Set 3 (Tie-break)', description: 'Special rules for the deciding set' }
-                  ].map((topic) => (
-                    <div
-                      key={topic.id}
-                      onClick={() => setSelectedHelpTopic(topic.id)}
-                      style={{
-                        background: 'var(--ov-sunken)',
-                        border: '1px solid var(--ov-hairline)',
-                        borderRadius: '8px',
-                        padding: '16px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'var(--ov-sunken-strong)'
-                        e.currentTarget.style.borderColor = 'var(--ov-hairline-strong)'
-                        e.currentTarget.style.transform = 'translateY(-2px)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'var(--ov-sunken)'
-                        e.currentTarget.style.borderColor = 'var(--ov-hairline)'
-                        e.currentTarget.style.transform = 'translateY(0)'
-                      }}
-                    >
-                      <div style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>
-                        {topic.title}
-                      </div>
-                      <div style={{ fontSize: '14px', color: 'var(--muted)' }}>
-                        {topic.description}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div>
-                <button
-                  onClick={() => setSelectedHelpTopic(null)}
-                  style={{
-                    marginBottom: '20px',
-                    padding: '8px 16px',
-                    background: 'var(--ov-sunken-strong)',
-                    color: 'var(--text)',
-                    border: '1px solid var(--ov-hairline-strong)',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '14px'
-                  }}
-                >
-                  ← Back to Topics
-                </button>
-                {getHelpContent(selectedHelpTopic)}
-              </div>
-            )}
-          </div>
-        </Modal>
-      )}
 
       {/* Action Log Modal */}
       {showLogs && (
@@ -11704,10 +11452,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 }}
               >
                 <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontSize: '18px' }}>⚡</span>
-                  Current Set
+                  <span style={{ fontSize: '18px', display: 'inline-flex' }}><Zap size={18} aria-hidden="true" /></span>
+                  {t('scoreboard.manual.currentSet')}
                 </span>
-                <span style={{ fontSize: '12px', transform: manualPanelExpandedSections.currentSet ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+                <ChevronDown size={16} aria-hidden="true" style={{ transform: manualPanelExpandedSections.currentSet ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
               </button>
               {manualPanelExpandedSections.currentSet && (
                 <div style={{ padding: '0 16px 16px 16px' }}>
@@ -11757,9 +11505,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             borderBottom: '1px solid var(--ov-hairline)'
                           }}
                         >
-                          <div style={{ fontWeight: 600, marginBottom: '4px' }}>Teams Setup</div>
+                          <div style={{ fontWeight: 600, marginBottom: '4px' }}>{t('scoreboard.manual.teamsSetup')}</div>
                           <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '8px' }}>
-                            Current court positions and serving team
+                            {t('scoreboard.manual.teamsSetupHint')}
                           </div>
 
                           {/* Visual Court Representation */}
@@ -11887,7 +11635,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 fontWeight: 600
                               }}
                             >
-                              <ArrowLeftRight /> Switch Sides
+                              <ArrowLeftRight /> {t('scoreboard.manual.switchSides')}
                             </button>
                             <button
                               className="secondary"
@@ -11932,7 +11680,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 fontWeight: 600
                               }}
                             >
-                              <RefreshCw /> Switch Team A ↔ B
+                              <RefreshCw /> {t('scoreboard.manual.switchAB')}
                             </button>
                             <button
                               className="secondary"
@@ -11991,13 +11739,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 fontWeight: 600
                               }}
                             >
-                              <Volleyball /> Switch Serve
+                              <Volleyball /> {t('scoreboard.manual.switchServe')}
                             </button>
                           </div>
 
                           {/* Switch Serving Player within each team */}
                           <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '12px', marginBottom: '8px' }}>
-                            Switch which player serves first within each team:
+                            {t('scoreboard.manual.firstServerHint')}
                           </div>
                           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                             {/* Team 1 - Switch Server */}
@@ -12208,9 +11956,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               >
                 <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <span style={{ fontSize: '18px' }}><ChartColumn /></span>
-                  Score &amp; Sets
+                  {t('scoreboard.manual.scoresSets')}
                 </span>
-                <span style={{ fontSize: '12px', transform: manualPanelExpandedSections.scores ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+                <ChevronDown size={16} aria-hidden="true" style={{ transform: manualPanelExpandedSections.scores ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
               </button>
               {manualPanelExpandedSections.scores && (
                 <div style={{ padding: '0 16px 16px 16px' }}>
@@ -12397,9 +12145,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               >
                 <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <span style={{ fontSize: '18px' }}><Settings /></span>
-                  Match Settings
+                  {t('scoreboard.manual.matchSettings')}
                 </span>
-                <span style={{ fontSize: '12px', transform: manualPanelExpandedSections.matchSettings ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+                <ChevronDown size={16} aria-hidden="true" style={{ transform: manualPanelExpandedSections.matchSettings ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
               </button>
               {manualPanelExpandedSections.matchSettings && (
                 <div style={{ padding: '0 16px 16px 16px' }}>
@@ -12517,9 +12265,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               >
                 <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <span style={{ fontSize: '18px' }}><NotebookPen /></span>
-                  Event History
+                  {t('scoreboard.manual.eventHistory')}
                 </span>
-                <span style={{ fontSize: '12px', transform: manualPanelExpandedSections.events ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+                <ChevronDown size={16} aria-hidden="true" style={{ transform: manualPanelExpandedSections.events ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
               </button>
               {manualPanelExpandedSections.events && (
                 <div style={{ padding: '0 16px 16px 16px' }}>
@@ -12542,7 +12290,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       >
                         <div style={{ fontWeight: 600, marginBottom: '8px' }}>Edit Points ({pointEvents.length} most recent)</div>
                         <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
-                          Edit or delete point events. Score shown is at time of point.
+                          {t('scoreboard.manual.pointsHint')}
                         </div>
                         <div style={{
                           maxHeight: '300px',
@@ -12579,7 +12327,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 borderRadius: '4px',
                                 fontSize: '11px'
                               }}>
-                                <span style={{ minWidth: '60px' }}>Set {setIndex}</span>
+                                <span style={{ minWidth: '60px' }}>{t('scoreboard.manual.setN', { n: setIndex })}</span>
                                 <select
                                   value={team || 'team1'}
                                   onChange={async (e) => {
@@ -12614,7 +12362,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     marginLeft: 'auto'
                                   }}
                                 >
-                                  Delete
+                                  {t('common.delete')}
                                 </button>
                               </div>
                             )
@@ -12642,7 +12390,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       >
                         <div style={{ fontWeight: 600, marginBottom: '8px' }}>Edit Timeouts ({timeoutEvents.length} most recent)</div>
                         <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
-                          Edit or delete timeout events. Score shown is at time of timeout.
+                          {t('scoreboard.manual.timeoutsHint')}
                         </div>
                         <div style={{
                           maxHeight: '300px',
@@ -12680,7 +12428,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 fontSize: '11px',
                                 flexWrap: 'wrap'
                               }}>
-                                <span style={{ minWidth: '40px' }}>Set {setIndex}</span>
+                                <span style={{ minWidth: '40px' }}>{t('scoreboard.manual.setN', { n: setIndex })}</span>
                                 <select
                                   value={team || 'team1'}
                                   onChange={async (e) => {
@@ -12715,7 +12463,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     marginLeft: 'auto'
                                   }}
                                 >
-                                  Delete
+                                  {t('common.delete')}
                                 </button>
                               </div>
                             )
@@ -12743,7 +12491,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       >
                         <div style={{ fontWeight: 600, marginBottom: '8px' }}>Edit Substitutions ({substitutionEvents.length} most recent)</div>
                         <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
-                          Edit or delete substitution events. Score shown is at time of substitution.
+                          {t('scoreboard.manual.subsHint')}
                         </div>
                         <div style={{
                           maxHeight: '300px',
@@ -12784,7 +12532,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 fontSize: '11px',
                                 flexWrap: 'wrap'
                               }}>
-                                <span style={{ minWidth: '40px' }}>Set {setIndex}</span>
+                                <span style={{ minWidth: '40px' }}>{t('scoreboard.manual.setN', { n: setIndex })}</span>
                                 <select
                                   value={team || 'team1'}
                                   onChange={async (e) => {
@@ -12827,7 +12575,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     <option key={pos} value={pos} style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>{pos}</option>
                                   ))}
                                 </select>
-                                <span style={{ fontSize: '10px' }}>Out:</span>
+                                <span style={{ fontSize: '10px' }}>{t('scoreboard.manual.out')}</span>
                                 <input
                                   type="number"
                                   min="1"
@@ -12849,7 +12597,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     color: 'var(--text)'
                                   }}
                                 />
-                                <span style={{ fontSize: '10px' }}>In:</span>
+                                <span style={{ fontSize: '10px' }}>{t('scoreboard.manual.in')}</span>
                                 <input
                                   type="number"
                                   min="1"
@@ -12985,7 +12733,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     marginLeft: 'auto'
                                   }}
                                 >
-                                  Delete
+                                  {t('common.delete')}
                                 </button>
                               </div>
                             )
@@ -13013,7 +12761,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       >
                         <div style={{ fontWeight: 600, marginBottom: '8px' }}>Edit Sanctions ({sanctionEvents.length} most recent)</div>
                         <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
-                          Edit or delete sanction events. Score shown is at time of sanction.
+                          {t('scoreboard.manual.sanctionsHint')}
                         </div>
                         <div style={{
                           maxHeight: '300px',
@@ -13055,7 +12803,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 fontSize: '11px',
                                 flexWrap: 'wrap'
                               }}>
-                                <span style={{ minWidth: '40px' }}>Set {setIndex}</span>
+                                <span style={{ minWidth: '40px' }}>{t('scoreboard.manual.setN', { n: setIndex })}</span>
                                 <select
                                   value={team || 'team1'}
                                   onChange={async (e) => {
@@ -13093,13 +12841,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     minWidth: '90px'
                                   }}
                                 >
-                                  <option value="warning" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>Warning</option>
-                                  <option value="penalty" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>Penalty</option>
-                                  <option value="expulsion" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>Expulsion</option>
-                                  <option value="disqualification" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>Disqualif.</option>
-                                  <option value="improper_request" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>Improper Req</option>
-                                  <option value="delay_warning" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>Delay Warn</option>
-                                  <option value="delay_penalty" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>Delay Pen</option>
+                                  <option value="warning" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>{t('scoreboard.sanctions.warning')}</option>
+                                  <option value="penalty" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>{t('scoreboard.sanctions.penalty')}</option>
+                                  <option value="expulsion" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>{t('scoreboard.sanctions.expulsion')}</option>
+                                  <option value="disqualification" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>{t('scoreboard.sanctions.disqualification')}</option>
+                                  <option value="improper_request" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>{t('scoreboard.sanctions.improperRequest')}</option>
+                                  <option value="delay_warning" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>{t('scoreboard.sanctions.delayWarning')}</option>
+                                  <option value="delay_penalty" style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>{t('scoreboard.sanctions.delayPenalty')}</option>
                                 </select>
                                 <span style={{ fontSize: '10px', color: 'var(--muted)' }}>{team1Score}-{team2Score}</span>
                                 {playerNumber !== undefined && playerNumber !== null && (
@@ -13164,7 +12912,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     marginLeft: 'auto'
                                   }}
                                 >
-                                  Delete
+                                  {t('common.delete')}
                                 </button>
                               </div>
                             )
@@ -13204,9 +12952,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               >
                 <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <span style={{ fontSize: '18px' }}><Wrench /></span>
-                  Advanced
+                  {t('scoreboard.manual.advanced')}
                 </span>
-                <span style={{ fontSize: '12px', transform: manualPanelExpandedSections.advanced ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+                <ChevronDown size={16} aria-hidden="true" style={{ transform: manualPanelExpandedSections.advanced ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
               </button>
               {manualPanelExpandedSections.advanced && (
                 <div style={{ padding: '0 16px 16px 16px' }}>
@@ -13223,9 +12971,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         borderBottom: '1px solid var(--ov-hairline)'
                       }}
                     >
-                      <div style={{ fontWeight: 600, marginBottom: '8px' }}>Edit Set Times</div>
+                      <div style={{ fontWeight: 600, marginBottom: '8px' }}>{t('scoreboard.manual.setTimes')}</div>
                       <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
-                        Edit start and end times for sets.
+                        {t('scoreboard.manual.setTimesHint')}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         {data.sets.sort((a, b) => a.index - b.index).map(set => (
@@ -13237,10 +12985,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             background: 'var(--ov-sunken)',
                             borderRadius: '6px'
                           }}>
-                            <div style={{ fontWeight: 600, fontSize: '12px' }}>Set {set.index}</div>
+                            <div style={{ fontWeight: 600, fontSize: '12px' }}>{t('scoreboard.manual.setN', { n: set.index })}</div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <label style={{ fontSize: '11px', minWidth: '80px' }}>Start Time:</label>
+                                <label style={{ fontSize: '11px', minWidth: '80px' }}>{t('scoreboard.manual.startTime')}</label>
                                 <input
                                   type="datetime-local"
                                   defaultValue={(() => {
@@ -13269,7 +13017,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 />
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <label style={{ fontSize: '11px', minWidth: '80px' }}>End Time:</label>
+                                <label style={{ fontSize: '11px', minWidth: '80px' }}>{t('scoreboard.manual.endTime')}</label>
                                 <input
                                   type="datetime-local"
                                   defaultValue={(() => {
@@ -13315,13 +13063,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       borderTop: '1px solid var(--ov-hairline)'
                     }}
                   >
-                    <div style={{ fontWeight: 600, marginBottom: '8px' }}>Add New Event</div>
+                    <div style={{ fontWeight: 600, marginBottom: '8px' }}>{t('scoreboard.manual.addEventTitle')}</div>
                     <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
-                      Manually add a new event to the match history.
+                      {t('scoreboard.manual.addEventHint')}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <label style={{ fontSize: '12px', minWidth: '100px' }}>Event Type:</label>
+                        <label style={{ fontSize: '12px', minWidth: '100px' }}>{t('scoreboard.manual.eventType')}</label>
                         <select
                           id="newEventType"
                           style={{
@@ -13334,19 +13082,19 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             color: 'var(--text)'
                           }}
                         >
-                          <option value="point" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>Point</option>
-                          <option value="timeout" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>Timeout</option>
-                          <option value="substitution" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>Substitution</option>
-                          <option value="sanction" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>Sanction</option>
-                          <option value="lineup" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>Lineup</option>
-                          <option value="replay" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>Replay</option>
-                          <option value="rally_start" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>Rally Start</option>
-                          <option value="set_start" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>Set Start</option>
-                          <option value="set_end" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>Set End</option>
+                          <option value="point" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>{t('scoreboard.manual.typePoint')}</option>
+                          <option value="timeout" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>{t('scoreboard.manual.typeTimeout')}</option>
+                          <option value="substitution" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>{t('scoreboard.manual.typeSubstitution')}</option>
+                          <option value="sanction" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>{t('scoreboard.manual.typeSanction')}</option>
+                          <option value="lineup" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>{t('scoreboard.manual.typeLineup')}</option>
+                          <option value="replay" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>{t('scoreboard.manual.typeReplay')}</option>
+                          <option value="rally_start" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>{t('scoreboard.manual.typeRallyStart')}</option>
+                          <option value="set_start" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>{t('scoreboard.manual.typeSetStart')}</option>
+                          <option value="set_end" style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>{t('scoreboard.manual.typeSetEnd')}</option>
                         </select>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <label style={{ fontSize: '12px', minWidth: '100px' }}>Set:</label>
+                        <label style={{ fontSize: '12px', minWidth: '100px' }}>{t('scoreboard.manual.set')}</label>
                         <select
                           id="newEventSet"
                           style={{
@@ -13360,12 +13108,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           }}
                         >
                           {data?.sets?.sort((a, b) => a.index - b.index).map(set => (
-                            <option key={set.id} value={set.index} style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>Set {set.index}</option>
+                            <option key={set.id} value={set.index} style={{ background: 'var(--ov-card)', color: 'var(--text)' }}>{t('scoreboard.manual.setN', { n: set.index })}</option>
                           ))}
                         </select>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <label style={{ fontSize: '12px', minWidth: '100px' }}>Team:</label>
+                        <label style={{ fontSize: '12px', minWidth: '100px' }}>{t('scoreboard.manual.team')}</label>
                         <select
                           id="newEventTeam"
                           style={{
@@ -13390,7 +13138,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           const team = document.getElementById('newEventTeam')?.value
 
                           if (!eventType || !setIndex || !team) {
-                            showAlert('Please fill in all fields', 'warning')
+                            showAlert(t('scoreboard.manual.fillAll'), 'warning')
                             return
                           }
 
@@ -13429,7 +13177,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           fontSize: '12px'
                         }}
                       >
-                        Add Event
+                        {t('scoreboard.manual.addEvent')}
                       </button>
                     </div>
                   </div>
@@ -13501,7 +13249,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     fontSize: '10px'
                                   }}
                                 >
-                                  Delete
+                                  {t('common.delete')}
                                 </button>
                               </div>
                             )
@@ -13539,7 +13287,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               >
                 <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <span style={{ fontSize: '18px' }}><ClipboardList /></span>
-                  Manual Changes Summary
+                  {t('scoreboard.manual.summary')}
                   {manualChangesLog.length > 0 && (
                     <span style={{
                       background: 'var(--ov-selected)',
@@ -13553,7 +13301,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     </span>
                   )}
                 </span>
-                <span style={{ fontSize: '12px', transform: manualPanelExpandedSections.summary ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+                <ChevronDown size={16} aria-hidden="true" style={{ transform: manualPanelExpandedSections.summary ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
               </button>
               {manualPanelExpandedSections.summary && (
                 <div style={{ padding: '0 16px 16px 16px' }}>
@@ -13564,16 +13312,16 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       textAlign: 'center',
                       padding: '24px 0'
                     }}>
-                      No manual changes recorded yet.
+                      {t('scoreboard.manual.summaryEmpty')}
                       <br />
                       <span style={{ fontSize: '11px' }}>
-                        Changes made via this panel will be logged here.
+                        {t('scoreboard.manual.summaryEmptyHint')}
                       </span>
                     </div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>
-                        All manual modifications made during this match session:
+                        {t('scoreboard.manual.summaryIntro')}
                       </div>
                       <div style={{
                         maxHeight: '400px',
@@ -13626,11 +13374,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 color: 'var(--muted)'
                               }}>
                                 <span>
-                                  <strong>Before:</strong> {String(change.before)}
+                                  <strong>{t('scoreboard.manual.before')}</strong> {String(change.before)}
                                 </span>
                                 <span>→</span>
                                 <span>
-                                  <strong>After:</strong> {String(change.after)}
+                                  <strong>{t('scoreboard.manual.after')}</strong> {String(change.after)}
                                 </span>
                               </div>
                             </div>
@@ -13660,7 +13408,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             width: '100%'
                           }}
                         >
-                          <Copy /> Copy Log
+                          <Copy /> {t('scoreboard.manual.copyLog')}
                         </button>
                       </div>
                     </div>
@@ -13686,7 +13434,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         >
           <div style={{ padding: '20px', maxHeight: '80vh', overflowY: 'auto' }}>
             <section className="panel">
-              <h3>Remarks</h3>
+              <h3>{t('scoreboard.remarks.heading')}</h3>
               <textarea
                 ref={remarksTextareaRef}
                 className="remarks-area"
@@ -13952,10 +13700,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px', overflowX: 'auto' }}>
                 {/* Left half: Sanctions */}
                 <div>
-                  <h4 style={{ marginBottom: '16px', fontSize: '14px', fontWeight: 600 }}>Sanctions</h4>
+                  <h4 style={{ marginBottom: '16px', fontSize: '14px', fontWeight: 600 }}>{t('scoreboard.sanctions.title')}</h4>
                   {/* Improper Request Row */}
                   <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ fontWeight: 600, fontSize: '12px', minWidth: '100px' }}>Improper Request:</div>
+                    <div style={{ fontWeight: 600, fontSize: '12px', minWidth: '100px' }}>{t('scoreboard.sanctions.improperRequest')}:</div>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       {['A', 'B'].map(team => {
                         const teamKey = team === 'A' ? teamAKey : teamBKey
@@ -14454,7 +14202,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       {/* Timeout confirmation modal - only show before timeout starts, not during countdown */}
       {timeoutModal && !timeoutModal.started && (
         <Modal
-          title={`Time-out — ${timeoutModal.team === teamAKey ? 'A' : 'B'}`}
+          title={t('scoreboard.timeoutFor', { team: timeoutModal.team === teamAKey ? 'A' : 'B' })}
           open={true}
           onClose={cancelTimeout}
           width={400}
@@ -14639,7 +14387,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     }}
                   >
                     <span>Sanction</span>
-                    <span style={{ fontSize: '14px', lineHeight: '1', transform: courtSanctionExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+                    <ChevronDown size={16} aria-hidden="true" style={{ transform: courtSanctionExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
                   </button>
                   {courtSanctionExpanded && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
@@ -16008,63 +15756,34 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         />
       )}
 
-      {sanctionConfirm && (
-        <Modal
-          title={t('scoreboard.modals.confirmSanction')}
-          open={true}
-          onClose={() => setSanctionConfirm(null)}
-          width={400}
-          hideCloseButton={true}
-        >
-          <div style={{ padding: '24px', textAlign: 'center' }}>
-            <p style={{ marginBottom: '24px', fontSize: '16px' }}>
-              Apply {sanctionConfirm.type === 'improper_request' ? 'Improper Request' :
-                sanctionConfirm.type === 'delay_warning' ? 'Delay Warning' :
-                  'Delay Penalty'} to Team {(() => {
-                    const sideTeamKey = sanctionConfirm.side === 'left' ? (leftisTeam1 ? 'team1' : 'team2') : (leftisTeam1 ? 'team2' : 'team1')
-                    return sideTeamKey === teamAKey ? 'A' : 'B'
-                  })()}?
-            </p>
-            {sanctionConfirm.type === 'delay_penalty' && (
-              <p style={{ marginBottom: '16px', fontSize: '14px', color: 'var(--muted)', fontStyle: 'italic' }}>
-                This will award a point and service to the opponent team
+      {sanctionConfirm && (() => {
+        const sideTeamKey = sanctionConfirm.side === 'left' ? (leftisTeam1 ? 'team1' : 'team2') : (leftisTeam1 ? 'team2' : 'team1')
+        const team = sideTeamKey === teamAKey ? 'A' : 'B'
+        const kind = sanctionConfirm.type === 'improper_request' ? 'improper' : sanctionConfirm.type === 'delay_warning' ? 'warning' : 'penalty'
+        return (
+          <Modal
+            title={t(`scoreboard.sanctionConfirm.${kind}Title`, { team })}
+            open={true}
+            onClose={() => setSanctionConfirm(null)}
+            width={420}
+            hideCloseButton={true}
+          >
+            <div className="ov-kit" data-testid="sanction-confirm">
+              <p className="m-0 text-sm text-stone-600">
+                {t(`scoreboard.sanctionConfirm.${kind}Body`)}
               </p>
-            )}
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-              <button
-                onClick={confirmSanction}
-                style={{
-                  padding: '12px 24px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  background: 'var(--ov-success)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
-                Yes
-              </button>
-              <button
-                onClick={() => setSanctionConfirm(null)}
-                style={{
-                  padding: '12px 24px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  background: 'var(--ov-sunken-strong)',
-                  color: 'var(--text)',
-                  border: '1px solid var(--ov-hairline-strong)',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
-                No
-              </button>
+              <div className="mt-6 flex justify-end gap-2">
+                <button type="button" onClick={() => setSanctionConfirm(null)} className={cn(modalCancelClass, 'h-12 px-5')}>
+                  {t('common.cancel')}
+                </button>
+                <button type="button" onClick={confirmSanction} className={cn(modalPrimaryClass, 'h-12 px-5')}>
+                  {t(`scoreboard.sanctionConfirm.${kind}Confirm`)}
+                </button>
+              </div>
             </div>
-          </div>
-        </Modal>
-      )}
+          </Modal>
+        )
+      })()}
 
       {/* Connection Status Popover */}
       {connectionModal && connectionModal !== 'teamA' && connectionModal !== 'teamB' && (
@@ -16256,7 +15975,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       {/* Edit PIN Modal */}
       {editPinModal && (
         <Modal
-          title={editPinType === 'referee' ? 'Edit Referee PIN' : editPinType === 'teamA' ? `Edit Team ${teamAShortName} PIN` : `Edit Team ${teamBShortName} PIN`}
+          title={editPinType === 'referee' ? t('scoreboard.editPin.referee') : t('scoreboard.editPin.team', { team: editPinType === 'teamA' ? teamAShortName : teamBShortName })}
           open={true}
           onClose={() => {
             setEditPinModal(false)
@@ -16347,7 +16066,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       {/* TTO (Technical Timeout) Modal - at 21 points in Sets 1-2 with 45s countdown */}
       {ttoModal && (
         <Modal
-          title="Technical Timeout"
+          title={t('scoreboard.tto.title')}
           open={true}
           onClose={() => { }}
           width={450}
@@ -16356,7 +16075,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         >
           <div style={{ padding: '24px', textAlign: 'center' }}>
             <p style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 700, color: 'var(--ov-success)' }}>
-              Technical Timeout at 21 points
+              {t('scoreboard.tto.at21')}
             </p>
             <div style={{ marginBottom: '16px', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
               <span style={{ background: data?.team1Team?.color || '#ef4444', color: isBrightColor(data?.team1Team?.color || '#ef4444') ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>{teamAKey === 'team1' ? 'A' : 'B'}</span>
@@ -17216,7 +16935,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     cursor: 'pointer'
                   }}
                 >
-                  Confirm
+                  {t('common.confirm')}
                 </button>
               </div>
             </div>
@@ -17229,45 +16948,16 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           title={t('scoreboard.modals.confirmUndo')}
           open={true}
           onClose={cancelUndo}
-          width={400}
+          width={420}
         >
-          <div style={{ padding: '24px', textAlign: 'center' }}>
-            <p style={{ marginBottom: '16px', fontSize: '16px' }}>
-              Do you want to undo action?
-            </p>
-            <p style={{ marginBottom: '24px', fontSize: '14px', color: 'var(--muted)', fontStyle: 'italic' }}>
-              {undoConfirm.description}
-            </p>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-              <button
-                onClick={handleUndo}
-                style={{
-                  padding: '12px 24px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  background: 'var(--ov-success)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
-                Yes
+          <div className="ov-kit" data-testid="undo-confirm">
+            <p className="m-0 text-sm text-stone-600">{undoConfirm.description}</p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="button" onClick={cancelUndo} className={cn(modalCancelClass, 'h-12 px-5')}>
+                {t('common.cancel')}
               </button>
-              <button
-                onClick={cancelUndo}
-                style={{
-                  padding: '12px 24px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  background: 'var(--ov-sunken-strong)',
-                  color: 'var(--text)',
-                  border: '1px solid var(--ov-hairline-strong)',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
-                Cancel
+              <button type="button" onClick={handleUndo} className={cn(modalPrimaryClass, 'h-12 px-5')}>
+                {t('scoreboard.undoConfirm.confirm')}
               </button>
             </div>
           </div>
@@ -17626,7 +17316,7 @@ function SetStartTimeModal({ setIndex, defaultTime, onConfirm, onCancel }) {
 function ToSubDetailsModal({ type, side, timeoutDetails, substitutionDetails, teamName, onClose }) {
   return (
     <Modal
-      title={type === 'timeout' ? `Timeouts - ${teamName}   ` : `Substitutions - ${teamName}  `}
+      title={type === 'timeout' ? t('scoreboard.detailsTimeouts', { team: teamName }) : t('scoreboard.detailsSubstitutions', { team: teamName })}
       open={true}
       onClose={onClose}
       width={400}

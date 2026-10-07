@@ -518,7 +518,7 @@
       "confirmRallyStart": "Confirmer le début de l’échange",
       "confirmPoint": "Confirmer le point",
       "confirmSanction": "Confirmer la sanction",
-      "confirmUndo": "Confirmer l’annulation",
+      "confirmUndo": "Annuler la dernière action ?",
       "confirmTimeout": "Confirmer le temps mort",
       "decisionChange": "Changement de décision",
       "courtSwitchRequired": "Changement de côté requis",
@@ -674,7 +674,8 @@
     },
     "remarks": {
       "title": "Enregistrement des remarques",
-      "placeholder": "Noter les remarques du match…"
+      "placeholder": "Noter les remarques du match…",
+      "heading": "Remarques"
     },
     "help": {
       "recordingPoints": "Enregistrer les points",
@@ -747,7 +748,83 @@
     "set3CoinToss": "Tirage au sort du 3e set",
     "wonToss": "A gagné le tirage",
     "betweenSetsChooses": "{{team}} choisit (a perdu le tirage)",
-    "timeoutFor": "Temps mort – {{team}}"
+    "timeoutFor": "Temps mort – {{team}}",
+    "pinsEmptyTest": "Aucun PIN : un match test n'a pas de connexion arbitre ni équipe.",
+    "pinsEmpty": "Pas encore de PIN : activez la connexion de l'arbitre ou d'une équipe dans la configuration de connexion.",
+    "refereePin": "PIN arbitre",
+    "gamePin": "PIN du match",
+    "teamPin": "PIN {{team}}",
+    "sanctionConfirm": {
+      "improperTitle": "Inscrire une demande irrégulière pour l'équipe {{team}} ?",
+      "improperBody": "Elle est inscrite sur la feuille de match. Une deuxième dans le match est une sanction de retard.",
+      "improperConfirm": "Inscrire la demande irrégulière",
+      "warningTitle": "Donner un avertissement pour retard à l'équipe {{team}} ?",
+      "warningBody": "Il est inscrit sur la feuille de match. Le prochain retard de l'équipe dans le match est une pénalité.",
+      "warningConfirm": "Donner l'avertissement",
+      "penaltyTitle": "Donner une pénalité pour retard à l'équipe {{team}} ?",
+      "penaltyBody": "L'adversaire marque un point et obtient le service.",
+      "penaltyConfirm": "Donner la pénalité"
+    },
+    "manual": {
+      "currentSet": "Set en cours",
+      "scoresSets": "Score & sets",
+      "matchSettings": "Réglages du match",
+      "eventHistory": "Historique des événements",
+      "advanced": "Avancé",
+      "summary": "Résumé des modifications manuelles",
+      "teamsSetupHint": "Côtés actuels et équipe au service",
+      "firstServerHint": "Changer le joueur qui sert en premier dans chaque équipe :",
+      "pointsHint": "Modifier ou supprimer des points. Le score est celui au moment du point.",
+      "timeoutsHint": "Modifier ou supprimer des temps morts. Le score est celui au moment du temps mort.",
+      "subsHint": "Modifier ou supprimer des remplacements. Le score est celui au moment du remplacement.",
+      "sanctionsHint": "Modifier ou supprimer des sanctions. Le score est celui au moment de la sanction.",
+      "setTimesHint": "Modifier le début et la fin de chaque set.",
+      "addEventHint": "Ajouter un événement à la main à l'historique du match.",
+      "addEvent": "Ajouter l'événement",
+      "summaryEmpty": "Pas encore de modification manuelle.",
+      "summaryEmptyHint": "Les modifications faites ici sont listées ici.",
+      "summaryIntro": "Toutes les modifications manuelles de ce match :",
+      "teamsSetup": "Équipes",
+      "out": "Sort :",
+      "in": "Entre :",
+      "setTimes": "Heures des sets",
+      "startTime": "Début :",
+      "endTime": "Fin :",
+      "addEventTitle": "Ajouter un événement",
+      "eventType": "Type :",
+      "typePoint": "Point",
+      "typeTimeout": "Temps mort",
+      "typeSubstitution": "Remplacement",
+      "typeSanction": "Sanction",
+      "typeLineup": "Composition",
+      "typeReplay": "Rejouer",
+      "typeRallyStart": "Début d'échange",
+      "typeSetStart": "Début de set",
+      "typeSetEnd": "Fin de set",
+      "set": "Set :",
+      "team": "Équipe :",
+      "before": "Avant :",
+      "after": "Après :",
+      "switchSides": "Changer de côté",
+      "switchAB": "Échanger équipe A ↔ B",
+      "switchServe": "Changer le service",
+      "copyLog": "Copier le journal",
+      "setN": "Set {{n}}",
+      "fillAll": "Remplissez tous les champs."
+    },
+    "editPin": {
+      "referee": "Modifier le PIN arbitre",
+      "team": "Modifier le PIN de {{team}}"
+    },
+    "tto": {
+      "title": "Temps mort technique",
+      "at21": "Temps mort technique à 21 points"
+    },
+    "detailsTimeouts": "Temps morts – {{team}}",
+    "detailsSubstitutions": "Remplacements – {{team}}",
+    "undoConfirm": {
+      "confirm": "Annuler l'action"
+    }
   },
   "settings": {
     "title": "Paramètres",

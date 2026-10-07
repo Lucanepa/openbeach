@@ -518,7 +518,7 @@
       "confirmRallyStart": "Conferma inizio scambio",
       "confirmPoint": "Conferma punto",
       "confirmSanction": "Conferma sanzione",
-      "confirmUndo": "Conferma annullamento",
+      "confirmUndo": "Annullare l'ultima azione?",
       "confirmTimeout": "Conferma il timeout",
       "decisionChange": "Cambio decisione",
       "courtSwitchRequired": "Cambio campo richiesto",
@@ -674,7 +674,8 @@
     },
     "remarks": {
       "title": "Registrazione note",
-      "placeholder": "Registra note della partita…"
+      "placeholder": "Registra note della partita…",
+      "heading": "Osservazioni"
     },
     "help": {
       "recordingPoints": "Registrazione punti",
@@ -747,7 +748,83 @@
     "set3CoinToss": "Sorteggio del 3° set",
     "wonToss": "Ha vinto il sorteggio",
     "betweenSetsChooses": "{{team}} sceglie (ha perso il sorteggio)",
-    "timeoutFor": "Timeout – {{team}}"
+    "timeoutFor": "Timeout – {{team}}",
+    "pinsEmptyTest": "Nessun PIN: una partita di prova non ha connessioni per arbitro o squadre.",
+    "pinsEmpty": "Ancora nessun PIN: attiva la connessione dell'arbitro o di una squadra nella configurazione della connessione.",
+    "refereePin": "PIN arbitro",
+    "gamePin": "PIN partita",
+    "teamPin": "PIN {{team}}",
+    "sanctionConfirm": {
+      "improperTitle": "Registrare una richiesta impropria per la squadra {{team}}?",
+      "improperBody": "Va sul referto. Una seconda nella partita è una sanzione per ritardo.",
+      "improperConfirm": "Registra richiesta impropria",
+      "warningTitle": "Dare un avvertimento per ritardo alla squadra {{team}}?",
+      "warningBody": "Va sul referto. Il prossimo ritardo della squadra nella partita è una penalità.",
+      "warningConfirm": "Dai avvertimento",
+      "penaltyTitle": "Dare una penalità per ritardo alla squadra {{team}}?",
+      "penaltyBody": "L'avversario ottiene un punto e il servizio.",
+      "penaltyConfirm": "Dai penalità"
+    },
+    "manual": {
+      "currentSet": "Set corrente",
+      "scoresSets": "Punteggio & set",
+      "matchSettings": "Impostazioni partita",
+      "eventHistory": "Cronologia eventi",
+      "advanced": "Avanzate",
+      "summary": "Riepilogo modifiche manuali",
+      "teamsSetupHint": "Lati attuali e squadra al servizio",
+      "firstServerHint": "Cambia chi serve per primo in ogni squadra:",
+      "pointsHint": "Modifica o elimina punti. Il punteggio è quello al momento del punto.",
+      "timeoutsHint": "Modifica o elimina time-out. Il punteggio è quello al momento del time-out.",
+      "subsHint": "Modifica o elimina sostituzioni. Il punteggio è quello al momento della sostituzione.",
+      "sanctionsHint": "Modifica o elimina sanzioni. Il punteggio è quello al momento della sanzione.",
+      "setTimesHint": "Modifica inizio e fine di ogni set.",
+      "addEventHint": "Aggiungi a mano un evento alla cronologia della partita.",
+      "addEvent": "Aggiungi evento",
+      "summaryEmpty": "Ancora nessuna modifica manuale.",
+      "summaryEmptyHint": "Le modifiche fatte in questo pannello sono elencate qui.",
+      "summaryIntro": "Tutte le modifiche manuali in questa partita:",
+      "teamsSetup": "Squadre",
+      "out": "Esce:",
+      "in": "Entra:",
+      "setTimes": "Orari dei set",
+      "startTime": "Inizio:",
+      "endTime": "Fine:",
+      "addEventTitle": "Aggiungi un evento",
+      "eventType": "Tipo:",
+      "typePoint": "Punto",
+      "typeTimeout": "Time-out",
+      "typeSubstitution": "Sostituzione",
+      "typeSanction": "Sanzione",
+      "typeLineup": "Formazione",
+      "typeReplay": "Ripetizione",
+      "typeRallyStart": "Inizio scambio",
+      "typeSetStart": "Inizio set",
+      "typeSetEnd": "Fine set",
+      "set": "Set:",
+      "team": "Squadra:",
+      "before": "Prima:",
+      "after": "Dopo:",
+      "switchSides": "Cambia lato",
+      "switchAB": "Scambia squadra A ↔ B",
+      "switchServe": "Cambia servizio",
+      "copyLog": "Copia registro",
+      "setN": "Set {{n}}",
+      "fillAll": "Compila tutti i campi."
+    },
+    "editPin": {
+      "referee": "Modifica il PIN arbitro",
+      "team": "Modifica il PIN di {{team}}"
+    },
+    "tto": {
+      "title": "Time-out tecnico",
+      "at21": "Time-out tecnico a 21 punti"
+    },
+    "detailsTimeouts": "Time-out – {{team}}",
+    "detailsSubstitutions": "Sostituzioni – {{team}}",
+    "undoConfirm": {
+      "confirm": "Annulla azione"
+    }
   },
   "settings": {
     "title": "Impostazioni",

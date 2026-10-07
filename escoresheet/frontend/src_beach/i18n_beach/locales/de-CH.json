@@ -518,7 +518,7 @@
       "confirmRallyStart": "Ballwechsel-Start bestätige",
       "confirmPoint": "Punkt bestätige",
       "confirmSanction": "Sanktion bestätige",
-      "confirmUndo": "Rückgängig bestätige",
+      "confirmUndo": "Letzte Aktion rückgängig machen?",
       "confirmTimeout": "Timeout bestätige",
       "decisionChange": "Entscheidsänderig",
       "courtSwitchRequired": "Siitewächsel nötig",
@@ -674,7 +674,8 @@
     },
     "remarks": {
       "title": "Bemerkige ufneh",
-      "placeholder": "Spiilbemerkige erfasse…"
+      "placeholder": "Spiilbemerkige erfasse…",
+      "heading": "Bemerkungen"
     },
     "help": {
       "recordingPoints": "Pünkt erfasse",
@@ -747,7 +748,83 @@
     "set3CoinToss": "Usloosig 3. Satz",
     "wonToss": "Usloosig gwunne",
     "betweenSetsChooses": "{{team}} wählt (Usloosig verlore)",
-    "timeoutFor": "Timeout – {{team}}"
+    "timeoutFor": "Timeout – {{team}}",
+    "pinsEmptyTest": "Keine PINs: Ein Testspiel hat keine Verbindung für Schiedsrichter oder Teams.",
+    "pinsEmpty": "Noch keine PINs: Schalte in der Verbindungseinrichtung die Verbindung für Schiedsrichter oder ein Team ein.",
+    "refereePin": "Schiedsrichter-PIN",
+    "gamePin": "Spiel-PIN",
+    "teamPin": "PIN {{team}}",
+    "sanctionConfirm": {
+      "improperTitle": "Unzulässiges Ersuchen für Team {{team}} eintragen?",
+      "improperBody": "Es kommt aufs Matchblatt. Ein zweites im Spiel ist eine Verzögerungssanktion.",
+      "improperConfirm": "Unzulässiges Ersuchen eintragen",
+      "warningTitle": "Team {{team}} eine Verzögerungsverwarnung geben?",
+      "warningBody": "Sie kommt aufs Matchblatt. Die nächste Verzögerung des Teams im Spiel ist eine Strafe.",
+      "warningConfirm": "Verwarnung geben",
+      "penaltyTitle": "Team {{team}} eine Verzögerungsstrafe geben?",
+      "penaltyBody": "Der Gegner erhält einen Punkt und den Aufschlag.",
+      "penaltyConfirm": "Strafe geben"
+    },
+    "manual": {
+      "currentSet": "Aktueller Satz",
+      "scoresSets": "Spielstand & Sätze",
+      "matchSettings": "Spieleinstellungen",
+      "eventHistory": "Ereignisverlauf",
+      "advanced": "Erweitert",
+      "summary": "Übersicht der manuellen Änderungen",
+      "teamsSetupHint": "Aktuelle Seiten und das aufschlagende Team",
+      "firstServerHint": "Wechseln, wer in jedem Team zuerst aufschlägt:",
+      "pointsHint": "Punkte bearbeiten oder löschen. Der Spielstand ist der zum Zeitpunkt des Punkts.",
+      "timeoutsHint": "Auszeiten bearbeiten oder löschen. Der Spielstand ist der zum Zeitpunkt der Auszeit.",
+      "subsHint": "Wechsel bearbeiten oder löschen. Der Spielstand ist der zum Zeitpunkt des Wechsels.",
+      "sanctionsHint": "Sanktionen bearbeiten oder löschen. Der Spielstand ist der zum Zeitpunkt der Sanktion.",
+      "setTimesHint": "Beginn und Ende jedes Satzes bearbeiten.",
+      "addEventHint": "Ein Ereignis von Hand zum Spielverlauf hinzufügen.",
+      "addEvent": "Ereignis hinzufügen",
+      "summaryEmpty": "Noch keine manuellen Änderungen.",
+      "summaryEmptyHint": "Änderungen in diesem Bereich werden hier aufgelistet.",
+      "summaryIntro": "Alle manuellen Änderungen in diesem Spiel:",
+      "teamsSetup": "Teams",
+      "out": "Raus:",
+      "in": "Rein:",
+      "setTimes": "Satzzeiten",
+      "startTime": "Beginn:",
+      "endTime": "Ende:",
+      "addEventTitle": "Ereignis hinzufügen",
+      "eventType": "Art:",
+      "typePoint": "Punkt",
+      "typeTimeout": "Auszeit",
+      "typeSubstitution": "Wechsel",
+      "typeSanction": "Sanktion",
+      "typeLineup": "Aufstellung",
+      "typeReplay": "Wiederholung",
+      "typeRallyStart": "Ballwechsel-Beginn",
+      "typeSetStart": "Satzbeginn",
+      "typeSetEnd": "Satzende",
+      "set": "Satz:",
+      "team": "Team:",
+      "before": "Vorher:",
+      "after": "Nachher:",
+      "switchSides": "Seiten wechseln",
+      "switchAB": "Team A ↔ B tauschen",
+      "switchServe": "Aufschlag wechseln",
+      "copyLog": "Protokoll kopieren",
+      "setN": "Satz {{n}}",
+      "fillAll": "Fülle alle Felder aus."
+    },
+    "editPin": {
+      "referee": "Schiedsrichter-PIN bearbeiten",
+      "team": "PIN von {{team}} bearbeiten"
+    },
+    "tto": {
+      "title": "Technisches Time-out",
+      "at21": "Technisches Time-out bei 21 Punkten"
+    },
+    "detailsTimeouts": "Auszeiten – {{team}}",
+    "detailsSubstitutions": "Wechsel – {{team}}",
+    "undoConfirm": {
+      "confirm": "Rückgängig machen"
+    }
   },
   "settings": {
     "title": "Iistellige",
