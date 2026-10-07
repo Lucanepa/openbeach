@@ -29,7 +29,8 @@ import {
   TEST_REFEREE_SEED_DATA,
   TEST_SCORER_SEED_DATA,
   TEST_TEAM_SEED_DATA,
-  TEST_MATCH_SEED_KEY,
+  isTestMatchSeedKey,
+  testMatchSeedKeyFor,
   TEST_MATCH_EXTERNAL_ID,
   TEST_TEAM_1_EXTERNAL_ID,
   TEST_TEAM_2_EXTERNAL_ID,
@@ -1786,11 +1787,13 @@ export default function App() {
 
     await db.transaction('rw', db.matches, db.sets, db.events, db.sync_queue, async () => {
       let existingMatch =
-        (await db.matches.filter(m => m.seedKey === TEST_MATCH_SEED_KEY).first()) ||
+        (await db.matches.filter(m => isTestMatchSeedKey(m.seedKey)).first()) ||
         (await db.matches.filter(m => m.test === true && !m.seedKey).first())
 
-      if (existingMatch && existingMatch.seedKey !== TEST_MATCH_SEED_KEY) {
-        await db.matches.update(existingMatch.id, { seedKey: TEST_MATCH_SEED_KEY })
+      // This device's own relay room (testMatchSeedKeyFor), kept across restarts
+      const testSeedKey = testMatchSeedKeyFor(existingMatch?.seedKey)
+      if (existingMatch && existingMatch.seedKey !== testSeedKey) {
+        await db.matches.update(existingMatch.id, { seedKey: testSeedKey })
         existingMatch = await db.matches.get(existingMatch.id)
       }
 
@@ -1817,7 +1820,7 @@ export default function App() {
         team2CaptainSignature: 'xxxxx',
         coinTossConfirmed: false,
         test: true,
-        seedKey: TEST_MATCH_SEED_KEY,
+        seedKey: testSeedKey,
         externalId: TEST_MATCH_EXTERNAL_ID,
         matchInfoConfirmedAt: timestamp // Test matches are pre-configured
       }

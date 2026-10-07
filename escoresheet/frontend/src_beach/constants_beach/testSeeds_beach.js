@@ -1,5 +1,40 @@
 // Test Match Constants (Beach Volleyball)
 export const TEST_MATCH_SEED_KEY = 'test-match-default'
+
+/**
+ * A test match's own seed key, which is also its relay room:
+ * `test-match-default-<random>` (as OpenVolley's constants/testSeeds.js).
+ * Test matches publish to the venue relay without a game PIN, so two courts
+ * rehearsing on one relay must not share a room: both sockets were granted
+ * it, each sync replaced the other's match, the referee and the LedBox jumped
+ * between courts, and the scorer's delete-match of the old key (switching to
+ * the official match) dropped the other court's room.
+ */
+export function newTestMatchSeedKey() {
+  let suffix = ''
+  try {
+    const bytes = new Uint8Array(6)
+    globalThis.crypto.getRandomValues(bytes)
+    suffix = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+  } catch {
+    suffix = Math.random().toString(16).slice(2, 14).padEnd(12, '0')
+  }
+  return `${TEST_MATCH_SEED_KEY}-${suffix}`
+}
+
+/** The seed key of a test match: the shared legacy one or a per-device one. */
+export function isTestMatchSeedKey(key) {
+  return typeof key === 'string' && (key === TEST_MATCH_SEED_KEY || key.startsWith(`${TEST_MATCH_SEED_KEY}-`))
+}
+
+/**
+ * The seed key a device's test match keeps: its own per-device key (the
+ * LedBox keeps following the same room when the test match is restarted), or
+ * a new one in place of the shared legacy key or none.
+ */
+export function testMatchSeedKeyFor(existing) {
+  return isTestMatchSeedKey(existing) && existing !== TEST_MATCH_SEED_KEY ? existing : newTestMatchSeedKey()
+}
 export const TEST_MATCH_EXTERNAL_ID = 'test-match-default'
 export const TEST_TEAM_1_EXTERNAL_ID = 'test-team-1'
 export const TEST_TEAM_2_EXTERNAL_ID = 'test-team-2'
