@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { getBackendUrl, getBackendOverride, setBackendOverride, clearBackendOverride, isAllowedBackendUrl, learnRelayWsPort } from '../utils_beach/backendConfig_beach'
+import { getBackendUrl, getBackendOverride, setBackendOverride, clearBackendOverride, isAllowedBackendUrl, learnRelayWsPort, normalizeRelayAddress } from '../utils_beach/backendConfig_beach'
 
 const LAST_SERVER_KEY = 'openbeach_last_server'
 
@@ -49,11 +49,9 @@ export default function ServerConnectionScreen({ onConnected, skipIfAutoConnect 
     setStatus('checking')
     setErrorMsg(null)
 
-    // Normalize URL
-    let serverUrl = url.trim().replace(/\/+$/, '')
-    if (!serverUrl.startsWith('http')) {
-      serverUrl = `http://${serverUrl}`
-    }
+    // Normalize URL: http:// added, and a LAN address typed without a port
+    // gets OpenBeach's desktop relay port (5174)
+    const serverUrl = normalizeRelayAddress(url)
 
     // Validate URL to prevent SSRF / protocol abuse
     try {
@@ -257,7 +255,7 @@ export default function ServerConnectionScreen({ onConnected, skipIfAutoConnect 
               value={localAddress}
               onChange={(e) => { setLocalAddress(e.target.value); setMode('local') }}
               onKeyDown={(e) => { if (e.key === 'Enter') handleLocalConnect() }}
-              placeholder="192.168.1.42:8080"
+              placeholder="192.168.1.42:5174"
               style={{
                 flex: 1,
                 padding: '10px 14px',

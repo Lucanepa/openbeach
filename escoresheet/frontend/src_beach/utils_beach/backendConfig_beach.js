@@ -455,6 +455,30 @@ export function isLanBackendUrl(url) {
   return false
 }
 
+/**
+ * A server address as typed on the connection screen ("192.168.1.20",
+ * "192.168.1.20:8080", "laptop.local", "https://backend.openvolley.app/"):
+ * an http(s) origin with no trailing slash. A LAN host typed without a port
+ * gets OpenBeach's desktop relay port (5174; its WebSocket on 8081 is found
+ * through /api/server/status). Anything else is returned as typed (trimmed,
+ * http:// added), for isAllowedBackendUrl to judge.
+ * @param {string} input
+ * @returns {string}
+ */
+export function normalizeRelayAddress(input) {
+  let s = String(input || '').trim().replace(/\/+$/, '')
+  if (!s) return ''
+  if (!/^https?:\/\//i.test(s)) s = `http://${s}`
+  let u
+  try { u = new URL(s) } catch { return s }
+  // new URL() drops a default port (:80), so read what was typed
+  const typedPort = /^https?:\/\/(\[[^\]]*\]|[^/?#:]*):\d+(?:[/?#]|$)/i.test(s)
+  if (!typedPort && u.protocol === 'http:' && isLanBackendUrl(u.href)) {
+    u.port = BEACH_DESKTOP_HTTP_PORT
+  }
+  return `${u.protocol}//${u.host}`
+}
+
 const isLoopbackHost = (hostname) => {
   const host = String(hostname || '').replace(/^\[|\]$/g, '').toLowerCase()
   return host === 'localhost' || host === '::1' || /^127\.(\d{1,3}\.){2}\d{1,3}$/.test(host)

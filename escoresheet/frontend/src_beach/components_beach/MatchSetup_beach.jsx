@@ -11,7 +11,7 @@ import CountrySelect from './CountrySelect_beach'
 import CountryFlag from './CountryFlag_beach'
 // Beach volleyball ball image
 const ballImage = '/beachball.png'
-import { isBackendAvailable, getCloudApiUrl } from '../utils_beach/backendConfig_beach'
+import { isBackendAvailable, getCloudApiUrl, BEACH_DESKTOP_HTTP_PORT } from '../utils_beach/backendConfig_beach'
 import { scorerPublisher, readRelayBundle } from '../utils_beach/relayPublisher_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { uploadBackupToCloud, uploadLogsToCloud } from '../utils_beach/logger_beach'
@@ -1346,7 +1346,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     try {
       const protocol = serverStatus.protocol || 'https'
       const host = serverStatus.localIP || serverStatus.hostname || 'escoresheet.local'
-      const port = serverStatus.port || 5173
+      const port = serverStatus.port || BEACH_DESKTOP_HTTP_PORT
       const url = `${protocol}://${host}:${port}/api/server/register-main`
 
       const response = await fetch(url, {

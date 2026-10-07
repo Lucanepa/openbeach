@@ -114,7 +114,8 @@ export default function ConnectionSetupModal({
 
   // Build URLs
   const lanUrls = localIP ? buildAppUrls(localIP, port, protocol) : null
-  const wsUrl = localIP ? buildWebSocketUrl(localIP, 8080, protocol === 'https') : null
+  // The WebSocket port the relay reports, else OpenBeach's desktop relay's (8081)
+  const wsUrl = localIP ? buildWebSocketUrl(localIP, serverStatus?.wsPort || undefined, protocol === 'https') : null
   const cloudUrls = cloudBackendUrl ? buildCloudUrls(cloudBackendUrl) : null
 
   // Current URLs based on mode

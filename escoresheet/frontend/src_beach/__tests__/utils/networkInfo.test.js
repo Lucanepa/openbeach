@@ -67,7 +67,7 @@ describe('networkInfo_beach', () => {
   describe('buildWebSocketUrl', () => {
     it('should build ws URL by default', () => {
       const url = buildWebSocketUrl('192.168.1.100')
-      expect(url).toBe('ws://192.168.1.100:8080')
+      expect(url).toBe('ws://192.168.1.100:8081')
     })
 
     it('should use custom port', () => {

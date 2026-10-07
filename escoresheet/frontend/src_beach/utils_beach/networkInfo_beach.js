@@ -3,6 +3,8 @@
  * Functions for getting local IP, server status, and generating QR codes
  */
 
+import { BEACH_DESKTOP_WS_PORT } from './backendConfig_beach'
+
 /**
  * Get local IP address using RTCPeerConnection trick
  * Works in most browsers except some strict privacy modes
@@ -172,9 +174,9 @@ export function buildAppUrls(localIP, port, protocol = 'http') {
 }
 
 /**
- * Build WebSocket URL
+ * Build WebSocket URL (default: OpenBeach's desktop relay, WebSocket on 8081)
  */
-export function buildWebSocketUrl(localIP, wsPort = 8080, secure = false) {
+export function buildWebSocketUrl(localIP, wsPort = BEACH_DESKTOP_WS_PORT, secure = false) {
   const protocol = secure ? 'wss' : 'ws'
   return `${protocol}://${localIP}:${wsPort}`
 }

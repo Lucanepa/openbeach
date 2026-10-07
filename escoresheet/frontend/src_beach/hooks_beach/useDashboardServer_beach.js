@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { getLocalIP, getServerStatus } from '../utils_beach/networkInfo_beach'
-import { getBackendUrl } from '../utils_beach/backendConfig_beach'
+import { getBackendUrl, BEACH_DESKTOP_HTTP_PORT, BEACH_DESKTOP_WS_PORT } from '../utils_beach/backendConfig_beach'
 
 /**
  * The relay's HTTP base (/api/server/connections): the venue relay or the
@@ -53,8 +53,9 @@ export function useDashboardServer({ enabled = true, pollInterval = 5000, matchI
   const [serverStatus, setServerStatus] = useState({
     running: false,
     ip: null,
-    port: 8080,
-    wsPort: 8080,
+    // OpenBeach's desktop relay: pages on 5174, WebSocket on 8081
+    port: Number(BEACH_DESKTOP_HTTP_PORT),
+    wsPort: Number(BEACH_DESKTOP_WS_PORT),
     mode: 'local'
   })
   const [connectedDashboards, setConnectedDashboards] = useState([])
@@ -85,8 +86,8 @@ export function useDashboardServer({ enabled = true, pollInterval = 5000, matchI
       setServerStatus({
         running: status.running || connectionsData.success,
         ip: localIP,
-        port: window.location.port || 5173,
-        wsPort: status.wsPort || 8080,
+        port: window.location.port || Number(BEACH_DESKTOP_HTTP_PORT),
+        wsPort: status.wsPort || Number(BEACH_DESKTOP_WS_PORT),
         mode: status.mode || 'local'
       })
 

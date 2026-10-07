@@ -26,7 +26,8 @@ import {
   learnRelayWsPort,
   applyServerParam,
   relayWsPortFor,
-  rememberRelayWsPort
+  rememberRelayWsPort,
+  normalizeRelayAddress
 } from '../../utils_beach/backendConfig_beach'
 import { useMemoryLocalStorage } from '../helpers/memoryStorage'
 
@@ -87,7 +88,7 @@ describe('static hosts and the local server status', () => {
     expect(getLocalServerStatusUrl()).toBeNull()
     setLocation('http://192.168.1.20:5174/')
     expect(getLocalServerStatusUrl()).toBe('http://192.168.1.20:5174/api/server/status')
-    setLocation('file:///opt/app/index_beach.html')
+    setLocation('file:///opt/app/index.html')
     expect(getLocalServerStatusUrl()).toBeNull()
   })
 })
@@ -212,7 +213,7 @@ describe('pages served by a local relay', () => {
   })
 
   it('a page opened from disk has no relay', () => {
-    setLocation('file:///opt/app/index_beach.html')
+    setLocation('file:///opt/app/index.html')
     expect(getRelayWebSocketUrl()).toBeNull()
   })
 })
@@ -243,5 +244,31 @@ describe('builds with VITE_BACKEND_URL and the dev server', () => {
     for (const u of ['https://backend.openvolley.app', 'https://cloud.example.org', 'http://172.32.0.1', null, '', 'not a url']) {
       expect(isLanBackendUrl(u), String(u)).toBe(false)
     }
+  })
+})
+
+describe('normalizeRelayAddress (the connection screen)', () => {
+  it('gives a bare LAN address the OpenBeach desktop relay port 5174', () => {
+    expect(normalizeRelayAddress('192.168.1.20')).toBe('http://192.168.1.20:5174')
+    expect(normalizeRelayAddress(' 10.0.0.7/ ')).toBe('http://10.0.0.7:5174')
+    expect(normalizeRelayAddress('beach-laptop.local')).toBe('http://beach-laptop.local:5174')
+    expect(normalizeRelayAddress('http://localhost')).toBe('http://localhost:5174')
+  })
+
+  it('keeps a port that was typed, even the default one', () => {
+    expect(normalizeRelayAddress('192.168.1.20:8080')).toBe('http://192.168.1.20:8080')
+    expect(normalizeRelayAddress('192.168.1.20:5173')).toBe('http://192.168.1.20:5173')
+    expect(normalizeRelayAddress('http://192.168.1.20:80')).toBe('http://192.168.1.20')
+  })
+
+  it('leaves the cloud and https addresses alone', () => {
+    expect(normalizeRelayAddress('https://backend.openvolley.app/')).toBe('https://backend.openvolley.app')
+    expect(normalizeRelayAddress('https://192.168.1.20')).toBe('https://192.168.1.20')
+  })
+
+  it('does not make an untrusted host acceptable', () => {
+    const url = normalizeRelayAddress('evil.example.com')
+    expect(isAllowedBackendUrl(url)).toBe(false)
+    expect(normalizeRelayAddress('')).toBe('')
   })
 })
