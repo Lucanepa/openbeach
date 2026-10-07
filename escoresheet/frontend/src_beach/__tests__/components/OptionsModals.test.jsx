@@ -9,6 +9,7 @@ import HomeOptionsModal from '../../components_beach/options/HomeOptionsModal_be
 import ScoreboardOptionsModal from '../../components_beach/options/ScoreboardOptionsModal_beach'
 import ConnectionSetupModal from '../../components_beach/options/ConnectionSetupModal_beach'
 import SupportFeedbackModal from '../../components_beach/SupportFeedbackModal_beach'
+import DesktopUpdateSection from '../../components_beach/options/DesktopUpdateSection_beach'
 
 // Home → Options, Support & feedback and the connection setup were dark
 // legacy modals (navy panel, blue selection, green Support button, Title Case,
@@ -96,6 +97,20 @@ describe('Home → Options', () => {
   it('App version: the plain version in a browser, the updater section in the desktop app', async () => {
     renderHome()
     expect(screen.getByTestId('options-app-version')).toHaveTextContent(`v${__APP_VERSION__}`)
+  })
+
+  it('a Flatpak / Snap / AUR copy: its package manager updates it, no check button', () => {
+    const update = { status: { kind: 'managed', phase: 'idle', current: '2.0.1', available: null, blockers: [] }, checkNow: vi.fn(), installNow: vi.fn(), setPrefs: vi.fn() }
+    render(<DesktopUpdateSection update={update} />)
+    expect(screen.getByText(/Updates come from your package manager/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Check for updates' })).toBeNull()
+    expect(screen.queryByRole('switch', { name: 'Check for updates automatically' })).toBeNull()
+  })
+
+  it('macOS: a downloaded update offers "Restart and update", like the AppImage', () => {
+    const update = { status: { kind: 'macApp', phase: 'ready', current: '2.0.1', available: { version: '2.0.2' }, canRestart: true, autoInstall: true, blockers: [] }, checkNow: vi.fn(), installNow: vi.fn(), setPrefs: vi.fn() }
+    render(<DesktopUpdateSection update={update} />)
+    expect(screen.getByRole('button', { name: 'Restart and update' })).toBeInTheDocument()
   })
 
   it('in German', async () => {

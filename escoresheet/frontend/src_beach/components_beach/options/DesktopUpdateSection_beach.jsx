@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Copy, RefreshCw } from 'lucide-react'
 import { Button, Switch, toast } from '../../ui/volleyui'
-import { APT_COMMAND, REPO_COMMAND, blockerText, failureText, mainBlocker, statusLine } from '../../utils_beach/desktopUpdate_beach'
+import { APT_COMMAND, REPO_COMMAND, blockerText, failureText, isDownloadingKind, mainBlocker, statusLine } from '../../utils_beach/desktopUpdate_beach'
 import { copyToClipboard } from '../../utils_beach/networkInfo_beach'
 
 const currentVersion = __APP_VERSION__
@@ -43,14 +43,15 @@ export default function DesktopUpdateSection({ update }) {
   const { status, checkNow, installNow, setPrefs } = update
   const [restarting, setRestarting] = useState(false)
   const kind = status?.kind
-  const supported = !!kind && kind !== 'unsupported'
+  // managed: Flatpak, Snap or a distro package; its package manager updates it.
+  const supported = !!kind && kind !== 'unsupported' && kind !== 'managed'
   const busy = ['checking', 'downloading', 'installing'].includes(status?.phase)
   const line = statusLine(status, t)
   const failed = status?.phase === 'failed'
   const version = status?.available?.version
   const offersRestart = supported && (
     status?.phase === 'restartPending'
-    || (status?.phase === 'ready' && (kind === 'nsis' || kind === 'appImage' || kind === 'debApt'))
+    || (status?.phase === 'ready' && (isDownloadingKind(kind) || kind === 'debApt'))
   )
   const blocker = mainBlocker(status?.blockers)
 
@@ -80,7 +81,11 @@ export default function DesktopUpdateSection({ update }) {
             </div>
           )}
           {!supported && status && (
-            <div className="mt-1 text-xs text-stone-500">{t('update.notSupported', 'This build does not update itself.')}</div>
+            <div className="mt-1 text-xs text-stone-500">
+              {kind === 'managed'
+                ? t('update.managed', 'Updates come from your package manager (Flatpak, Snap, AUR…).')
+                : t('update.notSupported', 'This build does not update itself.')}
+            </div>
           )}
         </div>
         {supported && (
