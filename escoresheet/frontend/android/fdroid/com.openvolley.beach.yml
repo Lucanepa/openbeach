@@ -27,7 +27,7 @@ Binaries:
 Builds:
   - versionName: 2.0.1
     versionCode: 20000010
-    commit: TODO
+    commit: 28c16e736c47db3eb4b22d1f330b580e66e7c963
     subdir: escoresheet/frontend/android/app
     sudo:
       - curl -Lo node.tar.xz https://nodejs.org/dist/v22.23.3/node-v22.23.3-linux-x64.tar.xz
