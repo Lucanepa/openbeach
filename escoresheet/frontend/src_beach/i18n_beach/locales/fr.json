@@ -514,7 +514,11 @@
       "syncError": "Échec de la synchronisation. Données sauvegardées localement.",
       "offlineWarning": "Hors ligne. Données sauvegardées localement.",
       "proceedAnyway": "Continuer quand même",
-      "proceed": "Continuer"
+      "proceed": "Continuer",
+      "titleSyncing": "Synchronisation…",
+      "titleDone": "Synchronisé",
+      "titleOffline": "Enregistré sur cet appareil",
+      "titleError": "Non synchronisé"
     },
     "modals": {
       "confirmRallyStart": "Confirmer le début de l’échange",

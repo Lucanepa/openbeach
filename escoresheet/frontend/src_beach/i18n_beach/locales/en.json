@@ -515,7 +515,11 @@
       "syncError": "Sync failed. Data saved locally and will retry.",
       "offlineWarning": "Offline. Data saved locally.",
       "proceedAnyway": "Proceed anyway",
-      "proceed": "Continue"
+      "proceed": "Continue",
+      "titleSyncing": "Syncing…",
+      "titleDone": "Synced",
+      "titleOffline": "Saved on this device",
+      "titleError": "Not synced"
     },
     "modals": {
       "confirmRallyStart": "Confirm rally start",

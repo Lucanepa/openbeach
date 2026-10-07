@@ -9,6 +9,7 @@ import { Field, FormError } from '../../ui/volleyui/Field.jsx'
 import { Input } from '../../ui/volleyui/Input.jsx'
 import { Button } from '../../ui/volleyui/Button.jsx'
 import AuthLayer from './AuthLayer_beach'
+import { cn } from '../../ui/volleyui/cn.js'
 import { BRAND } from '../../brand_beach'
 
 const LINK = 'font-medium text-red-700 underline underline-offset-2 hover:text-red-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60 rounded-sm'
@@ -101,9 +102,11 @@ export default function LoginModal({ open, onClose }) {
             </a>
             <p>
               {t('account.noAccount', 'No account yet?')}{' '}
-              <a href={SIGNUP_URL} target="_blank" rel="noopener noreferrer" className={LINK} data-testid="create-account-link">
+              {/* The kit scope makes every svg a block: the link is an
+                  inline flex row, so the icon stays on the text's line */}
+              <a href={SIGNUP_URL} target="_blank" rel="noopener noreferrer" className={cn(LINK, 'inline-flex items-center gap-1 whitespace-nowrap')} data-testid="create-account-link">
                 {t('account.createAccount', 'Create account')}
-                <ExternalLink size={12} aria-hidden="true" className="ml-1 inline align-[-1px]" />
+                <ExternalLink size={12} aria-hidden="true" className="shrink-0" />
               </a>
             </p>
             {COMPETITIONS_ENABLED && (

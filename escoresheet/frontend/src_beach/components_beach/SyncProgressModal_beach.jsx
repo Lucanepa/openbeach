@@ -1,7 +1,21 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
+import { AlertTriangle, Check, Circle, CloudOff, Loader2, X } from 'lucide-react'
+import { Button } from '../ui/volleyui/Button.jsx'
+import { cn } from '../ui/volleyui/cn.js'
+
+// Each step state: its icon and the hue of its word (the word says it too)
+const STEP = {
+  pending: { Icon: Circle, icon: 'text-stone-300', text: 'text-stone-400' },
+  in_progress: { Icon: Loader2, icon: 'animate-spin text-sky-600', text: 'text-stone-900' },
+  done: { Icon: Check, icon: 'text-emerald-600', text: 'text-emerald-800' },
+  warning: { Icon: AlertTriangle, icon: 'text-amber-600', text: 'text-amber-800' },
+  error: { Icon: X, icon: 'text-red-600', text: 'text-red-700' }
+}
 
 /**
- * SyncProgressModal - Full-screen overlay showing sync progress steps
+ * The set end's sync, step by step (volleyui decision dialog over the scoring
+ * screen; it cannot be dismissed, it closes itself).
  *
  * Props:
  * - open: boolean - whether modal is visible
@@ -21,18 +35,20 @@ export default function SyncProgressModal({
   hasError = false,
   hasWarning = false
 }) {
+  const { t } = useTranslation()
   // Track if we've already triggered auto-proceed to avoid double-calls
   const hasAutoProceeded = useRef(false)
+  const panelRef = useRef(null)
 
   // Reset tracking when modal opens fresh
   useEffect(() => {
     if (open) {
       hasAutoProceeded.current = false
+      panelRef.current?.focus?.()
     }
   }, [open])
 
   // Auto-proceed after completion (1s for success, 1.5s for warning)
-  // Simplified: single effect with all conditions
   useEffect(() => {
     if (!open || !isComplete || hasAutoProceeded.current) return
 
@@ -55,170 +71,71 @@ export default function SyncProgressModal({
 
   if (!open) return null
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'pending':
-        return (
-          <span style={{ color: 'var(--ov-text-muted)', fontSize: 20 }}>○</span>
-        )
-      case 'in_progress':
-        return (
-          <span
-            className="sync-spinner"
-            style={{
-              display: 'inline-block',
-              width: 20,
-              height: 20,
-              border: '2px solid #3b82f6',
-              borderTopColor: 'transparent',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite'
-            }}
-          />
-        )
-      case 'done':
-        return (
-          <span style={{ color: 'var(--ov-success)', fontSize: 20 }}>✓</span>
-        )
-      case 'warning':
-        return (
-          <span style={{ color: 'var(--ov-warning-text)', fontSize: 20 }}>⚠</span>
-        )
-      case 'error':
-        return (
-          <span style={{ color: 'var(--ov-danger-text)', fontSize: 20 }}>✗</span>
-        )
-      default:
-        return null
-    }
-  }
-
-  const getStepLabel = (step) => {
-    return step.label
-  }
+  const title = !isComplete
+    ? t('scoreboard.sync.titleSyncing', 'Syncing…')
+    : hasError
+      ? t('scoreboard.sync.titleError', 'Not synced')
+      : hasWarning
+        ? t('scoreboard.sync.titleOffline', 'Saved on this device')
+        : t('scoreboard.sync.titleDone', 'Synced')
 
   return (
     <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgb(28 25 23 / 0.6)',
-        backdropFilter: 'blur(4px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 2000,
-        pointerEvents: 'auto'
-      }}
+      className="ov-kit no-print fixed inset-0 flex items-center justify-center bg-stone-900/60 p-4 backdrop-blur-sm"
+      // Above the scoring screen's legacy overlays, as the startup check
+      style={{ zIndex: 2000, pointerEvents: 'auto' }}
       onClick={(e) => e.stopPropagation()}
       onTouchStart={(e) => e.stopPropagation()}
     >
-      <style>
-        {`
-          @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-          }
-        `}
-      </style>
-
       <div
-        style={{
-          background: 'var(--ov-card)',
-          border: '1px solid var(--ov-hairline-soft)',
-          boxShadow: 'var(--ov-shadow-pop)',
-          color: 'var(--ov-text-body)',
-          borderRadius: 16,
-          padding: 32,
-          minWidth: 320,
-          maxWidth: '90vw'
-        }}
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ob-sync-progress-title"
+        aria-busy={!isComplete || undefined}
+        tabIndex={-1}
+        className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl outline-none"
+        data-testid="sync-progress"
       >
-        <h3 style={{
-          margin: '0 0 24px 0',
-          textAlign: 'center',
-          color: 'var(--ov-text)',
-          fontSize: 18
-        }}>
-          Syncing...
+        <h3 id="ob-sync-progress-title" className="mb-4 text-center text-lg font-bold text-stone-900">
+          {title}
         </h3>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {steps.map((step, index) => (
-            <div
-              key={step.id || index}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                opacity: step.status === 'pending' ? 0.5 : 1
-              }}
-            >
-              <div style={{ width: 24, display: 'flex', justifyContent: 'center' }}>
-                {getStatusIcon(step.status)}
-              </div>
-              <span style={{
-                color: step.status === 'done' ? 'var(--ov-success)' :
-                  step.status === 'error' ? 'var(--ov-danger-text)' :
-                    step.status === 'warning' ? 'var(--ov-warning-text)' : 'var(--ov-text)',
-                fontSize: 16
-              }}>
-                {getStepLabel(step)}
-              </span>
-            </div>
-          ))}
-        </div>
+        <ol className="divide-y divide-stone-100 rounded-xl border border-stone-200/70">
+          {steps.map((step, index) => {
+            const look = STEP[step.status] || STEP.pending
+            const { Icon } = look
+            return (
+              <li key={step.id || index} className="flex min-h-11 items-center gap-3 px-3 py-2" data-status={step.status}>
+                <span className="flex w-5 shrink-0 justify-center">
+                  <Icon size={18} aria-hidden="true" className={look.icon} />
+                </span>
+                <span className={cn('text-sm font-medium', look.text)}>{step.label}</span>
+              </li>
+            )
+          })}
+        </ol>
 
-        {/* Warning message for offline */}
+        {/* Offline: the data is safe on this device, the queue sends it later */}
         {hasWarning && !hasError && (
-          <div style={{
-            marginTop: 20,
-            padding: 12,
-            background: 'rgba(245, 158, 11, 0.1)',
-            border: '1px solid rgba(245, 158, 11, 0.3)',
-            borderRadius: 8,
-            color: 'var(--ov-warning-text)',
-            fontSize: 14,
-            textAlign: 'center'
-          }}>
-            Offline. Data saved locally.
+          <div role="status" className="mt-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-900">
+            <CloudOff size={14} aria-hidden="true" className="mt-0.5 shrink-0 text-amber-700" />
+            <span>{t('scoreboard.sync.offlineWarning', 'Offline. Data saved locally.')}</span>
           </div>
         )}
 
-        {/* Error message */}
         {errorMessage && (
-          <div style={{
-            marginTop: 20,
-            padding: 12,
-            background: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            borderRadius: 8,
-            color: 'var(--ov-danger-text)',
-            fontSize: 14,
-            textAlign: 'center'
-          }}>
+          <div role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-medium leading-relaxed text-red-700">
             {errorMessage}
           </div>
         )}
 
-        {/* Proceed button - only show if complete with error (user must acknowledge) */}
+        {/* An error waits for the scorer (nothing is lost: the queue retries) */}
         {isComplete && hasError && (
-          <div style={{ marginTop: 24, display: 'flex', justifyContent: 'center' }}>
-            <button
-              onClick={onProceed}
-              style={{
-                padding: '12px 24px',
-                background: '#f59e0b',
-                color: '#000',
-                border: 'none',
-                borderRadius: 8,
-                fontSize: 16,
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
-            >
-              Proceed Anyway
-            </button>
+          <div className="mt-5 flex justify-center">
+            <Button variant="dark" size="xl" onClick={onProceed} className="w-full sm:w-auto sm:min-w-[200px]">
+              {t('scoreboard.sync.proceedAnyway', 'Proceed anyway')}
+            </Button>
           </div>
         )}
       </div>

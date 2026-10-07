@@ -514,7 +514,11 @@
       "syncError": "Sincronizzazione fallita. Dati salvati localmente.",
       "offlineWarning": "Offline. Dati salvati localmente.",
       "proceedAnyway": "Procedi comunque",
-      "proceed": "Continua"
+      "proceed": "Continua",
+      "titleSyncing": "Sincronizzazione…",
+      "titleDone": "Sincronizzato",
+      "titleOffline": "Salvato su questo dispositivo",
+      "titleError": "Non sincronizzato"
     },
     "modals": {
       "confirmRallyStart": "Conferma inizio scambio",

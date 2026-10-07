@@ -514,7 +514,11 @@
       "syncError": "Synchronisierig fählgschlage. Date lokal gspeicheret.",
       "offlineWarning": "Offline. Date lokal gspeicheret.",
       "proceedAnyway": "Trotzdem wiiterfahre",
-      "proceed": "Wiiter"
+      "proceed": "Wiiter",
+      "titleSyncing": "Synchronisiere…",
+      "titleDone": "Synchronisiert",
+      "titleOffline": "Uf däm Grät gspeicheret",
+      "titleError": "Nöd synchronisiert"
     },
     "modals": {
       "confirmRallyStart": "Ballwechsel-Start bestätige",

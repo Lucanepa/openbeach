@@ -48,6 +48,11 @@ describe('the header account button', () => {
     const create = within(dialog).getByTestId('create-account-link')
     expect(create).toHaveAttribute('href', 'https://manager-beach.openvolley.app/#signup')
     expect(SIGNUP_URL).toBe('https://manager-beach.openvolley.app/#signup')
+    // The external-link icon stays on the text's line (the kit scope makes
+    // every svg a block): the link is an inline flex row that does not wrap
+    expect(create.className).toMatch(/\binline-flex\b/)
+    expect(create.className).toMatch(/\bwhitespace-nowrap\b/)
+    expect(create.querySelector('svg')).not.toBeNull()
     expect(within(dialog).getByText('Forgot password?')).toHaveAttribute('href', RESET_PASSWORD_URL)
     // Sentence case and a named close button, no "x" glyph
     expect(within(dialog).queryByText('Sign In')).toBeNull()

@@ -514,7 +514,11 @@
       "syncError": "Synchronisierung fehlgeschlagen. Daten lokal gespeichert.",
       "offlineWarning": "Offline. Daten lokal gespeichert.",
       "proceedAnyway": "Trotzdem fortfahren",
-      "proceed": "Weiter"
+      "proceed": "Weiter",
+      "titleSyncing": "Synchronisiere…",
+      "titleDone": "Synchronisiert",
+      "titleOffline": "Auf diesem Gerät gespeichert",
+      "titleError": "Nicht synchronisiert"
     },
     "modals": {
       "confirmRallyStart": "Ballwechsel-Start bestätigen",
