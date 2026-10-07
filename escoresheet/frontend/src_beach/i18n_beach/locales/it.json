@@ -1220,7 +1220,7 @@
     "selectGameTitle": "Seleziona partita",
     "loadingGames": "Caricamento partite...",
     "noAvailableGames": "Nessuna partita disponibile.",
-    "testMode": "MODALITÀ TEST",
+    "testMode": "Modalità test",
     "refresh": "Aggiorna",
     "errors": {
       "enterPin": "Inserisci un codice PIN a 6 cifre",
@@ -1238,7 +1238,7 @@
       "directOnly": "Solo diretto",
       "directDesc": "WebSocket diretto"
     },
-    "awaitingCoinToss": "Awaiting Coin Toss",
+    "awaitingCoinToss": "In attesa del sorteggio",
     "awaitingCoinTossDesc": "La partita inizierà una volta confermato il Coin Toss sul eScoresheet.",
     "matchHasEnded": "La partita è terminata",
     "lineupSet": "Formazione inserita",
@@ -1262,7 +1262,9 @@
       "courtCaptainDesignation": "Capitano di corte",
       "noAction": "—"
     },
-    "selected": "Selezionato"
+    "selected": "Selezionato",
+    "scorerAttention": "Il segnapunti chiede attenzione",
+    "acknowledge": "Conferma"
   },
   "connection": {
     "title": "Configurazione connessione",

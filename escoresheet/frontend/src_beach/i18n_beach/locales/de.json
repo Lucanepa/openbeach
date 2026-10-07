@@ -1220,7 +1220,7 @@
     "selectGameTitle": "Spiel auswählen",
     "loadingGames": "Spiele werden geladen...",
     "noAvailableGames": "Keine verfügbaren Spiele.",
-    "testMode": "TESTMODUS",
+    "testMode": "Testmodus",
     "refresh": "Aktualisieren",
     "errors": {
       "enterPin": "Bitte geben Sie einen 6-stelligen PIN-Code ein",
@@ -1262,7 +1262,9 @@
       "courtCaptainDesignation": "Spielkapitän",
       "noAction": "—"
     },
-    "selected": "Ausgewählt"
+    "selected": "Ausgewählt",
+    "scorerAttention": "Schreiber braucht Aufmerksamkeit",
+    "acknowledge": "Bestätigen"
   },
   "connection": {
     "title": "Verbindungseinrichtung",

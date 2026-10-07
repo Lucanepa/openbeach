@@ -1220,7 +1220,7 @@
     "selectGameTitle": "Choisir le match",
     "loadingGames": "Chargement...",
     "noAvailableGames": "Aucun match disponible.",
-    "testMode": "MODE AMICAL",
+    "testMode": "Mode amical",
     "refresh": "Actualiser",
     "errors": {
       "enterPin": "Code PIN à 6 chiffres requis",
@@ -1262,7 +1262,9 @@
       "courtCaptainDesignation": "Capitaine de la Cour",
       "noAction": "-"
     },
-    "selected": "Sélectionné"
+    "selected": "Sélectionné",
+    "scorerAttention": "Le marqueur demande votre attention",
+    "acknowledge": "Confirmer"
   },
   "connection": {
     "title": "Configuration de connexion",

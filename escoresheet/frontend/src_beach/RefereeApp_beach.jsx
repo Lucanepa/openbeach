@@ -496,7 +496,12 @@ export default function RefereeApp() {
 
   // Render Referee component if connected (either to match or in master mode)
   if (matchId) {
-    return <Referee matchId={matchId} onExit={handleExit} isMasterMode={isMasterMode} />
+    // The referee view is an 800 px column: the stone page fills the sides
+    return (
+      <div style={{ minHeight: '100dvh', background: 'var(--ov-page)' }}>
+        <Referee matchId={matchId} onExit={handleExit} isMasterMode={isMasterMode} />
+      </div>
+    )
   }
 
   const reload = () => { loadMatches(); checkConnectionStatuses() }

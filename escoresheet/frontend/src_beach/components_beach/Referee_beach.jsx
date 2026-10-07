@@ -8,7 +8,6 @@ import { useRealtimeConnection, CONNECTION_TYPES, CONNECTION_STATUS } from '../h
 const ballImage = '/beachball.png'
 import { ConnectionManager } from '../utils_beach/connectionManager_beach'
 import ConnectionStatus from './ConnectionStatus_beach'
-import Modal from './Modal_beach'
 import WsDebugOverlay from './WsDebugOverlay_beach'
 import { db } from '../db_beach/db_beach'
 import TestModeControls from './TestModeControls_beach'
@@ -19,7 +18,14 @@ import { apiFrom } from '../lib_beach/apiClient_beach'
 import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 import { useSyncQueue } from '../hooks_beach/useSyncQueue_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
-import { Bell, Database, Moon, RefreshCw, SatelliteDish, Smartphone, Sun, TriangleAlert } from './Icons_beach'
+import { Bell, ChevronDown, Database, Loader2, Maximize, Moon, RefreshCw, SatelliteDish, Sun, TriangleAlert, X } from 'lucide-react'
+import { cn } from '../ui/volleyui/cn.js'
+import { Card } from '../ui/volleyui/Card.jsx'
+import { Button } from '../ui/volleyui/Button.jsx'
+import { StatusPill } from '../ui/volleyui/StatusPill.jsx'
+import { Modal as KitModal } from '../ui/volleyui/Modal.jsx'
+import { NarrowScreenOverlay } from './dashboards/EntryKit_beach.jsx'
+import { HEADER_BAR, HEADER_BTN, HEADER_BTN_ON, MENU_PANEL, MENU_SUBROW, MENU_ROW_ON } from './chromeClasses_beach'
 
 // Get current version from package.json (injected by Vite at build time)
 const currentVersion = __APP_VERSION__
@@ -1663,65 +1669,36 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         width: '100vw',
         maxWidth: '800px',
         margin: '0 auto',
-        background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-        color: '#fff',
-        fontFamily: "'Inter', sans-serif",
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden'
-      }}>
-        {/* Header - same as main view */}
-        <div style={{
-          height: '40px',
-          minHeight: '40px',
-          maxHeight: '40px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '0 12px',
-          background: 'rgba(0, 0, 0, 0.3)',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      }} className="bg-stone-100 text-stone-800">
+        {/* Header - kit bar: screen tools left, refresh centre, language / exit right */}
+        <div
+          className={cn('ov-kit', HEADER_BAR, 'flex items-center justify-between gap-2')}
+          style={{ height: '40px', minHeight: '40px', maxHeight: '40px', padding: '0 12px' }}
+        >
+          <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={toggleFullscreen}
-              style={{
-                padding: '4px 10px',
-                fontSize: '11px',
-                fontWeight: 600,
-                background: 'rgba(255,255,255,0.1)',
-                color: '#fff',
-                border: '1px solid rgba(255,255,255,0.2)',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                height: '25px',
-                alignItems: 'center',
-                justifyContent: 'center',
-                display: 'flex',
-              }}
+              aria-pressed={isFullscreen}
+              className={cn(HEADER_BTN, 'w-9 px-0', isFullscreen && HEADER_BTN_ON)}
+              aria-label={isFullscreen ? t('header.exitFullscreen', 'Exit fullscreen') : t('header.fullscreen', 'Fullscreen')}
+              title={isFullscreen ? t('header.exitFullscreen', 'Exit fullscreen') : t('header.fullscreen', 'Fullscreen')}
             >
-              {isFullscreen ? `⛶ ${t('refereeDashboard.exitFullscreen')}` : '⛶'}
+              <Maximize size={15} aria-hidden="true" />
             </button>
 
             <button
+              type="button"
               onClick={toggleWakeLock}
-              style={{
-                padding: '2px 8px',
-                fontSize: '9px',
-                fontWeight: 600,
-                background: wakeLockActive ? 'rgba(34, 197, 94, 0.3)' : 'rgba(255,255,255,0.1)',
-                color: wakeLockActive ? '#22c55e' : '#fff',
-                border: wakeLockActive ? '1px solid rgba(34, 197, 94, 0.5)' : '1px solid rgba(255,255,255,0.2)',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                height: '25px',
-                alignItems: 'center',
-                justifyContent: 'center',
-                display: 'flex',
-              }}
+              aria-pressed={wakeLockActive}
+              className={cn(HEADER_BTN, 'w-9 px-0', wakeLockActive && HEADER_BTN_ON)}
+              aria-label={t('refereeDashboard.keepScreenOn', 'Keep screen on')}
               title={wakeLockActive ? t('refereeDashboard.screenWillStayOn') : t('refereeDashboard.screenMayTurnOff')}
             >
-              {wakeLockActive ? <Sun /> : <Moon />}
+              {wakeLockActive ? <Sun size={15} aria-hidden="true" /> : <Moon size={15} aria-hidden="true" />}
             </button>
 
             <ConnectionStatus
@@ -1743,57 +1720,32 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           </div>
 
           {/* Center - Refresh Button */}
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-            <button
-              onClick={fetchFreshData}
-              style={{
-                padding: '6px 16px',
-                fontSize: '12px',
-                fontWeight: 600,
-                height: '25px',
-                alignItems: 'center',
-                justifyContent: 'center',
-                display: 'flex',
-                background: 'rgba(59, 130, 246, 0.2)',
-                color: '#3b82f6',
-                border: '1px solid rgba(59, 130, 246, 0.4)',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                gap: '6px'
-              }}
-              title={t('refereeDashboard.refresh')}
-            >
-              <RefreshCw /> {window.innerWidth >= 500 && t('refereeDashboard.refresh')}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={fetchFreshData}
+            className={HEADER_BTN}
+            aria-label={t('refereeDashboard.refresh')}
+            title={t('refereeDashboard.refresh')}
+          >
+            <RefreshCw size={14} aria-hidden="true" /> {window.innerWidth >= 500 && t('refereeDashboard.refresh')}
+          </button>
 
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <div className="flex items-center gap-2">
             {/* Language Selector */}
-            <div style={{ position: 'relative' }}>
+            <div className="relative">
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation()
                   setLanguageMenuOpen(!languageMenuOpen)
                 }}
-                style={{
-                  padding: '4px 8px',
-                  fontSize: '10px',
-                  height: '25px',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  display: 'flex',
-                  gap: '4px',
-                  fontWeight: 600,
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  color: '#fff',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
-                }}
+                aria-expanded={languageMenuOpen}
+                className={cn(HEADER_BTN, 'gap-1 px-2', languageMenuOpen && 'bg-stone-100')}
+                aria-label={t('header.language', 'Language')}
                 title={t('header.language', 'Language')}
               >
                 {(() => { const current = languages.find(l => l.code === i18n.language); return current ? <current.Flag /> : <FlagGB /> })()}
-                <span style={{ fontSize: '8px' }}>▼</span>
+                <ChevronDown size={12} aria-hidden="true" className="text-stone-400" />
               </button>
 
               {/* Language Dropdown */}
@@ -1801,63 +1753,23 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                 <>
                   <div
                     onClick={() => setLanguageMenuOpen(false)}
-                    style={{
-                      position: 'fixed',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      zIndex: 998
-                    }}
+                    className="fixed inset-0"
+                    style={{ zIndex: 998 }}
                   />
-                  <div style={{
-                    position: 'absolute',
-                    top: '100%',
-                    right: 0,
-                    marginTop: '4px',
-                    background: '#1a1a2e',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    borderRadius: '8px',
-                    overflow: 'hidden',
-                    zIndex: 1000,
-                    minWidth: '100px',
-                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)'
-                  }}>
+                  <div className={cn('absolute right-0 top-full mt-1.5 flex min-w-[120px] flex-col', MENU_PANEL)} style={{ zIndex: 1000 }}>
                     {languages.map((lang) => (
                       <button
+                        type="button"
                         key={lang.code}
+                        aria-pressed={i18n.language === lang.code}
                         onClick={(e) => {
                           e.stopPropagation()
                           i18n.changeLanguage(lang.code)
                           setLanguageMenuOpen(false)
                         }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          width: '100%',
-                          padding: '10px 12px',
-                          fontSize: '12px',
-                          fontWeight: i18n.language === lang.code ? 600 : 400,
-                          background: i18n.language === lang.code ? 'rgba(74, 222, 128, 0.15)' : 'transparent',
-                          color: i18n.language === lang.code ? '#4ade80' : 'rgba(255, 255, 255, 0.8)',
-                          border: 'none',
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                          transition: 'all 0.15s'
-                        }}
-                        onMouseEnter={(e) => {
-                          if (i18n.language !== lang.code) {
-                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (i18n.language !== lang.code) {
-                            e.currentTarget.style.background = 'transparent'
-                          }
-                        }}
+                        className={cn(MENU_SUBROW, i18n.language === lang.code && MENU_ROW_ON)}
                       >
-                        <span style={{ display: 'flex', alignItems: 'center' }}><lang.Flag /></span>
+                        <span className="flex w-5 items-center justify-center"><lang.Flag /></span>
                         <span>{lang.label}</span>
                       </button>
                     ))}
@@ -1867,94 +1779,47 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             </div>
 
             {/* Version */}
-            <span style={{ fontSize: '8px', color: 'rgba(255, 255, 255, 0.5)' }}>
+            <span className="hidden text-[10px] tabular-nums tracking-normal text-stone-500 sm:inline">
               v{currentVersion}
             </span>
-            {/* Exit Button with Icon */}
+            {/* Exit */}
             <button
+              type="button"
               onClick={onExit}
-              style={{
-                padding: '4px 8px',
-                fontSize: '10px',
-                height: '25px',
-                width: '25px',
-                alignItems: 'center',
-                justifyContent: 'center',
-                display: 'flex',
-                fontWeight: 600,
-                background: 'rgba(239, 68, 68, 0.2)',
-                color: '#ef4444',
-                border: '1px solid rgba(239, 68, 68, 0.4)',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                lineHeight: 1
-              }}
-              title="Exit"
+              className={cn(HEADER_BTN, 'w-9 border-red-200 px-0 text-red-600 hover:bg-red-50')}
+              aria-label={t('refereeDashboard.exit', 'Exit')}
+              title={t('refereeDashboard.exit', 'Exit')}
             >
-              ✕
+              <X size={15} aria-hidden="true" />
             </button>
           </div>
         </div>
 
         {/* Content */}
-        <div style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '24px',
-          padding: '20px'
-        }}>
-          {/* Team names if available */}
-          {data?.team1?.name && data?.team2?.name && (
-            <div style={{
-              fontSize: vmin(3.5),
-              fontWeight: 700,
-              textAlign: 'center',
-              marginBottom: '16px'
-            }}>
-              {data.team1.name} vs {data.team2.name}
+        <div className="ov-kit flex flex-1 flex-col items-center overflow-y-auto bg-gradient-to-b from-stone-50 to-stone-100 px-4 py-6">
+          <Card stack={false} className="my-auto w-full max-w-md rounded-3xl p-6 text-center shadow-card-lg sm:p-8">
+            {/* Team names if available */}
+            {data?.team1?.name && data?.team2?.name && (
+              <p className="mb-5 text-lg font-bold tracking-tight text-stone-900 sm:text-xl">
+                {data.team1.name} <span className="font-medium text-stone-400">{t('refereeDashboard.vs', 'vs')}</span> {data.team2.name}
+              </p>
+            )}
+
+            {/* Awaiting Coin Toss Message */}
+            <div className="flex justify-center">
+              <StatusPill tone="todo" className="px-3 py-1 text-xs">
+                {t('refereeDashboard.awaitingCoinToss', 'Awaiting coin toss')}
+              </StatusPill>
             </div>
-          )}
 
-          {/* Awaiting Coin Toss Message */}
-          <div style={{
-            fontSize: vmin(4),
-            fontWeight: 600,
-            color: '#fbbf24',
-            textAlign: 'center',
-            textTransform: 'uppercase',
-            letterSpacing: '2px'
-          }}>
-            {t('refereeDashboard.awaitingCoinToss', 'Awaiting Coin Toss')}
-          </div>
+            <p className="mx-auto mt-4 max-w-sm text-sm text-stone-600">
+              {t('refereeDashboard.awaitingCoinTossDesc', 'The match will begin once the coin toss has been confirmed on the scoresheet.')}
+            </p>
 
-          <div style={{
-            fontSize: vmin(2.5),
-            color: 'rgba(255, 255, 255, 0.7)',
-            textAlign: 'center',
-            maxWidth: '400px'
-          }}>
-            {t('refereeDashboard.awaitingCoinTossDesc', 'The match will begin once the coin toss has been confirmed on the scoresheet.')}
-          </div>
-
-          {/* Loading indicator */}
-          <div style={{
-            width: '40px',
-            height: '40px',
-            border: '3px solid rgba(255, 255, 255, 0.2)',
-            borderTopColor: '#fbbf24',
-            borderRadius: '50%',
-            animation: 'awaiting-spin 1s linear infinite'
-          }} />
+            {/* Loading indicator */}
+            <Loader2 size={28} className="mx-auto mt-6 animate-spin text-stone-400" aria-label={t('common.loading', 'Loading...')} />
+          </Card>
         </div>
-
-        <style>{`
-          @keyframes awaiting-spin {
-            to { transform: rotate(360deg); }
-          }
-        `}</style>
       </div>
     )
   }
@@ -2183,63 +2048,35 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         width: '100vw',
         maxWidth: '800px',
         margin: '0 auto',
-        background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-        color: '#fff',
-        fontFamily: "'Inter', sans-serif",
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: '24px',
         padding: '20px',
         overflow: 'hidden'
-      }}>
-        {/* Match Ended Banner */}
-        <div style={{
-          fontSize: '18px',
-          fontWeight: 500,
-          color: 'rgba(255, 255, 255, 0.7)',
-          textTransform: 'uppercase',
-          letterSpacing: '2px'
-        }}>
-          {t('refereeDashboard.matchHasEnded', 'The match has ended')}
-        </div>
+      }} className="bg-stone-100 text-stone-800">
+        <div className="ov-kit w-full max-w-sm">
+          <Card stack={false} className="rounded-3xl p-6 text-center shadow-card-lg sm:p-8">
+            {/* Match Ended Banner */}
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-500">
+              {t('refereeDashboard.matchHasEnded', 'The match has ended')}
+            </p>
 
-        {/* Winner and Result */}
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            fontSize: '32px',
-            fontWeight: 700,
-            marginBottom: '8px'
-          }}>
-            {matchWinner}
-          </div>
-          <div style={{
-            fontSize: '48px',
-            fontWeight: 800,
-            color: 'var(--accent)'
-          }}>
-            {matchResult}
-          </div>
-        </div>
+            {/* Winner and Result */}
+            <div className="mt-4 text-center">
+              <div className="mb-2 text-2xl font-bold tracking-tight text-stone-900 sm:text-3xl">
+                {matchWinner}
+              </div>
+              <div className="text-5xl font-bold tabular-nums text-stone-900">
+                {matchResult}
+              </div>
+            </div>
 
-        <button
-          onClick={onExit}
-          style={{
-            padding: '12px 24px',
-            fontSize: '16px',
-            fontWeight: 600,
-            background: 'rgba(255, 255, 255, 0.1)',
-            color: '#fff',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            transition: 'background 0.2s',
-            marginTop: '16px'
-          }}
-        >
-          Exit
-        </button>
+            <Button variant="secondary" size="xl" block className="mt-6" onClick={onExit}>
+              {t('refereeDashboard.exit', 'Exit')}
+            </Button>
+          </Card>
+        </div>
       </div>
     )
   }
@@ -2251,80 +2088,17 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       width: '100vw',
       maxWidth: '800px',
       margin: '0 auto',
-      background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-      color: '#fff',
-      fontFamily: "'Inter', sans-serif",
+      // volleyui: the stone page. Team colours, the sand court, the score
+      // digits, serve / captain / sanction markers and the counters keep their
+      // shapes and sizes; only the neutral surfaces around them went light.
+      background: 'var(--ov-page)',
+      color: 'var(--ov-text)',
       display: 'flex',
       flexDirection: 'column',
       overflow: 'hidden'
     }}>
       {/* Narrow screen blocking overlay */}
-      {(viewportWidth < 357 || viewportHeight < 650) && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.95)',
-          zIndex: 99999,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '24px',
-          textAlign: 'center'
-        }}>
-          <div style={{ fontSize: '64px', marginBottom: '24px' }}><Smartphone /></div>
-          <h2 style={{
-            fontSize: '24px',
-            fontWeight: 700,
-            color: '#ffffff',
-            marginBottom: '16px'
-          }}>
-            {t('common.screenTooSmall', 'Screen Too Small')}
-          </h2>
-          <p style={{
-            fontSize: '16px',
-            color: '#9ca3af',
-            maxWidth: '300px',
-            lineHeight: 1.5,
-            marginBottom: '24px'
-          }}>
-            {t('common.screenTooSmallMessage', 'This app requires a minimum screen width of 357px. Please use a device with a wider screen or rotate your device to landscape mode.')}
-          </p>
-          <button
-            onClick={() => {
-              if (document.documentElement.requestFullscreen) {
-                document.documentElement.requestFullscreen().catch(() => { })
-              }
-            }}
-            style={{
-              padding: '12px 24px',
-              fontSize: '16px',
-              fontWeight: 600,
-              background: 'var(--accent, #3b82f6)',
-              color: '#000',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}
-          >
-            <span>⛶</span>
-            <span>{t('common.tryFullscreen', 'Try Fullscreen')}</span>
-          </button>
-          <p style={{
-            fontSize: '12px',
-            color: '#6b7280',
-            marginTop: '12px'
-          }}>
-            {t('common.fullscreenHint', 'Fullscreen may provide more space by hiding browser UI.')}
-          </p>
-        </div>
-      )}
+      {(viewportWidth < 357 || viewportHeight < 650) && <NarrowScreenOverlay t={t} />}
 
       {/* Debug overlay - triple-tap to show */}
       {!isMasterMode && <WsDebugOverlay matchId={matchId} />}
@@ -2341,7 +2115,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           // Screen options
           { header: t('refereeDashboard.screenOptions') },
           {
-            icon: wakeLockActive ? <Sun /> : <Moon />,
+            icon: wakeLockActive ? <Sun size={14} aria-hidden="true" /> : <Moon size={14} aria-hidden="true" />,
             label: t('refereeDashboard.keepScreenOn'),
             onClick: toggleWakeLock,
             toggle: wakeLockActive,
@@ -2352,20 +2126,20 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           ...(!isMasterMode ? [
             { header: t('refereeDashboard.connection.title') },
             {
-              icon: <RefreshCw />,
+              icon: <RefreshCw size={14} aria-hidden="true" />,
               label: t('refereeDashboard.connection.auto'),
               onClick: () => setConnectionType(CONNECTION_TYPES.AUTO),
               active: connectionType === CONNECTION_TYPES.AUTO
             },
             {
-              icon: <Database />,
+              icon: <Database size={14} aria-hidden="true" />,
               label: t('refereeDashboard.connection.dbOnly'),
               onClick: () => setConnectionType(CONNECTION_TYPES.SUPABASE),
               active: connectionType === CONNECTION_TYPES.SUPABASE,
               color: '#22c55e'
             },
             {
-              icon: <SatelliteDish />,
+              icon: <SatelliteDish size={14} aria-hidden="true" />,
               label: t('refereeDashboard.connection.directOnly'),
               onClick: () => setConnectionType(CONNECTION_TYPES.WEBSOCKET),
               active: connectionType === CONNECTION_TYPES.WEBSOCKET,
@@ -2376,7 +2150,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           // Test mode indicator
           ...(isMasterMode ? [
             {
-              icon: <TriangleAlert />,
+              icon: <TriangleAlert size={14} aria-hidden="true" />,
               label: t('refereeDashboard.testMode'),
               disabled: true,
               color: '#fbbf24'
@@ -2385,7 +2159,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           ] : []),
           // Refresh (always visible)
           {
-            icon: <RefreshCw />,
+            icon: <RefreshCw size={14} aria-hidden="true" />,
             label: t('refereeDashboard.refresh'),
             onClick: fetchFreshData,
             color: '#3b82f6'
@@ -2393,7 +2167,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           { divider: true },
           // Exit
           {
-            icon: '✕',
+            icon: <X size={14} aria-hidden="true" />,
             label: t('refereeDashboard.exit'),
             onClick: onExit,
             color: '#ef4444'
@@ -2411,7 +2185,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       }}>
 
         {/* SECTION 2A: Set Counter Row - 8% */}
-        <div style={{ flex: '0 0 10%', padding: `${vmin(0.6)}px ${vmin(1.2)}px`, background: 'rgba(0, 0, 0, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', width: '100%', minHeight: 0, overflow: 'hidden' }}>
+        <div style={{ flex: '0 0 10%', padding: `${vmin(0.6)}px ${vmin(1.2)}px`, background: 'var(--ov-card)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--ov-hairline)', width: '100%', minHeight: 0, overflow: 'hidden' }}>
           {/* Left: Team Name (centered in its space) + A/B */}
           <div style={{ flex: '1 1 0', display: 'flex', alignItems: 'center', gap: vmin(1.2), minWidth: 0 }}>
             <div ref={section2AContainerRef} style={{ flex: '1 1 0', display: 'flex', justifyContent: 'center', minWidth: 0, overflow: 'hidden' }}>
@@ -2420,6 +2194,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                 fontWeight: 700,
                 background: leftColor,
                 color: isBrightColor(leftColor) ? '#000' : '#fff',
+                boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)',
                 padding: `${vmin(0.6)}px ${vmin(1.5)}px`,
                 borderRadius: vmin(0.6),
                 whiteSpace: 'nowrap',
@@ -2430,29 +2205,29 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                 {leftShortName}
               </div>
             </div>
-            <div style={{ padding: `${vmin(0.6)}px ${vmin(1.5)}px`, background: leftColor, color: isBrightColor(leftColor) ? '#000' : '#fff', borderRadius: vmin(0.6), fontSize: vmin(3.5), fontWeight: 800, flexShrink: 0 }}>{leftLabel}</div>
+            <div style={{ padding: `${vmin(0.6)}px ${vmin(1.5)}px`, background: leftColor, color: isBrightColor(leftColor) ? '#000' : '#fff', boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)', borderRadius: vmin(0.6), fontSize: vmin(3.5), fontWeight: 800, flexShrink: 0 }}>{leftLabel}</div>
           </div>
 
           {/* Center: Set scores + SET n */}
           <div style={{ display: 'flex', alignItems: 'center', gap: vmin(1), flexShrink: 0, marginLeft: vmin(0.8), marginRight: vmin(0.8) }}>
             <div style={{
-              padding: `${vmin(0.6)}px ${vmin(1.8)}px`, background: 'rgba(255, 255, 255, 0.15)', borderRadius: vmin(0.8),
-              fontSize: vmin(3), fontWeight: 800
+              padding: `${vmin(0.6)}px ${vmin(1.8)}px`, background: 'var(--ov-sunken-strong)', border: '1px solid var(--ov-hairline)', borderRadius: vmin(0.8),
+              fontSize: vmin(3), fontWeight: 800, fontVariantNumeric: 'tabular-nums'
             }}>
               {leftSetsWon}</div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <span style={{ fontSize: vmin(3), color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>SET</span>
+              <span style={{ fontSize: vmin(3), color: 'var(--ov-text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>SET</span>
               <span style={{ fontSize: vmin(4), fontWeight: 800 }}>{displaySetIndex}</span>
             </div>
             <div style={{
-              padding: `${vmin(0.6)}px ${vmin(1.8)}px`, background: 'rgba(255, 255, 255, 0.15)',
-              borderRadius: vmin(0.8), fontSize: vmin(3), fontWeight: 800
+              padding: `${vmin(0.6)}px ${vmin(1.8)}px`, background: 'var(--ov-sunken-strong)', border: '1px solid var(--ov-hairline)',
+              borderRadius: vmin(0.8), fontSize: vmin(3), fontWeight: 800, fontVariantNumeric: 'tabular-nums'
             }}>{rightSetsWon}</div>
           </div>
 
           {/* Right: A/B + Team Name (centered in its space) */}
           <div style={{ flex: '1 1 0', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: vmin(1.2), minWidth: 0 }}>
-            <div style={{ padding: `${vmin(0.6)}px ${vmin(1.5)}px`, background: rightColor, color: isBrightColor(rightColor) ? '#000' : '#fff', borderRadius: vmin(0.6), fontSize: vmin(3.5), fontWeight: 800, flexShrink: 0 }}>{rightLabel}</div>
+            <div style={{ padding: `${vmin(0.6)}px ${vmin(1.5)}px`, background: rightColor, color: isBrightColor(rightColor) ? '#000' : '#fff', boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)', borderRadius: vmin(0.6), fontSize: vmin(3.5), fontWeight: 800, flexShrink: 0 }}>{rightLabel}</div>
             <div style={{ flex: '1 1 0', display: 'flex', justifyContent: 'center', minWidth: 0, overflow: 'hidden' }}>
               <div
                 style={{
@@ -2460,6 +2235,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                   fontWeight: 700,
                   background: rightColor,
                   color: isBrightColor(rightColor) ? '#000' : '#fff',
+                  boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)',
                   padding: `${vmin(0.6)}px ${vmin(1.5)}px`,
                   borderRadius: vmin(0.6),
                   whiteSpace: 'nowrap',
@@ -2492,7 +2268,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         <div style={{
           flex: '0 0 15%',
           padding: `${vmin(0.4)}px 0`,
-          background: 'rgba(0, 0, 0, 0.2)',
+          background: 'var(--ov-card)',
+          borderBottom: '1px solid var(--ov-hairline)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -2513,19 +2290,19 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
               alignItems: 'center',
               gap: 2
             }}>
-              <span style={{ fontSize: vmin(2.5), color: 'var(--accent)', fontWeight: 700 }}>SERVE</span>
+              <span style={{ fontSize: vmin(2.5), color: 'var(--ov-success)', fontWeight: 700 }}>SERVE</span>
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 padding: vmin(0.8),
-                background: 'rgba(34, 197, 94, 0.15)',
-                border: '2px solid var(--accent)',
+                background: '#ecfdf5',
+                border: '2px solid #10b981',
                 borderRadius: vmin(0.8),
                 aspectRatio: '1/1',
                 minWidth: vmin(5.5)
               }}>
-                <span style={{ fontSize: vmin(6), fontWeight: 700, color: 'var(--accent)', lineHeight: 0.9, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontSize: vmin(6), fontWeight: 700, color: 'var(--ov-success)', lineHeight: 0.9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontVariantNumeric: 'tabular-nums' }}>
                   {(() => {
                     // Find serving player number from lineup (isServing flag)
                     for (const pos of [leftLineup?.I, leftLineup?.II, leftLineup?.III, leftLineup?.IV]) {
@@ -2552,6 +2329,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
               fontSize: vmin(15),
               fontWeight: 600,
               lineHeight: 1,
+              fontVariantNumeric: 'tabular-nums',
               flex: '1 1 0',
               textAlign: 'right',
               paddingRight: vmin(0.5)
@@ -2559,13 +2337,14 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
               {leftDisplayScore}
             </span>
             <span style={{
-              fontFamily: getScoreFont(), fontSize: vmin(11), fontWeight: 800, color: 'var(--accent)', lineHeight: 1, marginTop: vmin(-0.5), flexShrink: 0
+              fontFamily: getScoreFont(), fontSize: vmin(11), fontWeight: 800, color: 'var(--ov-text-faint)', lineHeight: 1, marginTop: vmin(-0.5), flexShrink: 0
             }}>:</span>
             <span style={{
               fontFamily: getScoreFont(),
               fontSize: vmin(15),
               fontWeight: 600,
               lineHeight: 1,
+              fontVariantNumeric: 'tabular-nums',
               flex: '1 1 0',
               textAlign: 'left',
               paddingLeft: vmin(0.5)
@@ -2586,19 +2365,19 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
               alignItems: 'center',
               gap: 2
             }}>
-              <span style={{ fontSize: vmin(2.5), color: 'var(--accent)', fontWeight: 700 }}>SERVE</span>
+              <span style={{ fontSize: vmin(2.5), color: 'var(--ov-success)', fontWeight: 700 }}>SERVE</span>
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 padding: vmin(0.8),
-                background: 'rgba(34, 197, 94, 0.15)',
-                border: '2px solid var(--accent)',
+                background: '#ecfdf5',
+                border: '2px solid #10b981',
                 borderRadius: vmin(0.8),
                 aspectRatio: '1/1',
                 minWidth: vmin(5.5)
               }}>
-                <span style={{ fontSize: vmin(6), fontWeight: 700, color: 'var(--accent)', lineHeight: 0.9, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontSize: vmin(6), fontWeight: 700, color: 'var(--ov-success)', lineHeight: 0.9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontVariantNumeric: 'tabular-nums' }}>
                   {(() => {
                     // Find serving player number from lineup (isServing flag)
                     for (const pos of [rightLineup?.I, rightLineup?.II, rightLineup?.III, rightLineup?.IV]) {
@@ -2637,7 +2416,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
               display: 'grid',
               gridTemplateColumns: '1fr 1fr',
               background: 'linear-gradient(90deg, #e6c288, #dcb67d)',
-              border: '2px solid rgba(255, 255, 255, 0.08)',
+              border: '1px solid var(--ov-hairline-strong)',
               overflow: 'hidden'
             }}>
               {/* Net */}
@@ -2718,12 +2497,12 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         {/* SECTION 4: TO counters + Sanctions - Beach volleyball (no substitutions) */}
         <div style={{
           flex: '1 1 auto',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
+          borderTop: '1px solid var(--ov-hairline)',
           display: 'grid',
           gridTemplateColumns: 'auto 1fr auto',
           alignItems: 'center',
           padding: '6px 12px',
-          background: 'rgba(0, 0, 0, 0.06)',
+          background: 'var(--ov-card)',
           gap: '12px',
           minHeight: 0,
           overflow: 'hidden'
@@ -2739,30 +2518,32 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           }}>
             {/* TO counter */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-              <span style={{ fontWeight: 600, color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.6em' }}>TO</span>
+              <span style={{ fontWeight: 600, color: 'var(--ov-text-muted)', fontSize: '0.6em' }}>TO</span>
               <span style={{
-                background: leftStats.timeouts >= 1 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255, 255, 255, 0.15)',
+                background: leftStats.timeouts >= 1 ? 'var(--ov-danger-soft)' : 'var(--ov-sunken-strong)',
                 padding: `${vmin(0.7)}px ${vmin(1.4)}px`,
                 borderRadius: vmin(0.6),
-                border: leftStats.timeouts >= 1 ? '1px solid rgba(239, 68, 68, 0.6)' : '1px solid rgba(255, 255, 255, 0.3)',
+                border: leftStats.timeouts >= 1 ? '1px solid #fca5a5' : '1px solid var(--ov-hairline-strong)',
                 minWidth: vmin(4.2),
                 aspectRatio: '1',
                 textAlign: 'center',
-                color: leftStats.timeouts >= 1 ? '#ef4444' : 'rgba(255, 255, 255, 0.9)'
+                color: leftStats.timeouts >= 1 ? 'var(--ov-danger-text)' : 'var(--ov-text)',
+                fontVariantNumeric: 'tabular-nums'
               }}>{leftStats.timeouts}</span>
             </div>
             {/* BMP counter */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-              <span style={{ fontWeight: 600, color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.6em' }}>BMP</span>
+              <span style={{ fontWeight: 600, color: 'var(--ov-text-muted)', fontSize: '0.6em' }}>BMP</span>
               <span style={{
-                background: leftStats.challengesUsed >= 1 ? 'rgba(234, 179, 8, 0.3)' : 'rgba(255, 255, 255, 0.15)',
+                background: leftStats.challengesUsed >= 1 ? 'var(--ov-warning-soft)' : 'var(--ov-sunken-strong)',
                 padding: `${vmin(0.7)}px ${vmin(1.4)}px`,
                 borderRadius: vmin(0.6),
-                border: leftStats.challengesUsed >= 1 ? '1px solid rgba(234, 179, 8, 0.6)' : '1px solid rgba(255, 255, 255, 0.3)',
+                border: leftStats.challengesUsed >= 1 ? '1px solid #fcd34d' : '1px solid var(--ov-hairline-strong)',
                 minWidth: vmin(4.2),
                 aspectRatio: '1',
                 textAlign: 'center',
-                color: leftStats.challengesUsed >= 1 ? '#eab308' : 'rgba(255, 255, 255, 0.9)'
+                color: leftStats.challengesUsed >= 1 ? 'var(--ov-warning-text)' : 'var(--ov-text)',
+                fontVariantNumeric: 'tabular-nums'
               }}>{leftStats.challengesUsed}</span>
             </div>
           </div>
@@ -2783,17 +2564,17 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
               alignItems: 'center',
               justifyContent: 'flex-start',
               gap: '4px',
-              border: (leftTeamSanctions.formalWarning || leftTeamSanctions.improperRequest || leftTeamSanctions.delayWarning || leftTeamSanctions.delayPenalty || leftTeamSanctions.warnings.length > 0 || leftTeamSanctions.penalties.length > 0 || leftTeamSanctions.expulsions.length > 0 || leftTeamSanctions.disqualifications.length > 0) ? '1px solid rgba(255,255,255,0.15)' : 'none',
+              border: (leftTeamSanctions.formalWarning || leftTeamSanctions.improperRequest || leftTeamSanctions.delayWarning || leftTeamSanctions.delayPenalty || leftTeamSanctions.warnings.length > 0 || leftTeamSanctions.penalties.length > 0 || leftTeamSanctions.expulsions.length > 0 || leftTeamSanctions.disqualifications.length > 0) ? '1px solid var(--ov-hairline)' : 'none',
               padding: '4px',
               height: '100%',
 
             }}>
               {/* Sanctions title if any sanctions exist */}
               {(leftTeamSanctions.formalWarning || leftTeamSanctions.improperRequest || leftTeamSanctions.delayWarning || leftTeamSanctions.delayPenalty || leftTeamSanctions.warnings.length > 0 || leftTeamSanctions.penalties.length > 0 || leftTeamSanctions.expulsions.length > 0 || leftTeamSanctions.disqualifications.length > 0) && (
-                <div style={{ fontSize: '15px', fontWeight: 600, color: 'rgba(255, 255, 255, 1)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sanctions</div>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--ov-text-body)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sanctions</div>
               )}
               {(leftTeamSanctions.formalWarning || leftTeamSanctions.improperRequest || leftTeamSanctions.delayWarning || leftTeamSanctions.delayPenalty || leftTeamSanctions.warnings.length > 0 || leftTeamSanctions.penalties.length > 0 || leftTeamSanctions.expulsions.length > 0 || leftTeamSanctions.disqualifications.length > 0) && (
-                <div style={{ border: '1px solid rgba(255,255,255,0.15)', height: '1px', width: '100%', margin: '4px 0' }}></div>
+                <div style={{ borderTop: '1px solid var(--ov-hairline)', height: 0, width: '100%', margin: '4px 0' }}></div>
               )}
               {/* Team-level sanctions at top (Formal warning, Improper Request only) */}
               {(leftTeamSanctions.formalWarning || leftTeamSanctions.improperRequest) && (
@@ -2824,7 +2605,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                 </div>
               )}
               {(leftTeamSanctions.formalWarning || leftTeamSanctions.improperRequest || leftTeamSanctions.delayWarning || leftTeamSanctions.delayPenalty || leftTeamSanctions.warnings.length > 0 || leftTeamSanctions.penalties.length > 0 || leftTeamSanctions.expulsions.length > 0 || leftTeamSanctions.disqualifications.length > 0) && (
-                <div style={{ border: '1px solid rgba(255,255,255,0.15)', height: '1px', width: '100%', margin: '4px 0' }}></div>
+                <div style={{ borderTop: '1px solid var(--ov-hairline)', height: 0, width: '100%', margin: '4px 0' }}></div>
               )}
               {/* Personal sanctions in grid: W|P|E|D columns, DW/DP below */}
               {(leftTeamSanctions.warnings.length > 0 || leftTeamSanctions.penalties.length > 0 || leftTeamSanctions.expulsions.length > 0 || leftTeamSanctions.disqualifications.length > 0 || leftTeamSanctions.delayWarning || leftTeamSanctions.delayPenalty) && (
@@ -2933,40 +2714,40 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             }}>
               {timeoutModal ? (
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '20px', color: 'var(--muted)', fontWeight: 600, marginBottom: '4px' }}>TIMEOUT</div>
+                  <div style={{ fontSize: '20px', color: 'var(--ov-text-muted)', fontWeight: 600, marginBottom: '4px' }}>TIMEOUT</div>
                   <DonutCountdown current={timeoutModal.countdown} total={45} size={130} strokeWidth={6}>
-                    <div style={{ fontSize: vmin(5), fontFamily: getScoreFont(), fontWeight: 600, color: timeoutModal.countdown <= 10 ? '#ef4444' : 'var(--accent)', lineHeight: 1 }}>
+                    <div style={{ fontSize: vmin(5), fontFamily: getScoreFont(), fontWeight: 600, color: timeoutModal.countdown <= 10 ? 'var(--ov-danger-text)' : 'var(--ov-success)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
                       {timeoutModal.countdown}"
                     </div>
                   </DonutCountdown>
                 </div>
               ) : ttoModal ? (
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '13px', color: 'var(--accent)', fontWeight: 700, marginBottom: '2px' }}>
+                  <div style={{ fontSize: '13px', color: 'var(--ov-success)', fontWeight: 700, marginBottom: '2px' }}>
                     Technical Timeout
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 500, marginBottom: '6px' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--ov-text-muted)', fontWeight: 500, marginBottom: '6px' }}>
                     at 21 points
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginBottom: '6px' }}>
-                    <span style={{ background: leftColor, color: isBrightColor(leftColor) ? '#000' : '#fff', padding: '1px 5px', borderRadius: '3px', fontSize: '11px', fontWeight: 700 }}>{leftLabel}</span>
-                    <strong style={{ fontSize: '16px', color: 'var(--text)' }}>{leftPoints} - {rightPoints}</strong>
-                    <span style={{ background: rightColor, color: isBrightColor(rightColor) ? '#000' : '#fff', padding: '1px 5px', borderRadius: '3px', fontSize: '11px', fontWeight: 700 }}>{rightLabel}</span>
+                    <span style={{ background: leftColor, color: isBrightColor(leftColor) ? '#000' : '#fff', boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)', padding: '1px 5px', borderRadius: '3px', fontSize: '11px', fontWeight: 700 }}>{leftLabel}</span>
+                    <strong style={{ fontSize: '16px', color: 'var(--ov-text)', fontVariantNumeric: 'tabular-nums' }}>{leftPoints} - {rightPoints}</strong>
+                    <span style={{ background: rightColor, color: isBrightColor(rightColor) ? '#000' : '#fff', boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)', padding: '1px 5px', borderRadius: '3px', fontSize: '11px', fontWeight: 700 }}>{rightLabel}</span>
                   </div>
                   <DonutCountdown current={ttoModal.countdown} total={45} size={130} strokeWidth={6}>
-                    <div style={{ fontSize: vmin(5), fontFamily: getScoreFont(), fontWeight: 600, color: ttoModal.countdown <= 10 ? '#ef4444' : 'var(--accent)', lineHeight: 1 }}>
+                    <div style={{ fontSize: vmin(5), fontFamily: getScoreFont(), fontWeight: 600, color: ttoModal.countdown <= 10 ? 'var(--ov-danger-text)' : 'var(--ov-success)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
                       {ttoModal.countdown}"
                     </div>
                   </DonutCountdown>
-                  <div style={{ fontSize: '11px', color: '#facc15', fontWeight: 500, marginTop: '4px' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--ov-warning-text)', fontWeight: 500, marginTop: '4px' }}>
                     Courts will switch when TTO ends
                   </div>
                 </div>
               ) : betweenSetsCountdown && betweenSetsCountdown.countdown > 0 ? (
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '12px', color: 'var(--muted)', fontWeight: 600, marginBottom: '4px' }}>INTERVAL</div>
+                  <div style={{ fontSize: '12px', color: 'var(--ov-text-muted)', fontWeight: 600, marginBottom: '4px' }}>INTERVAL</div>
                   <DonutCountdown current={betweenSetsCountdown.countdown} total={setIntervalDuration} size={90} strokeWidth={5}>
-                    <div style={{ fontSize: vmin(4.5), fontFamily: getScoreFont(), fontWeight: 800, color: betweenSetsCountdown.countdown <= 30 ? '#ef4444' : '#22c55e', lineHeight: 1 }}>
+                    <div style={{ fontSize: vmin(4.5), fontFamily: getScoreFont(), fontWeight: 800, color: betweenSetsCountdown.countdown <= 30 ? 'var(--ov-danger-text)' : 'var(--ov-success)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
                       {Math.floor(betweenSetsCountdown.countdown / 60)}:{String(betweenSetsCountdown.countdown % 60).padStart(2, '0')}
                     </div>
                   </DonutCountdown>
@@ -2994,16 +2775,16 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
               alignItems: 'center',
               justifyContent: 'flex-start',
               gap: '4px',
-              border: (rightTeamSanctions.formalWarning || rightTeamSanctions.improperRequest || rightTeamSanctions.delayWarning || rightTeamSanctions.delayPenalty || rightTeamSanctions.warnings.length > 0 || rightTeamSanctions.penalties.length > 0 || rightTeamSanctions.expulsions.length > 0 || rightTeamSanctions.disqualifications.length > 0) ? '1px solid rgba(255,255,255,0.15)' : 'none',
+              border: (rightTeamSanctions.formalWarning || rightTeamSanctions.improperRequest || rightTeamSanctions.delayWarning || rightTeamSanctions.delayPenalty || rightTeamSanctions.warnings.length > 0 || rightTeamSanctions.penalties.length > 0 || rightTeamSanctions.expulsions.length > 0 || rightTeamSanctions.disqualifications.length > 0) ? '1px solid var(--ov-hairline)' : 'none',
               padding: '4px',
               height: '100%',
             }}>
               {/* Sanctions title if any sanctions exist */}
               {(rightTeamSanctions.formalWarning || rightTeamSanctions.improperRequest || rightTeamSanctions.delayWarning || rightTeamSanctions.delayPenalty || rightTeamSanctions.warnings.length > 0 || rightTeamSanctions.penalties.length > 0 || rightTeamSanctions.expulsions.length > 0 || rightTeamSanctions.disqualifications.length > 0) && (
-                <div style={{ fontSize: '15px', fontWeight: 600, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sanctions</div>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--ov-text-body)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sanctions</div>
               )}
               {(rightTeamSanctions.formalWarning || rightTeamSanctions.improperRequest || rightTeamSanctions.delayWarning || rightTeamSanctions.delayPenalty || rightTeamSanctions.warnings.length > 0 || rightTeamSanctions.penalties.length > 0 || rightTeamSanctions.expulsions.length > 0 || rightTeamSanctions.disqualifications.length > 0) && (
-                <div style={{ border: '1px solid rgba(255,255,255,0.15)', height: '1px', width: '100%', margin: '4px 0' }}></div>
+                <div style={{ borderTop: '1px solid var(--ov-hairline)', height: 0, width: '100%', margin: '4px 0' }}></div>
               )}
               {/* Team-level sanctions at top (Formal warning, Improper Request only) */}
               {(rightTeamSanctions.formalWarning || rightTeamSanctions.improperRequest) && (
@@ -3034,7 +2815,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                 </div>
               )}
               {(rightTeamSanctions.formalWarning || rightTeamSanctions.improperRequest || rightTeamSanctions.delayWarning || rightTeamSanctions.delayPenalty || rightTeamSanctions.warnings.length > 0 || rightTeamSanctions.penalties.length > 0 || rightTeamSanctions.expulsions.length > 0 || rightTeamSanctions.disqualifications.length > 0) && (
-                <div style={{ border: '1px solid rgba(255,255,255,0.15)', height: '1px', width: '100%', margin: '4px 0' }}></div>
+                <div style={{ borderTop: '1px solid var(--ov-hairline)', height: 0, width: '100%', margin: '4px 0' }}></div>
               )}
               {/* Personal sanctions in grid: W|P|E|D columns, DW/DP below */}
               {(rightTeamSanctions.warnings.length > 0 || rightTeamSanctions.penalties.length > 0 || rightTeamSanctions.expulsions.length > 0 || rightTeamSanctions.disqualifications.length > 0 || rightTeamSanctions.delayWarning || rightTeamSanctions.delayPenalty) && (
@@ -3146,30 +2927,32 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           }}>
             {/* TO counter */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-              <span style={{ fontWeight: 600, color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.6em' }}>TO</span>
+              <span style={{ fontWeight: 600, color: 'var(--ov-text-muted)', fontSize: '0.6em' }}>TO</span>
               <span style={{
-                background: rightStats.timeouts >= 1 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255, 255, 255, 0.15)',
+                background: rightStats.timeouts >= 1 ? 'var(--ov-danger-soft)' : 'var(--ov-sunken-strong)',
                 padding: `${vmin(0.7)}px ${vmin(1.4)}px`,
                 borderRadius: vmin(0.6),
                 aspectRatio: '1',
-                border: rightStats.timeouts >= 1 ? '1px solid rgba(239, 68, 68, 0.6)' : '1px solid rgba(255, 255, 255, 0.3)',
+                border: rightStats.timeouts >= 1 ? '1px solid #fca5a5' : '1px solid var(--ov-hairline-strong)',
                 minWidth: vmin(4.2),
                 textAlign: 'center',
-                color: rightStats.timeouts >= 1 ? '#ef4444' : 'rgba(255, 255, 255, 0.9)'
+                color: rightStats.timeouts >= 1 ? 'var(--ov-danger-text)' : 'var(--ov-text)',
+                fontVariantNumeric: 'tabular-nums'
               }}>{rightStats.timeouts}</span>
             </div>
             {/* BMP counter */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-              <span style={{ fontWeight: 600, color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.6em' }}>BMP</span>
+              <span style={{ fontWeight: 600, color: 'var(--ov-text-muted)', fontSize: '0.6em' }}>BMP</span>
               <span style={{
-                background: rightStats.challengesUsed >= 1 ? 'rgba(234, 179, 8, 0.3)' : 'rgba(255, 255, 255, 0.15)',
+                background: rightStats.challengesUsed >= 1 ? 'var(--ov-warning-soft)' : 'var(--ov-sunken-strong)',
                 padding: `${vmin(0.7)}px ${vmin(1.4)}px`,
                 borderRadius: vmin(0.6),
                 aspectRatio: '1',
-                border: rightStats.challengesUsed >= 1 ? '1px solid rgba(234, 179, 8, 0.6)' : '1px solid rgba(255, 255, 255, 0.3)',
+                border: rightStats.challengesUsed >= 1 ? '1px solid #fcd34d' : '1px solid var(--ov-hairline-strong)',
                 minWidth: vmin(4.2),
                 textAlign: 'center',
-                color: rightStats.challengesUsed >= 1 ? '#eab308' : 'rgba(255, 255, 255, 0.9)'
+                color: rightStats.challengesUsed >= 1 ? 'var(--ov-warning-text)' : 'var(--ov-text)',
+                fontVariantNumeric: 'tabular-nums'
               }}>{rightStats.challengesUsed}</span>
             </div>
           </div>
@@ -3182,10 +2965,10 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           alignItems: 'center',
           justifyContent: 'center',
           padding: '0 12px',
-          background: 'rgba(0, 0, 0, 0.3)',
-          borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+          background: 'var(--ov-card)',
+          borderTop: '1px solid var(--ov-hairline)',
           fontSize: vmin(2),
-          color: 'rgba(255, 255, 255, 0.7)',
+          color: 'var(--ov-text-secondary)',
           overflow: 'hidden',
           minHeight: 0
         }}>
@@ -3197,13 +2980,13 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             overflow: 'hidden',
             textOverflow: 'ellipsis'
           }}>
-            <span style={{ opacity: 0.6, fontWeight: 500 }}>{t('refereeDashboard.lastAction')}:</span>
+            <span style={{ color: 'var(--ov-text-muted)', fontWeight: 500 }}>{t('refereeDashboard.lastAction')}:</span>
             {lastEvent ? (
               <>
-                <span style={{ opacity: 0.5 }}>
+                <span style={{ color: 'var(--ov-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
                   {new Date(lastEvent.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                 </span>
-                <span style={{ fontWeight: 600 }}>
+                <span style={{ fontWeight: 600, color: 'var(--ov-text-body)' }}>
                   {(() => {
                     // lastEvent.team is 'team1' or 'team2', need to map to display values
                     const teamLbl = lastEvent.team === 'team1' ? team1Label : lastEvent.team === 'team2' ? team2Label : ''
@@ -3269,7 +3052,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                 </span>
               </>
             ) : (
-              <span style={{ opacity: 0.4 }}>{t('refereeDashboard.events.noAction')}</span>
+              <span style={{ color: 'var(--ov-text-faint)' }}>{t('refereeDashboard.events.noAction')}</span>
             )}
           </span>
         </div>
@@ -3314,39 +3097,30 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         )
       }
       {/* Scorer Attention Modal */}
-      {
-        attentionModalOpen && (
-          <Modal
-            open={true}
+      {attentionModalOpen && (
+        <div className="ov-kit">
+          <KitModal
+            open
+            decision
+            dismissible={false}
             onClose={() => setAttentionModalOpen(false)}
-            width={400}
-            hideCloseButton={true}
+            size="sm"
+            closeLabel={t('common.close', 'Close')}
           >
-            <div style={{ padding: '24px', textAlign: 'center' }}>
-              <div style={{ marginBottom: '16px', fontSize: '48px' }}><Bell /></div>
-              <p style={{ marginBottom: '20px', fontSize: vmin(3), fontWeight: 700, color: '#ef4444' }}>
-                Scorer Needs Attention!
+            <div className="p-1 text-center sm:p-3">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-600">
+                <Bell size={32} aria-hidden="true" />
+              </div>
+              <p role="alert" className="mb-5 font-bold text-red-700" style={{ fontSize: vmin(3) }}>
+                {t('refereeDashboard.scorerAttention', 'Scorer needs attention')}
               </p>
-              <button
-                onClick={() => setAttentionModalOpen(false)}
-                style={{
-                  width: '100%',
-                  padding: '16px',
-                  fontSize: '18px',
-                  fontWeight: 700,
-                  background: '#ef4444',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
-                Acknowledge
-              </button>
+              <Button variant="dark" size="xl" block className="h-14 text-base" onClick={() => setAttentionModalOpen(false)}>
+                {t('refereeDashboard.acknowledge', 'Acknowledge')}
+              </Button>
             </div>
-          </Modal>
-        )
-      }
+          </KitModal>
+        </div>
+      )}
 
       {/* "One point to switch/TTO" popup notification */}
       {preEventPopup && (
@@ -3355,8 +3129,9 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
-          backgroundColor: 'rgb(34, 197, 94)',
-          color: 'white',
+          backgroundColor: 'var(--ov-success)',
+          color: 'var(--ov-on-dark)',
+          boxShadow: 'var(--ov-shadow-pop)',
           padding: `${vmin(3)}px ${vmin(6)}px`,
           borderRadius: `${vmin(1.5)}px`,
           fontSize: `${vmin(5)}px`,

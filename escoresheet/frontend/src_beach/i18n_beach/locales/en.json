@@ -1221,7 +1221,7 @@
     "selectGameTitle": "Select game",
     "loadingGames": "Loading games...",
     "noAvailableGames": "No available games.",
-    "testMode": "TEST MODE",
+    "testMode": "Test mode",
     "refresh": "Refresh",
     "errors": {
       "enterPin": "Please enter a 6-digit PIN code",
@@ -1239,7 +1239,7 @@
       "directOnly": "Direct only",
       "directDesc": "WebSocket direct"
     },
-    "awaitingCoinToss": "Awaiting Coin Toss",
+    "awaitingCoinToss": "Awaiting coin toss",
     "awaitingCoinTossDesc": "The match will begin once the coin toss has been confirmed on the scoresheet.",
     "matchHasEnded": "The match has ended",
     "lineupSet": "Line-up set",
@@ -1254,7 +1254,7 @@
     "screenOptions": "Screen",
     "keepScreenOn": "Keep screen on",
     "exit": "Exit",
-    "lastAction": "Last Action",
+    "lastAction": "Last action",
     "events": {
       "point": "Point",
       "timeout": "Timeout",
@@ -1263,7 +1263,9 @@
       "courtCaptainDesignation": "Court captain",
       "noAction": "—"
     },
-    "selected": "Selected"
+    "selected": "Selected",
+    "scorerAttention": "Scorer needs attention",
+    "acknowledge": "Acknowledge"
   },
   "connection": {
     "title": "Connection Setup",

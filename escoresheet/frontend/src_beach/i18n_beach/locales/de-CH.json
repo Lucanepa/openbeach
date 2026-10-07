@@ -1220,7 +1220,7 @@
     "selectGameTitle": "Spiil uswähle",
     "loadingGames": "Spiil werdet glade...",
     "noAvailableGames": "Kei verfüegbari Spiil.",
-    "testMode": "TESTMODUS",
+    "testMode": "Testmodus",
     "refresh": "Aktualisiere",
     "errors": {
       "enterPin": "Bitte gänd Sie en 6-stellige PIN-Code ii",
@@ -1262,7 +1262,9 @@
       "courtCaptainDesignation": "Hofkapitän",
       "noAction": "Kei Aktion"
     },
-    "selected": "Uusgwählt"
+    "selected": "Uusgwählt",
+    "scorerAttention": "Schriiber bruucht Ufmerksamkeit",
+    "acknowledge": "Bestätige"
   },
   "connection": {
     "title": "Verbindigsiirichtig",

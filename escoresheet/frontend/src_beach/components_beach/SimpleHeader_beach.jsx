@@ -1,17 +1,27 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ClipboardList } from './Icons_beach'
+import { ClipboardList, Maximize, Menu, X } from 'lucide-react'
+import { cn } from '../ui/volleyui/cn.js'
+import { SegmentedControl } from '../ui/volleyui/SegmentedControl.jsx'
+import {
+  HEADER_BAR, HEADER_BTN, HEADER_BTN_ON, HEADER_TITLE, MENU_PANEL, MENU_SECTION, MENU_ROW, MENU_SEP, MENU_ICON
+} from './chromeClasses_beach'
+import HeaderMenuItem from './HeaderMenuItem_beach'
 
 /**
  * SimpleHeader - 3-column header for all dashboard apps
  * Left: Title/version
  * Middle: Hamburger menu (collapsible)
  * Right: Fullscreen button
+ *
+ * volleyui chrome (as OpenVolley's SimpleHeader): white bar with a stone
+ * hairline, kit header buttons, the menu as a white anchored dropdown with
+ * 48 px rows, the optional toggle as a kit segmented pill (slate-900 when on).
  */
 export default function SimpleHeader({
   title,
   version,
-  menuItems = [], // Array of { icon, label, onClick, active, color, toggle, badge, badgeColor, disabled, divider }
+  menuItems = [], // Array of { icon, label, onClick, active, color, toggle, badge, disabled, divider }
   onFullscreen,
   isFullscreen = false,
   toggleOptions // Optional: segmented toggle [{ label: '1 REF', active: false, onClick }, { label: '2 REF', active: true, onClick }]
@@ -21,7 +31,7 @@ export default function SimpleHeader({
   const [versionExpanded, setVersionExpanded] = useState(false)
   const currentVersion = version || __APP_VERSION__
 
-  // Close menu on outside click
+  // Close menu on outside click and on Escape
   useEffect(() => {
     if (!menuOpen) return
     const handleClick = (e) => {
@@ -29,111 +39,60 @@ export default function SimpleHeader({
         setMenuOpen(false)
       }
     }
+    const handleKey = (e) => {
+      if (e.key === 'Escape') setMenuOpen(false)
+    }
     document.addEventListener('click', handleClick)
-    return () => document.removeEventListener('click', handleClick)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('click', handleClick)
+      document.removeEventListener('keydown', handleKey)
+    }
   }, [menuOpen])
 
+  const activeToggle = toggleOptions ? toggleOptions.findIndex(o => o.active) : -1
+
   return (
-    <div style={{
-      height: '40px',
-      minHeight: '40px',
-      maxHeight: '40px',
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      padding: '0 12px',
-      background: 'rgba(0, 0, 0, 0.3)',
-      borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
-    }}>
-      {/* LEFT: Title/Version or Toggle */}
-      <div style={{
-        flex: '1 1 0',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        minWidth: 0
-      }}>
-        {/* Segmented Toggle (like LOCAL/REMOTE) */}
+    <div
+      className={cn('ov-kit', HEADER_BAR, 'flex items-center justify-between')}
+      style={{ height: '40px', minHeight: '40px', maxHeight: '40px', padding: '0 12px' }}
+    >
+      {/* LEFT: Title or Toggle */}
+      <div className="flex min-w-0 flex-1 basis-0 items-center gap-2">
         {toggleOptions && toggleOptions.length > 0 ? (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            background: 'rgba(255, 255, 255, 0.1)',
-            borderRadius: '6px',
-            padding: '2px',
-            gap: '2px'
-          }}>
-            {toggleOptions.map((option, idx) => (
-              <button
-                key={idx}
-                onClick={option.onClick}
-                style={{
-                  padding: '4px 10px',
-                  fontSize: 'clamp(11px, 2.5vw, 13px)',
-                  fontWeight: 600,
-                  background: option.active ? 'rgba(59, 130, 246, 0.3)' : 'transparent',
-                  color: option.active ? '#60a5fa' : 'rgba(255, 255, 255, 0.6)',
-                  border: option.active ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid transparent',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+          // The courtside referee's view switch: h-9 segments from the tablet
+          // breakpoint up, no frame padding there so it fits the 40 px bar.
+          <SegmentedControl
+            variant="pill"
+            ariaLabel={t('refereeDashboard.view', 'View')}
+            options={toggleOptions.map((option, idx) => ({ value: String(idx), label: option.label }))}
+            value={activeToggle >= 0 ? String(activeToggle) : ''}
+            onChange={(v) => toggleOptions[Number(v)]?.onClick?.()}
+            className="shrink-0 sm:p-0 sm:[&_button]:h-9 sm:[&_button]:px-3"
+          />
         ) : title ? (
-          <span style={{
-            fontSize: 'clamp(12px, 3vw, 15px)',
-            fontWeight: 700,
-            color: '#fff',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis'
-          }}>
+          <span className={HEADER_TITLE}>
             {title}
           </span>
         ) : null}
       </div>
 
       {/* MIDDLE: Hamburger Menu */}
-      <div
-        className="simple-header-menu"
-        style={{
-          flex: '0 0 auto',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          position: 'relative'
-        }}
-      >
+      <div className="simple-header-menu relative flex flex-none items-center justify-center">
         {menuItems.length > 0 && (
           <>
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation()
                 setMenuOpen(!menuOpen)
               }}
-              style={{
-                padding: '6px 14px',
-                fontSize: '16px',
-                background: menuOpen ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.1)',
-                color: '#fff',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                height: '28px',
-                minWidth: '44px',
-                transition: 'all 0.15s'
-              }}
-              title={t('header.menu')}
+              aria-expanded={menuOpen}
+              className={cn(HEADER_BTN, 'min-w-11 px-3', menuOpen && HEADER_BTN_ON)}
+              aria-label={t('header.menu', 'Menu')}
+              title={t('header.menu', 'Menu')}
             >
-              {menuOpen ? '✕' : '☰'}
+              {menuOpen ? <X size={16} aria-hidden="true" /> : <Menu size={16} aria-hidden="true" />}
             </button>
 
             {/* Dropdown Menu */}
@@ -142,191 +101,40 @@ export default function SimpleHeader({
                 {/* Backdrop */}
                 <div
                   onClick={() => setMenuOpen(false)}
-                  style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    zIndex: 998
-                  }}
+                  className="fixed inset-0"
+                  style={{ zIndex: 998 }}
                 />
-                <div style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  marginTop: '6px',
-                  background: '#1a1a2e',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: '10px',
-                  overflow: 'hidden',
-                  zIndex: 1000,
-                  minWidth: '200px',
-                  maxWidth: '280px',
-                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)'
-                }}>
+                <div
+                  className={cn('absolute left-1/2 top-full mt-1.5 flex w-max min-w-[220px] max-w-[280px] -translate-x-1/2 flex-col', MENU_PANEL)}
+                  style={{ zIndex: 1000 }}
+                >
                   {menuItems.map((item, index) => {
-                    // Divider
                     if (item.divider) {
-                      return (
-                        <div
-                          key={`divider-${index}`}
-                          style={{
-                            height: '1px',
-                            background: 'rgba(255, 255, 255, 0.1)',
-                            margin: '4px 0'
-                          }}
-                        />
-                      )
+                      return <div key={`divider-${index}`} className={MENU_SEP} />
                     }
-
-                    // Section header
                     if (item.header) {
                       return (
-                        <div
-                          key={`header-${index}`}
-                          style={{
-                            padding: '8px 14px 4px',
-                            fontSize: '10px',
-                            fontWeight: 700,
-                            color: 'rgba(255, 255, 255, 0.4)',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.5px'
-                          }}
-                        >
+                        <div key={`header-${index}`} className={MENU_SECTION}>
                           {item.header}
                         </div>
                       )
                     }
-
-                    return (
-                      <button
-                        key={index}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (!item.disabled && item.onClick) {
-                            item.onClick()
-                          }
-                          if (!item.keepOpen) {
-                            setMenuOpen(false)
-                          }
-                        }}
-                        disabled={item.disabled}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '10px',
-                          width: '100%',
-                          padding: '12px 14px',
-                          fontSize: '13px',
-                          fontWeight: 500,
-                          background: item.active
-                            ? (item.color ? `${item.color}20` : 'rgba(255, 255, 255, 0.1)')
-                            : 'transparent',
-                          color: item.disabled
-                            ? 'rgba(255, 255, 255, 0.3)'
-                            : (item.color || '#fff'),
-                          border: 'none',
-                          cursor: item.disabled ? 'not-allowed' : 'pointer',
-                          textAlign: 'left',
-                          opacity: item.disabled ? 0.5 : 1,
-                          transition: 'background 0.15s'
-                        }}
-                        onMouseEnter={(e) => {
-                          if (!item.disabled) {
-                            e.currentTarget.style.background = item.active
-                              ? (item.color ? `${item.color}30` : 'rgba(255, 255, 255, 0.15)')
-                              : 'rgba(255, 255, 255, 0.08)'
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = item.active
-                            ? (item.color ? `${item.color}20` : 'rgba(255, 255, 255, 0.1)')
-                            : 'transparent'
-                        }}
-                      >
-                        {item.icon && <span style={{ fontSize: '15px', width: '20px', textAlign: 'center' }}>{item.icon}</span>}
-                        <span style={{ flex: 1 }}>{item.label}</span>
-
-                        {/* Badge */}
-                        {item.badge && (
-                          <span style={{
-                            padding: '2px 6px',
-                            fontSize: '9px',
-                            fontWeight: 700,
-                            background: item.badgeColor || 'rgba(255, 255, 255, 0.2)',
-                            color: item.badgeTextColor || '#fff',
-                            borderRadius: '4px'
-                          }}>
-                            {item.badge}
-                          </span>
-                        )}
-
-                        {/* Toggle switch */}
-                        {item.toggle !== undefined && (
-                          <span style={{
-                            width: '36px',
-                            height: '20px',
-                            background: item.toggle ? '#22c55e' : 'rgba(255, 255, 255, 0.2)',
-                            borderRadius: '10px',
-                            position: 'relative',
-                            transition: 'background 0.2s',
-                            flexShrink: 0
-                          }}>
-                            <span style={{
-                              position: 'absolute',
-                              top: '2px',
-                              left: item.toggle ? '18px' : '2px',
-                              width: '16px',
-                              height: '16px',
-                              background: '#fff',
-                              borderRadius: '50%',
-                              transition: 'left 0.2s'
-                            }} />
-                          </span>
-                        )}
-
-                        {/* Submenu arrow */}
-                        {item.submenu && (
-                          <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)' }}>▶</span>
-                        )}
-                      </button>
-                    )
+                    return <HeaderMenuItem key={index} item={item} onClose={() => setMenuOpen(false)} />
                   })}
 
                   {/* Version info at bottom */}
-                  <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.1)', margin: '4px 0' }} />
+                  <div className={MENU_SEP} />
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation()
                       setVersionExpanded(!versionExpanded)
                     }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                      width: '100%',
-                      padding: '10px 14px',
-                      fontSize: '11px',
-                      fontWeight: 500,
-                      background: 'transparent',
-                      color: 'rgba(255, 255, 255, 0.6)',
-                      border: 'none',
-                      cursor: 'pointer',
-                      textAlign: 'left'
-                    }}
+                    className={cn(MENU_ROW, 'text-stone-500')}
                   >
-                    <span style={{ fontSize: '13px', width: '20px', textAlign: 'center' }}><ClipboardList /></span>
-                    <span style={{ flex: 1 }}>Version {currentVersion}</span>
-                    <span style={{
-                      fontSize: '8px',
-                      transform: versionExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                      transition: 'transform 0.2s'
-                    }}>▼</span>
+                    <span className={MENU_ICON}><ClipboardList size={14} aria-hidden="true" /></span>
+                    <span className="flex-1 tabular-nums">Version {currentVersion}</span>
                   </button>
-
-                  {/* Version history removed */}
                 </div>
               </>
             )}
@@ -335,35 +143,17 @@ export default function SimpleHeader({
       </div>
 
       {/* RIGHT: Fullscreen Button */}
-      <div style={{
-        flex: '1 1 0',
-        display: 'flex',
-        justifyContent: 'flex-end',
-        alignItems: 'center',
-        gap: '8px'
-      }}>
+      <div className="flex flex-1 basis-0 items-center justify-end gap-2">
         {onFullscreen && (
           <button
+            type="button"
             onClick={onFullscreen}
-            style={{
-              padding: '6px 12px',
-              fontSize: '14px',
-              fontWeight: 600,
-              background: isFullscreen ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255, 255, 255, 0.1)',
-              color: isFullscreen ? '#22c55e' : '#fff',
-              border: isFullscreen ? '1px solid rgba(34, 197, 94, 0.4)' : '1px solid rgba(255, 255, 255, 0.2)',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              height: '28px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              transition: 'all 0.15s'
-            }}
-            title={isFullscreen ? t('header.exitFullscreen') : t('header.fullscreen')}
+            aria-pressed={isFullscreen}
+            className={cn(HEADER_BTN, 'w-9 px-0', isFullscreen && HEADER_BTN_ON)}
+            aria-label={isFullscreen ? t('header.exitFullscreen', 'Exit fullscreen') : t('header.fullscreen', 'Fullscreen')}
+            title={isFullscreen ? t('header.exitFullscreen', 'Exit fullscreen') : t('header.fullscreen', 'Fullscreen')}
           >
-            {isFullscreen ? '⛶' : '⛶'}
+            <Maximize size={15} aria-hidden="true" />
           </button>
         )}
       </div>
