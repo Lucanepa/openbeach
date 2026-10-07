@@ -53,6 +53,19 @@ import { FOCUS_RING } from '../ui/volleyui/Button.jsx'
  *  the hit area to 44px+ without moving the layout. */
 const SB_TOOLBAR_BTN = `relative inline-flex items-center justify-center gap-1 h-9 min-w-11 px-3 rounded-lg border border-stone-200 bg-white text-sm font-semibold tracking-normal text-stone-700 hover:bg-stone-50 transition-colors cursor-pointer before:absolute before:-inset-x-1 before:-inset-y-2 before:content-[''] ${FOCUS_RING}`
 
+/** Rally controls: the big courtside buttons keep their inline sizes (92px+ at
+ *  full scale); these give them the volleyui faces. Start / End interval are
+ *  the dark key action, a point is the emerald confirm, Replay the white
+ *  outline, Decision change amber (a decision), Undo the red outline (it goes
+ *  through a confirm). The Referee BMP keeps its orange (a domain marker). */
+const SB_RALLY_BASE = `inline-flex items-center justify-center rounded-xl border font-bold tracking-normal transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS_RING}`
+const SB_RALLY_START = `${SB_RALLY_BASE} border-slate-900 bg-slate-900 text-white hover:bg-slate-800`
+const SB_RALLY_POINT = `${SB_RALLY_BASE} border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800`
+const SB_RALLY_OUTLINE = `${SB_RALLY_BASE} border-stone-300 bg-white text-stone-700 hover:bg-stone-50`
+const SB_RALLY_DECISION = `${SB_RALLY_BASE} border-amber-400 bg-amber-300 text-stone-900 hover:bg-amber-400`
+const SB_RALLY_BMP = `${SB_RALLY_BASE} border-orange-500 bg-orange-500 text-stone-950 hover:bg-orange-600`
+const SB_RALLY_UNDO = `${SB_RALLY_BASE} border-red-200 bg-white text-red-700 hover:bg-red-50`
+
 /** A label that some locales break with a soft "-\n" (de: "Verzögerungs-\nwarnung"), on one line. */
 const oneLine = (text) => String(text).replace(/-\n/g, '').replace(/\n/g, ' ')
 
@@ -9878,18 +9891,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         {timeoutModal && timeoutModal.started ? (
                           <div
                             onClick={stopTimeout}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '16px',
-                              padding: '16px 20px',
-                              borderRadius: '12px',
-                              background: 'rgba(255, 255, 255, 0.05)',
-                              border: '1px solid rgba(255, 255, 255, 0.1)',
-                              cursor: 'pointer'
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'}
-                            onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); stopTimeout() } }}
+                            title={t('scoreboard.buttons.stopTimeout', 'Stop time-out')}
+                            className={cn('flex items-center gap-4 rounded-2xl border border-stone-200/70 bg-white px-5 py-4 shadow-card cursor-pointer hover:bg-stone-50 transition-colors', FOCUS_RING)}
                           >
                             {/* Stop sign icon - left side */}
                             <svg viewBox="0 0 24 24" width="45" height="45" style={{ flexShrink: 0 }}>
@@ -9905,12 +9911,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 textAlign: 'center',
                                 marginBottom: '4px'
                               }}>
-                                Time-out — {timeoutModal.team === 'team1' ? (data?.team1Team?.name || 'team1') : (data?.team2Team?.name || 'team2')}
+                                {t('scoreboard.timeoutFor', { team: timeoutModal.team === 'team1' ? (data?.team1Team?.name || 'team1') : (data?.team2Team?.name || 'team2'), defaultValue: 'Time-out – {{team}}' })}
                               </div>
-                              <div style={{
+                              <div className="tabular-nums" style={{
                                 fontSize: '42px',
                                 fontWeight: 700,
-                                color: timeoutModal.countdown <= 10 ? '#ef4444' : 'var(--accent)',
+                                color: timeoutModal.countdown <= 10 ? 'var(--ov-danger-text)' : 'var(--ov-success)',
                                 textAlign: 'center',
                                 fontFamily: getScoreFont(),
                                 lineHeight: 1
@@ -9921,7 +9927,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               <div style={{
                                 width: '100%',
                                 height: '6px',
-                                background: 'rgba(255, 255, 255, 0.15)',
+                                background: 'var(--ov-hairline)',
                                 borderRadius: '3px',
                                 overflow: 'hidden',
                                 marginTop: '8px'
@@ -9929,7 +9935,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 <div style={{
                                   width: `${(timeoutModal.countdown / 45) * 100}%`,
                                   height: '100%',
-                                  background: timeoutModal.countdown <= 10 ? '#ef4444' : 'var(--accent)',
+                                  background: timeoutModal.countdown <= 10 ? '#dc2626' : '#059669',
                                   borderRadius: '3px',
                                   transition: 'width 1s linear, background 0.3s',
                                   marginLeft: 'auto'
@@ -9955,17 +9961,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
                                       {/* Countdown display */}
                                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                        <div style={{
-                                          fontSize: '14px',
-                                          fontWeight: 600,
-                                          color: 'var(--muted)'
+                                        <div className="font-semibold uppercase tracking-[0.12em] text-stone-500" style={{
+                                          fontSize: '12px'
                                         }}>
-                                          {t('scoreboard.setInterval', 'Set Interval')}
+                                          {t('scoreboard.setInterval', 'Set interval')}
                                         </div>
-                                        <div style={{
+                                        <div className="tabular-nums" style={{
                                           fontSize: '28px',
                                           fontWeight: 700,
-                                          color: betweenSetsCountdown.countdown <= 30 ? '#ef4444' : 'var(--accent)',
+                                          color: betweenSetsCountdown.countdown <= 30 ? 'var(--ov-danger-text)' : 'var(--ov-success)',
                                           fontFamily: getScoreFont()
                                         }}>
                                           {formatTimeout(betweenSetsCountdown.countdown)}
@@ -9975,14 +9979,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                       <div style={{
                                         width: '200px',
                                         height: '6px',
-                                        background: 'rgba(255, 255, 255, 0.15)',
+                                        background: 'var(--ov-hairline)',
                                         borderRadius: '3px',
                                         overflow: 'hidden'
                                       }}>
                                         <div style={{
                                           width: `${(betweenSetsCountdown.countdown / setIntervalDuration) * 100}%`,
                                           height: '100%',
-                                          background: betweenSetsCountdown.countdown <= 30 ? '#ef4444' : 'var(--accent)',
+                                          background: betweenSetsCountdown.countdown <= 30 ? '#dc2626' : '#059669',
                                           borderRadius: '3px',
                                           transition: 'width 1s linear, background 0.3s'
                                         }} />
@@ -9990,11 +9994,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                       {/* End Interval button - only show if setup confirmed */}
                                       {setupConfirmed && (
                                         <button
-                                          className="rally-btn start"
+                                          className={cn('rally-btn start', SB_RALLY_START)}
                                           onClick={endSetInterval}
                                           style={{ marginTop: '8px', padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'calc(92px * var(--scale-factor, 1))' }}
                                         >
-                                          {t('scoreboard.endInterval', 'End Interval')}
+                                          {t('scoreboard.buttons.endSetInterval', 'End set interval')}
                                         </button>
                                       )}
                                     </div>
@@ -10005,11 +10009,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 if (intervalEnded && setupConfirmed && (data?.match?.status === 'between_sets' || data?.match?.status === 'set_complete')) {
                                   return (
                                     <button
-                                      className="rally-btn start"
+                                      className={cn('rally-btn start', SB_RALLY_START)}
                                       onClick={handleStartRally}
                                       style={{ padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'calc(92px * var(--scale-factor, 1))' }}
                                     >
-                                      {t('scoreboard.startSet', 'Start Set')} {(data?.set?.index || 1)}
+                                      {t('scoreboard.buttons.startSet', 'Start set')} {(data?.set?.index || 1)}
                                     </button>
                                   )
                                 }
@@ -10017,18 +10021,18 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 // Normal Start Rally/Set button
                                 return (
                                   <button
-                                    className="rally-btn start"
+                                    className={cn('rally-btn start', SB_RALLY_START)}
                                     onClick={handleStartRally}
                                     disabled={data?.match?.status === 'complete'}
                                     style={{ padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'calc(92px * var(--scale-factor, 1))' }}
                                   >
                                     {data?.match?.status === 'not_started'
-                                      ? t('scoreboard.startMatch', 'Start Match')
+                                      ? t('scoreboard.buttons.startMatch', 'Start match')
                                       : data?.match?.status === 'complete'
-                                        ? t('scoreboard.matchComplete', 'Match Complete')
+                                        ? t('scoreboard.buttons.matchComplete', 'Match complete')
                                         : isFirstRally
-                                          ? t('scoreboard.startSet', 'Start Set')
-                                          : t('scoreboard.startRally', 'Start Rally')}
+                                          ? t('scoreboard.buttons.startSet', 'Start set')
+                                          : t('scoreboard.buttons.startRally', 'Start rally')}
                                   </button>
                                 )
                               })()
@@ -10038,61 +10042,44 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 <div className="rally-controls-row" style={{ gap: '5px', alignItems: 'stretch' }}>
                                   {rallyStatus === 'in_play' ? (
                                     <button
-                                      className="secondary"
+                                      className={cn('secondary', SB_RALLY_OUTLINE)}
                                       onClick={handleReplay}
                                       style={{ padding: '8px 15px', fontSize: '18px', minWidth: '105px', marginRight: '30px' }}
                                     >
-                                      {t('scoreboard.replay', 'Replay')}
+                                      {t('scoreboard.buttons.replayShort', 'Replay')}
                                     </button>
                                   ) : (
                                     <div style={{ minWidth: '105px', marginRight: '30px' }} />
                                   )}
                                   <button
-                                    className="rally-point-button"
+                                    className={cn('rally-point-button tabular-nums', SB_RALLY_POINT)}
                                     onClick={() => handlePoint('left')}
                                     style={{
-                                      background: '#22c55e',
-                                      color: '#000',
-                                      padding: '12px 16px',
-                                      fontWeight: 600,
-                                      borderRadius: '8px',
-                                      border: 'none',
-                                      cursor: 'pointer'
+                                      padding: '12px 16px'
                                     }}
                                   >
                                     {t('scoreboard.buttons.pointTeam', { team: teamALabel || teamAShortName })}
                                   </button>
                                   <button
-                                    className="rally-point-button"
+                                    className={cn('rally-point-button tabular-nums', SB_RALLY_POINT)}
                                     onClick={() => handlePoint('right')}
                                     style={{
-                                      background: '#22c55e',
-                                      color: '#000',
-                                      padding: '12px 16px',
-                                      fontWeight: 600,
-                                      borderRadius: '8px',
-                                      border: 'none',
-                                      cursor: 'pointer'
+                                      padding: '12px 16px'
                                     }}
                                   >
                                     {t('scoreboard.buttons.pointTeam', { team: teamBLabel || teamBShortName })}
                                   </button>
                                   <button
+                                    className={SB_RALLY_BMP}
                                     onClick={handleRefereeBMP}
                                     style={{
                                       padding: '8px 15px',
                                       fontSize: '17px',
-                                      background: '#f97316',
-                                      color: '#000',
-                                      border: 'none',
-                                      borderRadius: '8px',
-                                      fontWeight: 600,
-                                      cursor: 'pointer',
                                       minWidth: '105px',
                                       marginLeft: '30px'
                                     }}
                                   >
-                                    {t('scoreboard.refereeBMP', 'Referee BMP')}
+                                    {t('scoreboard.buttons.refereeBmp', 'Referee BMP')}
                                   </button>
                                 </div>
                               </>
@@ -10101,24 +10088,19 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                               {rallyStatus === 'idle' && canReplayRally && (
                                 <button
+                                  className={SB_RALLY_DECISION}
                                   onClick={handleReplay}
                                   style={{
-                                    background: '#eab308',
-                                    color: '#000',
-                                    border: 'none',
-                                    borderRadius: '8px',
                                     padding: '8px 15px',
                                     fontSize: '17px',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
                                     minWidth: '105px'
                                   }}
                                 >
-                                  {t('scoreboard.decisionChange', 'Decision Change')}
+                                  {t('scoreboard.buttons.decisionChange', 'Decision change')}
                                 </button>
                               )}
                               <button
-                                className="danger"
+                                className={cn('danger', SB_RALLY_UNDO)}
                                 onClick={showUndoConfirm}
                                 disabled={!canUndo}
                                 style={{
@@ -10126,7 +10108,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   fontSize: '20px'
                                 }}
                               >
-                                {t('scoreboard.undo', 'Undo')}
+                                {t('scoreboard.buttons.undo', 'Undo')}
                               </button>
                             </div>
                           </>

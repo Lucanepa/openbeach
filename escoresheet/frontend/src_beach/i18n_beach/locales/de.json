@@ -497,7 +497,11 @@
       "switchSides": "Seiten wechseln",
       "switchCourts": "Feld wechseln",
       "switchServe": "Aufschlag wechseln",
-      "confirmSet3Setup": "Confirm Set 3 Setup"
+      "confirmSet3Setup": "Einstellungen 3. Satz bestätigen",
+      "startMatch": "Spiel starten",
+      "matchComplete": "Spiel beendet",
+      "replayShort": "Wiederholen",
+      "refereeBmp": "Schiri-BMP"
     },
     "sync": {
       "syncing": "Synchronisiere...",
@@ -734,7 +738,8 @@
     "secondRefereeShort": "2SR",
     "set3CoinToss": "Auslosung 3. Satz",
     "wonToss": "Auslosung gewonnen",
-    "betweenSetsChooses": "{{team}} wählt (Auslosung verloren)"
+    "betweenSetsChooses": "{{team}} wählt (Auslosung verloren)",
+    "timeoutFor": "Timeout – {{team}}"
   },
   "settings": {
     "title": "Einstellungen",

@@ -438,7 +438,7 @@
     "endMatch": "End Match",
     "matchPoint": "Match Point",
     "setPoint": "Set Point",
-    "setInterval": "Set Interval",
+    "setInterval": "Set interval",
     "options": "Options",
     "showRosters": "Show rosters",
     "hideRosters": "Hide rosters",
@@ -481,10 +481,10 @@
       "done": "Done"
     },
     "buttons": {
-      "startRally": "Start Rally",
-      "startSet": "Start Set",
-      "stopTimeout": "Stop Timeout",
-      "endSetInterval": "End Set Interval",
+      "startRally": "Start rally",
+      "startSet": "Start set",
+      "stopTimeout": "Stop time-out",
+      "endSetInterval": "End set interval",
       "enterFullscreen": "Enter fullscreen",
       "fullscreenHint": "Fullscreen removes the browser bars to make the most of the screen.",
       "pointTeam": "Point {{team}}",
@@ -493,12 +493,16 @@
       "confirmTimeout": "Confirm time-out",
       "substitute": "Substitute",
       "undo": "Undo",
-      "replay": "Replay Rally",
-      "decisionChange": "Decision Change",
+      "replay": "Replay rally",
+      "decisionChange": "Decision change",
       "switchSides": "Switch sides",
-      "switchCourts": "Switch Courts",
+      "switchCourts": "Switch courts",
       "switchServe": "Switch serve",
-      "confirmSet3Setup": "Confirm Set 3 Setup"
+      "confirmSet3Setup": "Confirm set 3 setup",
+      "startMatch": "Start match",
+      "matchComplete": "Match complete",
+      "replayShort": "Replay",
+      "refereeBmp": "Referee BMP"
     },
     "sync": {
       "syncing": "Syncing...",
@@ -735,7 +739,8 @@
     "secondRefereeShort": "2R",
     "set3CoinToss": "Set 3 coin toss",
     "wonToss": "Won the toss",
-    "betweenSetsChooses": "{{team}} chooses (lost the coin toss)"
+    "betweenSetsChooses": "{{team}} chooses (lost the coin toss)",
+    "timeoutFor": "Time-out – {{team}}"
   },
   "settings": {
     "title": "Settings",

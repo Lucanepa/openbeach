@@ -480,7 +480,7 @@
       "done": "Fertig"
     },
     "buttons": {
-      "startRally": "Ballwechsel starte",
+      "startRally": "Ballwächsel starte",
       "startSet": "Satz starte",
       "stopTimeout": "Timeout beände",
       "endSetInterval": "Satzpause beände",
@@ -492,12 +492,16 @@
       "confirmTimeout": "Timeout bestätige",
       "substitute": "Uswächsle",
       "undo": "Rückgängig",
-      "replay": "Ballwechsel wiederhole",
-      "decisionChange": "Entscheidsänderig",
+      "replay": "Ballwächsel wiederhole",
+      "decisionChange": "Entscheidigsänderig",
       "switchSides": "Siite wächsle",
       "switchCourts": "Fäld wächsle",
       "switchServe": "Ufschlag wächsle",
-      "confirmSet3Setup": "Confirm Set 3 Setup"
+      "confirmSet3Setup": "Iistellige 3. Satz bestätige",
+      "startMatch": "Spiil starte",
+      "matchComplete": "Spiil fertig",
+      "replayShort": "Wiederhole",
+      "refereeBmp": "Schiri-BMP"
     },
     "sync": {
       "syncing": "Synchronisiere...",
@@ -734,7 +738,8 @@
     "secondRefereeShort": "2SR",
     "set3CoinToss": "Usloosig 3. Satz",
     "wonToss": "Usloosig gwunne",
-    "betweenSetsChooses": "{{team}} wählt (Usloosig verlore)"
+    "betweenSetsChooses": "{{team}} wählt (Usloosig verlore)",
+    "timeoutFor": "Timeout – {{team}}"
   },
   "settings": {
     "title": "Iistellige",

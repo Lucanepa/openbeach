@@ -437,7 +437,7 @@
     "endMatch": "Fine Partita",
     "matchPoint": "Match Point",
     "setPoint": "Set Point",
-    "setInterval": "Intervallo set",
+    "setInterval": "Intervallo tra i set",
     "options": "Opzioni",
     "showRosters": "Mostra rose",
     "hideRosters": "Nascondi rose",
@@ -480,10 +480,10 @@
       "done": "Fatto"
     },
     "buttons": {
-      "startRally": "Inizia scambio",
-      "startSet": "Inizia set",
-      "stopTimeout": "Ferma timeout",
-      "endSetInterval": "Termina intervallo",
+      "startRally": "Avvia lo scambio",
+      "startSet": "Inizia il set",
+      "stopTimeout": "Termina il timeout",
+      "endSetInterval": "Termina l’intervallo",
       "enterFullscreen": "Schermo intero",
       "fullscreenHint": "Lo schermo intero nasconde le barre del browser per sfruttare tutto lo schermo.",
       "pointTeam": "Punto {{team}}",
@@ -492,12 +492,16 @@
       "confirmTimeout": "Conferma timeout",
       "substitute": "Sostituisci",
       "undo": "Annulla",
-      "replay": "Ripeti scambio",
-      "decisionChange": "Cambio decisione",
+      "replay": "Ripeti lo scambio",
+      "decisionChange": "Cambio di decisione",
       "switchSides": "Inverti lati",
-      "switchCourts": "Inverti campo",
+      "switchCourts": "Cambio campo",
       "switchServe": "Inverti servizio",
-      "confirmSet3Setup": "Confirm Set 3 Setup"
+      "confirmSet3Setup": "Conferma impostazioni del 3° set",
+      "startMatch": "Inizia la partita",
+      "matchComplete": "Partita conclusa",
+      "replayShort": "Ripeti",
+      "refereeBmp": "BMP arbitro"
     },
     "sync": {
       "syncing": "Sincronizzazione...",
@@ -734,7 +738,8 @@
     "secondRefereeShort": "2A",
     "set3CoinToss": "Sorteggio del 3° set",
     "wonToss": "Ha vinto il sorteggio",
-    "betweenSetsChooses": "{{team}} sceglie (ha perso il sorteggio)"
+    "betweenSetsChooses": "{{team}} sceglie (ha perso il sorteggio)",
+    "timeoutFor": "Timeout – {{team}}"
   },
   "settings": {
     "title": "Impostazioni",
