@@ -538,7 +538,9 @@
       "warning": "Warnung",
       "penalty": "Strafe",
       "expulsion": "Ausschluss",
-      "disqualification": "Disqualifikation"
+      "disqualification": "Disqualifikation",
+      "title": "Sanktionen",
+      "formalWarning": "Formelle Verwarnung"
     },
     "labels": {
       "sets": "SÄTZE",
@@ -719,7 +721,20 @@
       "title": "Gerät drehen",
       "body": "Die Spielerfassung funktioniert im Querformat. Drehe das Gerät, um weiterzufahren.",
       "tip": "Für die automatischen Backups Chrome oder Edge auf einem Laptop oder Desktop-Computer verwenden."
-    }
+    },
+    "bmpRemaining": "Ballabdruck-Protokoll ({{count}} übrig)",
+    "coachSanction": "Trainer-Sanktion",
+    "coach": "Trainer",
+    "table": {
+      "set": "Satz",
+      "points": "Punkte",
+      "wins": "Siege"
+    },
+    "firstRefereeShort": "1SR",
+    "secondRefereeShort": "2SR",
+    "set3CoinToss": "Auslosung 3. Satz",
+    "wonToss": "Auslosung gewonnen",
+    "betweenSetsChooses": "{{team}} wählt (Auslosung verloren)"
   },
   "settings": {
     "title": "Einstellungen",

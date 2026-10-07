@@ -538,7 +538,9 @@
       "warning": "Avertissement",
       "penalty": "Pénalité",
       "expulsion": "Expulsion",
-      "disqualification": "Disqualification"
+      "disqualification": "Disqualification",
+      "title": "Sanctions",
+      "formalWarning": "Avertissement formel"
     },
     "labels": {
       "sets": "SETS",
@@ -719,7 +721,20 @@
       "title": "Tournez votre appareil",
       "body": "L’écran de saisie fonctionne en paysage. Tournez votre appareil pour continuer.",
       "tip": "Pour les sauvegardes automatiques, utilisez Chrome ou Edge sur un ordinateur portable ou de bureau."
-    }
+    },
+    "bmpRemaining": "Protocole de marque de balle ({{count}} restant(s))",
+    "coachSanction": "Sanction de l’entraîneur",
+    "coach": "Entraîneur",
+    "table": {
+      "set": "Set",
+      "points": "Points",
+      "wins": "Gagnés"
+    },
+    "firstRefereeShort": "1A",
+    "secondRefereeShort": "2A",
+    "set3CoinToss": "Tirage au sort du 3e set",
+    "wonToss": "A gagné le tirage",
+    "betweenSetsChooses": "{{team}} choisit (a perdu le tirage)"
   },
   "settings": {
     "title": "Paramètres",

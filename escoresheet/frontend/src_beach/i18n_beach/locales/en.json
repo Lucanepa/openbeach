@@ -495,9 +495,9 @@
       "undo": "Undo",
       "replay": "Replay Rally",
       "decisionChange": "Decision Change",
-      "switchSides": "Switch Sides",
+      "switchSides": "Switch sides",
       "switchCourts": "Switch Courts",
-      "switchServe": "Switch Serve",
+      "switchServe": "Switch serve",
       "confirmSet3Setup": "Confirm Set 3 Setup"
     },
     "sync": {
@@ -530,16 +530,18 @@
     "sanctions": {
       "teamSanctions": "Team Sanctions",
       "irAndDelays": "IR & Delays",
-      "improperRequest": "Improper Request",
-      "delayWarning": "Delay Warning",
-      "delayPenalty": "Delay Penalty",
+      "improperRequest": "Improper request",
+      "delayWarning": "Delay warning",
+      "delayPenalty": "Delay penalty",
       "sanctionedImproperRequest": "Sanctioned with an improper request",
       "sanctionedDelayWarning": "Sanctioned with a delay warning",
       "sanctionedFormalWarning": "Sanctioned with a formal warning",
       "warning": "Warning",
       "penalty": "Penalty",
       "expulsion": "Expulsion",
-      "disqualification": "Disqualification"
+      "disqualification": "Disqualification",
+      "title": "Sanctions",
+      "formalWarning": "Formal warning"
     },
     "labels": {
       "sets": "SETS",
@@ -720,7 +722,20 @@
       "title": "Rotate your device",
       "body": "The scoring screen works in landscape. Turn your device sideways to continue.",
       "tip": "For the automatic backups, use Chrome or Edge on a laptop or desktop computer."
-    }
+    },
+    "bmpRemaining": "Ball mark protocol ({{count}} left)",
+    "coachSanction": "Coach sanction",
+    "coach": "Coach",
+    "table": {
+      "set": "Set",
+      "points": "Points",
+      "wins": "Wins"
+    },
+    "firstRefereeShort": "1R",
+    "secondRefereeShort": "2R",
+    "set3CoinToss": "Set 3 coin toss",
+    "wonToss": "Won the toss",
+    "betweenSetsChooses": "{{team}} chooses (lost the coin toss)"
   },
   "settings": {
     "title": "Settings",

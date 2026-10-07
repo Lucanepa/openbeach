@@ -53,6 +53,9 @@ import { FOCUS_RING } from '../ui/volleyui/Button.jsx'
  *  the hit area to 44px+ without moving the layout. */
 const SB_TOOLBAR_BTN = `relative inline-flex items-center justify-center gap-1 h-9 min-w-11 px-3 rounded-lg border border-stone-200 bg-white text-sm font-semibold tracking-normal text-stone-700 hover:bg-stone-50 transition-colors cursor-pointer before:absolute before:-inset-x-1 before:-inset-y-2 before:content-[''] ${FOCUS_RING}`
 
+/** A label that some locales break with a soft "-\n" (de: "Verzögerungs-\nwarnung"), on one line. */
+const oneLine = (text) => String(text).replace(/-\n/g, '').replace(/\n/g, ' ')
+
 /** Micro-label over a value (SET, rally status, last action). */
 const SB_EYEBROW = 'text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-500'
 
@@ -8047,10 +8050,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             }}>
               {/* Rally Status - 17% */}
               <div style={{ flex: '0 0 17%', textAlign: 'center', padding: `0 ${4 * scaleFactor}px` }}>
-                <div style={{ fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px`, color: 'var(--muted)' }}>
+                <div className="font-semibold uppercase tracking-[0.12em] text-stone-500" style={{ fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px` }}>
                   {t('scoreboard.labels.rallyStatus')}
                 </div>
-                <div style={{ fontSize: `${DESIGN_VMIN * 0.02 * scaleFactor}px`, color: rallyStatus === 'in_play' ? '#4ade80' : '#fb923c', fontWeight: 600, marginTop: `${2 * scaleFactor}px` }}>
+                <div className={rallyStatus === 'in_play' ? 'text-emerald-700' : 'text-amber-700'} style={{ fontSize: `${DESIGN_VMIN * 0.02 * scaleFactor}px`, fontWeight: 600, marginTop: `${2 * scaleFactor}px` }}>
                   {rallyStatus === 'in_play' ? t('scoreboard.labels.inPlay') : t('scoreboard.labels.notInPlay')}
                 </div>
               </div>
@@ -8063,7 +8066,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 justifyContent: 'center'
               }}>
                 {/* Left Score */}
-                <span style={{
+                <span className="text-stone-900" style={{
                   fontFamily: getScoreFont(),
                   fontVariantNumeric: 'tabular-nums',
                   fontSize: `${DESIGN_VMIN * 0.115 * scaleFactor}px`,
@@ -8086,7 +8089,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 }}>:</span>
 
                 {/* Right Score */}
-                <span style={{
+                <span className="text-stone-900" style={{
                   fontFamily: getScoreFont(),
                   fontVariantNumeric: 'tabular-nums',
                   fontSize: `${DESIGN_VMIN * 0.115 * scaleFactor}px`,
@@ -8178,10 +8181,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
                   return (
                     <div style={{ wordBreak: 'break-word' }}>
-                      <div style={{ fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px`, color: 'var(--muted)' }}>
+                      <div className="font-semibold uppercase tracking-[0.12em] text-stone-500" style={{ fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px` }}>
                         {t('scoreboard.labels.lastAction', 'Last action')}
                       </div>
-                      <div style={{ fontSize: `${DESIGN_VMIN * 0.018 * scaleFactor}px`, color: 'var(--text)', fontWeight: 600, marginTop: `${2 * scaleFactor}px` }}>
+                      <div className="text-stone-900" style={{ fontSize: `${DESIGN_VMIN * 0.018 * scaleFactor}px`, fontWeight: 600, marginTop: `${2 * scaleFactor}px` }}>
                         {actionLabel}
                       </div>
                       {teamName && (
@@ -8189,7 +8192,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           {teamName}
                         </div>
                       )}
-                      <div style={{ fontSize: `${DESIGN_VMIN * 0.015 * scaleFactor}px`, color: 'var(--muted)', marginTop: `${1 * scaleFactor}px` }}>
+                      <div className="tabular-nums" style={{ fontSize: `${DESIGN_VMIN * 0.015 * scaleFactor}px`, color: 'var(--muted)', marginTop: `${1 * scaleFactor}px` }}>
                         {scoreStr}
                       </div>
                     </div>
@@ -8212,9 +8215,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     gap: `${6 * scaleFactor}px`,
                     alignItems: 'center',
                     justifyContent: 'flex-start',
-                    background: 'rgba(15, 23, 42, 0.6)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    borderRadius: `${8 * scaleFactor}px`,
+                    background: 'var(--ov-card)',
+                    border: '1px solid var(--ov-hairline-soft)',
+                    boxShadow: 'var(--ov-shadow-card)',
+                    borderRadius: 'var(--ov-radius-xl)',
                     padding: `${6 * scaleFactor}px`,
                     overflow: 'auto',
                     boxSizing: 'border-box'
@@ -8237,7 +8241,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         <div style={{
                           width: '100%',
                           background: leftTeamColor,
-                          borderRadius: `${6 * scaleFactor}px`,
+                          borderRadius: 'var(--ov-radius-lg)',
                           padding: `${8 * scaleFactor}px ${4 * scaleFactor}px`,
                           textAlign: 'center',
                           color: isBrightColor(leftTeamColor) ? '#000' : '#fff'
@@ -8264,19 +8268,19 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       let bg, borderColor, textColor
                       if (toUsed >= 1) {
                         // Timeout taken - red
-                        bg = 'transparent'
-                        borderColor = '#ef4444'
-                        textColor = '#ef4444'
+                        bg = 'var(--ov-danger-soft)'
+                        borderColor = '#f87171'
+                        textColor = 'var(--ov-danger-text)'
                       } else if (isRallyOngoing) {
                         // Rally ongoing - gray
-                        bg = 'rgba(156, 163, 175, 0.3)'
-                        borderColor = 'rgba(156, 163, 175, 0.5)'
-                        textColor = '#9ca3af'
+                        bg = 'var(--ov-sunken-strong)'
+                        borderColor = 'var(--ov-hairline-strong)'
+                        textColor = 'var(--ov-text-faint)'
                       } else {
                         // Available - green border/text
-                        bg = 'transparent'
-                        borderColor = '#22c55e'
-                        textColor = '#22c55e'
+                        bg = 'var(--ov-card)'
+                        borderColor = '#059669'
+                        textColor = 'var(--ov-success)'
                       }
                       return (
                         <div style={{ display: 'flex', gap: `${4 * scaleFactor}px`, width: '100%' }}>
@@ -8291,12 +8295,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               background: bg,
                               color: textColor,
                               border: `${2 * scaleFactor}px solid ${borderColor}`,
-                              borderRadius: `${6 * scaleFactor}px`,
+                              borderRadius: 'var(--ov-radius)',
                               cursor: (isRallyOngoing || toUsed >= 1) ? 'not-allowed' : 'pointer',
                               padding: `${6 * scaleFactor}px`
                             }}
-                            title="Time-out requested"
-                          >{toUsed >= 1 ? 'TO' : 'TO'}</button>
+                            title={t('scoreboard.timeout', 'Time-out')}
+                          >{t('scoreboard.labels.to', 'TO')}</button>
                           {(() => {
                             const bmpUsed = getUnsuccessfulBMPsUsed(leftTeamKey)
                             const bmpRemaining = 2 - bmpUsed
@@ -8312,10 +8316,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   height: `${DESIGN_VMIN * 0.045 * scaleFactor}px`,
                                   fontSize: `${DESIGN_VMIN * 0.018 * scaleFactor}px`,
                                   fontWeight: 700,
-                                  background: bmpExhausted ? '#ef4444' : (bmpAvailable ? 'transparent' : 'rgba(156, 163, 175, 0.3)'),
-                                  color: bmpExhausted ? '#000' : (bmpAvailable ? '#f97316' : '#9ca3af'),
-                                  border: `${2 * scaleFactor}px solid ${bmpExhausted ? '#ef4444' : (bmpAvailable ? '#f97316' : 'rgba(156, 163, 175, 0.5)')}`,
-                                  borderRadius: `${6 * scaleFactor}px`,
+                                  background: bmpExhausted ? 'var(--ov-danger-soft)' : (bmpAvailable ? 'var(--ov-card)' : 'var(--ov-sunken-strong)'),
+                                  color: bmpExhausted ? 'var(--ov-danger-text)' : (bmpAvailable ? '#c2410c' : 'var(--ov-text-faint)'),
+                                  border: `${2 * scaleFactor}px solid ${bmpExhausted ? '#f87171' : (bmpAvailable ? '#f97316' : 'var(--ov-hairline-strong)')}`,
+                                  borderRadius: 'var(--ov-radius)',
                                   cursor: bmpAvailable ? 'pointer' : 'not-allowed',
                                   padding: `${6 * scaleFactor}px`,
                                   display: 'flex',
@@ -8323,12 +8327,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   justifyContent: 'center',
                                   gap: `${6 * scaleFactor}px`
                                 }}
-                                title={`Ball Mark Protocol (${bmpRemaining} remaining)`}
+                                title={t('scoreboard.bmpRemaining', { count: bmpRemaining, defaultValue: 'Ball mark protocol ({{count}} left)' })}
                               >
                                 <span>BMP</span>
-                                <span style={{
-                                  background: bmpExhausted ? '#000' : '#f97316',
-                                  color: bmpExhausted ? '#f97316' : '#000',
+                                <span className="tabular-nums" style={{
+                                  background: bmpExhausted ? '#b91c1c' : '#f97316',
+                                  color: bmpExhausted ? '#fff' : '#1c1917',
                                   padding: `${2 * scaleFactor}px ${6 * scaleFactor}px`,
                                   borderRadius: `${4 * scaleFactor}px`,
                                   fontSize: `${DESIGN_VMIN * 0.015 * scaleFactor}px`,
@@ -8349,10 +8353,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           height: `${DESIGN_VMIN * 0.028 * scaleFactor}px`,
                           fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px`,
                           fontWeight: 600,
-                          background: 'rgba(156, 163, 175, 0.2)',
-                          color: '#9ca3af',
-                          border: `${1 * scaleFactor}px solid rgba(156, 163, 175, 0.4)`,
-                          borderRadius: `${4 * scaleFactor}px`,
+                          background: 'var(--ov-card)',
+                          color: 'var(--ov-text-secondary)',
+                          border: `${1 * scaleFactor}px solid var(--ov-hairline-strong)`,
+                          borderRadius: 'var(--ov-radius)',
                           cursor: 'pointer',
                           padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                           overflow: 'hidden',
@@ -8360,8 +8364,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           whiteSpace: 'nowrap',
                           boxSizing: 'border-box'
                         }}
-                        title="Improper Request"
-                      >Improper Request</button>
+                        title={t('scoreboard.sanctions.improperRequest', 'Improper request')}
+                      >{t('scoreboard.sanctions.improperRequest', 'Improper request')}</button>
                     )}
                     {/* Delay Warning / Delay Penalty - yellow if DW not given, red if DW already given */}
                     {(() => {
@@ -8377,10 +8381,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               height: `${DESIGN_VMIN * 0.028 * scaleFactor}px`,
                               fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px`,
                               fontWeight: 600,
-                              background: 'rgba(239, 68, 68, 0.2)',
-                              color: '#ef4444',
-                              border: `${1 * scaleFactor}px solid rgba(239, 68, 68, 0.4)`,
-                              borderRadius: `${4 * scaleFactor}px`,
+                              background: 'var(--ov-danger-soft)',
+                              color: 'var(--ov-danger-text)',
+                              border: `${1 * scaleFactor}px solid #fecaca`,
+                              borderRadius: 'var(--ov-radius)',
                               cursor: 'pointer',
                               padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                               overflow: 'hidden',
@@ -8388,8 +8392,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               whiteSpace: 'nowrap',
                               boxSizing: 'border-box'
                             }}
-                            title="Delay Penalty"
-                          >Delay Penalty</button>
+                            title={t('scoreboard.sanctions.delayPenalty', 'Delay penalty')}
+                          >{t('scoreboard.sanctions.delayPenalty', 'Delay penalty')}</button>
                         )
                       } else {
                         // Delay Warning - yellow
@@ -8401,10 +8405,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               height: `${DESIGN_VMIN * 0.028 * scaleFactor}px`,
                               fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px`,
                               fontWeight: 600,
-                              background: 'rgba(234, 179, 8, 0.2)',
-                              color: '#eab308',
-                              border: `${1 * scaleFactor}px solid rgba(234, 179, 8, 0.4)`,
-                              borderRadius: `${4 * scaleFactor}px`,
+                              background: 'var(--ov-warning-soft)',
+                              color: 'var(--ov-warning-text)',
+                              border: `${1 * scaleFactor}px solid #fcd34d`,
+                              borderRadius: 'var(--ov-radius)',
                               cursor: 'pointer',
                               padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                               overflow: 'hidden',
@@ -8412,8 +8416,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               whiteSpace: 'nowrap',
                               boxSizing: 'border-box'
                             }}
-                            title="Delay Warning"
-                          >Delay Warning</button>
+                            title={t('scoreboard.sanctions.delayWarning', 'Delay warning')}
+                          >{oneLine(t('scoreboard.sanctions.delayWarning', 'Delay warning'))}</button>
                         )
                       }
                     })()}
@@ -8442,10 +8446,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             height: `${DESIGN_VMIN * 0.028 * scaleFactor}px`,
                             fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px`,
                             fontWeight: 600,
-                            background: 'rgba(168, 85, 247, 0.2)',
-                            color: '#a855f7',
-                            border: `${1 * scaleFactor}px solid rgba(168, 85, 247, 0.4)`,
-                            borderRadius: `${4 * scaleFactor}px`,
+                            background: '#f5f3ff',
+                            color: '#6d28d9',
+                            border: `${1 * scaleFactor}px solid #ddd6fe`,
+                            borderRadius: 'var(--ov-radius)',
                             cursor: 'pointer',
                             padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                             overflow: 'hidden',
@@ -8453,8 +8457,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             whiteSpace: 'nowrap',
                             boxSizing: 'border-box'
                           }}
-                          title={`Coach Sanction${coachName ? ` - ${coachName}` : ''}`}
-                        >Coach{coachName ? ` (${coachName})` : ''}</button>
+                          title={`${t('scoreboard.coachSanction', 'Coach sanction')}${coachName ? ` – ${coachName}` : ''}`}
+                        >{t('scoreboard.coach', 'Coach')}{coachName ? ` (${coachName})` : ''}</button>
                       )
                     })()}
                     {/* Summary Table */}
@@ -8472,13 +8476,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
                       return (
                         <div style={{ width: '100%', overflow: 'hidden' }}>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: `${DESIGN_VMIN * 0.018 * scaleFactor}px`, tableLayout: 'fixed' }}>
+                          <table className="tabular-nums text-stone-900" style={{ width: '100%', borderCollapse: 'collapse', fontSize: `${DESIGN_VMIN * 0.018 * scaleFactor}px`, tableLayout: 'fixed' }}>
                             <thead>
-                              <tr style={{ borderBottom: `${1 * scaleFactor}px solid rgba(255,255,255,0.2)` }}>
-                                <th style={{ padding: `${1 * scaleFactor}px`, textAlign: 'center', fontWeight: 600, fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px` }}>Set</th>
-                                <th style={{ padding: `${1 * scaleFactor}px`, textAlign: 'center', fontWeight: 600, fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px` }}>Points</th>
-                                <th style={{ padding: `${1 * scaleFactor}px`, textAlign: 'center', fontWeight: 600, fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px` }}>Wins</th>
-                                <th style={{ padding: `${1 * scaleFactor}px`, textAlign: 'center', fontWeight: 600, fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px` }}>TO</th>
+                              <tr className="text-stone-500" style={{ borderBottom: `${1 * scaleFactor}px solid var(--ov-hairline)` }}>
+                                <th className="font-bold uppercase tracking-wide" style={{ padding: `${1 * scaleFactor}px`, textAlign: 'center', fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px` }}>{t('scoreboard.table.set', 'Set')}</th>
+                                <th className="font-bold uppercase tracking-wide" style={{ padding: `${1 * scaleFactor}px`, textAlign: 'center', fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px` }}>{t('scoreboard.table.points', 'Points')}</th>
+                                <th className="font-bold uppercase tracking-wide" style={{ padding: `${1 * scaleFactor}px`, textAlign: 'center', fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px` }}>{t('scoreboard.table.wins', 'Wins')}</th>
+                                <th className="font-bold uppercase tracking-wide" style={{ padding: `${1 * scaleFactor}px`, textAlign: 'center', fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px` }}>{t('scoreboard.labels.to', 'TO')}</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -8491,10 +8495,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 ).length
                                 let rowColor = 'inherit'
                                 if (set.finished) {
-                                  rowColor = won === 1 ? '#22c55e' : '#ef4444'
+                                  rowColor = won === 1 ? 'var(--ov-success)' : 'var(--ov-danger-text)'
                                 }
                                 return (
-                                  <tr key={set.id} style={{ borderBottom: `${1 * scaleFactor}px solid rgba(255,255,255,0.1)`, color: rowColor }}>
+                                  <tr key={set.id} style={{ borderBottom: `${1 * scaleFactor}px solid var(--ov-sunken-strong)`, color: rowColor }}>
                                     <td style={{ padding: `${1 * scaleFactor}px`, textAlign: 'center' }}>{set.index}</td>
                                     <td style={{ padding: `${1 * scaleFactor}px`, textAlign: 'center' }}>{leftPoints}</td>
                                     <td style={{ padding: `${1 * scaleFactor}px`, textAlign: 'center' }}>{won}</td>
@@ -8534,14 +8538,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
                       // Render sanction letter only (for alignment)
                       const renderSanctionLetter = (sanctionType) => {
+                        // Official card colours, darkened to read on white
                         if (sanctionType === 'warning') {
-                          return <span style={{ color: '#eab308', fontWeight: 700 }}>W</span>
+                          return <span style={{ color: '#a16207', fontWeight: 700 }}>W</span>
                         } else if (sanctionType === 'penalty') {
-                          return <span style={{ color: '#ef4444', fontWeight: 700 }}>P</span>
+                          return <span style={{ color: '#dc2626', fontWeight: 700 }}>P</span>
                         } else if (sanctionType === 'expulsion') {
-                          return <span style={{ fontWeight: 700 }}><span style={{ color: '#eab308' }}>E</span><span style={{ color: '#ef4444' }}>x</span></span>
+                          return <span style={{ fontWeight: 700 }}><span style={{ color: '#a16207' }}>E</span><span style={{ color: '#dc2626' }}>x</span></span>
                         } else if (sanctionType === 'disqualification') {
-                          return <span style={{ color: '#ef4444', fontWeight: 700 }}>D</span>
+                          return <span style={{ color: '#dc2626', fontWeight: 700 }}>D</span>
                         }
                         return null
                       }
@@ -8560,23 +8565,19 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         return teamKey === 'team1' ? `${t1}:${t2}` : `${t2}:${t1}`
                       }
 
-                      const borderStyle = `${1 * scaleFactor}px solid rgba(255,255,255,0.2)`
+                      const borderStyle = `${1 * scaleFactor}px solid var(--ov-hairline)`
                       const tableFontSize = `${DESIGN_VMIN * 0.018 * scaleFactor}px`
                       const headerFontSize = `${DESIGN_VMIN * 0.016 * scaleFactor}px`
 
                       return (
                         <div style={{ marginTop: `${4 * scaleFactor}px`, width: '100%', display: 'flex', flexDirection: 'column', gap: `${2 * scaleFactor}px` }}>
                           {/* Sanctions Title */}
-                          <div style={{
+                          <div className="font-bold uppercase tracking-wider text-stone-800" style={{
                             fontSize: headerFontSize,
-                            color: '#ffffff',
-                            textAlign: 'center',
-                            fontWeight: 600,
-                            background: '#000000',
-                            padding: `${4 * scaleFactor}px`,
-                            borderRadius: `${3 * scaleFactor}px`
+                            padding: `${4 * scaleFactor}px 0`,
+                            borderBottom: '1.5px solid var(--ov-rule)'
                           }}>
-                            Sanctions
+                            {t('scoreboard.sanctions.title', 'Sanctions')}
                           </div>
                           {/* Team Sanctions */}
                           {(hasIR || hasDW || delayPenaltyCount > 0 || hasPlayerWarning) && (
@@ -8590,50 +8591,50 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               {hasPlayerWarning && (
                                 <div style={{
                                   fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
-                                  color: '#eab308',
+                                  color: 'var(--ov-warning-text)',
                                   textAlign: 'center',
                                   padding: `${2 * scaleFactor}px`,
-                                  background: 'rgba(234, 179, 8, 0.15)',
+                                  background: 'var(--ov-warning-soft)',
                                   borderRadius: `${3 * scaleFactor}px`
                                 }}>
-                                  Formal Warning
+                                  {t('scoreboard.sanctions.formalWarning', 'Formal warning')}
                                 </div>
                               )}
                               {hasIR && (
                                 <div style={{
                                   fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
-                                  color: '#9ca3af',
+                                  color: 'var(--ov-text-secondary)',
                                   textAlign: 'center',
                                   padding: `${2 * scaleFactor}px`,
-                                  background: 'rgba(156, 163, 175, 0.15)',
+                                  background: 'var(--ov-sunken-strong)',
                                   borderRadius: `${3 * scaleFactor}px`
                                 }}>
-                                  Improper Request
+                                  {t('scoreboard.sanctions.improperRequest', 'Improper request')}
                                 </div>
                               )}
                               {hasDW && (
                                 <div style={{
                                   fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
-                                  color: '#eab308',
+                                  color: 'var(--ov-warning-text)',
                                   textAlign: 'center',
                                   padding: `${2 * scaleFactor}px`,
-                                  background: 'rgba(234, 179, 8, 0.15)',
+                                  background: 'var(--ov-warning-soft)',
                                   borderRadius: `${3 * scaleFactor}px`
                                 }}>
-                                  Delay Warning
+                                  {t('scoreboard.sanctions.delayWarning', 'Delay warning')}
                                 </div>
                               )}
                               {delayPenaltyCount > 0 && (
                                 [...Array(delayPenaltyCount)].map((_, i) => (
                                   <div key={i} style={{
                                     fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
-                                    color: '#ef4444',
+                                    color: 'var(--ov-danger-text)',
                                     textAlign: 'center',
                                     padding: `${2 * scaleFactor}px`,
-                                    background: 'rgba(239, 68, 68, 0.15)',
+                                    background: 'var(--ov-danger-soft)',
                                     borderRadius: `${3 * scaleFactor}px`
                                   }}>
-                                    Delay Penalty
+                                    {t('scoreboard.sanctions.delayPenalty', 'Delay penalty')}
                                   </div>
                                 ))
                               )}
@@ -8641,7 +8642,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           )}
                           {/* Player Sanctions Table */}
                           {playerSanctions.length > 0 && (
-                            <table style={{
+                            <table className="tabular-nums" style={{
                               width: '100%',
                               fontSize: tableFontSize,
                               borderCollapse: 'collapse',
@@ -8652,7 +8653,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             }}>
                               <thead>
                                 <tr>
-                                  <th style={{ width: '20%', padding: `${4 * scaleFactor}px`, textAlign: 'center', fontWeight: 600, fontSize: headerFontSize, borderRight: borderStyle, borderBottom: borderStyle }}>SET</th>
+                                  <th style={{ width: '20%', padding: `${4 * scaleFactor}px`, textAlign: 'center', fontWeight: 600, fontSize: headerFontSize, borderRight: borderStyle, borderBottom: borderStyle }}><span className="uppercase">{t('scoreboard.table.set', 'Set')}</span></th>
                                   <th style={{ width: '40%', padding: `${4 * scaleFactor}px`, textAlign: 'center', fontWeight: 600, fontSize: headerFontSize, borderRight: borderStyle, borderBottom: borderStyle }}>{player1?.number || '1'}</th>
                                   <th style={{ width: '40%', padding: `${4 * scaleFactor}px`, textAlign: 'center', fontWeight: 600, fontSize: headerFontSize, borderBottom: borderStyle }}>{player2?.number || '2'}</th>
                                 </tr>
@@ -8723,26 +8724,26 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           <div style={{
                             fontSize: `${DESIGN_VMIN * 0.0253 * scaleFactor}px`,
                             fontWeight: 700,
-                            color: 'var(--accent)',
+                            color: 'var(--ov-success)',
                             textTransform: 'uppercase',
                             letterSpacing: `${0.5 * scaleFactor}px`,
                             textAlign: 'center'
                           }}>
-                            SERVE
+                            {t('scoreboard.serve', 'Serve')}
                           </div>
-                          <div style={{
+                          <div className="tabular-nums" style={{
                             fontSize: `${DESIGN_VMIN * 0.0575 * scaleFactor}px`,
                             fontWeight: 700,
-                            color: 'var(--accent)',
+                            color: 'var(--ov-success)',
                             width: '80%',
                             maxWidth: `${DESIGN_VMIN * 0.092 * scaleFactor}px`,
                             aspectRatio: '1',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            background: 'rgba(34, 197, 94, 0.15)',
-                            border: `${2 * scaleFactor}px solid var(--accent)`,
-                            borderRadius: `${8 * scaleFactor}px`,
+                            background: '#ecfdf5',
+                            border: `${2 * scaleFactor}px solid #10b981`,
+                            borderRadius: 'var(--ov-radius-lg)',
                             boxSizing: 'border-box'
                           }}>
                             {servingPlayer.number}
@@ -8768,7 +8769,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             color: 'var(--muted)',
                             whiteSpace: 'nowrap'
                           }}>
-                            1R: {ref1Name}
+                            {t('scoreboard.firstRefereeShort', '1R')}: {ref1Name}
                           </span>
                         </div>
                       )
@@ -8791,14 +8792,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         {/* Set 3 needs coin toss first */}
                         {data?.set?.index === 3 && !data?.match?.set3CoinTossWinner ? (
                           <>
-                            <div style={{
+                            <div className="text-stone-900 tracking-tight" style={{
                               fontSize: '24px',
                               fontWeight: 700,
-                              color: 'var(--accent)',
                               marginBottom: '24px',
                               textAlign: 'center'
                             }}>
-                              Set 3 Coin Toss
+                              {t('scoreboard.set3CoinToss', 'Set 3 coin toss')}
                             </div>
                             <div style={{ display: 'flex', gap: '16px' }}>
                               {(() => {
@@ -8820,12 +8820,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                         background: team1Color,
                                         color: isBrightColor(team1Color) ? '#000' : '#fff',
                                         border: 'none',
-                                        borderRadius: '12px',
+                                        borderRadius: 'var(--ov-radius-lg)',
+                                        minHeight: '56px',
                                         cursor: 'pointer'
                                       }}
                                     >
                                       {team1Label} — {team1Name}
-                                      <div style={{ fontSize: '13px', fontWeight: 600, marginTop: '4px', opacity: 0.85 }}>Won Toss</div>
+                                      <div style={{ fontSize: '13px', fontWeight: 600, marginTop: '4px', opacity: 0.85 }}>{t('scoreboard.wonToss', 'Won the toss')}</div>
                                     </button>
                                     <button
                                       onClick={() => handleSet3CoinToss('team2')}
@@ -8836,12 +8837,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                         background: team2Color,
                                         color: isBrightColor(team2Color) ? '#000' : '#fff',
                                         border: 'none',
-                                        borderRadius: '12px',
+                                        borderRadius: 'var(--ov-radius-lg)',
+                                        minHeight: '56px',
                                         cursor: 'pointer'
                                       }}
                                     >
                                       {team2Label} — {team2Name}
-                                      <div style={{ fontSize: '13px', fontWeight: 600, marginTop: '4px', opacity: 0.85 }}>Won Toss</div>
+                                      <div style={{ fontSize: '13px', fontWeight: 600, marginTop: '4px', opacity: 0.85 }}>{t('scoreboard.wonToss', 'Won the toss')}</div>
                                     </button>
                                   </>
                                 )
@@ -8853,7 +8855,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 <div style={{
                                   width: 'min(300px, 80vw)',
                                   height: '14px',
-                                  background: 'rgba(255, 255, 255, 0.15)',
+                                  background: 'var(--ov-hairline)',
                                   borderRadius: '7px',
                                   overflow: 'hidden',
                                   margin: '0 auto 8px auto'
@@ -8861,16 +8863,16 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   <div style={{
                                     width: `${(betweenSetsCountdown.countdown / setIntervalDuration) * 100}%`,
                                     height: '100%',
-                                    background: betweenSetsCountdown.countdown <= 30 ? '#ef4444' : 'var(--accent)',
+                                    background: betweenSetsCountdown.countdown <= 30 ? '#dc2626' : '#059669',
                                     borderRadius: '7px',
                                     transition: betweenSetsCountdown.firstRender ? 'none' : 'width 1s linear, background 0.3s',
                                     marginLeft: 'auto'
                                   }} />
                                 </div>
-                                <div style={{
+                                <div className="tabular-nums" style={{
                                   fontSize: '36px',
                                   fontWeight: 700,
-                                  color: betweenSetsCountdown.countdown <= 30 ? '#ef4444' : 'var(--accent)',
+                                  color: betweenSetsCountdown.countdown <= 30 ? 'var(--ov-danger-text)' : 'var(--ov-success)',
                                   fontFamily: getScoreFont()
                                 }}>
                                   {betweenSetsCountdown.countdown <= 0 ? "0" : formatCountdown(betweenSetsCountdown.countdown)}
@@ -8890,12 +8892,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 <svg
                                   className={betweenSetsDecisionTeam === (leftisTeam1 ? 'team1' : 'team2') ? 'between-sets-arrow-left' : 'between-sets-arrow-right'}
                                   width="56" height="40" viewBox="0 0 56 40"
-                                  style={{ filter: 'drop-shadow(0 2px 6px rgba(34, 197, 94, 0.4))' }}
+                                  style={{ filter: 'drop-shadow(0 2px 4px rgba(4, 120, 87, 0.25))' }}
                                 >
                                   {betweenSetsDecisionTeam === (leftisTeam1 ? 'team1' : 'team2') ? (
-                                    <path d="M48 20H12M12 20L24 8M12 20L24 32" stroke="#22c55e" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                                    <path d="M48 20H12M12 20L24 8M12 20L24 32" stroke="#059669" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
                                   ) : (
-                                    <path d="M8 20H44M44 20L32 8M44 20L32 32" stroke="#22c55e" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                                    <path d="M8 20H44M44 20L32 8M44 20L32 32" stroke="#059669" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
                                   )}
                                 </svg>
                               </div>
@@ -8904,11 +8906,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               <div style={{
                                 fontSize: '18px',
                                 fontWeight: 600,
-                                color: 'var(--muted)',
+                                color: 'var(--ov-text-secondary)',
                                 marginBottom: '16px',
                                 textAlign: 'center'
                               }}>
-                                {betweenSetsDecisionTeamName} chooses (lost coin toss)
+                                {t('scoreboard.betweenSetsChooses', { team: betweenSetsDecisionTeamName, defaultValue: '{{team}} chooses (lost the coin toss)' })}
                               </div>
                             )}
 
@@ -8948,8 +8950,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                         justifyContent: 'center',
                                         padding: '10px 16px',
                                         background: `${leftColor}dd`,
-                                        borderRadius: '10px',
-                                        border: leftServes ? '2px solid var(--accent)' : `2px solid ${leftColor}`,
+                                        borderRadius: 'var(--ov-radius-lg)',
+                                        border: leftServes ? '3px solid #059669' : `2px solid ${leftColor}`,
                                         minWidth: '80px',
                                         cursor: 'pointer',
                                         height: '100%',
@@ -8980,17 +8982,18 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     justifyContent: 'center',
                                     gap: '8px',
                                     padding: '12px 20px',
+                                    minHeight: '48px',
                                     fontSize: '16px',
                                     fontWeight: 700,
-                                    background: '#22c55e',
+                                    background: 'var(--ov-selected)',
                                     color: '#fff',
                                     border: 'none',
-                                    borderRadius: '10px',
+                                    borderRadius: 'var(--ov-radius-lg)',
                                     cursor: 'pointer'
                                   }}
                                 >
-                                  <span style={{ fontSize: '20px' }}>↔</span>
-                                  Switch Sides
+                                  <ArrowLeftRight size={20} />
+                                  {t('scoreboard.buttons.switchSides', 'Switch sides')}
                                 </button>
 
                                 <button
@@ -9001,17 +9004,18 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     justifyContent: 'center',
                                     gap: '8px',
                                     padding: '12px 20px',
+                                    minHeight: '48px',
                                     fontSize: '16px',
                                     fontWeight: 700,
-                                    background: '#22c55e',
+                                    background: 'var(--ov-selected)',
                                     color: '#fff',
                                     border: 'none',
-                                    borderRadius: '10px',
+                                    borderRadius: 'var(--ov-radius-lg)',
                                     cursor: 'pointer'
                                   }}
                                 >
                                   <img src={ballImage} onError={(e) => e.target.src = ballImage} alt="" style={{ width: 24, height: 24, objectFit: 'contain' }} />
-                                  Switch Serve
+                                  {t('scoreboard.buttons.switchServe', 'Switch serve')}
                                 </button>
                               </div>
 
@@ -9049,8 +9053,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                         justifyContent: 'center',
                                         padding: '10px 16px',
                                         background: `${rightColor}dd`,
-                                        borderRadius: '10px',
-                                        border: rightServes ? '2px solid var(--accent)' : `2px solid ${rightColor}`,
+                                        borderRadius: 'var(--ov-radius-lg)',
+                                        border: rightServes ? '3px solid #059669' : `2px solid ${rightColor}`,
                                         minWidth: '80px',
                                         cursor: 'pointer',
                                         height: '100%',
@@ -9078,7 +9082,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 <div style={{
                                   width: 'min(300px, 80vw)',
                                   height: '14px',
-                                  background: 'rgba(255, 255, 255, 0.15)',
+                                  background: 'var(--ov-hairline)',
                                   borderRadius: '7px',
                                   overflow: 'hidden',
                                   margin: '0 auto 8px auto'
@@ -9086,16 +9090,16 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   <div style={{
                                     width: `${(betweenSetsCountdown.countdown / setIntervalDuration) * 100}%`,
                                     height: '100%',
-                                    background: betweenSetsCountdown.countdown <= 30 ? '#ef4444' : 'var(--accent)',
+                                    background: betweenSetsCountdown.countdown <= 30 ? '#dc2626' : '#059669',
                                     borderRadius: '7px',
                                     transition: betweenSetsCountdown.firstRender ? 'none' : 'width 1s linear, background 0.3s',
                                     marginLeft: 'auto'
                                   }} />
                                 </div>
-                                <div style={{
+                                <div className="tabular-nums" style={{
                                   fontSize: '36px',
                                   fontWeight: 700,
-                                  color: betweenSetsCountdown.countdown <= 30 ? '#ef4444' : 'var(--accent)',
+                                  color: betweenSetsCountdown.countdown <= 30 ? 'var(--ov-danger-text)' : 'var(--ov-success)',
                                   fontFamily: getScoreFont()
                                 }}>
                                   {betweenSetsCountdown.countdown <= 0 ? "0" : formatCountdown(betweenSetsCountdown.countdown)}
@@ -9797,7 +9801,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           whiteSpace: 'nowrap',
                           marginTop: '4px'
                         }}>
-                          2R: {ref2Name}
+                          {t('scoreboard.secondRefereeShort', '2R')}: {ref2Name}
                         </span>
                       )
                     })()}
@@ -9830,26 +9834,26 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           <div style={{
                             fontSize: `${DESIGN_VMIN * 0.0253 * scaleFactor}px`,
                             fontWeight: 700,
-                            color: 'var(--accent)',
+                            color: 'var(--ov-success)',
                             textTransform: 'uppercase',
                             letterSpacing: `${0.5 * scaleFactor}px`,
                             textAlign: 'center'
                           }}>
-                            SERVE
+                            {t('scoreboard.serve', 'Serve')}
                           </div>
-                          <div style={{
+                          <div className="tabular-nums" style={{
                             fontSize: `${DESIGN_VMIN * 0.0575 * scaleFactor}px`,
                             fontWeight: 700,
-                            color: 'var(--accent)',
+                            color: 'var(--ov-success)',
                             width: '80%',
                             maxWidth: `${DESIGN_VMIN * 0.092 * scaleFactor}px`,
                             aspectRatio: '1',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            background: 'rgba(34, 197, 94, 0.15)',
-                            border: `${2 * scaleFactor}px solid var(--accent)`,
-                            borderRadius: `${8 * scaleFactor}px`,
+                            background: '#ecfdf5',
+                            border: `${2 * scaleFactor}px solid #10b981`,
+                            borderRadius: 'var(--ov-radius-lg)',
                             boxSizing: 'border-box'
                           }}>
                             {servingPlayer.number}
@@ -10143,9 +10147,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     gap: `${6 * scaleFactor}px`,
                     alignItems: 'center',
                     justifyContent: 'flex-start',
-                    background: 'rgba(15, 23, 42, 0.6)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    borderRadius: `${8 * scaleFactor}px`,
+                    background: 'var(--ov-card)',
+                    border: '1px solid var(--ov-hairline-soft)',
+                    boxShadow: 'var(--ov-shadow-card)',
+                    borderRadius: 'var(--ov-radius-xl)',
                     padding: `${6 * scaleFactor}px`,
                     overflow: 'auto',
                     boxSizing: 'border-box'
@@ -10168,7 +10173,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         <div style={{
                           width: '100%',
                           background: rightTeamColor,
-                          borderRadius: `${6 * scaleFactor}px`,
+                          borderRadius: 'var(--ov-radius-lg)',
                           padding: `${8 * scaleFactor}px ${4 * scaleFactor}px`,
                           textAlign: 'center',
                           color: isBrightColor(rightTeamColor) ? '#000' : '#fff'
@@ -10195,19 +10200,19 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       let bg, borderColor, textColor
                       if (toUsed >= 1) {
                         // Timeout taken - red
-                        bg = 'transparent'
-                        borderColor = '#ef4444'
-                        textColor = '#ef4444'
+                        bg = 'var(--ov-danger-soft)'
+                        borderColor = '#f87171'
+                        textColor = 'var(--ov-danger-text)'
                       } else if (isRallyOngoing) {
                         // Rally ongoing - gray
-                        bg = 'rgba(156, 163, 175, 0.3)'
-                        borderColor = 'rgba(156, 163, 175, 0.5)'
-                        textColor = '#9ca3af'
+                        bg = 'var(--ov-sunken-strong)'
+                        borderColor = 'var(--ov-hairline-strong)'
+                        textColor = 'var(--ov-text-faint)'
                       } else {
                         // Available - green border/text
-                        bg = 'transparent'
-                        borderColor = '#22c55e'
-                        textColor = '#22c55e'
+                        bg = 'var(--ov-card)'
+                        borderColor = '#059669'
+                        textColor = 'var(--ov-success)'
                       }
                       return (
                         <div style={{ display: 'flex', gap: `${4 * scaleFactor}px`, width: '100%' }}>
@@ -10222,12 +10227,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               background: bg,
                               color: textColor,
                               border: `${2 * scaleFactor}px solid ${borderColor}`,
-                              borderRadius: `${6 * scaleFactor}px`,
+                              borderRadius: 'var(--ov-radius)',
                               cursor: (isRallyOngoing || toUsed >= 1) ? 'not-allowed' : 'pointer',
                               padding: `${6 * scaleFactor}px`
                             }}
-                            title="Time-out requested"
-                          >{toUsed >= 1 ? 'TO' : 'TO'}</button>
+                            title={t('scoreboard.timeout', 'Time-out')}
+                          >{t('scoreboard.labels.to', 'TO')}</button>
                           {(() => {
                             const bmpUsed = getUnsuccessfulBMPsUsed(rightTeamKey)
                             const bmpRemaining = 2 - bmpUsed
@@ -10243,10 +10248,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   height: `${DESIGN_VMIN * 0.045 * scaleFactor}px`,
                                   fontSize: `${DESIGN_VMIN * 0.018 * scaleFactor}px`,
                                   fontWeight: 700,
-                                  background: bmpExhausted ? '#ef4444' : (bmpAvailable ? 'transparent' : 'rgba(156, 163, 175, 0.3)'),
-                                  color: bmpExhausted ? '#000' : (bmpAvailable ? '#f97316' : '#9ca3af'),
-                                  border: `${2 * scaleFactor}px solid ${bmpExhausted ? '#ef4444' : (bmpAvailable ? '#f97316' : 'rgba(156, 163, 175, 0.5)')}`,
-                                  borderRadius: `${6 * scaleFactor}px`,
+                                  background: bmpExhausted ? 'var(--ov-danger-soft)' : (bmpAvailable ? 'var(--ov-card)' : 'var(--ov-sunken-strong)'),
+                                  color: bmpExhausted ? 'var(--ov-danger-text)' : (bmpAvailable ? '#c2410c' : 'var(--ov-text-faint)'),
+                                  border: `${2 * scaleFactor}px solid ${bmpExhausted ? '#f87171' : (bmpAvailable ? '#f97316' : 'var(--ov-hairline-strong)')}`,
+                                  borderRadius: 'var(--ov-radius)',
                                   cursor: bmpAvailable ? 'pointer' : 'not-allowed',
                                   padding: `${6 * scaleFactor}px`,
                                   display: 'flex',
@@ -10254,12 +10259,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   justifyContent: 'center',
                                   gap: `${6 * scaleFactor}px`
                                 }}
-                                title={`Ball Mark Protocol (${bmpRemaining} remaining)`}
+                                title={t('scoreboard.bmpRemaining', { count: bmpRemaining, defaultValue: 'Ball mark protocol ({{count}} left)' })}
                               >
                                 <span>BMP</span>
-                                <span style={{
-                                  background: bmpExhausted ? '#000' : '#f97316',
-                                  color: bmpExhausted ? '#f97316' : '#000',
+                                <span className="tabular-nums" style={{
+                                  background: bmpExhausted ? '#b91c1c' : '#f97316',
+                                  color: bmpExhausted ? '#fff' : '#1c1917',
                                   padding: `${2 * scaleFactor}px ${6 * scaleFactor}px`,
                                   borderRadius: `${4 * scaleFactor}px`,
                                   fontSize: `${DESIGN_VMIN * 0.015 * scaleFactor}px`,
@@ -10280,10 +10285,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           height: `${DESIGN_VMIN * 0.028 * scaleFactor}px`,
                           fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px`,
                           fontWeight: 600,
-                          background: 'rgba(156, 163, 175, 0.2)',
-                          color: '#9ca3af',
-                          border: `${1 * scaleFactor}px solid rgba(156, 163, 175, 0.4)`,
-                          borderRadius: `${4 * scaleFactor}px`,
+                          background: 'var(--ov-card)',
+                          color: 'var(--ov-text-secondary)',
+                          border: `${1 * scaleFactor}px solid var(--ov-hairline-strong)`,
+                          borderRadius: 'var(--ov-radius)',
                           cursor: 'pointer',
                           padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                           overflow: 'hidden',
@@ -10291,8 +10296,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           whiteSpace: 'nowrap',
                           boxSizing: 'border-box'
                         }}
-                        title="Improper Request"
-                      >Improper Request</button>
+                        title={t('scoreboard.sanctions.improperRequest', 'Improper request')}
+                      >{t('scoreboard.sanctions.improperRequest', 'Improper request')}</button>
                     )}
                     {/* Delay Warning / Delay Penalty - yellow if DW not given, red if DW already given */}
                     {(() => {
@@ -10308,10 +10313,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               height: `${DESIGN_VMIN * 0.028 * scaleFactor}px`,
                               fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px`,
                               fontWeight: 600,
-                              background: 'rgba(239, 68, 68, 0.2)',
-                              color: '#ef4444',
-                              border: `${1 * scaleFactor}px solid rgba(239, 68, 68, 0.4)`,
-                              borderRadius: `${4 * scaleFactor}px`,
+                              background: 'var(--ov-danger-soft)',
+                              color: 'var(--ov-danger-text)',
+                              border: `${1 * scaleFactor}px solid #fecaca`,
+                              borderRadius: 'var(--ov-radius)',
                               cursor: 'pointer',
                               padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                               overflow: 'hidden',
@@ -10319,8 +10324,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               whiteSpace: 'nowrap',
                               boxSizing: 'border-box'
                             }}
-                            title="Delay Penalty"
-                          >Delay Penalty</button>
+                            title={t('scoreboard.sanctions.delayPenalty', 'Delay penalty')}
+                          >{t('scoreboard.sanctions.delayPenalty', 'Delay penalty')}</button>
                         )
                       } else {
                         // Delay Warning - yellow
@@ -10332,10 +10337,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               height: `${DESIGN_VMIN * 0.028 * scaleFactor}px`,
                               fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px`,
                               fontWeight: 600,
-                              background: 'rgba(234, 179, 8, 0.2)',
-                              color: '#eab308',
-                              border: `${1 * scaleFactor}px solid rgba(234, 179, 8, 0.4)`,
-                              borderRadius: `${4 * scaleFactor}px`,
+                              background: 'var(--ov-warning-soft)',
+                              color: 'var(--ov-warning-text)',
+                              border: `${1 * scaleFactor}px solid #fcd34d`,
+                              borderRadius: 'var(--ov-radius)',
                               cursor: 'pointer',
                               padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                               overflow: 'hidden',
@@ -10343,8 +10348,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               whiteSpace: 'nowrap',
                               boxSizing: 'border-box'
                             }}
-                            title="Delay Warning"
-                          >Delay Warning</button>
+                            title={t('scoreboard.sanctions.delayWarning', 'Delay warning')}
+                          >{oneLine(t('scoreboard.sanctions.delayWarning', 'Delay warning'))}</button>
                         )
                       }
                     })()}
@@ -10373,10 +10378,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             height: `${DESIGN_VMIN * 0.028 * scaleFactor}px`,
                             fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px`,
                             fontWeight: 600,
-                            background: 'rgba(168, 85, 247, 0.2)',
-                            color: '#a855f7',
-                            border: `${1 * scaleFactor}px solid rgba(168, 85, 247, 0.4)`,
-                            borderRadius: `${4 * scaleFactor}px`,
+                            background: '#f5f3ff',
+                            color: '#6d28d9',
+                            border: `${1 * scaleFactor}px solid #ddd6fe`,
+                            borderRadius: 'var(--ov-radius)',
                             cursor: 'pointer',
                             padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                             overflow: 'hidden',
@@ -10384,8 +10389,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             whiteSpace: 'nowrap',
                             boxSizing: 'border-box'
                           }}
-                          title={`Coach Sanction${coachName ? ` - ${coachName}` : ''}`}
-                        >Coach{coachName ? ` (${coachName})` : ''}</button>
+                          title={`${t('scoreboard.coachSanction', 'Coach sanction')}${coachName ? ` – ${coachName}` : ''}`}
+                        >{t('scoreboard.coach', 'Coach')}{coachName ? ` (${coachName})` : ''}</button>
                       )
                     })()}
                     {/* Summary Table */}
@@ -10403,13 +10408,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
                       return (
                         <div style={{ width: '100%', overflow: 'hidden' }}>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: `${DESIGN_VMIN * 0.018 * scaleFactor}px`, tableLayout: 'fixed' }}>
+                          <table className="tabular-nums text-stone-900" style={{ width: '100%', borderCollapse: 'collapse', fontSize: `${DESIGN_VMIN * 0.018 * scaleFactor}px`, tableLayout: 'fixed' }}>
                             <thead>
-                              <tr style={{ borderBottom: `${1 * scaleFactor}px solid rgba(255,255,255,0.2)` }}>
-                                <th style={{ padding: `${1 * scaleFactor}px`, textAlign: 'center', fontWeight: 600, fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px` }}>Set</th>
-                                <th style={{ padding: `${1 * scaleFactor}px`, textAlign: 'center', fontWeight: 600, fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px` }}>Points</th>
-                                <th style={{ padding: `${1 * scaleFactor}px`, textAlign: 'center', fontWeight: 600, fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px` }}>Wins</th>
-                                <th style={{ padding: `${1 * scaleFactor}px`, textAlign: 'center', fontWeight: 600, fontSize: `${DESIGN_VMIN * 0.016 * scaleFactor}px` }}>TO</th>
+                              <tr className="text-stone-500" style={{ borderBottom: `${1 * scaleFactor}px solid var(--ov-hairline)` }}>
+                                <th className="font-bold uppercase tracking-wide" style={{ padding: `${1 * scaleFactor}px`, textAlign: 'center', fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px` }}>{t('scoreboard.table.set', 'Set')}</th>
+                                <th className="font-bold uppercase tracking-wide" style={{ padding: `${1 * scaleFactor}px`, textAlign: 'center', fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px` }}>{t('scoreboard.table.points', 'Points')}</th>
+                                <th className="font-bold uppercase tracking-wide" style={{ padding: `${1 * scaleFactor}px`, textAlign: 'center', fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px` }}>{t('scoreboard.table.wins', 'Wins')}</th>
+                                <th className="font-bold uppercase tracking-wide" style={{ padding: `${1 * scaleFactor}px`, textAlign: 'center', fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px` }}>{t('scoreboard.labels.to', 'TO')}</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -10422,10 +10427,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 ).length
                                 let rowColor = 'inherit'
                                 if (set.finished) {
-                                  rowColor = won === 1 ? '#22c55e' : '#ef4444'
+                                  rowColor = won === 1 ? 'var(--ov-success)' : 'var(--ov-danger-text)'
                                 }
                                 return (
-                                  <tr key={set.id} style={{ borderBottom: `${1 * scaleFactor}px solid rgba(255,255,255,0.1)`, color: rowColor }}>
+                                  <tr key={set.id} style={{ borderBottom: `${1 * scaleFactor}px solid var(--ov-sunken-strong)`, color: rowColor }}>
                                     <td style={{ padding: `${1 * scaleFactor}px`, textAlign: 'center' }}>{set.index}</td>
                                     <td style={{ padding: `${1 * scaleFactor}px`, textAlign: 'center' }}>{rightPoints}</td>
                                     <td style={{ padding: `${1 * scaleFactor}px`, textAlign: 'center' }}>{won}</td>
@@ -10465,14 +10470,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
                       // Render sanction letter only (for alignment)
                       const renderSanctionLetter = (sanctionType) => {
+                        // Official card colours, darkened to read on white
                         if (sanctionType === 'warning') {
-                          return <span style={{ color: '#eab308', fontWeight: 700 }}>W</span>
+                          return <span style={{ color: '#a16207', fontWeight: 700 }}>W</span>
                         } else if (sanctionType === 'penalty') {
-                          return <span style={{ color: '#ef4444', fontWeight: 700 }}>P</span>
+                          return <span style={{ color: '#dc2626', fontWeight: 700 }}>P</span>
                         } else if (sanctionType === 'expulsion') {
-                          return <span style={{ fontWeight: 700 }}><span style={{ color: '#eab308' }}>E</span><span style={{ color: '#ef4444' }}>x</span></span>
+                          return <span style={{ fontWeight: 700 }}><span style={{ color: '#a16207' }}>E</span><span style={{ color: '#dc2626' }}>x</span></span>
                         } else if (sanctionType === 'disqualification') {
-                          return <span style={{ color: '#ef4444', fontWeight: 700 }}>D</span>
+                          return <span style={{ color: '#dc2626', fontWeight: 700 }}>D</span>
                         }
                         return null
                       }
@@ -10491,23 +10497,19 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         return teamKey === 'team1' ? `${t1}:${t2}` : `${t2}:${t1}`
                       }
 
-                      const borderStyle = `${1 * scaleFactor}px solid rgba(255,255,255,0.2)`
+                      const borderStyle = `${1 * scaleFactor}px solid var(--ov-hairline)`
                       const tableFontSize = `${DESIGN_VMIN * 0.018 * scaleFactor}px`
                       const headerFontSize = `${DESIGN_VMIN * 0.016 * scaleFactor}px`
 
                       return (
                         <div style={{ marginTop: `${4 * scaleFactor}px`, width: '100%', display: 'flex', flexDirection: 'column', gap: `${2 * scaleFactor}px` }}>
                           {/* Sanctions Title */}
-                          <div style={{
+                          <div className="font-bold uppercase tracking-wider text-stone-800" style={{
                             fontSize: headerFontSize,
-                            color: '#ffffff',
-                            textAlign: 'center',
-                            fontWeight: 600,
-                            background: '#000000',
-                            padding: `${4 * scaleFactor}px`,
-                            borderRadius: `${3 * scaleFactor}px`
+                            padding: `${4 * scaleFactor}px 0`,
+                            borderBottom: '1.5px solid var(--ov-rule)'
                           }}>
-                            Sanctions
+                            {t('scoreboard.sanctions.title', 'Sanctions')}
                           </div>
                           {/* Team Sanctions */}
                           {(hasIR || hasDW || delayPenaltyCount > 0 || hasPlayerWarning) && (
@@ -10521,50 +10523,50 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               {hasPlayerWarning && (
                                 <div style={{
                                   fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
-                                  color: '#eab308',
+                                  color: 'var(--ov-warning-text)',
                                   textAlign: 'center',
                                   padding: `${2 * scaleFactor}px`,
-                                  background: 'rgba(234, 179, 8, 0.15)',
+                                  background: 'var(--ov-warning-soft)',
                                   borderRadius: `${3 * scaleFactor}px`
                                 }}>
-                                  Formal Warning
+                                  {t('scoreboard.sanctions.formalWarning', 'Formal warning')}
                                 </div>
                               )}
                               {hasIR && (
                                 <div style={{
                                   fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
-                                  color: '#9ca3af',
+                                  color: 'var(--ov-text-secondary)',
                                   textAlign: 'center',
                                   padding: `${2 * scaleFactor}px`,
-                                  background: 'rgba(156, 163, 175, 0.15)',
+                                  background: 'var(--ov-sunken-strong)',
                                   borderRadius: `${3 * scaleFactor}px`
                                 }}>
-                                  Improper Request
+                                  {t('scoreboard.sanctions.improperRequest', 'Improper request')}
                                 </div>
                               )}
                               {hasDW && (
                                 <div style={{
                                   fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
-                                  color: '#eab308',
+                                  color: 'var(--ov-warning-text)',
                                   textAlign: 'center',
                                   padding: `${2 * scaleFactor}px`,
-                                  background: 'rgba(234, 179, 8, 0.15)',
+                                  background: 'var(--ov-warning-soft)',
                                   borderRadius: `${3 * scaleFactor}px`
                                 }}>
-                                  Delay Warning
+                                  {t('scoreboard.sanctions.delayWarning', 'Delay warning')}
                                 </div>
                               )}
                               {delayPenaltyCount > 0 && (
                                 [...Array(delayPenaltyCount)].map((_, i) => (
                                   <div key={i} style={{
                                     fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
-                                    color: '#ef4444',
+                                    color: 'var(--ov-danger-text)',
                                     textAlign: 'center',
                                     padding: `${2 * scaleFactor}px`,
-                                    background: 'rgba(239, 68, 68, 0.15)',
+                                    background: 'var(--ov-danger-soft)',
                                     borderRadius: `${3 * scaleFactor}px`
                                   }}>
-                                    Delay Penalty
+                                    {t('scoreboard.sanctions.delayPenalty', 'Delay penalty')}
                                   </div>
                                 ))
                               )}
@@ -10572,7 +10574,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           )}
                           {/* Player Sanctions Table - 3 columns: SET, Player 1, Player 2 with flex layout */}
                           {playerSanctions.length > 0 && (
-                            <table style={{
+                            <table className="tabular-nums" style={{
                               width: '100%',
                               fontSize: tableFontSize,
                               borderCollapse: 'collapse',
@@ -10583,7 +10585,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             }}>
                               <thead>
                                 <tr>
-                                  <th style={{ width: '20%', padding: `${4 * scaleFactor}px`, textAlign: 'center', fontWeight: 600, fontSize: headerFontSize, borderRight: borderStyle, borderBottom: borderStyle }}>SET</th>
+                                  <th style={{ width: '20%', padding: `${4 * scaleFactor}px`, textAlign: 'center', fontWeight: 600, fontSize: headerFontSize, borderRight: borderStyle, borderBottom: borderStyle }}><span className="uppercase">{t('scoreboard.table.set', 'Set')}</span></th>
                                   <th style={{ width: '40%', padding: `${4 * scaleFactor}px`, textAlign: 'center', fontWeight: 600, fontSize: headerFontSize, borderRight: borderStyle, borderBottom: borderStyle }}>{player1?.number || '1'}</th>
                                   <th style={{ width: '40%', padding: `${4 * scaleFactor}px`, textAlign: 'center', fontWeight: 600, fontSize: headerFontSize, borderBottom: borderStyle }}>{player2?.number || '2'}</th>
                                 </tr>

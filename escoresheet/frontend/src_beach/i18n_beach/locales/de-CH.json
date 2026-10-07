@@ -538,7 +538,9 @@
       "warning": "Warnig",
       "penalty": "Straaf",
       "expulsion": "Usschluss",
-      "disqualification": "Disqualifikation"
+      "disqualification": "Disqualifikation",
+      "title": "Sanktione",
+      "formalWarning": "Formelli Verwarnig"
     },
     "labels": {
       "sets": "SÄTZ",
@@ -719,7 +721,20 @@
       "title": "Grät drähe",
       "body": "D Spiilerfassig funktioniert im Querformat. Drähj s Grät, zum wiiterzmache.",
       "tip": "Für di automatische Backups Chrome oder Edge uf emne Laptop oder Desktop-Computer bruuche."
-    }
+    },
+    "bmpRemaining": "Ballabdruck-Protokoll ({{count}} übrig)",
+    "coachSanction": "Trainer-Sanktion",
+    "coach": "Trainer",
+    "table": {
+      "set": "Satz",
+      "points": "Pünkt",
+      "wins": "Sieg"
+    },
+    "firstRefereeShort": "1SR",
+    "secondRefereeShort": "2SR",
+    "set3CoinToss": "Usloosig 3. Satz",
+    "wonToss": "Usloosig gwunne",
+    "betweenSetsChooses": "{{team}} wählt (Usloosig verlore)"
   },
   "settings": {
     "title": "Iistellige",

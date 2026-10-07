@@ -538,7 +538,9 @@
       "warning": "Avvertimento",
       "penalty": "Penalità",
       "expulsion": "Espulsione",
-      "disqualification": "Squalifica"
+      "disqualification": "Squalifica",
+      "title": "Sanzioni",
+      "formalWarning": "Avvertimento formale"
     },
     "labels": {
       "sets": "SET",
@@ -719,7 +721,20 @@
       "title": "Ruota il dispositivo",
       "body": "La schermata di refertazione funziona in orizzontale. Ruota il dispositivo per continuare.",
       "tip": "Per i backup automatici, usa Chrome o Edge su un portatile o un computer fisso."
-    }
+    },
+    "bmpRemaining": "Protocollo segno della palla ({{count}} rimasti)",
+    "coachSanction": "Sanzione all’allenatore",
+    "coach": "Allenatore",
+    "table": {
+      "set": "Set",
+      "points": "Punti",
+      "wins": "Vinti"
+    },
+    "firstRefereeShort": "1A",
+    "secondRefereeShort": "2A",
+    "set3CoinToss": "Sorteggio del 3° set",
+    "wonToss": "Ha vinto il sorteggio",
+    "betweenSetsChooses": "{{team}} sceglie (ha perso il sorteggio)"
   },
   "settings": {
     "title": "Impostazioni",
