@@ -46,7 +46,7 @@ describe('AlertContext_beach', () => {
       expect(screen.getByText('Test message')).toBeInTheDocument()
     })
 
-    it('should display OK button to close', () => {
+    it('should display a Close button (a verb, not OK)', () => {
       function TestComponent() {
         const { showAlert } = useAlert()
         return <button onClick={() => showAlert('Test message')}>Show</button>
@@ -59,10 +59,10 @@ describe('AlertContext_beach', () => {
       )
 
       fireEvent.click(screen.getByText('Show'))
-      expect(screen.getByText('OK')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument()
     })
 
-    it('should close alert when OK is clicked', () => {
+    it('should close alert when Close is clicked', () => {
       function TestComponent() {
         const { showAlert } = useAlert()
         return <button onClick={() => showAlert('Test message')}>Show</button>
@@ -77,7 +77,7 @@ describe('AlertContext_beach', () => {
       fireEvent.click(screen.getByText('Show'))
       expect(screen.getByText('Test message')).toBeInTheDocument()
 
-      fireEvent.click(screen.getByText('OK'))
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }))
       expect(screen.queryByText('Test message')).not.toBeInTheDocument()
     })
   })
@@ -97,7 +97,6 @@ describe('AlertContext_beach', () => {
 
       fireEvent.click(screen.getByText('Show'))
       expect(screen.getByText('Error')).toBeInTheDocument()
-      expect(screen.getByText('!')).toBeInTheDocument()
     })
 
     it('should show Success label for success type', () => {
@@ -193,8 +192,43 @@ describe('AlertContext_beach', () => {
       expect(screen.getByText('First alert')).toBeInTheDocument()
 
       // Dismiss first alert
-      fireEvent.click(screen.getByText('OK'))
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }))
       expect(screen.getByText('Second alert')).toBeInTheDocument()
+    })
+  })
+
+  describe('the volleyui dialog', () => {
+    it('is a named light alertdialog above the scoring screen, with no legacy dark styling', () => {
+      function TestComponent() {
+        const { showAlert } = useAlert()
+        return <button onClick={() => showAlert('Saved locally', 'warning')}>Show</button>
+      }
+      render(
+        <AlertProvider>
+          <TestComponent />
+        </AlertProvider>
+      )
+      fireEvent.click(screen.getByText('Show'))
+      const dialog = screen.getByRole('alertdialog', { name: 'Warning' })
+      expect(dialog).toHaveAccessibleDescription('Saved locally')
+      expect(dialog.className).toContain('bg-white')
+      expect(dialog.getAttribute('style') || '').not.toContain('#111827')
+      expect(screen.queryByText('OK')).toBeNull()
+    })
+
+    it('closes on Escape', () => {
+      function TestComponent() {
+        const { showAlert } = useAlert()
+        return <button onClick={() => showAlert('Esc me')}>Show</button>
+      }
+      render(
+        <AlertProvider>
+          <TestComponent />
+        </AlertProvider>
+      )
+      fireEvent.click(screen.getByText('Show'))
+      fireEvent.keyDown(screen.getByRole('alertdialog'), { key: 'Escape' })
+      expect(screen.queryByText('Esc me')).toBeNull()
     })
   })
 })
