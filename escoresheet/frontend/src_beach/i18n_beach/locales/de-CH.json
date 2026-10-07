@@ -1309,7 +1309,7 @@
     "invalidUrl": "Ungültigi Server-URL"
   },
   "livescore": {
-    "title": "Live-Ergebnis",
+    "title": "Live-Resultat",
     "loadingGames": "Verfüegbari Spiil werdet glade...",
     "selectGame": "Wähled Sie es Spiil us, um s Live-Ergebnis aazeige",
     "game": "Spiil {{number}}",
@@ -1320,7 +1320,7 @@
     "backToGames": "Zrugg zu de Spiil",
     "switchSides": "Siite wächsle",
     "servingTeam": "Ufschlagteam",
-    "set": "SATZ",
+    "set": "Satz",
     "changeGame": "Spiil wächsle",
     "enterDifferentGame": "Anderi Spiilnummere iigäh",
     "gameNotFound": "Spiil nöd gfunde oder nöd im Gang",
@@ -1329,7 +1329,7 @@
     "to": "AZ",
     "bmp": "BMP",
     "server": "Ufschlag",
-    "final": "ENDRESULTAT",
+    "final": "Endresultat",
     "sets": "SÄTZ",
     "errors": {
       "enterGameNumber": "Bitte gänd Sie e Spiilnummere ii",
@@ -1337,7 +1337,9 @@
       "failedToFindMatch": "Spiil hät nöd chönne gfunde werde. Stelled Sie sicher, dass de HaupteScoresheet lauft.",
       "failedToLoadData": "Date händ nöd chönne glade werde",
       "failedToLoadDataConnection": "Date händ nöd chönne glade werde. Stelled Sie sicher, dass de HaupteScoresheet lauft."
-    }
+    },
+    "gameShort": "Spiil",
+    "setsWon": "Sätz {{left}}–{{right}}"
   },
   "scoresheetApp": {
     "loadingScoresheet": "Spiilprotokoll wird glade...",

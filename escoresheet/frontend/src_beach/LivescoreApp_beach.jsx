@@ -5,7 +5,16 @@ import { apiFrom } from './lib_beach/apiClient_beach'
 import { isBackendAvailable } from './utils_beach/backendConfig_beach'
 import UpdateBanner from './components_beach/UpdateBanner_beach'
 import DashboardHeader from './components_beach/DashboardHeader_beach'
-import { Smartphone } from './components_beach/Icons_beach'
+import { Radio, RefreshCw } from 'lucide-react'
+import { Button } from './ui/volleyui/Button.jsx'
+import { Card } from './ui/volleyui/Card.jsx'
+import { FormError } from './ui/volleyui/Field.jsx'
+import { EmptyState } from './ui/volleyui/EmptyState.jsx'
+import { Row, RowList, DateRail } from './ui/volleyui/Row.jsx'
+import { Chip } from './ui/volleyui/Chip.jsx'
+import { StatusPill } from './ui/volleyui/StatusPill.jsx'
+import { SkeletonRows } from './ui/volleyui/Skeleton.jsx'
+import { NarrowScreenOverlay } from './components_beach/dashboards/EntryKit_beach.jsx'
 
 const ballImage = '/beachball.png'
 
@@ -148,30 +157,15 @@ export default function LivescoreApp() {
   }
 
   // Narrow screen overlay
-  const narrowOverlay = (viewportWidth < 357 || viewportHeight < 650) && (
-    <div className="livescore-narrow-overlay">
-      <div className="livescore-narrow-icon"><Smartphone /></div>
-      <h2 className="livescore-narrow-title">
-        {t('common.screenTooSmall', 'Screen too Small')}
-      </h2>
-      <p className="livescore-narrow-msg">
-        {t('common.screenTooSmallMessage', 'This app requires a minimum screen width of 357px. Please use a device with a wider screen or rotate your device to landscape mode.')}
-      </p>
-      <button
-        className="livescore-fullscreen-btn"
-        onClick={() => {
-          if (document.documentElement.requestFullscreen) {
-            document.documentElement.requestFullscreen().catch(() => {})
-          }
-        }}
-      >
-        <span>⛶</span>
-        <span>{t('common.tryFullscreen', 'Try Fullscreen')}</span>
-      </button>
-      <p className="livescore-fullscreen-hint">
-        {t('common.fullscreenHint', 'Fullscreen may provide more space by hiding browser UI.')}
-      </p>
-    </div>
+  const narrowOverlay = (viewportWidth < 357 || viewportHeight < 650) && <NarrowScreenOverlay t={t} />
+
+  // A team colour on the light page: a hairline keeps white visible
+  const colorBar = (color) => (
+    <div
+      aria-hidden="true"
+      className="mx-auto mb-3 h-1.5 w-3/5 rounded-full"
+      style={{ backgroundColor: color, boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)' }}
+    />
   )
 
   // Fullscreen view for selected game
@@ -186,112 +180,97 @@ export default function LivescoreApp() {
     const league = selectedGameData.league || ''
     const gender = selectedGameData.gender || ''
 
+    const serveCol = (side) => (
+      <div className="flex w-12 flex-col items-center justify-center gap-1 sm:w-16">
+        {servingTeam === side && (
+          <>
+            <img src={ballImage} alt={t('livescore.servingTeam', 'Serving team')} className="h-10 w-10 sm:h-12 sm:w-12" />
+            {serverNumber && <span className="text-base font-bold tabular-nums text-emerald-700">#{serverNumber}</span>}
+          </>
+        )}
+      </div>
+    )
+    const teamCol = (color, score, name) => (
+      <div className="min-w-0 text-center">
+        {colorBar(color)}
+        <div className="font-bold leading-none tabular-nums text-stone-900" style={{ fontSize: 'clamp(60px, 18vw, 150px)' }}>{score}</div>
+        <div className="mt-2 break-words font-medium text-stone-600" style={{ fontSize: 'clamp(14px, 3vw, 24px)' }}>{name}</div>
+      </div>
+    )
+    const setBox = (n) => (
+      <div className="rounded-xl border border-stone-200 bg-white px-4 py-2 font-bold leading-tight tabular-nums text-stone-900 shadow-card" style={{ fontSize: 'clamp(32px, 10vw, 80px)' }}>
+        {n}
+      </div>
+    )
+    const info = (label, value) => (
+      <div className="flex items-baseline gap-1.5">
+        <span className="font-semibold text-stone-500">{label}</span>
+        <span className="font-bold tabular-nums text-stone-900">{value}</span>
+      </div>
+    )
+
     return (
-      <div className="livescore-fullscreen">
+      <div className="flex min-h-screen flex-col bg-gradient-to-b from-stone-50 to-stone-100 text-stone-800">
         {narrowOverlay}
 
         <DashboardHeader
-          title={gameN ? `Game ${gameN}` : t('livescore.title', 'Live Score')}
-          subtitle={[league, gender].filter(Boolean).join(' \u2022 ') || null}
+          title={gameN ? t('livescore.game', { number: gameN }) : t('livescore.title', 'Live score')}
+          subtitle={[league, gender].filter(Boolean).join(' · ') || null}
           onBack={() => setSelectedGame(null)}
           backLabel={t('common.back', 'Back')}
           showOptionsMenu={false}
         />
 
         {/* Score Display */}
-        <div className="livescore-score-area">
-          <div className={`livescore-score-main ${isMatchEnded ? 'livescore-score-main-ended' : 'livescore-score-main-live'}`}>
-            {/* Left Ball + Server Number */}
-            {!isMatchEnded && (
-              <div className="livescore-serve-col">
-                {servingTeam === 'left' && (
-                  <>
-                    <img src={ballImage} alt="Serve" className="livescore-serve-img" />
-                    {serverNumber && <span className="livescore-serve-number">#{serverNumber}</span>}
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* Left Score + Name */}
-            <div className="livescore-team-col">
-              <div className="livescore-team-color-bar" style={{ backgroundColor: leftColor }} />
-              <div className="livescore-point-score">{leftScore}</div>
-              <div className="livescore-team-name">{leftName}</div>
-            </div>
-
-            {/* Separator */}
-            <div className="livescore-separator">:</div>
-
-            {/* Right Score + Name */}
-            <div className="livescore-team-col">
-              <div className="livescore-team-color-bar" style={{ backgroundColor: rightColor }} />
-              <div className="livescore-point-score">{rightScore}</div>
-              <div className="livescore-team-name">{rightName}</div>
-            </div>
-
-            {/* Right Ball + Server Number */}
-            {!isMatchEnded && (
-              <div className="livescore-serve-col">
-                {servingTeam === 'right' && (
-                  <>
-                    <img src={ballImage} alt="Serve" className="livescore-serve-img" />
-                    {serverNumber && <span className="livescore-serve-number">#{serverNumber}</span>}
-                  </>
-                )}
-              </div>
-            )}
+        <div className="ov-kit flex flex-1 flex-col items-center justify-center p-5">
+          <div
+            className="grid w-full max-w-[800px] items-center gap-2.5"
+            style={{ gridTemplateColumns: isMatchEnded ? 'minmax(0, 1fr) auto minmax(0, 1fr)' : 'auto minmax(0, 1fr) auto minmax(0, 1fr) auto' }}
+          >
+            {!isMatchEnded && serveCol('left')}
+            {teamCol(leftColor, leftScore, leftName)}
+            <div aria-hidden="true" className="leading-none text-stone-300" style={{ fontSize: 'clamp(40px, 12vw, 100px)' }}>:</div>
+            {teamCol(rightColor, rightScore, rightName)}
+            {!isMatchEnded && serveCol('right')}
           </div>
 
           {/* Set Score or Final */}
-          <div className="livescore-set-area">
+          <div className="mt-10 flex flex-col items-center gap-3">
             {isMatchEnded ? (
               <>
-                <div className="livescore-final-badge">
-                  {t('livescore.final', 'FINAL')}
+                <div className="font-bold text-emerald-700" style={{ fontSize: 'clamp(24px, 6vw, 48px)' }}>
+                  {t('livescore.final', 'Final')}
                 </div>
                 {setResults.length > 0 && (
-                  <div className="livescore-set-results">
+                  <div className="flex flex-wrap justify-center gap-2">
                     {setResults.map((s) => (
-                      <div key={s.set} className="livescore-set-result-chip">
-                        {s.left}-{s.right}
+                      <div key={s.set} className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-lg font-semibold tabular-nums text-stone-700">
+                        {s.left}–{s.right}
                       </div>
                     ))}
                   </div>
                 )}
               </>
             ) : (
-              <div className="livescore-set-scores">
-                <div className="livescore-set-score-num">{leftSets}</div>
-                <div className="livescore-set-label">
-                  <div>{t('livescore.set', 'SET')}</div>
-                  <div>{currentSet}</div>
+              <div className="flex items-center gap-5">
+                {setBox(leftSets)}
+                <div className="text-center font-bold leading-tight text-stone-900" style={{ fontSize: 'clamp(24px, 6vw, 48px)' }}>
+                  <div>{t('livescore.set', 'Set')}</div>
+                  <div className="tabular-nums">{currentSet}</div>
                 </div>
-                <div className="livescore-set-score-num">{rightSets}</div>
+                {setBox(rightSets)}
               </div>
             )}
           </div>
 
           {/* Beach volleyball info bar: TOs + BMPs */}
           {!isMatchEnded && (
-            <div className="livescore-info-bar">
-              <div className="livescore-info-item">
-                <span className="livescore-info-label">{t('livescore.to', 'TO')}</span>
-                <span className="livescore-info-value">{leftTimeouts}/1</span>
-              </div>
-              <div className="livescore-info-item">
-                <span className="livescore-info-label">{t('livescore.bmp', 'BMP')}</span>
-                <span className="livescore-info-value">{leftChallenges}/2</span>
-              </div>
-              <span className="livescore-info-label">|</span>
-              <div className="livescore-info-item">
-                <span className="livescore-info-label">{t('livescore.bmp', 'BMP')}</span>
-                <span className="livescore-info-value">{rightChallenges}/2</span>
-              </div>
-              <div className="livescore-info-item">
-                <span className="livescore-info-label">{t('livescore.to', 'TO')}</span>
-                <span className="livescore-info-value">{rightTimeouts}/1</span>
-              </div>
+            <div className="mt-8 flex items-center gap-4 rounded-xl border border-stone-200/70 bg-white px-5 py-2.5 text-lg shadow-card sm:gap-6 sm:text-xl">
+              {info(t('livescore.to', 'TO'), `${leftTimeouts}/1`)}
+              {info(t('livescore.bmp', 'BMP'), `${leftChallenges}/2`)}
+              <span aria-hidden="true" className="h-6 w-px bg-stone-200" />
+              {info(t('livescore.bmp', 'BMP'), `${rightChallenges}/2`)}
+              {info(t('livescore.to', 'TO'), `${rightTimeouts}/1`)}
             </div>
           )}
         </div>
@@ -301,13 +280,13 @@ export default function LivescoreApp() {
 
   // List view - show all games
   return (
-    <div className="livescore-container">
+    <div className="min-h-screen bg-gradient-to-b from-stone-50 to-stone-100 text-stone-800">
       {narrowOverlay}
 
       <UpdateBanner />
 
       <DashboardHeader
-        title={t('livescore.title', 'Live Scores')}
+        title={t('livescore.title', 'Live scores')}
         subtitle={t('livescore.gamesLive', { count: liveGames.length })}
         onLoadGames={fetchLiveGames}
         loadingMatches={loading}
@@ -315,87 +294,97 @@ export default function LivescoreApp() {
         showOptionsMenu={false}
       />
 
-      <div className="livescore-content">
+      <div className="ov-kit px-4 py-6">
         {loading ? (
-          <div className="livescore-loading">
-            {t('common.loading', 'Loading...')}
-          </div>
+          <Card pad="list" className="mx-auto max-w-3xl">
+            <span className="sr-only">{t('common.loading', 'Loading...')}</span>
+            <SkeletonRows rows={3} />
+          </Card>
         ) : error ? (
-          <div className="livescore-error">
-            <div className="livescore-error-msg">{error}</div>
-            <button className="livescore-retry-btn" onClick={fetchLiveGames}>
+          <Card className="mx-auto max-w-md text-center">
+            <FormError size="md">{error}</FormError>
+            <Button variant="secondary" size="xl" icon={RefreshCw} className="mt-4" onClick={fetchLiveGames}>
               {t('common.retry', 'Retry')}
-            </button>
-          </div>
+            </Button>
+          </Card>
         ) : liveGames.length === 0 ? (
-          <div className="livescore-empty">
-            <img src={ballImage} alt="" className="livescore-empty-img" />
-            <div>{t('livescore.noActiveGame', 'No live games')}</div>
-          </div>
+          <Card className="mx-auto max-w-md">
+            <EmptyState icon={Radio}>{t('livescore.noActiveGame', 'No live games')}</EmptyState>
+          </Card>
         ) : (
-          <div className="livescore-game-list">
-            {liveGames.map((game) => {
-              const {
-                leftName, rightName, leftScore, rightScore, leftSets, rightSets,
-                leftTimeouts, rightTimeouts, leftChallenges, rightChallenges,
-                isMatchEnded, servingTeam
-              } = getLeftRight(game)
-              const gameN = game.game_n || ''
-              const league = game.league || ''
-              const rawGender = game.gender || ''
-              const genderSymbol = rawGender.toLowerCase().startsWith('m') ? '\u2642'
-                : rawGender.toLowerCase().startsWith('f') || rawGender.toLowerCase().startsWith('w') ? '\u2640'
-                : rawGender
+          <Card pad="list" className="mx-auto max-w-3xl">
+            <RowList soft>
+              {liveGames.map((game) => {
+                const {
+                  leftName, rightName, leftScore, rightScore, leftSets, rightSets,
+                  leftColor, rightColor, leftTimeouts, rightTimeouts, leftChallenges, rightChallenges,
+                  isMatchEnded, servingTeam, setResults
+                } = getLeftRight(game)
+                const gameN = game.game_n || ''
+                const league = game.league || ''
+                const rawGender = game.gender || ''
+                const genderSymbol = rawGender.toLowerCase().startsWith('m') ? '\u2642'
+                  : rawGender.toLowerCase().startsWith('f') || rawGender.toLowerCase().startsWith('w') ? '\u2640'
+                  : rawGender
+                const tone = isMatchEnded ? 'emerald' : 'red'
+                const currentSet = game.current_set || 1
+                const serveBall = (
+                  <img src={ballImage} alt={t('livescore.servingTeam', 'Serving team')} className="inline-block h-5 w-5 shrink-0" />
+                )
+                const swatch = (color) => (
+                  <span aria-hidden="true" className="inline-block h-3 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: color, boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.15)' }} />
+                )
 
-              return (
-                <button
-                  key={game.match_id}
-                  className="livescore-game-card"
-                  onClick={() => setSelectedGame(game.match_id)}
-                >
-                  {(gameN || league || genderSymbol) && (
-                    <div className="livescore-game-meta">
-                      {gameN && <span className="livescore-game-meta-accent">Game {gameN}</span>}
-                      {gameN && (league || genderSymbol) && ' \u2022 '}
-                      {[league, genderSymbol].filter(Boolean).join(' \u2022 ')}
-                    </div>
-                  )}
-
-                  <div className="livescore-game-score-row">
-                    <div className="livescore-game-team livescore-game-team-left">
-                      {!isMatchEnded && servingTeam === 'left' && (
-                        <img src={ballImage} alt="" className="livescore-serve-img-sm" />
-                      )}
-                      {leftName}
-                    </div>
-                    <span className="livescore-game-score-num livescore-game-score-left">{leftScore}</span>
-                    <span className="livescore-game-score-sep">:</span>
-                    <span className="livescore-game-score-num livescore-game-score-right">{rightScore}</span>
-                    <div className="livescore-game-team livescore-game-team-right">
-                      {rightName}
-                      {!isMatchEnded && servingTeam === 'right' && (
-                        <img src={ballImage} alt="" className="livescore-serve-img-sm" />
-                      )}
-                    </div>
-                  </div>
-
-                  <div className={`livescore-game-status ${isMatchEnded ? 'livescore-game-status-final' : ''}`}>
-                    {isMatchEnded
-                      ? t('livescore.final', 'FINAL')
-                      : `Set ${game.current_set || 1} \u2022 Sets: ${leftSets} - ${rightSets}`
+                return (
+                  <Row
+                    key={game.match_id}
+                    tone={tone}
+                    onOpen={() => setSelectedGame(game.match_id)}
+                    label={[
+                      `${leftName} ${leftScore} – ${rightScore} ${rightName}`,
+                      isMatchEnded ? t('livescore.final', 'Final') : `${t('livescore.set', 'Set')} ${currentSet}`,
+                      gameN ? t('livescore.game', { number: gameN }) : '',
+                    ].filter(Boolean).join(', ')}
+                    className="min-h-11"
+                    leading={
+                      <DateRail
+                        tone={tone}
+                        weekday={gameN ? t('livescore.gameShort', 'Game') : undefined}
+                        date={gameN || '–'}
+                        time={genderSymbol || undefined}
+                        league={league || undefined}
+                      />
                     }
-                  </div>
-
-                  {!isMatchEnded && (
-                    <div className="livescore-game-info-row">
-                      <span>TO: {leftTimeouts}-{rightTimeouts}</span>
-                      <span>BMP: {leftChallenges}-{rightChallenges}</span>
-                    </div>
-                  )}
-                </button>
-              )
-            })}
-          </div>
+                    title={
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 text-left">
+                        <p className="flex min-w-0 items-center gap-1.5 text-sm font-semibold leading-snug break-words text-stone-900 sm:text-[15px]">
+                          {swatch(leftColor)}
+                          <span className="min-w-0">{leftName}</span>
+                          {!isMatchEnded && servingTeam === 'left' && serveBall}
+                        </p>
+                        <span className="text-right text-[28px] font-bold leading-tight tabular-nums text-stone-900 sm:text-3xl">{leftScore}</span>
+                        <p className="flex min-w-0 items-center gap-1.5 text-sm font-semibold leading-snug break-words text-stone-900 sm:text-[15px]">
+                          {swatch(rightColor)}
+                          <span className="min-w-0">{rightName}</span>
+                          {!isMatchEnded && servingTeam === 'right' && serveBall}
+                        </p>
+                        <span className="text-right text-[28px] font-bold leading-tight tabular-nums text-stone-900 sm:text-3xl">{rightScore}</span>
+                      </div>
+                    }
+                    meta={!isMatchEnded
+                      ? <span className="tabular-nums">{t('livescore.setsWon', { left: leftSets, right: rightSets })} · {t('livescore.to', 'TO')} {leftTimeouts}–{rightTimeouts} · {t('livescore.bmp', 'BMP')} {leftChallenges}–{rightChallenges}</span>
+                      : undefined}
+                    chips={isMatchEnded && setResults.length > 0
+                      ? setResults.map((r) => <Chip key={r.set}><span className="tabular-nums">{r.left}–{r.right}</span></Chip>)
+                      : undefined}
+                    status={isMatchEnded
+                      ? <StatusPill tone="done">{t('livescore.final', 'Final')}</StatusPill>
+                      : <StatusPill tone="brand"><span className="tabular-nums">{`${t('livescore.set', 'Set')} ${currentSet}`}</span></StatusPill>}
+                  />
+                )
+              })}
+            </RowList>
+          </Card>
         )}
       </div>
     </div>

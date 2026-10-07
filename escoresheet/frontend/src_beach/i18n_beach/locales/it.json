@@ -1309,7 +1309,7 @@
     "invalidUrl": "URL del server non valido"
   },
   "livescore": {
-    "title": "Punteggio Live",
+    "title": "Punteggi live",
     "loadingGames": "Caricamento partite disponibili...",
     "selectGame": "Seleziona una partita per vedere il punteggio live",
     "game": "Partita {{number}}",
@@ -1320,7 +1320,7 @@
     "backToGames": "Torna alle partite",
     "switchSides": "Inverti lati",
     "servingTeam": "Squadra al servizio",
-    "set": "SET",
+    "set": "Set",
     "changeGame": "Cambia partita",
     "enterDifferentGame": "Inserisci un altro numero di partita",
     "gameNotFound": "Partita non trovata o non in corso",
@@ -1329,7 +1329,7 @@
     "to": "TO",
     "bmp": "BMP",
     "server": "Battitore",
-    "final": "FINALE",
+    "final": "Finale",
     "sets": "SET",
     "errors": {
       "enterGameNumber": "Inserisci un numero di partita",
@@ -1337,7 +1337,9 @@
       "failedToFindMatch": "Impossibile trovare la partita. Assicurati che l'eScoresheet principale sia in esecuzione.",
       "failedToLoadData": "Impossibile caricare i dati",
       "failedToLoadDataConnection": "Impossibile caricare i dati. Assicurati che l'eScoresheet principale sia in esecuzione."
-    }
+    },
+    "gameShort": "Partita",
+    "setsWon": "Set {{left}}–{{right}}"
   },
   "scoresheetApp": {
     "loadingScoresheet": "Caricamento referto...",

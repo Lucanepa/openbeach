@@ -1320,7 +1320,7 @@
     "backToGames": "Retour aux matchs",
     "switchSides": "Inverser les côtés",
     "servingTeam": "Équipe au service",
-    "set": "SET",
+    "set": "Set",
     "changeGame": "Changer de match",
     "enterDifferentGame": "Entrer un autre numéro de match",
     "gameNotFound": "Match non trouvé ou pas en cours",
@@ -1329,7 +1329,7 @@
     "to": "TM",
     "bmp": "BMP",
     "server": "Serveur",
-    "final": "FINAL",
+    "final": "Final",
     "sets": "SETS",
     "errors": {
       "enterGameNumber": "Veuillez entrer un numéro de match",
@@ -1337,7 +1337,9 @@
       "failedToFindMatch": "Impossible de trouver le match. Vérifiez que la eScoresheet principale est en cours.",
       "failedToLoadData": "Échec du chargement des données",
       "failedToLoadDataConnection": "Échec du chargement des données. Vérifiez que la eScoresheet principale est en cours."
-    }
+    },
+    "gameShort": "Match",
+    "setsWon": "Sets {{left}}–{{right}}"
   },
   "scoresheetApp": {
     "loadingScoresheet": "Chargement de la feuille de match...",

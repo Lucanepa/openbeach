@@ -1310,7 +1310,7 @@
     "invalidUrl": "Invalid server URL"
   },
   "livescore": {
-    "title": "Live Scoring",
+    "title": "Live scores",
     "loadingGames": "Loading available games...",
     "selectGame": "Select a game to view live scores",
     "game": "Game {{number}}",
@@ -1321,7 +1321,7 @@
     "backToGames": "Back to Games",
     "switchSides": "Switch Sides",
     "servingTeam": "Serving team",
-    "set": "SET",
+    "set": "Set",
     "changeGame": "Change Game",
     "enterDifferentGame": "Enter Different Game Number",
     "gameNotFound": "Game not in progress or not existing",
@@ -1330,7 +1330,7 @@
     "to": "TO",
     "bmp": "BMP",
     "server": "Server",
-    "final": "FINAL",
+    "final": "Final",
     "sets": "SETS",
     "errors": {
       "enterGameNumber": "Please enter a game number",
@@ -1338,7 +1338,9 @@
       "failedToFindMatch": "Failed to find match. Make sure the main scoresheet is running.",
       "failedToLoadData": "Failed to load match data",
       "failedToLoadDataConnection": "Failed to load match data. Make sure the main scoresheet is running."
-    }
+    },
+    "gameShort": "Game",
+    "setsWon": "Sets {{left}}–{{right}}"
   },
   "scoresheetApp": {
     "loadingScoresheet": "Loading scoresheet...",

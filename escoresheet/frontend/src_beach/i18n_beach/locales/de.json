@@ -1309,7 +1309,7 @@
     "invalidUrl": "Ungültige Server-URL"
   },
   "livescore": {
-    "title": "Live-Ergebnis",
+    "title": "Live-Ergebnisse",
     "loadingGames": "Verfügbare Spiele werden geladen...",
     "selectGame": "Wählen Sie ein Spiel aus, um das Live-Ergebnis anzuzeigen",
     "game": "Spiel {{number}}",
@@ -1320,7 +1320,7 @@
     "backToGames": "Zurück zu den Spielen",
     "switchSides": "Seiten wechseln",
     "servingTeam": "Aufschlagteam",
-    "set": "SATZ",
+    "set": "Satz",
     "changeGame": "Spiel wechseln",
     "enterDifferentGame": "Andere Spielnummer eingeben",
     "gameNotFound": "Spiel nicht gefunden oder nicht im Gange",
@@ -1329,7 +1329,7 @@
     "to": "AZ",
     "bmp": "BMP",
     "server": "Aufschlag",
-    "final": "ENDERGEBNIS",
+    "final": "Endergebnis",
     "sets": "SÄTZE",
     "errors": {
       "enterGameNumber": "Bitte geben Sie eine Spielnummer ein",
@@ -1337,7 +1337,9 @@
       "failedToFindMatch": "Spiel konnte nicht gefunden werden. Stellen Sie sicher, dass der Haupt-eMatchblatt läuft.",
       "failedToLoadData": "Daten konnten nicht geladen werden",
       "failedToLoadDataConnection": "Daten konnten nicht geladen werden. Stellen Sie sicher, dass der Haupt-eMatchblatt läuft."
-    }
+    },
+    "gameShort": "Spiel",
+    "setsWon": "Sätze {{left}}–{{right}}"
   },
   "scoresheetApp": {
     "loadingScoresheet": "Spielprotokoll wird geladen...",
