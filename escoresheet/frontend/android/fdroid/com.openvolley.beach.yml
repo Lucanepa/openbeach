@@ -7,6 +7,8 @@
 # The owner-signed APK must be on the GitHub release android-v<versionName>
 # as com.openvolley.beach_<versionCode>.apk (Binaries below), so F-Droid can
 # check its own build against it byte for byte (ANDROID.md).
+# No 2.0.0 build: its stylesheet order was not reproducible, so F-Droid's
+# rebuild would not match the signed APK (ANDROID.md, stable-css-order).
 Categories:
   - Sports & Health
 License: GPL-3.0-or-later
@@ -23,30 +25,6 @@ Binaries:
   https://github.com/Lucanepa/openbeach/releases/download/android-v%v/com.openvolley.beach_%c.apk
 
 Builds:
-  - versionName: 2.0.0
-    versionCode: 20000000
-    commit: 16de62e126de6080fed99ac7a41c1f9cace8c58c
-    subdir: escoresheet/frontend/android/app
-    sudo:
-      - curl -Lo node.tar.xz https://nodejs.org/dist/v22.23.3/node-v22.23.3-linux-x64.tar.xz
-      - echo "df450af89261115ef9f9e3830c3eeb2cc9213b63c720b1af623cb5dcbe2e02de node.tar.xz"
-        | sha256sum -c -
-      - tar xJf node.tar.xz --strip-components=1 -C /usr/local/
-    init:
-      - cd ../..
-      - npm ci --ignore-scripts
-    gradle:
-      - yes
-    prebuild:
-      - cd ../..
-      - CAPACITOR=true VITE_BACKEND_URL=https://backend.openvolley.app npx vite build
-        --outDir dist-capacitor --emptyOutDir
-      - npx cap sync android
-    scanignore:
-      - escoresheet/frontend/node_modules/pdfjs-dist/iccs
-    scandelete:
-      - escoresheet/frontend/node_modules
-
   - versionName: 2.0.1
     versionCode: 20000010
     commit: TODO
