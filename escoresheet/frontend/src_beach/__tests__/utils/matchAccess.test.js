@@ -92,6 +92,10 @@ describe('validatePinSupabase (POST /api/match/validate-connection-pin, sport be
     expect(await validatePinSupabase('000000', 'referee', { fetchImpl: down })).toMatchObject({ success: false, unreachable: true })
     const offline = vi.fn(async () => { throw new TypeError('Failed to fetch') })
     expect(await validatePinSupabase('000000', 'referee', { fetchImpl: offline })).toMatchObject({ success: false, unreachable: true })
+    // a venue tablet's "cloud" is the LAN relay, which has no such endpoint
+    // (the Tauri relay answers 405 with an empty body): no answer either
+    const relay = vi.fn(async () => new Response(null, { status: 405 }))
+    expect(await validatePinSupabase('000000', 'referee', { fetchImpl: relay })).toMatchObject({ success: false, unreachable: true, status: 405 })
 
     const indoor = vi.fn(async () => json({ success: true, token: 'x', match: { id: 'match_in', gameNumber: 3 } }))
     const r = await validatePinSupabase('222222', 'referee', { fetchImpl: indoor })

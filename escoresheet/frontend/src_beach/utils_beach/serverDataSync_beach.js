@@ -1253,7 +1253,11 @@ export async function validatePinSupabase(pin, type = 'referee', { timeoutMs = 3
     try {
       result = await response.json()
     } catch {
-      return { success: false, error: 'Validation failed', status: response.status, ...(response.status >= 500 ? { unreachable: true } : {}) }
+      // No JSON is no answer about the PIN: the backend always answers JSON.
+      // A venue tablet's "cloud" is the LAN relay it was served from, which
+      // has no such endpoint (the Tauri relay: 405, empty body); the relay's
+      // own validate-pin must be asked then.
+      return { success: false, error: 'Validation failed', status: response.status, unreachable: true }
     }
 
     if (!response.ok || !result?.success || !result.match) {
