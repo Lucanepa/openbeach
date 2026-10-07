@@ -1,6 +1,12 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import Modal from './Modal_beach'
+import { Search } from 'lucide-react'
+import { Modal as KitModal } from '../ui/volleyui/Modal.jsx'
+import { Input } from '../ui/volleyui/Input.jsx'
+import { Select } from '../ui/volleyui/Select.jsx'
+import { NOTICE } from '../ui/volleyui/tones.js'
+import { FOCUS_RING_INSET } from '../ui/volleyui/Button.jsx'
+import { cn } from '../ui/volleyui/cn.js'
 import { useSavedTeams } from '../hooks_beach/useSavedTeams_beach'
 import { normalizeName } from '../utils_beach/savedTeams_beach'
 
@@ -15,8 +21,6 @@ export function formatFetchedAt(iso) {
   const p = n => String(n).padStart(2, '0')
   return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
-
-const controlStyle = { width: '100%', minHeight: 40, boxSizing: 'border-box' }
 
 /**
  * "Load saved team": pick a saved beach team from the offline cache. The
@@ -53,90 +57,101 @@ function PickerBody({ onClose, onPick, userId, access, defaultCompetitionId, sid
       .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
   }, [teams, competitionId, q])
 
+  // volleyui: a bottom sheet on a phone, a centred dialog from sm (above the
+  // legacy header, like the legacy modal it replaces); the competition
+  // filter and the search as kit fields, the teams as flat rows on hairlines
+  // with the player count as a state pill. Same filters, same pick.
   return (
-    <Modal open title={t('savedTeams.pickerTitle')} onClose={onClose} width={560}>
-      <div data-side={side || undefined} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {isOffline() && meta?.fetchedAt && (
-          <div
-            data-testid="saved-teams-offline"
-            role="status"
-            style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(14,165,233,0.12)', border: '1px solid rgba(14,165,233,0.4)', fontSize: 14 }}
+    <div className="ov-kit" style={{ position: 'relative', zIndex: 1000 }}>
+      <KitModal
+        open
+        sheet
+        size="lg"
+        dismissible={false}
+        title={t('savedTeams.pickerTitle')}
+        onClose={onClose}
+        closeLabel={t('common.close')}
+      >
+        <div data-side={side || undefined} className="flex flex-col gap-3">
+          {isOffline() && meta?.fetchedAt && (
+            <div data-testid="saved-teams-offline" role="status" className={NOTICE.info}>
+              {t('savedTeams.pickerOffline', { date: formatFetchedAt(meta.fetchedAt) })}
+            </div>
+          )}
+          <Select
+            size="lg"
+            block
+            aria-label={t('savedTeams.pickerCompetition')}
+            value={competitionId}
+            onChange={e => setCompetitionId(e.target.value)}
           >
-            {t('savedTeams.pickerOffline', { date: formatFetchedAt(meta.fetchedAt) })}
-          </div>
-        )}
-        <select
-          aria-label={t('savedTeams.pickerCompetition')}
-          value={competitionId}
-          onChange={e => setCompetitionId(e.target.value)}
-          style={controlStyle}
-        >
-          <option value="">{t('savedTeams.pickerAll')}</option>
-          {visibleCompetitions.map(c => (
-            <option key={c.id} value={c.id}>{c.name}{c.season ? ` · ${c.season}` : ''}</option>
-          ))}
-        </select>
-        <input
-          type="search"
-          value={q}
-          onChange={e => setQ(e.target.value)}
-          placeholder={t('savedTeams.pickerSearch')}
-          aria-label={t('savedTeams.pickerSearch')}
-          spellCheck={false}
-          autoCorrect="off"
-          autoCapitalize="off"
-          style={controlStyle}
-        />
-        {loading && !teams.length ? (
-          <div aria-busy="true" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {[0, 1, 2].map(i => (
-              <div key={i} style={{ padding: 12, borderRadius: 8, background: 'rgba(255,255,255,0.05)', color: 'var(--muted)' }}>…</div>
+            <option value="">{t('savedTeams.pickerAll')}</option>
+            {visibleCompetitions.map(c => (
+              <option key={c.id} value={c.id}>{c.name}{c.season ? ` · ${c.season}` : ''}</option>
             ))}
-          </div>
-        ) : list.length === 0 ? (
-          <p style={{ margin: 0, padding: '16px 4px', color: 'var(--muted)', fontSize: 14 }}>{t('savedTeams.pickerEmpty')}</p>
-        ) : (
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {list.map(team => {
-              const players = team.players || []
-              const coach = (team.staff || []).find(s => s.role === 'Coach')
-              const coachName = coach ? [coach.first_name, coach.last_name].filter(Boolean).join(' ') : ''
-              const metaLine = [
-                players.map(p => p.last_name).filter(Boolean).join(' / '),
-                team.club,
-                team.competition?.name
-              ].filter(Boolean).join(' · ')
-              return (
-                <li key={team.id}>
-                  <button
-                    type="button"
-                    data-testid="saved-team-row"
-                    onClick={() => onPick(team)}
-                    style={{
-                      width: '100%', minHeight: 44, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 12,
-                      padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
-                      background: 'rgba(255,255,255,0.05)', color: 'var(--text)', border: '1px solid rgba(255,255,255,0.1)'
-                    }}
-                  >
-                    <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <span style={{ fontWeight: 700, overflowWrap: 'anywhere' }}>{team.name}</span>
-                      {metaLine && <span style={{ fontSize: 13, color: 'var(--muted)', overflowWrap: 'anywhere' }}>{metaLine}</span>}
-                      {coachName && <span style={{ fontSize: 13, color: 'var(--muted)' }}>{t('savedTeams.coach', { name: coachName })}</span>}
-                    </span>
-                    <span style={{
-                      flexShrink: 0, fontSize: 12, fontWeight: 600, padding: '2px 8px', borderRadius: 999,
-                      background: players.length >= 2 ? 'rgba(34,197,94,0.15)' : 'rgba(249,115,22,0.15)',
-                      color: players.length >= 2 ? '#86efac' : '#fdba74'
-                    }}>
-                      {t('savedTeams.pickerPlayers', { count: players.length })}
-                    </span>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-        )}
-      </div>
-    </Modal>
+          </Select>
+          <Input
+            size="lg"
+            type="search"
+            icon={Search}
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            placeholder={t('savedTeams.pickerSearch')}
+            aria-label={t('savedTeams.pickerSearch')}
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="off"
+          />
+          {loading && !teams.length ? (
+            <div aria-busy="true" aria-label={t('common.loading')} className="divide-y divide-stone-100 rounded-xl border border-stone-200/70 bg-white">
+              {[0, 1, 2].map(i => (
+                <div key={i} data-testid="saved-team-skeleton" className="flex min-h-14 flex-col justify-center gap-2 px-3 py-2.5">
+                  <div className="h-3.5 w-2/5 animate-pulse rounded bg-stone-200" />
+                  <div className="h-3 w-3/5 animate-pulse rounded bg-stone-200" />
+                </div>
+              ))}
+            </div>
+          ) : list.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-stone-200 px-4 py-6 text-center text-sm text-stone-500">{t('savedTeams.pickerEmpty')}</p>
+          ) : (
+            <ul className="divide-y divide-stone-100 overflow-hidden rounded-xl border border-stone-200/70 bg-white">
+              {list.map(team => {
+                const players = team.players || []
+                const coach = (team.staff || []).find(s => s.role === 'Coach')
+                const coachName = coach ? [coach.first_name, coach.last_name].filter(Boolean).join(' ') : ''
+                const metaLine = [
+                  players.map(p => p.last_name).filter(Boolean).join(' / '),
+                  team.club,
+                  team.competition?.name
+                ].filter(Boolean).join(' · ')
+                const complete = players.length >= 2
+                return (
+                  <li key={team.id}>
+                    <button
+                      type="button"
+                      data-testid="saved-team-row"
+                      onClick={() => onPick(team)}
+                      className={cn('flex min-h-14 w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-stone-50', FOCUS_RING_INSET)}
+                    >
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="text-sm font-semibold text-stone-900 [overflow-wrap:anywhere]">{team.name}</span>
+                        {metaLine && <span className="text-xs text-stone-500 [overflow-wrap:anywhere]">{metaLine}</span>}
+                        {coachName && <span className="text-xs text-stone-500">{t('savedTeams.coach', { name: coachName })}</span>}
+                      </span>
+                      <span className={cn(
+                        'inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums',
+                        complete ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                      )}>
+                        {t('savedTeams.pickerPlayers', { count: players.length })}
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+      </KitModal>
+    </div>
   )
 }

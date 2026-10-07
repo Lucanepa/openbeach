@@ -116,10 +116,11 @@ describe('SavedTeamPickerModal_beach', () => {
     expect(screen.queryByTestId('saved-teams-offline')).toBeNull()
   })
 
-  it('shows placeholder rows while the first load runs, and the empty text without teams', () => {
+  it('shows skeleton rows while the first load runs, and the empty text without teams', () => {
     hook.value = { ...fixtureState(), teams: [], competitions: [], loading: true }
     const { unmount } = render(<SavedTeamPickerModal open onClose={() => {}} onPick={() => {}} userId="u1" access={scorer} />)
-    expect(screen.getAllByText('…')).toHaveLength(3)
+    expect(screen.getAllByTestId('saved-team-skeleton')).toHaveLength(3)
+    expect(rows()).toHaveLength(0)
     unmount()
     hook.value = { ...fixtureState(), teams: [], competitions: [], loading: false }
     renderPicker()

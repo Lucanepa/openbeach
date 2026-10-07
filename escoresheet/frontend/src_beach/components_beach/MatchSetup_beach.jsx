@@ -5,7 +5,6 @@ import { useAlert } from '../contexts_beach/AlertContext_beach'
 import { useAuth } from '../contexts_beach/AuthContext_beach'
 import { db } from '../db_beach/db_beach'
 import SignaturePad from './SignaturePad_beach'
-import Modal from './Modal_beach'
 import RefereeSelector from './RefereeSelector_beach'
 import CountrySelect from './CountrySelect_beach'
 import CountryFlag from './CountryFlag_beach'
@@ -2745,19 +2744,15 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     else applySavedTeam(side, row)
   }
 
-  const savedTeamButtonStyle = {
-    padding: '6px 12px', fontSize: '12px', fontWeight: 600, minHeight: 36,
-    background: '#000', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer'
-  }
-
-  // "Load saved team" for the roster header, or a short note when this
-  // device cannot read saved teams (signed out, pending, no scorer role).
+  // "Load saved team" for the roster header (secondary, beside the roster
+  // tools), or a short note when this device cannot read saved teams
+  // (signed out, pending, no scorer role).
   const renderSavedTeamControl = (side) => {
     if (canReadSavedTeams) {
       return (
-        <button type="button" onClick={() => setSavedPicker(side)} style={savedTeamButtonStyle}>
+        <Button variant="secondary" size="xl" icon={Database} onClick={() => setSavedPicker(side)}>
           {t('savedTeams.load')}
-        </button>
+        </Button>
       )
     }
     if (!isBackendAvailable()) return null
@@ -2765,30 +2760,31 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     // than tell an approved scorer to ask for approval
     if (user && !access?.known) return null
     return (
-      <span data-testid="saved-teams-note" style={{ fontSize: 12, color: 'var(--muted)', alignSelf: 'center', maxWidth: 220 }}>
+      <span data-testid="saved-teams-note" className="max-w-[220px] self-center text-xs text-stone-500">
         {user ? t('savedTeams.noAccessNote') : t('savedTeams.signInNote')}
       </span>
     )
   }
 
-  const suggestionBoxStyle = {
-    background: 'rgba(14,165,233,0.12)', border: '1px solid rgba(14,165,233,0.4)', borderRadius: 8, padding: 12
-  }
+  // A saved team matches what was typed: the sky info strip (volleyui: sky =
+  // pending / info), white mini-buttons in the same hue.
+  const SUGGESTION_BOX = 'rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-sky-900'
+  const SUGGESTION_BTN = `inline-flex min-h-11 items-center rounded-lg border border-sky-300 bg-white px-3 text-sm font-medium text-sky-800 hover:bg-sky-100 transition-colors ${FOCUS_RING}`
 
   // One side's suggestion, under the roster title of the team view
   const renderSuggestionStrip = (side) => {
     const row = savedSuggestion[side]
     if (!row) return null
     return (
-      <div data-testid={`saved-team-suggestion-${side}`} style={{ ...suggestionBoxStyle, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <span style={{ flex: '1 1 200px', fontSize: 14 }}>
-          <strong>{t('savedTeams.suggestionTitle')}</strong>{' · '}
+      <div data-testid={`saved-team-suggestion-${side}`} role="status" className={cn(SUGGESTION_BOX, 'flex flex-wrap items-center gap-2')}>
+        <span className="min-w-[200px] flex-1 text-sm">
+          <strong className="font-semibold">{t('savedTeams.suggestionTitle')}</strong>{' · '}
           {t(side === 'team1' ? 'savedTeams.suggestionTeam1' : 'savedTeams.suggestionTeam2', { name: row.name })}
         </span>
-        <button type="button" className="secondary" style={{ minHeight: 36 }} onClick={() => applySavedTeam(side, row)}>
+        <button type="button" className={SUGGESTION_BTN} onClick={() => applySavedTeam(side, row)}>
           {t(side === 'team1' ? 'savedTeams.loadTeam1' : 'savedTeams.loadTeam2')}
         </button>
-        <button type="button" className="secondary" style={{ minHeight: 36 }} onClick={() => setSuggestionDismissed(d => ({ ...d, [side]: true }))}>
+        <button type="button" className={SUGGESTION_BTN} onClick={() => setSuggestionDismissed(d => ({ ...d, [side]: true }))}>
           {t('savedTeams.dismiss')}
         </button>
       </div>
@@ -2800,22 +2796,24 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     const { team1: s1, team2: s2 } = savedSuggestion
     if (!s1 && !s2) return null
     return (
-      <div data-testid="saved-team-suggestions" className="setup-section" style={{ ...suggestionBoxStyle, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <strong>{t('savedTeams.suggestionTitle')}</strong>
-        {s1 && <span style={{ fontSize: 14 }}>{t('savedTeams.suggestionTeam1', { name: s1.name })}</span>}
-        {s2 && <span style={{ fontSize: 14 }}>{t('savedTeams.suggestionTeam2', { name: s2.name })}</span>}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+      <div data-testid="saved-team-suggestions" role="status" className={SUGGESTION_BOX}>
+        <p className="text-sm font-semibold">{t('savedTeams.suggestionTitle')}</p>
+        <div className="mt-0.5 flex flex-col gap-0.5 text-xs">
+          {s1 && <span>{t('savedTeams.suggestionTeam1', { name: s1.name })}</span>}
+          {s2 && <span>{t('savedTeams.suggestionTeam2', { name: s2.name })}</span>}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
           {s1 && (
-            <button type="button" className="secondary" style={{ minHeight: 36 }} onClick={() => applySavedTeam('team1', s1)}>
+            <button type="button" className={SUGGESTION_BTN} onClick={() => applySavedTeam('team1', s1)}>
               {t('savedTeams.loadTeam1')}
             </button>
           )}
           {s2 && (
-            <button type="button" className="secondary" style={{ minHeight: 36 }} onClick={() => applySavedTeam('team2', s2)}>
+            <button type="button" className={SUGGESTION_BTN} onClick={() => applySavedTeam('team2', s2)}>
               {t('savedTeams.loadTeam2')}
             </button>
           )}
-          <button type="button" className="secondary" style={{ minHeight: 36 }} onClick={() => setSuggestionDismissed({ team1: true, team2: true })}>
+          <button type="button" className={SUGGESTION_BTN} onClick={() => setSuggestionDismissed({ team1: true, team2: true })}>
             {t('savedTeams.dismiss')}
           </button>
         </div>
@@ -2958,41 +2956,41 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         access={access}
       />
       {savedReplace && (
-        <Modal
-          title={t('savedTeams.replaceConfirmTitle')}
-          open={true}
-          onClose={() => setSavedReplace(null)}
-          width={400}
-        >
-          <div style={{ padding: '20px', textAlign: 'center' }}>
-            <p style={{ marginBottom: '24px', fontSize: '16px', color: 'var(--text)' }}>
+        <div className="ov-kit" style={DIALOG_LAYER}>
+          <KitModal
+            open
+            decision
+            size="sm"
+            dismissible={false}
+            onClose={() => setSavedReplace(null)}
+            closeLabel={t('common.close')}
+            title={t('savedTeams.replaceConfirmTitle')}
+            footer={(
+              <>
+                <button type="button" onClick={() => setSavedReplace(null)} className={modalCancelClass}>
+                  {t('common.cancel')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const { side, row } = savedReplace
+                    setSavedReplace(null)
+                    applySavedTeam(side, row)
+                  }}
+                  className={modalPrimaryClass}
+                >
+                  {t('savedTeams.replace')}
+                </button>
+              </>
+            )}
+          >
+            <p className="text-sm text-stone-600">
               {t('savedTeams.replaceConfirmBody', {
                 team: (savedReplace.side === 'team1' ? team1Name : team2Name) || t(savedReplace.side === 'team1' ? 'matchSetup.team1' : 'matchSetup.team2')
               })}
             </p>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  const { side, row } = savedReplace
-                  setSavedReplace(null)
-                  applySavedTeam(side, row)
-                }}
-                style={{ padding: '12px 24px', fontSize: '14px', fontWeight: 600, background: '#000', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
-              >
-                {t('savedTeams.replace')}
-              </button>
-              <button
-                type="button"
-                onClick={() => setSavedReplace(null)}
-                className="secondary"
-                style={{ padding: '12px 24px', fontSize: '14px', fontWeight: 600 }}
-              >
-                {t('common.cancel')}
-              </button>
-            </div>
-          </div>
-        </Modal>
+          </KitModal>
+        </div>
       )}
     </>
   )
