@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../contexts_beach/AuthContext_beach'
 import LoginModal from './LoginModal_beach'
 import SignUpModal from './SignUpModal_beach'
+import { cn } from '../../ui/volleyui/cn.js'
+import { FOCUS_RING } from '../../ui/volleyui/Button.jsx'
 
 const DISMISS_KEY = 'ob_sync_signin_banner_dismissed'
 
@@ -55,23 +57,49 @@ export default function SyncSignInBanner({ syncStatus, compact = false }) {
         <div
           role="status"
           aria-live="polite"
-          className={`sync-signin-banner${compact ? ' sync-signin-banner--compact' : ''}`}
+          // Kit amber banner (decide / stale), floating, no-print, as in
+          // OpenVolley. Shown on the scoring screen too, so the action is dark,
+          // never a brand-red fill.
+          className={cn(
+            'ov-kit no-print fixed flex items-center rounded-xl border border-amber-200 bg-amber-50 shadow-lg',
+            compact ? 'flex-nowrap gap-2 px-2.5 py-1.5' : 'flex-wrap gap-3 px-3.5 py-3'
+          )}
+          style={{
+            left: '50%',
+            transform: 'translateX(-50%)',
+            // On the scoring screen: one short line at the top, clear of the
+            // scoring controls along the bottom
+            ...(compact
+              ? { top: 'calc(env(safe-area-inset-top, 0px) + 6px)', width: 'min(460px, calc(100vw - 24px))' }
+              : { bottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)', width: 'min(560px, calc(100vw - 32px))' }),
+            zIndex: 1500
+          }}
         >
-          <div className="sync-signin-banner-text">
-            <div className="sync-signin-banner-title">{title}</div>
+          <div className={cn('min-w-0', compact ? 'flex-auto' : 'flex-[1_1_260px]')}>
+            <div className={cn('font-semibold text-amber-800', compact ? 'truncate text-xs' : 'mb-0.5 text-sm')}>
+              {title}
+            </div>
             {!compact && (
-              <div className="sync-signin-banner-body">
+              <div className="text-xs leading-snug text-stone-600">
                 {sessionExpired
                   ? t('syncBanner.expiredBody', 'Scoring keeps working. Sign in again to save it to the cloud; waiting changes are sent right after.')
                   : t('syncBanner.body', 'Scoring keeps working. Sign in to save it to the cloud (referee, livescore, backup); waiting changes are sent right after.')}
               </div>
             )}
           </div>
-          <div className="sync-signin-banner-actions">
-            <button type="button" onClick={dismiss} className="sync-signin-banner-later">
+          <div className={cn('flex shrink-0', compact ? 'gap-1.5' : 'gap-2')}>
+            <button
+              type="button"
+              onClick={dismiss}
+              className={cn('inline-flex items-center rounded-lg border border-amber-200 bg-white font-medium text-amber-800 transition-colors hover:bg-amber-100', compact ? 'h-8 px-2.5 text-xs' : 'h-9 px-3 text-xs', FOCUS_RING)}
+            >
               {t('syncBanner.later', 'Later')}
             </button>
-            <button type="button" onClick={() => setShowLogin(true)} className="sync-signin-banner-signin">
+            <button
+              type="button"
+              onClick={() => setShowLogin(true)}
+              className={cn('inline-flex items-center rounded-lg bg-slate-900 font-semibold text-white transition-colors hover:bg-slate-800', compact ? 'h-8 px-2.5 text-xs' : 'h-9 px-3 text-xs', FOCUS_RING)}
+            >
               {sessionExpired ? t('syncBanner.signInAgain', 'Sign in again') : t('syncBanner.signIn', 'Sign in')}
             </button>
           </div>

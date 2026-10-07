@@ -103,7 +103,7 @@ describe('ConnectionStatus', () => {
         />
       )
 
-      expect(screen.queryByText('Connection Status')).not.toBeInTheDocument()
+      expect(screen.queryByText('Connection status')).not.toBeInTheDocument()
     })
 
     it('should show dropdown when clicked', async () => {
@@ -118,11 +118,11 @@ describe('ConnectionStatus', () => {
       )
 
       // Find and click the status button
-      const button = document.querySelector('[data-connection-menu] > div')
+      const button = document.querySelector('[data-connection-menu] > button')
       fireEvent.click(button)
 
       await waitFor(() => {
-        expect(screen.getByText('Connection Status')).toBeInTheDocument()
+        expect(screen.getByText('Connection status')).toBeInTheDocument()
       })
     })
 
@@ -139,7 +139,7 @@ describe('ConnectionStatus', () => {
         />
       )
 
-      const button = document.querySelector('[data-connection-menu] > div')
+      const button = document.querySelector('[data-connection-menu] > button')
       fireEvent.click(button)
 
       await waitFor(() => {
@@ -160,18 +160,18 @@ describe('ConnectionStatus', () => {
         />
       )
 
-      const button = document.querySelector('[data-connection-menu] > div')
+      const button = document.querySelector('[data-connection-menu] > button')
 
       // First click - open
       fireEvent.click(button)
       await waitFor(() => {
-        expect(screen.getByText('Connection Status')).toBeInTheDocument()
+        expect(screen.getByText('Connection status')).toBeInTheDocument()
       })
 
       // Second click - close
       fireEvent.click(button)
       await waitFor(() => {
-        expect(screen.queryByText('Connection Status')).not.toBeInTheDocument()
+        expect(screen.queryByText('Connection status')).not.toBeInTheDocument()
       })
     })
   })
@@ -188,11 +188,11 @@ describe('ConnectionStatus', () => {
         />
       )
 
-      const button = document.querySelector('[data-connection-menu] > div')
+      const button = document.querySelector('[data-connection-menu] > button')
       fireEvent.click(button)
 
       // Check that the status dot has the correct background color
-      const dots = document.querySelectorAll('span[style*="border-radius: 50%"]')
+      const dots = document.querySelectorAll('span.rounded-full')
       expect(dots.length).toBeGreaterThan(0)
     })
 
@@ -221,7 +221,7 @@ describe('ConnectionStatus', () => {
         />
       )
 
-      const button = document.querySelector('[data-connection-menu] > div')
+      const button = document.querySelector('[data-connection-menu] > button')
       fireEvent.click(button)
 
       await waitFor(() => {
@@ -240,11 +240,11 @@ describe('ConnectionStatus', () => {
         />
       )
 
-      const button = document.querySelector('[data-connection-menu] > div')
+      const button = document.querySelector('[data-connection-menu] > button')
       fireEvent.click(button)
 
       await waitFor(() => {
-        expect(screen.getByText('Test Mode')).toBeInTheDocument()
+        expect(screen.getByText('Test mode')).toBeInTheDocument()
       })
     })
   })
@@ -262,7 +262,7 @@ describe('ConnectionStatus', () => {
         />
       )
 
-      const button = document.querySelector('[data-connection-menu] > div')
+      const button = document.querySelector('[data-connection-menu] > button')
       fireEvent.click(button)
 
       await waitFor(() => {
@@ -286,16 +286,16 @@ describe('ConnectionStatus', () => {
         />
       )
 
-      const button = document.querySelector('[data-connection-menu] > div')
+      const button = document.querySelector('[data-connection-menu] > button')
       fireEvent.click(button)
 
       await waitFor(() => {
         expect(screen.getByText('Synchronization errors:')).toBeInTheDocument()
-        expect(screen.getByText('Retry All')).toBeInTheDocument()
+        expect(screen.getByText('Retry all')).toBeInTheDocument()
       })
 
       // Click retry button
-      fireEvent.click(screen.getByText('Retry All'))
+      fireEvent.click(screen.getByText('Retry all'))
       expect(onRetryErrors).toHaveBeenCalledTimes(1)
     })
   })
@@ -319,7 +319,7 @@ describe('ConnectionStatus', () => {
         />
       )
 
-      const button = document.querySelector('[data-connection-menu] > div')
+      const button = document.querySelector('[data-connection-menu] > button')
       fireEvent.click(button)
 
       await waitFor(() => {
@@ -331,7 +331,7 @@ describe('ConnectionStatus', () => {
       fireEvent.click(serverRow)
 
       await waitFor(() => {
-        expect(screen.getByText('Status Information')).toBeInTheDocument()
+        expect(screen.getByText('Status information')).toBeInTheDocument()
         expect(screen.getByText(/Connection refused/)).toBeInTheDocument()
       })
     })
@@ -347,7 +347,7 @@ describe('ConnectionStatus', () => {
         />
       )
 
-      const button = document.querySelector('[data-connection-menu] > div')
+      const button = document.querySelector('[data-connection-menu] > button')
       fireEvent.click(button)
 
       await waitFor(() => {
@@ -364,22 +364,22 @@ describe('ConnectionStatus', () => {
     it('should render with normal size by default', () => {
       const { container } = render(<ConnectionStatus {...defaultProps} />)
 
-      const button = container.querySelector('[data-connection-menu] > div')
-      expect(button).toHaveStyle({ fontSize: '12px' })
+      const button = container.querySelector('[data-connection-menu] > button')
+      expect(button).toHaveClass('h-8', 'text-xs')
     })
 
     it('should render with small size', () => {
       const { container } = render(<ConnectionStatus {...defaultProps} size="small" />)
 
-      const button = container.querySelector('[data-connection-menu] > div')
-      expect(button).toHaveStyle({ fontSize: '10px' })
+      const button = container.querySelector('[data-connection-menu] > button')
+      expect(button).toHaveClass('h-7', 'text-[10px]')
     })
 
     it('should render with large size', () => {
       const { container } = render(<ConnectionStatus {...defaultProps} size="large" />)
 
-      const button = container.querySelector('[data-connection-menu] > div')
-      expect(button).toHaveStyle({ fontSize: '14px' })
+      const button = container.querySelector('[data-connection-menu] > button')
+      expect(button).toHaveClass('h-9', 'text-sm')
     })
   })
 
@@ -461,18 +461,18 @@ describe('ConnectionStatus', () => {
         </div>
       )
 
-      const button = document.querySelector('[data-connection-menu] > div')
+      const button = document.querySelector('[data-connection-menu] > button')
       fireEvent.click(button)
 
       await waitFor(() => {
-        expect(screen.getByText('Connection Status')).toBeInTheDocument()
+        expect(screen.getByText('Connection status')).toBeInTheDocument()
       })
 
       // Click outside
       fireEvent.mouseDown(screen.getByTestId('outside'))
 
       await waitFor(() => {
-        expect(screen.queryByText('Connection Status')).not.toBeInTheDocument()
+        expect(screen.queryByText('Connection status')).not.toBeInTheDocument()
       })
     })
   })

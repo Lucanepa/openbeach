@@ -694,7 +694,7 @@
     "offline": "Offline",
     "switchToOnline": "Zum Online-Modus wechseln",
     "switchToOffline": "Zum Offline-Modus wechseln",
-    "dashboardConnectionInfo": "Dashboard-Verbindungsinfo",
+    "dashboardConnectionInfo": "Dashboard-Verbindung",
     "serverStatus": "Serverstatus",
     "serverRunning": "Server läuft",
     "serverNotRunning": "Server nicht aktiv",
@@ -706,12 +706,12 @@
     "total": "Gesamt",
     "referees": "Schiedsrichter",
     "matchPin": "Spiel-PIN",
-    "moreOptions": "Weitere Optionen...",
+    "moreOptions": "Weitere Optionen…",
     "match": "Spiel",
     "notSet": "Nicht festgelegt",
-    "testMatch": "TESTSPIEL",
-    "matchNumber": "SPIEL #{{number}}",
-    "test": "TEST",
+    "testMatch": "Testspiel",
+    "matchNumber": "Spiel #{{number}}",
+    "test": "Test",
     "versionHistory": "Versionsverlauf",
     "current": "Aktuell",
     "exitFullscreen": "Vollbild beenden",
@@ -723,7 +723,15 @@
     "preview": "Vorschau",
     "print": "Drucken",
     "savePdf": "PDF speichern",
-    "allowPopups": "Bitte erlauben Sie Popups, um das eMatchblatt anzuzeigen"
+    "allowPopups": "Bitte erlauben Sie Popups, um das eMatchblatt anzuzeigen",
+    "showHeader": "Kopfzeile zeigen",
+    "hideHeader": "Kopfzeile ausblenden",
+    "alarmBellNotify": "Alarmglocke: Schiedsrichter benachrichtigen",
+    "scale": "Skalierung",
+    "default": "Standard",
+    "viewportWidth": "Breite",
+    "viewportHeight": "Höhe",
+    "viewportEdit": "Klicken, um die Fenstergrösse zu ändern"
   },
   "home": {
     "title": "Openvolley eScoresheet",
@@ -1438,7 +1446,7 @@
     "cloudQRCodeAlt": "Cloud QR-Code"
   },
   "interactiveGuide": {
-    "title": "App Guide",
+    "title": "App-Anleitung",
     "demos": {
       "net": "NET",
       "frontRow": "Front Row",
@@ -1906,5 +1914,28 @@
     "exitBody": "Die Spiele sind auf diesem Gerät gespeichert: OpenBeach wieder öffnen, um weiterzumachen.",
     "exitConfirm": "Beenden",
     "stay": "Bleiben"
+  },
+  "screenTooSmall": {
+    "title": "Bitte verwenden Sie für diese App ein Tablet oder einen grösseren Bildschirm (mindestens 800×600).",
+    "current": "Aktuell: {{width}} × {{height}} px",
+    "hint": "Drehen Sie das Gerät oder wechseln Sie in den Vollbildmodus.",
+    "enterFullscreen": "Vollbild",
+    "fullscreenNote": "Im Vollbild verschwinden die Leisten des Browsers, so bleibt mehr Platz."
+  },
+  "Home": "Startseite",
+  "tabletStatus": {
+    "title": "Tablet-Status",
+    "allConnected": "Alle Geräte verbunden",
+    "issuesDetected": "{{count}} Gerät(e) mit Problemen",
+    "role": {
+      "referee": "Schiedsrichter",
+      "bench_team1": "Bank Team 1",
+      "bench_team2": "Bank Team 2"
+    },
+    "status": {
+      "connected": "Verbunden",
+      "stale": "Verzögert",
+      "disconnected": "Getrennt"
+    }
   }
 }

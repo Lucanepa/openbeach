@@ -221,7 +221,6 @@
     "dateTime": "Date & Time",
     "location": "Location",
     "category": "Category",
-    "teams": "Teams",
     "enterTeamName": "Enter team name",
     "selectCountry": "Select Country",
     "enterCity": "Enter city",
@@ -696,9 +695,9 @@
     "notSynced": "Not synced",
     "supportAndFeedback": "Support & Feedback",
     "offline": "Offline",
-    "switchToOnline": "Switch to Online Mode",
-    "switchToOffline": "Switch to Offline Mode",
-    "dashboardConnectionInfo": "Dashboard Connection Info",
+    "switchToOnline": "Switch to online mode",
+    "switchToOffline": "Switch to offline mode",
+    "dashboardConnectionInfo": "Dashboard connection",
     "serverStatus": "Server Status",
     "serverRunning": "Server Running",
     "serverNotRunning": "Server Not Running",
@@ -706,19 +705,19 @@
     "notAvailable": "Not available",
     "dashboardUrls": "Dashboard URLs",
     "referee": "Referee",
-    "connectedDevices": "Connected Devices",
+    "connectedDevices": "Connected devices",
     "total": "Total",
     "referees": "Referees",
     "matchPin": "Match PIN",
-    "moreOptions": "More Options...",
+    "moreOptions": "More options…",
     "match": "Match",
     "notSet": "Not set",
-    "testMatch": "TEST MATCH",
-    "matchNumber": "MATCH #{{number}}",
-    "test": "TEST",
+    "testMatch": "Test match",
+    "matchNumber": "Match #{{number}}",
+    "test": "Test",
     "versionHistory": "Version History",
     "current": "Current",
-    "exitFullscreen": "Exit Fullscreen",
+    "exitFullscreen": "Exit fullscreen",
     "fullscreen": "Fullscreen",
     "exit": "Exit",
     "menu": "Menu",
@@ -727,7 +726,15 @@
     "preview": "Preview",
     "print": "Print",
     "savePdf": "Save PDF",
-    "allowPopups": "Please allow popups to view the scoresheet"
+    "allowPopups": "Please allow popups to view the scoresheet",
+    "showHeader": "Show header",
+    "hideHeader": "Hide header",
+    "alarmBellNotify": "Alarm bell: notify the referee",
+    "scale": "Scale",
+    "default": "Default",
+    "viewportWidth": "Width",
+    "viewportHeight": "Height",
+    "viewportEdit": "Click to edit and resize the viewport"
   },
   "home": {
     "title": "openBeach eScoresheet",
@@ -1442,7 +1449,7 @@
     "cloudQRCodeAlt": "Cloud QR Code"
   },
   "interactiveGuide": {
-    "title": "App Guide",
+    "title": "App guide",
     "demos": {
       "net": "NET",
       "frontRow": "Front Row",
@@ -1910,5 +1917,28 @@
     "exitBody": "Matches are saved on this device: open OpenBeach again to continue.",
     "exitConfirm": "Exit",
     "stay": "Stay"
+  },
+  "screenTooSmall": {
+    "title": "To use this application, please use a tablet or larger screen (minimum 800×600).",
+    "current": "Current: {{width}} × {{height}} px",
+    "hint": "Try rotating your device or entering fullscreen mode.",
+    "enterFullscreen": "Enter fullscreen",
+    "fullscreenNote": "Fullscreen removes the browser bars to make the most of the screen."
+  },
+  "Home": "Home",
+  "tabletStatus": {
+    "title": "Tablet status",
+    "allConnected": "All devices connected",
+    "issuesDetected": "{{count}} device(s) with issues",
+    "role": {
+      "referee": "Referee",
+      "bench_team1": "Team 1 bench",
+      "bench_team2": "Team 2 bench"
+    },
+    "status": {
+      "connected": "Connected",
+      "stale": "Delayed",
+      "disconnected": "Disconnected"
+    }
   }
 }

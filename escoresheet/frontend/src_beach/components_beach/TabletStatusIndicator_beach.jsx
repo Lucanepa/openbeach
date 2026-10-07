@@ -1,6 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { getTabletStatusSummary, formatAge } from '../utils_beach/connectionHealth_beach'
+import { ChevronDown } from 'lucide-react'
+import { cn } from '../ui/volleyui/cn.js'
+import { StatusPill } from '../ui/volleyui/StatusPill.jsx'
+import { FOCUS_RING, KIT_SCOPE, MENU_TITLE, POPOVER_PANEL, STATUS_PILL, STATUS_TONES } from './chromeClasses_beach'
 
 export default function TabletStatusIndicator({ match }) {
   const { t } = useTranslation()
@@ -18,9 +22,10 @@ export default function TabletStatusIndicator({ match }) {
 
   const summary = getTabletStatusSummary(match)
 
-  const overallColor = summary.overallStatus === 'ok' ? '#22c55e'
-    : summary.overallStatus === 'issues' ? '#eab308'
-    : '#6b7280'
+  // Kit status tones: emerald all connected, amber some missing, stone none.
+  const overallTone = STATUS_TONES[summary.overallStatus === 'ok' ? 'ok'
+    : summary.overallStatus === 'issues' ? 'warn'
+    : 'neutral']
 
   const openMenu = useCallback(() => {
     if (buttonRef.current) {
@@ -48,134 +53,69 @@ export default function TabletStatusIndicator({ match }) {
   // Don't render if no roles are enabled (after every hook: the hook order must not change)
   if (summary.expectedCount === 0) return null
 
-  const roleColors = {
-    referee: '#3b82f6',
-    bench_team1: '#10b981',
-    bench_team2: '#ef4444'
+  const SUMMARY_BOX = {
+    ok: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+    issues: 'border-amber-200 bg-amber-50 text-amber-800',
+    none: 'border-stone-200 bg-stone-50 text-stone-600'
   }
+
+  // Per-device heartbeat state -> kit tone (a StatusPill per device).
+  const roleTone = (status) => STATUS_TONES[status === 'connected' ? 'ok' : status === 'stale' ? 'warn' : 'error']
 
   return (
     <div ref={buttonRef} style={{ position: 'relative' }}>
-      <button
-        onClick={openMenu}
-        title={t('tabletStatus.title', 'Tablet Status')}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          padding: '4px 10px',
-          fontSize: 'clamp(9px, 1.1vw, 11px)',
-          fontWeight: 600,
-          background: `${overallColor}15`,
-          color: overallColor,
-          border: `1px solid ${overallColor}30`,
-          borderRadius: '6px',
-          cursor: 'pointer',
-          transition: 'all 0.2s',
-          whiteSpace: 'nowrap'
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = `${overallColor}25`
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = `${overallColor}15`
-        }}
-      >
-        {/* Status dot */}
-        <span style={{
-          width: 8,
-          height: 8,
-          borderRadius: '50%',
-          background: overallColor,
-          flexShrink: 0
-        }} />
-        <span>{summary.connectedCount}/{summary.expectedCount}</span>
-        <span style={{ fontSize: '8px', marginLeft: '2px' }}>{menuOpen ? '\u25B2' : '\u25BC'}</span>
-      </button>
+      <span className={KIT_SCOPE}>
+        <button
+          type="button"
+          onClick={openMenu}
+          aria-expanded={menuOpen}
+          title={t('tabletStatus.title', 'Tablet status')}
+          className={cn(STATUS_PILL, FOCUS_RING, overallTone.pill)}
+        >
+          {/* Status dot */}
+          <span className={cn('h-2 w-2 shrink-0 rounded-full', overallTone.dot)} />
+          <span className="tabular-nums">{summary.connectedCount}/{summary.expectedCount}</span>
+          <ChevronDown size={12} aria-hidden="true" className={cn('opacity-70 transition-transform', menuOpen && 'rotate-180')} />
+        </button>
+      </span>
 
       {menuOpen && (
         <div
           onClick={(e) => e.stopPropagation()}
+          className={cn('ov-kit fixed w-[260px] max-w-[calc(100vw-24px)]', POPOVER_PANEL)}
           style={{
-            position: 'fixed',
             top: `${menuPos.top}px`,
             right: `${menuPos.right}px`,
-            maxWidth: 'calc(100vw - 24px)',
-            width: '260px',
-            background: 'rgba(0, 0, 0, 0.95)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            borderRadius: '8px',
-            padding: '12px',
-            zIndex: 1000,
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.6)'
+            zIndex: 1000
           }}
         >
-          <div style={{
-            fontSize: 11,
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px',
-            color: 'rgba(255,255,255,0.5)',
-            marginBottom: 10
-          }}>
-            {t('tabletStatus.title', 'Tablet Status')}
+          <div className={cn('mb-1', MENU_TITLE)}>
+            {t('tabletStatus.title', 'Tablet status')}
           </div>
 
-          {summary.roles.map((role) => (
-            <div key={role.role} style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '8px 0',
-              borderBottom: '1px solid rgba(255,255,255,0.08)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  background: role.color,
-                  flexShrink: 0
-                }} />
-                <span style={{
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: roleColors[role.role] || '#fff'
-                }}>
-                  {t(`tabletStatus.role.${role.role}`, role.label)}
-                </span>
-              </div>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                fontSize: 11,
-                color: role.color
-              }}>
-                <span>{t(`tabletStatus.status.${role.status}`, role.status)}</span>
-                {role.ageMs != null && (
-                  <span style={{
-                    fontFamily: 'monospace',
-                    fontSize: 10,
-                    color: 'rgba(255,255,255,0.4)'
-                  }}>
-                    {formatAge(role.ageMs)}
+          <div className="divide-y divide-stone-100">
+            {summary.roles.map((role) => {
+              const tone = roleTone(role.status)
+              return (
+                <div key={role.role} className="flex items-center justify-between gap-3 py-2">
+                  <span className="min-w-0 truncate text-sm font-medium text-stone-800">
+                    {t(`tabletStatus.role.${role.role}`, role.label)}
                   </span>
-                )}
-              </div>
-            </div>
-          ))}
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <StatusPill className={tone.tint}>{t(`tabletStatus.status.${role.status}`, role.status)}</StatusPill>
+                    {role.ageMs != null && (
+                      <span className="font-mono text-[10px] tabular-nums text-stone-500">
+                        {formatAge(role.ageMs)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
 
           {/* Overall summary */}
-          <div style={{
-            marginTop: 10,
-            padding: '8px 10px',
-            background: `${overallColor}10`,
-            borderRadius: 6,
-            fontSize: 12,
-            color: overallColor,
-            textAlign: 'center'
-          }}>
+          <div className={cn('mt-2 rounded-lg border px-2.5 py-2 text-center text-xs font-medium', SUMMARY_BOX[summary.overallStatus] || SUMMARY_BOX.none)}>
             {summary.overallStatus === 'ok'
               ? t('tabletStatus.allConnected', 'All devices connected')
               : t('tabletStatus.issuesDetected', {

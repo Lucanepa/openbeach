@@ -689,12 +689,12 @@
   },
   "header": {
     "online": "Online",
-    "notSynced": "Not synced",
+    "notSynced": "Nöd synchronisiert",
     "supportAndFeedback": "Support & Feedback",
     "offline": "Offline",
     "switchToOnline": "In Online-Modus wächsle",
     "switchToOffline": "In Offline-Modus wächsle",
-    "dashboardConnectionInfo": "Dashboard-Verbindigsinfo",
+    "dashboardConnectionInfo": "Dashboard-Verbindig",
     "serverStatus": "Serverstatus",
     "serverRunning": "Server lauft",
     "serverNotRunning": "Server nöd aktiv",
@@ -706,12 +706,12 @@
     "total": "Gsamt",
     "referees": "Schiri",
     "matchPin": "Spiil-PIN",
-    "moreOptions": "Wiiteri Optione...",
+    "moreOptions": "Wiiteri Optione…",
     "match": "Spiil",
     "notSet": "Nöd feschtgleit",
-    "testMatch": "TESTSPIIL",
-    "matchNumber": "SPIIL #{{number}}",
-    "test": "TEST",
+    "testMatch": "Testspiil",
+    "matchNumber": "Spiil #{{number}}",
+    "test": "Test",
     "versionHistory": "Versionsverlauf",
     "current": "Aktuell",
     "exitFullscreen": "Vollbild verlah",
@@ -723,7 +723,15 @@
     "preview": "Vorschau",
     "print": "Drucke",
     "savePdf": "PDF speichere",
-    "allowPopups": "Bitte erlaubed Sie Popups, um s eMatchblatt aazeige"
+    "allowPopups": "Bitte erlaubed Sie Popups, um s eMatchblatt aazeige",
+    "showHeader": "Chopfziile zeige",
+    "hideHeader": "Chopfziile uusblände",
+    "alarmBellNotify": "Alarmglogge: Schiri benachrichtige",
+    "scale": "Skalierig",
+    "default": "Standard",
+    "viewportWidth": "Breiti",
+    "viewportHeight": "Höchi",
+    "viewportEdit": "Klicke, zum d Fänstergrössi ändere"
   },
   "home": {
     "title": "Openvolley eScoresheet",
@@ -1438,7 +1446,7 @@
     "cloudQRCodeAlt": "Cloud QR-Code"
   },
   "interactiveGuide": {
-    "title": "App Guide",
+    "title": "App-Aaleitig",
     "demos": {
       "net": "NET",
       "frontRow": "Front Row",
@@ -1906,5 +1914,28 @@
     "exitBody": "D Spiil sind uf däm Grät gspeicheret: OpenBeach wieder ufmache zum wiiterfüehre.",
     "exitConfirm": "Beände",
     "stay": "Bliibe"
+  },
+  "screenTooSmall": {
+    "title": "Bitte bruuched Sie für die App es Tablet oder en grössere Bildschirm (mindestens 800×600).",
+    "current": "Aktuell: {{width}} × {{height}} px",
+    "hint": "Dräihed Sie s Grät oder wächsled Sie in Vollbildmodus.",
+    "enterFullscreen": "Vollbild",
+    "fullscreenNote": "Im Vollbild verschwinded d Leischte vom Browser, so bliibt meh Platz."
+  },
+  "Home": "Startsiite",
+  "tabletStatus": {
+    "title": "Tablet-Status",
+    "allConnected": "Alli Grät verbunde",
+    "issuesDetected": "{{count}} Grät mit Problem",
+    "role": {
+      "referee": "Schiri",
+      "bench_team1": "Bank Team 1",
+      "bench_team2": "Bank Team 2"
+    },
+    "status": {
+      "connected": "Verbunde",
+      "stale": "Verzögeret",
+      "disconnected": "Trännt"
+    }
   }
 }

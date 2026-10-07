@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { useTranslation } from 'react-i18next'
 import { db } from './db_beach/db_beach'
 import MatchSetup from './components_beach/MatchSetup_beach'
 import Scoreboard from './components_beach/Scoreboard_beach'
@@ -50,7 +51,9 @@ import { fetchMatchByPin, importMatchFromSupabase, restoreMatchFromJson, selectB
 import UpdateBanner from './components_beach/UpdateBanner_beach'
 import CompetitionMatchPicker from './components_beach/CompetitionMatchPicker_beach'
 import { COMPETITIONS_ENABLED } from './utils_beach/features_beach'
-import { Smartphone } from './components_beach/Icons_beach'
+import { Maximize, Smartphone } from 'lucide-react'
+import { Button } from './ui/volleyui/Button.jsx'
+import { cn } from './ui/volleyui/cn.js'
 
 function parseDateTime(dateTime) {
   const [datePart, timePart] = dateTime.split(' ')
@@ -70,6 +73,7 @@ function generateRefereePin() {
 }
 
 export default function App() {
+  const { t } = useTranslation()
   const [matchId, setMatchId] = useState(null)
   const [showMatchSetup, setShowMatchSetup] = useState(false)
   const [showCoinToss, setShowCoinToss] = useState(false)
@@ -2093,7 +2097,9 @@ export default function App() {
   }
 
   return (
-    <div style={{ position: 'relative', height: '100vh', width: 'auto', maxWidth: '100vw', display: 'flex', flexDirection: 'column', overflow: 'hidden' }} onClick={(e) => {
+    // The home page is restyled (volleyui, light); the screens of an open match
+    // keep the legacy dark frame until their own restyle.
+    <div className={cn('app-root', !matchId && 'bg-gradient-to-b from-stone-50 to-stone-100')} onClick={(e) => {
       // Close connection menu and debug menu when clicking outside
       if (showConnectionMenu && !e.target.closest('[data-connection-menu]')) {
         setShowConnectionMenu(false)
@@ -2117,70 +2123,27 @@ export default function App() {
       {/* Allow if at least one dimension >= 800 (tablet in any orientation), but enforce min 500 on both */}
       {/* Skip warning in fullscreen mode - trust user has adequate screen space */}
       {!isFullscreen && ((viewportSize.width < 800 && viewportSize.height < 800) || viewportSize.width < 600 || viewportSize.height < 600) ? (
-        <div style={{
-          flex: '1 1 auto',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          alignItems: 'center',
-          padding: '40px 20px',
-          textAlign: 'center',
-          color: 'rgba(255, 255, 255, 0.9)',
-          gap: '20px'
-        }}>
-          <div style={{
-            fontSize: '48px',
-            marginBottom: '10px'
-          }}>
-            <Smartphone />
-          </div>
-          <div style={{
-            fontSize: '18px',
-            fontWeight: 600,
-            maxWidth: '400px',
-            lineHeight: '1.5'
-          }}>
-            To use this application, please use a tablet or larger screen (minimum 800×600).
-          </div>
-          <div style={{
-            fontSize: '14px',
-            color: 'rgba(255, 255, 255, 0.6)'
-          }}>
-            Current: {viewportSize.width} × {viewportSize.height}px
-          </div>
-          <div style={{
-            fontSize: '13px',
-            color: 'rgba(255, 255, 255, 0.5)',
-            marginTop: '10px'
-          }}>
-            Try rotating your device or entering fullscreen mode.
-          </div>
-          <button
-            onClick={toggleFullscreen}
-            style={{
-              marginTop: '20px',
-              padding: '12px 24px',
-              fontSize: '16px',
-              fontWeight: 600,
-              background: 'var(--accent)',
-              color: '#000',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}
-          >
-            <span>⛶</span>
-            <span>Enter Fullscreen</span>
-          </button>
-          <div style={{
-            fontSize: '12px',
-            color: 'rgba(255, 255, 255, 0.4)',
-            marginTop: '12px'
-          }}>
-            Fullscreen removes browser headers to maximize screen space.
+        <div className="ov-kit flex flex-1 flex-col items-center justify-center overflow-y-auto bg-gradient-to-br from-stone-100 via-stone-50 to-stone-100 p-4">
+          <div className="relative w-full max-w-sm overflow-hidden rounded-3xl border border-stone-200/70 bg-white p-8 text-center shadow-card-lg">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-red-600 to-red-500" />
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-stone-100 text-stone-500">
+              <Smartphone size={28} aria-hidden="true" />
+            </div>
+            <p className="text-lg font-bold leading-snug text-stone-900">
+              {t('screenTooSmall.title', 'To use this application, please use a tablet or larger screen (minimum 800×600).')}
+            </p>
+            <p className="mt-2 text-sm tabular-nums text-stone-500">
+              {t('screenTooSmall.current', { defaultValue: 'Current: {{width}} × {{height}} px', width: viewportSize.width, height: viewportSize.height })}
+            </p>
+            <p className="mt-3 text-sm text-stone-600">
+              {t('screenTooSmall.hint', 'Try rotating your device or entering fullscreen mode.')}
+            </p>
+            <Button variant="dark" size="xl" block icon={Maximize} onClick={toggleFullscreen} className="mt-6">
+              {t('screenTooSmall.enterFullscreen', 'Enter fullscreen')}
+            </Button>
+            <p className="mt-3 text-xs text-stone-500">
+              {t('screenTooSmall.fullscreenNote', 'Fullscreen removes the browser bars to make the most of the screen.')}
+            </p>
           </div>
         </div>
       ) : (

@@ -4,7 +4,13 @@ import i18n from '../i18n'
 import ConnectionStatus from './ConnectionStatus_beach'
 import TabletStatusIndicator from './TabletStatusIndicator_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
-import { Bell, BookOpen, ClipboardList, House, Search } from './Icons_beach'
+import { Bell, BookOpen, ChevronDown, ChevronUp, ClipboardList, House, Maximize, Menu, Minimize, SatelliteDish, X, ZoomIn } from 'lucide-react'
+import { cn } from '../ui/volleyui/cn.js'
+import { SwitchTrack } from '../ui/volleyui/Switch.jsx'
+import {
+  FOCUS_RING, KIT_SCOPE, HEADER_BAR, HEADER_BTN, HEADER_BTN_ON, HEADER_SWITCH, POPOVER_PANEL, MENU_PANEL, MENU_TITLE,
+  MENU_ROW, MENU_SUBROW, MENU_ROW_ON, MENU_NEST, MENU_SEP, MENU_ICON, MENU_COUNT, STATUS_PILL, STATUS_TONES
+} from './chromeClasses_beach'
 
 
 const FlagBox = ({ children }) => (
@@ -117,7 +123,6 @@ export default function MainHeader({
   const { scaleFactor, userScaleOverride, setUserScaleOverride } = useScaledLayout()
   const [scaleMenuOpen, setScaleMenuOpen] = useState(false)
   const scaleOptions = [0.5, 0.75, 1.0, 1.25, 1.5]
-  const [versionMenuOpen, setVersionMenuOpen] = useState(false)
   const [languageMenuOpen, setLanguageMenuOpen] = useState(false)
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 })
   const [editingSize, setEditingSize] = useState({ width: '', height: '' })
@@ -307,62 +312,43 @@ export default function MainHeader({
       <div
         data-match-info-menu
         onClick={(e) => e.stopPropagation()}
-        style={{
-          position: 'absolute',
-          top: '100%',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          padding: '8px 12px',
-          background: 'rgba(0, 0, 0, 0.95)',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
-          borderRadius: '8px',
-          minWidth: '280px',
-          zIndex: 1000,
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '10px'
-        }}
+        className={cn('ov-kit absolute left-1/2 top-full mt-1.5 flex min-w-[280px] -translate-x-1/2 flex-col gap-2 text-center', POPOVER_PANEL)}
+        style={{ zIndex: 1000 }}
       >
         {/* Match Number */}
-        <div style={{ fontSize: '12px', fontWeight: 500, color: '#94a3b8' }}>{t('header.notSynced')}</div>
-        <div style={{ fontSize: '14px', fontWeight: 700, color: '#fff', textAlign: 'center' }}>
+        <div className={MENU_TITLE}>{t('header.notSynced')}</div>
+        <div className="text-sm font-bold tabular-nums text-stone-900">
           {t('header.match')} {(matchData.match.gameNumber || matchData.match.game_n) ? (matchData.match.gameNumber || matchData.match.game_n) : t('header.notSet')}
         </div>
 
         {/* Match ID - for debugging/support */}
         {matchId && (
-          <div style={{
-            fontSize: '10px',
-            color: 'rgba(255, 255, 255, 0.4)',
-            textAlign: 'center',
-            fontFamily: 'monospace'
-          }}>
+          <div className="font-mono text-[10px] text-stone-500">
             ID: {matchId}
           </div>
         )}
 
         {/* Teams */}
-        <div style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.9)', textAlign: 'center', fontWeight: 500 }}>
+        <div className="text-sm font-medium text-stone-700">
           {(matchData.team1?.name && matchData.team2?.name)
             ? `${matchData.team1.name} - ${matchData.team2.name}`
             : t('header.notSet')}
         </div>
 
         {/* Date and Time */}
-        <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)', textAlign: 'center' }}>
+        <div className="text-xs tabular-nums text-stone-500">
           {matchData.match.scheduledAt ? (
             (() => {
               try {
                 const date = new Date(matchData.match.scheduledAt)
                 // Display as UTC (no timezone conversion) since we store time as-entered
-                // Explicitly format as dd/mm/yyyy HH:mm
+                // Explicitly format as dd.mm.yyyy HH:mm
                 const day = String(date.getUTCDate()).padStart(2, '0')
                 const month = String(date.getUTCMonth() + 1).padStart(2, '0')
                 const year = date.getUTCFullYear()
                 const hours = String(date.getUTCHours()).padStart(2, '0')
                 const minutes = String(date.getUTCMinutes()).padStart(2, '0')
-                return `${day}/${month}/${year}, ${hours}:${minutes}`
+                return `${day}.${month}.${year} ${hours}:${minutes}`
               } catch {
                 return matchData.match.scheduledAt
               }
@@ -371,17 +357,12 @@ export default function MainHeader({
         </div>
 
         {/* PIN or TEST */}
-        <div style={{
-          fontSize: '13px',
-          textAlign: 'center',
-          padding: '6px 12px',
-          borderRadius: '4px',
-          background: matchData.match.test ? 'rgba(251, 191, 36, 0.2)' : 'rgba(255, 255, 255, 0.1)',
-          color: matchData.match.test ? '#fbbf24' : '#fff',
-          fontWeight: 600,
-          fontFamily: matchData.match.test ? 'inherit' : 'monospace',
-          letterSpacing: matchData.match.test ? '0.5px' : '2px'
-        }}>
+        <div className={cn(
+          'rounded-lg border px-3 py-1.5 text-sm font-semibold',
+          matchData.match.test
+            ? 'border-amber-200 bg-amber-50 text-[11px] uppercase tracking-[0.08em] text-amber-800'
+            : 'border-stone-200 bg-stone-50 font-mono tracking-[0.3em] text-stone-900'
+        )}>
           {matchData.match.test ? t('header.test') : (matchData.match.gamePin || 'N/A')}
         </div>
       </div>
@@ -397,87 +378,45 @@ export default function MainHeader({
     const buttonText = isTest ? t('header.testMatch') : t('header.matchNumber', { number: matchNumber })
 
     return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        position: 'relative',
-        width: 'auto',
-        height: '32px'
-      }}>
-        <button
-          data-match-info-menu
-          onClick={(e) => {
-            e.stopPropagation()
-            setMatchInfoMenuOpen(!matchInfoMenuOpen)
-          }}
-          style={{
-            padding: '5px 12px',
-            fontSize: 'clamp(12px, 1.2vw, 14px)',
-            fontWeight: 600,
-            background: 'rgba(255, 255, 255, 0.1)',
-            color: isTest ? '#fbbf24' : 'rgba(255, 255, 255, 0.9)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            width: 'auto',
-            height: 'auto',
-            minHeight: '20px',
-            minWidth: '100px',
-            maxHeight: '30px',
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-          }}
-        >
-          <span>{buttonText}</span>
-          <span style={{ fontSize: '10px', transition: 'transform 0.2s', transform: matchInfoMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
-            ▼
-          </span>
-        </button>
+      <div className="relative flex h-8 w-auto items-center justify-center gap-1.5">
+        <span className={KIT_SCOPE}>
+          <button
+            type="button"
+            data-match-info-menu
+            aria-expanded={matchInfoMenuOpen}
+            onClick={(e) => {
+              e.stopPropagation()
+              setMatchInfoMenuOpen(!matchInfoMenuOpen)
+            }}
+            className={cn(
+              'inline-flex h-7 min-w-[100px] items-center justify-center gap-1 rounded-full border px-3 text-xs font-semibold tabular-nums transition-colors cursor-pointer',
+              FOCUS_RING,
+              isTest
+                ? 'border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200/70'
+                : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-100'
+            )}
+          >
+            <span>{buttonText}</span>
+            <ChevronDown size={13} aria-hidden="true" className={cn('transition-transform', matchInfoMenuOpen && 'rotate-180')} />
+          </button>
+        </span>
 
         {/* Header collapse toggle button */}
         {collapsible && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              setIsCollapsed(!isCollapsed)
-            }}
-            style={{
-              padding: '4px 8px',
-              fontSize: '12px',
-              fontWeight: 700,
-              background: 'rgba(34, 197, 94, 0.2)',
-              color: '#22c55e',
-              border: '1px solid rgba(34, 197, 94, 0.4)',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minHeight: '20px',
-              maxHeight: '30px'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(34, 197, 94, 0.3)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'rgba(34, 197, 94, 0.2)'
-            }}
-            title={isCollapsed ? 'Show Header' : 'Hide Header'}
-          >
-            <span style={{ transition: 'transform 0.2s', transform: isCollapsed ? 'rotate(180deg)' : 'rotate(0deg)' }}>▲</span>
-          </button>
+          <span className={KIT_SCOPE}>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setIsCollapsed(!isCollapsed)
+              }}
+              className={cn(HEADER_BTN, 'h-7 w-7 px-0')}
+              aria-label={isCollapsed ? t('header.showHeader', 'Show header') : t('header.hideHeader', 'Hide header')}
+              title={isCollapsed ? t('header.showHeader', 'Show header') : t('header.hideHeader', 'Hide header')}
+            >
+              <ChevronUp size={15} aria-hidden="true" className={cn('transition-transform', isCollapsed && 'rotate-180')} />
+            </button>
+          </span>
         )}
 
         {/* Collapsible Match Info Menu - hide when header is collapsed */}
@@ -486,10 +425,143 @@ export default function MainHeader({
     )
   }
 
+  // One look for every row of the header menus (compact and desktop).
+  const currentLanguage = languages.find(l => l.code === i18n.language)
+  const CurrentFlag = currentLanguage ? currentLanguage.Flag : FlagGB
+  const isCurrentScale = (scale) => userScaleOverride === scale || (userScaleOverride === null && scale === 1.0)
+
+  const languageOptions = (
+    <div className={MENU_NEST}>
+      {languages.map((lang) => (
+        <button
+          type="button"
+          key={lang.code}
+          aria-pressed={i18n.language === lang.code}
+          onClick={(e) => {
+            e.stopPropagation()
+            i18n.changeLanguage(lang.code)
+            setLanguageMenuOpen(false)
+          }}
+          className={cn(MENU_SUBROW, i18n.language === lang.code && MENU_ROW_ON)}
+        >
+          <FlagBox><lang.Flag /></FlagBox>
+          <span>{lang.label}</span>
+        </button>
+      ))}
+    </div>
+  )
+
+  const scaleOptionsList = (
+    <div className={MENU_NEST}>
+      {scaleOptions.map((scale) => (
+        <button
+          type="button"
+          key={scale}
+          aria-pressed={isCurrentScale(scale)}
+          onClick={(e) => {
+            e.stopPropagation()
+            setUserScaleOverride(scale === 1.0 ? null : scale)
+            setScaleMenuOpen(false)
+          }}
+          className={cn(MENU_SUBROW, 'justify-center tabular-nums', isCurrentScale(scale) && MENU_ROW_ON)}
+        >
+          <span>{Math.round(scale * 100)}%{scale === 1.0 ? ` (${t('header.default', 'Default')})` : ''}</span>
+        </button>
+      ))}
+    </div>
+  )
+
+  const fullscreenRow = (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        toggleFullscreen()
+        setActionsMenuOpen(false)
+      }}
+      className={MENU_ROW}
+    >
+      <span className={MENU_ICON}>{isFullscreen ? <Minimize size={15} /> : <Maximize size={15} />}</span>
+      <span>{isFullscreen ? t('header.exitFullscreen') : t('header.fullscreen')}</span>
+    </button>
+  )
+
+  // The version history is gone, so the version is a plain line (no control).
+  const versionRow = (
+    <div className={cn(MENU_ROW, 'cursor-default text-stone-500 hover:bg-transparent')} data-testid="header-version">
+      <span className={MENU_ICON}><ClipboardList size={14} /></span>
+      <span className="tabular-nums">v{currentVersion}</span>
+    </div>
+  )
+
+  const languageRow = (
+    <button
+      type="button"
+      aria-expanded={languageMenuOpen}
+      onClick={(e) => {
+        e.stopPropagation()
+        setLanguageMenuOpen(!languageMenuOpen)
+      }}
+      className={cn(MENU_ROW, languageMenuOpen && 'bg-stone-100')}
+    >
+      <span className={MENU_ICON}><CurrentFlag /></span>
+      <span>{currentLanguage?.label || 'EN'}</span>
+      <ChevronDown size={14} aria-hidden="true" className={cn('ml-auto text-stone-400 transition-transform', languageMenuOpen && 'rotate-180')} />
+    </button>
+  )
+
+  const scaleRow = (
+    <button
+      type="button"
+      aria-expanded={scaleMenuOpen}
+      onClick={(e) => {
+        e.stopPropagation()
+        setScaleMenuOpen(!scaleMenuOpen)
+      }}
+      className={cn(MENU_ROW, scaleMenuOpen && 'bg-stone-100')}
+    >
+      <span className={MENU_ICON}><ZoomIn size={14} /></span>
+      <span>{t('header.scale', 'Scale')}</span>
+      <span className={MENU_COUNT}>{Math.round(scaleFactor * 100)}%</span>
+    </button>
+  )
+
+  // Home: back to the setup of the open match (shown only away from home).
+  const homeRow = matchId && onOpenSetup && (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        onOpenSetup()
+        setActionsMenuOpen(false)
+      }}
+      className={MENU_ROW}
+    >
+      <span className={MENU_ICON}><House size={15} /></span>
+      <span>{t('Home')}</span>
+    </button>
+  )
+
+  const guideRow = onOpenGuide && (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        onOpenGuide()
+        setActionsMenuOpen(false)
+      }}
+      className={MENU_ROW}
+    >
+      <span className={MENU_ICON}><BookOpen size={15} /></span>
+      <span>{t('interactiveGuide.title', 'App guide')}</span>
+    </button>
+  )
+
   return (
-    <div style={{ position: 'relative', zIndex: 1000 }}>
+    <div className="no-print" style={{ position: 'relative', zIndex: 1000 }}>
       <div
         ref={headerRef}
+        className={effectivelyCollapsed ? 'bg-white' : HEADER_BAR}
         style={{
           display: 'flex',
           height: effectivelyCollapsed ? '0px' : `${40 * scaleFactor}px`,
@@ -498,8 +570,6 @@ export default function MainHeader({
           justifyContent: 'space-between',
           alignItems: 'center',
           padding: effectivelyCollapsed ? '0' : `0 ${Math.round(12 * scaleFactor)}px`,
-          background: 'rgba(0, 0, 0, 0.2)',
-          borderBottom: effectivelyCollapsed ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
           flexShrink: 0,
           gap: `${Math.round(10 * scaleFactor)}px`,
           overflow: effectivelyCollapsed ? 'hidden' : 'visible',
@@ -509,61 +579,20 @@ export default function MainHeader({
         {/* Left: Online/Offline Toggle + Connection Status */}
         <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
           {/* Online/Offline Toggle */}
-          <button
-            onClick={() => setOfflineMode(!offlineMode)}
-            title={offlineMode ? t('header.switchToOnline') : t('header.switchToOffline')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '4px 8px',
-              fontSize: 'clamp(9px, 1.1vw, 11px)',
-              fontWeight: 600,
-              background: 'transparent',
-              color: offlineMode ? '#ef4444' : '#22c55e',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              whiteSpace: 'nowrap'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent'
-            }}
-          >
-            <span>{offlineMode ? t('header.offline') : t('header.online')}</span>
-            {/* Toggle Switch */}
-            <div
-              style={{
-                position: 'relative',
-                width: '25px',
-                height: '15px',
-                borderRadius: '10px',
-                background: offlineMode ? 'rgba(239, 68, 68, 0.3)' : 'rgba(34, 197, 94, 0.3)',
-                border: `1px solid ${offlineMode ? 'rgba(239, 68, 68, 0.5)' : 'rgba(34, 197, 94, 0.5)'}`,
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                display: 'flex',
-                alignItems: 'center',
-                padding: '2px'
-              }}
+          <span className={KIT_SCOPE}>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={!offlineMode}
+              onClick={() => setOfflineMode(!offlineMode)}
+              title={offlineMode ? t('header.switchToOnline') : t('header.switchToOffline')}
+              className={HEADER_SWITCH}
             >
-              <div
-                style={{
-                  width: '12px',
-                  height: '12px',
-                  borderRadius: '50%',
-                  background: offlineMode ? '#ef4444' : '#22c55e',
-                  transform: offlineMode ? 'translateX(0)' : 'translateX(9px)',
-                  transition: 'all 0.3s ease',
-                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
-                }}
-              />
-            </div>
-          </button>
+              <span>{offlineMode ? t('header.offline') : t('header.online')}</span>
+              {/* Switch track: emerald when online (no brand red on a state) */}
+              <SwitchTrack checked={!offlineMode} className={!offlineMode ? 'bg-emerald-500' : undefined} />
+            </button>
+          </span>
 
           {/* Connection Status - only show in online mode */}
           {!offlineMode && (
@@ -584,170 +613,90 @@ export default function MainHeader({
 
           {/* Alarm Bell Button - visible if alarm is enabled and match is active */}
           {alarmEnabled && onTriggerAlarm && matchId && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                onTriggerAlarm()
-              }}
-              title="Alarm Bell: Notify Referee"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '4px 10px',
-                fontSize: 'clamp(10px, 1.2vw, 12px)',
-                fontWeight: 600,
-                background: '#ef4444', // Red
-                color: '#fff',
-                border: '1px solid #dc2626',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                whiteSpace: 'nowrap'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#dc2626'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = '#ef4444'
-              }}
-            >
-              <span><Bell /></span>
-            </button>
+            <span className={KIT_SCOPE}>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onTriggerAlarm()
+                }}
+                aria-label={t('header.alarmBellNotify', 'Alarm bell: notify the referee')}
+                title={t('header.alarmBellNotify', 'Alarm bell: notify the referee')}
+                className={cn(HEADER_BTN, HEADER_BTN_ON, 'w-9 px-0')}
+              >
+                <Bell size={14} aria-hidden="true" />
+              </button>
+            </span>
           )}
 
           {/* Dashboard Server Indicator */}
           {dashboardServer?.enabled && (
             <div ref={dashboardButtonRef} style={{ position: 'relative' }}>
-              <button
-                onClick={openDashboardMenu}
-                title={`${dashboardServer.dashboardCount || 0} dashboard(s) connected${dashboardServer.refereePin ? ` | PIN: ${dashboardServer.refereePin}` : ''}`}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '4px 10px',
-                  fontSize: 'clamp(9px, 1.1vw, 11px)',
-                  fontWeight: 600,
-                  background: dashboardServer.dashboardCount > 0
-                    ? 'rgba(34, 197, 94, 0.15)'
-                    : 'rgba(255, 255, 255, 0.08)',
-                  color: dashboardServer.dashboardCount > 0 ? '#22c55e' : 'rgba(255, 255, 255, 0.7)',
-                  border: `1px solid ${dashboardServer.dashboardCount > 0 ? 'rgba(34, 197, 94, 0.3)' : 'rgba(255, 255, 255, 0.15)'}`,
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  whiteSpace: 'nowrap'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = dashboardServer.dashboardCount > 0
-                    ? 'rgba(34, 197, 94, 0.25)'
-                    : 'rgba(255, 255, 255, 0.15)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = dashboardServer.dashboardCount > 0
-                    ? 'rgba(34, 197, 94, 0.15)'
-                    : 'rgba(255, 255, 255, 0.08)'
-                }}
-              >
-                <span style={{ fontSize: '12px' }}>&#128225;</span>
-                <span>{dashboardServer.dashboardCount || 0}</span>
-                {dashboardServer.refereePin && (
-                  <span style={{
-                    padding: '2px 6px',
-                    background: 'rgba(59, 130, 246, 0.2)',
-                    borderRadius: '4px',
-                    fontSize: 'clamp(8px, 1vw, 10px)',
-                    fontFamily: 'monospace',
-                    color: '#3b82f6',
-                    letterSpacing: '1px'
-                  }}>
-                    {dashboardServer.refereePin}
-                  </span>
-                )}
-                <span style={{ fontSize: '8px', marginLeft: '2px' }}>{dashboardMenuOpen ? '▲' : '▼'}</span>
-              </button>
+              <span className={KIT_SCOPE}>
+                <button
+                  type="button"
+                  onClick={openDashboardMenu}
+                  aria-expanded={dashboardMenuOpen}
+                  title={`${dashboardServer.dashboardCount || 0} dashboard(s) connected${dashboardServer.refereePin ? ` | PIN: ${dashboardServer.refereePin}` : ''}`}
+                  className={cn(STATUS_PILL, FOCUS_RING, dashboardServer.dashboardCount > 0 ? STATUS_TONES.ok.pill : STATUS_TONES.neutral.pill)}
+                >
+                  <SatelliteDish size={13} aria-hidden="true" />
+                  <span className="tabular-nums">{dashboardServer.dashboardCount || 0}</span>
+                  {dashboardServer.refereePin && (
+                    <span className="rounded bg-stone-100 px-1.5 py-px font-mono text-[10px] tracking-[0.15em] text-stone-700">
+                      {dashboardServer.refereePin}
+                    </span>
+                  )}
+                  <ChevronDown size={12} aria-hidden="true" className={cn('opacity-70 transition-transform', dashboardMenuOpen && 'rotate-180')} />
+                </button>
+              </span>
 
               {/* Dashboard Connection Info Dropdown */}
               {dashboardMenuOpen && (
                 <div
                   onClick={(e) => e.stopPropagation()}
+                  className={cn('ov-kit fixed w-[280px] max-w-[calc(100vw-24px)] space-y-3 text-sm', POPOVER_PANEL)}
                   style={{
-                    position: 'fixed',
                     top: `${dashboardMenuPos.top}px`,
                     right: `${dashboardMenuPos.right}px`,
-                    maxWidth: 'calc(100vw - 24px)',
-                    width: '280px',
-                    background: 'rgba(0, 0, 0, 0.95)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    borderRadius: '8px',
-                    padding: '12px',
-                    zIndex: 1000,
-                    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.6)'
+                    zIndex: 1000
                   }}
                 >
-                  <div style={{
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    color: 'rgba(255, 255, 255, 0.6)',
-                    marginBottom: '10px',
-                    paddingBottom: '6px',
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
-                  }}>
+                  <div className={cn('border-b border-stone-100 pb-2', MENU_TITLE)}>
                     {t('header.dashboardConnectionInfo')}
                   </div>
 
                   {/* Server Status */}
-                  <div style={{ marginBottom: '12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                      <span style={{
-                        display: 'inline-block',
-                        width: '8px',
-                        height: '8px',
-                        borderRadius: '50%',
-                        background: dashboardServer.serverRunning ? '#22c55e' : '#ef4444'
-                      }}></span>
-                      <span style={{ fontSize: '12px', fontWeight: 600 }}>
-                        {dashboardServer.serverRunning ? t('header.serverRunning') : t('header.serverNotRunning')}
-                      </span>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <span className={cn('inline-block h-2 w-2 rounded-full', dashboardServer.serverRunning ? 'bg-emerald-500' : 'bg-red-500')}></span>
+                    <span className="text-xs font-semibold text-stone-800">
+                      {dashboardServer.serverRunning ? t('header.serverRunning') : t('header.serverNotRunning')}
+                    </span>
                   </div>
 
                   {/* IP Address - Prominent Display */}
-                  <div style={{
-                    background: 'rgba(34, 197, 94, 0.1)',
-                    border: '1px solid rgba(34, 197, 94, 0.3)',
-                    borderRadius: '6px',
-                    padding: '10px',
-                    marginBottom: '12px',
-                    textAlign: 'center'
-                  }}>
-                    <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.6)', marginBottom: '4px' }}>
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-center">
+                    <div className="mb-1 text-[11px] text-stone-500">
                       {t('header.connectDevicesToIp')}
                     </div>
-                    <div style={{ fontSize: '16px', fontWeight: 600, fontFamily: 'monospace', color: '#22c55e' }}>
+                    <div className="font-mono text-base font-semibold text-emerald-800">
                       {dashboardServer.serverIP || t('header.notAvailable')}
                       {dashboardServer.serverPort && dashboardServer.serverPort !== 80 && dashboardServer.serverPort !== 443 && (
-                        <span style={{ color: 'rgba(255,255,255,0.7)' }}>:{dashboardServer.serverPort}</span>
+                        <span className="text-stone-500">:{dashboardServer.serverPort}</span>
                       )}
                     </div>
                   </div>
 
                   {/* Connection URLs */}
                   {dashboardServer.serverIP && (
-                    <div style={{
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      borderRadius: '6px',
-                      padding: '10px',
-                      marginBottom: '12px'
-                    }}>
-                      <div style={{ fontSize: '11px', fontWeight: 600, marginBottom: '8px', color: 'rgba(255,255,255,0.8)' }}>
+                    <div className="rounded-lg border border-stone-200 bg-stone-50 p-2.5">
+                      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-stone-500">
                         {t('header.dashboardUrls')}
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '11px', fontFamily: 'monospace' }}>
+                      <div className="flex flex-col gap-1.5 font-mono text-[11px] text-stone-700">
                         {dashboardServer.connectionUrl && (
-                          <div style={{ wordBreak: 'break-all' }}>
-                            <span style={{ color: 'rgba(255,255,255,0.5)', marginRight: '4px' }}>{t('header.referee')}:</span>
+                          <div className="break-all">
+                            <span className="mr-1 text-stone-500">{t('header.referee')}:</span>
                             <span>{dashboardServer.connectionUrl}/referee</span>
                           </div>
                         )}
@@ -756,38 +705,27 @@ export default function MainHeader({
                   )}
 
                   {/* Connected Dashboards Count */}
-                  <div style={{
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    borderRadius: '6px',
-                    padding: '10px',
-                    marginBottom: '12px'
-                  }}>
-                    <div style={{ fontSize: '11px', fontWeight: 600, marginBottom: '8px', color: 'rgba(255,255,255,0.8)' }}>
+                  <div className="rounded-lg border border-stone-200 bg-stone-50 p-2.5">
+                    <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-stone-500">
                       {t('header.connectedDevices')}
                     </div>
-                    <div style={{ display: 'flex', gap: '16px', fontSize: '12px' }}>
+                    <div className="flex gap-4 text-xs text-stone-700">
                       <div>
-                        <span style={{ color: 'rgba(255,255,255,0.5)' }}>{t('header.total')}: </span>
-                        <span style={{ fontWeight: 600 }}>{dashboardServer.dashboardCount || 0}</span>
+                        <span className="text-stone-500">{t('header.total')}: </span>
+                        <span className="font-semibold tabular-nums">{dashboardServer.dashboardCount || 0}</span>
                       </div>
                       <div>
-                        <span style={{ color: 'rgba(255,255,255,0.5)' }}>{t('header.referees')}: </span>
-                        <span style={{ fontWeight: 600 }}>{dashboardServer.refereeCount || 0}</span>
+                        <span className="text-stone-500">{t('header.referees')}: </span>
+                        <span className="font-semibold tabular-nums">{dashboardServer.refereeCount || 0}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* PIN */}
                   {dashboardServer.refereePin && (
-                    <div style={{
-                      background: 'rgba(59, 130, 246, 0.1)',
-                      border: '1px solid rgba(59, 130, 246, 0.3)',
-                      borderRadius: '6px',
-                      padding: '10px',
-                      marginBottom: '12px'
-                    }}>
-                      <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', marginBottom: '4px' }}>{t('header.matchPin')}</div>
-                      <div style={{ fontSize: '18px', fontWeight: 600, fontFamily: 'monospace', color: '#3b82f6', letterSpacing: '2px' }}>
+                    <div className="rounded-lg border border-stone-200 bg-stone-50 p-2.5">
+                      <div className="mb-1 text-[11px] text-stone-500">{t('header.matchPin')}</div>
+                      <div className="font-mono text-lg font-semibold tracking-[0.3em] text-stone-900">
                         {dashboardServer.refereePin}
                       </div>
                     </div>
@@ -795,21 +733,12 @@ export default function MainHeader({
 
                   {/* More Options Button */}
                   <button
+                    type="button"
                     onClick={() => {
                       setDashboardMenuOpen(false)
                       dashboardServer.onOpenOptions?.()
                     }}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      background: 'rgba(255, 255, 255, 0.1)',
-                      color: 'var(--text)',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      borderRadius: '6px',
-                      cursor: 'pointer'
-                    }}
+                    className={cn('inline-flex h-10 w-full items-center justify-center rounded-lg border border-stone-300 bg-white px-4 text-sm font-medium text-stone-700 hover:bg-stone-50 transition-colors cursor-pointer', FOCUS_RING)}
                   >
                     {t('header.moreOptions')}
                   </button>
@@ -837,7 +766,7 @@ export default function MainHeader({
           </div>
         ) : null}
 
-        {/* Right: Home Button, Version and Fullscreen */}
+        {/* Right: the app menu */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -848,452 +777,72 @@ export default function MainHeader({
         }}>
           {/* Compact Mode: Collapsible Actions Menu */}
           {isCompactMode ? (
-            <>
-              <div style={{ position: 'relative' }}>
+            <div style={{ position: 'relative' }}>
+              <span className={KIT_SCOPE}>
                 <button
+                  type="button"
+                  aria-expanded={actionsMenuOpen}
                   onClick={(e) => {
                     e.stopPropagation()
                     setActionsMenuOpen(!actionsMenuOpen)
                   }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '0 10px',
-                    height: '32px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    background: actionsMenuOpen ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.1)',
-                    color: '#fff',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    gap: '6px',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)'
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!actionsMenuOpen) {
-                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-                    }
-                  }}
+                  className={cn(HEADER_BTN, actionsMenuOpen && HEADER_BTN_ON)}
                 >
                   <span>{isFullscreen ? t('header.exit') : t('header.fullscreen')}</span>
-                  <span style={{
-                    fontSize: '8px',
-                    transition: 'transform 0.2s',
-                    transform: actionsMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)'
-                  }}>
-                    ▼
-                  </span>
+                  <ChevronDown size={13} aria-hidden="true" className={cn('transition-transform', actionsMenuOpen && 'rotate-180')} />
                 </button>
+              </span>
 
-                {/* Expanded Actions Menu */}
-                {actionsMenuOpen && (
-                  <div
-                    onClick={(e) => e.stopPropagation()}
-                    style={{
-                      position: 'absolute',
-                      top: '100%',
-                      right: 0,
-                      marginTop: '4px',
-                      padding: '8px',
-                      background: 'rgba(0, 0, 0, 0.95)',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      borderRadius: '8px',
-                      minWidth: '160px',
-                      zIndex: 1000,
-                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '6px'
-                    }}
-                  >
-                    {/* Fullscreen Action */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        toggleFullscreen()
-                        setActionsMenuOpen(false)
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '8px 12px',
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        background: 'rgba(255, 255, 255, 0.1)',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        width: '100%',
-                        textAlign: 'left'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-                      }}
-                    >
-                      <span>⛶</span>
-                      <span>{isFullscreen ? t('header.exitFullscreen') : t('header.fullscreen')}</span>
-                    </button>
-
-                    {/* Version Action */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setVersionMenuOpen(!versionMenuOpen)
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '8px 12px',
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        background: versionMenuOpen ? 'rgba(255, 255, 255, 0.15)' : 'transparent',
-                        color: 'rgba(255, 255, 255, 0.8)',
-                        border: 'none',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        width: '100%',
-                        textAlign: 'left'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!versionMenuOpen) {
-                          e.currentTarget.style.background = 'transparent'
-                        }
-                      }}
-                    >
-                      <span><ClipboardList /></span>
-                      <span>v{currentVersion}</span>
-                    </button>
-
-                    {/* Language Selector Action */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setLanguageMenuOpen(!languageMenuOpen)
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '8px 12px',
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        background: languageMenuOpen ? 'rgba(255, 255, 255, 0.15)' : 'transparent',
-                        color: 'rgba(255, 255, 255, 0.8)',
-                        border: 'none',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        width: '100%',
-                        textAlign: 'left'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!languageMenuOpen) {
-                          e.currentTarget.style.background = 'transparent'
-                        }
-                      }}
-                    >
-                      {(() => { const current = languages.find(l => l.code === i18n.language); return current ? <current.Flag /> : <FlagGB /> })()}
-                      <span>{languages.find(l => l.code === i18n.language)?.label || 'EN'}</span>
-                    </button>
-
-                    {/* Language Options - nested dropdown */}
-                    {languageMenuOpen && (
-                      <div
-                        style={{
-                          padding: '8px',
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          borderRadius: '6px'
-                        }}
-                      >
-                        {languages.map((lang) => (
-                          <button
-                            key={lang.code}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              i18n.changeLanguage(lang.code)
-                              setLanguageMenuOpen(false)
-                            }}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              width: '100%',
-                              padding: '6px 10px',
-                              fontSize: '12px',
-                              fontWeight: i18n.language === lang.code ? 600 : 400,
-                              background: i18n.language === lang.code ? 'rgba(74, 222, 128, 0.2)' : 'transparent',
-                              color: i18n.language === lang.code ? '#4ade80' : '#fff',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s',
-                              textAlign: 'left'
-                            }}
-                            onMouseEnter={(e) => {
-                              if (i18n.language !== lang.code) {
-                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (i18n.language !== lang.code) {
-                                e.currentTarget.style.background = 'transparent'
-                              }
-                            }}
-                          >
-                            <lang.Flag />
-                            <span>{lang.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Display Scale Selector */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setScaleMenuOpen(!scaleMenuOpen)
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '8px 12px',
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        background: scaleMenuOpen ? 'rgba(255, 255, 255, 0.15)' : 'transparent',
-                        color: 'rgba(255, 255, 255, 0.8)',
-                        border: 'none',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        width: '100%',
-                        textAlign: 'left'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!scaleMenuOpen) {
-                          e.currentTarget.style.background = 'transparent'
-                        }
-                      }}
-                    >
-                      <span><Search /></span>
-                      <span>{t('header.scale', 'Scale')}</span>
-                      <span style={{
-                        marginLeft: 'auto',
-                        padding: '2px 6px',
-                        background: 'rgba(59, 130, 246, 0.2)',
-                        borderRadius: '4px',
-                        fontSize: '10px',
-                        fontWeight: 600,
-                        color: '#3b82f6'
-                      }}>
-                        {Math.round(scaleFactor * 100)}%
-                      </span>
-                    </button>
-
-                    {/* Scale Options - nested dropdown (Compact) */}
-                    {scaleMenuOpen && (
-                      <div
-                        style={{
-                          padding: '8px',
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          borderRadius: '6px'
-                        }}
-                      >
-                        {scaleOptions.map((scale) => (
-                          <button
-                            key={scale}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setUserScaleOverride(scale === 1.0 ? null : scale)
-                              setScaleMenuOpen(false)
-                            }}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              width: '100%',
-                              padding: '6px 10px',
-                              fontSize: '12px',
-                              fontWeight: (userScaleOverride === scale || (userScaleOverride === null && scale === 1.0)) ? 600 : 400,
-                              background: (userScaleOverride === scale || (userScaleOverride === null && scale === 1.0)) ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
-                              color: (userScaleOverride === scale || (userScaleOverride === null && scale === 1.0)) ? '#3b82f6' : '#fff',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s',
-                              textAlign: 'center'
-                            }}
-                            onMouseEnter={(e) => {
-                              if (!(userScaleOverride === scale || (userScaleOverride === null && scale === 1.0))) {
-                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (!(userScaleOverride === scale || (userScaleOverride === null && scale === 1.0))) {
-                                e.currentTarget.style.background = 'transparent'
-                              }
-                            }}
-                          >
-                            <span>{Math.round(scale * 100)}%{scale === 1.0 ? ` (${t('header.default', 'Default')})` : ''}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Home Action - only show when not on home screen */}
-                    {matchId && onOpenSetup && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onOpenSetup()
-                          setActionsMenuOpen(false)
-                        }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          padding: '8px 12px',
-                          fontSize: '13px',
-                          fontWeight: 500,
-                          background: 'transparent',
-                          color: '#22c55e',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s',
-                          width: '100%',
-                          textAlign: 'left'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = 'rgba(34, 197, 94, 0.15)'
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'transparent'
-                        }}
-                      >
-                        <span>{t('Home')}</span>
-                      </button>
-                    )}
-
-                    {/* App Guide Action */}
-                    {onOpenGuide && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onOpenGuide()
-                          setActionsMenuOpen(false)
-                        }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          padding: '8px 12px',
-                          fontSize: '13px',
-                          fontWeight: 500,
-                          background: 'transparent',
-                          color: '#60a5fa',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s',
-                          width: '100%',
-                          textAlign: 'left'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = 'rgba(96, 165, 250, 0.15)'
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'transparent'
-                        }}
-                      >
-                        <span><BookOpen /></span>
-                        <span>{t('interactiveGuide.title', 'App Guide')}</span>
-                      </button>
-                    )}
-
-                    {/* Version history removed */}
-                  </div>
-                )}
-              </div>
-            </>
+              {/* Expanded Actions Menu */}
+              {actionsMenuOpen && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className={cn('ov-kit absolute right-0 top-full mt-1.5 flex min-w-[220px] max-h-[calc(100vh-56px)] flex-col overflow-y-auto', MENU_PANEL)}
+                  style={{ zIndex: 1000 }}
+                >
+                  {fullscreenRow}
+                  {versionRow}
+                  {languageRow}
+                  {languageMenuOpen && languageOptions}
+                  {scaleRow}
+                  {scaleMenuOpen && scaleOptionsList}
+                  {homeRow}
+                  {guideRow}
+                </div>
+              )}
+            </div>
           ) : (
-            /* Desktop Mode: Unified hamburger menu + Fullscreen button */
+            /* Desktop Mode: Unified hamburger menu */
             <>
               {/* Viewport Size Display - Editable (hidden by default) */}
               {showViewportSize && (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  fontSize: 'clamp(10px, 1.2vw, 12px)',
-                  color: 'rgba(255, 255, 255, 0.6)',
-                  whiteSpace: 'nowrap'
-                }}>
+                <div className="ov-kit flex items-center gap-1 whitespace-nowrap text-xs tabular-nums text-stone-500">
                   {isEditing ? (
                     <>
                       <input
                         type="number"
+                        aria-label={t('header.viewportWidth', 'Width')}
                         value={editingSize.width}
                         onChange={(e) => setEditingSize({ ...editingSize, width: e.target.value })}
                         onKeyDown={handleKeyDown}
                         onBlur={handleResizeViewport}
                         autoFocus
-                        style={{
-                          width: '60px',
-                          fontSize: 'clamp(10px, 1.2vw, 12px)',
-                          color: 'rgba(255, 255, 255, 0.9)',
-                          background: 'rgba(255, 255, 255, 0.1)',
-                          border: '1px solid rgba(255, 255, 255, 0.3)',
-                          borderRadius: '4px',
-                          padding: '2px 4px',
-                          textAlign: 'center',
-                          outline: 'none'
-                        }}
+                        className="h-7 w-[60px] rounded-md border border-stone-300 bg-white px-1 text-center text-xs text-stone-800 outline-none focus:ring-2 focus:ring-red-500"
                       />
                       <span>×</span>
                       <input
                         type="number"
+                        aria-label={t('header.viewportHeight', 'Height')}
                         value={editingSize.height}
                         onChange={(e) => setEditingSize({ ...editingSize, height: e.target.value })}
                         onKeyDown={handleKeyDown}
                         onBlur={handleResizeViewport}
-                        style={{
-                          width: '60px',
-                          fontSize: 'clamp(10px, 1.2vw, 12px)',
-                          color: 'rgba(255, 255, 255, 0.9)',
-                          background: 'rgba(255, 255, 255, 0.1)',
-                          border: '1px solid rgba(255, 255, 255, 0.3)',
-                          borderRadius: '4px',
-                          padding: '2px 4px',
-                          textAlign: 'center',
-                          outline: 'none'
-                        }}
+                        className="h-7 w-[60px] rounded-md border border-stone-300 bg-white px-1 text-center text-xs text-stone-800 outline-none focus:ring-2 focus:ring-red-500"
                       />
                     </>
                   ) : (
-                    <span
+                    <button
+                      type="button"
                       onClick={() => {
                         setEditingSize({
                           width: viewportSize.width.toString(),
@@ -1301,430 +850,53 @@ export default function MainHeader({
                         })
                         setIsEditing(true)
                       }}
-                      style={{
-                        cursor: 'pointer',
-                        padding: '2px 4px',
-                        borderRadius: '4px',
-                        transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-                        e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'transparent'
-                        e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)'
-                      }}
-                      title="Click to edit and resize viewport"
+                      className={cn('rounded px-1 py-0.5 text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition-colors', FOCUS_RING)}
+                      title={t('header.viewportEdit', 'Click to edit and resize the viewport')}
                     >
                       {viewportSize.width} × {viewportSize.height}
-                    </span>
+                    </button>
                   )}
                 </div>
               )}
 
               {/* Unified Menu Button (hamburger) */}
               <div style={{ position: 'relative' }}>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setActionsMenuOpen(!actionsMenuOpen)
-                    setLanguageMenuOpen(false)
-                    setVersionMenuOpen(false)
-                    setScaleMenuOpen(false)
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '4px 12px',
-                    height: '32px',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    background: actionsMenuOpen ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.1)',
-                    color: '#fff',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    gap: '6px',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)'
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!actionsMenuOpen) {
-                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-                    }
-                  }}
-                  title={t('header.menu', 'Menu')}
-                >
-                  <span>{actionsMenuOpen ? '✕' : '☰'}</span>
-                </button>
+                <span className={KIT_SCOPE}>
+                  <button
+                    type="button"
+                    aria-expanded={actionsMenuOpen}
+                    aria-label={t('header.menu', 'Menu')}
+                    title={t('header.menu', 'Menu')}
+                    data-help-id="header-menu-button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setActionsMenuOpen(!actionsMenuOpen)
+                      setLanguageMenuOpen(false)
+                      setScaleMenuOpen(false)
+                    }}
+                    className={cn(HEADER_BTN, 'w-9 px-0', actionsMenuOpen && HEADER_BTN_ON)}
+                  >
+                    {actionsMenuOpen ? <X size={16} aria-hidden="true" /> : <Menu size={16} aria-hidden="true" />}
+                  </button>
+                </span>
 
                 {/* Unified Actions Menu */}
                 {actionsMenuOpen && (
                   <div
                     onClick={(e) => e.stopPropagation()}
-                    style={{
-                      position: 'absolute',
-                      top: '100%',
-                      right: 0,
-                      marginTop: '4px',
-                      padding: '8px',
-                      background: 'rgba(0, 0, 0, 0.95)',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      borderRadius: '8px',
-                      minWidth: '200px',
-                      zIndex: 1000,
-                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '4px'
-                    }}
+                    className={cn('ov-kit absolute right-0 top-full mt-1.5 flex min-w-[240px] max-h-[calc(100vh-56px)] flex-col overflow-y-auto', MENU_PANEL)}
+                    style={{ zIndex: 1000 }}
                   >
-                    {/* Home Action - only show when not on home screen */}
-                    {matchId && onOpenSetup && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onOpenSetup()
-                          setActionsMenuOpen(false)
-                        }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '10px',
-                          padding: '10px 14px',
-                          fontSize: '13px',
-                          fontWeight: 500,
-                          background: 'transparent',
-                          color: '#22c55e',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s',
-                          width: '100%',
-                          textAlign: 'left'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = 'rgba(34, 197, 94, 0.15)'
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'transparent'
-                        }}
-                      >
-                        <span><House /></span>
-                        <span>{t('Home')}</span>
-                      </button>
-                    )}
-
-                    {/* App Guide Action */}
-                    {onOpenGuide && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onOpenGuide()
-                          setActionsMenuOpen(false)
-                        }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '10px',
-                          padding: '10px 14px',
-                          fontSize: '13px',
-                          fontWeight: 500,
-                          background: 'transparent',
-                          color: '#60a5fa',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s',
-                          width: '100%',
-                          textAlign: 'left'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = 'rgba(96, 165, 250, 0.15)'
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'transparent'
-                        }}
-                      >
-                        <span><BookOpen /></span>
-                        <span>{t('interactiveGuide.title', 'App Guide')}</span>
-                      </button>
-                    )}
-
-                    {/* Divider */}
-                    <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.1)', margin: '4px 0' }} />
-
-                    {/* Language Selector */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setLanguageMenuOpen(!languageMenuOpen)
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        padding: '10px 14px',
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        background: languageMenuOpen ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
-                        color: 'rgba(255, 255, 255, 0.8)',
-                        border: 'none',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        width: '100%',
-                        textAlign: 'left'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!languageMenuOpen) {
-                          e.currentTarget.style.background = 'transparent'
-                        }
-                      }}
-                    >
-                      <span style={{ display: 'flex', alignItems: 'center' }}>
-                        {(() => { const current = languages.find(l => l.code === i18n.language); return current ? <current.Flag /> : <FlagGB /> })()}
-                      </span>
-                      <span style={{ flex: 1 }}>{t('header.language', 'Language')}</span>
-                      <span style={{
-                        fontSize: '10px',
-                        transform: languageMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                        transition: 'transform 0.2s'
-                      }}>▼</span>
-                    </button>
-
-                    {/* Language Options - nested */}
-                    {languageMenuOpen && (
-                      <div style={{
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        borderRadius: '6px',
-                        padding: '4px'
-                      }}>
-                        {languages.map((lang) => (
-                          <button
-                            key={lang.code}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              i18n.changeLanguage(lang.code)
-                              setLanguageMenuOpen(false)
-                            }}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              width: '100%',
-                              padding: '8px 12px',
-                              fontSize: '12px',
-                              fontWeight: i18n.language === lang.code ? 600 : 400,
-                              background: i18n.language === lang.code ? 'rgba(74, 222, 128, 0.2)' : 'transparent',
-                              color: i18n.language === lang.code ? '#4ade80' : 'rgba(255, 255, 255, 0.8)',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s',
-                              textAlign: 'left'
-                            }}
-                            onMouseEnter={(e) => {
-                              if (i18n.language !== lang.code) {
-                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (i18n.language !== lang.code) {
-                                e.currentTarget.style.background = 'transparent'
-                              }
-                            }}
-                          >
-                            <FlagBox><lang.Flag /></FlagBox>
-                            <span>{lang.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Display Scale Selector */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setScaleMenuOpen(!scaleMenuOpen)
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        padding: '10px 14px',
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        background: scaleMenuOpen ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
-                        color: 'rgba(255, 255, 255, 0.8)',
-                        border: 'none',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        width: '100%',
-                        textAlign: 'left'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!scaleMenuOpen) {
-                          e.currentTarget.style.background = 'transparent'
-                        }
-                      }}
-                    >
-                      <span><Search /></span>
-                      <span style={{ flex: 1 }}>{t('header.scale', 'Scale')}</span>
-                      <span style={{
-                        padding: '2px 6px',
-                        background: 'rgba(59, 130, 246, 0.2)',
-                        borderRadius: '4px',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        color: '#3b82f6'
-                      }}>
-                        {Math.round(scaleFactor * 100)}%
-                      </span>
-                      <span style={{
-                        fontSize: '10px',
-                        transform: scaleMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                        transition: 'transform 0.2s'
-                      }}>▼</span>
-                    </button>
-
-                    {/* Scale Options - nested */}
-                    {scaleMenuOpen && (
-                      <div style={{
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        borderRadius: '6px',
-                        padding: '4px'
-                      }}>
-                        {scaleOptions.map((scale) => (
-                          <button
-                            key={scale}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setUserScaleOverride(scale === 1.0 ? null : scale)
-                              setScaleMenuOpen(false)
-                            }}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              width: '100%',
-                              padding: '8px 12px',
-                              fontSize: '12px',
-                              fontWeight: (userScaleOverride === scale || (userScaleOverride === null && scale === 1.0)) ? 600 : 400,
-                              background: (userScaleOverride === scale || (userScaleOverride === null && scale === 1.0)) ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
-                              color: (userScaleOverride === scale || (userScaleOverride === null && scale === 1.0)) ? '#3b82f6' : 'rgba(255, 255, 255, 0.8)',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s',
-                              textAlign: 'center'
-                            }}
-                            onMouseEnter={(e) => {
-                              if (!(userScaleOverride === scale || (userScaleOverride === null && scale === 1.0))) {
-                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (!(userScaleOverride === scale || (userScaleOverride === null && scale === 1.0))) {
-                                e.currentTarget.style.background = 'transparent'
-                              }
-                            }}
-                          >
-                            <span>{Math.round(scale * 100)}%{scale === 1.0 ? ` (${t('header.default', 'Default')})` : ''}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Version / Changelog */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setVersionMenuOpen(!versionMenuOpen)
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        padding: '10px 14px',
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        background: versionMenuOpen ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
-                        color: 'rgba(255, 255, 255, 0.8)',
-                        border: 'none',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        width: '100%',
-                        textAlign: 'left'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!versionMenuOpen) {
-                          e.currentTarget.style.background = 'transparent'
-                        }
-                      }}
-                    >
-                      <span><ClipboardList /></span>
-                      <span style={{ flex: 1 }}>v{currentVersion}</span>
-                      <span style={{
-                        fontSize: '10px',
-                        transform: versionMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                        transition: 'transform 0.2s'
-                      }}>▼</span>
-                    </button>
-
-                    {/* Version history removed */}
-
-                    {/* Divider */}
-                    <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.1)', margin: '4px 0' }} />
-
-                    {/* Fullscreen Action */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        toggleFullscreen()
-                        setActionsMenuOpen(false)
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        padding: '10px 14px',
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        background: 'transparent',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        width: '100%',
-                        textAlign: 'left'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'transparent'
-                      }}
-                    >
-                      <span>⛶</span>
-                      <span>{isFullscreen ? t('header.exitFullscreen') : t('header.fullscreen')}</span>
-                    </button>
+                    {homeRow}
+                    {guideRow}
+                    {(homeRow || guideRow) && <div className={MENU_SEP} />}
+                    {languageRow}
+                    {languageMenuOpen && languageOptions}
+                    {scaleRow}
+                    {scaleMenuOpen && scaleOptionsList}
+                    {versionRow}
+                    <div className={MENU_SEP} />
+                    {fullscreenRow}
                   </div>
                 )}
               </div>
@@ -1735,26 +907,18 @@ export default function MainHeader({
       </div>
       {/* Show thin expand bar when header is collapsed */}
       {effectivelyCollapsed && (
-        <div
-          onClick={() => setIsCollapsed(false)}
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            width: '100%',
-            height: '16px',
-            cursor: 'pointer',
-            background: 'rgba(0, 0, 0, 0.3)',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-            transition: 'all 0.2s'
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(34, 197, 94, 0.2)'}
-          onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.3)'}
-        >
-          <span style={{ fontSize: '10px', color: '#22c55e', fontWeight: 700 }}>▼</span>
-        </div>
+        <span className={KIT_SCOPE}>
+          <button
+            type="button"
+            onClick={() => setIsCollapsed(false)}
+            aria-label={t('header.showHeader', 'Show header')}
+            title={t('header.showHeader', 'Show header')}
+            className={cn('flex h-4 w-full items-center justify-center border-b border-stone-200/70 bg-white text-stone-500 hover:bg-stone-100 transition-colors', FOCUS_RING)}
+          >
+            <ChevronDown size={12} aria-hidden="true" />
+          </button>
+        </span>
       )}
     </div>
   )
 }
-

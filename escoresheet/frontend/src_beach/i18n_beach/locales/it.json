@@ -694,7 +694,7 @@
     "offline": "Offline",
     "switchToOnline": "Passa alla modalità online",
     "switchToOffline": "Passa alla modalità offline",
-    "dashboardConnectionInfo": "Info connessione dashboard",
+    "dashboardConnectionInfo": "Connessione dashboard",
     "serverStatus": "Stato del server",
     "serverRunning": "Server attivo",
     "serverNotRunning": "Server non attivo",
@@ -706,12 +706,12 @@
     "total": "Totale",
     "referees": "Arbitri",
     "matchPin": "PIN partita",
-    "moreOptions": "Altre opzioni...",
+    "moreOptions": "Altre opzioni…",
     "match": "Partita",
     "notSet": "Non impostato",
-    "testMatch": "PARTITA TEST",
-    "matchNumber": "PARTITA #{{number}}",
-    "test": "TEST",
+    "testMatch": "Partita test",
+    "matchNumber": "Partita #{{number}}",
+    "test": "Test",
     "versionHistory": "Cronologia versioni",
     "current": "Attuale",
     "exitFullscreen": "Esci da schermo intero",
@@ -723,7 +723,15 @@
     "preview": "Anteprima",
     "print": "Stampa",
     "savePdf": "Salva PDF",
-    "allowPopups": "Consenti i popup per visualizzare l'eScoresheet"
+    "allowPopups": "Consenti i popup per visualizzare l'eScoresheet",
+    "showHeader": "Mostra intestazione",
+    "hideHeader": "Nascondi intestazione",
+    "alarmBellNotify": "Campanello: avvisa l’arbitro",
+    "scale": "Scala",
+    "default": "Predefinita",
+    "viewportWidth": "Larghezza",
+    "viewportHeight": "Altezza",
+    "viewportEdit": "Clicca per cambiare le dimensioni della finestra"
   },
   "home": {
     "title": "Openvolley eScoresheet",
@@ -1438,7 +1446,7 @@
     "cloudQRCodeAlt": "QR Code Cloud"
   },
   "interactiveGuide": {
-    "title": "App Guide",
+    "title": "Guida all’app",
     "demos": {
       "net": "NET",
       "frontRow": "Front Row",
@@ -1906,5 +1914,28 @@
     "exitBody": "Le partite sono salvate su questo dispositivo: riapri OpenBeach per continuare.",
     "exitConfirm": "Esci",
     "stay": "Resta"
+  },
+  "screenTooSmall": {
+    "title": "Per usare questa applicazione serve un tablet o uno schermo più grande (almeno 800×600).",
+    "current": "Attuale: {{width}} × {{height}} px",
+    "hint": "Ruota il dispositivo o passa a schermo intero.",
+    "enterFullscreen": "Schermo intero",
+    "fullscreenNote": "Lo schermo intero nasconde le barre del browser per sfruttare tutto lo spazio."
+  },
+  "Home": "Home",
+  "tabletStatus": {
+    "title": "Stato dei tablet",
+    "allConnected": "Tutti i dispositivi collegati",
+    "issuesDetected": "{{count}} dispositivo/i con problemi",
+    "role": {
+      "referee": "Arbitro",
+      "bench_team1": "Panchina squadra 1",
+      "bench_team2": "Panchina squadra 2"
+    },
+    "status": {
+      "connected": "Connesso",
+      "stale": "In ritardo",
+      "disconnected": "Disconnesso"
+    }
   }
 }

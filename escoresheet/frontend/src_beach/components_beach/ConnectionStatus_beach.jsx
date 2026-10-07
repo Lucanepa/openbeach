@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { db } from '../db_beach/db_beach'
+import { ChevronDown } from 'lucide-react'
+import { cn } from '../ui/volleyui/cn.js'
+import { FOCUS_RING, MENU_TITLE, POPOVER_PANEL, STATUS_PILL, STATUS_TONES } from './chromeClasses_beach'
 
 export default function ConnectionStatus({
   connectionStatuses = {},
@@ -95,29 +97,31 @@ export default function ConnectionStatus({
     }
   }, [showConnectionMenu, showDebugMenu])
 
+  // Each state -> a kit tone (STATUS_TONES) and its word. Colour never carries
+  // the meaning alone: the word is always shown next to the dot.
   const getStatusColor = (status, key) => {
     if (status === 'connected' || status === 'live' || status === 'scheduled' || status === 'synced' || status === 'syncing') {
-      return { bg: 'rgba(34, 197, 94, 0.2)', border: 'rgba(34, 197, 94, 0.5)', dot: '#22c55e', text: status === 'syncing' ? 'Syncing' : 'Connected' }
+      return { tone: 'ok', text: status === 'syncing' ? 'Syncing' : 'Connected' }
     } else if (status === 'awaiting_match') {
-      return { bg: 'rgba(34, 197, 94, 0.2)', border: 'rgba(34, 197, 94, 0.5)', dot: '#22c55e', text: 'Connected' }
+      return { tone: 'ok', text: 'Connected' }
     } else if (status === 'attention') {
-      return { bg: 'rgba(239, 68, 68, 0.2)', border: 'rgba(239, 68, 68, 0.5)', dot: '#ef4444', text: 'Error' }
+      return { tone: 'error', text: 'Error' }
     } else if (status === 'no_match') {
-      // For websocket, "no_match" means waiting for a match to be selected - show as gray/ready
-      const text = key === 'websocket' ? 'No Match' : 'Ready'
-      return { bg: 'rgba(156, 163, 175, 0.2)', border: 'rgba(156, 163, 175, 0.5)', dot: '#9ca3af', text }
+      // For websocket, "no_match" means waiting for a match to be selected - show as grey/ready
+      const text = key === 'websocket' ? 'No match' : 'Ready'
+      return { tone: 'neutral', text }
     } else if (status === 'disconnected' || status === 'error' || status === 'offline') {
-      return { bg: 'rgba(239, 68, 68, 0.2)', border: 'rgba(239, 68, 68, 0.5)', dot: '#ef4444', text: status === 'error' ? 'Error' : status === 'offline' ? 'Offline' : 'Disconnected' }
+      return { tone: 'error', text: status === 'error' ? 'Error' : status === 'offline' ? 'Offline' : 'Disconnected' }
     } else if (status === 'not_configured' || status === 'not_applicable') {
-      return { bg: 'rgba(245, 158, 11, 0.2)', border: 'rgba(245, 158, 11, 0.5)', dot: '#f59e0b', text: 'Not Configured' }
+      return { tone: 'warn', text: 'Not configured' }
     } else if (status === 'not_available') {
-      return { bg: 'rgba(156, 163, 175, 0.2)', border: 'rgba(156, 163, 175, 0.5)', dot: '#9ca3af', text: 'N/A (Static)' }
+      return { tone: 'neutral', text: 'N/A (static)' }
     } else if (status === 'connecting') {
-      return { bg: 'rgba(234, 179, 8, 0.2)', border: 'rgba(234, 179, 8, 0.5)', dot: '#eab308', text: 'Connecting' }
+      return { tone: 'warn', text: 'Connecting' }
     } else if (status === 'test_mode') {
-      return { bg: 'rgba(139, 92, 246, 0.2)', border: 'rgba(139, 92, 246, 0.5)', dot: '#8b5cf6', text: 'Test Mode' }
+      return { tone: 'violet', text: 'Test mode' }
     } else {
-      return { bg: 'rgba(156, 163, 175, 0.2)', border: 'rgba(156, 163, 175, 0.5)', dot: '#9ca3af', text: 'Unknown' }
+      return { tone: 'neutral', text: 'Unknown' }
     }
   }
 
@@ -182,30 +186,22 @@ export default function ConnectionStatus({
   const overallStatus = queueStats.error > 0 ? 'attention' : getOverallStatus()
   const statusInfo = getStatusColor(overallStatus)
 
-  const sizeStyles = {
-    normal: {
-      fontSize: '12px',
-      padding: '4px 8px',
-      dotSize: '8px'
-    },
-    small: {
-      fontSize: '10px',
-      padding: '3px 6px',
-      dotSize: '6px'
-    },
-    large: {
-      fontSize: '14px',
-      padding: '6px 12px',
-      dotSize: '10px'
-    }
+  // Trigger sizes: the header uses 'normal' (h-8, the bar's button height).
+  const sizeClasses = {
+    normal: { trigger: 'h-8 text-xs', dot: 'h-2 w-2' },
+    small: { trigger: 'h-7 px-2 text-[10px]', dot: 'h-1.5 w-1.5' },
+    large: { trigger: 'h-9 px-3 text-sm', dot: 'h-2.5 w-2.5' }
   }
 
-  const currentSize = sizeStyles[size]
+  const currentSize = sizeClasses[size] || sizeClasses.normal
+  const overallTone = STATUS_TONES[statusInfo.tone]
 
   return (
-    <div style={{ position: 'relative' }} data-connection-menu>
-      <div
+    <div className="ov-kit relative" data-connection-menu>
+      <button
+        type="button"
         ref={buttonRef}
+        aria-expanded={showConnectionMenu}
         onClick={(e) => {
           e.stopPropagation()
           if (!showConnectionMenu) {
@@ -213,92 +209,42 @@ export default function ConnectionStatus({
           }
           setShowConnectionMenu(!showConnectionMenu)
         }}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '6px',
-          height: '25px',
-          fontSize: currentSize.fontSize,
-          padding: currentSize.padding,
-          background: statusInfo.bg,
-          border: `1px solid ${statusInfo.border}`,
-          borderRadius: '4px',
-          cursor: 'pointer',
-          transition: 'all 0.2s'
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = statusInfo.bg.replace('0.2', '0.3')
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = statusInfo.bg
-        }}
+        className={cn(STATUS_PILL, FOCUS_RING, overallTone.pill, currentSize.trigger)}
       >
-        <span style={{
-          display: 'inline-block',
-          width: currentSize.dotSize,
-          height: currentSize.dotSize,
-          borderRadius: '50%',
-          background: statusInfo.dot
-        }}></span>
-        <span>
+        <span className={cn('inline-block shrink-0 rounded-full', currentSize.dot, overallTone.dot)}></span>
+        <span className="inline-flex items-center">
           {overallStatus === 'connected' ? (queueStats.pending > 0 ? 'Syncing...' : 'Connected') :
             overallStatus === 'awaiting_match' ? 'Ready' :
               'Error'}
           {queueStats.error > 0 && (
-            <span style={{
-              background: '#ef4444',
-              color: '#fff',
-              fontSize: '9px',
-              borderRadius: '10px',
-              padding: '0px 5px',
-              marginLeft: '4px',
-              fontWeight: 800
-            }}>
+            <span className="ml-1 inline-flex min-w-[1.125rem] h-[1.125rem] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold tabular-nums text-white">
               {queueStats.error}
             </span>
           )}
         </span>
-        <span style={{ fontSize: `${parseInt(currentSize.fontSize) - 2}px`, marginLeft: '4px' }}>
-          {showConnectionMenu ? '▲' : '▼'}
-        </span>
-      </div>
+        <ChevronDown size={12} aria-hidden="true" className={cn('opacity-70 transition-transform', showConnectionMenu && 'rotate-180')} />
+      </button>
 
       {/* Connection Status Menu */}
       {showConnectionMenu && (
         <div
           ref={menuRef}
           onClick={(e) => e.stopPropagation()}
+          className={cn('fixed w-max min-w-[220px] max-w-[300px] overflow-y-auto overflow-x-hidden', POPOVER_PANEL)}
           style={{
-            position: 'fixed',
             top: `${menuPosition.top}px`,
             left: `${menuPosition.left}px`,
-            maxWidth: '300px',
-            width: 'max-content',
-            minWidth: '200px',
-            background: 'rgba(0, 0, 0, 0.95)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            borderRadius: '8px',
-            padding: '12px',
             maxHeight: `${menuPosition.maxHeight}px`,
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            zIndex: 1000,
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.6)'
+            zIndex: 1000
           }}
         >
-          <div style={{
-            fontSize: '11px',
-            fontWeight: 600,
-            color: 'rgba(255, 255, 255, 0.6)',
-            marginBottom: '8px',
-            paddingBottom: '4px',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
-          }}>
-            Connection Status
+          <div className={cn('mb-2 border-b border-stone-100 pb-1.5', MENU_TITLE)}>
+            Connection status
           </div>
+          <div className="space-y-1">
           {Object.entries(connectionStatuses).map(([key, status]) => {
             const itemStatusInfo = getStatusColor(status, key)
+            const itemTone = STATUS_TONES[itemStatusInfo.tone]
 
             let displayText = itemStatusInfo.text
             if (key === 'match' && status !== 'no_match' && status !== 'unknown') {
@@ -308,99 +254,65 @@ export default function ConnectionStatus({
             const isConnected = status === 'connected' || status === 'live' || status === 'scheduled' || status === 'synced' || status === 'syncing'
             const isReady = key === 'match' && status === 'no_match'
             const debugInfo = connectionDebugInfo[key]
+            const expandable = !isConnected && !isReady
 
             return (
-              <div key={key} style={{ position: 'relative' }} data-debug-menu>
+              <div key={key} className="relative" data-debug-menu>
                 <div
+                  role={expandable ? 'button' : undefined}
+                  tabIndex={expandable ? 0 : undefined}
+                  aria-expanded={expandable ? showDebugMenu === key : undefined}
                   onClick={(e) => {
-                    if (!isConnected && !isReady) {
+                    if (expandable) {
                       e.stopPropagation()
                       setShowDebugMenu(showDebugMenu === key ? null : key)
                     }
                   }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '8px',
-                    padding: '6px 8px',
-                    marginBottom: '4px',
-                    fontSize: '12px',
-                    background: itemStatusInfo.bg,
-                    border: `1px solid ${itemStatusInfo.border}`,
-                    borderRadius: '4px',
-                    cursor: (!isConnected && !isReady) ? 'pointer' : 'default',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isConnected && !isReady) {
-                      e.currentTarget.style.background = itemStatusInfo.bg.replace('0.2', '0.3')
+                  onKeyDown={(e) => {
+                    if (expandable && (e.key === 'Enter' || e.key === ' ')) {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setShowDebugMenu(showDebugMenu === key ? null : key)
                     }
                   }}
-                  onMouseLeave={(e) => {
-                    if (!isConnected && !isReady) {
-                      e.currentTarget.style.background = itemStatusInfo.bg
-                    }
-                  }}
+                  className={cn(
+                    'flex min-h-9 items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-xs',
+                    expandable ? cn('cursor-pointer hover:bg-stone-100 transition-colors', FOCUS_RING) : 'cursor-default'
+                  )}
                 >
-                  <span style={{ fontWeight: 600 }}>{labelMap[key] || key}:</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span style={{
-                      display: 'inline-block',
-                      width: '6px',
-                      height: '6px',
-                      borderRadius: '50%',
-                      background: itemStatusInfo.dot
-                    }}></span>
-                    <span style={{ color: status === 'no_match' ? 'rgba(156, 163, 175, 1)' : 'inherit' }}>{displayText}</span>
-                    {!isConnected && !isReady && (
-                      <span style={{ fontSize: '10px', marginLeft: '4px' }}>
-                        {showDebugMenu === key ? '▲' : '▼'}
-                      </span>
+                  <span className="font-semibold text-stone-700">{labelMap[key] || key}:</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={cn('inline-block h-1.5 w-1.5 shrink-0 rounded-full', itemTone.dot)}></span>
+                    <span className={cn('font-medium', itemTone.text)}>{displayText}</span>
+                    {expandable && (
+                      <ChevronDown size={12} aria-hidden="true" className={cn('text-stone-400 transition-transform', showDebugMenu === key && 'rotate-180')} />
                     )}
                   </div>
                 </div>
 
-                {/* Queue Stats for Supabase */}
+                {/* Queue Stats for the cloud */}
                 {key === 'supabase' && (queueStats.pending > 0 || queueStats.error > 0) && (
-                  <div style={{
-                    padding: '8px',
-                    margin: '0 8px 8px',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    borderRadius: '4px',
-                    fontSize: '11px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '4px'
-                  }}>
+                  <div className="mx-2 mb-2 mt-1 flex flex-col gap-1 rounded-lg bg-stone-50 p-2 text-[11px]">
                     {queueStats.pending > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#3b82f6' }}>
+                      <div className="flex justify-between text-sky-800">
                         <span>Pending background sync:</span>
-                        <span style={{ fontWeight: 700 }}>{queueStats.pending}</span>
+                        <span className="font-bold tabular-nums">{queueStats.pending}</span>
                       </div>
                     )}
                     {queueStats.error > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#ef4444' }}>
+                      <div className="flex items-center justify-between text-red-700">
                         <span>Synchronization errors:</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ fontWeight: 700 }}>{queueStats.error}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold tabular-nums">{queueStats.error}</span>
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation()
                               onRetryErrors?.()
                             }}
-                            style={{
-                              padding: '2px 8px',
-                              background: '#ef4444',
-                              color: '#fff',
-                              border: 'none',
-                              borderRadius: '4px',
-                              fontSize: '10px',
-                              fontWeight: 600,
-                              cursor: 'pointer'
-                            }}
+                            className={cn('inline-flex h-7 items-center rounded-lg bg-red-600 px-2.5 text-[11px] font-medium text-white hover:bg-red-700 transition-colors', FOCUS_RING)}
                           >
-                            Retry All
+                            Retry all
                           </button>
                         </div>
                       </div>
@@ -409,44 +321,26 @@ export default function ConnectionStatus({
                 )}
 
                 {/* Debug Menu - inline instead of absolute to avoid overflow */}
-                {!isConnected && !isReady && showDebugMenu === key && (
+                {expandable && showDebugMenu === key && (
                   <div
                     onClick={(e) => e.stopPropagation()}
-                    style={{
-                      marginTop: '4px',
-                      marginBottom: '8px',
-                      background: 'rgba(30, 30, 40, 0.95)',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      borderRadius: '6px',
-                      padding: '10px',
-                      fontSize: '11px',
-                      lineHeight: '1.5',
-                      wordBreak: 'break-word'
-                    }}
+                    className="mx-1 mb-2 mt-1 break-words rounded-lg border border-red-100 bg-red-50 p-2.5 text-[11px] leading-relaxed text-stone-700"
                   >
-                    <div style={{
-                      fontWeight: 600,
-                      marginBottom: '8px',
-                      color: '#ef4444',
-                      fontSize: '12px'
-                    }}>
-                      Status Information
+                    <div className="mb-1.5 text-xs font-semibold text-red-700">
+                      Status information
                     </div>
-                    <div style={{ marginBottom: '6px', color: 'rgba(255, 255, 255, 0.9)' }}>
-                      <strong>Status:</strong> {(() => {
+                    <div className="mb-1">
+                      <strong className="font-semibold text-stone-900">Status:</strong> {(() => {
                         const statusText = (debugInfo?.status || status || '').toString()
-                        return statusText
-                          .replace(/_/g, ' ')
-                          .split(' ')
-                          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-                          .join(' ')
+                        const words = statusText.replace(/_/g, ' ').toLowerCase()
+                        return words.charAt(0).toUpperCase() + words.slice(1)
                       })()}
                     </div>
-                    <div style={{ marginBottom: '6px', color: 'rgba(255, 255, 255, 0.8)' }}>
-                      <strong>Message:</strong> {debugInfo?.message || 'Connection issue detected'}
+                    <div>
+                      <strong className="font-semibold text-stone-900">Message:</strong> {debugInfo?.message || 'Connection issue detected'}
                     </div>
                     {debugInfo?.details && (
-                      <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.2)', color: 'rgba(255, 255, 255, 0.7)', fontSize: '10px' }}>
+                      <div className="mt-2 border-t border-red-100 pt-2 text-[10px] text-stone-600">
                         {debugInfo.details}
                       </div>
                     )}
@@ -455,6 +349,7 @@ export default function ConnectionStatus({
               </div>
             )
           })}
+          </div>
         </div>
       )}
     </div>

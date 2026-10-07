@@ -689,12 +689,12 @@
   },
   "header": {
     "online": "En ligne",
-    "notSynced": "Not synced",
+    "notSynced": "Non synchronisé",
     "supportAndFeedback": "Support & Feedback",
     "offline": "Hors ligne",
-    "switchToOnline": "Passer en mode Online",
-    "switchToOffline": "Passer en mode Offline",
-    "dashboardConnectionInfo": "Info connexion tableau de bord",
+    "switchToOnline": "Passer en mode en ligne",
+    "switchToOffline": "Passer en mode hors ligne",
+    "dashboardConnectionInfo": "Connexion des tableaux de bord",
     "serverStatus": "État du serveur",
     "serverRunning": "Serveur actif",
     "serverNotRunning": "Serveur arrêté",
@@ -706,12 +706,12 @@
     "total": "Total",
     "referees": "Arbitres",
     "matchPin": "PIN du match",
-    "moreOptions": "Plus d'options...",
+    "moreOptions": "Plus d’options…",
     "match": "Match",
     "notSet": "Non défini",
-    "testMatch": "MATCH AMICAL",
-    "matchNumber": "MATCH N°{{number}}",
-    "test": "TEST",
+    "testMatch": "Match amical",
+    "matchNumber": "Match n° {{number}}",
+    "test": "Test",
     "versionHistory": "Historique des versions",
     "current": "Actuelle",
     "exitFullscreen": "Quitter le plein écran",
@@ -723,7 +723,15 @@
     "preview": "Aperçu",
     "print": "Imprimer",
     "savePdf": "Enregistrer PDF",
-    "allowPopups": "Veuillez autoriser les popups pour afficher la eScoresheet"
+    "allowPopups": "Veuillez autoriser les popups pour afficher la eScoresheet",
+    "showHeader": "Afficher l’en-tête",
+    "hideHeader": "Masquer l’en-tête",
+    "alarmBellNotify": "Sonnette : avertir l’arbitre",
+    "scale": "Échelle",
+    "default": "Par défaut",
+    "viewportWidth": "Largeur",
+    "viewportHeight": "Hauteur",
+    "viewportEdit": "Cliquer pour modifier la taille de la fenêtre"
   },
   "home": {
     "title": "Openvolley e-Feuille",
@@ -734,7 +742,7 @@
     "continueMatch": "Continuer le match",
     "deleteMatch": "Supprimer le match",
     "restoreMatch": "Restaurer le match",
-    "loadCompetitionMatch": "Charger match de comp\u00e9tition",
+    "loadCompetitionMatch": "Charger match de compétition",
     "gamePin": "PIN du match",
     "options": "Options",
     "myMatches": "Mes matchs",
@@ -1438,7 +1446,7 @@
     "cloudQRCodeAlt": "QR Code Cloud"
   },
   "interactiveGuide": {
-    "title": "App Guide",
+    "title": "Guide de l’app",
     "demos": {
       "net": "NET",
       "frontRow": "Front Row",
@@ -1906,5 +1914,28 @@
     "exitBody": "Les matchs sont enregistrés sur cet appareil : rouvrez OpenBeach pour continuer.",
     "exitConfirm": "Quitter",
     "stay": "Rester"
+  },
+  "screenTooSmall": {
+    "title": "Pour utiliser cette application, utilisez une tablette ou un écran plus grand (au moins 800×600).",
+    "current": "Actuel : {{width}} × {{height}} px",
+    "hint": "Tournez l’appareil ou passez en plein écran.",
+    "enterFullscreen": "Plein écran",
+    "fullscreenNote": "Le plein écran masque les barres du navigateur pour gagner de la place."
+  },
+  "Home": "Accueil",
+  "tabletStatus": {
+    "title": "État des tablettes",
+    "allConnected": "Tous les appareils sont connectés",
+    "issuesDetected": "{{count}} appareil(s) avec un problème",
+    "role": {
+      "referee": "Arbitre",
+      "bench_team1": "Banc équipe 1",
+      "bench_team2": "Banc équipe 2"
+    },
+    "status": {
+      "connected": "Connecté",
+      "stale": "En retard",
+      "disconnected": "Déconnecté"
+    }
   }
 }
