@@ -49,6 +49,12 @@ export default defineConfig({
       workbox: {
         // Cache all assets for offline use
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        // A multi-page app: no SPA fallback. With workbox's default every
+        // navigation the service worker controls got index.html, so on the
+        // desktop / venue relay a tablet's /referee or /livescore (the QR
+        // code links) opened the scoretable once the worker was installed.
+        // The subdomain builds (scripts/build-subdomains.js) do the same.
+        navigateFallback: null,
         // Use NetworkFirst for API calls, but CacheFirst for assets
         runtimeCaching: [
           {
