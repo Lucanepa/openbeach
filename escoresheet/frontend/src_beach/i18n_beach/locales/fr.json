@@ -2309,7 +2309,24 @@
       "saveFailed": "Ton nom n’a pas été enregistré.",
       "deleteFailed": "Le compte n’a pas été supprimé.",
       "inviteRejected": "Ce code n’est pas valable (faux, épuisé ou expiré).",
-      "tooManyTries": "Trop d’essais. Attends quelques minutes et réessaie."
-    }
+      "tooManyTries": "Trop d’essais. Attends quelques minutes et réessaie.",
+      "joinFailed": "L'adhésion à OpenBeach a échoué. Réessayez."
+    },
+    "buttonNotMember": "Compte {{email}} : pas encore dans OpenBeach",
+    "joinTitle": "Pas encore dans OpenBeach",
+    "joinBody": "C'est un compte OpenVolley. Rejoignez OpenBeach avec le même identifiant ; un code d'invitation ou un admin l'approuve ensuite. D'ici là, les matchs restent sur cet appareil.",
+    "joinBeach": "Rejoindre OpenBeach",
+    "joined": "Vous avez rejoint OpenBeach. Le compte attend maintenant l'approbation."
+  },
+  "syncBanner": {
+    "title": "Non connecté : ce match est enregistré sur cet appareil uniquement",
+    "body": "La saisie continue. Connectez-vous pour l'enregistrer dans le cloud (arbitre, livescore, sauvegarde) ; les modifications en attente partent aussitôt après.",
+    "expiredTitle": "Session expirée : les modifications sont enregistrées sur cet appareil uniquement",
+    "expiredBody": "La saisie continue. Reconnectez-vous pour l'enregistrer dans le cloud ; les modifications en attente partent aussitôt après.",
+    "later": "Plus tard",
+    "signIn": "Se connecter",
+    "signInAgain": "Se reconnecter",
+    "joinTitle": "Pas encore dans OpenBeach : les matchs restent sur cet appareil",
+    "joinBody": "Ce compte OpenVolley peut rejoindre OpenBeach avec le même identifiant. Dès qu'un code d'invitation ou un admin l'approuve, les matchs en attente sont envoyés."
   }
 }

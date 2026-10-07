@@ -7,7 +7,7 @@ import { useMemoryLocalStorage } from '../helpers/memoryStorage'
 // data) is cleared on sign-out, account deletion, account switch and when the
 // login goes away without a sign-out (rejected or expired).
 
-const h = vi.hoisted(() => ({ authCb: null, profileRoles: {}, profileFail: new Set(), profileGate: null, me: null, redeem: null }))
+const h = vi.hoisted(() => ({ authCb: null, profileRoles: {}, profileFail: new Set(), profileGate: null, me: null, redeem: null, join: null }))
 
 vi.mock('../../utils_beach/backendConfig_beach', () => ({ isBackendAvailable: () => true }))
 vi.mock('../../db_beach/savedTeams_beach', () => ({
@@ -19,6 +19,7 @@ vi.mock('../../lib_beach/apiClient_beach', () => ({
   // /api/me: none (404) unless a test sets one
   apiMe: async () => (h.me ? { data: h.me, error: null, status: 200 } : { data: null, error: { message: 'Not found' }, status: 404 }),
   apiRedeemInvite: async (code) => h.redeem(code),
+  apiJoinBeach: async () => h.join(),
   apiAuth: {
     onAuthStateChange: (cb) => { h.authCb = cb; return { data: { subscription: { unsubscribe: () => {} } } } },
     getSession: async () => ({ data: { session: null } }),
@@ -41,6 +42,7 @@ vi.mock('../../lib_beach/apiClient_beach', () => ({
 }))
 
 import { AuthProvider, useAuth } from '../../contexts_beach/AuthContext_beach'
+import { ACCESS_CHANGED_EVENT } from '../../lib_beach/access_beach'
 import { clearSavedTeams, clearSavedTeamsOfOtherAccount, refreshSavedTeams } from '../../db_beach/savedTeams_beach'
 
 let ctx
@@ -62,6 +64,7 @@ beforeEach(() => {
   h.profileGate = null
   h.me = null
   h.redeem = async () => ({ data: { roles: ['beach:scorer'] }, error: null, status: 200 })
+  h.join = vi.fn(async () => ({ data: { app: 'beach', member: true, already_member: false }, error: null, status: 200 }))
   h.profileRoles = { scorer1: ['scorer'], scorer2: ['scorer'], pending: [], referee: ['referee'] }
   render(<AuthProvider><Probe /></AuthProvider>)
 })
@@ -172,5 +175,46 @@ describe('AuthContext_beach saved teams wiring', () => {
     await act(async () => { result = await ctx.redeemInvite('ABCD-1234-EFGH') })
     expect(result.error).toBeNull()
     await waitFor(() => expect(ctx.access).toMatchObject({ isPending: false, canScore: true }))
+  })
+
+  it('an OpenVolley account not in OpenBeach needs to join; after the join it is pending', async () => {
+    h.me = { apps: { beach: { roles: [], canScore: false, canManageTeams: false, canReadTeams: false, isPending: true, member: false } } }
+    await signInAs('scorer1')
+    await waitFor(() => expect(ctx.access.needsJoin).toBe(true))
+    expect(ctx.access).toMatchObject({ isPending: true, member: false, known: true })
+    // The server's answer after the join
+    h.me = { apps: { beach: { roles: [], canScore: false, canManageTeams: false, canReadTeams: false, isPending: true, member: true } } }
+    let result
+    await act(async () => { result = await ctx.joinBeach() })
+    expect(h.join).toHaveBeenCalledTimes(1)
+    expect(result.error).toBeNull()
+    await waitFor(() => expect(ctx.access.needsJoin).toBe(false))
+    expect(ctx.access).toMatchObject({ isPending: true, member: true })
+  })
+
+  it('a refused join keeps the account as it was', async () => {
+    h.me = { apps: { beach: { roles: [], isPending: true, member: false } } }
+    h.join = vi.fn(async () => ({ data: null, error: { message: 'Service unavailable' }, status: 503 }))
+    await signInAs('scorer1')
+    await waitFor(() => expect(ctx.access.needsJoin).toBe(true))
+    let result
+    await act(async () => { result = await ctx.joinBeach() })
+    expect(result.status).toBe(503)
+    expect(ctx.access.needsJoin).toBe(true)
+  })
+
+  it('tells the sync queue when the account may score now (an invite redeemed)', async () => {
+    const seen = []
+    const on = (e) => seen.push(e.detail)
+    window.addEventListener(ACCESS_CHANGED_EVENT, on)
+    try {
+      await signInAs('pending')
+      await waitFor(() => expect(ctx.access.isPending).toBe(true))
+      h.profileRoles.pending = ['beach:scorer']
+      await act(async () => { await ctx.redeemInvite('ABCD-1234-EFGH') })
+      await waitFor(() => expect(seen.some(d => d.canScore === true)).toBe(true))
+    } finally {
+      window.removeEventListener(ACCESS_CHANGED_EVENT, on)
+    }
   })
 })

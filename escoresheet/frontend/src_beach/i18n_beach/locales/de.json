@@ -2309,7 +2309,24 @@
       "saveFailed": "Dein Name wurde nicht gespeichert.",
       "deleteFailed": "Das Konto wurde nicht gelöscht.",
       "inviteRejected": "Dieser Code gilt nicht (falsch, aufgebraucht oder abgelaufen).",
-      "tooManyTries": "Zu viele Versuche. Warte ein paar Minuten und versuche es nochmals."
-    }
+      "tooManyTries": "Zu viele Versuche. Warte ein paar Minuten und versuche es nochmals.",
+      "joinFailed": "Der Beitritt zu OpenBeach ist fehlgeschlagen. Versuche es erneut."
+    },
+    "buttonNotMember": "Konto {{email}}: noch nicht bei OpenBeach",
+    "joinTitle": "Noch nicht bei OpenBeach",
+    "joinBody": "Dies ist ein OpenVolley-Konto. Tritt OpenBeach mit demselben Login bei; ein Einladungscode oder ein Admin gibt es dann frei. Bis dahin bleiben die Spiele auf diesem Gerät.",
+    "joinBeach": "OpenBeach beitreten",
+    "joined": "Du bist OpenBeach beigetreten. Das Konto wartet jetzt auf die Freigabe."
+  },
+  "syncBanner": {
+    "title": "Nicht angemeldet: dieses Spiel ist nur auf diesem Gerät gespeichert",
+    "body": "Das Schreiben läuft weiter. Melde dich an, um es in der Cloud zu sichern (Schiedsrichter, Livescore, Backup); wartende Änderungen werden gleich danach gesendet.",
+    "expiredTitle": "Sitzung abgelaufen: Änderungen sind nur auf diesem Gerät gespeichert",
+    "expiredBody": "Das Schreiben läuft weiter. Melde dich erneut an, um es in der Cloud zu sichern; wartende Änderungen werden gleich danach gesendet.",
+    "later": "Später",
+    "signIn": "Anmelden",
+    "signInAgain": "Erneut anmelden",
+    "joinTitle": "Noch nicht bei OpenBeach: Spiele bleiben auf diesem Gerät",
+    "joinBody": "Dieses OpenVolley-Konto kann OpenBeach mit demselben Login beitreten. Sobald ein Einladungscode oder ein Admin es freigibt, werden die wartenden Spiele gesendet."
   }
 }

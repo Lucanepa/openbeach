@@ -54,7 +54,9 @@ export default function UserButton({ buttonClass }) {
 
   const initials = accountInitials(profile, user.email)
   const pending = access?.known && access.isPending
-  const label = pending
+  const label = pending && access.needsJoin
+    ? t('account.buttonNotMember', { email: user.email || '', defaultValue: 'Account {{email}}: not in OpenBeach yet' })
+    : pending
     ? t('account.buttonPending', { email: user.email || '', defaultValue: 'Account {{email}}: waiting for approval' })
     : t('account.button', { email: user.email || '', defaultValue: 'Account {{email}}' })
 

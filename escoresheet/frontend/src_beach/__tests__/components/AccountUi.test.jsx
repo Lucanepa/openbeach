@@ -30,6 +30,7 @@ function signedIn(extra = {}) {
     deleteAccount: vi.fn(async () => ({ error: null })),
     updateProfile: vi.fn(async () => ({ error: null })),
     redeemInvite: vi.fn(async () => ({ data: { roles: ['beach:scorer'] }, error: null, status: 200 })),
+    joinBeach: vi.fn(async () => ({ data: { app: 'beach', member: true }, error: null, status: 200 })),
     ...extra
   }
 }
@@ -82,6 +83,49 @@ describe('the header account button', () => {
     expect(code).toHaveValue('ABCD-1234-EFGH')
     fireEvent.click(within(dialog).getByRole('button', { name: 'Redeem code' }))
     await waitFor(() => expect(auth.current.redeemInvite).toHaveBeenCalledWith('ABCD-1234-EFGH'))
+  })
+
+  it('an OpenVolley account not in OpenBeach: Join OpenBeach, then the pending state', async () => {
+    auth.current = signedIn({ access: { known: true, isPending: true, needsJoin: true, roles: ['scorer'] } })
+    const { rerender } = render(<UserButton buttonClass="btn" />)
+    const button = screen.getByTestId('header-account')
+    expect(button).toHaveAccessibleName(/not in OpenBeach yet/)
+    fireEvent.click(button)
+    const dialog = await screen.findByRole('dialog', { name: 'Your account' })
+    expect(within(dialog).getByTestId('join-beach-section')).toBeInTheDocument()
+    // No invite code before the join (the join comes first)
+    expect(within(dialog).queryByTestId('pending-approval')).toBeNull()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Join OpenBeach' }))
+    await waitFor(() => expect(auth.current.joinBeach).toHaveBeenCalledTimes(1))
+    // The server says: a member now, waiting for approval
+    auth.current = { ...auth.current, access: { known: true, isPending: true, needsJoin: false, roles: ['scorer'] } }
+    rerender(<UserButton buttonClass="btn" />)
+    const after = await screen.findByRole('dialog', { name: 'Your account' })
+    expect(within(after).queryByTestId('join-beach-section')).toBeNull()
+    expect(within(after).getByTestId('pending-approval')).toBeInTheDocument()
+    expect(within(after).getByLabelText('Invite code')).toBeInTheDocument()
+  })
+
+  it('a failed join says so in the dialog', async () => {
+    auth.current = signedIn({
+      access: { known: true, isPending: true, needsJoin: true, roles: [] },
+      joinBeach: vi.fn(async () => ({ data: null, error: { message: 'x' }, status: 503 }))
+    })
+    render(<UserButton buttonClass="btn" />)
+    fireEvent.click(screen.getByTestId('header-account'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Join OpenBeach' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Joining OpenBeach failed')
+  })
+
+  it('Save name is the kit primary button', async () => {
+    auth.current = signedIn({ access: { known: true, isPending: false, roles: ['beach:scorer'] } })
+    render(<UserButton buttonClass="btn" />)
+    fireEvent.click(screen.getByTestId('header-account'))
+    const dialog = await screen.findByRole('dialog')
+    const save = within(dialog).getByRole('button', { name: 'Save name' })
+    expect(save.className).toMatch(/bg-red-600/)
+    expect(save.className).not.toMatch(/emerald/)
   })
 
   it('an approved account has no pending block', async () => {

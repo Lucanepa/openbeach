@@ -2309,7 +2309,24 @@
       "saveFailed": "Din Name isch nöd gspeicheret worde.",
       "deleteFailed": "S Konto isch nöd glöscht worde.",
       "inviteRejected": "De Code gilt nöd (falsch, ufbruucht oder abglaufe).",
-      "tooManyTries": "Z vill Versüech. Wart es paar Minute und probier's nomal."
-    }
+      "tooManyTries": "Z vill Versüech. Wart es paar Minute und probier's nomal.",
+      "joinFailed": "De Biitritt zu OpenBeach het nöd klappt. Probier s nomal."
+    },
+    "buttonNotMember": "Konto {{email}}: no nöd bi OpenBeach",
+    "joinTitle": "No nöd bi OpenBeach",
+    "joinBody": "Das isch es OpenVolley-Konto. Tritt OpenBeach mit em gliiche Login bi; en Iiladigscode oder en Admin git s dänn frei. Bis dänn bliibed d Spiel uf däm Grät.",
+    "joinBeach": "OpenBeach biitrete",
+    "joined": "Du bisch OpenBeach biitrete. S Konto wartet jetzt uf d Freigab."
+  },
+  "syncBanner": {
+    "title": "Nöd aagmäldet: das Spiel isch nur uf däm Grät gspeicheret",
+    "body": "S Schriibe lauft wiiter. Mäld di aa, zum s i de Cloud z sichere (Schiri, Livescore, Backup); wartendi Änderige gönd grad nachher use.",
+    "expiredTitle": "Sitzig abglaufe: Änderige sind nur uf däm Grät gspeicheret",
+    "expiredBody": "S Schriibe lauft wiiter. Mäld di nomal aa, zum s i de Cloud z sichere; wartendi Änderige gönd grad nachher use.",
+    "later": "Spöter",
+    "signIn": "Aamälde",
+    "signInAgain": "Nomal aamälde",
+    "joinTitle": "No nöd bi OpenBeach: Spiel bliibed uf däm Grät",
+    "joinBody": "Das OpenVolley-Konto cha OpenBeach mit em gliiche Login biitrete. Sobald en Iiladigscode oder en Admin s freigit, gönd di wartende Spiel use."
   }
 }

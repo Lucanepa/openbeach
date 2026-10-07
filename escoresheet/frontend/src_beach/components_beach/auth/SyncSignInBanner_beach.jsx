@@ -1,14 +1,32 @@
 import { useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../contexts_beach/AuthContext_beach'
 import LoginModal from './LoginModal_beach'
+import ProfileModal from './ProfileModal_beach'
+import { toast } from '../../ui/volleyui/uiStore.js'
 import { cn } from '../../ui/volleyui/cn.js'
 import { FOCUS_RING } from '../../ui/volleyui/Button.jsx'
 
 const DISMISS_KEY = 'ob_sync_signin_banner_dismissed'
+const JOIN_DISMISS_KEY = 'ob_sync_join_banner_dismissed'
 
-function readDismissed() {
-  try { return sessionStorage.getItem(DISMISS_KEY) === '1' } catch { return false }
+function readDismissed(key = DISMISS_KEY) {
+  try { return sessionStorage.getItem(key) === '1' } catch { return false }
+}
+
+// Sync states in which the cloud answers at all (not offline, not a venue
+// relay's page, not a build without a backend)
+const CLOUD_REACHED = new Set(['connecting', 'syncing', 'synced', 'error', 'auth_required'])
+
+/**
+ * Should the "join OpenBeach" banner show? A signed-in account of the shared
+ * login that /api/me reports as not an OpenBeach member (an OpenVolley
+ * account): the backend refuses its beach matches until it has joined and
+ * been approved.
+ */
+export function shouldShowJoinBeach({ syncStatus, loading, dismissed, user, access }) {
+  return !!user && !loading && !dismissed && !!access?.known && !!access.needsJoin && CLOUD_REACHED.has(syncStatus)
 }
 
 /**
@@ -28,30 +46,68 @@ export function shouldShowSyncSignIn({ syncStatus, loading, dismissed }) {
  * and everything is saved on this device, but the cloud copy (referee,
  * livescore, backup) needs an account. After a sign-in the waiting changes are
  * sent at once (useSyncQueue_beach resumes on the session change).
+ * A signed-in OpenVolley account that is not in OpenBeach yet gets "Join
+ * OpenBeach" instead; the account dialog then shows its pending state with
+ * the invite code field.
  *
  * Ported from OpenVolley src/components/auth/SyncSignInBanner.jsx.
  */
 export default function SyncSignInBanner({ syncStatus, compact = false }) {
   const { t } = useTranslation()
-  const { user, loading } = useAuth()
-  const [dismissed, setDismissed] = useState(readDismissed)
+  const { user, loading, access, joinBeach } = useAuth()
+  const [dismissed, setDismissed] = useState(() => readDismissed(DISMISS_KEY))
+  const [joinDismissed, setJoinDismissed] = useState(() => readDismissed(JOIN_DISMISS_KEY))
   const [showLogin, setShowLogin] = useState(false)
+  const [showAccount, setShowAccount] = useState(false)
+  const [joining, setJoining] = useState(false)
+  const [joinError, setJoinError] = useState('')
 
-  const visible = shouldShowSyncSignIn({ syncStatus, loading, dismissed })
+  // A session the backend refused comes first: joining needs a valid one
+  const signInVisible = shouldShowSyncSignIn({ syncStatus, loading, dismissed })
+  const joinVisible = !signInVisible && shouldShowJoinBeach({ syncStatus, loading, dismissed: joinDismissed, user, access })
+  const visible = signInVisible || joinVisible
   // Signed in as far as the app knows, but the backend refused the session
   const sessionExpired = !!user
-  const title = sessionExpired
-    ? t('syncBanner.expiredTitle', 'Session expired: changes are saved on this device only')
-    : t('syncBanner.title', 'Not signed in: this match is saved on this device only')
+  const title = joinVisible
+    ? t('syncBanner.joinTitle', 'Not in OpenBeach yet: matches stay on this device')
+    : sessionExpired
+      ? t('syncBanner.expiredTitle', 'Session expired: changes are saved on this device only')
+      : t('syncBanner.title', 'Not signed in: this match is saved on this device only')
+  const body = joinVisible
+    ? t('syncBanner.joinBody', 'This OpenVolley account can join OpenBeach with the same login. Once an invite code or an admin approves it, the waiting matches are sent.')
+    : sessionExpired
+      ? t('syncBanner.expiredBody', 'Scoring keeps working. Sign in again to save it to the cloud; waiting changes are sent right after.')
+      : t('syncBanner.body', 'Scoring keeps working. Sign in to save it to the cloud (referee, livescore, backup); waiting changes are sent right after.')
 
   const dismiss = () => {
-    setDismissed(true)
-    try { sessionStorage.setItem(DISMISS_KEY, '1') } catch { /* private mode */ }
+    const key = joinVisible ? JOIN_DISMISS_KEY : DISMISS_KEY
+    if (joinVisible) setJoinDismissed(true)
+    else setDismissed(true)
+    try { sessionStorage.setItem(key, '1') } catch { /* private mode */ }
+  }
+
+  const join = async () => {
+    if (joining) return
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      setJoinError(t('account.errors.offline', 'No connection: this needs the internet.'))
+      return
+    }
+    setJoining(true)
+    setJoinError('')
+    const { error } = await joinBeach()
+    setJoining(false)
+    if (error) {
+      setJoinError(t('account.errors.joinFailed', 'Joining OpenBeach failed. Try again.'))
+      return
+    }
+    toast.success(t('account.joined', 'You joined OpenBeach. It now waits for approval.'))
+    // The pending state, with the invite code field
+    setShowAccount(true)
   }
 
   return (
     <>
-      {visible && !showLogin && (
+      {visible && !showLogin && !showAccount && (
         <div
           role="status"
           aria-live="polite"
@@ -72,17 +128,17 @@ export default function SyncSignInBanner({ syncStatus, compact = false }) {
               : { bottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)', width: 'min(560px, calc(100vw - 32px))' }),
             zIndex: 1500
           }}
+          data-testid={joinVisible ? 'sync-join-banner' : 'sync-signin-banner'}
         >
           <div className={cn('min-w-0', compact ? 'flex-auto' : 'flex-[1_1_260px]')}>
-            <div className={cn('font-semibold text-amber-800', compact ? 'truncate text-xs' : 'mb-0.5 text-sm')}>
+            <div className={cn('font-semibold text-amber-800', compact ? 'truncate text-xs' : 'mb-0.5 text-sm')} title={compact ? title : undefined}>
               {title}
             </div>
             {!compact && (
-              <div className="text-xs leading-snug text-stone-600">
-                {sessionExpired
-                  ? t('syncBanner.expiredBody', 'Scoring keeps working. Sign in again to save it to the cloud; waiting changes are sent right after.')
-                  : t('syncBanner.body', 'Scoring keeps working. Sign in to save it to the cloud (referee, livescore, backup); waiting changes are sent right after.')}
-              </div>
+              <div className="text-xs leading-snug text-stone-600">{body}</div>
+            )}
+            {joinError && (
+              <div role="alert" className={cn('font-medium text-red-700', compact ? 'truncate text-[11px]' : 'mt-1 text-xs')}>{joinError}</div>
             )}
           </div>
           <div className={cn('flex shrink-0', compact ? 'gap-1.5' : 'gap-2')}>
@@ -93,18 +149,33 @@ export default function SyncSignInBanner({ syncStatus, compact = false }) {
             >
               {t('syncBanner.later', 'Later')}
             </button>
-            <button
-              type="button"
-              onClick={() => setShowLogin(true)}
-              className={cn('inline-flex items-center rounded-lg bg-slate-900 font-semibold text-white transition-colors hover:bg-slate-800', compact ? 'h-8 px-2.5 text-xs' : 'h-9 px-3 text-xs', FOCUS_RING)}
-            >
-              {sessionExpired ? t('syncBanner.signInAgain', 'Sign in again') : t('syncBanner.signIn', 'Sign in')}
-            </button>
+            {joinVisible ? (
+              <button
+                type="button"
+                onClick={join}
+                disabled={joining}
+                aria-busy={joining || undefined}
+                className={cn('inline-flex items-center gap-1.5 rounded-lg bg-slate-900 font-semibold text-white transition-colors hover:bg-slate-800 disabled:bg-stone-300', compact ? 'h-8 px-2.5 text-xs' : 'h-9 px-3 text-xs', FOCUS_RING)}
+                data-testid="banner-join-beach"
+              >
+                {joining && <Loader2 size={12} aria-hidden="true" className="animate-spin" />}
+                {t('account.joinBeach', 'Join OpenBeach')}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowLogin(true)}
+                className={cn('inline-flex items-center rounded-lg bg-slate-900 font-semibold text-white transition-colors hover:bg-slate-800', compact ? 'h-8 px-2.5 text-xs' : 'h-9 px-3 text-xs', FOCUS_RING)}
+              >
+                {sessionExpired ? t('syncBanner.signInAgain', 'Sign in again') : t('syncBanner.signIn', 'Sign in')}
+              </button>
+            )}
           </div>
         </div>
       )}
 
       <LoginModal open={showLogin} onClose={() => setShowLogin(false)} />
+      <ProfileModal open={showAccount} onClose={() => setShowAccount(false)} />
     </>
   )
 }

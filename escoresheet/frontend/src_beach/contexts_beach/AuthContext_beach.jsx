@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { apiFrom, apiAuth, apiMe, apiRedeemInvite } from '../lib_beach/apiClient_beach'
+import { apiFrom, apiAuth, apiMe, apiRedeemInvite, apiJoinBeach } from '../lib_beach/apiClient_beach'
 import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
-import { accessFromMe, accessFromRoles, NO_ACCESS } from '../lib_beach/access_beach'
+import { accessFromMe, accessFromRoles, accessChanged, ACCESS_CHANGED_EVENT, NO_ACCESS } from '../lib_beach/access_beach'
 
 // A pending account re-reads its access this often, so an admin's approval
 // (or an invite redeemed on another device) shows without a reload.
@@ -322,6 +322,36 @@ export function AuthProvider({ children }) {
     return result
   }, [userId, fetchProfile])
 
+  // Join OpenBeach with an existing OpenVolley account (same login): the
+  // account becomes a member, pending until an invite code or an admin
+  // approves it. /api/me is read again from the server.
+  const joinBeach = useCallback(async () => {
+    if (!isBackendAvailable() || !userId) return { data: null, error: { message: 'Not authenticated', status: 401 }, status: 401 }
+    const result = await apiJoinBeach()
+    if (!result.error) {
+      // At once: the account is a member now (the server's answer follows)
+      setMe(prev => (prev && prev._for === userId && prev.apps?.beach
+        ? { ...prev, apps: { ...prev.apps, beach: { ...prev.apps.beach, member: true } } }
+        : prev))
+      fetchProfile(userId)
+    }
+    return result
+  }, [userId, fetchProfile])
+
+  // What the account may do changed (an invite redeemed, an admin's
+  // approval, a join): the sync queue sends again what the backend refused
+  // before (useSyncQueue_beach listens)
+  const lastAccess = useRef(null)
+  useEffect(() => {
+    const prev = lastAccess.current
+    lastAccess.current = access
+    if (!prev || !userId || !access.known || !accessChanged(prev, access)) return
+    if (typeof window === 'undefined') return
+    try {
+      window.dispatchEvent(new CustomEvent(ACCESS_CHANGED_EVENT, { detail: { canScore: !!access.canScore, isPending: !!access.isPending } }))
+    } catch { /* no window events */ }
+  }, [access, userId])
+
   // Another account, or none (sign-out, a login the server rejected or that
   // expired): drop the previous account's saved teams (personal data) and its
   // cached profile before anything reads them.
@@ -359,6 +389,7 @@ export function AuthProvider({ children }) {
     profile,
     access,
     redeemInvite,
+    joinBeach,
     loading,
     isAuthenticated: !!user,
     signIn,

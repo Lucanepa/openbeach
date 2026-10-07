@@ -2310,7 +2310,24 @@
       "saveFailed": "Your name was not saved.",
       "deleteFailed": "The account was not deleted.",
       "inviteRejected": "This code is not valid (wrong, used up or expired).",
-      "tooManyTries": "Too many tries. Wait a few minutes and try again."
-    }
+      "tooManyTries": "Too many tries. Wait a few minutes and try again.",
+      "joinFailed": "Joining OpenBeach failed. Try again."
+    },
+    "buttonNotMember": "Account {{email}}: not in OpenBeach yet",
+    "joinTitle": "Not in OpenBeach yet",
+    "joinBody": "This is an OpenVolley account. Join OpenBeach with the same login; an invite code or an admin then approves it. Matches stay on this device until then.",
+    "joinBeach": "Join OpenBeach",
+    "joined": "You joined OpenBeach. It now waits for approval."
+  },
+  "syncBanner": {
+    "title": "Not signed in: this match is saved on this device only",
+    "body": "Scoring keeps working. Sign in to save it to the cloud (referee, livescore, backup); waiting changes are sent right after.",
+    "expiredTitle": "Session expired: changes are saved on this device only",
+    "expiredBody": "Scoring keeps working. Sign in again to save it to the cloud; waiting changes are sent right after.",
+    "later": "Later",
+    "signIn": "Sign in",
+    "signInAgain": "Sign in again",
+    "joinTitle": "Not in OpenBeach yet: matches stay on this device",
+    "joinBody": "This OpenVolley account can join OpenBeach with the same login. Once an invite code or an admin approves it, the waiting matches are sent."
   }
 }

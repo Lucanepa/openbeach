@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db_beach/db_beach'
 import { apiFrom, apiMatchRestore, apiMatchClaim, AUTH_TOKEN_CHANGE_EVENT, AUTH_TOKEN_STORAGE_KEY } from '../lib_beach/apiClient_beach'
 import { getCloudApiUrl, isCloudOffline } from '../utils_beach/backendConfig_beach'
+import { ACCESS_CHANGED_EVENT } from '../lib_beach/access_beach'
 import { parseExtId, resolveJobExternalId, jobMatchKey } from '../utils_beach/syncIds_beach'
 import { buildConnectionPins } from '../utils_beach/connectionPins_beach'
 
@@ -576,6 +577,11 @@ function installAuthListener() {
   // refreshing the stored session's expiry is not a sign-in.
   window.addEventListener('storage', (e) => {
     if (e.key === AUTH_TOKEN_STORAGE_KEY && e.newValue && !e.oldValue) onSession(e.newValue)
+  })
+  // The account may score now (an invite code redeemed, an admin approved
+  // it): what the backend refused while it was pending goes again
+  window.addEventListener(ACCESS_CHANGED_EVENT, (e) => {
+    if (e?.detail?.canScore && hasStoredSessionToken()) resumeAfterSignIn()
   })
 }
 installAuthListener()

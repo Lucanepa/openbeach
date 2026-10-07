@@ -2309,7 +2309,24 @@
       "saveFailed": "Il tuo nome non è stato salvato.",
       "deleteFailed": "L’account non è stato eliminato.",
       "inviteRejected": "Questo codice non è valido (errato, esaurito o scaduto).",
-      "tooManyTries": "Troppi tentativi. Attendi qualche minuto e riprova."
-    }
+      "tooManyTries": "Troppi tentativi. Attendi qualche minuto e riprova.",
+      "joinFailed": "L'adesione a OpenBeach non è riuscita. Riprova."
+    },
+    "buttonNotMember": "Account {{email}}: non ancora in OpenBeach",
+    "joinTitle": "Non ancora in OpenBeach",
+    "joinBody": "Questo è un account OpenVolley. Unisciti a OpenBeach con lo stesso login; poi un codice d'invito o un admin lo approva. Fino ad allora le partite restano su questo dispositivo.",
+    "joinBeach": "Unisciti a OpenBeach",
+    "joined": "Ti sei unito a OpenBeach. L'account ora attende l'approvazione."
+  },
+  "syncBanner": {
+    "title": "Non connesso: questa partita è salvata solo su questo dispositivo",
+    "body": "Il punteggio continua a funzionare. Accedi per salvarlo nel cloud (arbitro, livescore, backup); le modifiche in attesa partono subito dopo.",
+    "expiredTitle": "Sessione scaduta: le modifiche sono salvate solo su questo dispositivo",
+    "expiredBody": "Il punteggio continua a funzionare. Accedi di nuovo per salvarlo nel cloud; le modifiche in attesa partono subito dopo.",
+    "later": "Più tardi",
+    "signIn": "Accedi",
+    "signInAgain": "Accedi di nuovo",
+    "joinTitle": "Non ancora in OpenBeach: le partite restano su questo dispositivo",
+    "joinBody": "Questo account OpenVolley può unirsi a OpenBeach con lo stesso login. Appena un codice d'invito o un admin lo approva, le partite in attesa vengono inviate."
   }
 }

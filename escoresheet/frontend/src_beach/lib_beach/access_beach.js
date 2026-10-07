@@ -74,7 +74,24 @@ export function accessFromMe(me, rawRoles = []) {
   if (typeof beach.canReadTeams !== 'boolean') out.canReadTeams = out.canScore || out.canManageTeams
   if (typeof beach.isPending !== 'boolean') out.isPending = !(out.canScore || out.canManageTeams || out.isAdmin || beach.member === true)
   out.member = beach.member === true || !out.isPending
+  // The account's roles in OpenBeach (an indoor 'scorer' is not one here)
+  if (Array.isArray(beach.roles)) out.appRoles = normalizeRoles(beach.roles)
+  // An account of the shared login that is not in OpenBeach yet (an
+  // OpenVolley account): it joins first (POST /api/account/join), then waits
+  // for an invite code or an admin like any new account
+  out.needsJoin = beach.member === false && out.isPending && !out.isAdmin
   return out
+}
+
+/**
+ * The roles to show in OpenBeach: the ones /api/me reports for the app (plus
+ * the global admin roles), else every role of the profile (an older backend).
+ * @param {{ roles?: string[], appRoles?: string[] }|null|undefined} access
+ */
+export function displayedRoles(access) {
+  const all = access?.roles || []
+  if (!Array.isArray(access?.appRoles)) return all
+  return [...access.appRoles, ...all.filter(r => ADMIN_ROLES.includes(r) && !access.appRoles.includes(r))]
 }
 
 /** A typed invite code for display: uppercase, groups of four (as OpenVolley). */
@@ -92,6 +109,7 @@ export const NO_ACCESS = Object.freeze({
   canManageTeams: false,
   canReadTeams: false,
   isPending: false,
+  needsJoin: false,
   known: false
 })
 
@@ -99,7 +117,7 @@ export const NO_ACCESS = Object.freeze({
 export function accessChanged(a, b) {
   if (!a || !b) return a !== b
   return a.isAdmin !== b.isAdmin || a.canScore !== b.canScore || a.canManageTeams !== b.canManageTeams ||
-    a.canReadTeams !== b.canReadTeams || a.isPending !== b.isPending
+    a.canReadTeams !== b.canReadTeams || a.isPending !== b.isPending || !!a.needsJoin !== !!b.needsJoin
 }
 
 export const ACCESS_CHANGED_EVENT = 'ob-access-changed'

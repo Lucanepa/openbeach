@@ -64,7 +64,7 @@ describe('accessChanged', () => {
 
 // The OpenBeach / OpenVolley account separation: per-app roles (beach:*) and
 // /api/me's apps.beach, which wins when the backend reports it.
-import { accessFromMe, BEACH_ROLES, formatInviteCode } from '../../lib_beach/access_beach'
+import { accessFromMe, BEACH_ROLES, formatInviteCode, displayedRoles } from '../../lib_beach/access_beach'
 
 describe('beach roles', () => {
   it('beach:scorer scores and reads teams; beach:competition_manager manages', () => {
@@ -88,6 +88,25 @@ describe('accessFromMe', () => {
     expect(a).toMatchObject({ canScore: false, canReadTeams: false, isPending: true, member: false, roles: ['scorer'] })
     const b = accessFromMe({ apps: { beach: { canScore: true, member: true } } }, [])
     expect(b).toMatchObject({ canScore: true, canReadTeams: true, isPending: false, member: true })
+  })
+
+  it('needsJoin: an account the backend reports as not an OpenBeach member', () => {
+    expect(accessFromMe({ apps: { beach: { isPending: true, member: false } } }, ['scorer'])).toMatchObject({ needsJoin: true, isPending: true })
+    // A member waiting for approval does not join again
+    expect(accessFromMe({ apps: { beach: { isPending: true, member: true } } })).toMatchObject({ needsJoin: false, isPending: true })
+    // Global admins are in every app
+    expect(accessFromMe({ roles: ['admin'], apps: { beach: { member: false } } })).toMatchObject({ needsJoin: false })
+    // A backend without `member` never asks for a join
+    expect(accessFromMe({ apps: { beach: { isPending: true } } })).toMatchObject({ needsJoin: false })
+    expect(NO_ACCESS.needsJoin).toBe(false)
+  })
+
+  it('shows the OpenBeach roles only (an indoor scorer is no scorer here)', () => {
+    expect(displayedRoles(accessFromMe({ roles: ['scorer'], apps: { beach: { roles: [], member: false } } }))).toEqual([])
+    expect(displayedRoles(accessFromMe({ roles: ['scorer', 'beach:scorer'], apps: { beach: { roles: ['beach:scorer'] } } }))).toEqual(['beach:scorer'])
+    expect(displayedRoles(accessFromMe({ roles: ['admin'], apps: { beach: { roles: [] } } }))).toEqual(['admin'])
+    // An older backend: the profile's roles
+    expect(displayedRoles(accessFromRoles(['scorer']))).toEqual(['scorer'])
   })
 
   it('fills what apps.beach leaves out from the roles', () => {

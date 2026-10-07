@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Clock, LogOut, Trash2, UserRound } from 'lucide-react'
+import { Clock, LogIn, LogOut, Trash2, UserRound } from 'lucide-react'
 import { useAuth } from '../../contexts_beach/AuthContext_beach'
 import { Modal } from '../../ui/volleyui/Modal.jsx'
 import { Field, FormError } from '../../ui/volleyui/Field.jsx'
@@ -10,6 +10,48 @@ import { Chip } from '../../ui/volleyui/Chip.jsx'
 import { confirmDialog, toast } from '../../ui/volleyui/uiStore.js'
 import AuthLayer from './AuthLayer_beach'
 import InviteCodeForm from './InviteCodeForm_beach'
+import { displayedRoles } from '../../lib_beach/access_beach'
+
+/**
+ * "Join OpenBeach": an OpenVolley account (the login both apps share) that
+ * is not an OpenBeach member yet joins with one tap. It then waits for
+ * approval like any new account: the pending block with the invite code.
+ * Used by the account dialog and the sync banner.
+ * @param {{ onJoined?: () => void, size?: string, variant?: string, className?: string }} props
+ */
+export function JoinBeachButton({ onJoined, size = 'md', variant = 'dark', className = '' }) {
+  const { t } = useTranslation()
+  const { joinBeach } = useAuth()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const join = async () => {
+    if (busy) return
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      setError(t('account.errors.offline', 'No connection: this needs the internet.'))
+      return
+    }
+    setBusy(true)
+    setError('')
+    const { error: err, status } = await joinBeach()
+    setBusy(false)
+    if (err) {
+      setError(status === 429
+        ? t('account.errors.tooManyTries', 'Too many tries. Wait a few minutes and try again.')
+        : t('account.errors.joinFailed', 'Joining OpenBeach failed. Try again.'))
+      return
+    }
+    toast.success(t('account.joined', 'You joined OpenBeach. It now waits for approval.'))
+    onJoined?.()
+  }
+  return (
+    <div className={className}>
+      <Button size={size} variant={variant} icon={LogIn} loading={busy} disabled={busy} onClick={join} data-testid="join-beach">
+        {t('account.joinBeach', 'Join OpenBeach')}
+      </Button>
+      {error && <p role="alert" className="mt-1.5 text-xs font-medium text-red-600">{error}</p>}
+    </div>
+  )
+}
 
 const ROLE_WORDS = {
   admin: ['account.roles.admin', 'Admin'],
@@ -62,7 +104,7 @@ export default function ProfileModal({ open, onClose }) {
   const email = user.email || profile?.email || ''
   const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ')
   const changed = firstName.trim() !== (profile?.first_name || '') || lastName.trim() !== (profile?.last_name || '')
-  const roles = roleLabels(access?.roles, t)
+  const roles = roleLabels(displayedRoles(access), t)
 
   const save = async (e) => {
     e.preventDefault()
@@ -136,8 +178,19 @@ export default function ProfileModal({ open, onClose }) {
             )}
           </div>
 
+          {/* An OpenVolley account, not in OpenBeach yet: join first */}
+          {access?.known && access.needsJoin && (
+            <section aria-labelledby="ob-join-title" className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-3 text-sky-950" data-testid="join-beach-section">
+              <h3 id="ob-join-title" className="text-sm font-semibold">{t('account.joinTitle', 'Not in OpenBeach yet')}</h3>
+              <p className="mt-0.5 text-xs text-sky-950/80">
+                {t('account.joinBody', 'This is an OpenVolley account. Join OpenBeach with the same login; an invite code or an admin then approves it. Matches stay on this device until then.')}
+              </p>
+              <JoinBeachButton className="mt-3" />
+            </section>
+          )}
+
           {/* Waiting for approval: the invite code */}
-          {access?.known && access.isPending && (
+          {access?.known && access.isPending && !access.needsJoin && (
             <section aria-labelledby="ob-pending-title" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-amber-900" data-testid="pending-approval">
               <div className="flex items-start gap-2">
                 <Clock size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-amber-700" />
@@ -163,7 +216,7 @@ export default function ProfileModal({ open, onClose }) {
               </Field>
             </div>
             {saveError && <FormError>{saveError}</FormError>}
-            <Button type="submit" variant="positive" loading={saving} disabled={!changed}>
+            <Button type="submit" loading={saving} disabled={!changed}>
               {t('account.saveName', 'Save name')}
             </Button>
           </form>

@@ -293,6 +293,16 @@ export function apiMe() {
 }
 
 /**
+ * POST /api/account/join { app: 'beach' } -> { app, member: true, already_member }.
+ * An existing OpenVolley account joins OpenBeach with the same login. No role
+ * comes with it: the account waits in OpenBeach until an invite code or an
+ * admin approves it.
+ */
+export function apiJoinBeach() {
+  return postJson('/api/account/join', { app: 'beach' }, { fallbackError: 'Joining OpenBeach failed' })
+}
+
+/**
  * POST /api/account/redeem-invite { code, app: 'beach' } -> { roles, role_granted }.
  * A beach invite code grants a beach role (and the OpenBeach membership).
  */
