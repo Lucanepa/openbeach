@@ -3,7 +3,6 @@ node_modules/
 
 # Build outputs
 dist/
-dist-electron/
 # Cloudflare Pages builds (npm run build:subdomains)
 dist-beachapp/
 dist-beach-*/
@@ -27,7 +26,7 @@ Thumbs.db
 *.log
 npm-debug.log*
 
-# Electron
+# Build output
 out/
 build/
 

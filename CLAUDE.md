@@ -12,7 +12,8 @@ Offline-first beach volleyball scoring application with multi-platform support (
 - **Frontend**: React 18 + Vite
 - **Database**: Dexie (IndexedDB wrapper) for offline-first local storage
 - **Cloud Sync**: the OpenVolley backend (backend.openvolley.app: auth, `/api/db`, realtime relay, storage), shared with indoor; beach rows carry `sport_type = 'beach'`
-- **Desktop**: Electron
+- **Desktop**: the Tauri beach flavour of the OpenVolley desktop app (built in the OpenVolley repo, `escoresheet/frontend/src-tauri/tauri.beach.conf.json`); its relay serves these pages on 5174 / WS 8081
+- **Android**: Capacitor (`com.openvolley.beach`, `npm run build:android`)
 - **PDF**: jsPDF, pdf-lib, pdfjs-dist
 - **i18n**: i18next (en, fr, it, de, de-CH)
 - **Styling**: Tailwind v4 + the volleyui kit (`src_beach/ui/volleyui`, light only) via `src_beach/tailwind_beach.css`; the legacy `styles_beach.css` (dark) sits in a `legacy` layer until every screen is restyled. Restyled views live inside `.ov-kit`.
@@ -29,7 +30,7 @@ escoresheet/frontend/
 │   └── *App_beach.jsx       # Entry points
 ├── scoresheet_pdf_beach/    # PDF generation
 ├── public_beach/            # Static assets
-└── electron/                # Desktop app
+└── android/                 # Capacitor Android app
 ```
 
 ## Commands
@@ -39,10 +40,9 @@ Run from `escoresheet/frontend/`:
 ```bash
 npm run dev              # Dev server (port 6173)
 npm run build            # Production build
-npm run electron:dev     # Dev with Electron
-npm run electron:build:win   # Build Windows installer
-npm run electron:build:mac   # Build macOS DMG
-npm run electron:build:linux # Build Linux packages
+npm run build:subdomains # Cloudflare Pages builds (dist-beach*)
+npm run build:android    # Capacitor web bundle (dist-capacitor)
+npm run test:run         # vitest
 ```
 
 ## Key Entry Points

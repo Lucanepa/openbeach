@@ -21,13 +21,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:ui": "vitest --ui",
-    "electron": "electron .",
-    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
-    "electron:build": "npm run build && electron-builder",
-    "electron:build:win": "npm run build && electron-builder --win",
-    "electron:build:mac": "npm run build && electron-builder --mac",
-    "electron:build:linux": "npm run build && electron-builder --linux"
+    "test:ui": "vitest --ui"
   },
   "dependencies": {
     "@capacitor/screen-orientation": "^8.0.2",
@@ -63,8 +57,6 @@
     "@testing-library/user-event": "^14.6.1",
     "@vitejs/plugin-react": "^5.1.4",
     "concurrently": "^9.2.1",
-    "electron": "^40.0.0",
-    "electron-builder": "^26.8.1",
     "fake-indexeddb": "^6.2.5",
     "happy-dom": "^20.3.4",
     "jsdom": "^28.1.0",
@@ -75,51 +67,10 @@
     "tailwindcss3": "npm:tailwindcss@^3.4.19",
     "vite": "^7.3.1",
     "vite-plugin-pwa": "^1.2.0",
-    "vitest": "^4.0.17",
-    "wait-on": "^9.0.4"
+    "vitest": "^4.0.17"
   },
   "overrides": {
     "minimatch": ">=10.2.1",
     "glob": ">=11.0.0"
-  },
-  "main": "electron/main.cjs",
-  "build": {
-    "appId": "app.openbeach.escoresheet",
-    "productName": "OpenBeach eScoresheet",
-    "directories": {
-      "output": "dist-electron"
-    },
-    "files": [
-      "dist/**/*",
-      "electron/**/*"
-    ],
-    "win": {
-      "target": [
-        "nsis"
-      ],
-      "icon": "build/icon.ico",
-      "artifactName": "OpenBeach-eScoresheet-Setup.${ext}",
-      "publisherName": "OpenBeach"
-    },
-    "mac": {
-      "target": [
-        "dmg"
-      ],
-      "icon": "build/icon.icns",
-      "category": "public.app-category.sports",
-      "artifactName": "OpenBeach-eScoresheet.${ext}"
-    },
-    "linux": {
-      "target": [
-        "AppImage",
-        "deb"
-      ],
-      "icon": "build/icon.png",
-      "category": "Sports"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
-    }
   }
 }
