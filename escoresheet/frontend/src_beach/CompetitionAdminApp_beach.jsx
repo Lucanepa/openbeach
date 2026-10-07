@@ -4,6 +4,7 @@ import CompetitionList from './components_beach/admin/CompetitionList_beach'
 import ExcelUpload from './components_beach/admin/ExcelUpload_beach'
 import CompMatchEditor from './components_beach/admin/CompMatchEditor_beach'
 import { COMPETITIONS_ENABLED } from './utils_beach/features_beach'
+import { BRAND } from './brand_beach'
 
 const headerStyle = {
   display: 'flex',
@@ -70,7 +71,7 @@ function AdminLogin() {
     <div style={{ minHeight: '100vh', background: '#0b1220', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ width: 'min(90vw, 400px)', background: '#111827', border: '2px solid #7c3aed', borderRadius: 12, overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px', background: 'rgba(124, 58, 237, 0.1)', borderBottom: '1px solid rgba(124, 58, 237, 0.3)' }}>
-          <img src="/openbeach_no_bg.png" alt="openBeach" style={{ width: 32, height: 32 }} />
+          <img src={BRAND.mark} alt="OpenBeach" style={{ width: 32, height: 32 }} />
           <h2 style={{ margin: 0, color: '#fff', fontSize: 20, fontWeight: 600 }}>Competitions Admin</h2>
         </div>
         <div style={{ padding: 20 }}>
@@ -197,7 +198,7 @@ function CompetitionAdmin() {
       {/* Header */}
       <div style={headerStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <img src="/openbeach_no_bg.png" alt="openBeach" style={{ width: 28, height: 28 }} />
+          <img src={BRAND.mark} alt="OpenBeach" style={{ width: 28, height: 28 }} />
           <span style={{ fontWeight: 600, fontSize: 16, color: '#fff' }}>Competitions Admin</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

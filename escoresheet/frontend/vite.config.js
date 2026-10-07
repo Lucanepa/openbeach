@@ -6,6 +6,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 import { readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, resolve } from 'path'
+import { PWA_INCLUDE_ASSETS, PWA_ICONS, THEME_COLOR } from './pwa-icons.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -45,7 +46,7 @@ export default defineConfig({
     VitePWA({
       disable: isCapacitor,
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg'],
+      includeAssets: PWA_INCLUDE_ASSETS,
       workbox: {
         // Cache all assets for offline use
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
@@ -88,11 +89,8 @@ export default defineConfig({
         start_url: '.',
         display: 'standalone',
         background_color: '#ffffff',
-        theme_color: '#e2001a',
-        icons: [
-          { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'pwa-512.png', sizes: '512x512', type: 'image/png' }
-        ]
+        theme_color: THEME_COLOR,
+        icons: PWA_ICONS
       }
     })
   ],

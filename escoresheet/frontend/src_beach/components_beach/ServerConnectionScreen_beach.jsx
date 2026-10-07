@@ -4,6 +4,7 @@ import { Globe, Loader2, SatelliteDish } from 'lucide-react'
 import { Button, FOCUS_RING } from '../ui/volleyui/Button.jsx'
 import { NOTICE } from '../ui/volleyui/tones.js'
 import { cn } from '../ui/volleyui/cn.js'
+import { BRAND } from '../brand_beach'
 import { getBackendUrl, getBackendOverride, setBackendOverride, clearBackendOverride, isAllowedBackendUrl, learnRelayWsPort, normalizeRelayAddress } from '../utils_beach/backendConfig_beach'
 
 const LAST_SERVER_KEY = 'openbeach_last_server'
@@ -137,6 +138,7 @@ export default function ServerConnectionScreen({ onConnected, skipIfAutoConnect 
   return (
     <div className="ov-kit flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-stone-100 via-stone-50 to-stone-100 px-4 py-8 text-stone-800">
       <div className="w-full max-w-sm rounded-2xl border border-stone-200/70 bg-white p-5 shadow-card-lg sm:p-6">
+        <img src={BRAND.mark} alt="OpenBeach" draggable={false} className="mx-auto mb-4 h-11 w-11" />
         <h2 className="text-center text-xl font-bold tracking-tight text-stone-900">
           {t('connection.connectToServer', 'Connect to Server')}
         </h2>

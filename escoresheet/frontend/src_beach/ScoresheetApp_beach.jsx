@@ -13,6 +13,7 @@ import { EmptyState } from './ui/volleyui/EmptyState.jsx'
 import { GateMessage } from './ui/volleyui/ErrorScreen.jsx'
 import { AppSpinner } from './ui/volleyui/AppSpinner.jsx'
 import { dayLabel } from './ui/volleyui/format.js'
+import { BRAND } from './brand_beach'
 
 // Beach scoresheets live under beach/{date}/ in the shared bucket (indoor
 // writes {date}/ at the root)
@@ -440,7 +441,7 @@ const ScoresheetList = () => {
         <aside className="fixed inset-y-0 left-0 z-40 flex w-72 max-w-[85vw] shrink-0 flex-col border-r border-stone-200/70 bg-white shadow-xl sm:static sm:z-auto sm:shadow-none">
           {/* Sidebar header */}
           <div className="flex items-center gap-3 border-b border-stone-200/70 px-4 py-3">
-            <img src="/openbeach_no_bg.png" alt="OpenBeach" className="h-8 w-8 shrink-0" />
+            <img src={BRAND.mark} alt="OpenBeach" className="h-8 w-8 shrink-0" draggable={false} />
             <div className="min-w-0">
               <h1 className="truncate text-sm font-semibold text-stone-900">{t('scoresheetApp.scoresheetArchive')}</h1>
               <p className="text-xs tabular-nums text-stone-500">

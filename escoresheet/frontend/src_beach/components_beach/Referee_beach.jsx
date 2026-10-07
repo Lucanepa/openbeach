@@ -27,6 +27,7 @@ import { Modal as KitModal } from '../ui/volleyui/Modal.jsx'
 import { NarrowScreenOverlay } from './dashboards/EntryKit_beach.jsx'
 import { HEADER_BAR, HEADER_BTN, HEADER_BTN_ON, MENU_PANEL, MENU_SUBROW, MENU_ROW_ON } from './chromeClasses_beach'
 import { timeSecondsLabel } from '../ui/volleyui/format.js'
+import { BRAND } from '../brand_beach'
 
 // Get current version from package.json (injected by Vite at build time)
 const currentVersion = __APP_VERSION__
@@ -2755,8 +2756,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                 </div>
               ) : (
                 <img
-                  src="/openbeach_no_bg.png"
-                  alt="openBeach"
+                  src={BRAND.mark}
+                  alt="OpenBeach"
                   style={{
                     width: '100%',
                     height: '100%',

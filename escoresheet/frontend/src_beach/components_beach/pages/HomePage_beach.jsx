@@ -6,6 +6,7 @@ import SupportFeedbackModal from '../SupportFeedbackModal_beach'
 import { Button, FOCUS_RING_INSET } from '../../ui/volleyui/Button.jsx'
 import { Card } from '../../ui/volleyui/Card.jsx'
 import { cn } from '../../ui/volleyui/cn.js'
+import { BRAND } from '../../brand_beach'
 
 // The home page in the Volleyball style (volleyui), the same stack as
 // OpenVolley's home: one card holding the match actions (brand red New match,
@@ -35,9 +36,9 @@ export default function HomePage({
         <h1 className="text-center text-2xl sm:text-3xl font-bold tracking-tight text-stone-900">{t('home.title')}</h1>
         <div className="my-4 flex justify-center">
           <img
-            src={`${import.meta.env.BASE_URL}openbeach_no_bg.png`}
+            src={BRAND.mark}
             alt="OpenBeach"
-            className="h-28 w-auto sm:h-32"
+            className="h-24 w-24 sm:h-28 sm:w-28"
             draggable={false}
           />
         </div>

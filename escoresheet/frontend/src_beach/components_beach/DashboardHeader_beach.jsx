@@ -8,6 +8,7 @@ import {
   MENU_SUBROW, MENU_ROW_ON, MENU_NEST, MENU_SEP, MENU_ICON
 } from './chromeClasses_beach'
 import HeaderMenuItem from './HeaderMenuItem_beach'
+import { BRAND } from '../brand_beach'
 
 // Flag SVG components for language selector
 const FlagGB = () => (
@@ -218,6 +219,8 @@ export default function DashboardHeader({
     >
       {/* LEFT: Title/Version */}
       <div className="flex min-w-0 flex-1 basis-0 items-center gap-2">
+        {/* The OpenBeach mark; decorative, the page names itself in the title */}
+        <img src={BRAND.mark} alt="" aria-hidden="true" draggable={false} className="h-6 w-6 shrink-0" />
         <span className={cn(HEADER_TITLE, 'min-w-0')}>
           {title}
         </span>

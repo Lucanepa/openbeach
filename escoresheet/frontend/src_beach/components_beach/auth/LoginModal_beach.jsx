@@ -9,6 +9,7 @@ import { Field, FormError } from '../../ui/volleyui/Field.jsx'
 import { Input } from '../../ui/volleyui/Input.jsx'
 import { Button } from '../../ui/volleyui/Button.jsx'
 import AuthLayer from './AuthLayer_beach'
+import { BRAND } from '../../brand_beach'
 
 const LINK = 'font-medium text-red-700 underline underline-offset-2 hover:text-red-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60 rounded-sm'
 
@@ -66,6 +67,7 @@ export default function LoginModal({ open, onClose }) {
         closeLabel={t('common.close', 'Close')}
       >
         <form onSubmit={handleSubmit} className="space-y-3" noValidate>
+          <img src={BRAND.mark} alt="" aria-hidden="true" draggable={false} className="mx-auto h-11 w-11" />
           <p className="text-sm text-stone-600">
             {t('account.signInLead', 'Sign in with your OpenBeach account to save matches to the cloud.')}
           </p>

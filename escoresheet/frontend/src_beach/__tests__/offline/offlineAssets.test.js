@@ -26,7 +26,9 @@ describe('offline pages', () => {
   }
 
   it('the subdomain build writes no CDN tag either', () => {
-    expect(readFileSync(resolve(root, 'scripts/build-subdomains.js'), 'utf8')).not.toMatch(/cdn\.tailwindcss\.com"/)
+    for (const f of ['scripts/build-subdomains.js', 'scripts/subdomain-pages.js']) {
+      expect(readFileSync(resolve(root, f), 'utf8'), f).not.toMatch(/cdn\.tailwindcss\.com"/)
+    }
   })
 
   it('no source fetches a QR code, flag or font from a web service', () => {

@@ -12,6 +12,7 @@ import { Row, RowList, DateRail } from './ui/volleyui/Row.jsx'
 import { SkeletonRows } from './ui/volleyui/Skeleton.jsx'
 import { AppSpinner } from './ui/volleyui/AppSpinner.jsx'
 import { EntryPage, EntryCard } from './components_beach/dashboards/EntryKit_beach.jsx'
+import { BRAND } from './brand_beach'
 
 
 /**
@@ -253,7 +254,7 @@ export default function ScoreboardApp() {
       </button>
     )
     return setupPage(
-      <EntryCard width="md" title={t('scoreboard.title', 'Scoreboard')} subtitle={t('scoreboard.setup', 'Choose how to connect to the match')}>
+      <EntryCard width="md" art={<img src={BRAND.mark} alt="OpenBeach" draggable={false} className="h-14 w-14" />} title={t('scoreboard.title', 'Scoreboard')} subtitle={t('scoreboard.setup', 'Choose how to connect to the match')}>
         <div className="flex flex-col gap-3 sm:flex-row">
           {modeCard('local', Monitor, t('scoreboard.localMode', 'Local'), t('scoreboard.localModeDesc', 'Same device as the scorer. Connect instantly via browser.'))}
           {modeCard('remote', Globe, t('scoreboard.remoteMode', 'Remote'), t('scoreboard.remoteModeDesc', 'Another device. Through the venue server or OpenVolley Cloud.'))}

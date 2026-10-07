@@ -22,8 +22,6 @@ import { useDashboardServer } from './hooks_beach/useDashboardServer_beach'
 // Beach volleyball ball image
 const ballImage = '/beachball.png'
 
-// Logo for HomePage
-const openbeachLogo = '/openbeach_no_bg.png'
 import {
   TEST_REFEREE_SEED_DATA,
   TEST_SCORER_SEED_DATA,
@@ -249,10 +247,7 @@ export default function App() {
 
   // Preload assets that are used later (e.g., coin toss ball image, logo)
   useEffect(() => {
-    const assetsToPreload = [
-      ballImage,
-      openbeachLogo
-    ]
+    const assetsToPreload = [ballImage]
 
     assetsToPreload.forEach(src => {
       const img = new Image()
@@ -775,7 +770,7 @@ export default function App() {
 
   // Preload ball and logo images when app loads
   useEffect(() => {
-    const imagesToPreload = [ballImage, openbeachLogo]
+    const imagesToPreload = [ballImage]
 
     imagesToPreload.forEach(src => {
       // Preload the image
@@ -2313,7 +2308,6 @@ export default function App() {
                   {/* desktop app: "Update x is ready" (home screen only, never during a match) */}
                   <DesktopUpdateNotice />
                   <HomePage
-                    favicon={openbeachLogo}
                     newMatchMenuOpen={newMatchMenuOpen}
                     setNewMatchMenuOpen={setNewMatchMenuOpen}
                     createNewOfficialMatch={createNewOfficialMatch}

@@ -7,6 +7,7 @@ import {
   HEADER_BAR, HEADER_BTN, HEADER_BTN_ON, HEADER_TITLE, MENU_PANEL, MENU_SECTION, MENU_ROW, MENU_SEP, MENU_ICON
 } from './chromeClasses_beach'
 import HeaderMenuItem from './HeaderMenuItem_beach'
+import { BRAND } from '../brand_beach'
 
 /**
  * SimpleHeader - 3-column header for all dashboard apps
@@ -71,9 +72,13 @@ export default function SimpleHeader({
             className="shrink-0 sm:p-0 sm:[&_button]:h-9 sm:[&_button]:px-3"
           />
         ) : title ? (
-          <span className={HEADER_TITLE}>
-            {title}
-          </span>
+          <>
+            {/* The OpenBeach mark; decorative, the page names itself in the title */}
+            <img src={BRAND.mark} alt="" aria-hidden="true" draggable={false} className="h-6 w-6 shrink-0" />
+            <span className={HEADER_TITLE}>
+              {title}
+            </span>
+          </>
         ) : null}
       </div>
 

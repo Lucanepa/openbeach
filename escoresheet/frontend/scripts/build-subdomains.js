@@ -21,6 +21,8 @@ import { fileURLToPath } from 'url'
 import { readFileSync, writeFileSync, existsSync, rmSync, renameSync, copyFileSync, cpSync } from 'fs'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { PWA_INCLUDE_ASSETS, PWA_ICONS, THEME_COLOR } from '../pwa-icons.js'
+import { subdomains, htmlFor } from './subdomain-pages.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const frontendDir = resolve(__dirname, '..')
@@ -29,151 +31,6 @@ const disablePWA = process.env.DISABLE_PWA === 'true'
 // Read version from package.json
 const packageJson = JSON.parse(readFileSync(resolve(frontendDir, 'package.json'), 'utf-8'))
 const appVersion = packageJson.version
-
-// Subdomain configurations
-const subdomains = {
-  beachapp: {
-    name: 'OpenBeach eScoresheet',
-    shortName: 'Beach',
-    description: 'Beach volleyball match scoring application',
-    title: 'OpenBeach eScoresheet',
-    mainEntry: 'main_beach',
-    themeColor: '#f59e0b'
-  },
-  'beach-referee': {
-    name: 'Beach Referee Dashboard',
-    shortName: 'Referee',
-    description: 'Referee view for beach volleyball match scoring',
-    title: 'Beach Referee Dashboard - OpenBeach',
-    mainEntry: 'referee-main_beach',
-    themeColor: '#1e40af'
-  },
-  'beach-livescore': {
-    name: 'Beach Live Scoreboard',
-    shortName: 'Livescore',
-    description: 'Live scoring display for beach volleyball match',
-    title: 'Beach Live Scoreboard - OpenBeach',
-    mainEntry: 'livescore-main_beach',
-    themeColor: '#7c3aed'
-  },
-  'beach-scoreboard': {
-    name: 'Beach Scoreboard Display',
-    shortName: 'Scoreboard',
-    description: 'Arena scoreboard display for beach volleyball matches',
-    title: 'Beach Scoreboard - OpenBeach',
-    mainEntry: 'scoreboard-main_beach',
-    themeColor: '#0f172a'
-  },
-  'beach-scoresheet': {
-    name: 'Beach Scoresheet Archive',
-    shortName: 'Scoresheet',
-    description: 'View and download beach volleyball match scoresheets',
-    title: 'Beach Scoresheet Archive - OpenBeach',
-    mainEntry: 'scoresheet-main_beach',
-    themeColor: '#0891b2',
-    customHtml: true
-  }
-}
-
-function createIndexHtml(config) {
-  return `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" sizes="16x16 32x32 48x48 64x64" href="/favicon_beach.png" />
-    <link rel="icon" type="image/png" sizes="128x128 256x256" href="/favicon_beach.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/favicon_beach.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="${config.themeColor}" />
-    <meta name="description" content="${config.description}" />
-    <title>${config.title}</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src_beach/${config.mainEntry}.jsx"></script>
-  </body>
-</html>
-`
-}
-
-function createScoresheetHtml(config) {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="icon" type="image/png" sizes="16x16 32x32 48x48 64x64" href="/favicon_beach.png" />
-  <link rel="icon" type="image/png" sizes="128x128 256x256" href="/favicon_beach.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="/favicon_beach.png" />
-  <meta name="theme-color" content="${config.themeColor}" />
-  <meta name="description" content="${config.description}" />
-  <title>${config.title}</title>
-  <!-- No CDN: the archive app brings its own Tailwind (src_beach/tailwind_beach.css) -->
-  <style>
-    /* Global Font Setting */
-    body {
-      font-family: 'Aptos Display', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    }
-
-    /* Custom print styles to ensure background graphics/colors print */
-    @media print {
-      html,
-      body {
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-        margin: 0 !important;
-        padding: 0 !important;
-        height: 100% !important;
-        overflow: hidden !important;
-      }
-
-      @page {
-        size: A4 landscape;
-        margin: 0;
-      }
-
-      #root {
-        margin: 0 !important;
-        padding: 0 !important;
-        overflow: hidden !important;
-        height: 100vh !important;
-        max-height: 100vh !important;
-      }
-    }
-
-    /* Hide scrollbar for cleaner look in inputs */
-    input[type="number"]::-webkit-inner-spin-button,
-    input[type="number"]::-webkit-outer-spin-button {
-      -webkit-appearance: none;
-      margin: 0;
-    }
-
-    .vertical-text {
-      writing-mode: vertical-lr;
-      transform: rotate(180deg);
-    }
-
-    /* Dense table utils */
-    .input-dense {
-      text-align: center;
-      background-color: transparent;
-      width: 100%;
-      height: 100%;
-      outline: none;
-    }
-
-    .input-dense:focus {
-      background-color: rgba(59, 130, 246, 0.1);
-    }
-  </style>
-</head>
-<body class="bg-gray-100 text-gray-900 antialiased print:bg-white text-[10px] overflow-auto">
-  <div id="root"></div>
-  <script type="module" src="/src_beach/${config.mainEntry}.jsx"></script>
-</body>
-</html>
-`
-}
 
 async function buildSubdomain(subdomain, basePath = '/') {
   const config = subdomains[subdomain]
@@ -193,7 +50,7 @@ async function buildSubdomain(subdomain, basePath = '/') {
   console.log(`\n🏐 Building ${subdomain}.openvolley.app...`)
 
   // Create temp index.html in frontend root (use custom HTML for scoresheet)
-  const htmlContent = config.customHtml ? createScoresheetHtml(config) : createIndexHtml(config)
+  const htmlContent = htmlFor(config)
   writeFileSync(tempIndexPath, htmlContent)
 
   try {
@@ -211,7 +68,7 @@ async function buildSubdomain(subdomain, basePath = '/') {
         react(),
         ...(!disablePWA ? [VitePWA({
           registerType: 'prompt',
-          includeAssets: ['favicon_beach.png'],
+          includeAssets: PWA_INCLUDE_ASSETS,
           workbox: {
             skipWaiting: false,
             clientsClaim: true,
@@ -253,11 +110,8 @@ async function buildSubdomain(subdomain, basePath = '/') {
             start_url: '/',
             display: 'standalone',
             background_color: '#ffffff',
-            theme_color: config.themeColor,
-            icons: [
-              { src: 'favicon_beach.png', sizes: '192x192', type: 'image/png' },
-              { src: 'favicon_beach.png', sizes: '512x512', type: 'image/png' }
-            ]
+            theme_color: THEME_COLOR,
+            icons: PWA_ICONS
           }
         })] : [])
       ],
@@ -293,13 +147,6 @@ async function buildSubdomain(subdomain, basePath = '/') {
     const publicDir = resolve(frontendDir, 'public_beach')
     if (existsSync(publicDir)) {
       cpSync(publicDir, outDir, { recursive: true })
-    }
-
-    // Copy favicon from root if it exists (legacy path)
-    const faviconSrc = resolve(frontendDir, 'favicon_beach.png')
-    const faviconDest = resolve(outDir, 'favicon_beach.png')
-    if (existsSync(faviconSrc) && !existsSync(faviconDest)) {
-      copyFileSync(faviconSrc, faviconDest)
     }
 
     // Create 404.html for SPA routing
