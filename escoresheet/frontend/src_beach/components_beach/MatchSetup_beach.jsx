@@ -18,6 +18,7 @@ import { uploadBackupToCloud, uploadLogsToCloud } from '../utils_beach/logger_be
 import { apiFrom } from '../lib_beach/apiClient_beach'
 import { setExtId } from '../utils_beach/syncIds_beach'
 import { buildConnectionPins } from '../utils_beach/connectionPins_beach'
+import { cloudSyncWaitNow } from '../utils_beach/cloudStatus_beach'
 import { COMPETITIONS_ENABLED } from '../utils_beach/features_beach'
 import { generateMatchSeedKey } from '../utils_beach/serverDataSync_beach'
 import { TEST_TEAM_SEED_DATA } from '../constants_beach/testSeeds_beach'
@@ -1962,11 +1963,12 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
       setMatchInfoConfirmed(true)
       setCurrentView('main')
-      setNoticeModal({
-        message: isCreating ? t('matchSetup.modals.matchCreatedSyncing') : t('matchSetup.modals.matchUpdatedSyncing'),
-        type: 'success',
-        syncing: true
-      })
+      // Wait for the cloud only when the sync can finish now; a venue tablet
+      // (its server is the relay) or offline mode syncs in the background
+      const waitForCloud = cloudSyncWaitNow()
+      setNoticeModal(waitForCloud
+        ? { message: isCreating ? t('matchSetup.modals.matchCreatedSyncing') : t('matchSetup.modals.matchUpdatedSyncing'), type: 'success', syncing: true }
+        : { message: t('matchSetup.modals.matchSavedLocalSyncPending'), type: 'success' })
 
       // Send match info email if provided (non-blocking)
       if (notificationEmail && notificationEmail.trim() && match?.gamePin) {
@@ -2032,7 +2034,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           }
         }, 500)
       }
-      checkSyncStatus()
+      if (waitForCloud) checkSyncStatus()
     } catch (error) {
       console.error('Error confirming match info:', error)
       setNoticeModal({ message: `Error: ${error.message}`, type: 'error' })
@@ -3459,7 +3461,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 })
               }
 
-              setNoticeModal({ message: t('matchSetup.officialsSaved'), type: 'success', syncing: true })
+              const waitForCloud = cloudSyncWaitNow()
+              setNoticeModal(waitForCloud
+                ? { message: t('matchSetup.officialsSaved'), type: 'success', syncing: true }
+                : { message: t('matchSetup.officialsSavedLocal'), type: 'success' })
 
               // Poll to check when sync completes
               const checkSyncStatus = async () => {
@@ -3481,7 +3486,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                   }
                 }, 500)
               }
-              checkSyncStatus()
+              if (waitForCloud) checkSyncStatus()
             }
             setCurrentView('main')
           }}>{t('common.confirm')}</Button>
@@ -3877,7 +3882,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 }
               }
 
-              setNoticeModal({ message: t('matchSetup.team1Saved'), type: 'success', syncing: true })
+              const waitForCloud = cloudSyncWaitNow()
+              setNoticeModal(waitForCloud
+                ? { message: t('matchSetup.team1Saved'), type: 'success', syncing: true }
+                : { message: t('matchSetup.team1SavedLocal'), type: 'success' })
 
               // Poll to check when sync completes
               const checkSyncStatus = async () => {
@@ -3899,7 +3907,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                   }
                 }, 500)
               }
-              checkSyncStatus()
+              if (waitForCloud) checkSyncStatus()
             }
             setCurrentView('main')
           }}>{t('common.confirm')}</Button>
@@ -4320,7 +4328,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 }
               }
 
-              setNoticeModal({ message: t('matchSetup.team2Saved'), type: 'success', syncing: true })
+              const waitForCloud = cloudSyncWaitNow()
+              setNoticeModal(waitForCloud
+                ? { message: t('matchSetup.team2Saved'), type: 'success', syncing: true }
+                : { message: t('matchSetup.team2SavedLocal'), type: 'success' })
 
               // Poll to check when sync completes
               const checkSyncStatus = async () => {
@@ -4342,7 +4353,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                   }
                 }, 500)
               }
-              checkSyncStatus()
+              if (waitForCloud) checkSyncStatus()
             }
             setCurrentView('main')
           }}>{t('common.confirm')}</Button>
@@ -4549,8 +4560,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             status: 'queued'
           })
 
-          // Show syncing modal and poll for completion
-          setNoticeModal({ message: 'Syncing to database...', type: 'success', syncing: true })
+          // Show syncing modal and poll for completion (only when the sync
+          // can finish now: never on a venue tablet or offline)
+          if (!cloudSyncWaitNow()) return
+          setNoticeModal({ message: t('matchSetup.modals.syncingToDatabase'), type: 'success', syncing: true })
           let attempts = 0
           const maxAttempts = 20
           const interval = setInterval(async () => {

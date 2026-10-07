@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { db } from '../db_beach/db_beach'
 import { processJob, takeJobError, errorBackoffMs, DROP_JOB, AUTH_REQUIRED, PERMANENT_FAILURE, STOP_ERROR } from './useSyncQueue_beach'
+import { cloudSyncWaitNow } from '../utils_beach/cloudStatus_beach'
 
 // Ported from OpenVolley src/hooks/useSequentialSync.js: the set-end / match-end
 // sync sends through the same processJob as the background queue (session,
@@ -79,7 +80,7 @@ async function settleException(job, jobId, error) {
  * concurrently. useSyncQueue reclaims 'sending' rows abandoned by a closed tab.
  * Processing reuses useSyncQueue's processJob, so both paths send the same thing.
  */
-export async function sendJobNow(job, timeout = 10000) {
+export async function sendJobNow(job, timeout = 10000, { waitForCloud = cloudSyncWaitNow } = {}) {
   // 1. Write to IndexedDB sync_queue first (for retry if app closes)
   const jobId = await db.sync_queue.add({
     ...job,
@@ -88,8 +89,10 @@ export async function sendJobNow(job, timeout = 10000) {
     sending_since: Date.now()
   })
 
-  // 2. If offline, return warning (data saved locally)
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+  // 2. If offline, return warning (data saved locally). Also when the cloud
+  // sync cannot finish now (offline mode, a venue tablet whose server is the
+  // relay, no session): the background queue sends it, nobody waits for it.
+  if ((typeof navigator !== 'undefined' && navigator.onLine === false) || !waitForCloud()) {
     await db.sync_queue.update(jobId, { status: 'queued' })
     console.warn('[SequentialSync] Offline - job queued for later:', job.resource, job.action)
     return { success: false, offline: true, jobId }

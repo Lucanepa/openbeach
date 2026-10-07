@@ -6,6 +6,7 @@ import { db } from '../db_beach/db_beach'
 import { apiFrom } from '../lib_beach/apiClient_beach'
 import { setExtId, eventExtId } from '../utils_beach/syncIds_beach'
 import { isBackendAvailable, getBackendUrl } from '../utils_beach/backendConfig_beach'
+import { cloudSyncWaitNow } from '../utils_beach/cloudStatus_beach'
 import SignaturePad from './SignaturePad_beach'
 import MenuList from './MenuList_beach'
 import CountryFlag from './CountryFlag_beach'
@@ -1099,13 +1100,17 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
       team2Coach: team2CoachSignature
     })
 
-    // Show initialization modal and wait for sync
+    // Show initialization modal and wait for sync. Only when the cloud sync
+    // can finish now: a venue tablet (its server is the relay, no /api/db),
+    // offline mode or a device without a session syncs in the background and
+    // starts the match at once (it waited 9-13 s for nothing).
+    const waitForCloud = !match?.test && cloudSyncWaitNow()
     setInitModal({ status: 'syncing', message: 'Syncing match data...' })
 
     // Wait for sync queue to process (poll for completion)
-    const maxAttempts = 30 // 15 seconds max
+    const maxAttempts = waitForCloud ? 30 : 0 // 15 seconds max
     let attempts = 0
-    let syncComplete = false
+    let syncComplete = !waitForCloud
 
     while (attempts < maxAttempts && !syncComplete) {
       await new Promise(resolve => setTimeout(resolve, 500))
@@ -1124,7 +1129,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
     // This is non-blocking - if offline or error, we still proceed (local status is already 'live')
     let verificationSkipped = false
 
-    if (!match?.test && isBackendAvailable()) {
+    if (waitForCloud && isBackendAvailable()) {
       setInitModal({ status: 'verifying', message: 'Verifying match status...' })
 
       try {
@@ -1169,7 +1174,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
     }
 
     // --- Pre-game connection checks (non-blocking, informational) ---
-    if (!match?.test && isBackendAvailable()) {
+    if (waitForCloud && isBackendAvailable()) {
       setInitModal({ status: 'checking', message: 'Running connection checks...', checks: {} })
 
       const localMatchForChecks = await db.matches.get(matchId)
@@ -1302,8 +1307,8 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
     // Success!
     setInitModal({ status: 'success', message: 'Match initialized!' })
 
-    // Short delay to show success message
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    // Short delay to show success message (none when nothing was waited for)
+    if (waitForCloud) await new Promise(resolve => setTimeout(resolve, 1000))
 
     setInitModal(null)
     // Navigate to scoreboard
