@@ -4,6 +4,9 @@ node_modules/
 # Build outputs
 dist/
 dist-electron/
+# Cloudflare Pages builds (npm run build:subdomains)
+dist-beachapp/
+dist-beach-*/
 
 # Environment variables
 .env
