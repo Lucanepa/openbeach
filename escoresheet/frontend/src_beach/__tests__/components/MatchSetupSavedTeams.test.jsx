@@ -157,3 +157,32 @@ describe('MatchSetup_beach saved teams', () => {
     expect(h.teams.map(t => t.id)).toEqual([MUELLER_WEBER_ID, ROSSI_ID])
   })
 })
+
+describe('MatchSetup_beach auto-save and the game PIN', () => {
+  // The auto-save wrote gamePin: null for a test match, so the PIN it got when
+  // it was created (it guards the match's relay room) was gone half a second
+  // after the setup opened, and each later sync made a new one.
+  async function autoSaved(match) {
+    const matchId = await db.matches.add({ status: 'scheduled', gameNumber: '1', court: '1', createdAt: new Date().toISOString(), ...match })
+    render(<MatchSetup matchId={matchId} onStart={() => {}} onReturn={() => {}} onOpenOptions={() => {}} onOpenCoinToss={() => {}} />)
+    await screen.findAllByRole('button', { name: 'Edit roster' })
+    // let the debounced (500 ms) auto-save run
+    await act(async () => { await new Promise(r => setTimeout(r, 900)) })
+    return db.matches.get(matchId)
+  }
+
+  it('a test match keeps its game PIN', async () => {
+    const saved = await autoSaved({ test: true, seedKey: 'test-match-default-abc', gamePin: '482913' })
+    expect(saved.gamePin).toBe('482913')
+  })
+
+  it('an official match keeps its game PIN', async () => {
+    const saved = await autoSaved({ test: false, gamePin: '102938' })
+    expect(saved.gamePin).toBe('102938')
+  })
+
+  it('a match without one gets a 6-digit game PIN', async () => {
+    const saved = await autoSaved({ test: true, seedKey: 'test-match-default-def', gamePin: null })
+    expect(saved.gamePin).toMatch(/^\d{6}$/)
+  })
+})

@@ -12,7 +12,7 @@ import CountryFlag from './CountryFlag_beach'
 // Beach volleyball ball image
 const ballImage = '/beachball.png'
 import { isBackendAvailable, getCloudApiUrl, BEACH_DESKTOP_HTTP_PORT } from '../utils_beach/backendConfig_beach'
-import { scorerPublisher, readRelayBundle } from '../utils_beach/relayPublisher_beach'
+import { scorerPublisher, readRelayBundle, ensureGamePin } from '../utils_beach/relayPublisher_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { uploadBackupToCloud, uploadLogsToCloud } from '../utils_beach/logger_beach'
 import { apiFrom } from '../lib_beach/apiClient_beach'
@@ -1540,15 +1540,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           game_n: gameN ? Number(gameN) : null,
           gameNumber: gameN ? gameN : null,
           league,
-          gamePin: match && !match.test ? (match.gamePin || (() => {
-            // Auto-generate gamePin if it doesn't exist
-            const chars = '0123456789'
-            let pin = ''
-            for (let i = 0; i < 6; i++) {
-              pin += chars.charAt(Math.floor(Math.random() * chars.length))
-            }
-            return pin
-          })()) : null,
+          // The stored game PIN, or a new one; a test match keeps its PIN too
+          // (it guards the match's relay room, see ensureGamePin). Read from
+          // the database: this auto-save can run with the render's `match`
+          // from before the live query answered (undefined).
+          gamePin: ensureGamePin((await db.matches.get(matchId)) || match).gamePin,
           scheduledAt,
           officials: buildOfficialsArray(
             { firstName: ref1First, lastName: ref1Last, country: ref1Country, dob: ref1Dob },
