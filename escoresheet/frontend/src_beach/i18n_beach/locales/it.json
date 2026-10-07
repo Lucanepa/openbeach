@@ -1624,7 +1624,7 @@
     "statusLabel": "Stato:",
     "messageLabel": "Messaggio:",
     "connectionIssueDetected": "Problema di connessione rilevato",
-    "venueMode": "Modalità palestra",
+    "venueMode": "Modalità sul posto",
     "venueNoRelay": "Nessun relay",
     "notUsedHere": "Non usato qui",
     "keptOnDevice": "Tenuto su questo dispositivo:"

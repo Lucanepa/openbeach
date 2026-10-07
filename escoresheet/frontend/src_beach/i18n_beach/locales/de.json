@@ -1624,7 +1624,7 @@
     "statusLabel": "Status:",
     "messageLabel": "Nachricht:",
     "connectionIssueDetected": "Verbindungsproblem erkannt",
-    "venueMode": "Hallenmodus",
+    "venueMode": "Vor-Ort-Modus",
     "venueNoRelay": "Kein Relay",
     "notUsedHere": "Hier nicht genutzt",
     "keptOnDevice": "Auf diesem Gerät gespeichert:"

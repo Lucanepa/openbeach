@@ -1624,7 +1624,7 @@
     "statusLabel": "Status:",
     "messageLabel": "Nachricht:",
     "connectionIssueDetected": "Verbindigsproblem erkannt",
-    "venueMode": "Hallemodus",
+    "venueMode": "Vor-Ort-Modus",
     "venueNoRelay": "Kei Relay",
     "notUsedHere": "Da nöd bruucht",
     "keptOnDevice": "Uf däm Grät gspeicheret:"

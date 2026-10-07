@@ -1624,7 +1624,7 @@
     "statusLabel": "État :",
     "messageLabel": "Message :",
     "connectionIssueDetected": "Problème de connexion détecté",
-    "venueMode": "Mode salle",
+    "venueMode": "Mode sur place",
     "venueNoRelay": "Pas de relais",
     "notUsedHere": "Non utilisé ici",
     "keptOnDevice": "Gardé sur cet appareil :"
