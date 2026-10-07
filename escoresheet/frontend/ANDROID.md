@@ -55,6 +55,15 @@ the metadata folders.
 Needs JDK 21 and the Android SDK in `~/Android/Sdk` (the script sets
 `ANDROID_HOME`).
 
+## Icons and splash
+
+The launcher icons (adaptive: the B2 ball on a dune `#efd8ae` background, plus
+a monochrome layer for Android 13+ themed icons), the legacy square and round
+icons, the pre-Android-12 splash and the store icon are rendered from
+`brand/` by `npm run brand` (`scripts/make-brand-assets.py`, see
+`brand/README.md`). Android 12+ draws the adaptive foreground on a dune icon
+disc on white (`styles.xml`).
+
 ## Signing key
 
 `~/.config/openbeach-android/release.p12` + `signing.properties`, backed up in

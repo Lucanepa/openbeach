@@ -15,7 +15,7 @@
     "build:android": "CAPACITOR=true vite build --emptyOutDir",
     "cap:sync": "cap sync android",
     "cap:open:android": "cap open android",
-    "android:icons": "python3 scripts/make-android-icons.py",
+    "brand": "python3 scripts/make-brand-assets.py",
     "release:android": "scripts/release-android.sh",
     "preview": "vite preview",
     "test": "vitest",
