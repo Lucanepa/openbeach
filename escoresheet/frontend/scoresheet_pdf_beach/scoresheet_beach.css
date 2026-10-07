@@ -1,0 +1,11 @@
+/**
+ * Tailwind for the PDF scoresheet page (scoresheet_beach.html), compiled at
+ * build time with Tailwind v3 by scripts/vite-plugin-scoresheet-tailwind.js
+ * and bundled with the app. It replaces the runtime CDN (cdn.tailwindcss.com,
+ * the same v3 with its default config), which left the official sheet and its
+ * PDF / ZIP unstyled at a venue with no internet and was a third-party script
+ * loaded at runtime. Classes come from scoresheet_pdf_beach/ and the page.
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

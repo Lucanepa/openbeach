@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import './scoresheet_beach.css'; // compiled Tailwind (was cdn.tailwindcss.com: unstyled offline)
 
 // Helper function to send errors to parent window
 const sendErrorToParent = (error: Error | string, details?: string) => {

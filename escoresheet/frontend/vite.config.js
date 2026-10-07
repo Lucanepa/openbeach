@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import scoresheetTailwind from './scripts/vite-plugin-scoresheet-tailwind.js'
 import { VitePWA } from 'vite-plugin-pwa'
 import { readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
@@ -37,6 +38,8 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    // The PDF scoresheet's own Tailwind v3 (was the CDN); before v4 sees it
+    scoresheetTailwind(),
     // Tailwind v4 + the volleyui tokens (src_beach/tailwind_beach.css)
     tailwindcss(),
     VitePWA({

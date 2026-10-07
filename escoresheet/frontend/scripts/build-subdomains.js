@@ -108,7 +108,7 @@ function createScoresheetHtml(config) {
   <meta name="theme-color" content="${config.themeColor}" />
   <meta name="description" content="${config.description}" />
   <title>${config.title}</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- No CDN: the archive app brings its own Tailwind (src_beach/tailwind_beach.css) -->
   <style>
     /* Global Font Setting */
     body {
