@@ -25,8 +25,11 @@ const PASSWORD = process.env.OB_SCORER_PASSWORD || ''
 
 vi.mock('../../utils_beach/backendConfig_beach', () => ({
   getApiUrl: (p) => `${process.env.OB_BACKEND_URL}${p.startsWith('/') ? p : `/${p}`}`,
+  getCloudApiUrl: (p) => `${process.env.OB_BACKEND_URL}${p.startsWith('/') ? p : `/${p}`}`,
   isBackendAvailable: () => true,
   getWebSocketUrl: () => null,
+  getCloudWebSocketUrl: () => null,
+  getRelayWebSocketUrl: () => process.env.OB_BACKEND_URL.replace(/^http/, 'ws'),
   getBackendUrl: () => process.env.OB_BACKEND_URL
 }))
 

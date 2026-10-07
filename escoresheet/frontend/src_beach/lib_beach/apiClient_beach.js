@@ -14,7 +14,7 @@
  * removed /api/storage/signed-url; download the object instead).
  */
 
-import { getApiUrl } from '../utils_beach/backendConfig_beach'
+import { getCloudApiUrl } from '../utils_beach/backendConfig_beach'
 
 // Client protocol version, sent as X-OV-Proto on every data request. The
 // backend refuses writes below 2 (426 OV_CLIENT_TOO_OLD), so queued jobs from
@@ -189,7 +189,7 @@ class QueryBuilder {
   }
 
   async _execute() {
-    const apiUrl = getApiUrl('/api/db')
+    const apiUrl = getCloudApiUrl('/api/db')
     if (!apiUrl) {
       return { data: null, error: { message: 'Backend not available' } }
     }
@@ -243,7 +243,7 @@ function getAuthHeaders() {
 export const RESTORE_REQUEST_TIMEOUT_MS = 90000
 
 async function postJson(path, body, { auth = true, timeoutMs = DB_REQUEST_TIMEOUT_MS, fallbackError = 'Request failed' } = {}) {
-  const apiUrl = getApiUrl(path)
+  const apiUrl = getCloudApiUrl(path)
   if (!apiUrl) return { data: null, error: { message: 'Backend not available' }, status: 0 }
   let response
   try {
@@ -266,7 +266,7 @@ async function postJson(path, body, { auth = true, timeoutMs = DB_REQUEST_TIMEOU
  * @returns {Promise<{data: any, error: object|null, status: number}>}
  */
 export async function apiGet(path, { timeoutMs = DB_REQUEST_TIMEOUT_MS, fallbackError = 'Request failed' } = {}) {
-  const apiUrl = getApiUrl(path)
+  const apiUrl = getCloudApiUrl(path)
   if (!apiUrl) return { data: null, error: { message: 'Backend not available' }, status: 0 }
   let response
   try {
@@ -388,7 +388,7 @@ export const apiStorage = {
   from(bucket) {
     return {
       async upload(path, fileData, options = {}) {
-        const apiUrl = getApiUrl('/api/storage/upload')
+        const apiUrl = getCloudApiUrl('/api/storage/upload')
         if (!apiUrl) return { data: null, error: { message: 'Backend not available' } }
         const token = storageSession()
         if (!token) return { data: null, error: { ...STORAGE_SIGNED_OUT }, status: 401 }
@@ -421,7 +421,7 @@ export const apiStorage = {
       },
 
       async download(path) {
-        const apiUrl = getApiUrl('/api/storage/download')
+        const apiUrl = getCloudApiUrl('/api/storage/download')
         if (!apiUrl) return { data: null, error: { message: 'Backend not available' } }
         const token = storageSession()
         if (!token) return { data: null, error: { ...STORAGE_SIGNED_OUT }, status: 401 }
@@ -458,7 +458,7 @@ export const apiStorage = {
       },
 
       async list(dirPath, options = {}) {
-        const apiUrl = getApiUrl('/api/storage/list')
+        const apiUrl = getCloudApiUrl('/api/storage/list')
         if (!apiUrl) return { data: null, error: { message: 'Backend not available' } }
         const token = storageSession()
         if (!token) return { data: null, error: { ...STORAGE_SIGNED_OUT }, status: 401 }
@@ -481,7 +481,7 @@ export const apiStorage = {
 // ==================== Auth ====================
 
 async function authRequest(action, body = {}) {
-  const apiUrl = getApiUrl(`/api/auth/${action}`)
+  const apiUrl = getCloudApiUrl(`/api/auth/${action}`)
   if (!apiUrl) return { data: null, error: { message: 'Backend not available' } }
 
   try {

@@ -55,7 +55,7 @@
  * (feat/selfhost-postgres). Beach subscribers filter on sport_type=eq.beach
  * where they would otherwise see indoor rows too.
  */
-import { getWebSocketUrl } from '../utils_beach/backendConfig_beach'
+import { getCloudWebSocketUrl } from '../utils_beach/backendConfig_beach'
 
 export const REALTIME_SUBSCRIBE_STATES = Object.freeze({
   SUBSCRIBED: 'SUBSCRIBED',
@@ -202,7 +202,7 @@ class RelayChannel {
 
 /**
  * @param {Object} [options]
- * @param {() => string|null} [options.getUrl]  WebSocket base URL (default: backendConfig.getWebSocketUrl)
+ * @param {() => string|null} [options.getUrl]  WebSocket base URL (default: backendConfig.getCloudWebSocketUrl: the cloud, also when a venue relay serves the match)
  * @param {typeof WebSocket} [options.WebSocketImpl]  default: globalThis.WebSocket at connect time
  * @param {number} [options.subscribeTimeoutMs=10000]
  * @param {number} [options.reconnectBaseMs=1000]
@@ -215,7 +215,7 @@ class RelayChannel {
  */
 export function createRelayRealtime(options = {}) {
   const {
-    getUrl = getWebSocketUrl,
+    getUrl = getCloudWebSocketUrl,
     WebSocketImpl,
     subscribeTimeoutMs = 10000,
     reconnectBaseMs = 1000,

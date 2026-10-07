@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('../../lib_beach/apiClient_beach', () => ({ apiFrom: vi.fn() }))
-vi.mock('../../utils_beach/backendConfig_beach', () => ({ isBackendAvailable: () => false, getApiUrl: () => null }))
+vi.mock('../../utils_beach/backendConfig_beach', () => ({ isBackendAvailable: () => false, getApiUrl: () => null, getCloudApiUrl: () => null, getBackendUrl: () => null, getRelayWebSocketUrl: () => null }))
 
 const { fromWire } = await import('../../utils_beach/serverDataSync_beach')
 

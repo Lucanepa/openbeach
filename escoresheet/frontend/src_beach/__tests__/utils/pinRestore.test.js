@@ -5,8 +5,12 @@ vi.hoisted(() => { globalThis.__APP_VERSION__ = 'test' })
 
 vi.mock('../../utils_beach/backendConfig_beach', () => ({
   getApiUrl: (p) => `http://backend.test${p}`,
+  getCloudApiUrl: (p) => `http://backend.test${p}`,
   isBackendAvailable: () => true,
-  getWebSocketUrl: () => null
+  getWebSocketUrl: () => null,
+  getCloudWebSocketUrl: () => null,
+  getBackendUrl: () => 'http://relay.test',
+  getRelayWebSocketUrl: () => null
 }))
 vi.mock('../../db_beach/db_beach', () => ({ db: { sync_queue: { hook: () => {} } } }))
 

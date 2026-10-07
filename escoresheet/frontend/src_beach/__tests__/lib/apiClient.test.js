@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('../../utils_beach/backendConfig_beach', () => ({
-  getApiUrl: (path) => `http://backend.test${path}`
+  getApiUrl: (path) => `http://backend.test${path}`,
+  getCloudApiUrl: (path) => `http://backend.test${path}`
 }))
 
 import { apiFrom, apiAuth, apiStorage, apiGet, savedTeamsApi, apiMatchRestore, apiMatchRestoreByPin, apiMatchClaim, isSessionRejected, normalizeError, toBase64, canUseStorage } from '../../lib_beach/apiClient_beach'

@@ -39,7 +39,7 @@ import {
 } from './constants_beach/testSeeds_beach'
 import { apiFrom } from './lib_beach/apiClient_beach'
 import { setExtId } from './utils_beach/syncIds_beach'
-import { isBackendAvailable, getBackendUrl, getWebSocketUrl } from './utils_beach/backendConfig_beach'
+import { isBackendAvailable, getBackendUrl, getWebSocketUrl, isServedFromLocalServer, getLocalServerStatusUrl, rememberRelayWsPort } from './utils_beach/backendConfig_beach'
 import { checkMatchSession, lockMatchSession, unlockMatchSession, verifyGamePin } from './utils_beach/sessionManager_beach'
 
 // Sport type for beach volleyball
@@ -254,21 +254,22 @@ export default function App() {
 
   // Fetch server status periodically
   useEffect(() => {
-    // Only the local-server mode has /api/server/status: the Electron app
-    // (its bundled server) or a build that says so (VITE_LOCAL_SERVER=true).
-    // Elsewhere (the static PWA, the Vite dev server against the cloud
-    // backend) every poll was a 404.
-    const localServerMode = !!window.electronAPI?.server || import.meta.env.VITE_LOCAL_SERVER === 'true'
-    if (!localServerMode) return
+    // Only a page a local server serves has /api/server/status: the desktop
+    // app's relay, a venue server, the Electron app, or a build that says so
+    // (VITE_LOCAL_SERVER=true). Elsewhere (the static PWA, the native app, the
+    // Vite dev server against the cloud backend) every poll was a 404.
+    const localServerMode = isServedFromLocalServer() || !!window.electronAPI?.server || import.meta.env.VITE_LOCAL_SERVER === 'true'
+    const statusUrl = getLocalServerStatusUrl()
+    if (!localServerMode || !statusUrl) return
 
     const fetchServerStatus = async () => {
       try {
-        const protocol = window.location.protocol === 'https:' ? 'https' : 'http'
-        const hostname = window.location.hostname
-        const port = window.location.port || (protocol === 'https' ? '443' : '5173')
-        const response = await fetch(`${protocol}://${hostname}:${port}/api/server/status`)
+        const response = await fetch(statusUrl)
         if (response.ok) {
           const status = await response.json()
+          // The relay's WebSocket port (a desktop relay takes it on a port of
+          // its own): the referee pages served here find it again
+          if (status?.wsPort) rememberRelayWsPort(window.location.origin, status.wsPort)
           setServerStatus(status)
         }
       } catch (err) {

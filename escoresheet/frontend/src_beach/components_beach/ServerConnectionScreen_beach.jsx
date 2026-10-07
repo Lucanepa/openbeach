@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { getBackendUrl, getBackendOverride, setBackendOverride, clearBackendOverride } from '../utils_beach/backendConfig_beach'
+import { getBackendUrl, getBackendOverride, setBackendOverride, clearBackendOverride, isAllowedBackendUrl, learnRelayWsPort } from '../utils_beach/backendConfig_beach'
 
 const LAST_SERVER_KEY = 'openbeach_last_server'
 
@@ -58,7 +58,9 @@ export default function ServerConnectionScreen({ onConnected, skipIfAutoConnect 
     // Validate URL to prevent SSRF / protocol abuse
     try {
       const parsed = new URL(serverUrl)
-      if (!['http:', 'https:'].includes(parsed.protocol)) {
+      // Only a LAN / localhost relay or an openvolley.app host: the session
+      // token goes wherever this points (backendConfig.isAllowedBackendUrl)
+      if (!['http:', 'https:'].includes(parsed.protocol) || !isAllowedBackendUrl(serverUrl)) {
         setStatus('failed')
         setErrorMsg(t('connection.invalidUrl', 'Invalid server URL'))
         return
@@ -82,6 +84,9 @@ export default function ServerConnectionScreen({ onConnected, skipIfAutoConnect 
       if (response.ok) {
         setStatus('connected')
         setBackendOverride(serverUrl)
+        // A desktop relay takes the WebSocket on a port of its own: ask it
+        // before the referee / livescore connects (never throws)
+        await learnRelayWsPort(serverUrl, { timeoutMs: 2500 })
         const label = serverUrl.includes('openvolley.app') || serverUrl.includes('openbeach.app') ? 'Cloud' : 'Local'
         saveLastServer(serverUrl, label)
         // Brief delay to show connected state

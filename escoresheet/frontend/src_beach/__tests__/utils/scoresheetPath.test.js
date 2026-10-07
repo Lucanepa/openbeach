@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('../../utils_beach/backendConfig_beach', () => ({
   getApiUrl: (p) => `http://backend.test${p}`,
+  getCloudApiUrl: (p) => `http://backend.test${p}`,
   isBackendAvailable: () => true
 }))
 const uploads = vi.hoisted(() => [])

@@ -2,7 +2,7 @@ import { useEffect, useCallback, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db_beach/db_beach'
 import { apiFrom, apiMatchRestore, apiMatchClaim, AUTH_TOKEN_CHANGE_EVENT, AUTH_TOKEN_STORAGE_KEY } from '../lib_beach/apiClient_beach'
-import { getApiUrl } from '../utils_beach/backendConfig_beach'
+import { getCloudApiUrl } from '../utils_beach/backendConfig_beach'
 import { parseExtId, resolveJobExternalId, jobMatchKey } from '../utils_beach/syncIds_beach'
 import { buildConnectionPins } from '../utils_beach/connectionPins_beach'
 
@@ -1261,7 +1261,7 @@ export function useSyncQueue() {
   const CONNECTION_CHECK_INTERVAL = 30000 // Only recheck every 30 seconds
 
   // Check backend/Supabase connection (with caching)
-  const hasBackend = () => !!getApiUrl('/api/db')
+  const hasBackend = () => !!getCloudApiUrl('/api/db')
   const checkSupabaseConnection = useCallback(async (forceCheck = false) => {
     if (!hasBackend()) {
       setSyncStatus('online_no_supabase')

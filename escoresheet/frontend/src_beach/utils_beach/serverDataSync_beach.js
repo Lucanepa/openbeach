@@ -4,7 +4,7 @@
  */
 
 import { apiFrom } from '../lib_beach/apiClient_beach'
-import { isBackendAvailable, getApiUrl } from '../utils_beach/backendConfig_beach'
+import { isBackendAvailable, getCloudApiUrl, getBackendUrl, getRelayWebSocketUrl } from '../utils_beach/backendConfig_beach'
 import { formatTimeLocal } from './timeUtils'
 
 const SPORT_TYPE = 'beach'
@@ -21,46 +21,19 @@ export function generateMatchSeedKey() {
   return `match_${timestamp}_${randomPart}`
 }
 
-// Get server URL - checks for configured backend first, then falls back to current location
+// The relay the referee / livescore pages read the match from: the venue
+// relay (a runtime override, the local server that serves the page) or the
+// cloud (backendConfig.getBackendUrl). Without one: the page's own origin.
 function getServerUrl() {
-  // Check if we have a configured backend URL (cloud backend)
-  const backendUrl = import.meta.env.VITE_BACKEND_URL
-
-  if (backendUrl) {
-    return backendUrl
-  }
-
-  // Fallback to local server (development or Electron)
-  const protocol = window.location.protocol === 'https:' ? 'https' : 'http'
-  const hostname = window.location.hostname
-  // In production (HTTPS), use same origin without port (Cloudflare handles routing)
-  if (window.location.protocol === 'https:') {
-    return `${protocol}://${hostname}`
-  }
-  const port = window.location.port || '5173'
-  return `${protocol}://${hostname}:${port}`
+  const base = getBackendUrl()
+  if (base) return String(base).replace(/\/+$/, '')
+  return window.location.origin
 }
 
-// Get WebSocket URL - checks for configured backend first, then falls back to current location
+// The relay's WebSocket: a desktop relay takes it on a port of its own
+// (backendConfig.getRelayWebSocketUrl), the same one the scorer publishes to
 function getWebSocketUrl() {
-  // Check if we have a configured backend URL (cloud backend)
-  const backendUrl = import.meta.env.VITE_BACKEND_URL
-
-  if (backendUrl) {
-    const url = new URL(backendUrl)
-    const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-    return `${protocol}//${url.host}`
-  }
-
-  // Fallback to local WebSocket server (development or Electron)
-  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-  const hostname = window.location.hostname
-  // In production (HTTPS), use same origin without port (Cloudflare handles routing)
-  if (window.location.protocol === 'https:') {
-    return `${protocol}://${hostname}`
-  }
-  const wsPort = 8080 // Default WebSocket port for development
-  return `${protocol}://${hostname}:${wsPort}`
+  return getRelayWebSocketUrl()
 }
 
 // ---------------------------------------------------------------------------
@@ -1227,7 +1200,7 @@ export async function validatePinSupabase(pin, type = 'referee', { timeoutMs = 3
       return { success: false, error: 'Invalid PIN type' }
     }
 
-    const apiUrl = getApiUrl('/api/match/validate-connection-pin')
+    const apiUrl = getCloudApiUrl('/api/match/validate-connection-pin')
     if (!apiUrl) return { success: false, error: 'Backend not available', unreachable: true }
 
     const response = await fetchImpl(apiUrl, {

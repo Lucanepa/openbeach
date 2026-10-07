@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import Modal from './Modal_beach'
-import { getApiUrl } from '../utils_beach/backendConfig_beach'
+import { getCloudApiUrl } from '../utils_beach/backendConfig_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 
 const CONTACT_TYPES = ['support', 'feedback', 'request']
@@ -297,7 +297,7 @@ export default function SupportFeedbackModal({ open, onClose, currentPage = 'mai
         formData.append(`file_${index}`, file)
       })
 
-      const apiUrl = getApiUrl('/api/contact')
+      const apiUrl = getCloudApiUrl('/api/contact')
 
       if (apiUrl) {
         const response = await fetch(apiUrl, {
