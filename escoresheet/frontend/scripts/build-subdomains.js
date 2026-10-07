@@ -8,7 +8,7 @@
  *   node scripts/build-subdomains.js beachapp   # Build only beachapp
  *
  * Output:
- *   dist-beachapp/       → beachapp.openvolley.app (main scoresheet)
+ *   dist-beachapp/       → beach.openvolley.app (main scoresheet; the Pages project keeps the beachapp name)
  *   dist-beach-referee/  → beach-referee.openvolley.app
  *   dist-beach-livescore/→ beach-livescore.openvolley.app
  *   dist-beach-scoresheet/→ beach-scoresheet.openvolley.app
