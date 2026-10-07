@@ -20,6 +20,9 @@ const appVersion = packageJson.version
 // keep serving the previous version after an APK update), and the output goes
 // to dist-capacitor (capacitor.config.json webDir).
 const isCapacitor = process.env.CAPACITOR === 'true'
+// scripts/build-subdomains.js: each subdomain app brings its own VitePWA
+// (its own manifest name); this one would overwrite it
+const isSubdomainBuild = process.env.OB_SUBDOMAIN_BUILD === 'true'
 
 export default defineConfig({
   // Set base from env for GitHub Pages project site deployments.
@@ -44,7 +47,7 @@ export default defineConfig({
     // Tailwind v4 + the volleyui tokens (src_beach/tailwind_beach.css)
     tailwindcss(),
     VitePWA({
-      disable: isCapacitor,
+      disable: isCapacitor || isSubdomainBuild,
       registerType: 'autoUpdate',
       includeAssets: PWA_INCLUDE_ASSETS,
       workbox: {

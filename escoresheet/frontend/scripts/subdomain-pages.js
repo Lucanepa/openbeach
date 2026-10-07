@@ -2,41 +2,44 @@
 // name, entry and HTML. Its own module, free of vite, so tests can read it.
 import { THEME_COLOR } from '../pwa-icons.js'
 
-// Subdomain configurations
+// Subdomain configurations. Each PWA has its own name (its manifest, written
+// by build-subdomains.js), so an installed referee or livescore app is not
+// one more "OpenBeach eScoresheet" on the home screen. short_name is what a
+// launcher shows under the icon (about 12 characters fit).
 export const subdomains = {
   beachapp: {
     name: 'OpenBeach eScoresheet',
-    shortName: 'Beach',
+    shortName: 'OpenBeach',
     description: 'Beach volleyball match scoring application',
     title: 'OpenBeach eScoresheet',
     mainEntry: 'main_beach'
   },
   'beach-referee': {
-    name: 'Beach Referee Dashboard',
-    shortName: 'Referee',
+    name: 'OpenBeach Referee',
+    shortName: 'OB Referee',
     description: 'Referee view for beach volleyball match scoring',
-    title: 'Beach Referee Dashboard - OpenBeach',
+    title: 'OpenBeach Referee',
     mainEntry: 'referee-main_beach'
   },
   'beach-livescore': {
-    name: 'Beach Live Scoreboard',
-    shortName: 'Livescore',
+    name: 'OpenBeach Livescore',
+    shortName: 'OB Livescore',
     description: 'Live scoring display for beach volleyball match',
-    title: 'Beach Live Scoreboard - OpenBeach',
+    title: 'OpenBeach Livescore',
     mainEntry: 'livescore-main_beach'
   },
   'beach-scoreboard': {
-    name: 'Beach Scoreboard Display',
-    shortName: 'Scoreboard',
+    name: 'OpenBeach Scoreboard',
+    shortName: 'OB Board',
     description: 'Arena scoreboard display for beach volleyball matches',
-    title: 'Beach Scoreboard - OpenBeach',
+    title: 'OpenBeach Scoreboard',
     mainEntry: 'scoreboard-main_beach'
   },
   'beach-scoresheet': {
-    name: 'Beach Scoresheet Archive',
-    shortName: 'Scoresheet',
+    name: 'OpenBeach Scoresheets',
+    shortName: 'OB Sheets',
     description: 'View and download beach volleyball match scoresheets',
-    title: 'Beach Scoresheet Archive - OpenBeach',
+    title: 'OpenBeach Scoresheets',
     mainEntry: 'scoresheet-main_beach',
     customHtml: true
   }

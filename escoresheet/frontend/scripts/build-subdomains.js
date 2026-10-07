@@ -25,6 +25,11 @@ import { PWA_INCLUDE_ASSETS, PWA_ICONS, THEME_COLOR } from '../pwa-icons.js'
 import { subdomains, htmlFor } from './subdomain-pages.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+
+// vite.config.js is loaded for every subdomain build too (Tailwind, the PDF
+// scoresheet's Tailwind): its own VitePWA must stay out, or its manifest
+// ("OpenBeach eScoresheet") replaced each app's own name and short name.
+process.env.OB_SUBDOMAIN_BUILD = 'true'
 const frontendDir = resolve(__dirname, '..')
 const disablePWA = process.env.DISABLE_PWA === 'true'
 
