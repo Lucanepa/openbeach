@@ -2739,20 +2739,6 @@ body.ios-fullscreen {
 }
 
 /* ===========================
-   Livescore App
-   =========================== */
-.livescore-loading {
-  text-align: center;
-  padding: 40px;
-  color: rgba(255, 255, 255, 0.6);
-}
-.livescore-empty {
-  text-align: center;
-  padding: 40px;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-/* ===========================
    Scoreboard App (Arena Display)
    =========================== */
 .scoreboard-app {
@@ -2761,131 +2747,6 @@ body.ios-fullscreen {
   color: #fff;
   font-family: 'Inter', sans-serif;
   overflow: hidden;
-}
-/* Setup screen */
-.scoreboard-setup {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  padding: 24px;
-  gap: 32px;
-}
-.scoreboard-setup-title {
-  font-size: clamp(22px, 5vw, 32px);
-  font-weight: 800;
-  text-align: center;
-}
-.scoreboard-setup-subtitle {
-  font-size: clamp(13px, 2.5vw, 16px);
-  color: var(--muted);
-  text-align: center;
-  margin-top: 8px;
-}
-.scoreboard-mode-cards {
-  display: flex;
-  gap: clamp(12px, 3vw, 24px);
-  flex-wrap: wrap;
-  justify-content: center;
-  padding: 0 16px;
-}
-.scoreboard-mode-card {
-  padding: clamp(16px, 4vw, 32px);
-  background: rgba(255, 255, 255, 0.05);
-  border: 2px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  cursor: pointer;
-  text-align: center;
-  transition: border-color 0.2s, background 0.2s;
-  width: min(280px, 80vw);
-  color: #fff;
-  font-family: inherit;
-}
-.scoreboard-mode-card:hover {
-  border-color: var(--accent);
-  background: rgba(255, 255, 255, 0.08);
-}
-.scoreboard-mode-card-active {
-  border-color: var(--accent);
-  background: rgba(34, 197, 94, 0.1);
-}
-.scoreboard-mode-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-}
-.scoreboard-mode-name {
-  font-size: 20px;
-  font-weight: 700;
-  margin-bottom: 8px;
-}
-.scoreboard-mode-desc {
-  font-size: 14px;
-  color: var(--muted);
-  line-height: 1.4;
-}
-.scoreboard-game-select {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  width: 100%;
-  max-width: 500px;
-}
-.scoreboard-game-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-  max-height: 300px;
-  overflow-y: auto;
-}
-.scoreboard-game-btn {
-  padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  color: #fff;
-  cursor: pointer;
-  text-align: left;
-  font-family: inherit;
-  font-size: 14px;
-  transition: border-color 0.2s, background 0.2s;
-}
-.scoreboard-game-btn:hover {
-  border-color: var(--accent);
-  background: rgba(255, 255, 255, 0.08);
-}
-.scoreboard-game-btn-active {
-  border-color: var(--accent);
-  background: rgba(34, 197, 94, 0.1);
-}
-.scoreboard-game-btn-name {
-  font-weight: 600;
-  font-size: 15px;
-}
-.scoreboard-game-btn-meta {
-  font-size: 12px;
-  color: var(--muted);
-  margin-top: 4px;
-}
-.scoreboard-connect-btn {
-  padding: 14px 32px;
-  font-size: 16px;
-  font-weight: 600;
-  background: var(--accent);
-  color: #000;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-.scoreboard-connect-btn:hover {
-  opacity: 0.9;
-}
-.scoreboard-connect-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 /* Main scoreboard display — explicit row heights */
 .scoreboard-display {
@@ -3157,27 +3018,4 @@ body.ios-fullscreen {
 }
 .scoreboard-back-btn:hover {
   opacity: 1;
-}
-/* Waiting state */
-.scoreboard-waiting {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  gap: 16px;
-  color: var(--muted);
-}
-.scoreboard-waiting-icon {
-  width: clamp(64px, 15vw, 120px);
-  height: clamp(64px, 15vw, 120px);
-  object-fit: contain;
-  opacity: 0.5;
-  animation: scoreboard-pulse 2s ease-in-out infinite;
-}
-.scoreboard-waiting-text {
-  font-size: clamp(14px, 3vw, 20px);
-  font-weight: 600;
-  text-align: center;
-  padding: 0 16px;
 }

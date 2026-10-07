@@ -3,9 +3,15 @@ import { useTranslation } from 'react-i18next'
 import { supabase } from './lib_beach/supabaseClient_beach'
 import { apiFrom } from './lib_beach/apiClient_beach'
 import { isBackendAvailable } from './utils_beach/backendConfig_beach'
-import { Globe, Monitor } from './components_beach/Icons_beach'
+import { ArrowLeft, ChevronRight, Globe, Monitor, Radio } from 'lucide-react'
+import { cn } from './ui/volleyui/cn.js'
+import { FOCUS_RING, Button } from './ui/volleyui/Button.jsx'
+import { EmptyState } from './ui/volleyui/EmptyState.jsx'
+import { Row, RowList, DateRail } from './ui/volleyui/Row.jsx'
+import { SkeletonRows } from './ui/volleyui/Skeleton.jsx'
+import { AppSpinner } from './ui/volleyui/AppSpinner.jsx'
+import { EntryPage, EntryCard } from './components_beach/dashboards/EntryKit_beach.jsx'
 
-const ballImage = '/beachball.png'
 
 /**
  * Normalize match_live_state data from A/B model to left/right based on side_a.
@@ -180,118 +186,117 @@ export default function ScoreboardApp() {
     }
   }
 
+  // The setup, game choice and waiting screens: the stone page with one gate
+  // card. The arena display itself (below) stays the black LED board.
+  const setupPage = (children) => (
+    <div className="flex min-h-screen flex-col bg-stone-100 text-stone-800">
+      <EntryPage>{children}</EntryPage>
+    </div>
+  )
+
   // ── Setup Screen ──
   if (!connectionMode) {
-    return (
-      <div className="scoreboard-app">
-        <div className="scoreboard-setup">
-          <div>
-            <h1 className="scoreboard-setup-title">{t('scoreboard.title', 'Scoreboard')}</h1>
-            <p className="scoreboard-setup-subtitle">{t('scoreboard.setup', 'Choose how to connect to the match')}</p>
-          </div>
-
-          <div className="scoreboard-mode-cards">
-            <button
-              className="scoreboard-mode-card"
-              onClick={() => setConnectionMode('local')}
-            >
-              <div className="scoreboard-mode-icon"><Monitor /></div>
-              <div className="scoreboard-mode-name">{t('scoreboard.localMode', 'Local')}</div>
-              <div className="scoreboard-mode-desc">
-                {t('scoreboard.localModeDesc', 'Same device as the scorer. Connect instantly via browser.')}
-              </div>
-            </button>
-
-            <button
-              className="scoreboard-mode-card"
-              onClick={() => setConnectionMode('remote')}
-            >
-              <div className="scoreboard-mode-icon"><Globe /></div>
-              <div className="scoreboard-mode-name">{t('scoreboard.remoteMode', 'Remote')}</div>
-              <div className="scoreboard-mode-desc">
-                {t('scoreboard.remoteModeDesc', 'Different device. Connect via internet using Supabase.')}
-              </div>
-            </button>
-          </div>
+    const modeCard = (mode, Icon, name, desc) => (
+      <button
+        type="button"
+        onClick={() => setConnectionMode(mode)}
+        className={cn(
+          'flex min-h-11 flex-1 flex-col items-center gap-2 rounded-2xl border border-stone-200 bg-white p-5 text-center transition-colors hover:border-stone-300 hover:bg-stone-50',
+          FOCUS_RING
+        )}
+      >
+        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-stone-100 text-stone-700">
+          <Icon size={24} strokeWidth={1.75} aria-hidden="true" />
+        </span>
+        <span className="text-base font-semibold text-stone-900">{name}</span>
+        <span className="text-xs leading-relaxed text-stone-500">{desc}</span>
+      </button>
+    )
+    return setupPage(
+      <EntryCard width="md" title={t('scoreboard.title', 'Scoreboard')} subtitle={t('scoreboard.setup', 'Choose how to connect to the match')}>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          {modeCard('local', Monitor, t('scoreboard.localMode', 'Local'), t('scoreboard.localModeDesc', 'Same device as the scorer. Connect instantly via browser.'))}
+          {modeCard('remote', Globe, t('scoreboard.remoteMode', 'Remote'), t('scoreboard.remoteModeDesc', 'Different device. Connect via internet using Supabase.'))}
         </div>
-      </div>
+      </EntryCard>
     )
   }
 
   // ── Remote: Game Selection ──
   if (connectionMode === 'remote' && !selectedMatchId) {
-    return (
-      <div className="scoreboard-app">
-        <div className="scoreboard-setup">
-          <div>
-            <h1 className="scoreboard-setup-title">{t('scoreboard.selectGame', 'Select a Game')}</h1>
-            <p className="scoreboard-setup-subtitle">{t('scoreboard.selectGameDesc', 'Choose a live match to display')}</p>
-          </div>
-
-          <div className="scoreboard-game-select">
-            {loadingGames ? (
-              <div className="livescore-loading">{t('common.loading', 'Loading...')}</div>
-            ) : availableGames.length === 0 ? (
-              <div className="livescore-empty">
-                <div>{t('livescore.noActiveGame', 'No live games')}</div>
-              </div>
-            ) : (
-              <div className="scoreboard-game-list">
-                {availableGames.map(game => {
-                  const nameA = game.team_a_name || 'Team A'
-                  const nameB = game.team_b_name || 'Team B'
-                  const gameN = game.game_n || ''
-                  return (
-                    <button
-                      key={game.match_id}
-                      className="scoreboard-game-btn"
-                      onClick={() => setSelectedMatchId(game.match_id)}
-                    >
-                      <div className="scoreboard-game-btn-name">
-                        {nameA} vs {nameB}
+    return setupPage(
+      <EntryCard width="md" title={t('scoreboard.selectGame', 'Select a game')} subtitle={t('scoreboard.selectGameDesc', 'Choose a live match to display')}>
+        <div className="flex flex-col gap-4 text-left">
+          {loadingGames ? (
+            <div>
+              <span className="sr-only">{t('common.loading', 'Loading...')}</span>
+              <SkeletonRows rows={3} pill={false} />
+            </div>
+          ) : availableGames.length === 0 ? (
+            <EmptyState icon={Radio} className="py-6">{t('livescore.noActiveGame', 'No live games')}</EmptyState>
+          ) : (
+            <RowList framed soft className="rounded-lg">
+              {availableGames.map(game => {
+                const nameA = game.team_a_name || 'Team A'
+                const nameB = game.team_b_name || 'Team B'
+                const gameN = game.game_n || ''
+                const score = `${game.points_a || 0}–${game.points_b || 0}`
+                const setLabel = `${t('livescore.set', 'Set')} ${game.current_set || 1}`
+                return (
+                  <Row
+                    key={game.match_id}
+                    tone="red"
+                    onOpen={() => setSelectedMatchId(game.match_id)}
+                    label={[`${nameA} – ${nameB}`, gameN ? t('livescore.game', { number: gameN }) : '', `${score} (${setLabel})`].filter(Boolean).join(', ')}
+                    className="min-h-11"
+                    leading={
+                      <DateRail
+                        tone="red"
+                        weekday={gameN ? t('livescore.gameShort', 'Game') : undefined}
+                        date={gameN || '–'}
+                      />
+                    }
+                    title={
+                      <div className="min-w-0 text-left">
+                        <p className="text-sm font-semibold leading-snug break-words text-stone-900 sm:text-[15px]">{nameA}</p>
+                        <p className="text-sm leading-snug break-words text-stone-600 sm:text-[15px]">{nameB}</p>
                       </div>
-                      <div className="scoreboard-game-btn-meta">
-                        {gameN && `Game ${gameN} \u2022 `}
-                        {game.points_a || 0}-{game.points_b || 0} (Set {game.current_set || 1})
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
+                    }
+                    meta={<span className="tabular-nums">{score} · {setLabel}</span>}
+                    status={<ChevronRight size={16} className="text-stone-400" aria-hidden />}
+                  />
+                )
+              })}
+            </RowList>
+          )}
 
-            <button className="scoreboard-connect-btn" onClick={handleBack}>
-              {t('common.back', 'Back')}
-            </button>
-          </div>
+          <Button variant="secondary" size="xl" block icon={ArrowLeft} onClick={handleBack}>
+            {t('common.back', 'Back')}
+          </Button>
         </div>
-      </div>
+      </EntryCard>
     )
   }
 
   // ── Waiting for data ──
   if (!normalized) {
-    return (
-      <div className="scoreboard-app">
-        <div className="scoreboard-waiting">
-          <img src={ballImage} alt="" className="scoreboard-waiting-icon" />
-          <div className="scoreboard-waiting-text">
-            {connectionMode === 'local'
-              ? t('scoreboard.waiting', 'Waiting for scorer...')
-              : t('scoreboard.connecting', 'Connecting...')
-            }
-          </div>
-          <div className="scoreboard-waiting-text" style={{ fontSize: '14px', opacity: 0.5 }}>
-            {connectionMode === 'local'
-              ? t('scoreboard.waitingHint', 'Start scoring a match in the scorer app on this device')
-              : ''
-            }
-          </div>
-        </div>
-        <button className="scoreboard-back-btn" onClick={handleBack}>
+    return setupPage(
+      <EntryCard>
+        <AppSpinner
+          size={96}
+          label={connectionMode === 'local'
+            ? t('scoreboard.waiting', 'Waiting for scorer...')
+            : t('scoreboard.connecting', 'Connecting...')}
+        />
+        {connectionMode === 'local' && (
+          <p className="mx-auto mt-3 max-w-xs text-sm text-stone-600">
+            {t('scoreboard.waitingHint', 'Start scoring a match in the scorer app on this device')}
+          </p>
+        )}
+        <Button variant="secondary" size="xl" block icon={ArrowLeft} className="mt-6" onClick={handleBack}>
           {t('common.back', 'Back')}
-        </button>
-      </div>
+        </Button>
+      </EntryCard>
     )
   }
 

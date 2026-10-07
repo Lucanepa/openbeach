@@ -702,7 +702,7 @@
     "localModeDesc": "Same device as the scorer. Connect instantly via browser.",
     "remoteMode": "Remote",
     "remoteModeDesc": "Different device. Connect via internet using OpenVolley Cloud.",
-    "selectGame": "Select a Game",
+    "selectGame": "Select a game",
     "selectGameDesc": "Choose a live match to display",
     "waiting": "Waiting for scorer...",
     "waitingHint": "Start scoring a match in the scorer app on this device",
