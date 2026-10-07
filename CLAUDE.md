@@ -15,7 +15,7 @@ Offline-first beach volleyball scoring application with multi-platform support (
 - **Desktop**: Electron
 - **PDF**: jsPDF, pdf-lib, pdfjs-dist
 - **i18n**: i18next (en, fr, it, de, de-CH)
-- **Styling**: Single CSS file with CSS variables (dark theme)
+- **Styling**: Tailwind v4 + the volleyui kit (`src_beach/ui/volleyui`, light only) via `src_beach/tailwind_beach.css`; the legacy `styles_beach.css` (dark) sits in a `legacy` layer until every screen is restyled. Restyled views live inside `.ov-kit`.
 
 ## Project Structure
 

@@ -26,9 +26,18 @@ i18n
     }
   })
 
+// <html lang> follows the app language (screen readers, hyphenation); the
+// pages also carry translate="no" so browser auto-translate leaves the
+// volleyball terms alone.
+const setDocumentLang = (lng) => {
+  if (typeof document !== 'undefined' && lng) document.documentElement.lang = lng
+}
+setDocumentLang(i18n.language)
+
 // Save language preference when changed
 i18n.on('languageChanged', (lng) => {
   localStorage.setItem('language', lng)
+  setDocumentLang(lng)
 })
 
 export default i18n

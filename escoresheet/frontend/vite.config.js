@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import { readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
@@ -36,6 +37,8 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    // Tailwind v4 + the volleyui tokens (src_beach/tailwind_beach.css)
+    tailwindcss(),
     VitePWA({
       disable: isCapacitor,
       registerType: 'autoUpdate',
@@ -76,7 +79,7 @@ export default defineConfig({
         start_url: '.',
         display: 'standalone',
         background_color: '#ffffff',
-        theme_color: '#111827',
+        theme_color: '#e2001a',
         icons: [
           { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512.png', sizes: '512x512', type: 'image/png' }

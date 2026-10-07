@@ -1,0 +1,253 @@
+/**
+ * Tailwind v4 + volleyui tokens: LIGHT MODE ONLY. The same set-up as
+ * OpenVolley's src/tailwind.css, so the restyle can move screen by screen.
+ *
+ * Cascade order (lowest to highest):
+ *   theme -> base -> legacy -> components -> utilities -> unlayered -> inline style
+ *
+ * - Preflight (Tailwind's element reset) is NOT imported: the legacy
+ *   styles_beach.css owns the element rules, and the screens not restyled yet
+ *   rely on them.
+ * - styles_beach.css is imported here, demoted into the `legacy` layer. It sits
+ *   above the kit's `base` (so its body/background/text colours still win while
+ *   the migration runs) and BELOW `utilities`, so a volleyui class on a
+ *   <button>, <input> or <p> beats the old element rules. Inline style={{}}
+ *   still beats everything.
+ * - ui/volleyui/tokens.css (the volleyui kit) is the base: brand red,
+ *   red-600/700 = Swiss Volley red, shadow-card, Inter Variable at opsz 32,
+ *   colour-scheme light, print and reduced-motion rules.
+ * - Classes are collected from src_beach only. The PDF scoresheet
+ *   (scoresheet_pdf_beach) has its own Tailwind; scanning it here would start
+ *   styling its Results block where MatchEntry shows it.
+ */
+@layer theme, base, legacy, components, utilities;
+
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities) source('./');
+
+/* volleyui kit tokens (also pulls in @fontsource-variable/inter/opsz.css). */
+@import './ui/volleyui/tokens.css';
+
+/* The legacy stylesheet, demoted into its layer (was: import './styles_beach.css'
+   in each *-main_beach.jsx). */
+@import './styles_beach.css' layer(legacy);
+
+/* Name collisions: legacy classes that are also valid Tailwind utilities would
+   switch meaning now that utilities beat the legacy layer (`.inline` is a flex
+   row there, `.container` the app frame, `w-80`.. and `col-*` scaled widths).
+   Tailwind must not generate these names, so the legacy cascade resolves
+   exactly as before. New code uses arbitrary widths (w-[320px]) or the kit. */
+@source not inline("container inline w-70 w-80 w-90 w-120 w-140 w-160 w-180 w-200 w-220 w-240 w-300 col-2 col-3 col-4 col-6 col-12");
+
+/* `text-sm` / `text-xs` collide too, but the kit needs them. Outside `.ov-kit`
+   (the screens not restyled yet) they keep their legacy meaning: a size scaled
+   by --scale-factor, the inherited line height and .2px tracking. Unlayered,
+   so it beats the utility; restyled views sit inside `.ov-kit` and get the
+   Tailwind sizes. */
+:where(.text-sm):not(.ov-kit, .ov-kit *) {
+  font-size: calc(14px * var(--scale-factor));
+  line-height: inherit;
+  letter-spacing: .2px;
+}
+:where(.text-xs):not(.ov-kit, .ov-kit *) {
+  font-size: calc(13px * var(--scale-factor));
+  line-height: inherit;
+  letter-spacing: .2px;
+}
+
+/* The kit's base gives <body> Inter Display's settings (opsz 32, cv02-cv11).
+   The legacy screens draw the static Inter files from styles_beach.css, so
+   keep those settings off them; `.ov-kit` puts them back for restyled views. */
+@layer legacy {
+  body {
+    font-variation-settings: normal;
+    font-optical-sizing: auto;
+    font-feature-settings: normal;
+  }
+}
+
+@theme {
+  /* Hover/pressed brand, for non-class contexts (red-700 is the class form). */
+  --color-brand-hover: #be0014;
+  --color-brand-soft-border: #fee2e2;
+}
+
+/* --ov-* tokens: the same palette for the inline style={{}} objects that
+   cannot use classes (as OpenVolley). The legacy names (--bg, --panel, --text,
+   --muted, --accent, --danger) stay defined in styles_beach.css with their
+   dark values until every screen has moved. */
+:root {
+  /* ---- surfaces (stone neutrals) ---- */
+  --ov-page: #f5f5f4;            /* stone-100 page background */
+  --ov-page-top: #fafaf9;        /* stone-50  top of the page gradient */
+  --ov-card: #ffffff;            /* cards, modals, top bar */
+  --ov-sunken: #fafaf9;          /* stone-50  table heads, inset panels */
+  --ov-sunken-strong: #f5f5f4;   /* stone-100 hover rows, count pills */
+  --ov-hairline: #e7e5e4;        /* stone-200 card/table borders, dividers */
+  --ov-hairline-soft: rgb(231 229 228 / 0.7); /* stone-200/70 card edge */
+  --ov-hairline-strong: #d6d3d1; /* stone-300 input borders, outline buttons */
+  --ov-rule: #292524;            /* stone-800 1.5px section-head rule */
+
+  /* ---- text ---- */
+  --ov-text: #1c1917;            /* stone-900 headings, numbers */
+  --ov-text-body: #292524;       /* stone-800 body copy */
+  --ov-text-secondary: #57534e;  /* stone-600 secondary copy */
+  --ov-text-muted: #78716c;      /* stone-500 captions, labels (4.6:1 on white) */
+  --ov-text-faint: #a8a29e;      /* stone-400 placeholders, disabled, decorative only */
+  --ov-on-dark: #ffffff;
+
+  /* ---- brand / selection ---- */
+  --ov-brand: #e2001a;
+  --ov-brand-hover: #be0014;
+  --ov-brand-soft: #fef2f2;      /* red-50 */
+  --ov-brand-soft-border: #fee2e2; /* red-100 */
+  --ov-selected: #0f172a;        /* slate-900 active nav, segment on */
+  --ov-selected-hover: #1e293b;  /* slate-800 */
+
+  /* ---- status ---- */
+  --ov-success: #047857;         /* emerald-700 confirm (white text 5.5:1, AA) */
+  --ov-success-soft: #d1fae5;    /* emerald-100 */
+  --ov-success-text: #065f46;    /* emerald-800 */
+  --ov-warning-soft: #fffbeb;    /* amber-50 */
+  --ov-warning-border: #fde68a;  /* amber-200 */
+  --ov-warning-text: #92400e;    /* amber-800 */
+  --ov-danger: #e2001a;          /* = brand: one red for act and destroy */
+  --ov-danger-text: #b91c1c;     /* red-700 stock, inline errors */
+  --ov-danger-soft: #fef2f2;     /* red-50 */
+  --ov-danger-border: #fee2e2;   /* red-100 */
+  --ov-info-text: #0369a1;       /* sky-700 */
+  --ov-info-soft: #f0f9ff;       /* sky-50 */
+  --ov-info-border: #bae6fd;     /* sky-200 */
+
+  /* ---- overlays & elevation ---- */
+  --ov-overlay: rgb(28 25 23 / 0.60);         /* stone-900/60 + blur, decisions */
+  --ov-overlay-content: rgb(28 25 23 / 0.50); /* stone-900/50 + blur, content dialogs */
+  --ov-shadow-card: var(--shadow-card);
+  --ov-shadow-card-lg: var(--shadow-card-lg);
+  --ov-shadow-pop: 0 25px 50px -12px rgb(0 0 0 / 0.25); /* = shadow-2xl */
+
+  /* ---- radii (step down one size per nesting level) ---- */
+  --ov-radius: 0.5rem;       /* rounded-lg  buttons, inputs, notices */
+  --ov-radius-lg: 0.75rem;   /* rounded-xl  inner blocks, toasts, h-11 controls */
+  --ov-radius-xl: 1rem;      /* rounded-2xl cards, modals */
+}
+
+/* ---------------------------------------------------------------------------
+   .ov-kit: the volleyui kit's own preflight, scoped (as OpenVolley).
+   Tailwind's preflight stays off (the legacy views rely on the browser
+   defaults plus styles_beach.css), but the kit components were written against
+   it. Without this, the legacy element rules (`button { background:
+   var(--accent) }`, `p { color: var(--muted) }`, `h1 { margin; font-size }`,
+   `label`, `input`, `select`) reach every kit element that does not set those
+   properties itself. This layer sits above `legacy` and below `utilities`, so
+   it beats the legacy rules and every kit class still beats it. Restyled views
+   and the <UiHost /> host sit inside `.ov-kit`.
+   --------------------------------------------------------------------------- */
+@layer components {
+  .ov-kit {
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.5;
+    letter-spacing: normal;
+    color: var(--color-stone-800);
+    font-variation-settings: "opsz" 32;
+    font-optical-sizing: none;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .ov-kit,
+  .ov-kit :where(*, ::before, ::after, ::backdrop) {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0 solid;
+  }
+
+  .ov-kit :where(h1, h2, h3, h4, h5, h6) {
+    font-size: inherit;
+    font-weight: inherit;
+  }
+
+  .ov-kit :where(p, h1, h2, h3, h4, h5, h6, label) {
+    color: inherit;
+  }
+
+  .ov-kit :where(a) {
+    color: inherit;
+    text-decoration: inherit;
+  }
+
+  .ov-kit :where(ol, ul, menu) {
+    list-style: none;
+  }
+
+  .ov-kit :where(img, svg, video, canvas) {
+    display: block;
+    vertical-align: middle;
+  }
+
+  .ov-kit :where(label) {
+    display: revert;
+  }
+
+  .ov-kit :where(button, input, select, optgroup, textarea) {
+    font: inherit;
+    font-feature-settings: inherit;
+    font-variation-settings: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    border-radius: 0;
+    background-color: transparent;
+    opacity: 1;
+    width: auto;
+    text-transform: none;
+    box-shadow: none;
+  }
+
+  .ov-kit :where(button) {
+    appearance: button;
+    cursor: pointer;
+  }
+
+  .ov-kit :where(button:disabled) {
+    cursor: default;
+  }
+
+  .ov-kit :where(textarea) {
+    resize: vertical;
+  }
+
+  .ov-kit :where(::placeholder) {
+    opacity: 1;
+    color: color-mix(in oklab, currentcolor 50%, transparent);
+  }
+
+  /* The legacy .text-sm / .text-xs add letter-spacing: .2px (and size by
+     --scale-factor); inside the kit the Tailwind utility alone applies. */
+  .ov-kit :where(.text-sm, .text-xs) {
+    letter-spacing: normal;
+  }
+
+  /* The confirm dialog is opened from scoring screens, so its two buttons keep
+     the 44px courtside minimum (the kit draws them ~38px). */
+  .ov-kit :where([data-testid="confirm-cancel"], [data-testid="confirm-accept"]) {
+    min-height: 44px;
+  }
+}
+
+/* The host for <UiHost /> in every *-main_beach.jsx:
+   <div className="ov-kit ov-kit-host">. The kit's dialog is z-50 and its
+   toasts z-[60]; the legacy overlays go to z-index 1000 (Modal, MenuList),
+   9999, 99999 and 100000 (AlertContext). This box is its own stacking context
+   above all of them, so a confirmDialog() or toast fired from inside a legacy
+   modal shows on top of it. It is 0x0 and fixed, so it takes no space and
+   catches no taps; the dialog and toasts are position: fixed to the viewport. */
+.ov-kit-host {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  z-index: 100001;
+}
