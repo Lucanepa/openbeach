@@ -105,7 +105,11 @@ The same as OpenVolley's app:
 ## Known limits (2.0.0)
 
 - The scoresheet and its PDF open in a new window (`window.open`), which the
-  Android WebView does not have. OpenVolley shows such pages in an in-app view
+  Android WebView does not have: it loads the scoresheet page in place of the
+  scorer's (checked on the emulator). Back returns to the scorer, which
+  reloads and offers the match under Continue Match; nothing is lost, but a
+  flow that waits for the scoresheet window (the PDF for the match-end ZIP)
+  does not get it. OpenVolley shows such pages in an in-app view
   (`openAppWindow.js`); OpenBeach does not have that yet.
 - The scoresheet pages (`scoresheet_beach.html`,
   `scoresheet_archive_beach.html`) load Tailwind from a CDN, so they are
@@ -121,6 +125,8 @@ E=~/.claude/skills/android-emulator/emu.sh
 $E start && $E install android/app/build/outputs/apk/debug/app-debug.apk && $E launch com.openvolley.beach
 ```
 
-A relay on the host is `10.0.2.2` from the emulator, e.g. OpenVolley's backend
+The debug build allows WebView remote debugging (`adb forward tcp:9333
+localabstract:webview_devtools_remote_<pid>`, then Chrome DevTools or
+Playwright `connectOverCDP`). A relay on the host is `10.0.2.2` from the emulator, e.g. OpenVolley's backend
 in venue mode: `PORT=5174 OV_PIN_SECRET=<40+ chars> node server.js --local` in
 `openvolley/escoresheet/backend`, then Options → Server → `10.0.2.2` in the app.
