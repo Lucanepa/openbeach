@@ -34,7 +34,8 @@
     "screenTooSmallMessage": "Diese App erfordert eine Mindestbildschirmbreite von 357 Pixel. Bitte verwenden Sie ein Gerät mit einem breiteren Bildschirm oder drehen Sie Ihr Gerät ins Querformat.",
     "tryFullscreen": "Versuchen Sie den Vollbildmodus",
     "fullscreenHint": "Der Vollbildmodus kann mehr Platz bieten, indem er die Benutzeroberfläche des Browsers ausblendet.",
-    "later": "Später"
+    "later": "Später",
+    "saving": "Speichern…"
   },
   "alert": {
     "error": "Fehler",
@@ -1150,8 +1151,8 @@
     "remarks": "Bemerkungen",
     "officialSignatures": "Offizielle Unterschriften",
     "teamCaptains": "Teamkapitäne",
-    "captainA": "Kapitän A - {{team}}",
-    "captainB": "Kapitän B - {{team}}",
+    "captainA": "Kapitän A – {{team}}",
+    "captainB": "Kapitän B – {{team}}",
     "assistantScorer": "Ass. Schreiber",
     "scorer": "Schreiber",
     "referee2": "2. Schiedsrichter",
@@ -1208,7 +1209,16 @@
       "penalty": "Strafe",
       "expulsion": "Ausschluss",
       "disqualification": "Disqualifikation"
-    }
+    },
+    "signed": "Unterschrieben",
+    "teamSetLine": "Team {{team}}, Satz {{set}}",
+    "pdfFailedAfterApprove": "Das Spiel ist genehmigt, aber das PDF konnte nicht erstellt werden ({{error}}). Öffne das Matchblatt und speichere das PDF dort.",
+    "errorClosing": "Das Spiel konnte nicht abgeschlossen werden: {{error}}",
+    "errorReopeningMatch": "Das Spiel konnte nicht wieder geöffnet werden: {{error}}",
+    "reopenMatch": "Spiel wieder öffnen",
+    "showLarger": "Grösser anzeigen",
+    "setsWon": "Gewonnene Sätze",
+    "matchDataJson": "Spieldaten (JSON)"
   },
   "scoresheetPdf": {
     "zoomOut": "Verkleinern",
@@ -2075,7 +2085,11 @@
       "maroon": "Weinrot",
       "teal": "Türkis",
       "pink": "Rosa"
-    }
+    },
+    "scheduledDate": "Geplantes Datum",
+    "scheduledTime": "Geplante Zeit (24 h)",
+    "coach": "Trainer",
+    "setN": "Satz {{n}}"
   },
   "startupConnectivity": {
     "connecting": "Verbindung wird hergestellt…",

@@ -34,7 +34,8 @@
     "screenTooSmallMessage": "Diese App erfordert eine Mindestbildschirmbreite von 357 Pixel. Bitte verwenden Sie ein Gerät mit einem breiteren Bildschirm oder drehen Sie Ihr Gerät ins Querformat.",
     "tryFullscreen": "Versuchen Sie den Vollbildmodus",
     "fullscreenHint": "Der Vollbildmodus kann mehr Platz bieten, indem er die Benutzeroberfläche des Browsers ausblendet.",
-    "later": "Spöter"
+    "later": "Spöter",
+    "saving": "Speichern…"
   },
   "alert": {
     "error": "Fähler",
@@ -1142,7 +1143,7 @@
     "copyUrl": "Link kopieren"
   },
   "matchEnd": {
-    "title": "Match Beendet",
+    "title": "Spiel beendet",
     "winner": "Gwünner",
     "teamLabel": "(Team {{label}})",
     "results": "Resultat",
@@ -1150,8 +1151,8 @@
     "remarks": "Bemerkige",
     "officialSignatures": "Offizielli Underschrifte",
     "teamCaptains": "Team Captains",
-    "captainA": "Captain A - {{team}}",
-    "captainB": "Captain B - {{team}}",
+    "captainA": "Kapitän A – {{team}}",
+    "captainB": "Kapitän B – {{team}}",
     "assistantScorer": "Assistant Scorer",
     "scorer": "Scorer",
     "referee2": "2. Schiri",
@@ -1208,7 +1209,16 @@
       "penalty": "Straaf",
       "expulsion": "Usschluss",
       "disqualification": "Disqualifikation"
-    }
+    },
+    "signed": "Unterschrieben",
+    "teamSetLine": "Team {{team}}, Satz {{set}}",
+    "pdfFailedAfterApprove": "Das Spiel ist genehmigt, aber das PDF konnte nicht erstellt werden ({{error}}). Öffne das Matchblatt und speichere das PDF dort.",
+    "errorClosing": "Das Spiel konnte nicht abgeschlossen werden: {{error}}",
+    "errorReopeningMatch": "Das Spiel konnte nicht wieder geöffnet werden: {{error}}",
+    "reopenMatch": "Spiel wieder öffnen",
+    "showLarger": "Grösser anzeigen",
+    "setsWon": "Gewonnene Sätze",
+    "matchDataJson": "Spieldaten (JSON)"
   },
   "scoresheetPdf": {
     "zoomOut": "Verchliinere",
@@ -2075,7 +2085,11 @@
       "maroon": "Wiirot",
       "teal": "Türkis",
       "pink": "Rosa"
-    }
+    },
+    "scheduledDate": "Geplantes Datum",
+    "scheduledTime": "Geplante Zeit (24 h)",
+    "coach": "Trainer",
+    "setN": "Satz {{n}}"
   },
   "startupConnectivity": {
     "connecting": "Verbindig wird hergstellt…",

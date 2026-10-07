@@ -2095,10 +2095,9 @@ export default function App() {
   const onScoringScreen = !!(matchId && !showCoinToss && !showMatchSetup && !showMatchEnd && !showManualAdjustments)
 
   return (
-    // Home, setup, coin toss and the scoring screen are restyled (volleyui,
-    // light); manual adjustments and match end keep the legacy dark frame
-    // until their own restyle.
-    <div className={cn('app-root', !(matchId && !showCoinToss && !showMatchSetup && (showManualAdjustments || showMatchEnd)) && 'bg-gradient-to-b from-stone-50 to-stone-100')} onClick={(e) => {
+    // Every screen is on the volleyui stone page (light only), match end and
+    // manual adjustments included.
+    <div className={cn('app-root', 'bg-gradient-to-b from-stone-50 to-stone-100')} onClick={(e) => {
       // Close connection menu and debug menu when clicking outside
       if (showConnectionMenu && !e.target.closest('[data-connection-menu]')) {
         setShowConnectionMenu(false)

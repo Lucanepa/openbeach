@@ -34,7 +34,8 @@
     "screenTooSmallMessage": "This app requires a minimum screen width of 357px. Please use a device with a wider screen or rotate your device to landscape mode.",
     "tryFullscreen": "Try Fullscreen",
     "fullscreenHint": "Fullscreen may provide more space by hiding browser UI.",
-    "later": "Later"
+    "later": "Later",
+    "saving": "Saving…"
   },
   "alert": {
     "error": "Error",
@@ -1151,8 +1152,8 @@
     "remarks": "Remarks",
     "officialSignatures": "Official signatures",
     "teamCaptains": "Team captains",
-    "captainA": "Captain A - {{team}}",
-    "captainB": "Captain B - {{team}}",
+    "captainA": "Captain A – {{team}}",
+    "captainB": "Captain B – {{team}}",
     "assistantScorer": "Assistant scorer",
     "scorer": "Scorer",
     "referee2": "2nd referee",
@@ -1209,7 +1210,16 @@
       "penalty": "Penalty",
       "expulsion": "Expulsion",
       "disqualification": "Disqualification"
-    }
+    },
+    "signed": "Signed",
+    "teamSetLine": "Team {{team}}, set {{set}}",
+    "pdfFailedAfterApprove": "The match is approved, but the PDF could not be made ({{error}}). Open the scoresheet and save the PDF from there.",
+    "errorClosing": "Could not close the match: {{error}}",
+    "errorReopeningMatch": "Could not reopen the match: {{error}}",
+    "reopenMatch": "Reopen match",
+    "showLarger": "Show larger",
+    "setsWon": "Sets won",
+    "matchDataJson": "Match data (JSON)"
   },
   "scoresheetPdf": {
     "zoomOut": "Zoom Out",
@@ -2076,7 +2086,11 @@
       "maroon": "Maroon",
       "teal": "Teal",
       "pink": "Pink"
-    }
+    },
+    "scheduledDate": "Scheduled date",
+    "scheduledTime": "Scheduled time (24 h)",
+    "coach": "Coach",
+    "setN": "Set {{n}}"
   },
   "startupConnectivity": {
     "connecting": "Connecting…",
