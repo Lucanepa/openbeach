@@ -1112,7 +1112,10 @@ export async function listAvailableMatches() {
     }
 
     const result = await response.json()
-    return { ...result, matches: Array.isArray(result?.matches) ? result.matches.map(fromWireListRow) : [] }
+    // A venue relay may carry indoor courts too: a row that names another
+    // sport is not ours (rows without a sport are kept; the PIN check names it)
+    const rows = Array.isArray(result?.matches) ? result.matches.filter(m => !isOtherSportMatch(m)) : []
+    return { ...result, matches: rows.map(fromWireListRow) }
   } catch (error) {
     // Suppress noisy errors when local server isn't running (expected in Supabase-only mode)
     if (error.message?.includes('not valid JSON') || error.message?.includes('Failed to fetch')) {

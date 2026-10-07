@@ -14,7 +14,7 @@ vi.mock('../../utils_beach/backendConfig_beach', () => ({
   getRelayWebSocketUrl: () => 'ws://192.168.1.20:8081'
 }))
 
-const { subscribeToMatchData, rememberMatchAccess, forgetMatchAccess } = await import('../../utils_beach/serverDataSync_beach')
+const { subscribeToMatchData, rememberMatchAccess, forgetMatchAccess, listAvailableMatches } = await import('../../utils_beach/serverDataSync_beach')
 
 class FakeSocket {
   static instances = []
@@ -65,5 +65,25 @@ describe('the referee on the relay', () => {
     ws.receive({ type: 'live-state-update', matchId: 'match_k' })
     expect(got).toHaveLength(2)
     unsubscribe()
+  })
+})
+
+describe('the referee list on a venue relay', () => {
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  it('asks the relay, names the pairs, and leaves out rows of another sport', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      headers: { get: () => 'application/json' },
+      json: async () => ({ success: true, matches: [
+        { id: 'match_a', homeTeam: 'A / B', awayTeam: 'C / D', refereeConnectionEnabled: true },
+        { id: 'match_i', homeTeam: 'VBC', awayTeam: 'KSC', sportType: 'indoor' },
+        { id: 'match_b', homeTeam: 'E / F', awayTeam: 'G / H', sportType: 'beach' }
+      ] })
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    const r = await listAvailableMatches()
+    expect(fetchMock.mock.calls[0][0]).toBe('http://192.168.1.20:5174/api/match/list')
+    expect(r.matches.map(m => [m.id, m.team1Name, m.team2Name])).toEqual([['match_a', 'A / B', 'C / D'], ['match_b', 'E / F', 'G / H']])
   })
 })
