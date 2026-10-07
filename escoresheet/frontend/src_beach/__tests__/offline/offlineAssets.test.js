@@ -29,6 +29,15 @@ describe('offline pages', () => {
     expect(readFileSync(resolve(root, 'scripts/build-subdomains.js'), 'utf8')).not.toMatch(/cdn\.tailwindcss\.com"/)
   })
 
+  it('no source fetches a QR code, flag or font from a web service', () => {
+    const files = readdirSync(resolve(root, 'src_beach'), { recursive: true })
+      .filter((f) => /\.(jsx?|tsx?|css)$/.test(f) && !f.includes('__tests__'))
+    for (const f of files) {
+      const src = readFileSync(resolve(root, 'src_beach', f), 'utf8')
+      expect(src, f).not.toMatch(/api\.qrserver\.com|flagcdn\.com|fonts\.googleapis\.com|cdn\.tailwindcss\.com/)
+    }
+  })
+
   it('the scoresheet entry imports its compiled Tailwind', () => {
     expect(readFileSync(resolve(root, 'scoresheet_pdf_beach/index.tsx'), 'utf8')).toMatch(/import '\.\/scoresheet_beach\.css'/)
   })

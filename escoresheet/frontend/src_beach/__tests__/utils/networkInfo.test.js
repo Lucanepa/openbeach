@@ -1,7 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
-  generateQRCodeUrl,
-  generateQRCodeLocal,
   buildAppUrls,
   buildWebSocketUrl,
   buildCloudUrls,
@@ -12,35 +10,10 @@ import {
 } from '../../utils_beach/networkInfo_beach'
 
 describe('networkInfo_beach', () => {
-  describe('generateQRCodeUrl', () => {
-    it('should return a URL with the encoded text', () => {
-      const url = generateQRCodeUrl('https://example.com')
-      expect(url).toContain('https%3A%2F%2Fexample.com')
-      expect(url).toContain('api.qrserver.com')
-    })
-
-    it('should use default size of 200', () => {
-      const url = generateQRCodeUrl('test')
-      expect(url).toContain('size=200x200')
-    })
-
-    it('should use custom size', () => {
-      const url = generateQRCodeUrl('test', 400)
-      expect(url).toContain('size=400x400')
-    })
-
-    it('should encode special characters', () => {
-      const url = generateQRCodeUrl('hello world&foo=bar')
-      expect(url).toContain('hello%20world%26foo%3Dbar')
-    })
-  })
-
-  describe('generateQRCodeLocal', () => {
-    it('should return the same URL as generateQRCodeUrl (fallback)', async () => {
-      const result = await generateQRCodeLocal('test', 300)
-      const expected = generateQRCodeUrl('test', 300)
-      expect(result).toBe(expected)
-    })
+  it('has no QR web service any more (QR codes are drawn offline)', async () => {
+    const mod = await import('../../utils_beach/networkInfo_beach')
+    expect(mod.generateQRCodeUrl).toBeUndefined()
+    expect(mod.generateQRCodeLocal).toBeUndefined()
   })
 
   describe('buildAppUrls', () => {

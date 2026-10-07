@@ -742,6 +742,19 @@ button:disabled {
   box-sizing: border-box;
 }
 
+/* A light Modal_beach panel (tone="light") rendered outside the scoring
+   screen (Options, the guide, the connection setup): the same re-pointing as
+   .match-record, so inline var(--text) / var(--muted) and the legacy p rule
+   read dark on white. */
+.legacy-light {
+  --bg: var(--ov-page);
+  --panel: var(--ov-card);
+  --bg-secondary: var(--ov-sunken);
+  --text: var(--ov-text);
+  --muted: var(--ov-text-muted);
+  color: var(--ov-text-body);
+}
+
 /* The legacy dark palette, pinned on a dark panel that is still rendered inside
    the light scoring screen (Modal_beach without tone="light"). */
 .legacy-dark {

@@ -6,90 +6,21 @@ import { listCloudBackups, loadCloudBackup } from '../../utils_beach/logger_beac
 import { restoreMatchInPlace } from '../../utils_beach/backupManager_beach'
 import BackupTable from '../BackupTable_beach'
 import { SatelliteDish } from '../Icons_beach'
+import { Switch } from '../../ui/volleyui/Switch.jsx'
+import { OptionInfo } from './optionRows_beach'
 
+// The kit InfoHint (a real button, opens on tap) and Switch (role="switch",
+// aria-checked, named, focus ring): the hand-made dot and toggle had no role,
+// state or name and could not be reached by keyboard.
 function InfoDot({ title }) {
-  const [showTooltip, setShowTooltip] = useState(false)
-
-  return (
-    <div style={{ position: 'relative', display: 'inline-flex' }}>
-      <div
-        onClick={(e) => {
-          e.stopPropagation()
-          setShowTooltip(!showTooltip)
-        }}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: '16px',
-          height: '16px',
-          borderRadius: '50%',
-          background: showTooltip ? '#e0f2fe' : 'var(--ov-sunken-strong)',
-          color: showTooltip ? 'var(--ov-info-text)' : 'var(--ov-text-muted)',
-          fontSize: '11px',
-          fontWeight: 600,
-          cursor: 'pointer'
-        }}
-      >
-        i
-      </div>
-      {showTooltip && (
-        <div
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            position: 'absolute',
-            top: '100%',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            marginTop: '8px',
-            padding: '8px 12px',
-            background: 'var(--ov-card)',
-            border: '1px solid var(--ov-hairline-strong)',
-            borderRadius: '6px',
-            fontSize: '12px',
-            color: 'var(--ov-text-secondary)',
-            whiteSpace: 'normal',
-            width: 'max-content',
-            maxWidth: '250px',
-            zIndex: 10,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-          }}
-        >
-          {title}
-        </div>
-      )}
-    </div>
-  )
+  return <span className="ov-kit inline-flex"><OptionInfo>{title}</OptionInfo></span>
 }
 
-function ToggleSwitch({ value, onToggle }) {
+function ToggleSwitch({ value, onToggle, label }) {
   return (
-    <button
-      onClick={onToggle}
-      style={{
-        width: '52px',
-        height: '28px',
-        borderRadius: '14px',
-        border: 'none',
-        cursor: 'pointer',
-        background: value ? 'var(--ov-success)' : 'var(--ov-hairline-strong)',
-        position: 'relative',
-        transition: 'background 0.2s',
-        flexShrink: 0,
-        marginLeft: '16px'
-      }}
-    >
-      <div style={{
-        width: '20px',
-        height: '20px',
-        borderRadius: '10px',
-        background: '#fff',
-        position: 'absolute',
-        top: '4px',
-        left: value ? '28px' : '4px',
-        transition: 'left 0.2s'
-      }} />
-    </button>
+    <span className="ov-kit ml-4 inline-flex shrink-0">
+      <Switch size="lg" checked={!!value} onCheckedChange={() => onToggle()} aria-label={label} />
+    </span>
   )
 }
 
@@ -456,6 +387,7 @@ export default function ScoreboardOptionsModal({
               )}
             </div>
             <ToggleSwitch
+              label={t('options.checkAccidentalRallyStart')}
               value={checkAccidentalRallyStart}
               onToggle={() => {
                 const newValue = !checkAccidentalRallyStart
@@ -500,6 +432,7 @@ export default function ScoreboardOptionsModal({
               )}
             </div>
             <ToggleSwitch
+              label={t('options.checkAccidentalPointAward')}
               value={checkAccidentalPointAward}
               onToggle={() => {
                 const newValue = !checkAccidentalPointAward
@@ -514,6 +447,7 @@ export default function ScoreboardOptionsModal({
               <InfoDot title={t('options.showNamesOnCourtInfo')} />
             </div>
             <ToggleSwitch
+              label={t('options.showNamesOnCourt')}
               value={displayOptions?.showNamesOnCourt}
               onToggle={() => displayOptions?.setShowNamesOnCourt?.(!displayOptions?.showNamesOnCourt)}
             />
@@ -644,6 +578,7 @@ export default function ScoreboardOptionsModal({
               ) : null}
             </div>
             <ToggleSwitch
+              label={t('options.keyboardShortcuts')}
               value={keybindingsEnabled}
               onToggle={() => {
                 const newValue = !keybindingsEnabled
@@ -659,6 +594,7 @@ export default function ScoreboardOptionsModal({
               <InfoDot title={t('options.autoDownloadAtSetEndInfo')} />
             </div>
             <ToggleSwitch
+              label={t('options.autoDownloadAtSetEnd')}
               value={displayOptions?.autoDownloadAtSetEnd ?? true}
               onToggle={() => displayOptions?.setAutoDownloadAtSetEnd?.(!displayOptions?.autoDownloadAtSetEnd)}
             />
@@ -670,6 +606,7 @@ export default function ScoreboardOptionsModal({
                 <InfoDot title={t('options.alwaysDownloadAtSetEndInfo')} />
               </div>
               <ToggleSwitch
+                label={t('options.alwaysDownloadAtSetEnd')}
                 value={displayOptions?.alwaysDownloadAtSetEnd ?? false}
                 onToggle={() => displayOptions?.setAlwaysDownloadAtSetEnd?.(!displayOptions?.alwaysDownloadAtSetEnd)}
               />

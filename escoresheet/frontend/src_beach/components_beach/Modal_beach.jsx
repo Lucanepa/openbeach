@@ -87,7 +87,7 @@ export function useDialogFocus(open, panelRef) {
     }
   }, [open, panelRef])
 }
-const LIGHT_PANEL = 'bg-white rounded-2xl shadow-2xl p-5 overflow-auto text-stone-800 outline-none'
+const LIGHT_PANEL = 'legacy-light bg-white rounded-2xl shadow-2xl p-5 overflow-auto text-stone-800 outline-none'
 
 export default function Modal({ title, open, onClose, children, width = 800, height, hideCloseButton = false, position = 'center', customStyle = {}, zIndex = 1000, tone = 'dark' }) {
   const { t } = useTranslation()

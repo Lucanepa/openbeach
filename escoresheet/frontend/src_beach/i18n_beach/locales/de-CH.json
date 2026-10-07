@@ -1033,7 +1033,7 @@
     "restoreMatchToThisState": "Spiil uf dä Zuestand wiederherstelle?",
     "warningStateReplaced": "Warnig: De aktuelli Spiilstand wird ersetzt.",
     "websocket": "WebSocket",
-    "backupSetScore": "Satz {{setIndex}}: {{homePoints}} - {{awayPoints}}",
+    "backupSetScore": "Satz {{setIndex}}: {{team1Points}}:{{team2Points}}",
     "unknownTime": "Unbekannti Ziit",
     "autoWithMode": "Auto ({{mode}})",
     "alerts": {
@@ -1050,7 +1050,19 @@
     "nativeServerChange": "Server wächsle",
     "nativeOpenView": "Das Tablet bruuche als",
     "nativeReferee": "Schiri",
-    "nativeLivescore": "Live-Ergebnis"
+    "nativeLivescore": "Live-Ergebnis",
+    "done": "Fertig",
+    "scoring": "Schreiben",
+    "infoEyebrow": "Erklärung",
+    "showInfo": "Erklärung anzeigen",
+    "decrease": "{{label}} verringern",
+    "increase": "{{label}} erhöhen",
+    "clearAllTitle": "Cache und alle Einstellungen löschen?",
+    "clearCacheTitle": "Cache leeren?",
+    "backUp": "Sichern",
+    "iconCredits": "Icons",
+    "iconCreditsText": "Lucide (ISC) · Phosphor (MIT)",
+    "copyUrl": "Link kopieren"
   },
   "matchEnd": {
     "title": "Match Beendet",
@@ -1191,7 +1203,8 @@
     "thankYouFeedback": "Viel Dank für Ihr Feedback! Ihri Rückmeldig hilft das Tool z verbessere.",
     "thankYouRequest": "Viel Dank für Ihri Funktionsaafraag! Ich wirde sie für zukünftigi Updates berücksichtige.",
     "fillRequired": "Bitte fülled Sie alli erforderliche Felder us.",
-    "sendError": "Nachricht hät nöd chönne gschickt werde. Bitte versueched Sie es nomal oder schicked Sie e E-Mail direkt."
+    "sendError": "Nachricht hät nöd chönne gschickt werde. Bitte versueched Sie es nomal oder schicked Sie e E-Mail direkt.",
+    "removeFile": "{{name}} entfernen"
   },
   "rosterSetup": {
     "title": "Kader",
@@ -1346,7 +1359,15 @@
     "serverNotResponding": "Server antwortet nöd",
     "retry": "Nomal probiere",
     "noBackendConfigured": "Kei Backend-Server konfiguriert",
-    "invalidUrl": "Ungültigi Server-URL"
+    "invalidUrl": "Ungültigi Server-URL",
+    "role": {
+      "referee": "Schiedsrichter-Ansicht",
+      "bench_team1": "Bank Team 1",
+      "bench_team2": "Bank Team 2",
+      "livescore": "Livescore"
+    },
+    "showQR": "QR zeigen",
+    "scanToConnect": "Scannen zum Verbinden"
   },
   "livescore": {
     "title": "Live-Resultat",

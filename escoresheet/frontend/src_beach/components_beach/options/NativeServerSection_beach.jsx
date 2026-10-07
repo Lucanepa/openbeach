@@ -1,20 +1,12 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
+import { X } from 'lucide-react'
 import ServerConnectionScreen from '../ServerConnectionScreen_beach'
 import { getBackendOverride, isNativeApp } from '../../utils_beach/backendConfig_beach'
-
-const buttonStyle = {
-  minHeight: 44,
-  padding: '0 16px',
-  borderRadius: 8,
-  border: '1px solid rgba(255,255,255,0.2)',
-  background: 'rgba(255,255,255,0.08)',
-  color: 'var(--text)',
-  fontSize: 14,
-  fontWeight: 600,
-  cursor: 'pointer'
-}
+import { OptionRow, OptionSection } from './optionRows_beach'
+import { Button } from '../../ui/volleyui/Button.jsx'
+import { IconButton } from '../../ui/volleyui/IconButton.jsx'
 
 /**
  * Android app only (Capacitor), after OpenVolley's NativeServerSection: the
@@ -30,11 +22,9 @@ const buttonStyle = {
  * reloads after a change so every connection (relay socket, sync, status
  * checks) starts over against the new server.
  *
- * Styled like the rest of the (dark) options modal until the Phase 5 restyle.
- *
- * @param {{ Section: Function, Row: Function }} props the options modal's own layout pieces
+ * Rows of the volleyui Options dialog (optionRows_beach).
  */
-export default function NativeServerSection({ Section, Row }) {
+export default function NativeServerSection() {
   const { t } = useTranslation()
   const [choosing, setChoosing] = useState(false)
   if (!isNativeApp()) return null
@@ -49,61 +39,45 @@ export default function NativeServerSection({ Section, Row }) {
   const openView = (path) => { window.location.assign(path) }
 
   return (
-    <Section title={t('options.nativeServerTitle', 'Server')}>
-      <Row style={{ marginBottom: '12px', gap: '16px' }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 600, fontSize: '15px' }}>
-            {override ? t('options.nativeServerLocal', 'Local server') : t('options.nativeServerOnline', 'Online')}
-          </div>
-          <div
-            data-testid="native-server-current"
-            style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', marginTop: '4px', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis' }}
-          >
-            {current}
-          </div>
-        </div>
-        <button type="button" style={buttonStyle} onClick={() => setChoosing(true)}>
-          {t('options.nativeServerChange', 'Change server')}
-        </button>
-      </Row>
-      <Row style={{ flexWrap: 'wrap', gap: '12px' }}>
-        <div style={{ fontWeight: 600, fontSize: '15px' }}>
-          {t('options.nativeOpenView', 'Use this tablet as')}
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-          <button type="button" style={buttonStyle} onClick={() => openView('/referee_beach.html')}>
-            {t('options.nativeReferee', 'Referee')}
-          </button>
-          <button type="button" style={buttonStyle} onClick={() => openView('/livescore_beach.html')}>
-            {t('options.nativeLivescore', 'Livescore')}
-          </button>
-        </div>
-      </Row>
+    <OptionSection title={t('options.nativeServerTitle', 'Server')}>
+      <OptionRow
+        label={override ? t('options.nativeServerLocal', 'Local server') : t('options.nativeServerOnline', 'Online')}
+        hint={<span data-testid="native-server-current" className="block truncate font-mono">{current}</span>}
+        control={(
+          <Button variant="secondary" size="xl" onClick={() => setChoosing(true)}>
+            {t('options.nativeServerChange', 'Change server')}
+          </Button>
+        )}
+      />
+      <OptionRow
+        label={t('options.nativeOpenView', 'Use this tablet as')}
+        control={(
+          <>
+            <Button variant="secondary" size="xl" onClick={() => openView('/referee_beach.html')}>
+              {t('options.nativeReferee', 'Referee')}
+            </Button>
+            <Button variant="secondary" size="xl" onClick={() => openView('/livescore_beach.html')}>
+              {t('options.nativeLivescore', 'Livescore')}
+            </Button>
+          </>
+        )}
+      />
 
-      {/* Portal + stopped propagation: the options modal's backdrop swallows
-          touchstart (preventDefault) for everything rendered inside it, which
-          would keep the address field from ever getting focus. */}
+      {/* Portal + stopped propagation: a touch on it must not reach the
+          options dialog behind (its backdrop would take it). */}
       {choosing && createPortal(
         <div
           role="dialog"
           aria-modal="true"
-          style={{ position: 'fixed', inset: 0, zIndex: 2000, overflowY: 'auto', background: '#0a0a0a' }}
+          aria-label={t('connection.connectToServer', 'Connect to Server')}
+          className="ov-kit fixed inset-0 overflow-y-auto"
+          style={{ zIndex: 2000 }}
           onClick={(e) => e.stopPropagation()}
           onTouchStart={(e) => e.stopPropagation()}
         >
-          <button
-            type="button"
-            data-modal-close
-            aria-label={t('options.close', 'Close')}
-            title={t('options.close', 'Close')}
-            onClick={() => setChoosing(false)}
-            style={{
-              position: 'absolute', top: 16, right: 16, zIndex: 1, width: 44, height: 44, borderRadius: 8,
-              border: 'none', background: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: 22, cursor: 'pointer'
-            }}
-          >
-            ×
-          </button>
+          <div className="absolute right-3 top-3 z-10">
+            <IconButton variant="close" icon={X} label={t('options.close', 'Close')} onClick={() => setChoosing(false)} data-modal-close="" />
+          </div>
           <ServerConnectionScreen
             skipIfAutoConnect={false}
             onConnected={() => window.location.reload()}
@@ -111,6 +85,6 @@ export default function NativeServerSection({ Section, Row }) {
         </div>,
         document.body
       )}
-    </Section>
+    </OptionSection>
   )
 }

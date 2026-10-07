@@ -1033,7 +1033,7 @@
     "restoreMatchToThisState": "Rétablir la correspondance dans cet état ?",
     "warningStateReplaced": "Avertissement : L'état actuel du match sera remplacé.",
     "websocket": "WebSocket",
-    "backupSetScore": "Définir {{setIndex}} : {{homePoints}} - {{awayPoints}}",
+    "backupSetScore": "Set {{setIndex}} : {{team1Points}}:{{team2Points}}",
     "unknownTime": "Période inconnue",
     "autoWithMode": "Auto ({{mode}})",
     "alerts": {
@@ -1050,7 +1050,19 @@
     "nativeServerChange": "Changer de serveur",
     "nativeOpenView": "Utiliser cette tablette comme",
     "nativeReferee": "Arbitre",
-    "nativeLivescore": "Livescore"
+    "nativeLivescore": "Livescore",
+    "done": "Terminé",
+    "scoring": "Marque",
+    "infoEyebrow": "Explication",
+    "showInfo": "Afficher l'explication",
+    "decrease": "Diminuer {{label}}",
+    "increase": "Augmenter {{label}}",
+    "clearAllTitle": "Vider le cache et tous les réglages ?",
+    "clearCacheTitle": "Vider le cache ?",
+    "backUp": "Sauvegarder",
+    "iconCredits": "Icônes",
+    "iconCreditsText": "Lucide (ISC) · Phosphor (MIT)",
+    "copyUrl": "Copier le lien"
   },
   "matchEnd": {
     "title": "Match Terminé",
@@ -1191,7 +1203,8 @@
     "thankYouFeedback": "Merci pour votre retour ! Cela nous aide à améliorer l'outil.",
     "thankYouRequest": "Suggestion reçue ! Nous l'étudierons pour les prochaines versions.",
     "fillRequired": "Veuillez remplir tous les champs obligatoires.",
-    "sendError": "Erreur lors de l'envoi. Veuillez réessayer s'il vous plaît ."
+    "sendError": "Erreur lors de l'envoi. Veuillez réessayer s'il vous plaît .",
+    "removeFile": "Retirer {{name}}"
   },
   "rosterSetup": {
     "title": "Effectif",
@@ -1346,7 +1359,15 @@
     "serverNotResponding": "Le serveur ne répond pas",
     "retry": "Réessayer",
     "noBackendConfigured": "Aucun serveur backend configuré",
-    "invalidUrl": "URL du serveur invalide"
+    "invalidUrl": "URL du serveur invalide",
+    "role": {
+      "referee": "Tableau de l'arbitre",
+      "bench_team1": "Banc équipe 1",
+      "bench_team2": "Banc équipe 2",
+      "livescore": "Livescore"
+    },
+    "showQR": "Afficher le QR",
+    "scanToConnect": "Scanner pour se connecter"
   },
   "livescore": {
     "title": "Score en direct",

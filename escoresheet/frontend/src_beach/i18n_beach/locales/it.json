@@ -1033,7 +1033,7 @@
     "restoreMatchToThisState": "Ripristinare la partita in questo stato?",
     "warningStateReplaced": "Attenzione: Lo stato attuale della partita verrà sostituito.",
     "websocket": "WebSocket",
-    "backupSetScore": "Impostare {{setIndex}}: {{homePoints}} - {{awayPoints}}",
+    "backupSetScore": "Set {{setIndex}}: {{team1Points}}:{{team2Points}}",
     "unknownTime": "Ora sconosciuta",
     "autoWithMode": "Automatico ({{mode}})",
     "alerts": {
@@ -1050,7 +1050,19 @@
     "nativeServerChange": "Cambia server",
     "nativeOpenView": "Usa questo tablet come",
     "nativeReferee": "Arbitro",
-    "nativeLivescore": "Punteggio live"
+    "nativeLivescore": "Punteggio live",
+    "done": "Fatto",
+    "scoring": "Refertazione",
+    "infoEyebrow": "Spiegazione",
+    "showInfo": "Mostra spiegazione",
+    "decrease": "Diminuisci {{label}}",
+    "increase": "Aumenta {{label}}",
+    "clearAllTitle": "Svuotare la cache e tutte le impostazioni?",
+    "clearCacheTitle": "Svuotare la cache?",
+    "backUp": "Esegui backup",
+    "iconCredits": "Icone",
+    "iconCreditsText": "Lucide (ISC) · Phosphor (MIT)",
+    "copyUrl": "Copia link"
   },
   "matchEnd": {
     "title": "Partita Terminata",
@@ -1191,7 +1203,8 @@
     "thankYouFeedback": "Grazie per il tuo feedback! Il tuo contributo aiuta a migliorare questo strumento.",
     "thankYouRequest": "Grazie per la tua richiesta di funzionalità! La considererò per i futuri aggiornamenti.",
     "fillRequired": "Compila tutti i campi obbligatori.",
-    "sendError": "Invio del messaggio fallito. Riprova o invia un'email direttamente."
+    "sendError": "Invio del messaggio fallito. Riprova o invia un'email direttamente.",
+    "removeFile": "Rimuovi {{name}}"
   },
   "rosterSetup": {
     "title": "Rosa",
@@ -1346,7 +1359,15 @@
     "serverNotResponding": "Il server non risponde",
     "retry": "Riprova",
     "noBackendConfigured": "Nessun server backend configurato",
-    "invalidUrl": "URL del server non valido"
+    "invalidUrl": "URL del server non valido",
+    "role": {
+      "referee": "Pannello arbitro",
+      "bench_team1": "Panchina squadra 1",
+      "bench_team2": "Panchina squadra 2",
+      "livescore": "Livescore"
+    },
+    "showQR": "Mostra QR",
+    "scanToConnect": "Scansiona per connetterti"
   },
   "livescore": {
     "title": "Punteggi live",

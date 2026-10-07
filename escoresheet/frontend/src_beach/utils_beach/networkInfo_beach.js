@@ -106,27 +106,9 @@ export async function getConnectionCount() {
   }
 }
 
-/**
- * Generate QR code as data URL using a simple QR code library approach
- * Uses the QR Server API for simplicity (external service)
- * For offline use, consider bundling a QR code library like 'qrcode'
- */
-export function generateQRCodeUrl(text, size = 200) {
-  // Use Google Charts API (simple, no library needed)
-  // Note: For production/offline, consider using a bundled library
-  const encoded = encodeURIComponent(text)
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encoded}`
-}
-
-/**
- * Generate QR code locally using canvas (no external dependency)
- * This is a simplified implementation - for production, use a proper QR library
- */
-export async function generateQRCodeLocal(text, size = 200) {
-  // For a full implementation, you'd use a library like 'qrcode'
-  // This returns the external URL as fallback
-  return generateQRCodeUrl(text, size)
-}
+// QR codes are drawn in the page (qrcode.react's QRCodeSVG), never fetched
+// from a QR web service: they are needed exactly where there is no internet
+// (tablets joining the venue relay).
 
 /**
  * Copy text to clipboard with fallback for older browsers

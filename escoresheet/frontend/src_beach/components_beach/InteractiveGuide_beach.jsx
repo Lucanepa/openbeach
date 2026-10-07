@@ -41,16 +41,16 @@ function Section({ title, icon, children, defaultOpen = false }) {
   const [isOpen, setIsOpen] = useState(defaultOpen)
 
   return (
-    <div style={{ marginBottom: 16, border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, overflow: 'hidden' }}>
+    <div style={{ marginBottom: 16, border: '1px solid var(--ov-sunken-strong)', borderRadius: 8, overflow: 'hidden' }}>
       <button
         onClick={() => setIsOpen(!isOpen)}
         style={{
           width: '100%',
           padding: '14px 16px',
-          background: isOpen ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255,255,255,0.05)',
+          background: isOpen ? 'rgba(59, 130, 246, 0.15)' : 'var(--ov-sunken)',
           border: 'none',
-          borderBottom: isOpen ? '1px solid rgba(255,255,255,0.1)' : 'none',
-          color: 'white',
+          borderBottom: isOpen ? '1px solid var(--ov-sunken-strong)' : 'none',
+          color: 'var(--ov-text)',
           fontSize: 15,
           fontWeight: 600,
           textAlign: 'left',
@@ -79,7 +79,7 @@ function QAItem({ question, answer }) {
   const [isOpen, setIsOpen] = useState(false)
 
   return (
-    <div style={{ marginBottom: 8, borderRadius: 6, overflow: 'hidden', background: 'rgba(255,255,255,0.03)' }}>
+    <div style={{ marginBottom: 8, borderRadius: 6, overflow: 'hidden', background: 'var(--ov-sunken)' }}>
       <button
         onClick={() => setIsOpen(!isOpen)}
         style={{
@@ -87,7 +87,7 @@ function QAItem({ question, answer }) {
           padding: '12px 14px',
           background: 'transparent',
           border: 'none',
-          color: '#60a5fa',
+          color: 'var(--ov-info-text)',
           fontSize: 14,
           textAlign: 'left',
           cursor: 'pointer',
@@ -96,13 +96,13 @@ function QAItem({ question, answer }) {
           gap: 8
         }}
       >
-        <span style={{ fontWeight: 700, color: '#3b82f6' }}>Q:</span>
+        <span style={{ fontWeight: 700, color: 'var(--ov-info-text)' }}>Q:</span>
         <span style={{ flex: 1 }}>{question}</span>
         <span style={{ fontSize: 10, opacity: 0.6 }}>{isOpen ? '−' : '+'}</span>
       </button>
       {isOpen && (
-        <div style={{ padding: '0 14px 12px 30px', fontSize: 13, color: 'rgba(255,255,255,0.8)', lineHeight: 1.6 }}>
-          <span style={{ fontWeight: 600, color: '#22c55e' }}>A: </span>
+        <div style={{ padding: '0 14px 12px 30px', fontSize: 13, color: 'var(--ov-text-secondary)', lineHeight: 1.6 }}>
+          <span style={{ fontWeight: 600, color: 'var(--ov-success-text)' }}>A: </span>
           {answer}
         </div>
       )}
@@ -127,10 +127,10 @@ function DemoButton({ label, color = '#3b82f6', onClick, small = false, disabled
       disabled={disabled}
       style={{
         padding: small ? '6px 12px' : '10px 20px',
-        background: disabled ? 'rgba(255,255,255,0.1)' : color,
+        background: disabled ? 'var(--ov-sunken-strong)' : color,
         border: 'none',
         borderRadius: 6,
-        color: 'white',
+        color: 'var(--ov-text)',
         fontSize: small ? 12 : 14,
         fontWeight: 600,
         cursor: disabled ? 'not-allowed' : 'pointer',
@@ -200,12 +200,12 @@ function CourtDemo({ animateRotation = false, highlightPosition = null, t }) {
               width: 60,
               height: 60,
               borderRadius: '50%',
-              background: highlightPosition === p.pos ? '#3b82f6' : 'rgba(255,255,255,0.15)',
+              background: highlightPosition === p.pos ? '#3b82f6' : 'var(--ov-hairline)',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              border: '2px solid rgba(255,255,255,0.3)',
+              border: '2px solid var(--ov-hairline-strong)',
               transition: 'all 0.3s',
               transform: isRotating ? 'scale(0.9)' : 'scale(1)',
               position: 'relative'
@@ -264,7 +264,7 @@ function ScoreDemo({ t }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: 16, background: 'rgba(0,0,0,0.3)', borderRadius: 8 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: 16, background: 'var(--ov-sunken)', borderRadius: 8 }}>
       {/* Score display */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
         <div style={{ textAlign: 'center' }}>
@@ -272,7 +272,7 @@ function ScoreDemo({ t }) {
           <div style={{
             fontSize: 48,
             fontWeight: 700,
-            color: '#3b82f6',
+            color: 'var(--ov-info-text)',
             transition: 'all 0.2s',
             transform: team1Flash ? 'scale(1.2)' : 'scale(1)'
           }}>
@@ -285,7 +285,7 @@ function ScoreDemo({ t }) {
           <div style={{
             fontSize: 48,
             fontWeight: 700,
-            color: '#ef4444',
+            color: 'var(--ov-danger-text)',
             transition: 'all 0.2s',
             transform: team2Flash ? 'scale(1.2)' : 'scale(1)'
           }}>
@@ -329,7 +329,7 @@ function CountdownDemo({ t }) {
             cy="40"
             r="35"
             fill="none"
-            stroke="rgba(255,255,255,0.1)"
+            stroke="var(--ov-sunken-strong)"
             strokeWidth="6"
           />
           <circle
@@ -414,9 +414,9 @@ function ButtonStateDemo({ t }) {
   return (
     <div style={{
       padding: 20,
-      background: 'rgba(0,0,0,0.4)',
+      background: 'var(--ov-sunken)',
       borderRadius: 12,
-      border: '1px solid rgba(255,255,255,0.1)'
+      border: '1px solid var(--ov-sunken-strong)'
     }}>
       <div style={{ textAlign: 'center', marginBottom: 16 }}>
         <h4 style={{ margin: '0 0 8px 0', fontSize: 14, opacity: 0.8 }}>
@@ -431,12 +431,12 @@ function ButtonStateDemo({ t }) {
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 24, marginBottom: 20 }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 4 }}>{t('interactiveGuide.demos.team1')}</div>
-          <div style={{ fontSize: 32, fontWeight: 700, color: '#3b82f6' }}>{team1Score}</div>
+          <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--ov-info-text)' }}>{team1Score}</div>
         </div>
         <div style={{ fontSize: 20, opacity: 0.3 }}>:</div>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 4 }}>{t('interactiveGuide.demos.team2')}</div>
-          <div style={{ fontSize: 32, fontWeight: 700, color: '#ef4444' }}>{team2Score}</div>
+          <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--ov-danger-text)' }}>{team2Score}</div>
         </div>
       </div>
 
@@ -445,9 +445,9 @@ function ButtonStateDemo({ t }) {
         textAlign: 'center',
         marginBottom: 16,
         padding: '8px 16px',
-        background: rallyActive ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255,255,255,0.05)',
+        background: rallyActive ? 'rgba(34, 197, 94, 0.2)' : 'var(--ov-sunken)',
         borderRadius: 8,
-        border: `1px solid ${rallyActive ? 'rgba(34, 197, 94, 0.5)' : 'rgba(255,255,255,0.1)'}`
+        border: `1px solid ${rallyActive ? 'rgba(34, 197, 94, 0.5)' : 'var(--ov-sunken-strong)'}`
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           <div style={{
@@ -474,7 +474,7 @@ function ButtonStateDemo({ t }) {
               background: rallyActive ? 'rgba(107, 114, 128, 0.3)' : 'linear-gradient(180deg, #4ade80 0%, #22c55e 100%)',
               border: 'none',
               borderRadius: 8,
-              color: 'white',
+              color: 'var(--ov-text)',
               fontSize: 14,
               fontWeight: 600,
               cursor: rallyActive ? 'not-allowed' : 'pointer',
@@ -499,7 +499,7 @@ function ButtonStateDemo({ t }) {
               background: !rallyActive ? 'rgba(107, 114, 128, 0.3)' : 'linear-gradient(180deg, #60a5fa 0%, #3b82f6 100%)',
               border: 'none',
               borderRadius: 8,
-              color: 'white',
+              color: 'var(--ov-text)',
               fontSize: 14,
               fontWeight: 600,
               cursor: !rallyActive ? 'not-allowed' : 'pointer',
@@ -524,7 +524,7 @@ function ButtonStateDemo({ t }) {
               background: !rallyActive ? 'rgba(107, 114, 128, 0.3)' : 'linear-gradient(180deg, #f87171 0%, #ef4444 100%)',
               border: 'none',
               borderRadius: 8,
-              color: 'white',
+              color: 'var(--ov-text)',
               fontSize: 14,
               fontWeight: 600,
               cursor: !rallyActive ? 'not-allowed' : 'pointer',
@@ -574,9 +574,9 @@ function ButtonStateDemo({ t }) {
           style={{
             padding: '6px 14px',
             background: 'transparent',
-            border: '1px solid rgba(255,255,255,0.2)',
+            border: '1px solid var(--ov-hairline)',
             borderRadius: 6,
-            color: 'rgba(255,255,255,0.6)',
+            color: 'var(--ov-text-secondary)',
             fontSize: 12,
             cursor: 'pointer'
           }}
@@ -655,9 +655,9 @@ function TimeoutAvailabilityDemo({ t }) {
   return (
     <div style={{
       padding: 20,
-      background: 'rgba(0,0,0,0.4)',
+      background: 'var(--ov-sunken)',
       borderRadius: 12,
-      border: '1px solid rgba(255,255,255,0.1)'
+      border: '1px solid var(--ov-sunken-strong)'
     }}>
       <div style={{ textAlign: 'center', marginBottom: 16 }}>
         <h4 style={{ margin: '0 0 8px 0', fontSize: 14, opacity: 0.8 }}>
@@ -674,10 +674,10 @@ function TimeoutAvailabilityDemo({ t }) {
           onClick={() => setRallyActive(!rallyActive)}
           style={{
             padding: '8px 16px',
-            background: rallyActive ? 'rgba(234, 179, 8, 0.3)' : 'rgba(255,255,255,0.1)',
-            border: `1px solid ${rallyActive ? '#eab308' : 'rgba(255,255,255,0.2)'}`,
+            background: rallyActive ? 'rgba(234, 179, 8, 0.3)' : 'var(--ov-sunken-strong)',
+            border: `1px solid ${rallyActive ? '#eab308' : 'var(--ov-hairline)'}`,
             borderRadius: 6,
-            color: 'white',
+            color: 'var(--ov-text)',
             fontSize: 12,
             cursor: 'pointer'
           }}
@@ -691,7 +691,7 @@ function TimeoutAvailabilityDemo({ t }) {
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
           <div style={{ position: 'relative', width: 70, height: 70 }}>
             <svg width="70" height="70" style={{ transform: 'rotate(-90deg)' }}>
-              <circle cx="35" cy="35" r="30" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="5" />
+              <circle cx="35" cy="35" r="30" fill="none" stroke="var(--ov-sunken-strong)" strokeWidth="5" />
               <circle
                 cx="35" cy="35" r="30" fill="none" stroke="#eab308" strokeWidth="5"
                 strokeDasharray="188" strokeDashoffset={188 - (countdown / 30) * 188}
@@ -716,7 +716,7 @@ function TimeoutAvailabilityDemo({ t }) {
               background: team1CanCall ? 'linear-gradient(180deg, #60a5fa 0%, #3b82f6 100%)' : 'rgba(107, 114, 128, 0.3)',
               border: 'none',
               borderRadius: 8,
-              color: 'white',
+              color: 'var(--ov-text)',
               fontSize: 13,
               fontWeight: 600,
               cursor: team1CanCall ? 'pointer' : 'not-allowed',
@@ -743,7 +743,7 @@ function TimeoutAvailabilityDemo({ t }) {
               background: team2CanCall ? 'linear-gradient(180deg, #f87171 0%, #ef4444 100%)' : 'rgba(107, 114, 128, 0.3)',
               border: 'none',
               borderRadius: 8,
-              color: 'white',
+              color: 'var(--ov-text)',
               fontSize: 13,
               fontWeight: 600,
               cursor: team2CanCall ? 'pointer' : 'not-allowed',
@@ -803,9 +803,9 @@ function TimeoutAvailabilityDemo({ t }) {
         <button onClick={resetDemo} style={{
           padding: '6px 14px',
           background: 'transparent',
-          border: '1px solid rgba(255,255,255,0.2)',
+          border: '1px solid var(--ov-hairline)',
           borderRadius: 6,
-          color: 'rgba(255,255,255,0.6)',
+          color: 'var(--ov-text-secondary)',
           fontSize: 12,
           cursor: 'pointer'
         }}>
@@ -824,19 +824,19 @@ function TimeoutAvailabilityDemo({ t }) {
 function ScreenMockup({ title, children, width = '100%' }) {
   return (
     <div style={{
-      background: '#0f172a',
+      background: 'var(--ov-page)',
       borderRadius: 12,
       overflow: 'hidden',
-      border: '1px solid rgba(255,255,255,0.1)',
-      boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+      border: '1px solid var(--ov-hairline)',
+      boxShadow: 'var(--ov-shadow-card)',
       width,
       maxWidth: '100%'
     }}>
       {/* Title bar */}
       <div style={{
-        background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
+        background: 'var(--ov-card)',
         padding: '8px 12px',
-        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        borderBottom: '1px solid var(--ov-hairline)',
         display: 'flex',
         alignItems: 'center',
         gap: 8
@@ -863,23 +863,23 @@ function MatchSetupMockup({ t }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {/* Match Info Card */}
         <div style={{ background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: 8, padding: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: '#60a5fa' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--ov-info-text)' }}>
             {t('interactiveGuide.mockups.matchInfo')}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 11 }}>
-            <div style={{ background: 'rgba(255,255,255,0.05)', padding: 8, borderRadius: 4 }}>
+            <div style={{ background: 'var(--ov-sunken)', padding: 8, borderRadius: 4 }}>
               <div style={{ opacity: 0.5, marginBottom: 2 }}>{t('interactiveGuide.mockups.gameNo')}</div>
               <div>2024-001</div>
             </div>
-            <div style={{ background: 'rgba(255,255,255,0.05)', padding: 8, borderRadius: 4 }}>
+            <div style={{ background: 'var(--ov-sunken)', padding: 8, borderRadius: 4 }}>
               <div style={{ opacity: 0.5, marginBottom: 2 }}>{t('interactiveGuide.mockups.dateTime')}</div>
               <div>14.01.2026 19:00</div>
             </div>
-            <div style={{ background: 'rgba(255,255,255,0.05)', padding: 8, borderRadius: 4 }}>
+            <div style={{ background: 'var(--ov-sunken)', padding: 8, borderRadius: 4 }}>
               <div style={{ opacity: 0.5, marginBottom: 2 }}>{t('interactiveGuide.mockups.location')}</div>
               <div>Zürich, Sportshalle</div>
             </div>
-            <div style={{ background: 'rgba(255,255,255,0.05)', padding: 8, borderRadius: 4 }}>
+            <div style={{ background: 'var(--ov-sunken)', padding: 8, borderRadius: 4 }}>
               <div style={{ opacity: 0.5, marginBottom: 2 }}>{t('interactiveGuide.mockups.league')}</div>
               <div>NLA</div>
             </div>
@@ -890,10 +890,10 @@ function MatchSetupMockup({ t }) {
         <div style={{ display: 'flex', gap: 12 }}>
           {/* Team A Card */}
           <div style={{ flex: 1, background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: 8, padding: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: '#3b82f6' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--ov-info-text)' }}>
               {t('interactiveGuide.mockups.teamA')}
             </div>
-            <div style={{ background: '#3b82f6', color: 'white', padding: '6px 10px', borderRadius: 4, fontSize: 14, fontWeight: 600, textAlign: 'center', marginBottom: 8 }}>
+            <div style={{ background: '#3b82f6', color: 'var(--ov-text)', padding: '6px 10px', borderRadius: 4, fontSize: 14, fontWeight: 600, textAlign: 'center', marginBottom: 8 }}>
               VBC Zürich
             </div>
             <div style={{ fontSize: 11, opacity: 0.7, display: 'flex', justifyContent: 'space-between' }}>
@@ -904,10 +904,10 @@ function MatchSetupMockup({ t }) {
 
           {/* Team B Card */}
           <div style={{ flex: 1, background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: 8, padding: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: '#ef4444' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--ov-danger-text)' }}>
               {t('interactiveGuide.mockups.teamB')}
             </div>
-            <div style={{ background: '#ef4444', color: 'white', padding: '6px 10px', borderRadius: 4, fontSize: 14, fontWeight: 600, textAlign: 'center', marginBottom: 8 }}>
+            <div style={{ background: '#ef4444', color: 'var(--ov-text)', padding: '6px 10px', borderRadius: 4, fontSize: 14, fontWeight: 600, textAlign: 'center', marginBottom: 8 }}>
               Volley Luzern
             </div>
             <div style={{ fontSize: 11, opacity: 0.7, display: 'flex', justifyContent: 'space-between' }}>
@@ -919,29 +919,29 @@ function MatchSetupMockup({ t }) {
 
         {/* Signatures Card */}
         <div style={{ background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.3)', borderRadius: 8, padding: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: '#22c55e' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--ov-success-text)' }}>
             {t('interactiveGuide.mockups.signatures')}
           </div>
           <div style={{ display: 'flex', gap: 12, fontSize: 11 }}>
             <div style={{ flex: 1, textAlign: 'center' }}>
-              <div style={{ background: 'rgba(255,255,255,0.1)', padding: 8, borderRadius: 4, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ background: 'var(--ov-sunken-strong)', padding: 8, borderRadius: 4, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ fontStyle: 'italic', opacity: 0.5 }}>✓ {t('interactiveGuide.mockups.signed')}</span>
               </div>
             </div>
             <div style={{ flex: 1, textAlign: 'center' }}>
               <div style={{ opacity: 0.6, marginBottom: 4 }}>{t('interactiveGuide.mockups.captainA')}</div>
-              <div style={{ background: 'rgba(255,255,255,0.1)', padding: 8, borderRadius: 4, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ background: 'var(--ov-sunken-strong)', padding: 8, borderRadius: 4, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ fontStyle: 'italic', opacity: 0.5 }}>✓ {t('interactiveGuide.mockups.signed')}</span>
               </div>
             </div>
             <div style={{ flex: 1, textAlign: 'center' }}>
-              <div style={{ background: 'rgba(255,255,255,0.05)', padding: 8, borderRadius: 4, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed rgba(255,255,255,0.2)' }}>
+              <div style={{ background: 'var(--ov-sunken)', padding: 8, borderRadius: 4, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed var(--ov-hairline)' }}>
                 <span style={{ opacity: 0.4 }}>{t('interactiveGuide.mockups.tapToSign')}</span>
               </div>
             </div>
             <div style={{ flex: 1, textAlign: 'center' }}>
               <div style={{ opacity: 0.6, marginBottom: 4 }}>{t('interactiveGuide.mockups.captainB')}</div>
-              <div style={{ background: 'rgba(255,255,255,0.05)', padding: 8, borderRadius: 4, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed rgba(255,255,255,0.2)' }}>
+              <div style={{ background: 'var(--ov-sunken)', padding: 8, borderRadius: 4, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed var(--ov-hairline)' }}>
                 <span style={{ opacity: 0.4 }}>{t('interactiveGuide.mockups.tapToSign')}</span>
               </div>
             </div>
@@ -954,7 +954,7 @@ function MatchSetupMockup({ t }) {
           border: 'none',
           borderRadius: 8,
           padding: '12px 24px',
-          color: 'white',
+          color: 'var(--ov-text)',
           fontWeight: 600,
           fontSize: 14,
           cursor: 'default'
@@ -1006,7 +1006,7 @@ function CoinTossMockup({ t }) {
               fontSize: 12,
               fontWeight: 600,
               margin: '0 auto 8px',
-              border: '3px solid rgba(255,255,255,0.2)'
+              border: '3px solid var(--ov-hairline)'
             }}>
               Volley Luzern
             </div>
@@ -1015,14 +1015,14 @@ function CoinTossMockup({ t }) {
         </div>
 
         {/* Selections */}
-        <div style={{ width: '100%', background: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: 12 }}>
+        <div style={{ width: '100%', background: 'var(--ov-sunken)', borderRadius: 8, padding: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 8 }}>
             <span style={{ opacity: 0.6 }}>{t('interactiveGuide.mockups.serve')}:</span>
-            <span style={{ color: '#3b82f6', fontWeight: 600 }}>VBC Zürich <Volleyball /></span>
+            <span style={{ color: 'var(--ov-info-text)', fontWeight: 600 }}>VBC Zürich <Volleyball /></span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
             <span style={{ opacity: 0.6 }}>{t('interactiveGuide.mockups.leftSide')}:</span>
-            <span style={{ color: '#3b82f6', fontWeight: 600 }}>VBC Zürich ←</span>
+            <span style={{ color: 'var(--ov-info-text)', fontWeight: 600 }}>VBC Zürich ←</span>
           </div>
         </div>
 
@@ -1044,7 +1044,7 @@ function CoinTossMockup({ t }) {
           border: 'none',
           borderRadius: 8,
           padding: '12px 32px',
-          color: 'white',
+          color: 'var(--ov-text)',
           fontWeight: 600,
           fontSize: 14,
           cursor: 'default'
@@ -1102,7 +1102,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
             <div style={{
               fontSize: 48,
               fontWeight: 700,
-              color: '#3b82f6',
+              color: 'var(--ov-info-text)',
               lineHeight: 1,
               textShadow: '0 2px 8px rgba(59, 130, 246, 0.5)'
             }}>
@@ -1130,7 +1130,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
             <div style={{
               fontSize: 48,
               fontWeight: 700,
-              color: '#ef4444',
+              color: 'var(--ov-danger-text)',
               lineHeight: 1,
               textShadow: '0 2px 8px rgba(239, 68, 68, 0.5)'
             }}>
@@ -1170,7 +1170,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
           </div>
 
           {/* Net */}
-          <div style={{ width: 4, background: 'rgba(255,255,255,0.2)', borderRadius: 2 }} />
+          <div style={{ width: 4, background: 'var(--ov-hairline)', borderRadius: 2 }} />
 
           {/* Right Court */}
           <div style={{
@@ -1207,7 +1207,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
             background: state === 'rally' ? 'rgba(107, 114, 128, 0.3)' : 'linear-gradient(180deg, #4ade80 0%, #22c55e 100%)',
             border: 'none',
             borderRadius: 6,
-            color: 'white',
+            color: 'var(--ov-text)',
             fontSize: 12,
             fontWeight: 600,
             opacity: state === 'rally' ? 0.5 : 1,
@@ -1220,7 +1220,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
             background: state !== 'rally' ? 'rgba(107, 114, 128, 0.3)' : '#3b82f6',
             border: 'none',
             borderRadius: 6,
-            color: 'white',
+            color: 'var(--ov-text)',
             fontSize: 12,
             fontWeight: 600,
             opacity: state !== 'rally' ? 0.5 : 1,
@@ -1233,7 +1233,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
             background: 'rgba(234, 179, 8, 0.3)',
             border: '1px solid #eab308',
             borderRadius: 6,
-            color: '#eab308',
+            color: 'var(--ov-warning-text)',
             fontSize: 12,
             fontWeight: 600,
             cursor: 'default'
@@ -1245,7 +1245,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
             background: 'rgba(239, 68, 68, 0.3)',
             border: '1px solid #ef4444',
             borderRadius: 6,
-            color: '#ef4444',
+            color: 'var(--ov-danger-text)',
             fontSize: 12,
             fontWeight: 600,
             cursor: 'default'
@@ -1263,7 +1263,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
             padding: 16,
             textAlign: 'center'
           }}>
-            <div style={{ fontSize: 40, fontWeight: 700, color: '#eab308' }}>0:25</div>
+            <div style={{ fontSize: 40, fontWeight: 700, color: 'var(--ov-warning-text)' }}>0:25</div>
             <div style={{ fontSize: 12, opacity: 0.7 }}>VBC Zürich - Timeout 1/1</div>
             <button style={{
               marginTop: 12,
@@ -1320,34 +1320,34 @@ function MatchEndMockup({ t }) {
           textAlign: 'center'
         }}>
           <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>{t('interactiveGuide.mockups.winner')}</div>
-          <div style={{ fontSize: 24, fontWeight: 700, color: '#22c55e' }}>VBC Zürich</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--ov-success-text)' }}>VBC Zürich</div>
         </div>
 
         {/* Final Score - Beach volleyball is best-of-3 */}
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 24 }}>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>VBC Zürich</div>
-            <div style={{ fontSize: 48, fontWeight: 700, color: '#3b82f6' }}>2</div>
+            <div style={{ fontSize: 48, fontWeight: 700, color: 'var(--ov-info-text)' }}>2</div>
           </div>
           <div style={{ fontSize: 20, opacity: 0.3 }}>:</div>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>Volley Luzern</div>
-            <div style={{ fontSize: 48, fontWeight: 700, color: '#ef4444' }}>1</div>
+            <div style={{ fontSize: 48, fontWeight: 700, color: 'var(--ov-danger-text)' }}>1</div>
           </div>
         </div>
 
         {/* Set Scores - Beach volleyball is best-of-3 */}
-        <div style={{ width: '100%', background: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: 12 }}>
+        <div style={{ width: '100%', background: 'var(--ov-sunken)', borderRadius: 8, padding: 12 }}>
           <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, opacity: 0.7 }}>{t('interactiveGuide.mockups.setScores')}</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, textAlign: 'center', fontSize: 14 }}>
-            <div><span style={{ opacity: 0.5 }}>Set 1:</span> <strong style={{ color: '#3b82f6' }}>21</strong>-18</div>
-            <div><span style={{ opacity: 0.5 }}>Set 2:</span> 19-<strong style={{ color: '#ef4444' }}>21</strong></div>
-            <div><span style={{ opacity: 0.5 }}>Set 3:</span> <strong style={{ color: '#3b82f6' }}>15</strong>-12</div>
+            <div><span style={{ opacity: 0.5 }}>Set 1:</span> <strong style={{ color: 'var(--ov-info-text)' }}>21</strong>-18</div>
+            <div><span style={{ opacity: 0.5 }}>Set 2:</span> 19-<strong style={{ color: 'var(--ov-danger-text)' }}>21</strong></div>
+            <div><span style={{ opacity: 0.5 }}>Set 3:</span> <strong style={{ color: 'var(--ov-info-text)' }}>15</strong>-12</div>
           </div>
         </div>
 
         {/* Signatures Section */}
-        <div style={{ width: '100%', background: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: 12 }}>
+        <div style={{ width: '100%', background: 'var(--ov-sunken)', borderRadius: 8, padding: 12 }}>
           <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, opacity: 0.7 }}>{t('interactiveGuide.mockups.finalSignatures')}</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, fontSize: 11 }}>
             <div style={{ padding: 8, background: 'rgba(59, 130, 246, 0.1)', borderRadius: 4, textAlign: 'center' }}>
@@ -1356,10 +1356,10 @@ function MatchEndMockup({ t }) {
             <div style={{ padding: 8, background: 'rgba(239, 68, 68, 0.1)', borderRadius: 4, textAlign: 'center' }}>
               {t('interactiveGuide.mockups.captainB')}: ✓
             </div>
-            <div style={{ padding: 8, background: 'rgba(255,255,255,0.05)', borderRadius: 4, textAlign: 'center' }}>
+            <div style={{ padding: 8, background: 'var(--ov-sunken)', borderRadius: 4, textAlign: 'center' }}>
               {t('interactiveGuide.mockups.referee1')}: ✓
             </div>
-            <div style={{ padding: 8, background: 'rgba(255,255,255,0.05)', borderRadius: 4, textAlign: 'center' }}>
+            <div style={{ padding: 8, background: 'var(--ov-sunken)', borderRadius: 4, textAlign: 'center' }}>
               {t('interactiveGuide.mockups.scorer')}: ✓
             </div>
           </div>
@@ -1372,7 +1372,7 @@ function MatchEndMockup({ t }) {
             background: 'linear-gradient(180deg, #60a5fa 0%, #3b82f6 100%)',
             border: 'none',
             borderRadius: 8,
-            color: 'white',
+            color: 'var(--ov-text)',
             fontWeight: 600,
             fontSize: 13,
             cursor: 'default'
@@ -1381,10 +1381,10 @@ function MatchEndMockup({ t }) {
           </button>
           <button style={{
             padding: '10px 20px',
-            background: 'rgba(255,255,255,0.1)',
-            border: '1px solid rgba(255,255,255,0.2)',
+            background: 'var(--ov-sunken-strong)',
+            border: '1px solid var(--ov-hairline)',
             borderRadius: 8,
-            color: 'white',
+            color: 'var(--ov-text)',
             fontWeight: 600,
             fontSize: 13,
             cursor: 'default'
@@ -1396,7 +1396,7 @@ function MatchEndMockup({ t }) {
             background: 'linear-gradient(180deg, #4ade80 0%, #22c55e 100%)',
             border: 'none',
             borderRadius: 8,
-            color: 'white',
+            color: 'var(--ov-text)',
             fontWeight: 600,
             fontSize: 13,
             cursor: 'default'
@@ -1456,7 +1456,7 @@ function ShortcutTable({ shortcuts, t }) {
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
-          <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
+          <tr style={{ borderBottom: '1px solid var(--ov-hairline)' }}>
             <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600 }}>{t('interactiveGuide.table.action')}</th>
             <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 600 }}>{t('interactiveGuide.table.key')}</th>
             <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600 }}>{t('interactiveGuide.table.description')}</th>
@@ -1464,12 +1464,12 @@ function ShortcutTable({ shortcuts, t }) {
         </thead>
         <tbody>
           {shortcuts.map((s, i) => (
-            <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+            <tr key={i} style={{ borderBottom: '1px solid var(--ov-sunken)' }}>
               <td style={{ padding: '8px 12px' }}>{s.action}</td>
               <td style={{ padding: '8px 12px', textAlign: 'center' }}>
                 <kbd style={{
                   padding: '4px 8px',
-                  background: 'rgba(255,255,255,0.1)',
+                  background: 'var(--ov-sunken-strong)',
                   borderRadius: 4,
                   fontFamily: 'monospace',
                   fontSize: 12
@@ -1490,7 +1490,7 @@ function NavSidebar({ sections, activeSection, onSectionClick }) {
     <div style={{
       width: 200,
       flexShrink: 0,
-      borderRight: '1px solid rgba(255,255,255,0.1)',
+      borderRight: '1px solid var(--ov-sunken-strong)',
       padding: '8px 0',
       position: 'sticky',
       top: 0,
@@ -1505,10 +1505,11 @@ function NavSidebar({ sections, activeSection, onSectionClick }) {
             display: 'block',
             width: '100%',
             padding: '10px 16px',
-            background: activeSection === section.id ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
+            background: activeSection === section.id ? 'var(--ov-selected)' : 'transparent',
             border: 'none',
-            borderLeft: activeSection === section.id ? '3px solid #3b82f6' : '3px solid transparent',
-            color: activeSection === section.id ? '#fff' : 'rgba(255,255,255,0.6)',
+            borderLeft: '3px solid transparent',
+            borderRadius: 8,
+            color: activeSection === section.id ? 'var(--ov-on-dark)' : 'var(--ov-text-secondary)',
             fontSize: 13,
             textAlign: 'left',
             cursor: 'pointer',
@@ -1573,6 +1574,7 @@ export default function InteractiveGuide({ open, onClose }) {
 
   return (
     <Modal
+      tone="light"
       title={t('interactiveGuide.title')}
       open={open}
       onClose={onClose}
@@ -1611,10 +1613,10 @@ export default function InteractiveGuide({ open, onClose }) {
                 width: '100%',
                 padding: '10px 12px',
                 marginBottom: 16,
-                background: 'rgba(255,255,255,0.1)',
-                border: '1px solid rgba(255,255,255,0.2)',
+                background: 'var(--ov-sunken-strong)',
+                border: '1px solid var(--ov-hairline)',
                 borderRadius: 6,
-                color: 'white',
+                color: 'var(--ov-text)',
                 fontSize: 14
               }}
             >
@@ -1645,7 +1647,7 @@ export default function InteractiveGuide({ open, onClose }) {
               justifyContent: 'center',
               gap: 8,
               padding: 16,
-              background: 'rgba(255,255,255,0.05)',
+              background: 'var(--ov-sunken)',
               borderRadius: 8,
               marginBottom: 16
             }}>
@@ -1691,7 +1693,7 @@ export default function InteractiveGuide({ open, onClose }) {
 
               <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'wrap' }}>
                 <div style={{ flex: 1, minWidth: 200, padding: 16, background: 'rgba(34, 197, 94, 0.1)', borderRadius: 8, border: '1px solid rgba(34, 197, 94, 0.3)' }}>
-                  <h4 style={{ margin: '0 0 8px 0', color: '#22c55e' }}>
+                  <h4 style={{ margin: '0 0 8px 0', color: 'var(--ov-success-text)' }}>
                     {t('interactiveGuide.home.officialMatch')}
                   </h4>
                   <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
@@ -1703,7 +1705,7 @@ export default function InteractiveGuide({ open, onClose }) {
                   </ul>
                 </div>
                 <div style={{ flex: 1, minWidth: 200, padding: 16, background: 'rgba(234, 179, 8, 0.1)', borderRadius: 8, border: '1px solid rgba(234, 179, 8, 0.3)' }}>
-                  <h4 style={{ margin: '0 0 8px 0', color: '#eab308' }}>
+                  <h4 style={{ margin: '0 0 8px 0', color: 'var(--ov-warning-text)' }}>
                     {t('interactiveGuide.home.testMatch')}
                   </h4>
                   <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
@@ -1842,7 +1844,7 @@ export default function InteractiveGuide({ open, onClose }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                 {/* Normal State */}
                 <div>
-                  <h4 style={{ marginBottom: 8, fontSize: 14, color: '#3b82f6' }}>
+                  <h4 style={{ marginBottom: 8, fontSize: 14, color: 'var(--ov-info-text)' }}>
                     {t('interactiveGuide.mockups.stateNormal')}
                   </h4>
                   <ScoreboardMockup t={t} state="normal" />
@@ -1850,7 +1852,7 @@ export default function InteractiveGuide({ open, onClose }) {
 
                 {/* Rally Active State */}
                 <div>
-                  <h4 style={{ marginBottom: 8, fontSize: 14, color: '#22c55e' }}>
+                  <h4 style={{ marginBottom: 8, fontSize: 14, color: 'var(--ov-success-text)' }}>
                     {t('interactiveGuide.mockups.stateRally')}
                   </h4>
                   <ScoreboardMockup t={t} state="rally" />
@@ -1858,7 +1860,7 @@ export default function InteractiveGuide({ open, onClose }) {
 
                 {/* Timeout State */}
                 <div>
-                  <h4 style={{ marginBottom: 8, fontSize: 14, color: '#eab308' }}>
+                  <h4 style={{ marginBottom: 8, fontSize: 14, color: 'var(--ov-warning-text)' }}>
                     {t('interactiveGuide.mockups.stateTimeout')}
                   </h4>
                   <ScoreboardMockup t={t} state="timeout" />
@@ -1866,7 +1868,7 @@ export default function InteractiveGuide({ open, onClose }) {
 
                 {/* Sanction State */}
                 <div>
-                  <h4 style={{ marginBottom: 8, fontSize: 14, color: '#ef4444' }}>
+                  <h4 style={{ marginBottom: 8, fontSize: 14, color: 'var(--ov-danger-text)' }}>
                     {t('interactiveGuide.mockups.stateSanction')}
                   </h4>
                   <ScoreboardMockup t={t} state="sanction" />
@@ -1935,35 +1937,35 @@ export default function InteractiveGuide({ open, onClose }) {
               </TipBox>
             </Section>
 
-            <Section title={t('interactiveGuide.scoreboard.sanctions')} icon={<Card fill="currentColor" style={{ color: '#eab308' }} />}>
+            <Section title={t('interactiveGuide.scoreboard.sanctions')} icon={<Card fill="currentColor" style={{ color: 'var(--ov-warning-text)' }} />}>
               <p>{t('interactiveGuide.scoreboard.sanctionsDesc')}</p>
 
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginTop: 12 }}>
                 <tbody>
-                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                  <tr style={{ borderBottom: '1px solid var(--ov-sunken-strong)' }}>
                     <td style={{ padding: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ width: 20, height: 20, background: '#eab308', borderRadius: 4 }}></span>
                       <strong>{t('interactiveGuide.scoreboard.warning')}</strong>
                     </td>
                     <td style={{ padding: 8, opacity: 0.8 }}>{t('interactiveGuide.scoreboard.warningDesc')}</td>
                   </tr>
-                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                  <tr style={{ borderBottom: '1px solid var(--ov-sunken-strong)' }}>
                     <td style={{ padding: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ width: 20, height: 20, background: '#ef4444', borderRadius: 4 }}></span>
                       <strong>{t('interactiveGuide.scoreboard.penalty')}</strong>
                     </td>
                     <td style={{ padding: 8, opacity: 0.8 }}>{t('interactiveGuide.scoreboard.penaltyDesc')}</td>
                   </tr>
-                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                  <tr style={{ borderBottom: '1px solid var(--ov-sunken-strong)' }}>
                     <td style={{ padding: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ width: 20, height: 20, background: '#ef4444', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 10 }}>E</span>
+                      <span style={{ width: 20, height: 20, background: '#ef4444', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ov-text)', fontSize: 10 }}>E</span>
                       <strong>{t('interactiveGuide.scoreboard.expulsion')}</strong>
                     </td>
                     <td style={{ padding: 8, opacity: 0.8 }}>{t('interactiveGuide.scoreboard.expulsionDesc')}</td>
                   </tr>
                   <tr>
                     <td style={{ padding: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ width: 20, height: 20, background: '#000', border: '2px solid #ef4444', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 10 }}>D</span>
+                      <span style={{ width: 20, height: 20, background: '#000', border: '2px solid #ef4444', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ov-on-dark)', fontSize: 10 }}>D</span>
                       <strong>{t('interactiveGuide.scoreboard.disqualification')}</strong>
                     </td>
                     <td style={{ padding: 8, opacity: 0.8 }}>{t('interactiveGuide.scoreboard.disqualificationDesc')}</td>
@@ -2204,7 +2206,7 @@ export default function InteractiveGuide({ open, onClose }) {
           <div style={{
             marginTop: 40,
             paddingTop: 20,
-            borderTop: '1px solid rgba(255,255,255,0.1)',
+            borderTop: '1px solid var(--ov-sunken-strong)',
             textAlign: 'center',
             opacity: 0.6,
             fontSize: 12

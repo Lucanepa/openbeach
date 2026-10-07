@@ -1033,7 +1033,7 @@
     "restoreMatchToThisState": "Spiel auf diesen Zustand wiederherstellen?",
     "warningStateReplaced": "Warnung: Der aktuelle Spielstand wird ersetzt.",
     "websocket": "WebSocket",
-    "backupSetScore": "Satz {{setIndex}}: {{homePoints}} - {{awayPoints}}",
+    "backupSetScore": "Satz {{setIndex}}: {{team1Points}}:{{team2Points}}",
     "unknownTime": "Unbekannte Zeit",
     "autoWithMode": "Auto ({{mode}})",
     "alerts": {
@@ -1050,7 +1050,19 @@
     "nativeServerChange": "Server wechseln",
     "nativeOpenView": "Dieses Tablet verwenden als",
     "nativeReferee": "Schiedsrichter",
-    "nativeLivescore": "Live-Ergebnis"
+    "nativeLivescore": "Live-Ergebnis",
+    "done": "Fertig",
+    "scoring": "Schreiben",
+    "infoEyebrow": "Erklärung",
+    "showInfo": "Erklärung anzeigen",
+    "decrease": "{{label}} verringern",
+    "increase": "{{label}} erhöhen",
+    "clearAllTitle": "Cache und alle Einstellungen löschen?",
+    "clearCacheTitle": "Cache leeren?",
+    "backUp": "Sichern",
+    "iconCredits": "Icons",
+    "iconCreditsText": "Lucide (ISC) · Phosphor (MIT)",
+    "copyUrl": "Link kopieren"
   },
   "matchEnd": {
     "title": "Spiel beendet",
@@ -1191,7 +1203,8 @@
     "thankYouFeedback": "Vielen Dank für Ihr Feedback! Ihre Rückmeldung hilft dieses Tool zu verbessern.",
     "thankYouRequest": "Vielen Dank für Ihre Funktionsanfrage! Ich werde sie für zukünftige Updates berücksichtigen.",
     "fillRequired": "Bitte füllen Sie alle erforderlichen Felder aus.",
-    "sendError": "Nachricht konnte nicht gesendet werden. Bitte versuchen Sie es erneut oder senden Sie eine E-Mail direkt."
+    "sendError": "Nachricht konnte nicht gesendet werden. Bitte versuchen Sie es erneut oder senden Sie eine E-Mail direkt.",
+    "removeFile": "{{name}} entfernen"
   },
   "rosterSetup": {
     "title": "Kader",
@@ -1346,7 +1359,15 @@
     "serverNotResponding": "Server antwortet nicht",
     "retry": "Erneut versuchen",
     "noBackendConfigured": "Kein Backend-Server konfiguriert",
-    "invalidUrl": "Ungültige Server-URL"
+    "invalidUrl": "Ungültige Server-URL",
+    "role": {
+      "referee": "Schiedsrichter-Ansicht",
+      "bench_team1": "Bank Team 1",
+      "bench_team2": "Bank Team 2",
+      "livescore": "Livescore"
+    },
+    "showQR": "QR zeigen",
+    "scanToConnect": "Scannen zum Verbinden"
   },
   "livescore": {
     "title": "Live-Ergebnisse",
