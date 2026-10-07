@@ -12,11 +12,22 @@ const __dirname = dirname(__filename)
 const packageJson = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'))
 const appVersion = packageJson.version
 
+// Android app build (scripts/release-android.sh, the F-Droid recipe): the
+// WebView loads the bundled files, so no service worker (an old precache would
+// keep serving the previous version after an APK update), and the output goes
+// to dist-capacitor (capacitor.config.json webDir).
+const isCapacitor = process.env.CAPACITOR === 'true'
+
 export default defineConfig({
   // Set base from env for GitHub Pages project site deployments.
   // If deploying to a custom domain (CNAME), use '/'. Otherwise set to '/<repo-name>/'
   base: process.env.VITE_BASE_PATH || '/',
   publicDir: 'public_beach',
+  // Android app: no .env files, only the variables given on the command line.
+  // F-Droid builds the APK from source and checks it against the owner-signed
+  // one byte for byte, so a value from someone's local .env (e.g. a VITE_*
+  // backend URL) must not end up in the bundle.
+  envDir: isCapacitor ? false : undefined,
   optimizeDeps: {
     include: ['pdfjs-dist']
   },
@@ -26,6 +37,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      disable: isCapacitor,
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
       workbox: {
@@ -59,8 +71,8 @@ export default defineConfig({
         ]
       },
       manifest: {
-        name: process.env.VITE_APP_TITLE || 'Open eScoresheet',
-        short_name: 'eScoresheet',
+        name: process.env.VITE_APP_TITLE || 'OpenBeach eScoresheet',
+        short_name: 'OpenBeach',
         start_url: '.',
         display: 'standalone',
         background_color: '#ffffff',
@@ -93,6 +105,7 @@ export default defineConfig({
     },
   },
   build: {
+    ...(isCapacitor ? { outDir: 'dist-capacitor' } : {}),
     // Use safer build options to avoid eval in production
     minify: 'esbuild',
     target: 'es2015',
@@ -100,6 +113,7 @@ export default defineConfig({
       input: {
         main: './index.html',
         referee: './referee_beach.html',
+        livescore: './livescore_beach.html',
         scoresheet: './scoresheet_beach.html',
         scoresheetArchive: './scoresheet_archive_beach.html',
         admin: './admin_beach.html',

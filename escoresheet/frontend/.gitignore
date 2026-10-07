@@ -28,3 +28,6 @@ npm-debug.log*
 out/
 build/
 
+
+# Android app web bundle (CAPACITOR=true vite build)
+dist-capacitor/
