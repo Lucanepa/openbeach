@@ -10,6 +10,7 @@ import { Chip } from '../../ui/volleyui/Chip.jsx'
 import { confirmDialog, toast } from '../../ui/volleyui/uiStore.js'
 import AuthLayer from './AuthLayer_beach'
 import InviteCodeForm from './InviteCodeForm_beach'
+import ApprovalPinSection from './ApprovalPinSection_beach'
 import { displayedRoles } from '../../lib_beach/access_beach'
 
 /**
@@ -204,6 +205,9 @@ export default function ProfileModal({ open, onClose }) {
               </div>
             </section>
           )}
+
+          {/* Referees and scorers: the personal PIN to approve results with the account (OpenVolley 0fc2661a) */}
+          <ApprovalPinSection />
 
           {/* Name */}
           <form onSubmit={save} className="space-y-3" noValidate>
