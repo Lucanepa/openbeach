@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import jsPDF from 'jspdf';
 import OpenbeachScoresheet from './components_beach/eScoresheet_beach';
 // Opened as a popup, a desktop app window or the Android app's in-app view
-import { closeAppWindow, deliverPdfToOpener, getOpenerWindow, savePdfThroughApp } from '../src_beach/utils_beach/appWindowGuest_beach.js';
+import { closeAppWindow, deliverPdfToOpener, getOpenerWindow, savePdfThroughApp, reportPdfProgress, watchPdfWindowClose } from '../src_beach/utils_beach/appWindowGuest_beach.js';
+// The app's language (the same localStorage as the scorer page)
+import i18n from '../src_beach/i18n.js';
 // The desktop app's quit question says a PDF is still being saved here
 import { setPdfBusy } from '../src_beach/utils_beach/openAppWindow_beach.js';
 
@@ -13,16 +15,52 @@ const countPages = (): number => {
   return Math.max(count, 2); // At least 2 pages
 };
 
+const t = (key: string, opts?: Record<string, unknown>) => String(i18n.t(key, opts));
+
+/** The page's URL action: 'getBlob' (the match-end approval), 'save', 'print' or none (preview). */
+export const pageAction = (search = typeof window !== 'undefined' ? window.location.search : '') =>
+  new URLSearchParams(search).get('action');
+
+/** The progress line under "Generating…". */
+export function progressLabel(p: { step: string; page?: number; pages?: number; error?: string } | null) {
+  if (!p) return t('scoresheet.wait');
+  if (p.step === 'page') return t('scoresheet.page', { page: p.page, pages: p.pages });
+  if (p.step === 'finishing') return t('scoresheet.finishing');
+  if (p.step === 'sent') return t('scoresheet.sent');
+  if (p.step === 'failed') return t('scoresheet.pdfFailed', { error: p.error || '' });
+  return t('scoresheet.preparing');
+}
+
 export default function App({ matchData }: { matchData?: any }) {
+  // The match-end approval (action=getBlob) makes the PDF at once: the
+  // "Generating…" overlay is there from the first paint (no interactive
+  // preview for 2 s that closes under the scorer), without Download / zoom.
+  const approvalMode = pageAction() === 'getBlob';
   const [zoom, setZoom] = useState(1);
+  // The pages stay hidden until the first fit-to-window: no 100 % -> 125 % jump
+  const [fitted, setFitted] = useState(false);
+  const [savedNotice, setSavedNotice] = useState(false);
   const [isAutoFit, setIsAutoFit] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(2);
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [isPdfGenerating, setIsPdfGenerating] = useState(false);
-  const [pdfProgress, setPdfProgress] = useState('');
+  const [isPdfGenerating, setIsPdfGenerating] = useState(approvalMode);
+  const [pdfProgress, setPdfProgress] = useState<{ step: string; page?: number; pages?: number; error?: string } | null>(approvalMode ? { step: 'preparing' } : null);
+  // While the approval waits for this window: its heartbeat to the opener,
+  // and closing the window tells the opener at once (it then asks the scorer)
+  const approvalBusyRef = useRef(approvalMode);
+  const progressRef = useRef<{ page?: number; pages?: number }>({});
+  useEffect(() => {
+    if (!approvalMode) return undefined;
+    const stopWatch = watchPdfWindowClose(() => approvalBusyRef.current);
+    reportPdfProgress(progressRef.current);
+    const beat = setInterval(() => {
+      if (approvalBusyRef.current) reportPdfProgress(progressRef.current);
+    }, 1000);
+    return () => { clearInterval(beat); stopWatch(); };
+  }, [approvalMode]);
 
   // Update total pages after render
   useEffect(() => {
@@ -48,6 +86,8 @@ export default function App({ matchData }: { matchData?: any }) {
     // Use actual page dimensions
     const pageWidth = page1.offsetWidth;
     const pageHeight = page1.offsetHeight;
+
+    if (!pageWidth || !pageHeight || containerWidth <= 0 || containerHeight <= 0) return 1; // not laid out yet
 
     const scaleX = containerWidth / pageWidth;
     const scaleY = containerHeight / pageHeight;
@@ -76,6 +116,13 @@ export default function App({ matchData }: { matchData?: any }) {
 
     setCurrentPage(pageNum);
   }, [zoom, getPageElement]);
+
+  // The first fit before the pages are shown (no zoom jump)
+  useLayoutEffect(() => {
+    if (fitted) return;
+    setZoom(calculateAutoFitZoom());
+    setFitted(true);
+  }, [fitted, calculateAutoFitZoom]);
 
   // Auto-fit on mount and resize
   useEffect(() => {
@@ -284,7 +331,7 @@ export default function App({ matchData }: { matchData?: any }) {
   // Generate PDF using rasterizeHTML for all pages
   const handleSavePDF = async (returnBlob = false) => {
     setIsPdfGenerating(true);
-    setPdfProgress('Preparing...');
+    setPdfProgress({ step: 'preparing' });
     // the desktop app's quit question says a PDF is still being saved here
     setPdfBusy(true);
 
@@ -306,7 +353,9 @@ export default function App({ matchData }: { matchData?: any }) {
 
       for (let i = 0; i < state.pages.length; i++) {
         if (i > 0) pdf.addPage();
-        setPdfProgress(`Page ${i + 1} of ${state.pages.length}...`);
+        setPdfProgress({ step: 'page', page: i + 1, pages: state.pages.length });
+        progressRef.current = { page: i + 1, pages: state.pages.length };
+        if (returnBlob) reportPdfProgress(progressRef.current);
 
         const page = state.pages[i];
         const htmlContent = `<!DOCTYPE html>
@@ -331,29 +380,44 @@ export default function App({ matchData }: { matchData?: any }) {
       }
 
       restoreAfterCapture(state);
-      setPdfProgress('Finalizing...');
+      setPdfProgress({ step: 'finishing' });
       if (returnBlob) {
+        // delivered: closing the window from now on cancels nothing
+        approvalBusyRef.current = false;
         finishPDF(pdf, true);
+        // where window.close() does nothing (macOS app windows) the window
+        // stays: it must not keep saying "Generating…, closing cancels"
+        setPdfProgress({ step: 'sent' });
       } else {
         savePdf(pdf, generateFilename());
+        setSavedNotice(true);
+        setTimeout(() => setSavedNotice(false), 4000);
       }
     } catch (error) {
       console.error('Error generating PDF:', error);
       const message = error instanceof Error ? error.message : 'Unknown error';
       if (returnBlob && getOpenerWindow()) {
         // The approval waits for this window: say so at once (no blocking alert)
+        approvalBusyRef.current = false;
         deliverPdfToOpener({ error: message });
+        setPdfProgress({ step: 'failed', error: message });
       } else {
-        alert('Error generating PDF: ' + message);
+        alert(t('scoresheet.pdfFailed', { error: message }));
       }
     } finally {
-      setIsPdfGenerating(false);
-      setPdfProgress('');
       setPdfBusy(false);
+      // the approval window closes itself once the PDF is sent: the overlay
+      // stays until then (no flash of the interactive preview)
+      if (!returnBlob) {
+        setIsPdfGenerating(false);
+        setPdfProgress(null);
+      }
     }
   };
 
   const zoomPercentage = Math.round(zoom * 100);
+  // the approval's PDF went back (or its error did): nothing left to cancel
+  const pdfDone = pdfProgress?.step === 'sent' || pdfProgress?.step === 'failed';
 
   return (
     <div ref={containerRef} className="scoresheet-app h-screen flex flex-col bg-gray-200 overflow-hidden">
@@ -363,6 +427,7 @@ export default function App({ matchData }: { matchData?: any }) {
           <span className="text-sm font-medium mr-2">Beach Volleyball eScoresheet</span>
         </div>
 
+        {!approvalMode && (
         <div className="flex items-center gap-1">
           <button onClick={handlePrevPage} disabled={currentPage <= 1}
             className="px-2 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Previous page">
@@ -395,9 +460,10 @@ export default function App({ matchData }: { matchData?: any }) {
 
           <button onClick={() => handleSavePDF(false)} disabled={isPdfGenerating}
             className="px-3 py-1.5 rounded bg-green-600 hover:bg-green-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Download PDF">
-            {isPdfGenerating ? pdfProgress : 'Download PDF'}
+            {isPdfGenerating ? progressLabel(pdfProgress) : savedNotice ? `✓ ${t('scoresheet.pdfSaved')}` : t('scoresheet.downloadPdf')}
           </button>
         </div>
+        )}
       </div>
 
       {/* Scrollable content area */}
@@ -412,7 +478,8 @@ export default function App({ matchData }: { matchData?: any }) {
           style={{
             transform: `scale(${zoom})`,
             transformOrigin: 'top center',
-            transition: 'transform 0.2s ease-out',
+            transition: fitted ? 'transform 0.2s ease-out' : 'none',
+            visibility: fitted ? 'visible' : 'hidden',
             pointerEvents: 'none',
             userSelect: 'none',
           }}
@@ -426,18 +493,28 @@ export default function App({ matchData }: { matchData?: any }) {
       {isPdfGenerating && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.85)', zIndex: 99998,
+          // light, as the app (volleyui): no black flash when the window opens
+          backgroundColor: 'rgba(250, 250, 249, 0.97)', zIndex: 99998,
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           padding: '24px', textAlign: 'center'
         }}>
-          <div style={{ fontSize: '48px', marginBottom: '24px', animation: 'spin 1s linear infinite' }}>⏳</div>
+          {pdfDone ? (
+            <div style={{ fontSize: '48px', marginBottom: '24px', color: pdfProgress?.step === 'sent' ? '#047857' : '#b91c1c' }} aria-hidden="true">{pdfProgress?.step === 'sent' ? '✓' : '!'}</div>
+          ) : (
+            <div style={{ fontSize: '48px', marginBottom: '24px', animation: 'spin 1s linear infinite' }}>⏳</div>
+          )}
           <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-          <h2 style={{ color: 'white', fontSize: '24px', fontWeight: 'bold', marginBottom: '16px' }}>
-            Generating...
+          <h2 style={{ color: '#1c1917', fontSize: '24px', fontWeight: 'bold', marginBottom: '16px' }}>
+            {pdfProgress?.step === 'sent' ? t('scoresheet.sentTitle') : t('scoresheet.generating')}
           </h2>
-          <p style={{ color: '#d1d5db', fontSize: '16px', maxWidth: '400px' }}>
-            {pdfProgress || 'Please wait while the scoresheet is being converted.'}
+          <p role="status" aria-live="polite" style={{ color: '#57534e', fontSize: '16px', maxWidth: '400px' }}>
+            {progressLabel(pdfProgress)}
           </p>
+          {approvalMode && !pdfDone && (
+            <p style={{ color: '#b45309', fontSize: '15px', fontWeight: 600, maxWidth: '420px', marginTop: '16px' }}>
+              {t('scoresheet.closeCancels')}
+            </p>
+          )}
         </div>
       )}
     </div>

@@ -40,6 +40,44 @@ export async function savePdfThroughApp(blob, filename, win = window) {
 /** Messages to the window that asked for the PDF (MatchEnd's approval). */
 export const MSG_PDF_BLOB = 'pdfBlob'
 export const MSG_PDF_ERROR = 'pdfError'
+/** The heartbeat while the PDF is made: { page, pages } (scoresheetPdfRequest_beach.js). */
+export const MSG_PDF_PROGRESS = 'pdfProgress'
+
+/** Tells the opener the PDF is still being made (page n of m). */
+export function reportPdfProgress(progress = {}, win = window) {
+  const opener = getOpenerWindow(win)
+  if (!opener) return false
+  try {
+    opener.postMessage({ type: MSG_PDF_PROGRESS, page: progress.page ?? null, pages: progress.pages ?? null }, win.location.origin)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * While `isBusy()` (the PDF is being made), closing this window tells the
+ * opener at once ('pdfError', reason 'closed'), so the approval does not
+ * wait for a PDF that will never come. Returns the cleanup.
+ */
+export function watchPdfWindowClose(isBusy, win = window) {
+  let sent = false
+  const onLeave = () => {
+    if (sent || !isBusy()) return
+    const opener = getOpenerWindow(win)
+    if (!opener) return
+    sent = true
+    try {
+      opener.postMessage({ type: MSG_PDF_ERROR, reason: 'closed', message: 'The scoresheet window was closed' }, win.location.origin)
+    } catch { /* opener gone */ }
+  }
+  win.addEventListener('pagehide', onLeave)
+  win.addEventListener('beforeunload', onLeave)
+  return () => {
+    win.removeEventListener('pagehide', onLeave)
+    win.removeEventListener('beforeunload', onLeave)
+  }
+}
 
 /**
  * The end of a getBlob scoresheet (the match-end approval): hands the PDF to
@@ -54,7 +92,7 @@ export function deliverPdfToOpener(result, win = window) {
   const origin = win.location.origin
   try {
     if (result && 'arrayBuffer' in result) opener.postMessage({ type: MSG_PDF_BLOB, arrayBuffer: result.arrayBuffer, filename: result.filename }, origin)
-    else opener.postMessage({ type: MSG_PDF_ERROR, message: result?.error || 'PDF generation failed' }, origin)
+    else opener.postMessage({ type: MSG_PDF_ERROR, reason: 'failed', message: result?.error || 'PDF generation failed' }, origin)
   } catch { /* opener gone */ }
   setTimeout(() => closeAppWindow(win), 500)
   return true

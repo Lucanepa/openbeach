@@ -1290,7 +1290,23 @@
     "resign": "Signer à nouveau",
     "clearSignature": "Effacer",
     "signatureLocked": "Match approuvé ou clôturé : les signatures ne changent plus",
-    "signatureSaveFailed": "La signature n’a pas pu être enregistrée. Réessayez."
+    "signatureSaveFailed": "La signature n’a pas pu être enregistrée. Réessayez.",
+    "export": {
+      "cancel": "Annuler",
+      "retry": "Réessayer",
+      "approveWithoutPdf": "Approuver sans PDF",
+      "noPdfTitle": "Le PDF n'est pas prêt",
+      "reason": {
+        "closed": "La fenêtre de la feuille de match a été fermée avant que le PDF soit prêt.",
+        "stalled": "La fenêtre de la feuille de match ne répond plus.",
+        "timeout": "Le PDF a pris trop de temps.",
+        "blocked": "La fenêtre de la feuille de match n'a pas pu s'ouvrir.",
+        "failed": "La feuille de match n'a pas pu créer le PDF ({{error}})."
+      },
+      "cancelKeepsUnapproved": "Annuler laisse le match non approuvé. Approuver sans PDF l'approuve maintenant : enregistrez le PDF depuis la feuille de match plus tard.",
+      "page": "Page {{page}} sur {{pages}}",
+      "keepWindowOpen": "Laissez la fenêtre de la feuille de match ouverte jusqu'à ce que le PDF soit prêt."
+    }
   },
   "scoresheetPdf": {
     "zoomOut": "Réduire",
@@ -3016,5 +3032,18 @@
       "judgmentImpossible": "jugement impossible"
     },
     "bmpLeft": "Protocole de marque de balle ({{count}} restant(s))"
+  },
+  "scoresheet": {
+    "generating": "Création du PDF…",
+    "preparing": "Préparation…",
+    "page": "Page {{page}} sur {{pages}}",
+    "finishing": "Finalisation…",
+    "closeCancels": "Fermer cette fenêtre annule l'approbation du match.",
+    "wait": "Veuillez patienter pendant la conversion de la feuille de match.",
+    "downloadPdf": "Télécharger le PDF",
+    "pdfSaved": "PDF enregistré",
+    "pdfFailed": "Le PDF n'a pas pu être créé : {{error}}",
+    "sentTitle": "PDF prêt",
+    "sent": "Il a été transmis à la page de fin de match. Vous pouvez fermer cette fenêtre."
   }
 }

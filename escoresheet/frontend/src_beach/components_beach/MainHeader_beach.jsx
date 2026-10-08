@@ -218,6 +218,20 @@ export default function MainHeader({
     return () => window.removeEventListener('resize', updateViewportSize)
   }, [isEditing])
 
+  // The actions menu closes on a press anywhere else (it stayed open, sharp
+  // above the match-end export, with "Quit OpenBeach…" pressable, video 08:26)
+  useEffect(() => {
+    if (!actionsMenuOpen) return undefined
+    const onPointerDown = (e) => {
+      if (e.target?.closest?.('[data-ob-actions-menu]')) return
+      setActionsMenuOpen(false)
+      setLanguageMenuOpen(false)
+      setScaleMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown, true)
+    return () => document.removeEventListener('pointerdown', onPointerDown, true)
+  }, [actionsMenuOpen])
+
   // Close dashboard menu when clicking outside
   useEffect(() => {
     if (!dashboardMenuOpen) return
@@ -833,7 +847,7 @@ export default function MainHeader({
 
           {/* Compact Mode: Collapsible Actions Menu */}
           {isCompactMode ? (
-            <div style={{ position: 'relative' }}>
+            <div style={{ position: 'relative' }} data-ob-actions-menu="">
               <span className={KIT_SCOPE}>
                 <button
                   type="button"
@@ -919,7 +933,7 @@ export default function MainHeader({
               {fullscreenButton}
 
               {/* Unified Menu Button (hamburger) */}
-              <div style={{ position: 'relative' }}>
+              <div style={{ position: 'relative' }} data-ob-actions-menu="">
                 <span className={KIT_SCOPE}>
                   <button
                     type="button"
