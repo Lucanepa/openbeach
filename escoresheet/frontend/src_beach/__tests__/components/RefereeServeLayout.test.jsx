@@ -148,8 +148,18 @@ describe('Referee_beach: serve ball and SERVE block layout', () => {
   it('reserves a SERVE slot on both sides of the score and shows the block on the serving side', async () => {
     await mount('team1')
     const row = document.querySelector('[data-diag="referee-score"]')
+    // The score's column first (auto, never squeezed), the two equal slots
+    // share what is left up to their width: the block never covers the score
     const slotWidth = `min(${REF_SERVE_SLOT_VMIN * 10}px, ${REF_SERVE_SLOT_MAX})`
-    expect(row.dataset.columns).toBe(`${slotWidth} minmax(0, 1fr) ${slotWidth}`)
+    expect(row.dataset.columns).toBe(`minmax(0, ${slotWidth}) auto minmax(0, ${slotWidth})`)
+    const digits = row.querySelector('[data-score-digits]')
+    expect(digits.style.minWidth).toBe('min-content')
+    // Two digits a side reserved, whatever the score (nothing moves at 10)
+    const [leftScore, , rightScore] = digits.children
+    expect(leftScore.style.minWidth).toBe('calc(2ch + 5px)')
+    expect(rightScore.style.minWidth).toBe('calc(2ch + 5px)')
+    // The block's text is sized to the slot's width too
+    expect(slot('left').style.containerType).toBe('inline-size')
     expect(slot('left')).not.toBeNull()
     expect(slot('right')).not.toBeNull()
     // The slots are the row's first and last cells, the score between them
@@ -175,7 +185,7 @@ describe('Referee_beach: serve ball and SERVE block layout', () => {
     // The 1st referee sees the court from the other side
     const row = document.querySelector('[data-diag="referee-score"]')
     const columns = row.dataset.columns
-    expect(columns).toMatch(/^min\(.+\) minmax\(0, 1fr\) min\(.+\)$/)
+    expect(columns).toMatch(/^minmax\(0, min\(.+\)\) auto minmax\(0, min\(.+\)\)$/)
     fireEvent.click(screen.getByRole('button', { name: /^1 / }))
     await settle()
     expect(block('left')).not.toBeNull()
@@ -188,11 +198,12 @@ describe('Referee_beach: serve ball and SERVE block layout', () => {
   it('the SERVE number fits the score row (never makes it taller)', async () => {
     rowHeight = 114
     await mount('team1')
-    await waitFor(() => expect(px(block('left').querySelector('[data-serve-number]').style.fontSize)).toBeGreaterThan(0))
+    await waitFor(() => expect(px(block('left').querySelector('[data-serve-number]').dataset.maxPx)).toBeGreaterThan(0))
     const row = document.querySelector('[data-diag="referee-score"]')
     const b = block('left')
-    const number = px(b.querySelector('[data-serve-number]').style.fontSize)
-    const label = px(b.querySelector('span > span').style.fontSize)
+    // The largest the text gets (the slot's width can make it smaller)
+    const number = px(b.querySelector('[data-serve-number]').dataset.maxPx)
+    const label = px(b.querySelector('[data-serve-label]').dataset.maxPx)
     const used = number * 0.95 + label + px(b.style.gap) + 2 * px(b.style.paddingTop) + 2 * px(b.style.borderTopWidth)
     expect(used).toBeLessThanOrEqual(rowHeight - 2 * px(row.style.paddingTop))
     // ... and bigger than the old 6 vmin box

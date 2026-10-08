@@ -23,6 +23,12 @@ export const REF_BALL_GAP_VMIN = 0.8
 export const REF_SERVE_SLOT_VMIN = 22
 export const REF_SERVE_SLOT_MAX = '24%'
 const SERVE_ROW_PAD_VMIN = 0.6
+// The block's text never wider than its slot (share of the slot's width): a
+// two-digit number; the label by its length ("AUFSCHLAG" with its
+// serve-order badge still fits), so a short one keeps its full size
+const SERVE_NUMBER_CQW = 56
+const SERVE_LABEL_CQW_PER_CHAR = 96
+const SERVE_ORDER_CQW = 8
 import { ConnectionManager } from '../utils_beach/connectionManager_beach'
 import ConnectionStatus from './ConnectionStatus_beach'
 import WsDebugOverlay from './WsDebugOverlay_beach'
@@ -2024,9 +2030,13 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     return { number: data?.currentSet?.serverNumber || '', order: null }
   }
 
-  // Width of each SERVE slot beside the big score (reserved on both sides)
+  // Width of each SERVE slot beside the big score (reserved on both sides).
+  // The score's column comes first (auto: two digits a side are reserved,
+  // whatever the score), the two slots share what is left, up to their
+  // width: on a large screen in the 800 px column the score keeps its size
+  // and the block narrows, never over the score.
   const serveSlotWidth = `min(${vmin(REF_SERVE_SLOT_VMIN)}px, ${REF_SERVE_SLOT_MAX})`
-  const scoreRowColumns = `${serveSlotWidth} minmax(0, 1fr) ${serveSlotWidth}`
+  const scoreRowColumns = `minmax(0, ${serveSlotWidth}) auto minmax(0, ${serveSlotWidth})`
   // SERVE block sizes: the number as big as the row's height allows (it
   // never makes the row taller), at most vmin(12)
   const serveBorder = Math.max(2, vmin(0.3))
@@ -2044,13 +2054,16 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     const serving = side === 'left' ? leftServing : rightServing
     const server = serving ? servingPlayerOf(side === 'left' ? leftLineup : rightLineup) : null
     const label = t('scoreboard.serve', 'Serve')
+    const labelCqw = SERVE_LABEL_CQW_PER_CHAR / Math.max(5, String(label).length)
     return (
       <div data-serve-slot={side} aria-hidden={serving ? undefined : true} style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         minWidth: 0,
-        minHeight: 0
+        minHeight: 0,
+        // The block's text is sized to the slot's width too (cqw)
+        containerType: 'inline-size'
       }}>
         {serving && (
           <div
@@ -2066,30 +2079,36 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
               alignItems: 'center',
               justifyContent: 'center',
               gap: vmin(0.2),
-              padding: `${vmin(0.3)}px ${vmin(0.8)}px`,
+              paddingTop: vmin(0.3),
+              paddingBottom: vmin(0.3),
+              paddingLeft: `min(${vmin(0.8)}px, 4cqw)`,
+              paddingRight: `min(${vmin(0.8)}px, 4cqw)`,
               background: '#ecfdf5',
               border: `${serveBorder}px solid #10b981`,
               borderRadius: vmin(1.2),
               overflow: 'hidden'
             }}
           >
-            <span style={{ display: 'flex', alignItems: 'center', gap: vmin(0.6), lineHeight: 1, maxWidth: '100%', minWidth: 0 }}>
-              <span style={{ fontSize: serveLabelSize, fontWeight: 800, color: 'var(--ov-success)', textTransform: 'uppercase', letterSpacing: '0.02em', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: `min(${vmin(0.6)}px, 3cqw)`, lineHeight: 1, maxWidth: '100%', minWidth: 0 }}>
+              <span data-serve-label="" data-max-px={serveLabelSize} style={{ fontSize: `min(${serveLabelSize}px, ${labelCqw.toFixed(2)}cqw)`, fontWeight: 800, color: 'var(--ov-success)', textTransform: 'uppercase', letterSpacing: '0.02em', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
               {server.order && (
                 <span data-serve-order="" style={{
                   flexShrink: 0,
                   background: 'rgba(15, 23, 42, 0.95)',
                   color: '#fff',
                   borderRadius: vmin(0.5),
-                  padding: `${vmin(0.2)}px ${vmin(0.6)}px`,
-                  fontSize: vmin(1.9),
+                  paddingTop: vmin(0.2),
+                  paddingBottom: vmin(0.2),
+                  paddingLeft: `min(${vmin(0.6)}px, 3cqw)`,
+                  paddingRight: `min(${vmin(0.6)}px, 3cqw)`,
+                  fontSize: `min(${vmin(1.9)}px, ${SERVE_ORDER_CQW}cqw)`,
                   fontWeight: 700,
                   lineHeight: 1
                 }}>{server.order}</span>
               )}
             </span>
-            <span data-serve-number="" style={{
-              fontSize: serveNumberSize,
+            <span data-serve-number="" data-max-px={serveNumberSize} style={{
+              fontSize: `min(${serveNumberSize}px, ${SERVE_NUMBER_CQW}cqw)`,
               fontWeight: 800,
               lineHeight: 0.95,
               color: 'var(--ov-success)',
@@ -2574,12 +2593,13 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
               side); the serving team's slot shows the SERVE block */}
           {renderServeSlot('left')}
 
-          {/* Score section - centred between the two SERVE slots */}
-          <div style={{
+          {/* Score section - centred between the two SERVE slots; two
+              digits a side are always reserved (nothing moves at 10) */}
+          <div data-score-digits="" style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            minWidth: 0,
+            minWidth: 'min-content',
             gap: 0
           }}>
             <span style={{
@@ -2589,6 +2609,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
               lineHeight: 1,
               fontVariantNumeric: 'tabular-nums',
               flex: '1 1 0',
+              boxSizing: 'border-box',
+              minWidth: `calc(2ch + ${vmin(0.5)}px)`,
               textAlign: 'right',
               paddingRight: vmin(0.5)
             }}>
@@ -2604,6 +2626,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
               lineHeight: 1,
               fontVariantNumeric: 'tabular-nums',
               flex: '1 1 0',
+              boxSizing: 'border-box',
+              minWidth: `calc(2ch + ${vmin(0.5)}px)`,
               textAlign: 'left',
               paddingLeft: vmin(0.5)
             }}>
