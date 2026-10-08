@@ -15,7 +15,7 @@ vi.mock('../../contexts_beach/AlertContext_beach', () => ({ useAlert: () => ({ s
 vi.mock('../../contexts_beach/ScaleContext_beach', () => ({ useScale: () => ({ scaleFactor: 1, vmin: (v) => v * 10 }) }))
 vi.mock('../../contexts_beach/LoggingContext_beach', () => ({ useComponentLogging: () => ({ logHandler: () => {} }) }))
 vi.mock('../../utils_beach/comprehensiveLogger_beach', () => ({ exportLogsAsNDJSON: async () => '' }))
-vi.mock('../../utils_beach/backendConfig_beach', () => ({ isBackendAvailable: () => false }))
+vi.mock('../../utils_beach/backendConfig_beach', async (orig) => ({ ...(await orig()), isBackendAvailable: () => false, getCloudApiUrl: () => null }))
 
 // The scoresheet window: each open gets a fresh fake window the test can close
 const opened = []

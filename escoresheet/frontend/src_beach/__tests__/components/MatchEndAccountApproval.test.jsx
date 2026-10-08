@@ -284,6 +284,8 @@ describe('MatchEnd_beach: approve with an account', () => {
     const approve = screen.getByRole('button', { name: 'Confirm and approve' })
     await waitFor(() => expect(approve).toBeEnabled())
     await click(approve)
+    // The scoresheet window cannot open here: the scorer approves without the PDF
+    await click(await screen.findByRole('button', { name: 'Approve without PDF' }))
     let job
     await waitFor(async () => {
       job = (await db.sync_queue.toArray()).find(j => j.payload?.status === 'approved')
