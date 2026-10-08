@@ -32,7 +32,7 @@ export default function SignaturePad({ open, onClose, onSave, title, existingSig
   const phoneLocked = phoneOffered && !!phone.locked
   // Locked while on the phone view: unmounting PhoneSignPanel closes its session
   const showPhone = mode === 'phone' && phoneOffered && !phoneLocked
-  const { transports } = usePhoneSignTransports(open && phoneOffered && !phoneLocked, { hallIp })
+  const { transports, loading: phoneChecking } = usePhoneSignTransports(open && phoneOffered && !phoneLocked, { hallIp })
 
   // Every opening starts on the pad, and a lock sends it back there
   useEffect(() => {
@@ -220,7 +220,8 @@ export default function SignaturePad({ open, onClose, onSave, title, existingSig
 
   const phoneReason = phoneLocked
     ? (phone.lockedReason || t('matchEnd.signatureLocked'))
-    : phoneOffered && !transports.default ? t(REASON_KEYS[transports.reason] || REASON_KEYS.none) : null
+    // no reason while the local server check runs: it may yet offer the hall network
+    : phoneOffered && !phoneChecking && !transports.default ? t(REASON_KEYS[transports.reason] || REASON_KEYS.none) : null
 
   // volleyui decision dialog (above the legacy header like the modal it
   // replaces; a backdrop tap does not close it, so a stroke near the edge
