@@ -477,6 +477,9 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   useEffect(() => { timeoutModalRef.current = timeoutModal }, [timeoutModal])
   useEffect(() => { ttoModalRef.current = ttoModal }, [ttoModal])
   useEffect(() => { scorerAttentionTriggerRef.current = scorerAttentionTrigger }, [scorerAttentionTrigger])
+  // The break between two sets runs on this screen (set by the effect after
+  // isBetweenSets): every live-state push in it keeps the break
+  const breakRunningRef = useRef(false)
 const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { countdown: number, started: boolean, finished?: boolean } | null
   const countdownDismissedRef = useRef(false) // Track if countdown was manually dismissed
   const setEndModalDismissedRef = useRef(null) // Track setIndex where set end modal was dismissed via undo
@@ -1204,6 +1207,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     const timeoutModal = timeoutModalRef.current
     const ttoModal = ttoModalRef.current
     const scorerAttentionTrigger = scorerAttentionTriggerRef.current
+    // The break between sets goes on after the set end's own push (as
+    // OpenVolley's keepInterval): a push in it (an undo, the set 3 toss, a
+    // sanction) keeps it. It needed the match status 'interval', which this
+    // screen never writes, so every later push ended the break on the
+    // referee and the livescore. Not the pushes that end it.
+    const keepInterval = breakRunningRef.current && !['set_end', 'end_interval', 'set_start'].includes(eventType)
 
     // Always broadcast locally (works offline, no Supabase needed)
     broadcastToScoreboard(cachedSnapshot)
@@ -1236,8 +1245,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       }
       if (!supabaseMatchId) return
 
-      // Use cached snapshot if provided, otherwise fetch/compute
-      let snapshot = cachedSnapshot
+      // Use cached snapshot if provided, otherwise fetch/compute. In the
+      // break: fresh, the coming set's (the set end created it; the last
+      // event's snapshot can be of the set that ended)
+      let snapshot = keepInterval ? await captureFullStateSnapshot() : cachedSnapshot
       if (!snapshot) {
         if (eventType?.startsWith('manual_')) {
           // Manual change - must capture fresh to reflect the change
@@ -1260,11 +1271,22 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const snapshotSet = match?.status === 'interval'
         ? await db.sets.where('matchId').equals(matchId).and(s => s.index === snapshot.currentSetIndex).first()
         : null
-      const isSetInterval = isLiveSetInterval({
+      const isSetInterval = !keepInterval && isLiveSetInterval({
         eventType,
         matchStatus: match?.status,
         snapshotSetFinished: snapshotSet?.finished === true
       })
+      // The break's start: the set end's confirmation (its set_end event, as
+      // the screen's countdown; else the set's end time), so the referee's
+      // countdown runs on instead of starting again
+      let keptIntervalStartedAt = null
+      if (keepInterval) {
+        const previousSet = await db.sets.where('matchId').equals(matchId).and(s => s.index === snapshot.currentSetIndex - 1).first()
+        const setEndEvent = previousSet && (await db.events.where('matchId').equals(matchId).toArray())
+          .filter(e => e.type === 'set_end' && e.setIndex === previousSet.index)
+          .sort((a, b) => (b.seq || 0) - (a.seq || 0))[0]
+        keptIntervalStartedAt = setEndEvent?.ts || previousSet?.endTime || null
+      }
       const isTimeout = eventType === 'timeout' || (eventType !== 'end_timeout' && timeoutModal !== null)
       const isTto = eventType !== 'end_tto' && (eventType === 'technical_to' || eventType === 'tto_start' || (ttoModal !== null && ttoModal.started))
 
@@ -1316,7 +1338,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       let matchStatus = 'in_progress'
       if (isMatchFinished) matchStatus = 'ended'
       else if (isTimeout) matchStatus = 'timeout'
-      else if (isSetInterval) matchStatus = 'interval'
+      else if (isSetInterval || keepInterval) matchStatus = 'interval'
 
       // The side team A plays the next set on (the match's end: the last
       // set's), by the scorer's own rule (courtSides_beach): the teams stay
@@ -1407,8 +1429,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         timeout_started_at: isTimeout ? (timeoutModal?.startedAt || timeoutStartedAt) : null,
         tto_active: isTto,
         tto_started_at: isTto ? ttoStartedAt : null,
-        set_interval_active: isSetInterval,
-        set_interval_started_at: isSetInterval ? (match?.intervalStartedAt || intervalStartedAt) : null,
+        set_interval_active: isSetInterval || (keepInterval && !isMatchFinished),
+        set_interval_started_at: isSetInterval
+          ? (match?.intervalStartedAt || intervalStartedAt)
+          : (keepInterval && !isMatchFinished ? keptIntervalStartedAt : null),
         match_status: matchStatus,
         scorer_attention_trigger: scorerAttentionTrigger,
         // Match metadata (from IndexedDB match record)
@@ -1972,6 +1996,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
     return !hasSetStarted
   }, [data?.sets, data?.set, data?.events])
+
+  // The break runs while the screen is between sets with its countdown on
+  // (at 0 it waits for "End set interval"; ended or run out: null)
+  useEffect(() => {
+    breakRunningRef.current = isBetweenSets && betweenSetsCountdown !== null
+  }, [isBetweenSets, betweenSetsCountdown])
 
   // Start between-sets countdown when we detect we're between sets
   useEffect(() => {

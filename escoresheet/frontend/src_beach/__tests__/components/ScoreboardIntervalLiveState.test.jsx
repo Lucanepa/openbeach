@@ -1,9 +1,12 @@
-// Undoing the set 3 coin toss, what leaves the scorer's device: the live
-// state the referee and the livescore read after the undo is set 3 with the
-// sides from before the toss (the undo restored set 2's snapshot: set 2 reopened
-// here, the live state back in set 2 at 15:21), and no sync job reopens set 2
-// in the cloud. On the real scoring screen over the app's Dexie database
-// (fake IndexedDB), the backend on, its live-state writes recorded.
+// The live state during the break between two sets. set_interval_active was
+// true only on the set end's own push: it needed the match status
+// 'interval', which the scorer never writes, so every later push in the
+// break (an undo, the set 3 toss) told the referee and the livescore the
+// break was over (found by a check, 2026-10-09). Every push while the
+// scorer's interval runs now keeps it, with the set end's start time, as
+// OpenVolley's set 5 setup pushes do (keepInterval).
+// On the real scoring screen over the app's Dexie database (fake IndexedDB),
+// the backend on, its live-state writes recorded.
 import '../helpers/fakeIndexedDb'
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest'
 import { render, fireEvent, waitFor, cleanup } from '@testing-library/react'
@@ -73,8 +76,10 @@ const bAll = (text) => [...document.querySelectorAll('button')].filter(b => b.te
 const toss = (label) => document.querySelector(`[data-testid="set3-toss-${label}"]`)
 const liveStates = () => upserts.filter(u => u.table === 'match_live_state').map(u => u.row)
 
-describe('Scoreboard_beach: undoing the set 3 coin toss, the live state and the sync queue', () => {
-  it('the live state after the undo is set 3 with the sides from before the toss; no job reopens set 2', async () => {
+const liveRows = (type) => liveStates().filter(r => r.last_event_type === type)
+
+describe('Scoreboard_beach: the live state keeps the break between sets', () => {
+  it('set 2 won, the toss, its undo: the undo\'s push keeps the break (set 3, 0:0, the set end\'s start time); End set interval ends it', async () => {
     const t1 = await db.teams.add({ name: 'Alpha / Beta' })
     const t2 = await db.teams.add({ name: 'Gamma / Delta' })
     await db.players.bulkAdd([
@@ -84,8 +89,8 @@ describe('Scoreboard_beach: undoing the set 3 coin toss, the live state and the 
     const start = new Date(Date.now() - 2400000).toISOString()
     const start2 = new Date(Date.now() - 1200000).toISOString()
     const matchId = await db.matches.add({
-      team1Id: t1, team2Id: t2, status: 'live', test: false, seed_key: 'test-seed-toss',
-      externalId: '11111111-2222-4333-8444-555555555556',
+      team1Id: t1, team2Id: t2, status: 'live', test: false, seed_key: 'test-seed-break',
+      externalId: '11111111-2222-4333-8444-555555555557',
       firstServe: 'team1', coinTossTeamA: 'team1', coinTossTeamB: 'team2', team1FirstServe: 1, team2FirstServe: 1,
       setLeftTeamOverrides: { 1: 'A', 2: 'A' }
     })
@@ -111,36 +116,31 @@ describe('Scoreboard_beach: undoing the set 3 coin toss, the live state and the 
     await waitFor(() => expect(button('Confirm')).toBeTruthy(), { timeout: 5000 })
     fireEvent.click(button('Confirm'))
     await waitFor(() => expect(toss('A')).toBeTruthy(), { timeout: 8000 })
+    await waitFor(() => expect(liveRows('set_end').length).toBeGreaterThan(0), { timeout: 5000 })
+    const setEnd = liveRows('set_end').at(-1)
+    expect(setEnd).toMatchObject({ set_interval_active: true, current_set: 3 })
     await settle()
 
-    // the toss (B), sides swapped by the winner
+    // the toss, then its undo: both in the break
     fireEvent.click(toss('B'))
     await waitFor(() => expect(button('Switch sides')).toBeTruthy(), { timeout: 5000 })
     await settle()
-    fireEvent.click(button('Switch sides'))
-    await waitFor(async () => expect((await db.matches.get(matchId)).set3LeftTeam).toBe('B'))
-    await settle()
-
-    const jobsBefore = await db.sync_queue.count()
     upserts.length = 0
     fireEvent.click(button('Undo'))
     await waitFor(() => expect(bAll('Undo').length).toBeGreaterThan(1))
     fireEvent.click(bAll('Undo').at(-1))
     await waitFor(() => expect(toss('A')).toBeTruthy(), { timeout: 5000 })
-    await waitFor(() => expect(liveStates().length).toBeGreaterThan(0), { timeout: 5000 })
+    await waitFor(() => expect(liveRows('undo').length).toBeGreaterThan(0), { timeout: 5000 })
+    const undo = liveRows('undo').at(-1)
+    expect(undo).toMatchObject({ set_interval_active: true, match_status: 'interval', current_set: 3, points_a: 0, points_b: 0, sets_won_a: 1, sets_won_b: 1 })
+    // the same break as the set end's: the referee's countdown does not restart
+    expect(Math.abs(Date.parse(undo.set_interval_started_at) - Date.parse(setEnd.set_interval_started_at))).toBeLessThan(2000)
     await settle()
 
-    // the live state: set 3, 0:0, A on the left (set 2's end sides again),
-    // still in the break (ScoreboardIntervalLiveState)
-    const state = liveStates().at(-1)
-    expect(state.set_interval_active).toBe(true)
-    expect(state.current_set).toBe(3)
-    expect([state.points_a, state.points_b]).toEqual([0, 0])
-    expect(state.side_a).toBe('left')
-    // no job puts set 2 back to "not finished" in the cloud
-    const newJobs = (await db.sync_queue.toArray()).slice(jobsBefore)
-    expect(newJobs.filter(j => j.resource === 'set' && j.payload?.index === 2 && j.payload?.finished === false)).toEqual([])
-    expect((await db.sets.where({ matchId }).toArray()).find(s => s.index === 2).finished).toBe(true)
+    // End set interval: the break is over
+    fireEvent.click(button('End set interval'))
+    await waitFor(() => expect(liveRows('end_interval').length).toBeGreaterThan(0), { timeout: 5000 })
+    expect(liveRows('end_interval').at(-1)).toMatchObject({ set_interval_active: false, match_status: 'in_progress' })
     cleanup()
   }, 60000)
 })
