@@ -220,7 +220,7 @@ export default function ScoreboardOptionsModal({
   const modeDescriptions = {
     desktop: t('options.desktopDesc'),
     tablet: t('options.tabletDesc'),
-    smartphone: t('options.smartphoneDesc')
+    phone: t('options.phoneDesc')
   }
 
   return (
@@ -608,11 +608,11 @@ export default function ScoreboardOptionsModal({
                 <InfoDot title={t('options.screenModeInfo')} />
               </div>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {['auto', 'desktop', 'tablet', 'smartphone'].map(mode => (
+                {['auto', 'desktop', 'tablet', 'phone'].map(mode => (
                   <button
                     key={mode}
                     onClick={() => {
-                      if (mode === 'tablet' || mode === 'smartphone') {
+                      if (mode === 'tablet') {
                         enterDisplayMode(mode)
                         return
                       }

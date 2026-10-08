@@ -1,0 +1,156 @@
+/**
+ * Pure helpers of the phone scoring view (PhoneScoreboard_beach.jsx): when
+ * the phone layout is on, and which events make its "last actions" list.
+ * Display only: no scoring rule lives here. Ported from OpenVolley
+ * src/components/scoreboard/phoneLayout.js (feat/phone-scorer).
+ */
+
+/** Viewports narrower than this, held upright, get the phone layout (CSS px). */
+export const PHONE_MAX_WIDTH = 600
+
+/**
+ * The stored display mode, read safely. 'smartphone' is the name the option
+ * had before the phone layout existed (it changed nothing on the scoring
+ * screen): it is the Phone mode now.
+ * @param {string|null|undefined} mode
+ * @returns {'auto'|'desktop'|'tablet'|'phone'}
+ */
+export function normaliseDisplayMode(mode) {
+  if (mode === 'smartphone') return 'phone'
+  return mode === 'desktop' || mode === 'tablet' || mode === 'phone' ? mode : 'auto'
+}
+
+/** The display mode the scorer chose (localStorage 'displayMode'), 'auto' by default. */
+export function readStoredDisplayMode() {
+  try {
+    return normaliseDisplayMode(localStorage.getItem('displayMode'))
+  } catch {
+    return 'auto'
+  }
+}
+
+/**
+ * The display mode the screen size asks for (the "auto" choice of the
+ * display-mode option, as the options show it):
+ * - 'phone': a portrait viewport narrower than PHONE_MAX_WIDTH;
+ * - 'tablet': up to 1024px wide;
+ * - 'desktop': everything else.
+ * @param {{ width: number, height: number }} size
+ * @returns {'phone'|'tablet'|'desktop'}
+ */
+export function detectDisplayMode({ width, height }) {
+  if (height > width && width < PHONE_MAX_WIDTH) return 'phone'
+  if (width <= 1024) return 'tablet'
+  return 'desktop'
+}
+
+/**
+ * True when the scoring screen shows the phone layout: the Phone display
+ * mode, or the automatic mode on a portrait viewport under PHONE_MAX_WIDTH.
+ * @param {string|null} displayMode 'auto' | 'desktop' | 'tablet' | 'phone' (null: 'auto')
+ * @param {{ width: number, height: number }} size the viewport (CSS px)
+ */
+export function phoneLayoutActive(displayMode, size) {
+  const mode = normaliseDisplayMode(displayMode)
+  if (mode === 'phone') return true
+  return mode === 'auto' && detectDisplayMode(size) === 'phone'
+}
+
+/**
+ * True for a phone-sized screen (its short side under PHONE_MAX_WIDTH),
+ * whichever way it is held: such a device is not locked to landscape on the
+ * scoring screen in the automatic mode, so it can be turned upright for the
+ * phone layout.
+ * @param {{ width?: number, height?: number }} [screenSize] window.screen
+ */
+export function isPhoneScreen(screenSize = (typeof window !== 'undefined' ? window.screen : null)) {
+  const w = Number(screenSize?.width) || 0
+  const h = Number(screenSize?.height) || 0
+  if (!w || !h) return false
+  return Math.min(w, h) < PHONE_MAX_WIDTH
+}
+
+/**
+ * True while the scoring screen keeps its phone layout: whenever it shows it
+ * (phoneLayoutActive), and on a phone in the automatic mode turned sideways.
+ * Turning the phone must not take the scoring screen down (it would lose a
+ * running time-out countdown or an open dialog): it stays, under a notice to
+ * hold the phone upright.
+ * @param {string|null} displayMode
+ * @param {{ width: number, height: number }} size the viewport (CSS px)
+ * @param {{ width?: number, height?: number }} [screenSize] window.screen
+ */
+export function phoneLayoutKept(displayMode, size, screenSize) {
+  if (phoneLayoutActive(displayMode, size)) return true
+  return normaliseDisplayMode(displayMode) === 'auto' && isPhoneScreen(screenSize)
+}
+
+/**
+ * True when the phone layout is kept but the phone is held sideways: the
+ * scoring screen shows a notice to turn it upright over the phone layout.
+ * @param {string|null} displayMode
+ * @param {{ width: number, height: number }} size the viewport (CSS px)
+ * @param {{ width?: number, height?: number }} [screenSize] window.screen
+ */
+export function phoneHeldSideways(displayMode, size, screenSize) {
+  return !phoneLayoutActive(displayMode, size) && phoneLayoutKept(displayMode, size, screenSize)
+}
+
+const isSubEvent = (event) => {
+  const seq = event.seq || 0
+  return seq !== Math.floor(seq)
+}
+
+const eventTime = (event) => (typeof event.ts === 'number' ? event.ts : new Date(event.ts).getTime())
+
+/**
+ * The newest `count` actions of the current set, newest first, as the
+ * scoring screen's "Last action" box picks them: main events only (no N.1
+ * sub-events), no rally start or replay, line-ups only when initial or from a
+ * substitution, and only events `describe` can word.
+ * @param {Array<object>} events every event of the match
+ * @param {number} setIndex the current set
+ * @param {(event: object) => string|null} describe the screen's getActionDescription
+ * @param {number} [count]
+ * @returns {Array<{ id: any, seq: number, text: string }>}
+ */
+export function recentActions(events, setIndex, describe, count = 3) {
+  if (!Array.isArray(events) || !setIndex) return []
+  const sorted = events
+    .filter(e => e.setIndex === setIndex)
+    .sort((a, b) => {
+      const aSeq = a.seq || 0
+      const bSeq = b.seq || 0
+      if (aSeq !== 0 || bSeq !== 0) return bSeq - aSeq
+      return eventTime(b) - eventTime(a)
+    })
+  const out = []
+  for (const e of sorted) {
+    if (out.length >= count) break
+    if (isSubEvent(e)) continue
+    if (e.type === 'rally_start' || e.type === 'replay') continue
+    if (e.type === 'lineup' && e.payload?.isInitial !== true && e.payload?.fromSubstitution !== true) continue
+    const text = describe(e)
+    if (!text || text === 'Unknown action') continue
+    out.push({ id: e.id ?? `${e.type}-${e.seq}`, seq: e.seq, text })
+  }
+  return out
+}
+
+/**
+ * A light tint of a colour on white ('#rrggbb' in, '#rrggbb' out), for the
+ * serving team's score card and the team-action buttons. Anything unreadable
+ * gives null.
+ * @param {string} hex
+ * @param {number} amount 0..1, share of the colour
+ */
+export function tintOf(hex, amount = 0.1) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim())
+  if (!m) return null
+  const n = parseInt(m[1], 16)
+  const mix = (c) => Math.round(255 + (c - 255) * amount)
+  const r = mix((n >> 16) & 255)
+  const g = mix((n >> 8) & 255)
+  const b = mix(n & 255)
+  return `#${[r, g, b].map(v => v.toString(16).padStart(2, '0')).join('')}`
+}

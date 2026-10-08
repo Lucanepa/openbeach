@@ -53,6 +53,9 @@ describe('the grouped menu in MenuList_beach', () => {
 
   it('the Scoreboard builds its Menu from the groups', () => {
     const sb = readFileSync(resolve(__dirname, '../../components_beach/Scoreboard_beach.jsx'), 'utf8')
-    expect(sb).toContain('items={toMenuListItems(matchMenuSections(t, {')
+    // one grouped menu for the toolbar's Menu and the phone layout's sheet
+    expect(sb).toContain('const matchMenu = matchMenuSections(t, {')
+    expect(sb).toContain('items={toMenuListItems(matchMenu)}')
+    expect(sb).toMatch(/\{matchMenu\.map\(section =>/)
   })
 })

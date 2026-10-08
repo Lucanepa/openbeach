@@ -41,9 +41,11 @@ import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot } from '../utils_beach/stateSnapshot_beach'
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
 import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
-import { TTO_TOTAL, courtChangeEvery, hasTechnicalTimeout } from '../utils_beach/courtRhythm_beach'
+import { TTO_TOTAL, courtChangeEvery, hasTechnicalTimeout, nextCourtEvents } from '../utils_beach/courtRhythm_beach'
+import PhoneScoreboard from './scoreboard/PhoneScoreboard_beach.jsx'
+import { detectDisplayMode, isPhoneScreen, normaliseDisplayMode, phoneHeldSideways, phoneLayoutActive, readStoredDisplayMode, recentActions } from './scoreboard/phoneLayout_beach'
 import { defaultSetStartTime, scheduledClock, withActualStartTimeRemark, actualStartTimeLine, startScheduleOf, typedStartNear } from '../utils_beach/setStartTime_beach'
-import { withoutAutoRemarks, errorText as correctionErrorText } from '../utils_beach/corrections_beach'
+import { withoutAutoRemarks, errorText as correctionErrorText, pointsToWin as setPointsToWin } from '../utils_beach/corrections_beach'
 import { correctSetTimes } from '../utils_beach/applyCorrectionPlan_beach'
 import { cloudSyncWaitNow } from '../utils_beach/cloudStatus_beach'
 import { formatCourtScore } from '../utils_beach/scoreText_beach'
@@ -68,7 +70,7 @@ import { ChevronDown, ChevronUp, Ban, Expand, IdCard, KeyRound, ListChecks, Menu
 import { cn } from '../ui/volleyui/cn.js'
 import { FOCUS_RING } from '../ui/volleyui/Button.jsx'
 import { AppSpinner } from '../ui/volleyui/AppSpinner.jsx'
-import { modalCancelClass, modalPrimaryClass } from '../ui/volleyui/Modal.jsx'
+import { modalCancelClass, modalPrimaryClass, ActionSheet, ActionSheetItem } from '../ui/volleyui/Modal.jsx'
 import { dayLabel, timeSecondsLabel } from '../ui/volleyui/format.js'
 import { openAppWindow } from '../utils_beach/openAppWindow_beach'
 import { discPaint } from '../utils_beach/teamColours_beach'
@@ -256,6 +258,8 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   const [showRosters, setShowRosters] = useState(false)
   const [showSanctions, setShowSanctions] = useState(false)
   const [menuModal, setMenuModal] = useState(false)
+  // The phone layout's match menu (an action sheet of the toolbar's Menu)
+  const [phoneMenuOpen, setPhoneMenuOpen] = useState(false)
   const [showOptionsInMenu, setShowOptionsInMenu] = useState(false)
   const [connectionSetupModal, setConnectionSetupModal] = useState(false)
   const [localManageCaptainOnCourt, setLocalManageCaptainOnCourt] = useState(() => {
@@ -448,6 +452,38 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   const isNarrowMode = viewportWidth < 1000
   // Short height mode: < 900px - smaller counters, clickable TO counter, hide TO button
   const isShortHeight = viewportHeight < 900
+  // Display mode (the options' Screen mode): 'auto' | 'desktop' | 'tablet' |
+  // 'phone', kept in localStorage as the home options keep it
+  const [displayMode, setDisplayModeState] = useState(() => readStoredDisplayMode())
+  const setDisplayMode = useCallback((mode) => {
+    const next = normaliseDisplayMode(mode)
+    setDisplayModeState(next)
+    try { localStorage.setItem('displayMode', next) } catch { /* private mode: this visit only */ }
+  }, [])
+  // Tablet mode: fullscreen, as the home options enter it
+  const enterDisplayMode = useCallback((mode) => {
+    if (mode === 'tablet' && document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => {})
+    }
+    setDisplayMode(mode)
+  }, [setDisplayMode])
+  const exitDisplayMode = useCallback(() => {
+    if (document.exitFullscreen && document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {})
+    }
+    setDisplayMode('desktop')
+  }, [setDisplayMode])
+  const detectedDisplayMode = detectDisplayMode({ width: viewportWidth, height: viewportHeight })
+  // The phone layout (PhoneScoreboard_beach) replaces the scoring body: the
+  // Phone mode, or the automatic mode on a phone held upright. A phone in the
+  // automatic mode keeps it when turned sideways (the screen stays mounted,
+  // dialogs and countdowns included), under a notice to hold it upright,
+  // rather than falling back to the landscape layout.
+  const isPhoneSideways = phoneHeldSideways(displayMode, { width: viewportWidth, height: viewportHeight })
+  const isPhoneView = phoneLayoutActive(displayMode, { width: viewportWidth, height: viewportHeight }) || isPhoneSideways
+  // A phone in the automatic mode, or the Phone mode, is not locked to
+  // landscape; tablets and computers are locked as before
+  const keepOrientationFree = displayMode === 'phone' || (displayMode === 'auto' && isPhoneScreen())
   const relayKeyRef = useRef(null) // The match's relay room key (seed key), set by the relay sync
   const wakeLockRef = useRef(null) // Wake lock to prevent screen sleep
   const syncFunctionRef = useRef(null) // Store sync function for use in action handlers
@@ -685,6 +721,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   // app locks the activity natively (its WebView ignores
   // screen.orientation.lock()); a browser tries the web API.
   useEffect(() => {
+    if (keepOrientationFree) {
+      if (isNativeApp()) unlockNativeOrientation().catch(() => {})
+      return
+    }
     if (isNativeApp()) {
       lockNativeLandscape().catch(() => {})
       return () => { unlockNativeOrientation().catch(() => {}) }
@@ -710,7 +750,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         }
       }
     }
-  }, [])
+  }, [keepOrientationFree])
 
   // Calculate scale factor for proportional viewport scaling (no cap - scales to fill available space)
   const scaleFactor = Math.min(
@@ -7232,8 +7272,291 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     )
   }
 
+  // Preview or save the scoresheet in its own window (the toolbar's
+  // Scoresheet menu, and the Scoresheet button of the phone layout). The
+  // preview is kept for live updates.
+  const openScoresheet = (action = null) => {
+    const failure = action === 'save'
+      ? ['saving', 'Failed to save scoresheet']
+      : ['opening', 'Failed to open scoresheet']
+    try {
+      const match = data?.match
+      if (!match) {
+        showAlert('No match data available', 'error')
+        return
+      }
+
+      // Add country data to team objects
+      const team1WithCountry = data?.team1Team ? { ...data.team1Team, country: match?.team1Country || '' } : { name: '', country: match?.team1Country || '' }
+      const team2WithCountry = data?.team2Team ? { ...data.team2Team, country: match?.team2Country || '' } : { name: '', country: match?.team2Country || '' }
+
+      const scoresheetData = {
+        match: {
+          ...match,
+          team_1Country: match?.team1Country || '',
+          team_2Country: match?.team2Country || ''
+        },
+        team_1Team: team1WithCountry,
+        team_2Team: team2WithCountry,
+        team_1Players: data?.team1Players || [],
+        team_2Players: data?.team2Players || [],
+        sets: data?.sets || [],
+        events: data?.events || [],
+        sanctions: []
+      }
+
+      sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
+      const opened = openAppWindow(`/scoresheet_beach.html${action ? `?action=${action}` : ''}`, { features: 'width=1200,height=900' })
+
+      if (!opened.ok) {
+        showAlert(t('header.allowPopups'), 'warning')
+        return
+      }
+
+      // Store reference for live updates
+      if (!action) scoresheetWindowRef.current = opened.window
+
+      const errorListener = (event) => {
+        if (event.data && event.data.type === 'SCORESHEET_ERROR') {
+          setScoresheetErrorModal({
+            error: event.data.error || 'Unknown error',
+            details: event.data.details || event.data.stack || ''
+          })
+          window.removeEventListener('message', errorListener)
+        }
+      }
+      window.addEventListener('message', errorListener)
+      setTimeout(() => window.removeEventListener('message', errorListener), 30000)
+    } catch (error) {
+      console.error(`Error ${failure[0]} scoresheet:`, error)
+      setScoresheetErrorModal({ error: failure[1], details: error.message || '' })
+    }
+  }
+
+  // The match's menu, grouped (the toolbar's Menu and the phone layout's sheet)
+  const matchMenu = matchMenuSections(t, {
+    showRosters: () => {
+      setShowRosters(true)
+    },
+    showSanctions: () => {
+      setShowSanctions(true)
+    },
+    showActionLog: () => {
+      setShowLogs(true)
+    },
+    openRemarks: () => {
+      setShowRemarks(true)
+    },
+    openMatchSetup: onOpenMatchSetup ? () => { onOpenMatchSetup() } : undefined,
+    manualChanges: () => {
+      setShowManualPanel(true)
+    },
+    openScoreboard: () => {
+      const opened = openAppWindow('/scoreboard_beach.html?mode=local', { features: 'width=1280,height=720' })
+      if (!opened.ok) {
+        showAlert(t('header.allowPopups'), 'warning')
+      }
+    },
+    showPins: () => {
+      setShowPinsModal(true)
+    },
+    downloadGameData: async () => {
+      try {
+        // Export all database data
+        const allMatches = await db.matches.toArray()
+        const allTeams = await db.teams.toArray()
+        const allPlayers = await db.players.toArray()
+        const allSets = await db.sets.toArray()
+        const allEvents = await db.events.toArray()
+        const allReferees = await db.referees.toArray()
+        const allScorers = await db.scorers.toArray()
+
+        const exportData = {
+          exportDate: new Date().toISOString(),
+          matchId: matchId,
+          matches: allMatches,
+          teams: allTeams,
+          players: allPlayers,
+          sets: allSets,
+          events: allEvents,
+          referees: allReferees,
+          scorers: allScorers
+        }
+
+        // Create a blob and download
+        const jsonString = JSON.stringify(exportData, null, 2)
+        const blob = new Blob([jsonString], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `database_export_${matchId}_${new Date().toISOString().split('T')[0]}.json`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+      } catch (error) {
+        console.error('Error exporting database:', error)
+        showAlert(t('scoreboard.errors.exportFailed'), 'error')
+      }
+    },
+    options: () => {
+      setShowOptionsInMenu(true)
+    },
+    stopMatch: () => {
+      setStopMatchModal('select')
+    },
+    className: 'text-red-600 hover:bg-red-50'
+
+  })
+
+  // The phone layout's props (PhoneScoreboard_beach): what this screen
+  // already computes, per court side, and its own handlers. Built only when
+  // shown.
+  const buildPhoneView = () => {
+    const setIndex = data?.set?.index || 1
+    const status = data?.match?.status
+    const anchorOf = (e) => {
+      const el = e?.currentTarget
+      const rect = el?.getBoundingClientRect?.()
+      return rect ? { element: el, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : { element: el }
+    }
+    // The next set's service order, as the interval's team boxes show it
+    const serviceOrder = (teamKey) => {
+      const players = (teamKey === 'team1' ? data?.team1Players : data?.team2Players) || []
+      const numbers = players.map(p => p.number).sort((a, b) => a - b)
+      const raw = teamKey === 'team1' ? data?.match?.team1FirstServe : data?.match?.team2FirstServe
+      const first = raw ?? numbers[0]
+      const second = numbers.find(n => String(n) !== String(first)) ?? numbers[1]
+      return { firstServer: first ?? null, secondServer: second ?? null }
+    }
+    const phoneTeam = (side) => {
+      const isLeft = side === 'left'
+      const teamKey = mapSideToTeamKey(side)
+      const team = isLeft ? leftTeam : rightTeam
+      const servingPlayer = getServingPlayer(teamKey, team)
+      const bmpRemaining = 2 - getUnsuccessfulBMPsUsed(teamKey)
+      // only between the point and the next rally, once per completed rally (bmpAvailability_beach)
+      const bmpBlock = teamBmpBlockReason({ events: data?.events, setIndex: data?.set?.index, setFinished: !data?.set || data.set.finished, rallyStatus, remaining: bmpRemaining })
+      return {
+        side,
+        teamKey,
+        label: teamKey === teamAKey ? 'A' : 'B',
+        name: (team.name || teamKey).replace(/\s*\([A-Z]{2,3}\)\s*$/, ''),
+        color: team.color,
+        setsWon: setsWon?.[side] || 0,
+        points: pointsBySide[side] || 0,
+        timeouts: timeoutsUsed?.[teamKey] || 0,
+        bmp: {
+          remaining: bmpRemaining,
+          available: !bmpBlock,
+          title: bmpBlock === 'bmp_taken' ? t('scoreboard.bmpOncePerRally', 'BMP: once per rally, again after the next completed rally') : bmpBlock === 'rally' || bmpBlock === 'moved_on' || bmpBlock === 'no_point' ? t('scoreboard.bmpOnlyAfterPoint', 'BMP: only after a point, before the next rally') : t('scoreboard.bmpRemaining', { count: bmpRemaining, defaultValue: 'Ball mark protocol ({{count}} left)' })
+        },
+        players: (team.playersOnCourt || [])
+          .filter(pl => pl && pl.number !== undefined && pl.number !== null && pl.number !== '')
+          .map(pl => ({ number: pl.number, position: pl.position, serves: !!(servingPlayer && servingPlayer.number === pl.number) && (isLeft ? leftServing : rightServing) })),
+        ...serviceOrder(teamKey),
+        improperRequestDone: !!data?.match?.sanctions?.[teamKey === 'team1' ? 'improperRequestteam1' : 'improperRequestteam2'],
+        delayWarned: !!data?.match?.sanctions?.[teamKey === 'team1' ? 'delayWarningteam1' : 'delayWarningteam2'],
+        hasCoach: !!data?.match?.hasCoach
+      }
+    }
+
+    // The start button, as the desktop's centre column words it
+    const setupConfirmed = betweenSetsSetupConfirmed || (setIndex === 3 && set3SetupConfirmed)
+    const intervalEnded = !betweenSetsCountdown || betweenSetsCountdown.countdown <= 0
+    let startLabel
+    let startDisabled = false
+    if (intervalEnded && setupConfirmed && (status === 'between_sets' || status === 'set_complete')) {
+      startLabel = `${t('scoreboard.buttons.startSet', 'Start set')} ${setIndex}`
+    } else {
+      startDisabled = status === 'complete' || set3TossPending
+      startLabel = status === 'not_started'
+        ? t('scoreboard.buttons.startMatch', 'Start match')
+        : status === 'complete'
+          ? t('scoreboard.buttons.matchComplete', 'Match complete')
+          : isFirstRally
+            ? t('scoreboard.buttons.startSet', 'Start set')
+            : t('scoreboard.buttons.startRally', 'Start rally')
+    }
+
+    const intervalCountdown = betweenSetsCountdown ? {
+      countdown: betweenSetsCountdown.countdown,
+      countdownText: betweenSetsCountdown.countdown <= 0 ? '0' : formatCountdown(betweenSetsCountdown.countdown),
+      total: setIntervalDuration
+    } : {}
+    // As the desktop: the interval's setup takes the court's place until the set starts
+    const betweenOpen = isBetweenSets && (setIndex === 3 ? !set3SetupConfirmed : !betweenSetsSetupConfirmed)
+    const between = betweenOpen ? {
+      kind: setIndex === 3 && !data?.match?.set3CoinTossWinner ? 'toss' : 'setup',
+      chooses: setIndex !== 3 && betweenSetsDecisionTeamName ? t('scoreboard.betweenSetsChooses', { team: betweenSetsDecisionTeamName, defaultValue: '{{team}} chooses (lost the coin toss)' }) : null,
+      ...intervalCountdown
+    } : null
+
+    const centre = timeoutModal && timeoutModal.started ? {
+      kind: 'timeout',
+      teamName: timeoutModal.team === 'team1' ? (data?.team1Team?.name || 'team1') : (data?.team2Team?.name || 'team2'),
+      countdown: timeoutModal.countdown,
+      countdownText: formatTimeout(timeoutModal.countdown),
+      total: TEAM_TIMEOUT_SECONDS
+    } : null
+
+    const total = (data?.set?.team1Points || 0) + (data?.set?.team2Points || 0)
+    return {
+      setNumber: setIndex,
+      pointsToWin: setPointsToWin(setIndex),
+      teams: { left: phoneTeam('left'), right: phoneTeam('right') },
+      serving: leftServing ? 'left' : rightServing ? 'right' : null,
+      rhythm: { ...nextCourtEvents(setIndex, total), ttoTotal: TTO_TOTAL, setIndex },
+      rally: {
+        status: rallyStatus,
+        startLabel,
+        startDisabled,
+        startTitle: set3TossPending ? t('scoreboard.set3TossFirst', 'Record the set 3 coin toss first') : undefined,
+        canReplayRally,
+        isRallyReplayed
+      },
+      centre,
+      between,
+      recent: recentActions(data?.events, data?.set?.index, getActionDescription, 3),
+      canUndo,
+      scoreFont: getScoreFont(),
+      actions: {
+        undo: showUndoConfirm,
+        menu: () => setPhoneMenuOpen(true),
+        point: (side) => handlePoint(side),
+        // The desktop button hands its click event over too
+        startRally: handleStartRally,
+        timeout: (teamKey) => handleTimeout(teamKey),
+        teamBmp: (teamKey) => handleTeamBMP(teamKey),
+        refereeBmp: handleRefereeBMP,
+        playerClick: handlePlayerClick,
+        teamSanction: handleTeamSanction,
+        // The court's sanction menu (a player) or the coach button's
+        sanctionPerson: ({ team, side, type, playerNumber, position, role }, e) => {
+          if (rallyStatus !== 'idle' || isRallyReplayed) return
+          setSanctionConfirmModal(null)
+          setSanctionDropdown({ team, type, playerNumber, position, role, side, ...anchorOf(e) })
+        },
+        // The court's medical menu (MTO / RIT) of that player
+        medical: (teamKey, playerNumber, side, e) => {
+          if (rallyStatus !== 'idle' || isRallyReplayed || !data?.set) return
+          setInjuryDropdown({ team: teamKey, playerNumber, side, ...anchorOf(e) })
+        },
+        replay: handleReplay,
+        rosters: () => setShowRosters(true),
+        scoresheet: () => openScoresheet(),
+        remarks: () => setShowRemarks(true),
+        stopTimeout,
+        set3CoinToss: handleSet3CoinToss,
+        switchServiceOrder: handleBetweenSetsSwitchServiceOrder,
+        switchSides: handleBetweenSetsSwitchSides,
+        switchServe: handleBetweenSetsSwitchServe
+      }
+    }
+  }
+
   return (
-    <div className="match-record">
+    <div className={isPhoneView ? 'match-record phone-layout' : 'match-record'}>
       {setTransitionLoading && (
         // Taps wait while the set is being finished (the court still shows
         // the old set); the screen stays visible
@@ -7249,8 +7572,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           </div>
         </div>
       )}
-      {/* Portrait mode warning overlay for devices that don't support orientation lock (iOS) */}
-      {!isLandscape && (
+      {/* Portrait mode warning overlay for devices that don't support orientation lock (iOS).
+          Not over the phone layout, which is made for portrait. */}
+      {!isLandscape && !isPhoneView && (
         <div className="ov-kit fixed inset-0 flex flex-col items-center justify-center overflow-y-auto bg-gradient-to-br from-stone-100 via-stone-50 to-stone-100 px-4 py-6" style={{ zIndex: 99999 }}>
           <div className="w-full max-w-sm rounded-2xl border border-stone-200/70 bg-white p-6 text-center shadow-card-lg">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-stone-100 text-stone-600">
@@ -7294,7 +7618,28 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           </div>
         </div>
       )}
-      <ScoreboardToolbar collapsed={headerCollapsed} onToggle={() => setHeaderCollapsed(!headerCollapsed)}>
+      {/* A phone turned sideways: the phone layout stays underneath (its
+          dialogs and countdowns keep going), this asks to turn it back */}
+      {isPhoneSideways && (
+        <div
+          role="alert"
+          data-testid="phone-sideways-notice"
+          className="ov-kit fixed inset-0 flex flex-col items-center justify-center px-6 text-center"
+          style={{ zIndex: 99999, backgroundColor: 'rgb(28 25 23 / 0.6)', backdropFilter: 'blur(4px)' }}
+        >
+          <div className="mb-4 text-white">
+            <Smartphone size={56} aria-hidden="true" />
+          </div>
+          <h2 className="m-0 mb-2 text-[22px] font-bold text-white">
+            {t('scoreboard.phone.sidewaysTitle')}
+          </h2>
+          <p className="m-0 max-w-[420px] text-[15px] leading-normal text-stone-200">
+            {t('scoreboard.phone.sidewaysBody')}
+          </p>
+        </div>
+      )}
+      {/* The phone layout has its own header (undo, match menu) */}
+      {!isPhoneView && <ScoreboardToolbar collapsed={headerCollapsed} onToggle={() => setHeaderCollapsed(!headerCollapsed)}>
         {/* Column 1: Date/Time */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
           <span className="toolbar-clock tabular-nums" style={{ fontSize: isCompactMode ? '12px' : '14px' }}>{formatTimestamp(now)}</span>
@@ -7409,122 +7754,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             showArrow={true}
             position="right"
             items={[
-              {
-                key: 'scoresheet-preview',
-                icon: <Search size={18} />,
-                label: t('header.preview'),
-                onClick: async () => {
-                  try {
-                    const match = data?.match
-                    if (!match) {
-                      showAlert('No match data available', 'error')
-                      return
-                    }
-
-                    // Add country data to team objects
-                    const team1WithCountry = data?.team1Team ? { ...data.team1Team, country: match?.team1Country || '' } : { name: '', country: match?.team1Country || '' }
-                    const team2WithCountry = data?.team2Team ? { ...data.team2Team, country: match?.team2Country || '' } : { name: '', country: match?.team2Country || '' }
-
-                    const scoresheetData = {
-                      match: {
-                        ...match,
-                        team_1Country: match?.team1Country || '',
-                        team_2Country: match?.team2Country || ''
-                      },
-                      team_1Team: team1WithCountry,
-                      team_2Team: team2WithCountry,
-                      team_1Players: data?.team1Players || [],
-                      team_2Players: data?.team2Players || [],
-                      sets: data?.sets || [],
-                      events: data?.events || [],
-                      sanctions: []
-                    }
-
-                    sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
-                    const opened = openAppWindow('/scoresheet_beach.html', { features: 'width=1200,height=900' })
-                    const scoresheetWindow = opened.window
-
-                    if (!opened.ok) {
-                      showAlert(t('header.allowPopups'), 'warning')
-                      return
-                    }
-
-                    // Store reference for live updates
-                    scoresheetWindowRef.current = scoresheetWindow
-
-                    const errorListener = (event) => {
-                      if (event.data && event.data.type === 'SCORESHEET_ERROR') {
-                        setScoresheetErrorModal({
-                          error: event.data.error || 'Unknown error',
-                          details: event.data.details || event.data.stack || ''
-                        })
-                        window.removeEventListener('message', errorListener)
-                      }
-                    }
-                    window.addEventListener('message', errorListener)
-                    setTimeout(() => window.removeEventListener('message', errorListener), 30000)
-                  } catch (error) {
-                    console.error('Error opening scoresheet:', error)
-                    setScoresheetErrorModal({ error: 'Failed to open scoresheet', details: error.message || '' })
-                  }
-                }
-              },
-              {
-                key: 'scoresheet-save',
-                icon: <Save size={18} />,
-                label: t('header.savePdf'),
-                onClick: async () => {
-                  try {
-                    const match = data?.match
-                    if (!match) {
-                      showAlert('No match data available', 'error')
-                      return
-                    }
-
-                    // Add country data to team objects
-                    const team1WithCountry = data?.team1Team ? { ...data.team1Team, country: match?.team1Country || '' } : { name: '', country: match?.team1Country || '' }
-                    const team2WithCountry = data?.team2Team ? { ...data.team2Team, country: match?.team2Country || '' } : { name: '', country: match?.team2Country || '' }
-
-                    const scoresheetData = {
-                      match: {
-                        ...match,
-                        team_1Country: match?.team1Country || '',
-                        team_2Country: match?.team2Country || ''
-                      },
-                      team_1Team: team1WithCountry,
-                      team_2Team: team2WithCountry,
-                      team_1Players: data?.team1Players || [],
-                      team_2Players: data?.team2Players || [],
-                      sets: data?.sets || [],
-                      events: data?.events || [],
-                      sanctions: []
-                    }
-
-                    sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
-                    const opened = openAppWindow('/scoresheet_beach.html?action=save', { features: 'width=1200,height=900' })
-
-                    if (!opened.ok) {
-                      showAlert(t('header.allowPopups'), 'warning')
-                      return
-                    }
-
-                    const errorListener = (event) => {
-                      if (event.data && event.data.type === 'SCORESHEET_ERROR') {
-                        setScoresheetErrorModal({
-                          error: event.data.error || 'Unknown error',
-                          details: event.data.details || event.data.stack || ''
-                        })
-                        window.removeEventListener('message', errorListener)
-                      }
-                    }
-                    window.addEventListener('message', errorListener)
-                    setTimeout(() => window.removeEventListener('message', errorListener), 30000)
-                  } catch (error) {
-                    console.error('Error saving scoresheet:', error)
-                    setScoresheetErrorModal({ error: 'Failed to save scoresheet', details: error.message || '' })
-                  }
-                }
-              }
+              { key: 'scoresheet-preview', icon: <Search size={18} />, label: t('header.preview'), onClick: () => openScoresheet() },
+              { key: 'scoresheet-save', icon: <Save size={18} />, label: t('header.savePdf'), onClick: () => openScoresheet('save') }
             ]}
           />
           <MenuList
@@ -7535,82 +7766,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             buttonClassName={SB_TOOLBAR_BTN}
             showArrow={false}
             position="right"
-            items={toMenuListItems(matchMenuSections(t, {
-              showRosters: () => {
-                setShowRosters(true)
-              },
-              showSanctions: () => {
-                setShowSanctions(true)
-              },
-              showActionLog: () => {
-                setShowLogs(true)
-              },
-              openRemarks: () => {
-                setShowRemarks(true)
-              },
-              openMatchSetup: onOpenMatchSetup ? () => { onOpenMatchSetup() } : undefined,
-              manualChanges: () => {
-                setShowManualPanel(true)
-              },
-              openScoreboard: () => {
-                const opened = openAppWindow('/scoreboard_beach.html?mode=local', { features: 'width=1280,height=720' })
-                if (!opened.ok) {
-                  showAlert(t('header.allowPopups'), 'warning')
-                }
-              },
-              showPins: () => {
-                setShowPinsModal(true)
-              },
-              downloadGameData: async () => {
-                try {
-                  // Export all database data
-                  const allMatches = await db.matches.toArray()
-                  const allTeams = await db.teams.toArray()
-                  const allPlayers = await db.players.toArray()
-                  const allSets = await db.sets.toArray()
-                  const allEvents = await db.events.toArray()
-                  const allReferees = await db.referees.toArray()
-                  const allScorers = await db.scorers.toArray()
-
-                  const exportData = {
-                    exportDate: new Date().toISOString(),
-                    matchId: matchId,
-                    matches: allMatches,
-                    teams: allTeams,
-                    players: allPlayers,
-                    sets: allSets,
-                    events: allEvents,
-                    referees: allReferees,
-                    scorers: allScorers
-                  }
-
-                  // Create a blob and download
-                  const jsonString = JSON.stringify(exportData, null, 2)
-                  const blob = new Blob([jsonString], { type: 'application/json' })
-                  const url = URL.createObjectURL(blob)
-                  const link = document.createElement('a')
-                  link.href = url
-                  link.download = `database_export_${matchId}_${new Date().toISOString().split('T')[0]}.json`
-                  document.body.appendChild(link)
-                  link.click()
-                  document.body.removeChild(link)
-                  URL.revokeObjectURL(url)
-                } catch (error) {
-                  console.error('Error exporting database:', error)
-                  showAlert(t('scoreboard.errors.exportFailed'), 'error')
-                }
-              },
-              options: () => {
-                setShowOptionsInMenu(true)
-              },
-              stopMatch: () => {
-                setStopMatchModal('select')
-              },
-              className: 'text-red-600 hover:bg-red-50'
-            }))}
+            items={toMenuListItems(matchMenu)}
           />
         </div>
-      </ScoreboardToolbar>
+      </ScoreboardToolbar>}
 
       {/* Scoresheet Error Modal */}
       {scoresheetErrorModal && (
@@ -7790,8 +7949,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       )}
 
 
-      {/* Main Scoreboard Layout - Scaled proportionally to viewport. Top-aligned:
+      {/* The phone layout (PhoneScoreboard_beach) in place of the scoring body.
+          Main Scoreboard Layout - Scaled proportionally to viewport. Top-aligned:
           centred, the spare height became an empty band above the score */}
+      {isPhoneView ? (
+        <PhoneScoreboard {...buildPhoneView()} />
+      ) : (
       <div data-testid="scoring-layout" style={{
         width: '100%',
         flex: 1,
@@ -10806,6 +10969,35 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           </div>
         </div>
       </div>
+      )}
+
+      {/* The phone layout's match menu: the toolbar's Menu, as a sheet */}
+      {phoneMenuOpen && (
+        <div className="ov-kit" style={{ position: 'relative', zIndex: 1000 }}>
+          <ActionSheet open onClose={() => setPhoneMenuOpen(false)} title={t('scoreboard.menu.menu', 'Menu')} closeLabel={t('common.close', 'Close')} railOffset={false}>
+            {matchMenu.map(section => (
+              <div key={section.key} role="group" aria-label={section.title} className={section.danger ? 'mt-1 border-t border-stone-100 pt-1' : undefined}>
+                <p className={cn('m-0 px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.12em]', section.danger ? 'text-red-600' : 'text-stone-500')}>
+                  {section.title}
+                </p>
+                {section.items.map(item => (
+                  <ActionSheetItem
+                    key={item.key}
+                    icon={item.Icon}
+                    className={item.danger ? 'text-red-600 hover:bg-red-50' : undefined}
+                    onClick={() => {
+                      setPhoneMenuOpen(false)
+                      item.onClick()
+                    }}
+                  >
+                    {item.label}
+                  </ActionSheetItem>
+                ))}
+              </div>
+            ))}
+          </ActionSheet>
+        </div>
+      )}
 
       {/* Menu Modal - Keep for Options submenu */}
       {menuModal && (
@@ -11232,6 +11424,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           setKeybindingsEnabled
         }}
         displayOptions={{
+          displayMode,
+          setDisplayMode,
+          detectedDisplayMode,
+          enterDisplayMode,
+          exitDisplayMode,
           showNamesOnCourt,
           setShowNamesOnCourt,
           autoDownloadAtSetEnd,

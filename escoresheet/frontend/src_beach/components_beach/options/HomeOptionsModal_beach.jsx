@@ -112,10 +112,10 @@ export default function HomeOptionsModal({
     { value: 'auto', label: t('options.autoWithMode', { mode: modeName(detectedDisplayMode || 'desktop') }), title: t('options.screenModeInfo') },
     { value: 'desktop', label: modeName('desktop'), title: t('options.desktopDesc') },
     { value: 'tablet', label: modeName('tablet'), title: t('options.tabletDesc') },
-    { value: 'smartphone', label: modeName('smartphone'), title: t('options.smartphoneDesc') }
+    { value: 'phone', label: modeName('phone'), title: t('options.phoneDesc') }
   ]
   const chooseScreenMode = (mode) => {
-    if (mode === 'tablet' || mode === 'smartphone') return enterDisplayMode(mode)
+    if (mode === 'tablet') return enterDisplayMode(mode)
     if (mode === 'desktop') return exitDisplayMode()
     setDisplayMode(mode)
     localStorage.setItem('displayMode', mode)
