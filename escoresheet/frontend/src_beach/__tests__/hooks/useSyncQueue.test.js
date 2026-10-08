@@ -566,6 +566,31 @@ describe('retryErrorsInternal', () => {
   })
 })
 
+describe('event delete jobs (Undo, Replay, decision change, event editor)', () => {
+  it('removes the cloud row by its scoped external_id, after the event insert queued before it', async () => {
+    fakeDb.sync_queue.reset([
+      { id: 1, resource: 'event', action: 'insert', status: 'queued', payload: { external_id: 'match_100_aaa:e:12', match_id: 'match_100_aaa' } },
+      { id: 2, resource: 'event', action: 'delete', status: 'queued', payload: { external_id: 'match_100_aaa:e:12', match_id: 'match_100_aaa' } }
+    ])
+    await runQueuePass()
+    const writes = api.calls.filter(c => c.table === 'events')
+    expect(writes.map(c => c.action)).toEqual(['upsert', 'delete'])
+    expect(writes[1].filters).toEqual([['eq', 'external_id', 'match_100_aaa:e:12']])
+    expect(fakeDb.sync_queue.map.get(2).status).toBe('sent')
+  })
+
+  it('a refused delete is not reported as sent', async () => {
+    fakeDb.sync_queue.reset([
+      { id: 1, resource: 'event', action: 'delete', status: 'queued', payload: { external_id: 'match_100_aaa:e:12', match_id: 'match_100_aaa' } }
+    ])
+    api.respond = (call) => call.action === 'delete'
+      ? { data: null, error: { message: 'boom', status: 500 } }
+      : defaultRespond(call)
+    await runQueuePass()
+    expect(fakeDb.sync_queue.map.get(1).status).not.toBe('sent')
+  })
+})
+
 describe('helpers', () => {
   it('payloadCovers compares fields and JSON sub-keys', () => {
     expect(payloadCovers({ id: 'x', a: 1, j: { p: 1, q: 2 } }, { id: 'x', a: 0, j: { p: 0 } })).toBe(true)
