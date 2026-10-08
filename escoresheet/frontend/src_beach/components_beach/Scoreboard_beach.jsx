@@ -40,7 +40,7 @@ import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot } from '../utils_beach/stateSnapshot_beach'
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
 import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
-import { defaultSetStartTime, scheduledClock, withActualStartTimeRemark, startScheduleOf } from '../utils_beach/setStartTime_beach'
+import { defaultSetStartTime, scheduledClock, withActualStartTimeRemark, startScheduleOf, typedStartNear } from '../utils_beach/setStartTime_beach'
 import { cloudSyncWaitNow } from '../utils_beach/cloudStatus_beach'
 import { formatCourtScore } from '../utils_beach/scoreText_beach'
 import { medicalStartPayload, medicalEndPayload, findOpenMedical, formatMedicalDuration, medicalSecondsLeft, MEDICAL_RECOVERY_SECONDS } from '../utils_beach/medicalEvents_beach'
@@ -17308,10 +17308,10 @@ function SetStartTimeModal({ setIndex, defaultTime, scheduledTime = null, onConf
       toast.error(t('scoreboard.confirm.invalidTimeFormat'))
       return
     }
-    // Get the date component from defaultTime and combine with entered time
+    // The entered time on the day nearest to the proposed time (a 00:12
+    // typed under a proposed 23:30 of the day before is today)
     const { date } = splitLocalDateTime(defaultTime)
-    // Convert local time to UTC ISO string
-    const isoString = parseLocalDateTimeToISO(date, time)
+    const isoString = typedStartNear(defaultTime, time) ?? parseLocalDateTimeToISO(date, time)
     onConfirm(isoString)
   }
 

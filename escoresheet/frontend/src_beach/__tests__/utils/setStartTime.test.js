@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
-  defaultSetStartTime, scheduledClock, withActualStartTimeRemark, localClock, scheduledStartOn, startScheduleOf
+  defaultSetStartTime, scheduledClock, withActualStartTimeRemark, localClock, scheduledStartOn, startScheduleOf, typedStartNear
 } from '../../utils_beach/setStartTime_beach'
 import { planSetTimes } from '../../utils_beach/corrections_beach'
 import { remarksAfter } from '../../utils_beach/applyCorrectionPlan_beach'
@@ -176,5 +176,34 @@ describe('the scoring screen uses it', () => {
     expect(block).toContain('withActualStartTimeRemark(')
     expect(block).toContain('const scheduledAt = startScheduleOf(matchNow)')
     expect(block).toMatch(/db\.matches\.update\(matchId, \{ remarks/)
+  })
+})
+
+describe('the typed start time is on the day nearest to the proposal (typedStartNear)', () => {
+  it('a 23:30 match confirmed at 00:10: kept 23:30 is the evening before, a typed 00:12 is today', () => {
+    const proposed = defaultSetStartTime({ setIndex: 1, now: local(2026, 10, 9, 0, 10), scheduledAt: iso(2026, 10, 1, 23, 30) })
+    expect(proposed).toBe(iso(2026, 10, 8, 23, 30))
+    expect(typedStartNear(proposed, '23:30')).toBe(iso(2026, 10, 8, 23, 30))
+    // the proposal's date would give 08.10 00:12, a set 1 of over 24 hours
+    expect(typedStartNear(proposed, '00:12')).toBe(iso(2026, 10, 9, 0, 12))
+  })
+
+  it('a 20:00 match played the next morning: a typed 07:05 is the morning, not the day before', () => {
+    const proposed = defaultSetStartTime({ setIndex: 1, now: local(2026, 10, 9, 7, 3), scheduledAt: iso(2026, 10, 8, 20, 0) })
+    expect(typedStartNear(proposed, '07:05')).toBe(iso(2026, 10, 9, 7, 5))
+  })
+
+  it('the same day otherwise; invalid input is null', () => {
+    const proposed = iso(2026, 10, 8, 12, 30)
+    expect(typedStartNear(proposed, '12:45')).toBe(iso(2026, 10, 8, 12, 45))
+    expect(typedStartNear(proposed, '')).toBeNull()
+    expect(typedStartNear(proposed, '25:00')).toBeNull()
+  })
+
+  it('the dialog uses it', () => {
+    const sb = readFileSync(resolve(__dirname, '../../components_beach/Scoreboard_beach.jsx'), 'utf8')
+    const start = sb.indexOf('function SetStartTimeModal(')
+    const modal = sb.slice(start, sb.indexOf('onConfirm(isoString)', start))
+    expect(modal).toContain('typedStartNear(defaultTime, time)')
   })
 })
