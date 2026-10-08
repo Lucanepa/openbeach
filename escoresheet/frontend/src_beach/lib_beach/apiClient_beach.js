@@ -378,6 +378,16 @@ export function apiPostEventRevisions(matchExternalId, revisions) {
   })
 }
 
+/**
+ * Upload activity log entries (utils_beach/activity/upload_beach): at most
+ * 500 per call. Needs a session. POST /api/activity (backend db/016, shared
+ * with OpenVolley; beach rows carry app 'beach').
+ * @returns {Promise<{data: {accepted: string[], rejected: {uid: string, code: string}[]}|null, error: object|null, status: number}>}
+ */
+export function apiPostActivity(entries) {
+  return postJson('/api/activity', { entries }, { timeoutMs: 30000, fallbackError: 'Activity upload failed' })
+}
+
 // ==================== Base64 (storage uploads) ====================
 
 // btoa() only takes Latin-1 and String.fromCharCode(...bytes) overflows the call

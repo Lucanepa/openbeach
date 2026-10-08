@@ -107,6 +107,11 @@ vi.mock('../../lib_beach/apiClient_beach', () => {
       api.calls.push(call)
       return api.respond(call)
     },
+    apiPostActivity: async (entries) => {
+      const call = { table: '__activity', action: 'post', data: { entries }, filters: [] }
+      api.calls.push(call)
+      return api.respond(call)
+    },
     apiPostEventRevisions: async (matchExternalId, revisions) => {
       const call = { table: '__revisions', action: 'post', data: { matchExternalId, revisions }, filters: [] }
       api.calls.push(call)
@@ -600,6 +605,49 @@ describe('event delete jobs (Undo, Replay, decision change, event editor)', () =
       : defaultRespond(call)
     await runQueuePass()
     expect(fakeDb.sync_queue.map.get(1).status).not.toBe('sent')
+  })
+})
+
+// The activity upload job (utils_beach/activity/upload_beach), against the fakes
+const upload = vi.hoisted(() => ({ result: { sent: 0, more: false } }))
+vi.mock('../../utils_beach/activity/upload_beach', () => ({
+  uploadActivityBatch: async () => upload.result,
+  activityFlushJob: () => ({ resource: 'activity', action: 'flush', payload: {}, ts: Date.now(), status: 'queued' })
+}))
+
+describe('the activity upload job', () => {
+  it('runs after the match, set and event jobs; another flush when more rows wait', async () => {
+    upload.result = { sent: 500, accepted: 500, more: true }
+    fakeDb.sync_queue.reset([
+      { id: 1, resource: 'activity', action: 'flush', status: 'queued', payload: {} },
+      { id: 2, resource: 'event', action: 'insert', status: 'queued', payload: { external_id: 'match_100_aaa:e:2', match_id: 'match_100_aaa' } }
+    ])
+    await runQueuePass()
+    expect(fakeDb.sync_queue.map.get(1).status).toBe('sent')
+    expect(fakeDb.sync_queue.map.get(2).status).toBe('sent')
+    expect([...fakeDb.sync_queue.map.values()].filter(j => j.resource === 'activity' && j.status === 'queued')).toHaveLength(1)
+  })
+
+  it('a server without /api/activity (404) parks it as failed; a 503 is retried', async () => {
+    upload.result = { sent: 3, error: { status: 404, message: 'Not found' }, status: 404 }
+    fakeDb.sync_queue.reset([{ id: 1, resource: 'activity', action: 'flush', status: 'queued', payload: {} }])
+    await runQueuePass()
+    expect(fakeDb.sync_queue.map.get(1)).toMatchObject({ status: 'failed', last_error: expect.objectContaining({ code: 'OV_ROUTE_MISSING' }) })
+    upload.result = { sent: 3, error: { status: 503, message: 'busy' }, status: 503 }
+    fakeDb.sync_queue.reset([{ id: 1, resource: 'activity', action: 'flush', status: 'queued', payload: {} }])
+    await runQueuePass()
+    expect(fakeDb.sync_queue.map.get(1).status).not.toBe('sent')
+    upload.result = { sent: 0, more: false }
+  })
+
+  it('sent upload jobs are pruned after an hour, other sent jobs after a week', async () => {
+    const now = Date.now()
+    fakeDb.sync_queue.reset([
+      { id: 1, resource: 'activity', action: 'flush', status: 'sent', ts: now - 2 * 3600 * 1000 },
+      { id: 2, resource: 'event', action: 'insert', status: 'sent', ts: now - 2 * 3600 * 1000 }
+    ])
+    expect(await pruneSyncQueue({ now })).toBe(1)
+    expect([...fakeDb.sync_queue.map.keys()]).toEqual([2])
   })
 })
 

@@ -4,6 +4,7 @@ import { db } from '../db_beach/db_beach'
 import { apiFrom, apiMatchRestore, apiMatchClaim, apiPostEventRevisions, AUTH_TOKEN_CHANGE_EVENT, AUTH_TOKEN_STORAGE_KEY } from '../lib_beach/apiClient_beach'
 import { isEventRevisionJob, eventRevisionRequest, eventRevisionOutcome } from '../utils_beach/eventSync_beach'
 import { emitActivity, noteSyncPass } from '../utils_beach/activity/bus_beach'
+import { uploadActivityBatch, activityFlushJob } from '../utils_beach/activity/upload_beach'
 import { getCloudApiUrl, isCloudOffline, isRelayOriginPage } from '../utils_beach/backendConfig_beach'
 import { ACCESS_CHANGED_EVENT } from '../lib_beach/access_beach'
 import { parseExtId, resolveJobExternalId, jobMatchKey } from '../utils_beach/syncIds_beach'
@@ -118,8 +119,9 @@ function filterSetPayload(payload) {
 // Sync status types: 'offline' | 'online_no_supabase' | 'connecting' | 'syncing' | 'synced' | 'error' | 'auth_required'
 
 // Resource processing order - matches must be synced before sets/events (FK
-// dependency)
-const RESOURCE_ORDER = ['match', 'set', 'event']
+// dependency); 'activity': the activity log upload (utils_beach/activity),
+// needs no match row
+const RESOURCE_ORDER = ['match', 'set', 'event', 'activity']
 
 // Max retries for jobs waiting on dependencies (e.g., event waiting for match to sync)
 const MAX_DEPENDENCY_RETRIES = 10
@@ -155,6 +157,7 @@ const REQUEUE_INTERVAL_MS = 30000
 // Sent, superseded and dropped rows are kept this long (for debugging), then
 // pruned; the per-rally set score adds one row per point.
 const SENT_RETENTION_MS = 7 * 24 * 3600 * 1000
+const ACTIVITY_JOB_RETENTION_MS = 3600 * 1000
 const PRUNE_INTERVAL_MS = 60 * 60 * 1000
 
 // processJob result: stop this pass, leave the job queued untouched (rate limited)
@@ -553,9 +556,11 @@ export async function pruneSyncQueue({ retentionMs = SENT_RETENTION_MS, now = Da
     const done = await db.sync_queue.where('status').anyOf(['sent', 'superseded', 'dropped']).toArray()
     const ids = done
       .filter(j => {
-        if (j.id >= oldestPendingId) return false
         // ts is a number (Date.now()) or an ISO string, depending on the writer
         const ts = typeof j.ts === 'number' ? j.ts : Date.parse(j.ts)
+        // the activity uploads (one every 10 s in a match) carry nothing to keep
+        if (j.resource === 'activity') return Number.isFinite(ts) && now - ts > ACTIVITY_JOB_RETENTION_MS
+        if (j.id >= oldestPendingId) return false
         return Number.isFinite(ts) && now - ts > retentionMs
       })
       .map(j => j.id)
@@ -1047,6 +1052,24 @@ async function processJobInner(job, ctx) {
       }
       safeLog.warn('[SyncQueue] Event revision refused:', answer.error?.code || answer.error?.status || answer.status)
       return failureResult(answer.error, ctx)
+    }
+
+    // ==================== ACTIVITY LOG UPLOAD ====================
+    // Ported from OpenVolley 6a0a26e0
+    if (job.resource === 'activity' && job.action === 'flush') {
+      const r = await uploadActivityBatch(db)
+      if (r.error) {
+        const st = r.error.status ?? r.status
+        if (st === 404) {
+          // A server without /api/activity: parked as refused, retried hourly
+          ctx.error = { ...summarizeError(r.error), status: 404, code: r.error.code || 'OV_ROUTE_MISSING' }
+          return PERMANENT_FAILURE
+        }
+        return failureResult(r.error, ctx)
+      }
+      // More rows than one batch: the next flush right after this one
+      if (r.more) await db.sync_queue.add(activityFlushJob())
+      return true
     }
 
     // Unknown resource/action - mark as done to avoid infinite loop

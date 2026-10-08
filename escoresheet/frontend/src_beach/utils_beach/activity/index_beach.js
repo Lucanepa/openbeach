@@ -2,7 +2,8 @@
  * The match activity log: one record of what happened on this device -
  * scoring, corrections (undo, delete, edit, manual changes), sync results,
  * app start / update / quit and errors - with the device id, app version,
- * platform and account. Stored in Dexie (activity_log, db_beach v20).
+ * platform and account. Stored in Dexie (activity_log, db_beach v20) and
+ * uploaded in batches through the sync queue (POST /api/activity).
  *
  * Click and keystroke streams are NOT part of it: they stay on the device
  * (utils_beach/comprehensiveLogger_beach).
@@ -17,6 +18,7 @@ import { installActivityHooks } from './hooks_beach'
 import { setActivitySink, emitActivity } from './bus_beach'
 import { appVersion, platformName, currentAccountId } from '../identity_beach'
 import { AUTH_TOKEN_CHANGE_EVENT } from '../../lib_beach/apiClient_beach'
+import { scheduleActivityUpload, ensureActivityFlushJob } from './upload_beach'
 
 export { emitActivity, flushActivityNow } from './bus_beach'
 export { SYNC } from './writer_beach'
@@ -52,6 +54,8 @@ export function startActivityLog({ db, win = typeof window !== 'undefined' ? win
     db,
     app: 'beach',
     onWritten: (rows) => {
+      // Upload (with a session; rows of test matches never leave the device)
+      if (rows.some(r => r.synced === SYNC.PENDING)) scheduleActivityUpload(db)
       for (const fn of afterWrite) {
         try { fn(rows) } catch (e) { console.warn('[Activity] after-write listener failed:', e?.message) }
       }
@@ -126,7 +130,9 @@ export function startActivityLog({ db, win = typeof window !== 'undefined' ? win
       if (next) writer.record('auth.sign_in', {}, { accountId: next })
       account = next
       if (next) {
+        // What waited for a session goes now
         writer.flush().then(() => {
+          ensureActivityFlushJob(db, { accountId: next })
           for (const fn of onSignIn) {
             try { fn(next) } catch { /* ignore */ }
           }
@@ -141,6 +147,10 @@ export function startActivityLog({ db, win = typeof window !== 'undefined' ? win
       win.removeEventListener('storage', onStorage)
     })
   }
+
+  // Rows left from the last run (quit before the upload)
+  const kick = setTimeout(() => { ensureActivityFlushJob(db) }, 15000)
+  cleanups.push(() => clearTimeout(kick))
 
   // Retention
   writer.prune()
