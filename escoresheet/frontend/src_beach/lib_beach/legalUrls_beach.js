@@ -1,6 +1,6 @@
 // COPY of the openvolley repo's escoresheet/frontend/src/legal/legalUrls.js
 // (the legal pages cover OpenVolley and OpenBeach). Change both;
-// __tests__/lib/legalUrls.test.js pins the URLs. Named legalUrls, not
+// __tests__/lib/legalUrls.test.jsx pins the URLs. Named legalUrls, not
 // legalLinks: next to a LegalLinks component the two names would differ only
 // in case, which clashes on Windows/macOS file systems.
 
@@ -8,8 +8,9 @@
  * The legal pages (privacy policy, terms of use, legal notice, open-source
  * notice) on openvolley.app, in DE/EN/FR/IT; German is the binding version.
  * The one place for these URLs in OpenBeach: Options, the sign-in dialog,
- * the referee menu, livescore, the scoresheet archive and the competitions
- * admin link here.
+ * the referee and livescore menu, the livescore list and the scoresheet
+ * archive link here (not yet the competitions admin, switched off while
+ * COMPETITIONS_ENABLED is false).
  *
  * The pages are built by the openvolley_home site (legal/build.mjs, its
  * ROUTES) from the openvolley repo's escoresheet/docs/legal/<lang>/*.md.
