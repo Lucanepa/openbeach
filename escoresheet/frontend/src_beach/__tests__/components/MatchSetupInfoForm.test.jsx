@@ -89,6 +89,14 @@ describe('MatchSetup_beach match info', () => {
     const today = defaultMatchDateTime()
     expect(date.value).toBe(today.date)
     expect(time.value).toMatch(/^\d{2}:\d{2}$/)
+    // The narrow width is on the field's wrapper, which holds the calendar /
+    // clock button: on the input alone the button sat outside the box
+    for (const input of [date, time]) {
+      const wrap = input.parentElement
+      expect(wrap.className).toMatch(/max-w-\[\d+px\]/)
+      expect(input.className).not.toMatch(/max-w-\[\d+px\]/)
+      expect(wrap.querySelector('button')).not.toBeNull()
+    }
     // placeholders and values as typed: no CSS capitalize
     const site = screen.getByPlaceholderText('Enter the site')
     expect(site.className).not.toMatch(/capitalize/)

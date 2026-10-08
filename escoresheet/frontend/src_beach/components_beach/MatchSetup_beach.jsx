@@ -3090,7 +3090,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 {/* The kit's field: "12.3.2025", "12032025" or a pick in its calendar */}
                 <DateField
                   size="lg"
-                  className="max-w-[200px]"
+                  // The width on the wrapper: its calendar button sits inside it
+                  wrapperClassName="max-w-[200px]"
                   data-testid="match-info-date"
                   value={dateTextToIso(date)}
                   onChange={iso => handleDateChange(isoToFormDate(iso))}
@@ -3099,7 +3100,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               <Field className={FIELD} label={t('matchSetup.time')} error={timeError || undefined}>
                 <TimeField
                   size="lg"
-                  className="max-w-[140px]"
+                  wrapperClassName="max-w-[140px]"
                   data-testid="match-info-time"
                   step={5}
                   value={time}
