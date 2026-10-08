@@ -89,4 +89,55 @@ describe('MatchEnd_beach: saving a signature drawn on the pad', () => {
     expect(states.filter(st => !st.pad && !st.signed)).toEqual([])
     cleanup()
   }, 30000)
+
+  it('an official match: one change, and a second tap on Save saves once', async () => {
+    // an official match's save also queues the upload (a second write after
+    // the signature is on screen); the pad stays open until the signature
+    // shows, and a quick second tap on its Save saved it and queued it again
+    const team1Id = await db.teams.add({ name: 'Müller / Weber' })
+    const team2Id = await db.teams.add({ name: 'Rossi / Bianchi' })
+    await db.players.bulkAdd([
+      { teamId: team1Id, number: 1, firstName: 'Anna', lastName: 'Müller', isCaptain: true },
+      { teamId: team1Id, number: 2, firstName: 'Lea', lastName: 'Weber' },
+      { teamId: team2Id, number: 1, firstName: 'Sara', lastName: 'Rossi', isCaptain: true },
+      { teamId: team2Id, number: 2, firstName: 'Gaia', lastName: 'Bianchi' }
+    ])
+    const matchId = await db.matches.add({ team1Id, team2Id, status: 'ended', test: false, seed_key: 'sig-twice', coinTossTeamA: 'team1' })
+    await db.sets.bulkAdd([
+      { matchId, index: 1, team1Points: 21, team2Points: 15, finished: true },
+      { matchId, index: 2, team1Points: 21, team2Points: 18, finished: true }
+    ])
+
+    render(<MatchEnd matchId={matchId} onGoHome={() => {}} onReopenLastSet={() => {}} onManualAdjustments={() => {}} />)
+    const box = () => document.querySelector('[data-testid="signature-slot-captain-a"]')
+    await waitFor(() => expect(box()?.querySelector('button')).toBeTruthy(), { timeout: 10000 })
+    fireEvent.click(box().querySelector('button'))
+    const pad = () => document.querySelector('canvas')
+    await waitFor(() => expect(pad()).toBeTruthy())
+    await sleep(150)
+    fireEvent.mouseDown(pad(), { clientX: 10, clientY: 10 })
+    fireEvent.mouseMove(pad(), { clientX: 40, clientY: 30 })
+    fireEvent.mouseUp(pad(), { clientX: 40, clientY: 30 })
+    const saveButton = () => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Save' && !b.disabled)
+    await waitFor(() => expect(saveButton()).toBeTruthy())
+
+    const states = []
+    const observer = new MutationObserver(() => {
+      states.push({ pad: !!pad(), signed: !!box()?.querySelector(`img[src="${SIG}"]`) })
+    })
+    observer.observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true })
+    const save = saveButton()
+    fireEvent.click(save)
+    fireEvent.click(save)
+    await waitFor(() => expect(pad()).toBeFalsy(), { timeout: 5000 })
+    await sleep(300)
+    observer.disconnect()
+
+    // the pad closed in the change that showed the signature
+    expect(states.filter(st => st.pad && st.signed)).toEqual([])
+    expect(states.filter(st => !st.pad && !st.signed)).toEqual([])
+    const jobs = (await db.sync_queue.toArray()).filter(j => j.payload?.id === 'sig-twice' && j.payload?.signatures)
+    expect(jobs).toHaveLength(1)
+    cleanup()
+  }, 30000)
 })
