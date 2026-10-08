@@ -692,6 +692,29 @@ async function requeueParkedJobsOf(matchKey, exceptId) {
   }
 }
 
+// The approval (a closing update: approved / final) closes the match on the
+// server, which from then on refuses a change of its remarks (409
+// OV_MATCH_CLOSED). MatchEnd queues the remarks as approved just before the
+// approval (backend db/017), so the approval must not overtake an older
+// remarks job of its match that is still on its way (queued, in flight or
+// waiting out a backoff). A refused one ('failed', e.g. a server without
+// db/017) does not hold it.
+const CLOSING_STATUSES = ['approved', 'final']
+export function isClosingJob(job) {
+  return job?.resource === 'match' && job.action === 'update' && CLOSING_STATUSES.includes(job.payload?.status)
+}
+const isRemarksUpdate = (j) => j?.resource === 'match' && j.action === 'update' && j.payload != null && typeof j.payload === 'object' && 'remarks' in j.payload
+export async function closingMustWait(job) {
+  const matchKey = jobMatchKey(job)
+  if (!matchKey || job?.id == null) return false
+  try {
+    const pending = await db.sync_queue.where('status').anyOf('queued', 'sending', 'error').toArray()
+    return pending.some(j => j.id < job.id && isRemarksUpdate(j) && jobMatchKey(j) === matchKey)
+  } catch {
+    return false
+  }
+}
+
 async function processJobInner(job, ctx) {
   try {
     // Jobs queued before set/event ids were namespaced (or by a call site that
@@ -706,6 +729,12 @@ async function processJobInner(job, ctx) {
         job = { ...job, payload: { ...job.payload, external_id: resolved.external_id, ...(resolved.match_id ? { match_id: resolved.match_id } : {}) } }
         await db.sync_queue.update(job.id, { payload: job.payload })
       }
+    }
+
+    // Closing order: the approval waits for the older remarks job of its match
+    if (isClosingJob(job) && await closingMustWait(job)) {
+      safeLog.log('[SyncQueue] Closing update waits for the older remarks job of its match')
+      return null
     }
 
     // ==================== MATCH ====================
