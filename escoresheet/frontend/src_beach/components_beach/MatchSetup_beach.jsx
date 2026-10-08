@@ -4756,7 +4756,14 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 <StatusBadge ready={matchInfoConfirmed} pending={!matchInfoConfirmed && canConfirmMatchInfo} />
                 <h3 className={BLOCK_TITLE}>{t('matchSetup.matchInfo')}</h3>
               </div>
-              <SyncStatusIndicator status={matchInfoSyncStatus} onRetry={() => retrySyncForCard('matchInfo')} />
+              {/* Edit in the heading row, not a row of its own: the setup
+                  page did not fit a 900 px window */}
+              <div className="flex items-center gap-2">
+                <SyncStatusIndicator status={matchInfoSyncStatus} onRetry={() => retrySyncForCard('matchInfo')} />
+                {matchInfoConfirmed && (
+                  <Button variant="secondary" size="xl" onClick={() => setCurrentView('info')}>{t('common.edit')}</Button>
+                )}
+              </div>
             </div>
             {/* Six rows, not ten: date and time, site and court, and the
                 category on one row each (the setup did not fit a 900 px
@@ -4791,10 +4798,9 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               { label: t('matchSetup.coach'), value: <span className={TRUNC}>{hasCoach ? t('common.yes') : t('common.no')}</span> }
             ]} />
           </div>
+          {!matchInfoConfirmed && (
           <div className="flex flex-wrap justify-end gap-2">
-            {matchInfoConfirmed ? (
-              <Button variant="secondary" size="xl" onClick={() => setCurrentView('info')}>{t('common.edit')}</Button>
-            ) : (
+            {(
               <>
                 {onLoadCompetitionMatch && (
                   <Button variant="secondary" size="xl" onClick={onLoadCompetitionMatch}>
@@ -4807,6 +4813,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               </>
             )}
           </div>
+          )}
         </div>
 
         {/* Match Officials Card */}
@@ -4817,7 +4824,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 <StatusBadge ready={officialsConfigured} />
                 <h3 className={BLOCK_TITLE}>{t('matchSetup.matchOfficials')}</h3>
               </div>
-              <SyncStatusIndicator status={officialsSyncStatus} onRetry={() => retrySyncForCard('officials')} />
+              <div className="flex items-center gap-2">
+                <SyncStatusIndicator status={officialsSyncStatus} onRetry={() => retrySyncForCard('officials')} />
+                <Button variant="secondary" size="xl" onClick={() => setCurrentView('officials')} disabled={!matchInfoConfirmed}>{t('common.edit')}</Button>
+              </div>
             </div>
             <KeyValue variant="detail" className={SUMMARY_KV} items={[
               { label: t('matchSetup.referee1'), value: <span className={TRUNC} title={formatOfficial(ref1Last, ref1First)}>{formatOfficial(ref1Last, ref1First)}</span> },
@@ -4833,9 +4843,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 )
               }] : [])
             ]} />
-          </div>
-          <div className="flex justify-end">
-            <Button variant="secondary" size="xl" onClick={() => setCurrentView('officials')} disabled={!matchInfoConfirmed}>{t('common.edit')}</Button>
           </div>
         </div>
       </div>
