@@ -70,3 +70,34 @@ describe('issue 2: "Switch sides" in the set interval', () => {
     expect(sb).toContain('const sides = nextSetStartSides(2, sidesMatch)')
   })
 })
+
+describe('issue 5: "Referee BMP" button and dialog', () => {
+  it('the in-rally row has one sizing rule, one-line labels and even gaps', () => {
+    const rule = between(sb, 'function rallyRowButton(scaleFactor, kind) {', '\n}\n')
+    expect(rule).toContain("whiteSpace: 'nowrap'")
+    expect(rule).toContain('minHeight: `${Math.max(58, 110 * scaleFactor)}px`')
+    const row = between(sb, 'data-testid="rally-row"', '{/* Undo + Decision Change')
+    expect(row.match(/style=\{rallyRowButton\(scaleFactor, '(side|point)'\)\}/g)).toHaveLength(4)
+    expect(row).not.toMatch(/margin(Left|Right): '30px'/)
+    expect(row).not.toContain("fontSize: '17px'")
+  })
+
+  it('the dialog\'s three choices shrink inside it, the teams in their colours', () => {
+    const style = between(sb, 'const bmpChoiceButton = {', '}\n')
+    expect(style).toContain("flex: '1 1 0'")
+    expect(style).toContain('minWidth: 0')
+    expect(style).toContain("overflow: 'hidden'")
+    const dialog = between(sb, '{/* BMP Outcome Modal */}', 'Shared expansion area')
+    expect(dialog).not.toContain("'#fcd34d'")
+    expect(dialog).toContain('background: leftTeamColor')
+    expect(dialog).toContain('background: rightTeamColor')
+    // the letters follow the coin toss, not the side
+    expect(dialog).toContain("const team1Label = teamAKey === 'team1' ? 'A' : 'B'")
+  })
+
+  it('Current / New show the left team first with letters', () => {
+    const dialog = between(sb, '{/* BMP Outcome Modal */}', '{/* Court Switch Modal')
+    expect(dialog).not.toMatch(/\{currentScore\.team1\} : \{currentScore\.team2\}/)
+    expect(dialog).toContain('{courtScore(currentScore)}')
+  })
+})

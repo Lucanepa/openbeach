@@ -38,6 +38,7 @@ import { captureFullStateSnapshot as captureStateSnapshot } from '../utils_beach
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
 import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
 import { defaultSetStartTime } from '../utils_beach/setStartTime_beach'
+import { formatCourtScore } from '../utils_beach/scoreText_beach'
 import { medicalStartPayload, medicalEndPayload, findOpenMedical, formatMedicalDuration, medicalSecondsLeft, MEDICAL_RECOVERY_SECONDS } from '../utils_beach/medicalEvents_beach'
 
 // Sport type for beach volleyball
@@ -87,6 +88,42 @@ const SB_RALLY_OUTLINE = `${SB_RALLY_BASE} border-stone-300 bg-white text-stone-
 const SB_RALLY_DECISION = `${SB_RALLY_BASE} border-amber-400 bg-amber-300 text-stone-900 hover:bg-amber-400`
 const SB_RALLY_BMP = `${SB_RALLY_BASE} border-orange-500 bg-orange-500 text-stone-950 hover:bg-orange-600`
 const SB_RALLY_UNDO = `${SB_RALLY_BASE} border-red-200 bg-white text-red-700 hover:bg-red-50`
+
+/** The in-rally row (Replay | Point A | Point B | Referee BMP): one sizing
+ *  rule, so "Referee BMP" no longer wraps onto two lines next to the big point
+ *  buttons. The point buttons are as big as the row allows (volleyui §7):
+ *  wider, and on a 1024×600 tablet as tall as fits above Undo. */
+function rallyRowButton(scaleFactor, kind) {
+  const isPoint = kind === 'point'
+  return {
+    padding: '12px 16px',
+    minHeight: `${Math.max(58, 110 * scaleFactor)}px`,
+    minWidth: isPoint ? '150px' : '140px',
+    fontSize: isPoint ? '24px' : '20px',
+    lineHeight: 1.1,
+    whiteSpace: 'nowrap'
+  }
+}
+
+/** The Referee BMP dialog's three choices: equal columns that shrink inside
+ *  the dialog (a long team name is cut with an ellipsis, never past the edge). */
+const bmpChoiceButton = {
+  flex: '1 1 0',
+  minWidth: 0,
+  overflow: 'hidden',
+  padding: '12px 10px',
+  minHeight: '52px',
+  fontSize: '16px',
+  fontWeight: 600,
+  borderRadius: '8px',
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '6px',
+  whiteSpace: 'nowrap',
+  textOverflow: 'ellipsis'
+}
 
 /** A label that some locales break with a soft "-\n" (de: "Verzögerungs-\nwarnung"), on one line. */
 const oneLine = (text) => String(text).replace(/-\n/g, '').replace(/\n/g, ' ')
@@ -9766,55 +9803,39 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             ) : (
                               <>
                                 {/* Row 1: Replay | Point A | Point B | Referee BMP */}
-                                <div className="rally-controls-row" style={{ gap: '5px', alignItems: 'stretch' }}>
+                                {/* One sizing rule for the row (rallyRowButton): the same height,
+                                    text size and one-line labels, even gaps; the side buttons
+                                    reserve their width while hidden (no reflow) */}
+                                <div className="rally-controls-row" data-testid="rally-row" style={{ gap: '12px', alignItems: 'stretch' }}>
                                   {rallyStatus === 'in_play' ? (
                                     <button
                                       className={cn('secondary', SB_RALLY_OUTLINE)}
                                       onClick={handleReplay}
-                                      style={{ padding: '8px 15px', fontSize: '18px', minWidth: '105px', marginRight: '30px' }}
+                                      style={rallyRowButton(scaleFactor, 'side')}
                                     >
                                       {t('scoreboard.buttons.replayShort', 'Replay')}
                                     </button>
                                   ) : (
-                                    <div style={{ minWidth: '105px', marginRight: '30px' }} />
+                                    <div aria-hidden="true" style={{ minWidth: rallyRowButton(scaleFactor, 'side').minWidth }} />
                                   )}
                                   <button
                                     className={cn('rally-point-button tabular-nums', SB_RALLY_POINT)}
                                     onClick={() => handlePoint('left')}
-                                    style={{
-                                      padding: '12px 16px',
-                                      // the point buttons as big as the row allows (volleyui §7):
-                                      // wider, and on a 1024×600 tablet as tall as fits above Undo
-                                      minHeight: `${Math.max(58, 110 * scaleFactor)}px`,
-                                      minWidth: '150px',
-                                      fontSize: '24px'
-                                    }}
+                                    style={rallyRowButton(scaleFactor, 'point')}
                                   >
                                     {t('scoreboard.buttons.pointTeam', { team: teamALabel || teamAShortName })}
                                   </button>
                                   <button
                                     className={cn('rally-point-button tabular-nums', SB_RALLY_POINT)}
                                     onClick={() => handlePoint('right')}
-                                    style={{
-                                      padding: '12px 16px',
-                                      // the point buttons as big as the row allows (volleyui §7):
-                                      // wider, and on a 1024×600 tablet as tall as fits above Undo
-                                      minHeight: `${Math.max(58, 110 * scaleFactor)}px`,
-                                      minWidth: '150px',
-                                      fontSize: '24px'
-                                    }}
+                                    style={rallyRowButton(scaleFactor, 'point')}
                                   >
                                     {t('scoreboard.buttons.pointTeam', { team: teamBLabel || teamBShortName })}
                                   </button>
                                   <button
                                     className={SB_RALLY_BMP}
                                     onClick={handleRefereeBMP}
-                                    style={{
-                                      padding: '8px 15px',
-                                      fontSize: '17px',
-                                      minWidth: '105px',
-                                      marginLeft: '30px'
-                                    }}
+                                    style={rallyRowButton(scaleFactor, 'side')}
                                   >
                                     {t('scoreboard.buttons.refereeBmp', 'Referee BMP')}
                                   </button>
@@ -16160,8 +16181,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         // Get team colors and labels (team1 = team1Team, team2 = team2Team)
         const team1Color = leftisTeam1 ? leftTeam?.color : rightTeam?.color
         const team2Color = leftisTeam1 ? rightTeam?.color : leftTeam?.color
-        const team1Label = leftisTeam1 ? 'A' : 'B'
-        const team2Label = leftisTeam1 ? 'B' : 'A'
+        const team1Label = teamAKey === 'team1' ? 'A' : 'B'
+        const team2Label = teamAKey === 'team1' ? 'B' : 'A'
+        // "A 20 : 16 B": the left team first, as on the court
+        const courtScore = (sc) => formatCourtScore(sc, { leftisTeam1, teamAKey })
         const team1Name = leftisTeam1 ? leftTeam?.name : rightTeam?.name
         const team2Name = leftisTeam1 ? rightTeam?.name : leftTeam?.name
 
@@ -16245,68 +16268,53 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
                       return (
                         <>
-                          {/* Button row: Point Left | Mark Unavailable | Point Right */}
-                          <div style={{ display: 'flex', flexDirection: 'row', gap: '8px' }}>
+                          {/* Button row: Point Left | Mark Unavailable | Point Right:
+                              three equal columns that shrink inside the dialog */}
+                          <div data-testid="referee-bmp-row" style={{ display: 'flex', flexDirection: 'row', gap: '8px', minWidth: 0 }}>
                             {/* Point Left Button */}
                             <button
+                              data-testid="referee-bmp-left"
                               onClick={() => setBmpSelectedOutcome(bmpSelectedOutcome === 'left' ? null : 'left')}
+                              title={`${leftLabel} ${leftTeamName || ''}`}
                               style={{
-                                flex: 1,
-                                padding: '12px 10px',
-                                fontSize: '16px',
-                                fontWeight: 600,
-                                background: selectedTeam === 'left' ? '#fbbf24' : '#fcd34d',
-                                color: '#000',
-                                border: selectedTeam === 'left' ? '2px solid #fde047' : '2px solid transparent',
-                                borderRadius: '8px',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '4px'
+                                ...bmpChoiceButton,
+                                background: leftTeamColor,
+                                color: isBrightColor(leftTeamColor) ? '#000' : '#fff',
+                                border: `2px solid ${leftTeamColor}`,
+                                boxShadow: selectedTeam === 'left' ? '0 0 0 3px var(--ov-card), 0 0 0 6px #eab308' : 'none'
                               }}
                             >
-                              <span style={{ background: leftTeamColor, color: isBrightColor(leftTeamColor) ? '#000' : '#fff', padding: '2px 5px', borderRadius: '4px', fontSize: '14px', fontWeight: 700 }}>{leftLabel}</span>
-                              <span style={{ fontSize: '15px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{leftTeamName}</span>
+                              <span style={{ fontWeight: 700, flexShrink: 0 }}>{leftLabel}</span>
+                              <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{leftTeamName}</span>
                             </button>
                             {/* Mark Unavailable Button */}
                             <button
                               onClick={() => setBmpSelectedOutcome(bmpSelectedOutcome === 'judgment_impossible' ? null : 'judgment_impossible')}
                               style={{
-                                flex: 1,
-                                padding: '12px 10px',
-                                fontSize: '16px',
-                                fontWeight: 600,
+                                ...bmpChoiceButton,
                                 background: selectedTeam === 'unavailable' ? '#78716c' : '#a8a29e',
                                 color: '#fff',
-                                border: selectedTeam === 'unavailable' ? '2px solid #d1d5db' : '2px solid transparent',
-                                borderRadius: '8px',
-                                cursor: 'pointer'
+                                border: '2px solid transparent',
+                                boxShadow: selectedTeam === 'unavailable' ? '0 0 0 3px var(--ov-card), 0 0 0 6px #78716c' : 'none'
                               }}
                             >
                               Unavailable
                             </button>
                             {/* Point Right Button */}
                             <button
+                              data-testid="referee-bmp-right"
                               onClick={() => setBmpSelectedOutcome(bmpSelectedOutcome === 'right' ? null : 'right')}
+                              title={`${rightLabel} ${rightTeamName || ''}`}
                               style={{
-                                flex: 1,
-                                padding: '12px 10px',
-                                fontSize: '16px',
-                                fontWeight: 600,
-                                background: selectedTeam === 'right' ? '#fbbf24' : '#fcd34d',
-                                color: '#000',
-                                border: selectedTeam === 'right' ? '2px solid #fde047' : '2px solid transparent',
-                                borderRadius: '8px',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '4px'
+                                ...bmpChoiceButton,
+                                background: rightTeamColor,
+                                color: isBrightColor(rightTeamColor) ? '#000' : '#fff',
+                                border: `2px solid ${rightTeamColor}`,
+                                boxShadow: selectedTeam === 'right' ? '0 0 0 3px var(--ov-card), 0 0 0 6px #eab308' : 'none'
                               }}
                             >
-                              <span style={{ background: rightTeamColor, color: isBrightColor(rightTeamColor) ? '#000' : '#fff', padding: '2px 5px', borderRadius: '4px', fontSize: '14px', fontWeight: 700 }}>{rightLabel}</span>
-                              <span style={{ fontSize: '15px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rightTeamName}</span>
+                              <span style={{ fontWeight: 700, flexShrink: 0 }}>{rightLabel}</span>
+                              <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rightTeamName}</span>
                             </button>
                           </div>
 
@@ -16322,18 +16330,18 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               <div style={{ fontSize: '15px', color: 'var(--muted)', marginBottom: '12px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', padding: '6px 10px', background: 'var(--ov-sunken)', borderRadius: '6px' }}>
                                   <span>Current:</span>
-                                  <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
+                                  <span><strong className="tabular-nums">{courtScore(currentScore)}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
                                 </div>
                                 {selectedTeam === 'unavailable' ? (
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(156, 163, 175, 0.15)', borderRadius: '6px', border: '1px solid rgba(156, 163, 175, 0.3)' }}>
                                     <span style={{ color: 'var(--ov-text-muted)' }}>No change:</span>
-                                    <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
+                                    <span><strong className="tabular-nums">{courtScore(currentScore)}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
                                   </div>
                                 ) : (
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(234, 179, 8, 0.15)', borderRadius: '6px', border: '1px solid rgba(234, 179, 8, 0.3)' }}>
                                     <span style={{ color: 'var(--ov-warning-text)' }}>New:</span>
                                     <span><strong style={{ color: 'var(--ov-warning-text)' }}>
-                                      {selectedTeam === 'left' ? leftTeamScore.team1 : rightTeamScore.team1} : {selectedTeam === 'left' ? leftTeamScore.team2 : rightTeamScore.team2}
+                                      {courtScore(selectedTeam === 'left' ? leftTeamScore : rightTeamScore)}
                                     </strong> · <Volleyball /> {(selectedTeam === 'left' ? leftTeamScore.serve : rightTeamScore.serve) === 'team1' ? team1Name : team2Name}</span>
                                   </div>
                                 )}
@@ -16471,22 +16479,22 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         <div style={{ fontSize: '15px', color: 'var(--muted)', marginBottom: '12px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', padding: '6px 10px', background: 'var(--ov-sunken)', borderRadius: '6px' }}>
                             <span>Current:</span>
-                            <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
+                            <span><strong className="tabular-nums">{courtScore(currentScore)}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
                           </div>
                           {bmpSelectedOutcome === 'successful' ? (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(34, 197, 94, 0.15)', borderRadius: '6px', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
                               <span style={{ color: 'var(--ov-success)' }}>New:</span>
-                              <span><strong style={{ color: 'var(--ov-success)' }}>{successScore.team1} : {successScore.team2}</strong> · <Volleyball /> {successServe === 'team1' ? team1Name : team2Name}</span>
+                              <span><strong className="tabular-nums" style={{ color: 'var(--ov-success)' }}>{courtScore(successScore)}</strong> · <Volleyball /> {successServe === 'team1' ? team1Name : team2Name}</span>
                             </div>
                           ) : bmpSelectedOutcome === 'unsuccessful' ? (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(239, 68, 68, 0.15)', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
                               <span style={{ color: 'var(--ov-danger-text)' }}>No change:</span>
-                              <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
+                              <span><strong className="tabular-nums">{courtScore(currentScore)}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
                             </div>
                           ) : (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(156, 163, 175, 0.15)', borderRadius: '6px', border: '1px solid rgba(156, 163, 175, 0.3)' }}>
                               <span style={{ color: 'var(--ov-text-muted)' }}>No change:</span>
-                              <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
+                              <span><strong className="tabular-nums">{courtScore(currentScore)}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
                             </div>
                           )}
                         </div>
