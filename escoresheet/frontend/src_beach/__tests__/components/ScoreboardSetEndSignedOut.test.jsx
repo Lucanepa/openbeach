@@ -65,9 +65,9 @@ describe('Scoreboard_beach: set end while signed out (issue 16)', () => {
     render(<ScaleProvider><AlertProvider><LoggingProvider><Scoreboard matchId={matchId} /></LoggingProvider></AlertProvider></ScaleProvider>)
     await waitFor(() => expect(button('Start set')).toBeTruthy(), { timeout: 8000 })
     fireEvent.click(button('Start set'))
-    await waitFor(() => expect(button('Confirm')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(button('Confirm')).toBeTruthy())
     fireEvent.click(button('Confirm'))
-    await waitFor(() => expect(button('Point A')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(button('Point A')).toBeTruthy())
     fireEvent.click(button('Point A'))
 
     // the set end time

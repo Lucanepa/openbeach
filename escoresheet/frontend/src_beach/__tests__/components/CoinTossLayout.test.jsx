@@ -77,7 +77,7 @@ describe('CoinToss_beach layout', () => {
     await act(async () => { fireEvent.click(screen.getByRole('radio', { name: 'Court side' })) })
     expect(choice).toBeInTheDocument()
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Confirm the coin toss' })) })
-    await waitFor(async () => expect((await db.matches.get(matchId)).coinTossChoice).toBe('side'), { timeout: 5000 })
+    await waitFor(async () => expect((await db.matches.get(matchId)).coinTossChoice).toBe('side'))
     const ev = (await db.events.toArray()).find(e => e.type === 'coin_toss')
     expect(ev.payload.coinTossChoice).toBe('side')
     // the coin toss runs on after its writes (signatures, the sync and

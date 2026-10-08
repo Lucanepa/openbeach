@@ -3,7 +3,7 @@
 // React state until "Confirm coin toss result": a reload lost it (OpenVolley
 // 703cfa9c, owner 2026-10-07: "save the signatures as soon as they're made").
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest'
-import { render, screen, fireEvent, act, waitFor, cleanup, configure } from '@testing-library/react'
+import { render, screen, fireEvent, act, waitFor, cleanup } from '@testing-library/react'
 import Dexie from 'dexie'
 import { IDBFactory, IDBKeyRange } from 'fake-indexeddb'
 
@@ -64,16 +64,11 @@ const signatureJobs = async () => (await db.sync_queue.toArray()).filter(j => j.
 // saveMatchSignature writes the field, then queues the job: wait for the job
 const waitForSignatureJobs = async (n) => {
   let jobs
-  await waitFor(async () => { jobs = await signatureJobs(); expect(jobs).toHaveLength(n) }, { timeout: 5000 })
+  await waitFor(async () => { jobs = await signatureJobs(); expect(jobs).toHaveLength(n) })
   return jobs
 }
 
-// Each test draws the whole coin toss screen (the reload test twice) and
-// waits on its writes: up to 3.8 s in full-suite runs, 5 s and over (the
-// default limit) with the machine loaded (2026-10-08). Nothing here waits
-// on a timer, so the waits get time too.
-configure({ asyncUtilTimeout: 10000 })
-describe('CoinToss_beach signatures are saved at once', { timeout: 30000 }, () => {
+describe('CoinToss_beach signatures are saved at once', () => {
   it('the captain signature is on the match row and queued before the coin toss is confirmed', async () => {
     await seed()
     await openOrderAndSignature(0)

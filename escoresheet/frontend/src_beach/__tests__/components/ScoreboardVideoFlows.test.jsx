@@ -68,11 +68,11 @@ async function setUpMatch() {
 const bmpButtons = () => [...document.querySelectorAll('button')].filter(b => /^BMP\d$/.test(b.textContent.trim()))
 
 async function startSet() {
-  await waitFor(() => expect(button('Start set')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Start set')).toBeTruthy())
   fireEvent.click(button('Start set'))
-  await waitFor(() => expect(button('Confirm')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Confirm')).toBeTruthy())
   fireEvent.click(button('Confirm'))
-  await waitFor(() => expect(button('Point A')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Point A')).toBeTruthy())
 }
 
 describe('Scoreboard_beach: team BMP (issues 3 and 14)', () => {

@@ -16,6 +16,11 @@ export default defineConfig({
     // machine loaded that passed the default 10 s (three files at once in a
     // full-suite run, 2026-10-08). A hook waits on an import, not on a timer.
     hookTimeout: 30000,
+    // A whole screen drawn and driven through its writes: 2.5 to 5.4 s for a
+    // short test with the machine loaded, past the default 5 s (CoinToss
+    // signatures, 2026-10-08). Every wait ends on the screen or the database
+    // (setup.js: 10 s each), so only a stuck test runs this long.
+    testTimeout: 30000,
     include: ['src_beach/**/*.{test,spec}.{js,jsx}'],
     coverage: {
       provider: 'v8',

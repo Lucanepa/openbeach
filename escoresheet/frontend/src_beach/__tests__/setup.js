@@ -1,9 +1,18 @@
 import { expect, afterEach, vi } from 'vitest'
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
 import * as matchers from '@testing-library/jest-dom/matchers'
 
 // Extend Vitest's expect with jest-dom matchers
 expect.extend(matchers)
+
+// waitFor / findBy end on what the screen or the database shows, never on a
+// timer, so a longer limit costs a passing test nothing. The default 1 s was
+// too short with the machine loaded: one write of a scoring screen took up to
+// 1 s, an action of several writes (a BMP outcome, the end of a TTO) longer,
+// and different tests failed in turn in full-suite runs (2026-10-08). 10 s,
+// under the 30 s per test (vitest.config.js), so a real failure still reports
+// its assertion rather than a test timeout.
+configure({ asyncUtilTimeout: 10000 })
 
 // Cleanup after each test
 afterEach(() => {

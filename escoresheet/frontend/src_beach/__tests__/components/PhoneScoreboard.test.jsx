@@ -114,9 +114,9 @@ describe('Scoreboard_beach: the phone layout', () => {
     // ---- Start set: the screen's set start dialog, then the point buttons ----
     expect(view.queryByRole('button', { name: 'Point A' })).toBeNull()
     fireEvent.click(view.getByTestId('phone-start'))
-    await waitFor(() => expect(button('Confirm')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(button('Confirm')).toBeTruthy())
     fireEvent.click(button('Confirm'))
-    await waitFor(() => expect(view.getByRole('button', { name: 'Point A' })).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(view.getByRole('button', { name: 'Point A' })).toBeTruthy())
     // square, as wide as their column; lower (not narrower) on a short screen (styles_beach.css)
     expect(view.getByRole('button', { name: 'Point A' }).classList.contains('phone-square')).toBe(true)
     // the referee BMP decides the rally in play
@@ -136,7 +136,7 @@ describe('Scoreboard_beach: the phone layout', () => {
     await waitFor(() => expect(view.getByTestId('phone-bmp-right').disabled).toBe(false))
     expect(view.getByTestId('phone-bmp-right').textContent).toBe('BMP left2')
     fireEvent.click(view.getByTestId('phone-bmp-right'))
-    await waitFor(() => expect(button('Unsuccessful')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(button('Unsuccessful')).toBeTruthy())
     fireEvent.click(button('Unsuccessful'))
     await waitFor(() => expect(button('Confirm Unsuccessful')).toBeTruthy())
     fireEvent.click(button('Confirm Unsuccessful'))
@@ -152,24 +152,24 @@ describe('Scoreboard_beach: the phone layout', () => {
 
     // ---- time-out A: the screen's request dialog, then its countdown ----
     fireEvent.click(view.getByTestId('phone-timeout-left'))
-    await waitFor(() => expect(button('Confirm time-out')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(button('Confirm time-out')).toBeTruthy())
     await settle()
     fireEvent.click(button('Confirm time-out'))
     await waitFor(async () => expect((await ofType('timeout')).length).toBe(1))
     expect((await ofType('timeout'))[0].payload.team).toBe('team1')
-    await waitFor(() => expect(view.getByTestId('phone-countdown')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(view.getByTestId('phone-countdown')).toBeTruthy())
     await waitFor(() => expect(view.getByTestId('phone-timeout-left').textContent).toMatch('1/1'))
     // one per set: greyed; the other team's stays open
     expect(view.getByTestId('phone-timeout-left').disabled).toBe(true)
     expect(view.getByTestId('phone-timeout-right').disabled).toBe(false)
     await settle()
     fireEvent.click(view.getByRole('button', { name: 'Stop time-out' }))
-    await waitFor(() => expect(view.queryByTestId('phone-countdown')).toBeNull(), { timeout: 5000 })
+    await waitFor(() => expect(view.queryByTestId('phone-countdown')).toBeNull())
     await settle()
 
     // ---- undo: the screen's undo confirmation takes the time-out back ----
     fireEvent.click(view.getByRole('button', { name: 'Undo' }))
-    await waitFor(() => expect(document.querySelector('[data-testid="undo-confirm"]')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(document.querySelector('[data-testid="undo-confirm"]')).toBeTruthy())
     await settle()
     fireEvent.click([...document.querySelectorAll('[data-testid="undo-confirm"] button')].at(-1))
     await waitFor(async () => expect((await ofType('timeout')).length).toBe(0))
@@ -217,10 +217,10 @@ describe('Scoreboard_beach: the phone layout', () => {
       await settle()
       // a running time-out (the screen's own state)
       fireEvent.click(view.getByTestId('phone-timeout-left'))
-      await waitFor(() => expect(button('Confirm time-out')).toBeTruthy(), { timeout: 5000 })
+      await waitFor(() => expect(button('Confirm time-out')).toBeTruthy())
       await settle()
       fireEvent.click(button('Confirm time-out'))
-      await waitFor(() => expect(view.getByTestId('phone-countdown')).toBeTruthy(), { timeout: 5000 })
+      await waitFor(() => expect(view.getByTestId('phone-countdown')).toBeTruthy())
       const scoreboardRoot = document.querySelector('.match-record')
 
       // turned sideways: same screen (not remounted), the notice over it

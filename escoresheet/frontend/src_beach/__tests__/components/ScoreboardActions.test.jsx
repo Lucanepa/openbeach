@@ -73,7 +73,7 @@ describe('Scoreboard_beach: scorer actions against the real database', () => {
     render(<ScaleProvider><AlertProvider><LoggingProvider><Scoreboard matchId={matchId} /></LoggingProvider></AlertProvider></ScaleProvider>)
 
     // Start the set (start time dialog), which starts the first rally
-    await waitFor(() => expect(button('Start set')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(button('Start set')).toBeTruthy())
     fireEvent.click(button('Start set'))
     await waitFor(() => expect(button('Confirm')).toBeTruthy())
     fireEvent.click(button('Confirm'))

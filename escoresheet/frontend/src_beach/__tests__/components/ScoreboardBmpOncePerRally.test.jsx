@@ -6,7 +6,7 @@
 // Network is off: no relay socket, no fetch.
 import '../helpers/fakeIndexedDb'
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest'
-import { render, fireEvent, waitFor, cleanup, configure } from '@testing-library/react'
+import { render, fireEvent, waitFor, cleanup } from '@testing-library/react'
 import '../../i18n_beach'
 import { AlertProvider } from '../../contexts_beach/AlertContext_beach'
 import { ScaleProvider } from '../../contexts_beach/ScaleContext_beach'
@@ -14,12 +14,6 @@ import { LoggingProvider } from '../../contexts_beach/LoggingContext_beach'
 import { db } from '../../db_beach/db_beach'
 import Scoreboard from '../../components_beach/Scoreboard_beach'
 import { GHOST_CLICK_MS } from '../../hooks_beach/useConfirmAction_beach'
-
-// Every wait below ends on what the screen or the database shows, never on a
-// timer. A BMP outcome is several writes: from the tap on "Confirm
-// Unsuccessful" to its outcome row took up to 0.75 s with the machine loaded
-// alone, and past the default 1 s of waitFor in a full-suite run (2026-10-08)
-configure({ asyncUtilTimeout: 10000 })
 
 class OfflineSocket {
   constructor() { this.readyState = 3 }
@@ -78,11 +72,11 @@ async function setUpMatch() {
 const mount = (matchId) => render(<ScaleProvider><AlertProvider><LoggingProvider><Scoreboard matchId={matchId} /></LoggingProvider></AlertProvider></ScaleProvider>)
 
 async function startSet() {
-  await waitFor(() => expect(button('Start set')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Start set')).toBeTruthy())
   fireEvent.click(button('Start set'))
-  await waitFor(() => expect(button('Confirm')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Confirm')).toBeTruthy())
   fireEvent.click(button('Confirm'))
-  await waitFor(() => expect(button('Point A')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Point A')).toBeTruthy())
 }
 
 // Team A wins the rally in play (the first one is started by startSet)
@@ -92,12 +86,12 @@ async function pointA() {
   await waitFor(async () => expect((await ofType('point')).length).toBe(before + 1))
 }
 async function startRally() {
-  await waitFor(() => expect(button('Start rally')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Start rally')).toBeTruthy())
   fireEvent.click(button('Start rally'))
-  await waitFor(() => expect(button('Point A')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Point A')).toBeTruthy())
 }
 async function switchCourts() {
-  await waitFor(() => expect(button('Switch courts')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Switch courts')).toBeTruthy())
   fireEvent.click(button('Switch courts'))
   await waitFor(async () => expect((await ofType('court_switch')).length).toBeGreaterThan(0))
   await waitFor(() => expect(button('Switch courts')).toBeFalsy())
@@ -127,7 +121,7 @@ describe('Scoreboard_beach: one BMP per completed rally', () => {
       await pointA()
     }
     // 7:0, the court switch dialog offers team B a BMP on that rally
-    await waitFor(() => expect(button('Switch courts')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(button('Switch courts')).toBeTruthy())
     await waitFor(() => expect(dialogBmp()).toBeTruthy())
     await unsuccessfulBmp(dialogBmp())
 
@@ -142,7 +136,7 @@ describe('Scoreboard_beach: one BMP per completed rally', () => {
     // reload: still none, read from the events
     cleanup()
     mount(matchId)
-    await waitFor(() => expect(button('Start rally')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(button('Start rally')).toBeTruthy())
     expect(bmpButtons()).toHaveLength(2)
     expect(bmpButtons().every(b => b.disabled)).toBe(true)
 
@@ -158,7 +152,7 @@ describe('Scoreboard_beach: one BMP per completed rally', () => {
     // and after a reload too
     cleanup()
     mount(matchId)
-    await waitFor(() => expect(bmpButtons().length).toBe(2), { timeout: 5000 })
+    await waitFor(() => expect(bmpButtons().length).toBe(2))
     await waitFor(() => expect(bmpButtons().every(b => !b.disabled)).toBe(true))
     cleanup()
   }, 60000)
@@ -174,13 +168,13 @@ describe('Scoreboard_beach: one BMP per completed rally', () => {
     }
     // 21:0: the set-end dialog with team B's BMP request (2 left)
     const setEndOpen = () => document.body.textContent.includes('Set 1 end')
-    await waitFor(() => expect(setEndOpen()).toBe(true), { timeout: 5000 })
-    await waitFor(() => expect(dialogBmp()).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(setEndOpen()).toBe(true))
+    await waitFor(() => expect(dialogBmp()).toBeTruthy())
     expect(dialogBmp().textContent).toContain('2')
     await unsuccessfulBmp(dialogBmp())
 
     // the set-end dialog comes back for the same point: no second BMP
-    await waitFor(() => expect(setEndOpen()).toBe(true), { timeout: 5000 })
+    await waitFor(() => expect(setEndOpen()).toBe(true))
     await settle()
     expect(setEndOpen()).toBe(true)
     expect((await ofType('challenge')).length).toBe(1)
@@ -207,7 +201,7 @@ describe('Scoreboard_beach: one BMP per completed rally, event by event', () => 
     expect(bmpButtons()[0].title).toContain('once per rally')
     // reload
     cleanup(); mount(matchId)
-    await waitFor(() => expect(bmpButtons().length).toBe(2), { timeout: 5000 })
+    await waitFor(() => expect(bmpButtons().length).toBe(2))
     await settle()
     expect(allGrey()).toBe(true)
     // undo the BMP: available again
@@ -249,7 +243,7 @@ describe('Scoreboard_beach: one BMP per completed rally, event by event', () => 
     const [set1] = await db.sets.toArray()
     expect([set1.team1Points, set1.team2Points]).toEqual([2, 1])
     cleanup(); mount(matchId)
-    await waitFor(() => expect(bmpButtons().length).toBe(2), { timeout: 5000 })
+    await waitFor(() => expect(bmpButtons().length).toBe(2))
     await settle()
     expect(allGrey()).toBe(true)
     cleanup()
@@ -269,14 +263,14 @@ describe('Scoreboard_beach: one BMP per completed rally, event by event', () => 
       if (i % 2) await pointA(); else await pointB()
       if (i === 7 || i === 14) await switchCourts()
     }
-    await waitFor(() => expect(button('Start TTO')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(button('Start TTO')).toBeTruthy())
     await waitFor(() => expect(dialogBmp()).toBeTruthy())
     await unsuccessfulBmp(dialogBmp())
     await waitFor(() => expect(button('Start TTO')).toBeTruthy())
     expect(dialogBmp()).toBeFalsy()
     // reload: the scoring screen's buttons stay greyed (a BMP was taken on that rally)
     cleanup(); mount(matchId)
-    await waitFor(() => expect(bmpButtons().length).toBe(2), { timeout: 5000 })
+    await waitFor(() => expect(bmpButtons().length).toBe(2))
     await settle()
     expect(allGrey()).toBe(true)
     await startRally()

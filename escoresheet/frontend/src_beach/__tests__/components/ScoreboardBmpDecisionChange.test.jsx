@@ -71,11 +71,11 @@ async function setUpMatch() {
 const mount = (matchId) => render(<ScaleProvider><AlertProvider><LoggingProvider><Scoreboard matchId={matchId} /></LoggingProvider></AlertProvider></ScaleProvider>)
 
 async function startSet() {
-  await waitFor(() => expect(button('Start set')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Start set')).toBeTruthy())
   fireEvent.click(button('Start set'))
-  await waitFor(() => expect(button('Confirm')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Confirm')).toBeTruthy())
   fireEvent.click(button('Confirm'))
-  await waitFor(() => expect(button('Point A')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Point A')).toBeTruthy())
 }
 
 // Team A wins the rally in play (the first one is started by startSet)
@@ -85,9 +85,9 @@ async function pointA() {
   await waitFor(async () => expect((await ofType('point')).length).toBe(before + 1))
 }
 async function startRally() {
-  await waitFor(() => expect(button('Start rally')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Start rally')).toBeTruthy())
   fireEvent.click(button('Start rally'))
-  await waitFor(() => expect(button('Point A')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Point A')).toBeTruthy())
 }
 async function unsuccessfulBmp(open) {
   const before = (await ofType('challenge_outcome')).length
@@ -108,7 +108,7 @@ const optionTile = (text) => [...document.querySelectorAll('span')].find(s => s.
 // other team"; `option` picks the other one first
 async function decisionChange(option) {
   const before = (await ofType('decision_change')).length + (await ofType('replay')).length
-  await waitFor(() => expect(button('Decision change')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Decision change')).toBeTruthy())
   fireEvent.click(button('Decision change'))
   await waitFor(() => expect(optionTile('Assign to other team')).toBeTruthy())
   if (option) fireEvent.click(optionTile(option))
@@ -134,7 +134,7 @@ describe('Scoreboard_beach: a BMP after a decision change', () => {
     await waitFor(() => expect(allOn()).toBe(true))
     // and after a reload (read from the events)
     cleanup(); mount(matchId)
-    await waitFor(() => expect(bmpButtons().length).toBe(2), { timeout: 5000 })
+    await waitFor(() => expect(bmpButtons().length).toBe(2))
     await settle()
     expect(allOn()).toBe(true)
     // team A (left) asks: unsuccessful. Once per rally: greyed

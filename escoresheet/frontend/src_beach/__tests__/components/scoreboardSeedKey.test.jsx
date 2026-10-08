@@ -63,7 +63,7 @@ describe('Scoreboard_beach tells the event history the open match\'s seed_key', 
     for (let i = 1; i <= 201; i++) rememberSeedKey(100000 + i, null, false)
 
     render(<ScaleProvider><AlertProvider><LoggingProvider><Scoreboard matchId={matchId} /></LoggingProvider></AlertProvider></ScaleProvider>)
-    await waitFor(() => expect(button('Start set')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(button('Start set')).toBeTruthy())
 
     // An action's transaction (db.tables, as useScorerActions) taking the event back
     let inside = null

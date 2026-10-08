@@ -75,13 +75,13 @@ describe('Scoreboard_beach: Sanctions and results, times from the first rally', 
       return b
     }, { timeout: 8000 })
     fireEvent.click(menu)
-    fireEvent.click(await screen.findByText('Show sanctions and results', {}, { timeout: 5000 }))
+    fireEvent.click(await screen.findByText('Show sanctions and results', {}))
 
     const row = await waitFor(() => {
       const label = [...document.querySelectorAll('td')].find(td => td.textContent.trim() === 'Match start time:')
       expect(label).toBeTruthy()
       return label.parentElement
-    }, { timeout: 5000 })
+    })
     const cells = [...row.querySelectorAll('td')].map(td => td.textContent.trim())
     // 16:05 (set 1 first rally) - 16:45 (set 2 end) = 40 min
     expect(cells[1]).toBe('16:05:00')
@@ -121,12 +121,12 @@ describe('Scoreboard_beach: Sanctions and results, times from the first rally', 
       return b
     }, { timeout: 8000 })
     fireEvent.click(menu)
-    fireEvent.click(await screen.findByText('Show sanctions and results', {}, { timeout: 5000 }))
+    fireEvent.click(await screen.findByText('Show sanctions and results', {}))
     await waitFor(() => {
       const durs = [...document.querySelectorAll('td')].map(td => td.textContent.trim()).filter(x => /^\d+'$/.test(x))
       // 16:05 - 16:24, not 14:30 - 16:24 (114')
       expect(durs).toContain("19'")
       expect(durs).not.toContain("114'")
-    }, { timeout: 5000 })
+    })
   }, 30000)
 })

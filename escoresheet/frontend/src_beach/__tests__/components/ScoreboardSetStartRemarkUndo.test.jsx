@@ -79,7 +79,7 @@ async function setUpMatch(scheduledAt) {
 const mount = (matchId) => render(<ScaleProvider><AlertProvider><LoggingProvider><Scoreboard matchId={matchId} /></LoggingProvider></AlertProvider></ScaleProvider>)
 
 async function undoLast() {
-  await waitFor(() => expect(button('Undo')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Undo')).toBeTruthy())
   fireEvent.click(button('Undo'))
   await waitFor(() => expect(bAll('Undo').length).toBeGreaterThan(1))
   fireEvent.click(bAll('Undo').at(-1))
@@ -92,15 +92,15 @@ describe('Scoreboard_beach: undoing the set 1 start takes its "Actual start time
     const matchId = await setUpMatch(scheduled)
     mount(matchId)
 
-    await waitFor(() => expect(button('Start set')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(button('Start set')).toBeTruthy())
     fireEvent.click(button('Start set'))
-    await waitFor(() => expect(button('Confirm')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(button('Confirm')).toBeTruthy())
     // the dialog proposes the scheduled time; the scorer types the actual one
     const input = document.querySelector('input[inputmode="numeric"]')
     expect(input.value).toBe(clockOf(scheduled))
     fireEvent.change(input, { target: { value: clockOf(actual) } })
     fireEvent.click(button('Confirm'))
-    await waitFor(() => expect(button('Point A')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(button('Point A')).toBeTruthy())
 
     const line = `Actual start time: ${clockOf(actual)}`
     expect((await db.matches.get(matchId)).remarks).toBe(`Ball changed\n${line}`)
@@ -125,11 +125,11 @@ describe('Scoreboard_beach: undoing the set 1 start takes its "Actual start time
     const matchId = await setUpMatch(scheduled)
     mount(matchId)
 
-    await waitFor(() => expect(button('Start set')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(button('Start set')).toBeTruthy())
     fireEvent.click(button('Start set'))
-    await waitFor(() => expect(button('Confirm')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(button('Confirm')).toBeTruthy())
     fireEvent.click(button('Confirm'))
-    await waitFor(() => expect(button('Point A')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(button('Point A')).toBeTruthy())
     expect((await db.matches.get(matchId)).remarks).toBe('Ball changed')
     const [setStart] = await ofType('set_start')
     expect(setStart.payload.autoRemark).toBeUndefined()

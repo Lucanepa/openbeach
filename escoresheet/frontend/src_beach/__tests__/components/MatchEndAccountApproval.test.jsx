@@ -293,7 +293,7 @@ describe('MatchEnd_beach: approve with an account', () => {
     await waitFor(async () => {
       job = (await db.sync_queue.toArray()).find(j => j.payload?.status === 'approved')
       expect(job).toBeTruthy()
-    }, { timeout: 5000 })
+    })
     expect(api.list.mock.calls.length).toBeGreaterThanOrEqual(2)
     expect(job.payload.approval.accounts).toEqual({
       ref1: { short_id: 'AB12CD34', name: 'Ref Anna', approved_at: '2026-07-12T10:42:00.000Z' }, ref2: null, scorer: null

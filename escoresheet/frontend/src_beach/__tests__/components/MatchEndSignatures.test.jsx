@@ -82,7 +82,7 @@ const signatureJobs = async () => (await db.sync_queue.toArray()).filter(j => j.
 // saveMatchSignature writes the field, then queues the job: wait for the job
 const waitForSignatureJobs = async (n) => {
   let jobs
-  await waitFor(async () => { jobs = await signatureJobs(); expect(jobs).toHaveLength(n) }, { timeout: 5000 })
+  await waitFor(async () => { jobs = await signatureJobs(); expect(jobs).toHaveLength(n) })
   return jobs
 }
 
@@ -180,7 +180,7 @@ describe('MatchEnd_beach: Reopen last set', () => {
     await waitFor(async () => {
       live = (await db.sync_queue.toArray()).find(j => j.resource === 'match' && j.payload?.status === 'live')
       expect(live).toBeTruthy()
-    }, { timeout: 5000 })
+    })
     expect(live.payload.signatures).toMatchObject({
       team1_captain: 'data:pre-capt-1',
       team1_captain_post_game: null, team2_captain_post_game: null,

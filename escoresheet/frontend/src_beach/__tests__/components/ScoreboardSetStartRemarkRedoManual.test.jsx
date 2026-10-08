@@ -82,17 +82,17 @@ async function addMatch(scheduledAt, extra = {}) {
 const mount = (matchId) => render(<ScaleProvider><AlertProvider><LoggingProvider><Scoreboard matchId={matchId} /></LoggingProvider></AlertProvider></ScaleProvider>)
 
 async function startSet(clock) {
-  await waitFor(() => expect(button('Start set')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Start set')).toBeTruthy())
   fireEvent.click(button('Start set'))
-  await waitFor(() => expect(button('Confirm')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Confirm')).toBeTruthy())
   if (clock) fireEvent.change(document.querySelector('input[inputmode="numeric"]'), { target: { value: clock } })
   fireEvent.click(button('Confirm'))
-  await waitFor(() => expect(button('Point A')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Point A')).toBeTruthy())
   await settle()
 }
 
 async function undoLast() {
-  await waitFor(() => expect(button('Undo')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Undo')).toBeTruthy())
   fireEvent.click(button('Undo'))
   await waitFor(() => expect(bAll('Undo').length).toBeGreaterThan(1))
   fireEvent.click(bAll('Undo').at(-1))
@@ -108,13 +108,13 @@ async function undoSetStart() {
 }
 
 async function openSetTimes() {
-  await waitFor(() => expect(document.querySelector('button[title="Menu"]')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(document.querySelector('button[title="Menu"]')).toBeTruthy())
   const menu = document.querySelector('button[title="Menu"]')
   fireEvent.click(menu)
   await waitFor(() => expect([...document.querySelectorAll('button, [role="menuitem"], div')].some(el => el.textContent.trim() === 'Manual changes' && el.children.length <= 2)).toBe(true))
   const item = [...document.querySelectorAll('button, [role="menuitem"]')].find(el => el.textContent.trim() === 'Manual changes')
   fireEvent.click(item)
-  await waitFor(() => expect(button('Advanced')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Advanced')).toBeTruthy())
   fireEvent.click(button('Advanced'))
   await waitFor(() => expect(document.querySelectorAll('input[type="datetime-local"]').length).toBeGreaterThan(0))
 }
@@ -174,7 +174,7 @@ describe('Scoreboard_beach: "Actual start time" through undo, a new start, and t
     view.unmount()
     cleanup()
     mount(matchId)
-    await waitFor(() => expect(button('Point A')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(button('Point A')).toBeTruthy())
     expect(await remarks(matchId)).toBe(`Ball changed\nActual start time: ${clockOf(plus(scheduled, 3))}`)
     await openSetTimes()
     expect(timeInputs()[0].value).toBe(localInput(plus(scheduled, 3)))
