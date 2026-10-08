@@ -241,3 +241,37 @@ export function planDecisionChangeReversal(decisionEvent, events) {
   const { swappedFrom, ...rest } = point.payload
   return { pointEventId: point.id, pointPayload: { ...rest, team: swappedFrom } }
 }
+
+/**
+ * What removing some events takes off the score of one set (the points they
+ * added, a BMP reversal they made undone). Subtract it from the stored score
+ * (scoreAfterRemoval). The event editor removes single rows.
+ */
+export function scoreDeltaOfRemoval(events, removeIds, setIndex) {
+  const removed = new Set([...(removeIds || [])])
+  const before = scoreFromPointEvents(events, setIndex)
+  const after = scoreFromPointEvents((events || []).filter(e => e && !removed.has(e.id)), setIndex)
+  return {
+    team1Points: before.team1Points - after.team1Points,
+    team2Points: before.team2Points - after.team2Points
+  }
+}
+
+/**
+ * The team sanction flags kept on the match (improper request and delay
+ * warning given, per team key) as the sanction events give them; the other
+ * keys of `current` stay. After a sanction is deleted by hand, so the
+ * scoreboard offers the next step of the scale again.
+ */
+export function teamSanctionFlags(events, current = {}) {
+  const flags = Object.fromEntries(Object.entries(current || {})
+    .filter(([k]) => !/^(improperRequest|delayWarning)/.test(k)))
+  for (const e of events || []) {
+    if (e?.type !== 'sanction') continue
+    const team = e.payload?.team
+    if (!team) continue
+    if (e.payload?.type === 'improper_request') flags[`improperRequest${team}`] = true
+    else if (e.payload?.type === 'delay_warning') flags[`delayWarning${team}`] = true
+  }
+  return flags
+}

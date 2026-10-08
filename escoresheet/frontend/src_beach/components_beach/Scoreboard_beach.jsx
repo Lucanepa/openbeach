@@ -22,7 +22,9 @@ import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { apiFrom } from '../lib_beach/apiClient_beach'
 import { setExtId, eventExtId } from '../utils_beach/syncIds_beach'
 import { changesSetScore, isLiveSetInterval, queueSetScoreSync } from '../utils_beach/eventSync_beach'
-import { planPointRemoval, scoreAfterRemoval, syncJobsForEvents, syncJobsForSets, eventDeleteJob, eventUpsertJob, setReopenJob, planDecisionChangeReversal, UNSENT_STATUSES } from '../utils_beach/scorerCorrections_beach'
+import { planPointRemoval, scoreAfterRemoval, syncJobsForEvents, syncJobsForSets, eventDeleteJob, eventUpsertJob, setReopenJob, planDecisionChangeReversal, scoreDeltaOfRemoval, teamSanctionFlags, UNSENT_STATUSES } from '../utils_beach/scorerCorrections_beach'
+import { askConfirm } from '../utils_beach/askConfirm_beach'
+import { toast } from '../ui/volleyui/uiStore.js'
 import { buildConnectionPins } from '../utils_beach/connectionPins_beach'
 import { isBackendAvailable, getApiUrl, isNativeApp } from '../utils_beach/backendConfig_beach'
 import { lockLandscape as lockNativeLandscape, unlockOrientation as unlockNativeOrientation } from '../utils_beach/nativeOrientation_beach'
@@ -2520,6 +2522,28 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
   }, [matchId, data?.match, data?.team1Team, data?.team2Team, data?.team1Players, data?.team2Players])
 
+  // Manual edits reach the cloud through the sync queue (kept while offline,
+  // retried). They went straight to the cloud before and were lost offline;
+  // the set ones also used a bare id, which the backend refuses. Test
+  // matches are never queued. Ported from OpenVolley 38509c25.
+  const queueManualCloudUpdate = useCallback(async (resource, fields, setId = null) => {
+    try {
+      const match = await db.matches.get(matchId)
+      if (!match || match.test || !match.seed_key) return
+      await db.sync_queue.add({
+        resource,
+        action: 'update',
+        payload: resource === 'set'
+          ? { external_id: setExtId(match.seed_key, setId), ...fields }
+          : { id: match.seed_key, ...fields },
+        ts: new Date().toISOString(),
+        status: 'queued'
+      })
+    } catch (err) {
+      console.warn('[ManualChange] Could not queue the cloud update:', err?.message)
+    }
+  }, [matchId])
+
   // Helper function to log manual changes for the summary
   const logManualChange = useCallback((category, field, before, after, description) => {
     const change = {
@@ -2540,29 +2564,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         console.error('[ManualChange] IndexedDB error:', err)
       })
 
-      // Sync to Supabase
-      if (isBackendAvailable() && data.match?.seed_key) {
-        apiFrom('matches')
-          .update({ manual_changes: updatedChanges })
-          .eq('external_id', data.match.seed_key)
-          .eq('sport_type', SPORT_TYPE)
-          .select('id, external_id, manual_changes')
-          .then((result) => {
-            if (result.data && result.data.length > 0) {
-            } else {
-              console.warn('[ManualChange] NO ROWS UPDATED! external_id not found:', data.match.seed_key)
-            }
-          })
-          .catch((err) => {
-            console.error('[ManualChange] Supabase error:', err)
-          })
-      } else {
-      }
-    } else {
+      // To the cloud through the sync queue (kept while offline, retried)
+      void queueManualCloudUpdate('match', { manual_changes: updatedChanges })
     }
 
     return change
-  }, [matchId, data?.match])
+  }, [matchId, data?.match, queueManualCloudUpdate])
 
   // Refresh the eScoresheet window with latest data
   const refreshScoresheet = useCallback(async () => {
@@ -4927,6 +4934,31 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     await queueSetScoreSync(db, { matchId, setIndex: plan.setIndex })
     return score
   }, [matchId])
+
+  // The event editor's deletes (Edit match > event history): asked in the
+  // app's own dialog (askConfirm: a native confirm() reads as "yes" in the
+  // desktop app), then removed like every correction (discardEvents: the
+  // cloud row too, it stayed on the server before). A point takes the set
+  // score with it, a sanction the team's sanction flag; then the tablets,
+  // the livescore and the scoresheet follow. Ported from OpenVolley 07c7bbce,
+  // 38509c25.
+  const deleteEventByHand = useCallback(async (event, extraEvents = []) => {
+    const allEvents = await db.events.where('matchId').equals(matchId).toArray()
+    const rows = [event, ...extraEvents].filter(Boolean)
+    await discardEvents(rows)
+    if (rows.some(e => e.type === 'point')) {
+      const delta = scoreDeltaOfRemoval(allEvents, rows.map(e => e.id), event.setIndex)
+      await applyPointRemovalScore({ setIndex: event.setIndex, delta })
+    }
+    if (rows.some(e => e.type === 'sanction')) {
+      const match = await db.matches.get(matchId)
+      const remaining = allEvents.filter(e => !rows.some(r => r.id === e.id))
+      await db.matches.update(matchId, { sanctions: teamSanctionFlags(remaining, match?.sanctions) })
+    }
+    syncToReferee()
+    syncLiveStateToSupabase(rows.some(e => e.type === 'point') ? 'manual_score_update' : 'manual_event_delete', null, null)
+    refreshScoresheet()
+  }, [matchId, discardEvents, applyPointRemovalScore, syncToReferee, syncLiveStateToSupabase, refreshScoresheet])
 
   // NEW SNAPSHOT-BASED UNDO SYSTEM
   // Instead of complex per-event-type logic, we simply:
@@ -11865,13 +11897,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     const update = leftisTeam1 ? { team1Points: newPoints } : { team2Points: newPoints }
                                     await db.sets.update(data.set.id, update)
 
-                                    // Sync to Supabase
-                                    if (isBackendAvailable() && data.match?.seed_key) {
-                                      try {
-                                        const sbUpdate = leftisTeam1 ? { team1_points: newPoints } : { team2_points: newPoints }
-                                        await apiFrom('sets').update(sbUpdate).eq('external_id', String(data.set.id))
-                                      } catch (err) { /* ignore */ }
-                                    }
+                                    // To the cloud through the sync queue (also offline)
+                                    await queueSetScoreSync(db, { matchId, setIndex: data.set.index })
 
                                     // Update Live State immediately
                                     syncLiveStateToSupabase('manual_score_update')
@@ -11902,13 +11929,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     const update = rightIsTeam1 ? { team1Points: newPoints } : { team2Points: newPoints }
                                     await db.sets.update(data.set.id, update)
 
-                                    // Sync to Supabase
-                                    if (isBackendAvailable() && data.match?.seed_key) {
-                                      try {
-                                        const sbUpdate = rightIsTeam1 ? { team1_points: newPoints } : { team2_points: newPoints }
-                                        await apiFrom('sets').update(sbUpdate).eq('external_id', String(data.set.id))
-                                      } catch (err) { /* ignore */ }
-                                    }
+                                    // To the cloud through the sync queue (also offline)
+                                    await queueSetScoreSync(db, { matchId, setIndex: data.set.index })
 
                                     // Update Live State immediately
                                     syncLiveStateToSupabase('manual_score_update')
@@ -12046,12 +12068,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   onChange={async (e) => {
                                     const newPoints = Math.max(0, Math.min(99, parseInt(e.target.value) || 0))
                                     await db.sets.update(set.id, { team1Points: newPoints })
-                                    // Sync to Supabase
-                                    if (isBackendAvailable() && data.match?.seed_key) {
-                                      try {
-                                        await apiFrom('sets').update({ team1_points: newPoints }).eq('external_id', String(set.id))
-                                      } catch (err) { /* ignore */ }
-                                    }
+                                    // To the cloud through the sync queue (also offline)
+                                    await queueSetScoreSync(db, { matchId, setIndex: set.index })
                                   }}
                                   style={{
                                     width: '50px',
@@ -12074,12 +12092,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   onChange={async (e) => {
                                     const newPoints = Math.max(0, Math.min(99, parseInt(e.target.value) || 0))
                                     await db.sets.update(set.id, { team2Points: newPoints })
-                                    // Sync to Supabase
-                                    if (isBackendAvailable() && data.match?.seed_key) {
-                                      try {
-                                        await apiFrom('sets').update({ team2_points: newPoints }).eq('external_id', String(set.id))
-                                      } catch (err) { /* ignore */ }
-                                    }
+                                    // To the cloud through the sync queue (also offline)
+                                    await queueSetScoreSync(db, { matchId, setIndex: set.index })
                                   }}
                                   style={{
                                     width: '50px',
@@ -12099,12 +12113,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   checked={set.finished || false}
                                   onChange={async (e) => {
                                     await db.sets.update(set.id, { finished: e.target.checked })
-                                    // Sync to Supabase
-                                    if (isBackendAvailable() && data.match?.seed_key) {
-                                      try {
-                                        await apiFrom('sets').update({ finished: e.target.checked }).eq('external_id', String(set.id))
-                                      } catch (err) { /* ignore */ }
-                                    }
+                                    // To the cloud through the sync queue (also offline)
+                                    await queueManualCloudUpdate('set', { finished: e.target.checked }, set.id)
                                   }}
                                   style={{
                                     width: '18px',
@@ -12184,16 +12194,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               // Update local IndexedDB
                               await db.matches.update(matchId, { status: newStatus })
 
-                              // Also sync to Supabase if match has seed_key
-                              if (isBackendAvailable() && data.match?.seed_key) {
-                                try {
-                                  await apiFrom('matches')
-                                    .update({ status: newStatus })
-                                    .eq('external_id', data.match.seed_key)
-                                } catch (err) {
-                                  // Failed to sync status to Supabase
-                                }
-                              }
+                              // To the cloud through the sync queue (also offline)
+                              await queueManualCloudUpdate('match', { status: newStatus })
                             }}
                             style={{
                               flex: 1,
@@ -12356,9 +12358,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 <button
                                   className="danger"
                                   onClick={async () => {
-                                    if (confirm(t('scoreboard.confirm.deletePointEvent'))) {
-                                      await db.events.delete(event.id)
-                                    }
+                                    if (!(await askConfirm({ title: t('scoreboard.confirm.deletePointEvent'), confirmLabel: t('common.delete'), tone: 'danger' }))) return
+                                    await deleteEventByHand(event)
                                   }}
                                   style={{
                                     padding: '4px 8px',
@@ -12457,9 +12458,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 <button
                                   className="danger"
                                   onClick={async () => {
-                                    if (confirm(t('scoreboard.confirm.deleteTimeoutEvent'))) {
-                                      await db.events.delete(event.id)
-                                    }
+                                    if (!(await askConfirm({ title: t('scoreboard.confirm.deleteTimeoutEvent'), confirmLabel: t('common.delete'), tone: 'danger' }))) return
+                                    await deleteEventByHand(event)
                                   }}
                                   style={{
                                     padding: '4px 8px',
@@ -12678,14 +12678,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 <button
                                   className="danger"
                                   onClick={async () => {
-                                    if (confirm(t('scoreboard.confirm.deleteSubstitutionEvent'))) {
+                                    if (await askConfirm({ title: t('scoreboard.confirm.deleteSubstitutionEvent'), confirmLabel: t('common.delete'), tone: 'danger' })) {
                                       const subTeam = event.payload?.team
                                       const subPosition = event.payload?.position
                                       const subPlayerOut = event.payload?.playerOut
                                       const subSetIndex = event.setIndex
 
-                                      // Delete the substitution event
-                                      await db.events.delete(event.id)
+                                      // Delete the substitution event (its cloud row too)
+                                      await discardEvents([event])
 
                                       // Find and delete the lineup event created by this substitution
                                       // Then restore the previous lineup with the original player
@@ -12698,7 +12698,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                         if (lineupEvents.length > 1) {
                                           // Delete the most recent lineup (created by the substitution)
                                           const mostRecentLineup = lineupEvents[0]
-                                          await db.events.delete(mostRecentLineup.id)
+                                          await discardEvents([mostRecentLineup])
 
                                           // Get the previous lineup and restore it with the original player
                                           const previousLineup = lineupEvents[1]?.payload?.lineup || {}
@@ -12906,9 +12906,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 <button
                                   className="danger"
                                   onClick={async () => {
-                                    if (confirm(t('scoreboard.confirm.deleteSanctionEvent'))) {
-                                      await db.events.delete(event.id)
-                                    }
+                                    if (!(await askConfirm({ title: t('scoreboard.confirm.deleteSanctionEvent'), confirmLabel: t('common.delete'), tone: 'danger' }))) return
+                                    await deleteEventByHand(event)
                                   }}
                                   style={{
                                     padding: '4px 8px',
@@ -13244,9 +13243,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 <button
                                   className="danger"
                                   onClick={async () => {
-                                    if (confirm(t('scoreboard.confirm.deleteEventGeneric', { type: eventType }))) {
-                                      await db.events.delete(event.id)
-                                    }
+                                    if (!(await askConfirm({ title: t('scoreboard.confirm.deleteEventGeneric', { type: eventType }), confirmLabel: t('common.delete'), tone: 'danger' }))) return
+                                    await deleteEventByHand(event)
                                   }}
                                   style={{
                                     padding: '4px 8px',
@@ -17245,7 +17243,7 @@ function SetStartTimeModal({ setIndex, defaultTime, onConfirm, onCancel }) {
     // Validate time format (HH:MM, 24-hour)
     const timeRegex = /^([01][0-9]|2[0-3]):[0-5][0-9]$/
     if (!timeRegex.test(time)) {
-      alert(t('scoreboard.confirm.invalidTimeFormat'))
+      toast.error(t('scoreboard.confirm.invalidTimeFormat'))
       return
     }
     // Get the date component from defaultTime and combine with entered time
@@ -17318,6 +17316,7 @@ function SetStartTimeModal({ setIndex, defaultTime, onConfirm, onCancel }) {
 }
 
 function ToSubDetailsModal({ type, side, timeoutDetails, substitutionDetails, teamName, onClose }) {
+  const { t } = useTranslation()
   return (
     <Modal
       title={type === 'timeout' ? t('scoreboard.detailsTimeouts', { team: teamName }) : t('scoreboard.detailsSubstitutions', { team: teamName })}
@@ -17443,7 +17442,7 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
     // Validate time format (HH:MM, 24-hour)
     const timeRegex = /^([01][0-9]|2[0-3]):[0-5][0-9]$/
     if (!timeRegex.test(time)) {
-      alert(t('scoreboard.confirm.invalidTimeFormat'))
+      toast.error(t('scoreboard.confirm.invalidTimeFormat'))
       setIsConfirming(false)
       return
     }

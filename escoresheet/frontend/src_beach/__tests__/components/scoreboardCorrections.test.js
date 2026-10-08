@@ -127,3 +127,32 @@ describe('decision change reaches the server and the tablets', () => {
     expect(body()).toMatch(/syncToReferee\(\)/)
   })
 })
+
+describe('the event editor deletes in the app\'s own dialog, and in the cloud too', () => {
+  it('every delete asks with askConfirm (a native confirm() reads as "yes" in the desktop app)', () => {
+    expect(sb).not.toMatch(/if \(confirm\(t\(/)
+    for (const key of ['deletePointEvent', 'deleteTimeoutEvent', 'deleteSanctionEvent', 'deleteSubstitutionEvent', 'deleteEventGeneric']) {
+      expect(sb).toMatch(new RegExp(`await askConfirm\\(\\{ title: t\\('scoreboard\\.confirm\\.${key}'`))
+    }
+  })
+
+  it('the deletes go through discardEvents (raw deletes left the event on the server)', () => {
+    const b = between('const deleteEventByHand = useCallback(', '// NEW SNAPSHOT-BASED UNDO SYSTEM')
+    expect(b).toMatch(/await discardEvents\(rows\)/)
+    expect(b).toMatch(/scoreDeltaOfRemoval\(allEvents, rows\.map\(e => e\.id\), event\.setIndex\)/)
+    expect(b).toMatch(/teamSanctionFlags\(remaining, match\?\.sanctions\)/)
+    expect(b).toMatch(/syncToReferee\(\)/)
+    const editor = sb.slice(sb.indexOf("t('scoreboard.confirm.deletePointEvent')") - 400)
+    expect(editor.slice(0, 20000)).not.toMatch(/await db\.events\.delete\(/)
+  })
+})
+
+describe('manual edits reach the cloud through the sync queue (also offline)', () => {
+  it('no direct cloud writes of set rows (they used a bare id the backend refuses) or of the match row', () => {
+    expect(sb).not.toMatch(/apiFrom\('sets'\)\.update/)
+    expect(sb).not.toMatch(/\.update\(\{ manual_changes: updatedChanges \}\)/)
+    expect(sb).not.toMatch(/\.update\(\{ status: newStatus \}\)/)
+    expect(sb).toMatch(/queueManualCloudUpdate\('match', \{ manual_changes: updatedChanges \}\)/)
+    expect(sb).toMatch(/queueManualCloudUpdate\('set', \{ finished: e\.target\.checked \}, set\.id\)/)
+  })
+})

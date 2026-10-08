@@ -9,7 +9,9 @@ import {
   eventUpsertJob,
   syncJobsForSets,
   setReopenJob,
-  planDecisionChangeReversal
+  planDecisionChangeReversal,
+  scoreDeltaOfRemoval,
+  teamSanctionFlags
 } from '../../utils_beach/scorerCorrections_beach'
 
 // Ported from OpenVolley src/domain/__tests__/corrections.test.js
@@ -152,5 +154,24 @@ describe('planDecisionChangeReversal (undo of a point swap)', () => {
   it('nothing to reverse for another event or a point never swapped', () => {
     expect(planDecisionChangeReversal(point(12, 12, 'team1'), [])).toBeNull()
     expect(planDecisionChangeReversal(decision, [point(12, 12, 'team1')])).toBeNull()
+  })
+})
+
+describe('event editor deletes', () => {
+  it('scoreDeltaOfRemoval: what removing single rows takes off one set', () => {
+    const events = [point(1, 1, 'team1'), point(2, 2, 'team2'), point(3, 3, 'team1'), point(4, 4, 'team1', 2)]
+    expect(scoreDeltaOfRemoval(events, [3], 1)).toEqual({ team1Points: 1, team2Points: 0 })
+    expect(scoreDeltaOfRemoval(events, [4], 1)).toEqual({ team1Points: 0, team2Points: 0 })
+  })
+
+  it('teamSanctionFlags follows the sanction events and keeps the other keys', () => {
+    const events = [
+      { id: 1, type: 'sanction', payload: { team: 'team1', type: 'improper_request' } },
+      { id: 2, type: 'sanction', payload: { team: 'team2', type: 'delay_warning' } },
+      { id: 3, type: 'sanction', payload: { team: 'team2', type: 'delay_penalty' } }
+    ]
+    expect(teamSanctionFlags(events, { delayWarningteam1: true, other: 1 })).toEqual({
+      other: 1, improperRequestteam1: true, delayWarningteam2: true
+    })
   })
 })
