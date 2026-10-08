@@ -256,11 +256,16 @@ describe('select call sites', () => {
     expect(bad).toEqual([]);
   });
 
-  it('match setup Gender / Phase / Round / Coach are kit Selects', () => {
+  // The OpenBeach screencast of 2026-10-08: the closed selects looked right,
+  // but their native popup still opened as a dark GTK list in the Linux app.
+  // Two to five choices are now kit choice controls, no native select at all.
+  it('match setup Gender / Phase / Round / Coach are kit choices, not native selects', () => {
     const src = read('components_beach/MatchSetup_beach.jsx');
-    for (const v of ['type2', 'phase', 'round', "hasCoach ? 'yes' : 'no'"]) {
-      expect(src).toContain(`<Select size="lg" block value={${v}}`);
+    for (const v of ['type2', 'phase', "hasCoach ? 'yes' : 'no'"]) {
+      expect(src).toContain(`value={${v}}`);
     }
+    expect(src).toMatch(/<FilterPill key=\{value\} active=\{round === value\}/);
+    expect(src).not.toMatch(/<Select size="lg" block value=\{(type2|phase|round)\}/);
   });
 });
 
@@ -279,9 +284,9 @@ describe('option labels', () => {
     return keys;
   }
 
-  it('finds the match setup options', () => {
+  it('finds the option labels', () => {
     const keys = optionKeys();
-    for (const k of ['matchSetup.men', 'matchSetup.mainDraw', 'matchSetup.poolPlay', 'common.yes']) expect(keys).toContain(k);
+    expect(keys).toContain('savedTeams.pickerAll');
   });
 
   it('start with a capital letter in all five locales', () => {
