@@ -23,6 +23,7 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { PWA_INCLUDE_ASSETS, PWA_ICONS, THEME_COLOR } from '../pwa-icons.js'
 import { subdomains, htmlFor } from './subdomain-pages.js'
+import { precacheUnderFinalName } from './subdomain-precache.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -75,6 +76,9 @@ async function buildSubdomain(subdomain, basePath = '/') {
           registerType: 'prompt',
           includeAssets: PWA_INCLUDE_ASSETS,
           workbox: {
+            // The page is built as _build_<app>.html and renamed to index.html
+            // below: precache it under that name, or the worker's install 404s
+            manifestTransforms: [precacheUnderFinalName(tempIndexName)],
             skipWaiting: false,
             clientsClaim: true,
             navigateFallback: null,
