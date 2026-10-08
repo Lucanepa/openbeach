@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useLayoutEffect } from 'react'
+import { flushSync } from 'react-dom'
 
 // Context for sharing scale state across all components
 const ScaleContext = createContext(null)
@@ -22,7 +23,13 @@ export function ScaleProvider({ children, defaultScale = 1.0 }) {
   const [viewport, setViewport] = useState(getViewportSize)
 
   useEffect(() => {
-    const handleResize = () => setViewport(getViewportSize())
+    // Committed in the resize event (flushSync): a plain state update rendered
+    // a task later, after the browser had painted the new window size with
+    // the old scaled sizes
+    const handleResize = () => flushSync(() => setViewport((prev) => {
+      const next = getViewportSize()
+      return (prev.width === next.width && prev.height === next.height) ? prev : next
+    }))
     window.addEventListener('resize', handleResize)
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', handleResize)
@@ -42,8 +49,9 @@ export function ScaleProvider({ children, defaultScale = 1.0 }) {
   const rawScale = userScaleOverride ?? defaultScale
   const scaleFactor = Math.min(Math.max(rawScale, 0.5), 1.5)
 
-  // Update CSS custom properties on the root element for CSS-based scaling
-  useEffect(() => {
+  // Update CSS custom properties on the root element for CSS-based scaling,
+  // before the paint (useLayoutEffect): with the inline sizes, not a frame after
+  useLayoutEffect(() => {
     const root = document.documentElement
     root.style.setProperty('--scale-factor', scaleFactor.toString())
     root.style.setProperty('--vmin-base', `${viewportVmin}px`)
