@@ -432,6 +432,42 @@ describe('Scoreboard_beach: point paths at every change total', () => {
     cleanup()
   }, 90000)
 
+  it('set 3: a successful team BMP from the change-of-courts dialog that ends the set (11:14 -> 10:15) closes that dialog: only the set end opens', async () => {
+    const matchId = await setUpSet3()
+    mount(matchId)
+    // 10:14 (24 points), every change of courts made
+    const labels = [
+      ...Array.from({ length: 20 }, (_, i) => (i % 2 ? 'Point B' : 'Point A')), // 10:10
+      'Point B', 'Point B', 'Point B', 'Point B' // 10:14
+    ]
+    await startSet()
+    for (let i = 0; i < labels.length; i++) {
+      if (i > 0) await startRally()
+      await point(labels[i])
+      const [a, b] = await set3Score()
+      if ((a + b) % 5 === 0) await switchCourts()
+    }
+    expect(await set3Score()).toEqual([10, 14])
+    const switchesBefore = (await set3Events('court_switch')).length
+    expect(switchesBefore).toBe(4)
+
+    // 11:14: 25 points, the change of courts
+    await startRally()
+    await point('Point A')
+    await waitFor(() => expect(switchOpen()).toBe(true), { timeout: 5000 })
+    await waitFor(() => expect(dialogBmp()).toBeTruthy())
+
+    // B's BMP is successful: 10:15, the set is over
+    await successfulBmp(dialogBmp())
+    expect(await set3Score()).toEqual([10, 15])
+    // (set 3 decides the match: its dialog is the match end)
+    await waitFor(() => expect(document.body.textContent).toMatch(/Set 3 end|Match end/), { timeout: 5000 })
+    // no change of courts at the end of the set: its dialog is gone, none made
+    await waitFor(() => expect(switchOpen()).toBe(false), { timeout: 5000 })
+    expect(await set3Events('court_switch')).toHaveLength(switchesBefore)
+    cleanup()
+  }, 120000)
+
   it('a decision change asked from the set-end dialog and cancelled: the set-end dialog comes back (no TTO, no change of courts)', async () => {
     const matchId = await setUpMatch()
     mount(matchId)

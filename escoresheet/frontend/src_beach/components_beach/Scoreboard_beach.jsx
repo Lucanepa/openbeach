@@ -3414,6 +3414,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     const setIsEnding = (team1Points >= pointsToWin && team1Points - team2Points >= 2) ||
                         (team2Points >= pointsToWin && team2Points - team1Points >= 2)
 
+    // The point was moved onto a set-ending score while the change-of-courts
+    // dialog of its total is open (a successful BMP asked from it: 11:14 in
+    // set 3 taken back to 10:15): the set is over, no change of courts is
+    // made, and that dialog goes (confirming it switched the courts at the
+    // end of the set, its dialog over the set-end one)
+    if (setIsEnding && !newRally) {
+      deferUi(() => setCourtSwitchModal(prev => (prev && prev.set?.index === setIndex ? null : prev)))
+    }
+
     if (!setIsEnding) {
       // The point was moved off a set-ending score: a set-end dialog of this
       // set is out of date (it came back under the BMP dialog asked from it,
