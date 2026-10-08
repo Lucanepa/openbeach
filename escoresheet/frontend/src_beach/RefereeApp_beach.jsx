@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, ChevronRight, CalendarX2, Loader2, RefreshCw } from 'lucide-react'
-import { validatePin, listAvailableMatches, validatePinSupabase, listAvailableMatchesSupabase, forgetMatchAccess, setRelayDevice } from './utils_beach/serverDataSync_beach'
+import { validatePin, listAvailableMatches, validatePinSupabase, listAvailableMatchesSupabase, forgetMatchAccess, setRelayDevice, relayIsCloud as relayIsTheCloud } from './utils_beach/serverDataSync_beach'
 import Referee from './components_beach/Referee_beach'
 import UpdateBanner from './components_beach/UpdateBanner_beach'
 import DashboardHeader from './components_beach/DashboardHeader_beach'
@@ -35,37 +35,44 @@ const MASTER_PIN = '123456'
  * and Number() of one is NaN. Ported from OpenVolley RefereeApp.
  * @returns {Promise<object|null>} the match, or null
  */
-export async function revalidateRefereeSession(storedMatchId, storedPin, { checkCloud = validatePinSupabase, checkLan = validatePin } = {}) {
+export async function revalidateRefereeSession(storedMatchId, storedPin, { checkCloud = validatePinSupabase, checkLan = validatePin, relayIsCloud = relayIsTheCloud } = {}) {
   const same = (r) => r?.success && r.match && String(r.match.id) === String(storedMatchId)
   let result = null
   try { result = await checkCloud(storedPin, 'referee') } catch { result = { unreachable: true } }
   if (same(result)) return result.match
-  if (!cloudUnreachable(result)) return null
+  if (cloudAnswered(result, relayIsCloud)) return null
   try { result = await checkLan(storedPin, 'referee') } catch { result = null }
   return same(result) ? result.match : null
 }
 
 // The backend's PIN check did not answer (timeout, network, no backend, 5xx).
-// A wrong PIN (404) or a rate limit (429) is an answer: the relay is not asked
-// then, because both checks charge the same per-address failure budget (one
-// typo would cost two attempts, and referees behind one venue NAT would lock
-// each other out twice as fast).
 function cloudUnreachable(r) {
   return !r || r.unreachable === true
 }
 
+// The backend's answer is final: a rate limit (429) always; a wrong PIN (404)
+// when the relay is the cloud itself, because both checks then charge the same
+// per-address failure budget (one typo would cost two attempts, and referees
+// behind one venue NAT would lock each other out twice as fast). A venue relay
+// is still asked after a 404: it holds the matches the cloud never sees (a test
+// match, a match not synced yet).
+function cloudAnswered(r, relayIsCloud) {
+  if (cloudUnreachable(r)) return false
+  return r.status === 429 || relayIsCloud()
+}
+
 /**
- * Check a typed referee PIN: the backend's check (beach matches only), then,
- * only when that did not answer, the LAN relay. A thrown relay error is a
- * failed check, not the message to show.
+ * Check a typed referee PIN: the backend's check (beach matches only), then
+ * the LAN relay unless the backend's answer is final (cloudAnswered). A
+ * thrown relay error is a failed check, not the message to show.
  * @returns {Promise<{ match: object|null, source?: 'supabase'|'websocket', error?: string }>}
  */
-export async function validateRefereePin(pin, { checkCloud = validatePinSupabase, checkLan = validatePin } = {}) {
+export async function validateRefereePin(pin, { checkCloud = validatePinSupabase, checkLan = validatePin, relayIsCloud = relayIsTheCloud } = {}) {
   const ok = (r) => r?.success && r.match
   let cloud
   try { cloud = await checkCloud(pin, 'referee') } catch { cloud = { unreachable: true } }
   if (ok(cloud)) return { match: cloud.match, source: 'supabase' }
-  if (!cloudUnreachable(cloud)) return { match: null, ...(cloud?.status === 429 ? { error: cloud.error } : {}) }
+  if (cloudAnswered(cloud, relayIsCloud)) return { match: null, ...(cloud?.status === 429 ? { error: cloud.error } : {}) }
   let lan
   try { lan = await checkLan(pin, 'referee') } catch { lan = null }
   if (ok(lan)) return { match: lan.match, source: 'websocket' }

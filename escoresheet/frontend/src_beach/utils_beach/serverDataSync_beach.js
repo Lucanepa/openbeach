@@ -30,6 +30,22 @@ function getServerUrl() {
   return window.location.origin
 }
 
+/**
+ * True when the relay above is the cloud backend itself (the cloud web
+ * build): the cloud's "no such PIN" is then the relay's answer too, and both
+ * checks charge the same per-address budget. A venue relay (the desktop app,
+ * a LAN server) is another server, and it holds matches the cloud never sees
+ * (test matches, matches not synced yet).
+ */
+export function relayIsCloud() {
+  try {
+    const cloud = getCloudApiUrl('/')
+    return !!cloud && new URL(cloud).origin === new URL(getServerUrl()).origin
+  } catch {
+    return true
+  }
+}
+
 // The relay's WebSocket: a desktop relay takes it on a port of its own
 // (backendConfig.getRelayWebSocketUrl), the same one the scorer publishes to
 function getWebSocketUrl() {
