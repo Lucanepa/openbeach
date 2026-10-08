@@ -138,4 +138,11 @@ describe('score sheet PDF: the video match', () => {
     expect(empty.className).not.toMatch(/border-black/)
     cleanup()
   })
+
+  it('the TEAMS box names the teams next to their country', () => {
+    const { container } = render(<Sheet matchData={buildVideoMatch()} />)
+    expect(container.querySelector('[data-teams-name="t1"]')).toHaveTextContent('Müller/Weber')
+    expect(container.querySelector('[data-teams-name="t2"]')).toHaveTextContent('Schmidt / Fischer')
+    cleanup()
+  })
 })

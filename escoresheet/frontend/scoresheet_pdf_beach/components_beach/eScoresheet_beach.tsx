@@ -3844,6 +3844,8 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
               {/* Team A Col */}
               <div className="flex-1 border-r border-black p-0.5 flex flex-col">
                 <div className="flex items-end mb-0.5 justify-end mr-2">
+                  {/* the team's name, not only its country (two Swiss teams were "CHE" and "CHE") */}
+                  <span data-teams-name="t1" className="text-[9px] font-semibold mr-1 overflow-hidden" style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis', maxWidth: '60%' }}>{get('t1_name') || ''}</span>
                   <Input value={get('b_t1_country')} onChange={v => set('b_t1_country', v)} className="w-10 border-black text-xs font-bold text-center" />
                   <ABCircle value={get('b_t1_side')} onChange={v => set('b_t1_side', v)} size={16} className="ml-2" />
                 </div>
@@ -3906,6 +3908,7 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                   <ABCircle value={get('b_t2_side')} onChange={v => set('b_t2_side', v)} size={16} />
 
                   <Input value={get('b_t2_country')} onChange={v => set('b_t2_country', v)} className="w-10 border-black text-xs font-bold ml-1 text-center" />
+                  <span data-teams-name="t2" className="text-[9px] font-semibold ml-1 overflow-hidden" style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis', maxWidth: '60%' }}>{get('t2_name') || ''}</span>
                 </div>
                 <div className="flex text-[9px] h-4 border-b border-black">
                   <div className="w-6 border border-b-0 border-black text-center">No.</div>
