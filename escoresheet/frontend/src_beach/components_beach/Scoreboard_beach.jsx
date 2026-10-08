@@ -6726,8 +6726,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     })
   }), [runPlayerSanctionConfirm, runAction, deferUi, sanctionConfirmModal, data?.set, data?.events, data?.team1Players, data?.team2Players, logEvent, mapTeamKeyToSide, handlePoint, leftisTeam1, getPlayerSanctionLevel, playerHasSanctionType, teamHasFormalWarning, handleForfait, matchId, getPlayerPenaltyCountInCurrentSet])
 
-  // Execute expulsion/disqualification after secondary confirmation
-  const executeExpulsionOrDisqualification = useCallback(async () => {
+  // Execute expulsion/disqualification after secondary confirmation. ONE
+  // action: the sanction, the points the forfeit awards, the set end and the
+  // forfait commit together, and the dialog closes with them (deferUi).
+  // Written one by one the score counted up point by point under the open
+  // dialog, and the dialog, closed only after the set transition, came back
+  // on the next set's scoreboard.
+  const executeExpulsionOrDisqualification = useCallback(() => runAction('expulsion', async () => {
     console.log('[executeExpulsionOrDisqualification] Called', { expulsionConfirmModal, hasSet: !!data?.set })
     if (!expulsionConfirmModal || !data?.set) {
       console.log('[executeExpulsionOrDisqualification] Early return - missing data', { expulsionConfirmModal, hasSet: !!data?.set })
@@ -6735,6 +6740,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
 
     const { team, type, playerNumber, position, role, sanctionType } = expulsionConfirmModal
+    deferUi(() => setExpulsionConfirmModal(null))
     console.log('[executeExpulsionOrDisqualification] Logging sanction', { team, sanctionType, playerNumber })
 
     // Log the sanction event first (for PDF display)
@@ -6758,9 +6764,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const opponentSetsWon = allSets.filter(s => s.finished && s[`${opponentKey === 'team1' ? 'team1Points' : 'team2Points'}`] > s[`${opponentKey === 'team1' ? 'team2Points' : 'team1Points'}`]).length
       if (opponentSetsWon >= 2) {
         await db.matches.update(matchId, { status: 'ended' })
-        onTriggerEventBackup?.('match_end')
-        setExpulsionConfirmModal(null)
-        if (onFinishSet) onFinishSet(data.set)
+        runOrDefer({ run: () => onTriggerEventBackup?.('match_end') })
+        deferUi(() => { if (onFinishSet) onFinishSet(data.set) })
         return
       }
     } else if (sanctionType === 'disqualification') {
@@ -6783,14 +6788,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Disqualification: forfeit entire match
       await handleForfait(team, 'disqualification', 'match')
       await db.matches.update(matchId, { status: 'ended', forfait: true, forfaitTeam: team, remarks: updatedRemarks })
-      onTriggerEventBackup?.('match_end')
-      setExpulsionConfirmModal(null)
-      if (onFinishSet) onFinishSet(data.set)
-      return
+      runOrDefer({ run: () => onTriggerEventBackup?.('match_end') })
+      deferUi(() => { if (onFinishSet) onFinishSet(data.set) })
     }
-
-    setExpulsionConfirmModal(null)
-  }, [expulsionConfirmModal, data?.set, logEvent, handleForfait, matchId, onTriggerEventBackup, onFinishSet])
+  }), [runAction, deferUi, runOrDefer, expulsionConfirmModal, data?.set, logEvent, handleForfait, matchId, onTriggerEventBackup, onFinishSet])
 
   // Keyboard shortcuts handler
   useEffect(() => {

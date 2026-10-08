@@ -124,3 +124,23 @@ describe('a sanction is one screen change', () => {
     expect(regular.replace(/deferUi\(\(\) => setSanctionConfirmModal\(null\)\)/g, '')).not.toContain('setSanctionConfirmModal(null)')
   })
 })
+
+// An expulsion that forfeits the set: in the desktop app the awarded points
+// were written one by one (the score counted 9:5 ... 21:5 over 760 ms, the
+// dialog open above it), and the "Confirm set end" dialog came back for 77 ms
+// on the next set's scoreboard: it was closed only after the set transition,
+// whose loading screen had unmounted and remounted it.
+describe('an expulsion or a disqualification is one action', () => {
+  it('the sanction, the awarded points and the set end commit together; the dialog closes with them', () => {
+    const b = between('const executeExpulsionOrDisqualification = useCallback(', '// Keyboard shortcuts handler')
+    expect(b).toContain("runAction('expulsion', async () => {")
+    expect(b).toContain('deferUi(() => setExpulsionConfirmModal(null))')
+    expect(b.replace(/deferUi\(\(\) => setExpulsionConfirmModal\(null\)\)/g, '')).not.toContain('setExpulsionConfirmModal(null)')
+    // the close comes before the first write
+    expect(b.indexOf('deferUi(() => setExpulsionConfirmModal(null))')).toBeLessThan(b.indexOf("await logEvent('sanction'"))
+    // after the commit: the backup; with the data: Match End
+    expect(b).not.toMatch(/\n\s+onTriggerEventBackup\?\.\('match_end'\)/)
+    expect(b).toContain("runOrDefer({ run: () => onTriggerEventBackup?.('match_end') })")
+    expect(b).toContain('deferUi(() => { if (onFinishSet) onFinishSet(data.set) })')
+  })
+})
