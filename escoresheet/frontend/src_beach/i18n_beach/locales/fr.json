@@ -843,7 +843,21 @@
     "undoConfirm": {
       "confirm": "Annuler l'action"
     },
-    "confirmFailed": "Cela n'a pas été enregistré. Vérifiez la feuille de match et réessayez."
+    "confirmFailed": "Cela n'a pas été enregistré. Vérifiez la feuille de match et réessayez.",
+    "bmpOnlyAfterPoint": "BMP : seulement après un point, avant l'échange suivant",
+    "medicalEnd": "fin",
+    "medicalCannotContinue": "Le joueur ne peut pas continuer (forfait)…",
+    "medicalForfeitQuestion": "L'équipe est incomplète et perd le match par forfait. Confirmer ?",
+    "medicalConfirmForfeit": "Confirmer le forfait",
+    "bmpRequest": "Demande de BMP",
+    "set3TossFirst": "Saisissez d'abord le tirage au sort du set 3",
+    "onePointToSwitch": "Encore 1 point avant changement",
+    "onePointToTto": "Encore 1 point avant le TTO",
+    "transitionFinishing": "Fin du set…",
+    "transitionSaving": "Enregistrement du set…",
+    "transitionSyncing": "Synchronisation avec le cloud…",
+    "transitionUploading": "Envoi de la sauvegarde…",
+    "transitionDownloading": "Enregistrement d'un fichier de sauvegarde…"
   },
   "settings": {
     "title": "Paramètres",

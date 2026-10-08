@@ -38,6 +38,12 @@ import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { useDiagCommits } from '../diagnostics_beach/commits_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot } from '../utils_beach/stateSnapshot_beach'
+import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
+import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
+import { defaultSetStartTime } from '../utils_beach/setStartTime_beach'
+import { cloudSyncWaitNow } from '../utils_beach/cloudStatus_beach'
+import { formatCourtScore } from '../utils_beach/scoreText_beach'
+import { medicalStartPayload, medicalEndPayload, findOpenMedical, formatMedicalDuration, medicalSecondsLeft, MEDICAL_RECOVERY_SECONDS } from '../utils_beach/medicalEvents_beach'
 
 // Sport type for beach volleyball
 const SPORT_TYPE = 'beach'
@@ -87,6 +93,62 @@ const SB_RALLY_OUTLINE = `${SB_RALLY_BASE} border-stone-300 bg-white text-stone-
 const SB_RALLY_DECISION = `${SB_RALLY_BASE} border-amber-400 bg-amber-300 text-stone-900 hover:bg-amber-400`
 const SB_RALLY_BMP = `${SB_RALLY_BASE} border-orange-500 bg-orange-500 text-stone-950 hover:bg-orange-600`
 const SB_RALLY_UNDO = `${SB_RALLY_BASE} border-red-200 bg-white text-red-700 hover:bg-red-50`
+
+/** The in-rally row (Replay | Point A | Point B | Referee BMP): one sizing
+ *  rule, so "Referee BMP" no longer wraps onto two lines next to the big point
+ *  buttons. The point buttons are as big as the row allows (volleyui §7):
+ *  wider, and on a 1024×600 tablet as tall as fits above Undo. */
+function rallyRowButton(scaleFactor, kind) {
+  const isPoint = kind === 'point'
+  return {
+    padding: '12px 16px',
+    minHeight: `${Math.max(58, 110 * scaleFactor)}px`,
+    minWidth: isPoint ? '150px' : '140px',
+    fontSize: isPoint ? '24px' : '20px',
+    lineHeight: 1.1,
+    whiteSpace: 'nowrap'
+  }
+}
+
+/** The player menu's height with Sanction open (4 items + Medical, 44 px+
+ *  each): it opens where that fits, so opening Sanction never moves it. */
+const PLAYER_MENU_OPEN_HEIGHT = 380
+
+/** A popover's top: centred on `centerY`, but inside the window. */
+function clampedMenuTop(centerY, height) {
+  const winH = typeof window !== 'undefined' ? window.innerHeight : 800
+  return Math.max(8, Math.min(centerY - height / 2, winH - height - 8))
+}
+
+/** The serve indicator and the serving ball, as fractions of the design vmin
+ *  (scaled with the screen like the rest of the court). The SERVE box was
+ *  ~75 px with small text, and the ball (0.08) almost the size of the player
+ *  disc (0.10), touching its position badge: now a bigger SERVE box and a
+ *  ball of 60 % of the disc, which keeps clear of the badge. */
+const SERVE_LABEL = 0.033
+const SERVE_NUMBER = 0.083
+const SERVE_BOX = 0.13
+const SERVE_BALL = 0.06
+
+/** The Referee BMP dialog's three choices: equal columns that shrink inside
+ *  the dialog (a long team name is cut with an ellipsis, never past the edge). */
+const bmpChoiceButton = {
+  flex: '1 1 0',
+  minWidth: 0,
+  overflow: 'hidden',
+  padding: '12px 10px',
+  minHeight: '52px',
+  fontSize: '16px',
+  fontWeight: 600,
+  borderRadius: '8px',
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '6px',
+  whiteSpace: 'nowrap',
+  textOverflow: 'ellipsis'
+}
 
 /** A label that some locales break with a soft "-\n" (de: "Verzögerungs-\nwarnung"), on one line. */
 const oneLine = (text) => String(text).replace(/-\n/g, '').replace(/\n/g, ' ')
@@ -216,7 +278,8 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   })
 
   const [injuryDropdown, setInjuryDropdown] = useState(null)
-  // MTO/RIT countdown modal: { type: 'mto'|'rit', ritType?: 'no_blood'|'toilet'|'weather', team, playerNumber, countdown: 300, started: boolean, startedAt?: ISO string, eventId?: number }
+  // MTO/RIT countdown modal: { type: 'mto'|'rit', ritType?: 'no_blood'|'toilet'|'weather', team, playerNumber, playerName, countdown: 300, started: boolean, startedAt?: ISO string, startSeq?: number }
+  // (the running MTO / RIT is also rebuilt from the events: medicalEvents_beach)
   const [medicalModal, setMedicalModal] = useState(null)
 
   const setIntervalDuration = 60 // 1 minute for beach volleyball (FIVB standard)
@@ -296,16 +359,16 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   const betweenSetsStartTimestampRef = useRef(null) // Timestamp when between-sets interval started
   const betweenSetsInitialCountdownRef = useRef(60) // Initial between-sets duration
   const [bmpModal, setBmpModal] = useState(null) // { type: 'team'|'referee', team?: 'team1'|'team2' } | null - Ball Mark Protocol modal
-  const [bmpOutcomeModal, setBmpOutcomeModal] = useState(null) // { type: 'team'|'referee', team?: 'team1'|'team2', requestSeq: number } | null - requestSeq links outcome as sub-event
+  const [bmpOutcomeModal, setBmpOutcomeModal] = useState(null) // { type: 'team'|'referee', team?: 'team1'|'team2', requestedAt, currentScore, currentServe } | null - the request is logged with its outcome
   const [bmpSelectedOutcome, setBmpSelectedOutcome] = useState(null) // 'successful'|'unsuccessful'|'judgment_impossible'|'in'|'out' - selected outcome awaiting confirmation
 
-  // Auto-dismiss preEventPopup after 3 seconds or on click
+  // "One point to switch / TTO": a chip under the rally status (it was a big
+  // banner over the players, gone on the next tap). It covers nothing, so it
+  // stays a few seconds.
   useEffect(() => {
     if (preEventPopup) {
-      const timer = setTimeout(() => setPreEventPopup(null), 3000)
-      const dismiss = () => { setPreEventPopup(null); clearTimeout(timer) }
-      document.addEventListener('click', dismiss, { once: true })
-      return () => { clearTimeout(timer); document.removeEventListener('click', dismiss) }
+      const timer = setTimeout(() => setPreEventPopup(null), 8000)
+      return () => clearTimeout(timer)
     }
   }, [preEventPopup])
 
@@ -1623,54 +1686,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // Before coin toss, default to team1 left, team2 right
     const isBeforeCoinToss = !data?.match?.coinTossTeamA || !data?.match?.coinTossTeamB
     if (isBeforeCoinToss || !data?.set) return true
-
-    const setIndex = data.set.index
-
-    // Between sets (set 2 or 3 interval): use bench side positioning
-    if (setIndex >= 2) {
-      const allSets = (data.sets || []).sort((a, b) => a.index - b.index)
-      const previousSet = allSets.find(s => s.index === setIndex - 1)
-      const hasSetStarted = data.events?.some(e =>
-        (e.type === 'point' || e.type === 'set_start') && e.setIndex === setIndex
-      )
-      if (previousSet?.finished && !hasSetStarted) {
-        return data.match?.team1BenchSide === 'left'
-      }
-    }
-
-    // Check for manual override first (for sets 1-3)
-    if (setIndex >= 1 && setIndex <= 3 && data.match?.setLeftTeamOverrides) {
-      const override = data.match.setLeftTeamOverrides[setIndex]
-      if (override) {
-        // Override is 'A' or 'B'
-        const leftTeamKey = override === 'A' ? teamAKey : teamBKey
-        return leftTeamKey === 'team1'
-      }
-    }
-
-    // Set 1: Team A on left
-    if (setIndex === 1) {
-      return teamAKey === 'team1'
-    }
-
-    // Set 3: Use set3LeftTeam from coin toss as default (before any court switches)
-    if (setIndex === 3) {
-      if (data.match?.set3LeftTeam) {
-        const leftTeamKey = data.match.set3LeftTeam === 'A' ? teamAKey : teamBKey
-        return leftTeamKey === 'team1'
-      }
-
-      // Fallback: Set 3 starts with teams switched (like set 2)
-      return teamAKey !== 'team1'
-    }
-
-    // Sets 2, 3, 4: Teams alternate sides (automatic if no override)
-    // Set 1: Team A left, Team B right
-    // Set 2: Team A right, Team B left (switched)
-    // Set 3: Team A left, Team B right (new coin toss determines sides)
-    // Pattern for beach volleyball: Set 1-2 alternate, Set 3 uses new coin toss
-    return setIndex % 2 === 1 ? (teamAKey === 'team1') : (teamAKey !== 'team1')
-  }, [data?.set, data?.sets, data?.events, data?.match?.set3LeftTeam, data?.match?.setLeftTeamOverrides, data?.match?.team1BenchSide, teamAKey])
+    // One rule for the court, the interval preview and the started set
+    // (courtSides_beach): the interval shows the side the next set starts on
+    return isTeam1LeftInSet(data.set.index, data.match)
+  }, [data?.set, data?.match])
 
   // Calculate sets won by each team
   const setsWon = useMemo(() => {
@@ -2891,20 +2910,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           // A/B Model: Team A = coin toss winner (constant), side_a = which side they're on
           const teamAKey = match?.coinTossTeamA || 'team1'
           const teamBKey = teamAKey === 'team1' ? 'team2' : 'team1'
-          const setLeftTeamOverrides = match?.setLeftTeamOverrides || {}
-
           // Determine which side Team A is on this set
-          // setLeftTeamOverrides stores 'A' or 'B', set3LeftTeam stores 'A' or 'B'
-          let sideA // 'left' or 'right'
-          if (setLeftTeamOverrides[setIndex] !== undefined) {
-            sideA = setLeftTeamOverrides[setIndex] === 'A' ? 'left' : 'right'
-          } else if (setIndex === 3 && match?.set3CourtSwitched && match?.set3LeftTeam) {
-            sideA = match.set3LeftTeam === 'A' ? 'left' : 'right'
-          } else {
-            // Default fallback - actual positions are set during setup phase
-            // Teams stay where they finished the previous set (switching every 7 pts in sets 1-2, every 5 pts in set 3)
-            sideA = setIndex % 2 === 1 ? 'left' : 'right'
-          }
+          // (courtSides_beach: the same rule as the scorer's court)
+          const sideA = leftTeamInSet(setIndex, match) === 'A' ? 'left' : 'right'
 
           // Derive left/right team keys from A/B model
           const leftTeamKey = sideA === 'left' ? teamAKey : teamBKey
@@ -3297,12 +3305,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   const currentServeTeam = data?.set ? getCurrentServe() : null
 
   // Show serve on left as placeholder before coin toss or before set starts
+  // Set 3 before its toss: nobody serves yet (no SERVE, no Start set)
+  const set3TossPending = isBetweenSets && data?.set?.index === 3 && !data?.match?.set3CoinTossWinner
   const leftServing = (isBeforeCoinToss || hasNoSet)
     ? true // Placeholder: serve on left (team1) before coin toss
-    : (data?.set ? currentServeTeam === leftServeTeamKey : false)
+    : (data?.set && !set3TossPending ? currentServeTeam === leftServeTeamKey : false)
   const rightServing = (isBeforeCoinToss || hasNoSet)
     ? false
-    : (data?.set ? currentServeTeam === rightServeTeamKey : false)
+    : (data?.set && !set3TossPending ? currentServeTeam === rightServeTeamKey : false)
 
   const serveBallBaseStyle = useMemo(
     () => ({
@@ -3596,26 +3606,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
     // If this is the first rally, show set start time confirmation
     if (isFirstRally) {
-      // Show set start time confirmation
-      // For set 1, use scheduled time, for set 2+, use 1 minute after previous set end
-      let defaultTime = roundToMinute(new Date().toISOString())
-
-      if (data?.set?.index === 1) {
-        // Use scheduled time from match
-        if (data?.match?.scheduledAt) {
-          defaultTime = roundToMinute(data.match.scheduledAt)
-        }
-      } else {
-        // Get previous set's end time
-        const allSets = await db.sets.where('matchId').equals(matchId).toArray()
-        const previousSet = allSets.find(s => s.index === (data.set.index - 1))
-        if (previousSet?.endTime) {
-          // Add 1 minute to previous set end time (standard beach volleyball set interval)
-          const prevEndTime = new Date(previousSet.endTime)
-          prevEndTime.setMinutes(prevEndTime.getMinutes() + 1)
-          defaultTime = prevEndTime.toISOString()
-        }
-      }
+      // Show set start time confirmation: the set starts now (its first
+      // rally), never before the end of a set already played
+      const allSets = await db.sets.where('matchId').equals(matchId).toArray()
+      const defaultTime = defaultSetStartTime({ setIndex: data?.set?.index || 1, sets: allSets })
 
       setSetStartTimeModal({ setIndex: data?.set?.index, defaultTime })
       return
@@ -3886,10 +3880,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     setSetEndTimeModal(null)
 
     // Show loading overlay
-    setSetTransitionLoading({ step: 'Finishing set...' })
+    setSetTransitionLoading({ step: t('scoreboard.transitionFinishing', 'Finishing the set…') })
 
-    // Show sync progress modal
-    setSyncModalOpen(true)
+    // Show sync progress modal, only when a cloud sync can finish now: signed
+    // out, offline or with the cloud off the set is saved locally and the
+    // background queue sends it (the scorer was held up by a modal of
+    // "warning" steps at every set end)
+    const waitForCloudSync = cloudSyncWaitNow()
+    if (waitForCloudSync) setSyncModalOpen(true)
 
     // CRITICAL: Acquire lock IMMEDIATELY to prevent ensureActiveSet from creating duplicate sets
     // This must happen BEFORE we mark the current set as finished
@@ -3972,7 +3970,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         console.warn('[SET_END_DEBUG] WARNING: data.set.id differs from the unfinished set! Using correct set id:', setIdToUpdate)
       }
 
-      setSetTransitionLoading({ step: 'Saving set data...' })
+      setSetTransitionLoading({ step: t('scoreboard.transitionSaving', 'Saving the set…') })
       const updateResult = await db.sets.update(setIdToUpdate, { finished: true, team1Points, team2Points, endTime: roundToMinute(time) })
 
       // STEP 5: Verify the update actually worked
@@ -4000,7 +3998,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // STEP 8: IMMEDIATE SYNC TO SUPABASE (if not a test match)
       // Sync happens FIRST before any UI operations to ensure data is saved
       if (matchRecord?.test !== true && matchRecord?.seed_key) {
-        setSetTransitionLoading({ step: 'Syncing to cloud...' })
+        // only say so when a sync can finish now (signed in, online, cloud on);
+        // otherwise the set is saved locally and synced in the background
+        if (cloudSyncWaitNow()) setSetTransitionLoading({ step: t('scoreboard.transitionSyncing', 'Syncing to the cloud…') })
 
         // Prepare set update payload
         const setPayload = {
@@ -4043,7 +4043,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         // - Warning (offline): 1.5s delay, then proceed
         // - Error: wait for user to click button in modal (with 5s timeout fallback)
         if (!syncResult.success) {
-          // Error - wait for modal callback or timeout
+          // Error - wait for modal callback or timeout (the modal shows the error)
+          setSyncModalOpen(true)
           const SYNC_MODAL_TIMEOUT = 5000
           let syncTimeoutId = null
 
@@ -4068,8 +4069,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           ])
         } else {
           // Success or warning - show completion briefly then proceed
-          const delay = syncResult.hasWarning ? 1500 : 1000
-          await new Promise(resolve => setTimeout(resolve, delay))
+          if (waitForCloudSync) {
+            const delay = syncResult.hasWarning ? 1500 : 1000
+            await new Promise(resolve => setTimeout(resolve, delay))
+          }
           setSyncModalOpen(false)
           resetSyncState()
         }
@@ -4130,7 +4133,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
         // Cloud backup at set end (non-blocking)
         if (matchRecord?.test !== true) {
-          setSetTransitionLoading({ step: 'Uploading backup...' })
+          if (cloudSyncWaitNow()) setSetTransitionLoading({ step: t('scoreboard.transitionUploading', 'Uploading the backup…') })
           const gameNum = matchRecord?.gameNumber || matchRecord?.game_n || null
           exportMatchData(matchId).then(backupData => {
             uploadBackupToCloud(matchId, backupData)
@@ -4144,7 +4147,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         const shouldDownload = autoDownloadAtSetEnd && (alwaysDownloadAtSetEnd || !syncSucceeded || isOffline)
 
         if (shouldDownload) {
-          setSetTransitionLoading({ step: 'Downloading backup...' })
+          setSetTransitionLoading({ step: t('scoreboard.transitionDownloading', 'Saving a backup file…') })
           try {
             const allMatches = await db.matches.toArray()
             const allTeams = await db.teams.toArray()
@@ -4236,10 +4239,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             // Get team A/B assignments for set 3
             const set2TeamAKey = data?.match?.coinTossTeamA || 'team1'
 
-            // Determine current positions at end of set 2 (set 2 has teams switched from set 1)
-            const set2leftisTeam1 = set2TeamAKey !== 'team1'
-            const set2LeftTeamKey = set2leftisTeam1 ? 'team1' : 'team2'
-            const set2LeftTeamLabel = set2LeftTeamKey === set2TeamAKey ? 'A' : 'B'
+            // The side the teams finished set 2 on (its court switches included)
+            const set2LeftTeamLabel = leftTeamInSet(2, await db.matches.get(matchId))
 
             // Get current serve at end of set 2
             const currentServe = getCurrentServe()
@@ -4260,6 +4261,24 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               set3FirstServe: selectedFirstServe,
               set3CourtSwitched: false
             })
+          }
+
+          // Set 2 starts on the side set 1 finished on (rule 18.1.1: the
+          // courts change in the interval only if requested). Written now, so
+          // the interval's preview and "Switch sides" act on the same value.
+          if (newSetIndex === 2) {
+            const sidesMatch = await db.matches.get(matchId)
+            const sides = nextSetStartSides(2, sidesMatch)
+            await db.matches.update(matchId, sides)
+            if (sidesMatch?.seed_key && !sidesMatch?.test) {
+              await db.sync_queue.add({
+                resource: 'match',
+                action: 'update',
+                payload: { id: sidesMatch.seed_key, ...sides },
+                ts: new Date().toISOString(),
+                status: 'queued'
+              })
+            }
           }
 
           // Check if a set with this index already exists
@@ -4442,7 +4461,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       matchId,
       setIndex: 3,
       type: 'set3_coin_toss_winner',
-      payload: { winner },
+      // `team`: Last action's team line names the winner
+      payload: { winner, team: winner },
       ts: new Date().toISOString(),
       seq: nextSeq
     })
@@ -4454,27 +4474,29 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
   }, [matchId, data?.match, getNextSeq, captureFullStateSnapshot])
 
-  // Switch which team starts on which side for the next set
+  // Switch which team starts on which side for the next set: toggles the
+  // side the interval shows, which is the side the set starts on
   const handleBetweenSetsSwitchSides = useCallback(async () => {
     if (!data?.match || !data?.set) return
-
     const setIndex = data.set.index
-    const currentOverrides = data.match.setLeftTeamOverrides || {}
 
-    // Get current left team for this set
-    let currentLeftTeam
-    if (currentOverrides[setIndex]) {
-      currentLeftTeam = currentOverrides[setIndex]
-    } else {
-      // Default pattern: Set 1 = A left, Set 2 = B left
-      currentLeftTeam = setIndex % 2 === 1 ? 'A' : 'B'
-    }
-
-    // Toggle: if A is on left, make B on left (and vice versa)
-    const newLeftTeam = currentLeftTeam === 'A' ? 'B' : 'A'
-    const updatedOverrides = { ...currentOverrides, [setIndex]: newLeftTeam }
-
-    await db.matches.update(matchId, { setLeftTeamOverrides: updatedOverrides })
+    // Toggle the stored side, read in the same transaction: a double tap is
+    // two switches (with the rendered match both taps wrote the same side)
+    await db.transaction('rw', db.matches, db.sync_queue, async () => {
+      const match = await db.matches.get(matchId)
+      if (!match) return
+      const update = switchSidesUpdate(setIndex, match, { beforeSetStart: true })
+      await db.matches.update(matchId, update)
+      if (match.seed_key && !match.test) {
+        await db.sync_queue.add({
+          resource: 'match',
+          action: 'update',
+          payload: { id: match.seed_key, ...update },
+          ts: new Date().toISOString(),
+          status: 'queued'
+        })
+      }
+    })
   }, [data?.match, data?.set, matchId])
 
   // Switch which team serves first for the next set (Set 2 or Set 3 interval)
@@ -4551,6 +4573,24 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
 
   // Get action description for an event
+  // A dialog's score as on the court: left team's letter chip, "20 : 16", right chip
+  const courtScoreChips = (team1Points, team2Points) => {
+    const chip = (key) => {
+      const color = (key === 'team1' ? data?.team1Team?.color : data?.team2Team?.color) || (key === 'team1' ? '#ef4444' : '#3b82f6')
+      return <span style={{ background: color, color: isBrightColor(color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>{key === teamAKey ? 'A' : 'B'}</span>
+    }
+    const leftKey = leftisTeam1 ? 'team1' : 'team2'
+    const rightKey = leftisTeam1 ? 'team2' : 'team1'
+    const pts = { team1: team1Points ?? 0, team2: team2Points ?? 0 }
+    return (
+      <>
+        {chip(leftKey)}
+        <strong className="tabular-nums" style={{ fontSize: '20px' }}>{pts[leftKey]} : {pts[rightKey]}</strong>
+        {chip(rightKey)}
+      </>
+    )
+  }
+
   const getActionDescription = useCallback((event) => {
     if (!event || !data) return 'Unknown action'
 
@@ -4584,19 +4624,23 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       }
     }
 
+    // "A 20 : 16 B": the left team first, as on the court
+    const scoreText = (t1, t2) => formatCourtScore({ team1: t1, team2: t2 }, { leftisTeam1, teamAKey: data?.match?.coinTossTeamA || 'team1' })
+
     let eventDescription = ''
     if (event.type === 'coin_toss') {
+      // the team names (the short name is the country code, "CHE" for both)
       const teamAName = event.payload?.teamA === 'team1'
-        ? (data?.match?.team1ShortName || data?.match?.team1Name || data?.team1Team?.shortName || data?.team1Team?.name || 'team1')
-        : (data?.match?.team2ShortName || data?.match?.team2Name || data?.team2Team?.shortName || data?.team2Team?.name || 'team2')
+        ? (data?.match?.team1Name || data?.team1Team?.name || data?.team1Team?.shortName || 'team1')
+        : (data?.match?.team2Name || data?.team2Team?.name || data?.team2Team?.shortName || 'team2')
       const teamBName = event.payload?.teamB === 'team1'
-        ? (data?.match?.team1ShortName || data?.match?.team1Name || data?.team1Team?.shortName || data?.team1Team?.name || 'team1')
-        : (data?.match?.team2ShortName || data?.match?.team2Name || data?.team2Team?.shortName || data?.team2Team?.name || 'team2')
+        ? (data?.match?.team1Name || data?.team1Team?.name || data?.team1Team?.shortName || 'team1')
+        : (data?.match?.team2Name || data?.team2Team?.name || data?.team2Team?.shortName || 'team2')
       // Determine if first serve is Team A or Team B
       const firstServeLabel = event.payload?.firstServe === event.payload?.teamA ? 'A' : 'B'
       eventDescription = `Coin toss - A: ${teamAName}, B: ${teamBName}, First serve: ${firstServeLabel}`
     } else if (event.type === 'point') {
-      eventDescription = `Point — ${teamName} (${team1Label} ${team1Score}:${team2Score} ${team2Label})`
+      eventDescription = `Point — ${teamName} (${scoreText(team1Score, team2Score)})`
     } else if (event.type === 'timeout') {
       eventDescription = `Timeout — ${teamName}`
     } else if (event.type === 'substitution') {
@@ -4604,7 +4648,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const playerIn = event.payload?.playerIn || '?'
       const isExceptional = event.payload?.isExceptional === true
       const substitutionType = isExceptional ? 'Exceptional substitution' : 'Substitution'
-      eventDescription = `${substitutionType} — ${teamName} (OUT: ${playerOut} IN: ${playerIn}) (${team1Label} ${team1Score}:${team2Score} ${team2Label})`
+      eventDescription = `${substitutionType} — ${teamName} (OUT: ${playerOut} IN: ${playerIn}) (${scoreText(team1Score, team2Score)})`
     } else if (event.type === 'set_start') {
       // Format the relative time as MM:SS
       const relativeTime = typeof event.ts === 'number' ? event.ts : 0
@@ -4620,13 +4664,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Show detailed replay info with scores
       const { oldteam1Points, oldteam2Points, newteam1Points, newteam2Points } = event.payload || {}
       if (oldteam1Points !== undefined && newteam1Points !== undefined) {
-        // Get team labels (A/B) based on coin toss
-        const teamAKey = data?.match?.coinTossTeamA || 'team1'
-        const oldLeftScore = teamAKey === 'team1' ? oldteam1Points : oldteam2Points
-        const oldRightScore = teamAKey === 'team1' ? oldteam2Points : oldteam1Points
-        const newLeftScore = teamAKey === 'team1' ? newteam1Points : newteam2Points
-        const newRightScore = teamAKey === 'team1' ? newteam2Points : newteam1Points
-        eventDescription = `${oldLeftScore}:${oldRightScore} Rally Replayed, new score ${newLeftScore}:${newRightScore}`
+        eventDescription = `${scoreText(oldteam1Points, oldteam2Points)} Rally Replayed, new score ${scoreText(newteam1Points, newteam2Points)}`
       } else {
         eventDescription = 'Rally replayed'
       }
@@ -4702,7 +4740,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         target = ' Team'
       }
 
-      eventDescription = `Sanction — ${teamName}${target} (${sanctionLabel}) (${team1Label} ${team1Score}:${team2Score} ${team2Label})`
+      eventDescription = `Sanction — ${teamName}${target} (${sanctionLabel}) (${scoreText(team1Score, team2Score)})`
     } else if (event.type === 'remark') {
       const remarkText = event.payload?.text || ''
       // Show first line or first 50 characters
@@ -4767,31 +4805,23 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       eventDescription = `${resultLabel}`
     } else if (event.type === 'court_switch') {
       eventDescription = t('scoreboard.courtSwitch', 'Court switch')
-    } else if (event.type === 'mto') {
-      // MTO (Medical Timeout) with team A/B label and player number
-      const mtoTeamLabel = event.payload?.team === data?.match?.coinTossTeamA ? 'A' : 'B'
-      const mtoPlayerNumber = event.payload?.playerNumber || '?'
-      const mtoOutcome = event.payload?.outcome
-      if (mtoOutcome) {
-        const outcomeLabel = mtoOutcome === 'recovered' ? t('scoreboard.recovered', 'Recovered') : t('scoreboard.forfeit', 'Forfeit')
-        eventDescription = `MTO — ${t('scoreboard.team', 'Team')} ${mtoTeamLabel} #${mtoPlayerNumber} (${outcomeLabel})`
+    } else if (event.type === 'mto' || event.type === 'rit' || event.type === 'medical_end') {
+      // "MTO – B #2 Weber", "RIT (Toilet) – B #2 Weber",
+      // "MTO end – B #2 Weber (3:12, recovered)"
+      const mp = event.payload || {}
+      const kind = event.type === 'medical_end' ? mp.kind : event.type
+      const medTeamLabel = mp.team === (data?.match?.coinTossTeamA || 'team1') ? 'A' : 'B'
+      const medWho = `${medTeamLabel} #${mp.playerNumber ?? '?'}${mp.playerName ? ` ${mp.playerName}` : ''}`
+      const ritTypeLabel = mp.ritType === 'no_blood' ? t('scoreboard.ritNoBlood', 'No blood') :
+        mp.ritType === 'toilet' ? t('scoreboard.ritToilet', 'Toilet') :
+          mp.ritType === 'weather' ? t('scoreboard.ritWeather', 'Weather') : ''
+      const kindLabel = kind === 'rit' ? `RIT${ritTypeLabel ? ` (${ritTypeLabel})` : ''}` : 'MTO'
+      if (event.type === 'medical_end' || mp.outcome) {
+        const outcomeLabel = mp.outcome === 'forfeit' ? t('scoreboard.forfeit', 'Forfeit') : t('scoreboard.recovered', 'Recovered')
+        const dur = mp.duration !== undefined ? `${formatMedicalDuration(mp.duration)}, ` : ''
+        eventDescription = `${kindLabel} ${t('scoreboard.medicalEnd', 'end')} – ${medWho} (${dur}${outcomeLabel.toLowerCase()})`
       } else {
-        eventDescription = `MTO — ${t('scoreboard.team', 'Team')} ${mtoTeamLabel} #${mtoPlayerNumber}`
-      }
-    } else if (event.type === 'rit') {
-      // RIT (Recovery Interruption Time) with team A/B label, player number, and type
-      const ritTeamLabel = event.payload?.team === data?.match?.coinTossTeamA ? 'A' : 'B'
-      const ritPlayerNumber = event.payload?.playerNumber || '?'
-      const ritType = event.payload?.ritType
-      const ritTypeLabel = ritType === 'no_blood' ? t('scoreboard.ritNoBlood', 'No blood') :
-                          ritType === 'toilet' ? t('scoreboard.ritToilet', 'Toilet') :
-                          ritType === 'weather' ? t('scoreboard.ritWeather', 'Weather') : ritType
-      const ritOutcome = event.payload?.outcome
-      if (ritOutcome) {
-        const outcomeLabel = ritOutcome === 'recovered' ? t('scoreboard.recovered', 'Recovered') : t('scoreboard.forfeit', 'Forfeit')
-        eventDescription = `RIT (${ritTypeLabel}) — ${t('scoreboard.team', 'Team')} ${ritTeamLabel} #${ritPlayerNumber} (${outcomeLabel})`
-      } else {
-        eventDescription = `RIT (${ritTypeLabel}) — ${t('scoreboard.team', 'Team')} ${ritTeamLabel} #${ritPlayerNumber}`
+        eventDescription = `${kindLabel} – ${medWho}`
       }
     } else if (event.type === 'medical_timeout') {
       // Legacy medical_timeout support
@@ -4841,7 +4871,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
 
     return eventDescription
-  }, [data])
+  }, [data, leftisTeam1])
 
   // Show undo confirmation
   const showUndoConfirm = useCallback(() => {
@@ -5474,23 +5504,18 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     const team2Points = data.set.team2Points || 0
     const servingTeam = getCurrentServe()
 
-    // Log the BMP request event (challenge type for team requests)
-    const requestSeq = await logEvent('challenge', {
-      team: teamKey,
-      score: { team1: team1Points, team2: team2Points },
-      servingTeam
-    })
-
-    // Show outcome modal with score/serve info for display
+    // The request (a `challenge` event) is logged with its outcome, when the
+    // scorer confirms it: Cancel leaves nothing behind (it logged a "BMP
+    // request" that nothing undid). Its time is the time it was asked for.
     setBmpSelectedOutcome(null) // Reset any previous selection
     setBmpOutcomeModal({
       type: 'team',
       team: teamKey,
-      requestSeq, // Store sequence number to link outcome as sub-event
+      requestedAt: new Date().toISOString(),
       currentScore: { team1: team1Points, team2: team2Points },
       currentServe: servingTeam
     })
-  }, [data?.set, getCurrentServe, logEvent])
+  }, [data?.set, getCurrentServe])
 
   const handleRefereeBMP = useCallback(async () => {
     if (!data?.set) return
@@ -5500,30 +5525,38 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     const team2Points = data.set.team2Points || 0
     const servingTeam = getCurrentServe()
 
-    // Log the referee BMP request event
-    const requestSeq = await logEvent('referee_bmp_request', {
-      score: { team1: team1Points, team2: team2Points },
-      servingTeam
-    })
-
-    // Show outcome modal with score/serve info for display
+    // Logged with its outcome (as the team BMP): Cancel leaves nothing behind
     setBmpSelectedOutcome(null) // Reset any previous selection
     setBmpOutcomeModal({
       type: 'referee',
-      requestSeq, // Store sequence number to link outcome as sub-event
+      requestedAt: new Date().toISOString(),
       currentScore: { team1: team1Points, team2: team2Points },
       currentServe: servingTeam
     })
-  }, [data?.set, getCurrentServe, logEvent])
+  }, [data?.set, getCurrentServe])
 
   // Close first, then write (useConfirmAction): a double tap on an outcome
   // gave the point twice
   const runBMPOutcome = useConfirmAction(onConfirmFailed)
   const handleBMPOutcome = useCallback((result, pointToTeam = null) => runBMPOutcome(async () => {
     if (!bmpOutcomeModal || !data?.set) return
-    const bmpModal = bmpOutcomeModal
+    const bmpModal = { ...bmpOutcomeModal }
     setBmpSelectedOutcome(null)
     setBmpOutcomeModal(null)
+
+    // The request first, at the score it was asked at; the outcome is its sub-event
+    if (bmpModal.requestSeq === undefined) {
+      bmpModal.requestSeq = bmpModal.type === 'team'
+        ? await logEvent('challenge', {
+          team: bmpModal.team,
+          score: { ...bmpModal.currentScore },
+          servingTeam: bmpModal.currentServe
+        }, { timestamp: bmpModal.requestedAt })
+        : await logEvent('referee_bmp_request', {
+          score: { ...bmpModal.currentScore },
+          servingTeam: bmpModal.currentServe
+        }, { timestamp: bmpModal.requestedAt })
+    }
 
     const requestingTeam = bmpModal.team
     const isTeamBMP = bmpModal.type === 'team'
@@ -5790,22 +5823,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const timeout = setTimeout(() => {
         if (ttoModal?.triggerCourtSwitchAfter && data?.match && data?.set) {
           const setIndex = ttoModal.set.index
-          if (setIndex >= 1 && setIndex <= 4) {
-            const currentOverrides = data.match.setLeftTeamOverrides || {}
-            let currentLeftTeam
-            if (currentOverrides[setIndex]) {
-              currentLeftTeam = currentOverrides[setIndex]
-            } else {
-              currentLeftTeam = setIndex % 2 === 1 ? 'A' : 'B'
-            }
-            const newLeftTeam = currentLeftTeam === 'A' ? 'B' : 'A'
-            const updatedOverrides = { ...currentOverrides, [setIndex]: newLeftTeam }
-            db.matches.update(matchId, { setLeftTeamOverrides: updatedOverrides })
+          if (setIndex >= 1 && setIndex <= 3) {
+            const update = switchSidesUpdate(setIndex, data.match)
+            db.matches.update(matchId, update)
             if (data.match?.seed_key) {
               db.sync_queue.add({
                 resource: 'match',
                 action: 'update',
-                payload: { id: data.match.seed_key, setLeftTeamOverrides: updatedOverrides },
+                payload: { id: data.match.seed_key, ...update },
                 createdAt: new Date().toISOString()
               })
             }
@@ -6179,34 +6204,58 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     setPlayerActionMenu(null)
   }, [playerActionMenu, data?.set])
 
+  // The player's name for the medical dialogs and events
+  const medicalPlayerName = useCallback((team, playerNumber) => {
+    const players = team === 'team1' ? data?.team1Players : data?.team2Players
+    const p = (players || []).find(pl => String(pl.number) === String(playerNumber))
+    if (!p) return ''
+    if (p.lastName) return p.lastName
+    if (p.name) return String(p.name).trim()
+    return p.firstName || ''
+  }, [data?.team1Players, data?.team2Players])
+
+  // Start an MTO (medical time-out) or a RIT (recovery interruption time):
+  // 5 minutes recovery time (FIVB beach rule 17.1.2). One event, logged with
+  // logEvent (synced, undoable), carrying the player, the score and the server
+  // (the scoresheet's medical chart and remarks read it: medicalEvents_beach).
+  const startMedical = useCallback(async (kind, ritType) => {
+    if (!injuryDropdown || !data?.set) return
+    const { team, playerNumber } = injuryDropdown
+    const startedAt = new Date().toISOString()
+    const playerName = medicalPlayerName(team, playerNumber)
+    setInjuryDropdown(null)
+
+    const startSeq = await logEvent(kind, medicalStartPayload({
+      kind,
+      team,
+      playerNumber,
+      playerName,
+      ritType,
+      startTime: startedAt,
+      team1Points: data.set.team1Points || 0,
+      team2Points: data.set.team2Points || 0,
+      servingTeam: getCurrentServe()
+    }))
+
+    setMedicalModal({
+      type: kind,
+      ritType: kind === 'rit' ? ritType : undefined,
+      team,
+      playerNumber,
+      playerName,
+      countdown: MEDICAL_RECOVERY_SECONDS,
+      started: true,
+      startedAt,
+      startSeq
+    })
+    sendActionToReferee('medical', { kind, ritType: kind === 'rit' ? ritType : null, team, playerNumber, playerName, startTime: startedAt, durationSec: MEDICAL_RECOVERY_SECONDS })
+  }, [injuryDropdown, data?.set, logEvent, getCurrentServe, medicalPlayerName, sendActionToReferee])
+
   // Handle Start MTO (Medical Timeout) - 5 minute recovery time, unlimited per match
   const handleStartMTO = useCallback(async () => {
     cLogger.logHandler('handleStartMTO', { team: injuryDropdown?.team, player: injuryDropdown?.playerNumber })
-    if (!injuryDropdown || !data?.set) return
-
-    const { team, playerNumber } = injuryDropdown
-    const startedAt = new Date().toISOString()
-
-    // Log MTO event with start time
-    const eventId = await logEvent('mto', {
-      team,
-      playerNumber,
-      startTime: startedAt
-    })
-
-    // Start countdown modal
-    setMedicalModal({
-      type: 'mto',
-      team,
-      playerNumber,
-      countdown: 300,
-      started: true,
-      startedAt,
-      eventId
-    })
-
-    setInjuryDropdown(null)
-  }, [injuryDropdown, data?.set, logEvent])
+    await startMedical('mto')
+  }, [injuryDropdown, startMedical])
 
   // Handle Start RIT (Recovery Interruption Time) - 5 minute, only ONE per match
   const handleStartRIT = useCallback(async (ritType) => {
@@ -6218,82 +6267,31 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       showAlert(t('scoreboard.ritAlreadyUsed', 'RIT already used this match'), 'error')
       return
     }
+    await startMedical('rit', ritType)
+  }, [injuryDropdown, data?.set, ritUsedThisMatch, showAlert, t, startMedical])
 
-    const { team, playerNumber } = injuryDropdown
-    const startedAt = new Date().toISOString()
-
-    // Log RIT event with start time and type
-    const eventId = await logEvent('rit', {
-      team,
-      playerNumber,
-      ritType,
-      startTime: startedAt
-    })
-
-    // Start countdown modal
-    setMedicalModal({
-      type: 'rit',
-      ritType,
-      team,
-      playerNumber,
-      countdown: 300,
-      started: true,
-      startedAt,
-      eventId
-    })
-
-    setInjuryDropdown(null)
-  }, [injuryDropdown, data?.set, logEvent, ritUsedThisMatch, showAlert, t])
-
-  // Handle MTO/RIT outcome - player recovered or forfeit
-  const handleMedicalOutcome = useCallback(async (outcome) => {
+  // The MTO / RIT ends: the player recovered, or cannot continue (forfeit).
+  // A `medical_end` event (logEvent: synced, undoable) refers to the start; no
+  // separate remark (the scoresheet writes the remark line from the events).
+  const [medicalForfeitConfirm, setMedicalForfeitConfirm] = useState(false)
+  const medicalEndingRef = useRef(new Set())
+  const runMedicalOutcome = useConfirmAction(onConfirmFailed)
+  const handleMedicalOutcome = useCallback((outcome) => runMedicalOutcome(async () => {
     cLogger.logHandler('handleMedicalOutcome', { outcome, medicalModal })
     if (!medicalModal || !data?.set) return
-
-    const { type, ritType, team, playerNumber, startedAt, eventId } = medicalModal
-    const endTime = new Date().toISOString()
-    const startTime = new Date(startedAt).getTime()
-    const endTimeMs = new Date(endTime).getTime()
-    const durationSeconds = Math.floor((endTimeMs - startTime) / 1000)
-    const durationMinutes = Math.floor(durationSeconds / 60)
-    const durationRemainder = durationSeconds % 60
-
-    // Format times for remark
-    const startDate = new Date(startedAt)
-    const endDate = new Date(endTime)
-    const startTimeStr = `${String(startDate.getHours()).padStart(2, '0')}:${String(startDate.getMinutes()).padStart(2, '0')}`
-    const endTimeStr = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`
-    const durationStr = `${durationMinutes}:${String(durationRemainder).padStart(2, '0')}`
-
-    // Get team label (A/B)
-    const teamLabel = team === data?.match?.coinTossTeamA ? 'A' : 'B'
-    const typeLabel = type === 'mto' ? 'MTO' : `RIT (${ritType === 'no_blood' ? 'No blood' : ritType === 'toilet' ? 'Toilet' : 'Weather'})`
-    const outcomeLabel = outcome === 'recovered' ? 'Recovered' : 'Forfeit'
-
-    // Update the event with end time, duration, and outcome
-    if (eventId) {
-      const existingEvent = await db.events.get(eventId)
-      if (existingEvent) {
-        await db.events.update(eventId, {
-          payload: {
-            ...existingEvent.payload,
-            endTime,
-            duration: durationSeconds,
-            outcome
-          }
-        })
-      }
-    }
-
-    // Log remark with all details
-    const remarkText = `${typeLabel} - Team ${teamLabel} #${playerNumber} - Start: ${startTimeStr}, End: ${endTimeStr}, Duration: ${durationStr}, Outcome: ${outcomeLabel}`
-    await logEvent('remark', {
-      text: remarkText,
-      fullRemarks: remarkText
-    })
-
-    // Close the modal
+    const modal = medicalModal
     setMedicalModal(null)
+    setMedicalForfeitConfirm(false)
+
+    const { type, team, playerNumber } = modal
+    const startEvent = (data.events || []).find(e => e.seq === modal.startSeq && e.type === type) || {
+      type,
+      seq: modal.startSeq,
+      payload: { team, playerNumber, playerName: modal.playerName, ritType: modal.ritType, startTime: modal.startedAt }
+    }
+    if (startEvent.seq !== undefined) medicalEndingRef.current.add(startEvent.seq)
+    await logEvent('medical_end', medicalEndPayload(startEvent, { endTime: new Date().toISOString(), outcome }))
+    sendActionToReferee('end_medical', { kind: type, team, playerNumber, outcome })
 
     // If forfeit, generate FIVB remark and trigger forfeit flow
     if (outcome === 'forfeit') {
@@ -6315,7 +6313,43 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
       await handleForfait(team, 'medical', 'match')
     }
-  }, [medicalModal, data?.set, data?.match?.coinTossTeamA, data?.match?.remarks, data?.servingTeam, data?.team1Team?.name, data?.team2Team?.name, matchId, logEvent, handleForfait])
+  }), [runMedicalOutcome, medicalModal, data?.set, data?.events, data?.match?.coinTossTeamA, data?.match?.remarks, data?.servingTeam, data?.team1Team?.name, data?.team2Team?.name, matchId, logEvent, handleForfait, sendActionToReferee])
+
+  // The running MTO / RIT follows the events: a reload (or an undone end)
+  // brings its countdown back, an undone start closes it
+  const openMedicalEvent = useMemo(() => findOpenMedical(data?.events || []), [data?.events])
+  const medicalSeenRef = useRef(null)
+  useEffect(() => {
+    const events = data?.events || []
+    for (const seq of [...medicalEndingRef.current]) {
+      if (events.some(e => e.type === 'medical_end' && e.payload?.startSeq === seq)) medicalEndingRef.current.delete(seq)
+    }
+    if (medicalModal?.started) {
+      const inEvents = events.some(e => e.seq === medicalModal.startSeq && e.type === medicalModal.type)
+      if (inEvents) medicalSeenRef.current = medicalModal.startSeq
+      // seen in the events, now gone: its start was undone
+      else if (medicalSeenRef.current === medicalModal.startSeq) {
+        medicalSeenRef.current = null
+        setMedicalModal(null)
+        setMedicalForfeitConfirm(false)
+      }
+      return
+    }
+    if (!openMedicalEvent || medicalEndingRef.current.has(openMedicalEvent.seq)) return
+    const p = openMedicalEvent.payload || {}
+    const startedAt = p.startTime || openMedicalEvent.ts
+    setMedicalModal({
+      type: openMedicalEvent.type,
+      ritType: p.ritType,
+      team: p.team,
+      playerNumber: p.playerNumber,
+      playerName: p.playerName || medicalPlayerName(p.team, p.playerNumber),
+      countdown: medicalSecondsLeft(startedAt),
+      started: true,
+      startedAt,
+      startSeq: openMedicalEvent.seq
+    })
+  }, [openMedicalEvent, data?.events, medicalModal?.started, medicalModal?.startSeq, medicalModal?.type, medicalPlayerName])
 
   // Cancel medical dropdown
   const cancelMedical = useCallback(() => {
@@ -6913,59 +6947,16 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // Store pre-switch overrides so undo can restore them
     const preSwitchOverrides = data.match.setLeftTeamOverrides ? { ...data.match.setLeftTeamOverrides } : {}
 
-    if (setIndex === 3) {
-      // Set 3: Mark that courts have been switched at 8 points AND swap court sides
-      const currentOverrides = data.match.setLeftTeamOverrides || {}
-
-      // Determine current left team (from override or default pattern)
-      let currentLeftTeam
-      if (currentOverrides[setIndex]) {
-        currentLeftTeam = currentOverrides[setIndex] // 'A' or 'B'
-      } else {
-        // Set 3 uses set3LeftTeam from coin toss
-        currentLeftTeam = data.match.set3LeftTeam || 'A'
-      }
-
-      // Toggle: if A is on left, make B on left (and vice versa)
-      const newLeftTeam = currentLeftTeam === 'A' ? 'B' : 'A'
-      const updatedOverrides = { ...currentOverrides, [setIndex]: newLeftTeam }
-
-      await db.matches.update(matchId, { setLeftTeamOverrides: updatedOverrides })
+    if (setIndex >= 1 && setIndex <= 3) {
+      const update = switchSidesUpdate(setIndex, data.match)
+      await db.matches.update(matchId, update)
 
       // Sync to Supabase
       if (data.match?.seed_key) {
         await db.sync_queue.add({
           resource: 'match',
           action: 'update',
-          payload: { id: data.match.seed_key, setLeftTeamOverrides: updatedOverrides },
-          createdAt: new Date().toISOString()
-        })
-      }
-    } else if (setIndex >= 1 && setIndex <= 2) {
-      // Sets 1-4: Update setLeftTeamOverrides to swap teams
-      const currentOverrides = data.match.setLeftTeamOverrides || {}
-      
-      // Determine current left team (from override or default pattern)
-      let currentLeftTeam
-      if (currentOverrides[setIndex]) {
-        currentLeftTeam = currentOverrides[setIndex] // 'A' or 'B'
-      } else {
-        // Default pattern for beach volleyball: Set 1 = A left, Set 2 = B left, Set 3 = determined by coin toss
-        currentLeftTeam = setIndex % 2 === 1 ? 'A' : 'B'
-      }
-      
-      // Toggle: if A is on left, make B on left (and vice versa)
-      const newLeftTeam = currentLeftTeam === 'A' ? 'B' : 'A'
-      const updatedOverrides = { ...currentOverrides, [setIndex]: newLeftTeam }
-      
-      await db.matches.update(matchId, { setLeftTeamOverrides: updatedOverrides })
-      
-      // Sync to Supabase
-      if (data.match?.seed_key) {
-        await db.sync_queue.add({
-          resource: 'match',
-          action: 'update',
-          payload: { id: data.match.seed_key, setLeftTeamOverrides: updatedOverrides },
+          payload: { id: data.match.seed_key, ...update },
           createdAt: new Date().toISOString()
         })
       }
@@ -7007,31 +6998,16 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     if (shouldSwitchCourts && data?.match && data?.set) {
       const setIndex = ttoModal.set.index
 
-      if (setIndex >= 1 && setIndex <= 4) {
-        // Sets 1-4: Update setLeftTeamOverrides to swap teams
-        const currentOverrides = data.match.setLeftTeamOverrides || {}
-
-        // Determine current left team (from override or default pattern)
-        let currentLeftTeam
-        if (currentOverrides[setIndex]) {
-          currentLeftTeam = currentOverrides[setIndex] // 'A' or 'B'
-        } else {
-          // Default pattern for beach volleyball: Set 1 = A left, Set 2 = B left, Set 3 = coin toss
-          currentLeftTeam = setIndex % 2 === 1 ? 'A' : 'B'
-        }
-
-        // Toggle: if A is on left, make B on left (and vice versa)
-        const newLeftTeam = currentLeftTeam === 'A' ? 'B' : 'A'
-        const updatedOverrides = { ...currentOverrides, [setIndex]: newLeftTeam }
-
-        await db.matches.update(matchId, { setLeftTeamOverrides: updatedOverrides })
+      if (setIndex >= 1 && setIndex <= 3) {
+        const update = switchSidesUpdate(setIndex, data.match)
+        await db.matches.update(matchId, update)
 
         // Sync to Supabase
         if (data.match?.seed_key) {
           await db.sync_queue.add({
             resource: 'match',
             action: 'update',
-            payload: { id: data.match.seed_key, setLeftTeamOverrides: updatedOverrides },
+            payload: { id: data.match.seed_key, ...update },
             createdAt: new Date().toISOString()
           })
         }
@@ -7109,8 +7085,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
   }, [data, setTransitionLoading, onFinishSet])
 
-  if (!data?.set || setTransitionLoading) {
-    const loadingStep = setTransitionLoading?.step || t('common.loading', 'Loading…')
+  // Only the first load is a full-page loader. The set end's steps are a small
+  // status over the scoring screen (it was blanked for seconds, saying
+  // "Syncing to cloud…" on a device that was not even signed in).
+  if (!data?.set) {
+    const loadingStep = t('common.loading', 'Loading…')
     return (
       <div className="ov-kit fixed inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-stone-50 to-stone-100 px-4" style={{ zIndex: 9999 }}>
         <AppSpinner size={96} label={loadingStep} />
@@ -7155,6 +7134,21 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
   return (
     <div className="match-record">
+      {setTransitionLoading && (
+        // Taps wait while the set is being finished (the court still shows
+        // the old set); the screen stays visible
+        <div data-testid="set-transition-status" style={{ position: 'fixed', inset: 0, zIndex: 9000, cursor: 'progress' }}>
+          <div role="status" aria-live="polite" className="ov-kit" style={{
+            position: 'absolute', top: '12px', left: '50%', transform: 'translateX(-50%)',
+            display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 16px',
+            background: 'var(--ov-card)', border: '1px solid var(--ov-hairline-strong)', borderRadius: '999px',
+            boxShadow: 'var(--ov-shadow-card)', fontSize: '15px', fontWeight: 600, color: 'var(--ov-text)'
+          }}>
+            <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-stone-300 border-t-stone-700" aria-hidden="true" />
+            {setTransitionLoading.step}
+          </div>
+        </div>
+      )}
       {/* Portrait mode warning overlay for devices that don't support orientation lock (iOS) */}
       {!isLandscape && (
         <div className="ov-kit fixed inset-0 flex flex-col items-center justify-center overflow-y-auto bg-gradient-to-br from-stone-100 via-stone-50 to-stone-100 px-4 py-6" style={{ zIndex: 99999 }}>
@@ -7696,14 +7690,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       )}
 
 
-      {/* Main Scoreboard Layout - Scaled proportionally to viewport */}
-      <div style={{
+      {/* Main Scoreboard Layout - Scaled proportionally to viewport. Top-aligned:
+          centred, the spare height became an empty band above the score */}
+      <div data-testid="scoring-layout" style={{
         width: '100%',
         flex: 1,
         overflow: 'hidden',
         display: 'flex',
         justifyContent: 'center',
-        alignItems: 'center'
+        alignItems: 'flex-start'
       }}>
         <div
           className="match-content"
@@ -7922,8 +7917,33 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               width: '100%',
               minHeight: `${DESIGN_VMIN * 0.12 * scaleFactor}px`
             }}>
-              {/* Rally Status - 17% */}
-              <div style={{ flex: '0 0 17%', textAlign: 'center', padding: `0 ${4 * scaleFactor}px` }}>
+              {/* Rally Status - 17% (and the "One point to switch / TTO" chip
+                  under it, out of the flow: nothing moves) */}
+              <div style={{ flex: '0 0 17%', textAlign: 'center', padding: `0 ${4 * scaleFactor}px`, position: 'relative' }}>
+                {preEventPopup && (
+                  <div data-testid="pre-event-chip" role="status" style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    marginTop: `${2 * scaleFactor}px`,
+                    width: 'max-content',
+                    maxWidth: '100%',
+                    lineHeight: 1.2,
+                    background: 'var(--ov-success)',
+                    color: '#fff',
+                    padding: `${Math.max(4, 6 * scaleFactor)}px ${Math.max(10, 14 * scaleFactor)}px`,
+                    borderRadius: '999px',
+                    fontSize: `max(14px, ${DESIGN_VMIN * 0.02 * scaleFactor}px)`,
+                    fontWeight: 700,
+                    zIndex: 5,
+                    pointerEvents: 'none'
+                  }}>
+                    {preEventPopup.message === 'One point to TTO'
+                      ? t('scoreboard.onePointToTto', 'One point to TTO')
+                      : t('scoreboard.onePointToSwitch', 'One point to switch')}
+                  </div>
+                )}
                 <div className="font-semibold uppercase tracking-[0.12em] text-stone-500" style={{ fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px` }}>
                   {t('scoreboard.labels.rallyStatus')}
                 </div>
@@ -8045,7 +8065,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       }
                     }
                   }
-                  const scoreStr = `${team1Label} ${team1Score}:${team2Score} ${team2Label}`
+                  const scoreStr = formatCourtScore({ team1: team1Score, team2: team2Score }, { leftisTeam1, teamAKey })
 
                   // Determine action label
                   let actionLabel = getActionDescription(lastEvent)
@@ -8087,6 +8107,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     flex: '0 0 15%',
                     minWidth: 0,
                     maxWidth: '15%',
+                    // the card ends with its content (it stretched to the
+                    // bottom: a tall white card of empty space under the stats)
+                    alignSelf: 'flex-start',
+                    maxHeight: '100%',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: `${6 * scaleFactor}px`,
@@ -8183,8 +8207,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             const bmpUsed = getUnsuccessfulBMPsUsed(leftTeamKey)
                             const bmpRemaining = 2 - bmpUsed
                             const bmpExhausted = bmpRemaining <= 0
-                            // BMP available when rally is ongoing OR just ended (idle), but not during set break etc.
-                            const bmpAvailable = !bmpExhausted && data?.set && !data?.set?.finished
+                            // only between the point and the next rally (bmpAvailability_beach)
+                            const bmpBlock = teamBmpBlockReason({ events: data?.events, setIndex: data?.set?.index, setFinished: !data?.set || data.set.finished, rallyStatus, remaining: bmpRemaining })
+                            const bmpAvailable = !bmpBlock
                             return (
                               <button
                                 onClick={() => handleTeamBMP(leftTeamKey)}
@@ -8206,7 +8231,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   justifyContent: 'center',
                                   gap: `${6 * scaleFactor}px`
                                 }}
-                                title={t('scoreboard.bmpRemaining', { count: bmpRemaining, defaultValue: 'Ball mark protocol ({{count}} left)' })}
+                                title={bmpBlock === 'rally' || bmpBlock === 'moved_on' || bmpBlock === 'no_point' ? t('scoreboard.bmpOnlyAfterPoint', 'BMP: only after a point, before the next rally') : t('scoreboard.bmpRemaining', { count: bmpRemaining, defaultValue: 'Ball mark protocol ({{count}} left)' })}
                               >
                                 <span>BMP</span>
                                 <span className="tabular-nums" style={{
@@ -8444,6 +8469,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         return teamKey === 'team1' ? `${t1}:${t2}` : `${t2}:${t1}`
                       }
 
+                      // The team rows say when: "Delay warning · Set 2 · 3:4" (they had no set or score)
+                      const teamSanctionEvents = (type) => (data?.events || [])
+                        .filter(e => e.type === 'sanction' && e.payload?.team === leftTeamKey && e.payload?.type === type)
+                        .sort((a, b) => (a.seq || 0) - (b.seq || 0))
+                      const sanctionWhen = (ev) => ev ? ` · ${t('scoreboard.table.set', 'Set')} ${ev.setIndex} · ${getScoreFromSanction(ev, leftTeamKey)}` : ''
+                      const firstWarning = playerSanctions.filter(s => s.payload?.type === 'warning').sort((a, b) => (a.seq || 0) - (b.seq || 0))[0]
+
                       const borderStyle = `${1 * scaleFactor}px solid var(--ov-hairline)`
                       const tableFontSize = `${DESIGN_VMIN * 0.018 * scaleFactor}px`
                       const headerFontSize = `${DESIGN_VMIN * 0.016 * scaleFactor}px`
@@ -8476,7 +8508,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   background: 'var(--ov-warning-soft)',
                                   borderRadius: `${3 * scaleFactor}px`
                                 }}>
-                                  {t('scoreboard.sanctions.formalWarning', 'Formal warning')}
+                                  {t('scoreboard.sanctions.formalWarning', 'Formal warning')}{firstWarning ? ` · #${firstWarning.payload?.playerNumber}${sanctionWhen(firstWarning)}` : ''}
                                 </div>
                               )}
                               {hasIR && (
@@ -8488,7 +8520,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   background: 'var(--ov-sunken-strong)',
                                   borderRadius: `${3 * scaleFactor}px`
                                 }}>
-                                  {t('scoreboard.sanctions.improperRequest', 'Improper request')}
+                                  {t('scoreboard.sanctions.improperRequest', 'Improper request')}{sanctionWhen(teamSanctionEvents('improper_request')[0])}
                                 </div>
                               )}
                               {hasDW && (
@@ -8500,11 +8532,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   background: 'var(--ov-warning-soft)',
                                   borderRadius: `${3 * scaleFactor}px`
                                 }}>
-                                  {t('scoreboard.sanctions.delayWarning', 'Delay warning')}
+                                  {t('scoreboard.sanctions.delayWarning', 'Delay warning')}{sanctionWhen(teamSanctionEvents('delay_warning')[0])}
                                 </div>
                               )}
                               {delayPenaltyCount > 0 && (
-                                [...Array(delayPenaltyCount)].map((_, i) => (
+                                teamSanctionEvents('delay_penalty').map((ev, i) => (
                                   <div key={i} style={{
                                     fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
                                     color: 'var(--ov-danger-text)',
@@ -8513,7 +8545,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     background: 'var(--ov-danger-soft)',
                                     borderRadius: `${3 * scaleFactor}px`
                                   }}>
-                                    {t('scoreboard.sanctions.delayPenalty', 'Delay penalty')}
+                                    {t('scoreboard.sanctions.delayPenalty', 'Delay penalty')}{sanctionWhen(ev)}
                                   </div>
                                 ))
                               )}
@@ -8548,7 +8580,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                       <td style={{ padding: `${4 * scaleFactor}px`, textAlign: 'center', borderRight: borderStyle, borderBottom: isLast ? 'none' : borderStyle }}>{sanction.setIndex}</td>
                                       <td style={{ padding: `${4 * scaleFactor}px`, borderRight: borderStyle, borderBottom: isLast ? 'none' : borderStyle }}>
                                         {isPlayer1 && (
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'baseline', gap: `${6 * scaleFactor}px`, width: '100%' }}>
                                             {renderSanctionLetter(sanction.payload?.type)}
                                             <span>{score}</span>
                                           </div>
@@ -8556,7 +8588,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                       </td>
                                       <td style={{ padding: `${4 * scaleFactor}px`, borderBottom: isLast ? 'none' : borderStyle }}>
                                         {isPlayer2 && (
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'baseline', gap: `${6 * scaleFactor}px`, width: '100%' }}>
                                             {renderSanctionLetter(sanction.payload?.type)}
                                             <span>{score}</span>
                                           </div>
@@ -8587,7 +8619,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           <img
                             src={ballImage} onError={(e) => e.target.src = ballImage}
                             alt="Serving team"
-                            style={{ ...serveBallBaseStyle, width: '100%', maxWidth: `${DESIGN_VMIN * 0.092 * scaleFactor}px`, height: 'auto', aspectRatio: '1' }}
+                            style={{ ...serveBallBaseStyle, width: '100%', maxWidth: `${DESIGN_VMIN * SERVE_BOX * scaleFactor}px`, height: 'auto', aspectRatio: '1' }}
                           />
                         )
                       }
@@ -8601,7 +8633,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           gap: `${4 * scaleFactor}px`
                         }}>
                           <div style={{
-                            fontSize: `${DESIGN_VMIN * 0.0253 * scaleFactor}px`,
+                            fontSize: `${DESIGN_VMIN * SERVE_LABEL * scaleFactor}px`,
                             fontWeight: 700,
                             color: 'var(--ov-success)',
                             textTransform: 'uppercase',
@@ -8611,17 +8643,17 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             {t('scoreboard.serve', 'Serve')}
                           </div>
                           <div className="tabular-nums" style={{
-                            fontSize: `${DESIGN_VMIN * 0.0575 * scaleFactor}px`,
+                            fontSize: `${DESIGN_VMIN * SERVE_NUMBER * scaleFactor}px`,
                             fontWeight: 700,
                             color: 'var(--ov-success)',
-                            width: '80%',
-                            maxWidth: `${DESIGN_VMIN * 0.092 * scaleFactor}px`,
+                            width: '90%',
+                            maxWidth: `${DESIGN_VMIN * SERVE_BOX * scaleFactor}px`,
                             aspectRatio: '1',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             background: '#ecfdf5',
-                            border: `${2 * scaleFactor}px solid #10b981`,
+                            border: `${Math.max(2, 3 * scaleFactor)}px solid #047857`,
                             borderRadius: 'var(--ov-radius-lg)',
                             boxSizing: 'border-box'
                           }}>
@@ -8679,54 +8711,34 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             }}>
                               {t('scoreboard.set3CoinToss', 'Set 3 coin toss')}
                             </div>
+                            {/* the toss buttons in the court's order (the team cards) */}
                             <div style={{ display: 'flex', gap: '16px' }}>
-                              {(() => {
-                                const team1Color = data?.team1Team?.color || '#ef4444'
-                                const team2Color = data?.team2Team?.color || '#3b82f6'
-                                const team1IsA = teamAKey === 'team1'
-                                const team1Label = team1IsA ? 'A' : 'B'
-                                const team2Label = team1IsA ? 'B' : 'A'
-                                const team1Name = data?.team1Team?.name || data?.team1Team?.shortName || 'Team 1'
-                                const team2Name = data?.team2Team?.name || data?.team2Team?.shortName || 'Team 2'
+                              {(leftisTeam1 ? ['team1', 'team2'] : ['team2', 'team1']).map(key => {
+                                const color = (key === 'team1' ? data?.team1Team?.color : data?.team2Team?.color) || (key === 'team1' ? '#ef4444' : '#3b82f6')
+                                const label = key === teamAKey ? 'A' : 'B'
+                                const name = (key === 'team1' ? (data?.team1Team?.name || data?.team1Team?.shortName) : (data?.team2Team?.name || data?.team2Team?.shortName)) || (key === 'team1' ? 'Team 1' : 'Team 2')
                                 return (
-                                  <>
-                                    <button
-                                      onClick={() => handleSet3CoinToss('team1')}
-                                      style={{
-                                        padding: '16px 24px',
-                                        fontSize: '16px',
-                                        fontWeight: 700,
-                                        background: team1Color,
-                                        color: isBrightColor(team1Color) ? '#000' : '#fff',
-                                        border: 'none',
-                                        borderRadius: 'var(--ov-radius-lg)',
-                                        minHeight: '56px',
-                                        cursor: 'pointer'
-                                      }}
-                                    >
-                                      {team1Label} — {team1Name}
-                                      <div style={{ fontSize: '13px', fontWeight: 600, marginTop: '4px', opacity: 0.85 }}>{t('scoreboard.wonToss', 'Won the toss')}</div>
-                                    </button>
-                                    <button
-                                      onClick={() => handleSet3CoinToss('team2')}
-                                      style={{
-                                        padding: '16px 24px',
-                                        fontSize: '16px',
-                                        fontWeight: 700,
-                                        background: team2Color,
-                                        color: isBrightColor(team2Color) ? '#000' : '#fff',
-                                        border: 'none',
-                                        borderRadius: 'var(--ov-radius-lg)',
-                                        minHeight: '56px',
-                                        cursor: 'pointer'
-                                      }}
-                                    >
-                                      {team2Label} — {team2Name}
-                                      <div style={{ fontSize: '13px', fontWeight: 600, marginTop: '4px', opacity: 0.85 }}>{t('scoreboard.wonToss', 'Won the toss')}</div>
-                                    </button>
-                                  </>
+                                  <button
+                                    key={key}
+                                    data-testid={`set3-toss-${label}`}
+                                    onClick={() => handleSet3CoinToss(key)}
+                                    style={{
+                                      padding: '16px 24px',
+                                      fontSize: '16px',
+                                      fontWeight: 700,
+                                      background: color,
+                                      color: isBrightColor(color) ? '#000' : '#fff',
+                                      border: 'none',
+                                      borderRadius: 'var(--ov-radius-lg)',
+                                      minHeight: '56px',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    {label} · {name}
+                                    <div style={{ fontSize: '13px', fontWeight: 600, marginTop: '4px', opacity: 0.85 }}>{t('scoreboard.wonToss', 'Won the toss')}</div>
+                                  </button>
                                 )
-                              })()}
+                              })}
                             </div>
                             {/* Countdown and Progress bar during coin toss */}
                             {betweenSetsCountdown && (
@@ -8804,7 +8816,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 const leftFirstServeRaw = leftisTeam1 ? data?.match?.team1FirstServe : data?.match?.team2FirstServe
                                 const leftFirstServe = leftFirstServeRaw ?? leftPlayerNumbers[0]
                                 const leftOther = leftPlayerNumbers.find(n => String(n) !== String(leftFirstServe)) ?? leftPlayerNumbers[1]
-                                const leftLabel = leftisTeam1 ? 'A' : 'B'
+                                const leftLabel = (leftisTeam1 ? 'team1' : 'team2') === teamAKey ? 'A' : 'B'
                                 const leftName = leftisTeam1
                                   ? (data?.team1Team?.name || data?.team1Team?.shortName || 'T1')
                                   : (data?.team2Team?.name || data?.team2Team?.shortName || 'T2')
@@ -8837,7 +8849,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                         transition: 'background 0.15s'
                                       }}>
                                       <div style={{ fontWeight: 700, fontSize: '15px', color: leftTextColor }}>
-                                        {leftLabel} ({leftName})
+                                        {leftLabel} · {leftName}
                                       </div>
                                       <div style={{ fontSize: '13px', fontWeight: 700, color: leftSubTextColor, marginTop: '6px' }}>
                                         I: {leftFirstServe || '?'}
@@ -8907,7 +8919,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 const rightFirstServeRaw = leftisTeam1 ? data?.match?.team2FirstServe : data?.match?.team1FirstServe
                                 const rightFirstServe = rightFirstServeRaw ?? rightPlayerNumbers[0]
                                 const rightOther = rightPlayerNumbers.find(n => String(n) !== String(rightFirstServe)) ?? rightPlayerNumbers[1]
-                                const rightLabel = leftisTeam1 ? 'B' : 'A'
+                                const rightLabel = (leftisTeam1 ? 'team2' : 'team1') === teamAKey ? 'A' : 'B'
                                 const rightName = leftisTeam1
                                   ? (data?.team2Team?.name || data?.team2Team?.shortName || 'T2')
                                   : (data?.team1Team?.name || data?.team1Team?.shortName || 'T1')
@@ -8940,7 +8952,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                         transition: 'background 0.15s'
                                       }}>
                                       <div style={{ fontWeight: 700, fontSize: '15px', color: rightTextColor }}>
-                                        {rightLabel} ({rightName})
+                                        {rightLabel} · {rightName}
                                       </div>
                                       <div style={{ fontSize: '13px', fontWeight: 700, color: rightSubTextColor, marginTop: '6px' }}>
                                         I: {rightFirstServe || '?'}
@@ -9018,7 +9030,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           const playerSize = DESIGN_VMIN * 0.10 * scaleFactor
                           const positionSize = DESIGN_VMIN * 0.03 * scaleFactor
                           const positionOffset = DESIGN_VMIN * 0.015 * scaleFactor
-                          const ballSize = DESIGN_VMIN * 0.08 * scaleFactor
+                          const ballSize = DESIGN_VMIN * SERVE_BALL * scaleFactor
                           return (
                             <div
                               key={`${teamKey}-court-front-${player.position}-${player.id || player.number || idx}`}
@@ -9227,11 +9239,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   alt="Volleyball"
                                   style={{
                                     position: 'absolute',
-                                    left: `${-(DESIGN_VMIN * 0.08 * scaleFactor) - 12 * scaleFactor}px`,
+                                    left: `${-(DESIGN_VMIN * SERVE_BALL * scaleFactor) - 12 * scaleFactor}px`,
                                     top: '50%',
                                     transform: 'translateY(-50%)',
-                                    width: `${DESIGN_VMIN * 0.08 * scaleFactor}px`,
-                                    height: `${DESIGN_VMIN * 0.08 * scaleFactor}px`,
+                                    width: `${DESIGN_VMIN * SERVE_BALL * scaleFactor}px`,
+                                    height: `${DESIGN_VMIN * SERVE_BALL * scaleFactor}px`,
                                     zIndex: 5
                                   }}
                                 />
@@ -9352,7 +9364,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           const playerSize = DESIGN_VMIN * 0.10 * scaleFactor
                           const positionSize = DESIGN_VMIN * 0.03 * scaleFactor
                           const positionOffset = DESIGN_VMIN * 0.015 * scaleFactor
-                          const ballSize = DESIGN_VMIN * 0.08 * scaleFactor
+                          const ballSize = DESIGN_VMIN * SERVE_BALL * scaleFactor
                           return (
                             <div
                               key={`${teamKey}-court-front-${player.position}-${player.id || player.number || idx}`}
@@ -9546,7 +9558,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           const playerSize = DESIGN_VMIN * 0.10 * scaleFactor
                           const positionSize = DESIGN_VMIN * 0.03 * scaleFactor
                           const positionOffset = DESIGN_VMIN * 0.015 * scaleFactor
-                          const ballSize = DESIGN_VMIN * 0.08 * scaleFactor
+                          const ballSize = DESIGN_VMIN * SERVE_BALL * scaleFactor
                           return (
                             <div
                               key={`${rightTeamKey}-court-back-${player.position}-${player.id || player.number || idx}`}
@@ -9704,7 +9716,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           <img
                             src={ballImage} onError={(e) => e.target.src = ballImage}
                             alt="Serving team"
-                            style={{ ...serveBallBaseStyle, width: '100%', maxWidth: `${DESIGN_VMIN * 0.092 * scaleFactor}px`, height: 'auto', aspectRatio: '1' }}
+                            style={{ ...serveBallBaseStyle, width: '100%', maxWidth: `${DESIGN_VMIN * SERVE_BOX * scaleFactor}px`, height: 'auto', aspectRatio: '1' }}
                           />
                         )
                       }
@@ -9718,7 +9730,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           gap: `${4 * scaleFactor}px`
                         }}>
                           <div style={{
-                            fontSize: `${DESIGN_VMIN * 0.0253 * scaleFactor}px`,
+                            fontSize: `${DESIGN_VMIN * SERVE_LABEL * scaleFactor}px`,
                             fontWeight: 700,
                             color: 'var(--ov-success)',
                             textTransform: 'uppercase',
@@ -9728,17 +9740,17 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             {t('scoreboard.serve', 'Serve')}
                           </div>
                           <div className="tabular-nums" style={{
-                            fontSize: `${DESIGN_VMIN * 0.0575 * scaleFactor}px`,
+                            fontSize: `${DESIGN_VMIN * SERVE_NUMBER * scaleFactor}px`,
                             fontWeight: 700,
                             color: 'var(--ov-success)',
-                            width: '80%',
-                            maxWidth: `${DESIGN_VMIN * 0.092 * scaleFactor}px`,
+                            width: '90%',
+                            maxWidth: `${DESIGN_VMIN * SERVE_BOX * scaleFactor}px`,
                             aspectRatio: '1',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             background: '#ecfdf5',
-                            border: `${2 * scaleFactor}px solid #10b981`,
+                            border: `${Math.max(2, 3 * scaleFactor)}px solid #047857`,
                             borderRadius: 'var(--ov-radius-lg)',
                             boxSizing: 'border-box'
                           }}>
@@ -9896,7 +9908,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   <button
                                     className={cn('rally-btn start', SB_RALLY_START)}
                                     onClick={handleStartRally}
-                                    disabled={data?.match?.status === 'complete'}
+                                    disabled={data?.match?.status === 'complete' || set3TossPending}
+                                    title={set3TossPending ? t('scoreboard.set3TossFirst', 'Record the set 3 coin toss first') : undefined}
                                     style={{ padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'max(64px, calc(92px * var(--scale-factor, 1)))' }}
                                   >
                                     {data?.match?.status === 'not_started'
@@ -9912,55 +9925,39 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             ) : (
                               <>
                                 {/* Row 1: Replay | Point A | Point B | Referee BMP */}
-                                <div className="rally-controls-row" style={{ gap: '5px', alignItems: 'stretch' }}>
+                                {/* One sizing rule for the row (rallyRowButton): the same height,
+                                    text size and one-line labels, even gaps; the side buttons
+                                    reserve their width while hidden (no reflow) */}
+                                <div className="rally-controls-row" data-testid="rally-row" style={{ gap: '12px', alignItems: 'stretch' }}>
                                   {rallyStatus === 'in_play' ? (
                                     <button
                                       className={cn('secondary', SB_RALLY_OUTLINE)}
                                       onClick={handleReplay}
-                                      style={{ padding: '8px 15px', fontSize: '18px', minWidth: '105px', marginRight: '30px' }}
+                                      style={rallyRowButton(scaleFactor, 'side')}
                                     >
                                       {t('scoreboard.buttons.replayShort', 'Replay')}
                                     </button>
                                   ) : (
-                                    <div style={{ minWidth: '105px', marginRight: '30px' }} />
+                                    <div aria-hidden="true" style={{ minWidth: rallyRowButton(scaleFactor, 'side').minWidth }} />
                                   )}
                                   <button
                                     className={cn('rally-point-button tabular-nums', SB_RALLY_POINT)}
                                     onClick={() => handlePoint('left')}
-                                    style={{
-                                      padding: '12px 16px',
-                                      // the point buttons as big as the row allows (volleyui §7):
-                                      // wider, and on a 1024×600 tablet as tall as fits above Undo
-                                      minHeight: `${Math.max(58, 110 * scaleFactor)}px`,
-                                      minWidth: '150px',
-                                      fontSize: '24px'
-                                    }}
+                                    style={rallyRowButton(scaleFactor, 'point')}
                                   >
                                     {t('scoreboard.buttons.pointTeam', { team: teamALabel || teamAShortName })}
                                   </button>
                                   <button
                                     className={cn('rally-point-button tabular-nums', SB_RALLY_POINT)}
                                     onClick={() => handlePoint('right')}
-                                    style={{
-                                      padding: '12px 16px',
-                                      // the point buttons as big as the row allows (volleyui §7):
-                                      // wider, and on a 1024×600 tablet as tall as fits above Undo
-                                      minHeight: `${Math.max(58, 110 * scaleFactor)}px`,
-                                      minWidth: '150px',
-                                      fontSize: '24px'
-                                    }}
+                                    style={rallyRowButton(scaleFactor, 'point')}
                                   >
                                     {t('scoreboard.buttons.pointTeam', { team: teamBLabel || teamBShortName })}
                                   </button>
                                   <button
                                     className={SB_RALLY_BMP}
                                     onClick={handleRefereeBMP}
-                                    style={{
-                                      padding: '8px 15px',
-                                      fontSize: '17px',
-                                      minWidth: '105px',
-                                      marginLeft: '30px'
-                                    }}
+                                    style={rallyRowButton(scaleFactor, 'side')}
                                   >
                                     {t('scoreboard.buttons.refereeBmp', 'Referee BMP')}
                                   </button>
@@ -10009,6 +10006,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     flex: '0 0 15%',
                     minWidth: 0,
                     maxWidth: '15%',
+                    // the card ends with its content (it stretched to the
+                    // bottom: a tall white card of empty space under the stats)
+                    alignSelf: 'flex-start',
+                    maxHeight: '100%',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: `${6 * scaleFactor}px`,
@@ -10105,8 +10106,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             const bmpUsed = getUnsuccessfulBMPsUsed(rightTeamKey)
                             const bmpRemaining = 2 - bmpUsed
                             const bmpExhausted = bmpRemaining <= 0
-                            // BMP available when rally is ongoing OR just ended (idle), but not during set break etc.
-                            const bmpAvailable = !bmpExhausted && data?.set && !data?.set?.finished
+                            // only between the point and the next rally (bmpAvailability_beach)
+                            const bmpBlock = teamBmpBlockReason({ events: data?.events, setIndex: data?.set?.index, setFinished: !data?.set || data.set.finished, rallyStatus, remaining: bmpRemaining })
+                            const bmpAvailable = !bmpBlock
                             return (
                               <button
                                 onClick={() => handleTeamBMP(rightTeamKey)}
@@ -10128,7 +10130,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   justifyContent: 'center',
                                   gap: `${6 * scaleFactor}px`
                                 }}
-                                title={t('scoreboard.bmpRemaining', { count: bmpRemaining, defaultValue: 'Ball mark protocol ({{count}} left)' })}
+                                title={bmpBlock === 'rally' || bmpBlock === 'moved_on' || bmpBlock === 'no_point' ? t('scoreboard.bmpOnlyAfterPoint', 'BMP: only after a point, before the next rally') : t('scoreboard.bmpRemaining', { count: bmpRemaining, defaultValue: 'Ball mark protocol ({{count}} left)' })}
                               >
                                 <span>BMP</span>
                                 <span className="tabular-nums" style={{
@@ -10366,6 +10368,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         return teamKey === 'team1' ? `${t1}:${t2}` : `${t2}:${t1}`
                       }
 
+                      // The team rows say when: "Delay warning · Set 2 · 3:4" (they had no set or score)
+                      const teamSanctionEvents = (type) => (data?.events || [])
+                        .filter(e => e.type === 'sanction' && e.payload?.team === rightTeamKey && e.payload?.type === type)
+                        .sort((a, b) => (a.seq || 0) - (b.seq || 0))
+                      const sanctionWhen = (ev) => ev ? ` · ${t('scoreboard.table.set', 'Set')} ${ev.setIndex} · ${getScoreFromSanction(ev, rightTeamKey)}` : ''
+                      const firstWarning = playerSanctions.filter(s => s.payload?.type === 'warning').sort((a, b) => (a.seq || 0) - (b.seq || 0))[0]
+
                       const borderStyle = `${1 * scaleFactor}px solid var(--ov-hairline)`
                       const tableFontSize = `${DESIGN_VMIN * 0.018 * scaleFactor}px`
                       const headerFontSize = `${DESIGN_VMIN * 0.016 * scaleFactor}px`
@@ -10398,7 +10407,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   background: 'var(--ov-warning-soft)',
                                   borderRadius: `${3 * scaleFactor}px`
                                 }}>
-                                  {t('scoreboard.sanctions.formalWarning', 'Formal warning')}
+                                  {t('scoreboard.sanctions.formalWarning', 'Formal warning')}{firstWarning ? ` · #${firstWarning.payload?.playerNumber}${sanctionWhen(firstWarning)}` : ''}
                                 </div>
                               )}
                               {hasIR && (
@@ -10410,7 +10419,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   background: 'var(--ov-sunken-strong)',
                                   borderRadius: `${3 * scaleFactor}px`
                                 }}>
-                                  {t('scoreboard.sanctions.improperRequest', 'Improper request')}
+                                  {t('scoreboard.sanctions.improperRequest', 'Improper request')}{sanctionWhen(teamSanctionEvents('improper_request')[0])}
                                 </div>
                               )}
                               {hasDW && (
@@ -10422,11 +10431,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   background: 'var(--ov-warning-soft)',
                                   borderRadius: `${3 * scaleFactor}px`
                                 }}>
-                                  {t('scoreboard.sanctions.delayWarning', 'Delay warning')}
+                                  {t('scoreboard.sanctions.delayWarning', 'Delay warning')}{sanctionWhen(teamSanctionEvents('delay_warning')[0])}
                                 </div>
                               )}
                               {delayPenaltyCount > 0 && (
-                                [...Array(delayPenaltyCount)].map((_, i) => (
+                                teamSanctionEvents('delay_penalty').map((ev, i) => (
                                   <div key={i} style={{
                                     fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
                                     color: 'var(--ov-danger-text)',
@@ -10435,7 +10444,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     background: 'var(--ov-danger-soft)',
                                     borderRadius: `${3 * scaleFactor}px`
                                   }}>
-                                    {t('scoreboard.sanctions.delayPenalty', 'Delay penalty')}
+                                    {t('scoreboard.sanctions.delayPenalty', 'Delay penalty')}{sanctionWhen(ev)}
                                   </div>
                                 ))
                               )}
@@ -10470,7 +10479,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                       <td style={{ padding: `${4 * scaleFactor}px`, textAlign: 'center', borderRight: borderStyle, borderBottom: isLast ? 'none' : borderStyle }}>{sanction.setIndex}</td>
                                       <td style={{ padding: `${4 * scaleFactor}px`, borderRight: borderStyle, borderBottom: isLast ? 'none' : borderStyle }}>
                                         {isPlayer1 && (
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'baseline', gap: `${6 * scaleFactor}px`, width: '100%' }}>
                                             {renderSanctionLetter(sanction.payload?.type)}
                                             <span>{score}</span>
                                           </div>
@@ -10478,7 +10487,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                       </td>
                                       <td style={{ padding: `${4 * scaleFactor}px`, borderBottom: isLast ? 'none' : borderStyle }}>
                                         {isPlayer2 && (
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'baseline', gap: `${6 * scaleFactor}px`, width: '100%' }}>
                                             {renderSanctionLetter(sanction.payload?.type)}
                                             <span>{score}</span>
                                           </div>
@@ -11581,21 +11590,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   {data?.match && (() => {
                     // Calculate which team is on which side based on set index and overrides
                     const currentSetIndex = data.set?.index || 1
-                    const setLeftTeamOverrides = data.match?.setLeftTeamOverrides || {}
-                    const is3rdSet = currentSetIndex === 3
-                    const set3LeftTeam = data.match?.set3LeftTeam
-
-                    let sideA // 'left' or 'right' for Team A
-                    if (setLeftTeamOverrides[currentSetIndex] !== undefined) {
-                      // Override stores 'A' or 'B' (not 'team1'/'team2')
-                      sideA = setLeftTeamOverrides[currentSetIndex] === 'A' ? 'left' : 'right'
-                    } else if (is3rdSet && set3LeftTeam) {
-                      // set3LeftTeam stores 'A' or 'B'
-                      sideA = set3LeftTeam === 'A' ? 'left' : 'right'
-                    } else {
-                      // Default alternating pattern: odd sets = A on left, even sets = A on right
-                      sideA = currentSetIndex % 2 === 1 ? 'left' : 'right'
-                    }
+                    const sideA = leftTeamInSet(currentSetIndex, data.match) === 'A' ? 'left' : 'right'
 
                     // If Team A is on left, and Team A is team1, then team1 is on left
                     const leftisTeam1 = sideA === 'left' ? (teamAKey === 'team1') : (teamAKey !== 'team1')
@@ -11697,54 +11692,22 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
                                 const getTeamLabel = (ab) => ab === 'A' ? (teamAKey === 'team1' ? 'team1' : 'team2') : (teamAKey === 'team1' ? 'team2' : 'team1')
 
-                                if (setIdx === 3) {
-                                  const automatic5 = teamAKey === 'team1' ? 'A' : 'B'
-                                  const currentLeftTeam = data.match.set3LeftTeam || automatic5
-                                  const newLeftTeam = currentLeftTeam === 'A' ? 'B' : 'A'
-                                  const oldLeft = getTeamLabel(currentLeftTeam)
-                                  const newLeft = getTeamLabel(newLeftTeam)
-                                  await db.matches.update(matchId, { set3LeftTeam: newLeftTeam })
-                                  // Sync to Supabase
-                                  if (data.match?.seed_key) {
-                                    db.sync_queue.add({
-                                      resource: 'match',
-                                      action: 'update',
-                                      payload: { id: data.match.seed_key, set3LeftTeam: newLeftTeam },
-                                      createdAt: new Date().toISOString()
-                                    })
-                                  }
-                                  logManualChange('Teams Setup', 'Court Sides', `${oldLeft} on left`, `${newLeft} on left`, `Switched court sides (Set 3)`)
-                                  // Sync updated side to Supabase live state
-                                  syncLiveStateToSupabase('manual_side_change', null, { oldSide: oldLeft, newSide: newLeft })
-                                } else {
-                                  // Sets 1-2: Use setLeftTeamOverrides to swap sides only
-                                  const currentOverrides = data.match.setLeftTeamOverrides || {}
-                                  let currentLeftAB
-                                  if (currentOverrides[setIdx]) {
-                                    currentLeftAB = currentOverrides[setIdx]
-                                  } else {
-                                    currentLeftAB = setIdx % 2 === 1 ? 'A' : 'B'
-                                  }
-                                  const newLeftAB = currentLeftAB === 'A' ? 'B' : 'A'
-                                  const updatedOverrides = { ...currentOverrides, [setIdx]: newLeftAB }
-
-                                  const oldLeft = getTeamLabel(currentLeftAB)
-                                  const newLeft = getTeamLabel(newLeftAB)
-
-                                  await db.matches.update(matchId, { setLeftTeamOverrides: updatedOverrides })
-
-                                  if (data.match?.seed_key) {
-                                    db.sync_queue.add({
-                                      resource: 'match',
-                                      action: 'update',
-                                      payload: { id: data.match.seed_key, setLeftTeamOverrides: updatedOverrides },
-                                      createdAt: new Date().toISOString()
-                                    })
-                                  }
-
-                                  logManualChange('Teams Setup', 'Court Sides', `${oldLeft} on left`, `${newLeft} on left`, `Switched court sides (Set ${setIdx})`)
-                                  syncLiveStateToSupabase('manual_side_change', null, { oldSide: oldLeft, newSide: newLeft })
+                                const currentLeftAB = leftTeamInSet(setIdx, data.match)
+                                const newLeftAB = currentLeftAB === 'A' ? 'B' : 'A'
+                                const update = switchSidesUpdate(setIdx, data.match, { beforeSetStart: true })
+                                const oldLeft = getTeamLabel(currentLeftAB)
+                                const newLeft = getTeamLabel(newLeftAB)
+                                await db.matches.update(matchId, update)
+                                if (data.match?.seed_key) {
+                                  db.sync_queue.add({
+                                    resource: 'match',
+                                    action: 'update',
+                                    payload: { id: data.match.seed_key, ...update },
+                                    createdAt: new Date().toISOString()
+                                  })
                                 }
+                                logManualChange('Teams Setup', 'Court Sides', `${oldLeft} on left`, `${newLeft} on left`, `Switched court sides (Set ${setIdx})`)
+                                syncLiveStateToSupabase('manual_side_change', null, { oldSide: oldLeft, newSide: newLeft })
                               }}
                               style={{
                                 flex: 1,
@@ -14353,14 +14316,17 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         // For left side teams, menu opens to the right (use left CSS)
         // For right side teams, menu opens to the left (use right CSS)
         const isRightSide = playerActionMenu.side === 'right'
+        // Anchored by its top, next to the player, and kept on screen with
+        // room for the open Sanction list: centred (translateY(-50%)) the menu
+        // jumped up by half the list when Sanction opened, away from the pointer
+        const menuTop = (centerY) => Math.max(8, Math.min(centerY - 56, window.innerHeight - PLAYER_MENU_OPEN_HEIGHT - 8))
         let menuStyle
         if (playerActionMenu.x !== undefined && playerActionMenu.y !== undefined) {
           menuStyle = {
             position: 'fixed',
             left: isRightSide ? undefined : `${playerActionMenu.x}px`,
             right: isRightSide ? `${window.innerWidth - playerActionMenu.x}px` : undefined,
-            top: `${playerActionMenu.y}px`,
-            transform: 'translateY(-50%)',
+            top: `${menuTop(playerActionMenu.y)}px`,
             zIndex: 1000
           }
         } else {
@@ -14369,8 +14335,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             position: 'fixed',
             left: isRightSide ? undefined : `${rect.right + 30}px`,
             right: isRightSide ? `${window.innerWidth - rect.left + 30}px` : undefined,
-            top: `${rect.top + rect.height / 2}px`,
-            transform: 'translateY(-50%)',
+            top: `${menuTop(rect.top + rect.height / 2)}px`,
             zIndex: 1000
           } : {
             position: 'absolute',
@@ -14428,6 +14393,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             <div style={menuStyle} className="modal-wrapper-roll-down">
               <div
                 data-player-action-menu
+                className="sb-popover"
                 style={{
                   background: 'var(--ov-card)',
                   border: '2px solid var(--ov-hairline-strong)',
@@ -14466,14 +14432,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       gap: '6px',
                       width: '100%'
                     }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = '#1a1a1a'
-                      e.currentTarget.style.transform = 'scale(1.02)'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'var(--ov-card)'
-                      e.currentTarget.style.transform = 'scale(1)'
-                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--ov-sunken)' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--ov-card)' }}
                   >
                     <span>Sanction</span>
                     <ChevronDown size={16} aria-hidden="true" style={{ transform: courtSanctionExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
@@ -14592,14 +14552,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     gap: '6px',
                     width: '100%'
                   }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'var(--ov-danger)'
-                    e.currentTarget.style.transform = 'scale(1.02)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'var(--ov-danger)'
-                    e.currentTarget.style.transform = 'scale(1)'
-                  }}
+
                 >
                   <span>Medical</span>
                   <span style={{ fontSize: '14px', lineHeight: '1' }}>✚</span>
@@ -14625,8 +14578,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             position: 'fixed',
             left: isRightSide ? undefined : `${sanctionDropdown.x}px`,
             right: isRightSide ? `${window.innerWidth - sanctionDropdown.x}px` : undefined,
-            top: `${sanctionDropdown.y}px`,
-            transform: 'translateY(-50%)',
+            // centred on the player but kept on screen (it ran off the top)
+            top: `${clampedMenuTop(sanctionDropdown.y, 300)}px`,
             zIndex: 1000
           }
         } else {
@@ -14635,8 +14588,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             position: 'fixed',
             left: isRightSide ? undefined : `${rect.right + 30}px`,
             right: isRightSide ? `${window.innerWidth - rect.left + 30}px` : undefined,
-            top: `${rect.top + rect.height / 2}px`,
-            transform: 'translateY(-50%)',
+            top: `${clampedMenuTop(rect.top + rect.height / 2, 300)}px`,
             zIndex: 1000
           } : {
             position: 'absolute',
@@ -14666,6 +14618,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             <div style={dropdownStyle} className="modal-wrapper-roll-up">
               <div
                 data-sanction-dropdown
+                className="sb-popover"
                 style={{
                   background: 'var(--ov-card)',
                   border: '2px solid var(--ov-hairline-strong)',
@@ -14873,8 +14826,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             position: 'fixed',
             left: isRightSide ? undefined : `${injuryDropdown.x}px`,
             right: isRightSide ? `${window.innerWidth - injuryDropdown.x}px` : undefined,
-            top: `${injuryDropdown.y}px`,
-            transform: 'translateY(-50%)',
+            // centred on the player but kept on screen (it ran off the top)
+            top: `${clampedMenuTop(injuryDropdown.y, 380)}px`,
             zIndex: 1000
           }
         } else {
@@ -14883,8 +14836,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             position: 'fixed',
             left: isRightSide ? undefined : `${rect.right + 30}px`,
             right: isRightSide ? `${window.innerWidth - rect.left + 30}px` : undefined,
-            top: `${rect.top + rect.height / 2}px`,
-            transform: 'translateY(-50%)',
+            top: `${clampedMenuTop(rect.top + rect.height / 2, 380)}px`,
             zIndex: 1000
           } : {
             position: 'absolute',
@@ -14895,7 +14847,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           }
         }
 
-        const teamLabel = injuryDropdown.team === data?.match?.coinTossTeamA ? 'A' : 'B'
+        const teamLabel = injuryDropdown.team === (data?.match?.coinTossTeamA || 'team1') ? 'A' : 'B'
         const playerNumber = injuryDropdown.playerNumber
 
         return (
@@ -14916,6 +14868,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             {/* Dropdown */}
             <div style={dropdownStyle} className="modal-wrapper-roll-up">
               <div
+                data-medical-dropdown
+                className="sb-popover"
                 style={{
                   background: 'var(--ov-card)',
                   border: '2px solid rgba(220, 38, 38, 0.5)',
@@ -14926,7 +14880,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 }}
               >
                 <div style={{ marginBottom: '8px', fontSize: '11px', fontWeight: 600, color: 'var(--text)', textAlign: 'center', borderBottom: '1px solid var(--ov-hairline)', paddingBottom: '6px' }}>
-                  {t('scoreboard.medical', 'Medical')} - {t('scoreboard.team', 'Team')} {teamLabel} #{playerNumber}
+                  {t('scoreboard.medical', 'Medical')} – {t('scoreboard.team', 'Team')} {teamLabel} #{playerNumber}{medicalPlayerName(injuryDropdown.team, playerNumber) ? ` ${medicalPlayerName(injuryDropdown.team, playerNumber)}` : ''}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {/* MTO - Medical Timeout */}
@@ -15134,12 +15088,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         >
           <div style={{ padding: '24px', textAlign: 'center' }}>
             {/* Team and Player Info */}
-            <div style={{ marginBottom: '16px', fontSize: '14px', color: 'var(--muted)' }}>
-              {t('scoreboard.team', 'Team')} {medicalModal.team === data?.match?.coinTossTeamA ? 'A' : 'B'} #{medicalModal.playerNumber}
+            <div data-testid="medical-player" style={{ marginBottom: '16px', fontSize: '20px', fontWeight: 600, color: 'var(--text)' }}>
+              {t('scoreboard.team', 'Team')} {medicalModal.team === (data?.match?.coinTossTeamA || 'team1') ? 'A' : 'B'} #{medicalModal.playerNumber}{medicalModal.playerName ? ` ${medicalModal.playerName}` : ''}
             </div>
 
             {/* Countdown Display */}
-            <div style={{
+            <div className="tabular-nums" style={{
               fontSize: '72px',
               fontWeight: 700,
               fontFamily: scoreFont === 'orbitron' ? "'Orbitron', monospace" : 'inherit',
@@ -15147,7 +15101,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               marginBottom: '8px',
               lineHeight: 1
             }}>
-              {Math.floor(medicalModal.countdown / 60)}:{String(medicalModal.countdown % 60).padStart(2, '0')}
+              {formatMedicalDuration(medicalModal.countdown)}
             </div>
 
             {/* Progress Bar */}
@@ -15160,73 +15114,76 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               marginBottom: '24px'
             }}>
               <div style={{
-                width: `${(medicalModal.countdown / 300) * 100}%`,
+                width: `${(medicalModal.countdown / MEDICAL_RECOVERY_SECONDS) * 100}%`,
                 height: '100%',
                 background: medicalModal.countdown <= 30 ? 'var(--ov-danger)' : medicalModal.type === 'mto' ? '#0284c7' : '#f97316',
                 transition: 'width 0.1s linear'
               }} />
             </div>
 
-            {/* Outcome Buttons */}
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-              {/* Player Recovered */}
-              <button
-                onClick={() => handleMedicalOutcome('recovered')}
-                style={{
-                  padding: '12px 24px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  background: 'var(--ov-success)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'var(--ov-success)'
-                  e.currentTarget.style.transform = 'scale(1.02)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'var(--ov-success)'
-                  e.currentTarget.style.transform = 'scale(1)'
-                }}
-              >
-                {t('scoreboard.playerRecovered', 'Player Recovered')}
-              </button>
-
-              {/* Forfeit */}
-              <button
-                onClick={() => handleMedicalOutcome('forfeit')}
-                style={{
-                  padding: '12px 24px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  background: 'var(--ov-danger)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#b91c1c'
-                  e.currentTarget.style.transform = 'scale(1.02)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'var(--ov-danger)'
-                  e.currentTarget.style.transform = 'scale(1)'
-                }}
-              >
-                {t('scoreboard.forfeit', 'Forfeit')}
-              </button>
-            </div>
+            {/* Player recovered: the main action. The forfeit sits apart, small,
+                and asks first (it ends the match). */}
+            {!medicalForfeitConfirm ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '20px' }}>
+                <button
+                  data-testid="medical-recovered"
+                  onClick={() => handleMedicalOutcome('recovered')}
+                  style={{
+                    padding: '14px 24px',
+                    minHeight: '56px',
+                    fontSize: '18px',
+                    fontWeight: 700,
+                    background: 'var(--ov-success)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {t('scoreboard.playerRecovered', 'Player Recovered')}
+                </button>
+                <button
+                  data-testid="medical-forfeit"
+                  className="secondary"
+                  onClick={() => setMedicalForfeitConfirm(true)}
+                  style={{
+                    alignSelf: 'center',
+                    padding: '10px 16px',
+                    minHeight: '44px',
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    background: 'transparent',
+                    color: 'var(--ov-danger-text)',
+                    border: '1px solid var(--ov-hairline-strong)',
+                    borderRadius: '8px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {t('scoreboard.medicalCannotContinue', 'Player cannot continue (forfeit)…')}
+                </button>
+              </div>
+            ) : (
+              <div data-testid="medical-forfeit-confirm" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <p style={{ fontSize: '16px', color: 'var(--text)', margin: 0 }}>
+                  {t('scoreboard.medicalForfeitQuestion', 'The team is incomplete and forfeits the match. Confirm?')}
+                </p>
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                  <button
+                    className="secondary"
+                    onClick={() => setMedicalForfeitConfirm(false)}
+                    style={{ padding: '12px 20px', minHeight: '48px', fontSize: '16px', fontWeight: 600 }}
+                  >
+                    {t('common.back', 'Back')}
+                  </button>
+                  <button
+                    onClick={() => handleMedicalOutcome('forfeit')}
+                    style={{ padding: '12px 20px', minHeight: '48px', fontSize: '16px', fontWeight: 700, background: 'var(--ov-danger)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+                  >
+                    {t('scoreboard.medicalConfirmForfeit', 'Confirm forfeit')}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </Modal>
       )}
@@ -16167,9 +16124,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               {t('scoreboard.tto.at21')}
             </p>
             <div style={{ marginBottom: '16px', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              <span style={{ background: data?.team1Team?.color || '#ef4444', color: isBrightColor(data?.team1Team?.color || '#ef4444') ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>{teamAKey === 'team1' ? 'A' : 'B'}</span>
-              <strong style={{ fontSize: '20px' }}>{ttoModal.team1Points} : {ttoModal.team2Points}</strong>
-              <span style={{ background: data?.team2Team?.color || '#3b82f6', color: isBrightColor(data?.team2Team?.color || '#3b82f6') ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>{teamAKey === 'team2' ? 'A' : 'B'}</span>
+              {courtScoreChips(ttoModal.team1Points, ttoModal.team2Points)}
             </div>
             {ttoModal.triggerCourtSwitchAfter && (
               <p style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--ov-warning-text)', fontWeight: 500 }}>
@@ -16308,7 +16263,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         }}>
                           {losingTeamLabel}
                         </span>
-                        BMP Request
+                        {t('scoreboard.bmpRequest', 'BMP request')}
                         <span style={{
                           background: '#f97316',
                           color: '#000',
@@ -16327,26 +16282,6 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         </Modal>
       )}
 
-      {/* "One point to switch/TTO" popup notification */}
-      {preEventPopup && (
-        <div style={{
-          position: 'fixed',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          backgroundColor: 'rgb(34, 197, 94)',
-          color: 'white',
-          padding: '31px 62px',
-          borderRadius: '16px',
-          fontSize: '39px',
-          fontWeight: 'bold',
-          zIndex: 1500,
-          pointerEvents: 'none',
-          animation: 'preEventPulse 1s ease-in-out infinite'
-        }}>
-          {preEventPopup.message}
-        </div>
-      )}
 
       {/* BMP Outcome Modal */}
       {bmpOutcomeModal && (() => {
@@ -16358,8 +16293,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         // Get team colors and labels (team1 = team1Team, team2 = team2Team)
         const team1Color = leftisTeam1 ? leftTeam?.color : rightTeam?.color
         const team2Color = leftisTeam1 ? rightTeam?.color : leftTeam?.color
-        const team1Label = leftisTeam1 ? 'A' : 'B'
-        const team2Label = leftisTeam1 ? 'B' : 'A'
+        const team1Label = teamAKey === 'team1' ? 'A' : 'B'
+        const team2Label = teamAKey === 'team1' ? 'B' : 'A'
+        // "A 20 : 16 B": the left team first, as on the court
+        const courtScore = (sc) => formatCourtScore(sc, { leftisTeam1, teamAKey })
         const team1Name = leftisTeam1 ? leftTeam?.name : rightTeam?.name
         const team2Name = leftisTeam1 ? rightTeam?.name : leftTeam?.name
 
@@ -16443,68 +16380,53 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
                       return (
                         <>
-                          {/* Button row: Point Left | Mark Unavailable | Point Right */}
-                          <div style={{ display: 'flex', flexDirection: 'row', gap: '8px' }}>
+                          {/* Button row: Point Left | Mark Unavailable | Point Right:
+                              three equal columns that shrink inside the dialog */}
+                          <div data-testid="referee-bmp-row" style={{ display: 'flex', flexDirection: 'row', gap: '8px', minWidth: 0 }}>
                             {/* Point Left Button */}
                             <button
+                              data-testid="referee-bmp-left"
                               onClick={() => setBmpSelectedOutcome(bmpSelectedOutcome === 'left' ? null : 'left')}
+                              title={`${leftLabel} ${leftTeamName || ''}`}
                               style={{
-                                flex: 1,
-                                padding: '12px 10px',
-                                fontSize: '16px',
-                                fontWeight: 600,
-                                background: selectedTeam === 'left' ? '#fbbf24' : '#fcd34d',
-                                color: '#000',
-                                border: selectedTeam === 'left' ? '2px solid #fde047' : '2px solid transparent',
-                                borderRadius: '8px',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '4px'
+                                ...bmpChoiceButton,
+                                background: leftTeamColor,
+                                color: isBrightColor(leftTeamColor) ? '#000' : '#fff',
+                                border: `2px solid ${leftTeamColor}`,
+                                boxShadow: selectedTeam === 'left' ? '0 0 0 3px var(--ov-card), 0 0 0 6px #eab308' : 'none'
                               }}
                             >
-                              <span style={{ background: leftTeamColor, color: isBrightColor(leftTeamColor) ? '#000' : '#fff', padding: '2px 5px', borderRadius: '4px', fontSize: '14px', fontWeight: 700 }}>{leftLabel}</span>
-                              <span style={{ fontSize: '15px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{leftTeamName}</span>
+                              <span style={{ fontWeight: 700, flexShrink: 0 }}>{leftLabel}</span>
+                              <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{leftTeamName}</span>
                             </button>
                             {/* Mark Unavailable Button */}
                             <button
                               onClick={() => setBmpSelectedOutcome(bmpSelectedOutcome === 'judgment_impossible' ? null : 'judgment_impossible')}
                               style={{
-                                flex: 1,
-                                padding: '12px 10px',
-                                fontSize: '16px',
-                                fontWeight: 600,
+                                ...bmpChoiceButton,
                                 background: selectedTeam === 'unavailable' ? '#78716c' : '#a8a29e',
                                 color: '#fff',
-                                border: selectedTeam === 'unavailable' ? '2px solid #d1d5db' : '2px solid transparent',
-                                borderRadius: '8px',
-                                cursor: 'pointer'
+                                border: '2px solid transparent',
+                                boxShadow: selectedTeam === 'unavailable' ? '0 0 0 3px var(--ov-card), 0 0 0 6px #78716c' : 'none'
                               }}
                             >
                               Unavailable
                             </button>
                             {/* Point Right Button */}
                             <button
+                              data-testid="referee-bmp-right"
                               onClick={() => setBmpSelectedOutcome(bmpSelectedOutcome === 'right' ? null : 'right')}
+                              title={`${rightLabel} ${rightTeamName || ''}`}
                               style={{
-                                flex: 1,
-                                padding: '12px 10px',
-                                fontSize: '16px',
-                                fontWeight: 600,
-                                background: selectedTeam === 'right' ? '#fbbf24' : '#fcd34d',
-                                color: '#000',
-                                border: selectedTeam === 'right' ? '2px solid #fde047' : '2px solid transparent',
-                                borderRadius: '8px',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '4px'
+                                ...bmpChoiceButton,
+                                background: rightTeamColor,
+                                color: isBrightColor(rightTeamColor) ? '#000' : '#fff',
+                                border: `2px solid ${rightTeamColor}`,
+                                boxShadow: selectedTeam === 'right' ? '0 0 0 3px var(--ov-card), 0 0 0 6px #eab308' : 'none'
                               }}
                             >
-                              <span style={{ background: rightTeamColor, color: isBrightColor(rightTeamColor) ? '#000' : '#fff', padding: '2px 5px', borderRadius: '4px', fontSize: '14px', fontWeight: 700 }}>{rightLabel}</span>
-                              <span style={{ fontSize: '15px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rightTeamName}</span>
+                              <span style={{ fontWeight: 700, flexShrink: 0 }}>{rightLabel}</span>
+                              <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rightTeamName}</span>
                             </button>
                           </div>
 
@@ -16520,18 +16442,18 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               <div style={{ fontSize: '15px', color: 'var(--muted)', marginBottom: '12px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', padding: '6px 10px', background: 'var(--ov-sunken)', borderRadius: '6px' }}>
                                   <span>Current:</span>
-                                  <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
+                                  <span><strong className="tabular-nums">{courtScore(currentScore)}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
                                 </div>
                                 {selectedTeam === 'unavailable' ? (
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(156, 163, 175, 0.15)', borderRadius: '6px', border: '1px solid rgba(156, 163, 175, 0.3)' }}>
                                     <span style={{ color: 'var(--ov-text-muted)' }}>No change:</span>
-                                    <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
+                                    <span><strong className="tabular-nums">{courtScore(currentScore)}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
                                   </div>
                                 ) : (
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(234, 179, 8, 0.15)', borderRadius: '6px', border: '1px solid rgba(234, 179, 8, 0.3)' }}>
                                     <span style={{ color: 'var(--ov-warning-text)' }}>New:</span>
                                     <span><strong style={{ color: 'var(--ov-warning-text)' }}>
-                                      {selectedTeam === 'left' ? leftTeamScore.team1 : rightTeamScore.team1} : {selectedTeam === 'left' ? leftTeamScore.team2 : rightTeamScore.team2}
+                                      {courtScore(selectedTeam === 'left' ? leftTeamScore : rightTeamScore)}
                                     </strong> · <Volleyball /> {(selectedTeam === 'left' ? leftTeamScore.serve : rightTeamScore.serve) === 'team1' ? team1Name : team2Name}</span>
                                   </div>
                                 )}
@@ -16669,22 +16591,22 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         <div style={{ fontSize: '15px', color: 'var(--muted)', marginBottom: '12px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', padding: '6px 10px', background: 'var(--ov-sunken)', borderRadius: '6px' }}>
                             <span>Current:</span>
-                            <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
+                            <span><strong className="tabular-nums">{courtScore(currentScore)}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
                           </div>
                           {bmpSelectedOutcome === 'successful' ? (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(34, 197, 94, 0.15)', borderRadius: '6px', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
                               <span style={{ color: 'var(--ov-success)' }}>New:</span>
-                              <span><strong style={{ color: 'var(--ov-success)' }}>{successScore.team1} : {successScore.team2}</strong> · <Volleyball /> {successServe === 'team1' ? team1Name : team2Name}</span>
+                              <span><strong className="tabular-nums" style={{ color: 'var(--ov-success)' }}>{courtScore(successScore)}</strong> · <Volleyball /> {successServe === 'team1' ? team1Name : team2Name}</span>
                             </div>
                           ) : bmpSelectedOutcome === 'unsuccessful' ? (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(239, 68, 68, 0.15)', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
                               <span style={{ color: 'var(--ov-danger-text)' }}>No change:</span>
-                              <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
+                              <span><strong className="tabular-nums">{courtScore(currentScore)}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
                             </div>
                           ) : (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(156, 163, 175, 0.15)', borderRadius: '6px', border: '1px solid rgba(156, 163, 175, 0.3)' }}>
                               <span style={{ color: 'var(--ov-text-muted)' }}>No change:</span>
-                              <span><strong>{currentScore.team1} : {currentScore.team2}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
+                              <span><strong className="tabular-nums">{courtScore(currentScore)}</strong> · <Volleyball /> {currentServe === 'team1' ? team1Name : team2Name}</span>
                             </div>
                           )}
                         </div>
@@ -16740,9 +16662,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               {t('scoreboard.modals.teamsMustSwitchCourts')}
             </p>
             <div style={{ marginBottom: '16px', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              <span style={{ background: data?.team1Team?.color || '#ef4444', color: isBrightColor(data?.team1Team?.color || '#ef4444') ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>{teamAKey === 'team1' ? 'A' : 'B'}</span>
-              <strong style={{ fontSize: '20px' }}>{courtSwitchModal.team1Points} : {courtSwitchModal.team2Points}</strong>
-              <span style={{ background: data?.team2Team?.color || '#3b82f6', color: isBrightColor(data?.team2Team?.color || '#3b82f6') ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>{teamAKey === 'team2' ? 'A' : 'B'}</span>
+              {courtScoreChips(courtSwitchModal.team1Points, courtSwitchModal.team2Points)}
             </div>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
               <button
@@ -16835,7 +16755,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     }}>
                       {losingTeamLabel}
                     </span>
-                    BMP Request
+                    {t('scoreboard.bmpRequest', 'BMP request')}
                     <span style={{
                       background: '#f97316',
                       color: '#000',
@@ -17310,7 +17230,7 @@ function ScoreboardToolbar({ children, collapsed, onToggle }) {
       >
         {children}
       </div>
-      {/* Thin collapse/expand strip at bottom center (same 16px height) */}
+      {/* Thin collapse/expand tab at bottom center, over the page (no row of its own) */}
       <div
         role="button"
         tabIndex={0}
@@ -17319,7 +17239,11 @@ function ScoreboardToolbar({ children, collapsed, onToggle }) {
         aria-expanded={!collapsed}
         onClick={onToggle}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle() } }}
-        className={cn('flex w-full h-4 items-center justify-center cursor-pointer text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 transition-colors', FOCUS_RING)}
+        data-testid="header-toggle"
+        // a small tab hanging under the toolbar: it took a 16 px row of its own
+        // above the score
+        style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)' }}
+        className={cn('flex w-12 h-4 items-center justify-center rounded-b-md cursor-pointer text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 transition-colors', FOCUS_RING)}
       >
         <Chevron size={14} strokeWidth={2.5} aria-hidden="true" />
       </div>
@@ -17526,7 +17450,8 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
   const loserTeam = winner === 'team1' ? 'team2' : 'team1'
   const loserTeamName = winner === 'team1' ? team2TeamName : team1TeamName
   const loserTeamColor = winner === 'team1' ? team2TeamColor : team1TeamColor
-  const loserTeamLabel = (winner === 'team1' ? 'team2' : 'team1') === (leftisTeam1 ? 'team1' : 'team2') ? 'A' : 'B'
+  // A / B from the coin toss (it was taken from the side: "B" in team A's colour)
+  const loserTeamLabel = loserTeam === (teamAKey || 'team1') ? 'A' : 'B'
 
   // Calculate left and right team names and scores
   const leftTeamName = leftisTeam1 ? team1TeamName : team2TeamName
@@ -17646,7 +17571,7 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
               opacity: isConfirming ? 0.7 : 1
             }}
           >
-            Decision Change
+            {t('scoreboard.buttons.decisionChange', 'Decision change')}
           </button>
         </div>
         {/* BMP Request button for losing team */}
@@ -17682,7 +17607,7 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
               }}>
                 {loserTeamLabel}
               </span>
-              BMP Request
+              {t('scoreboard.bmpRequest', 'BMP request')}
               <span style={{
                 background: '#f97316',
                 color: '#000',

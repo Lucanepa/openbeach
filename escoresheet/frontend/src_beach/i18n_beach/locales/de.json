@@ -843,7 +843,21 @@
     "undoConfirm": {
       "confirm": "Rückgängig machen"
     },
-    "confirmFailed": "Das wurde nicht gespeichert. Bitte das Matchblatt prüfen und erneut versuchen."
+    "confirmFailed": "Das wurde nicht gespeichert. Bitte das Matchblatt prüfen und erneut versuchen.",
+    "bmpOnlyAfterPoint": "BMP: nur nach einem Punkt, vor dem nächsten Ballwechsel",
+    "medicalEnd": "Ende",
+    "medicalCannotContinue": "Spieler kann nicht weiterspielen (Forfait)…",
+    "medicalForfeitQuestion": "Das Team ist unvollständig und verliert das Spiel forfait. Bestätigen?",
+    "medicalConfirmForfeit": "Forfait bestätigen",
+    "bmpRequest": "BMP-Anfrage",
+    "set3TossFirst": "Zuerst den Münzwurf für Satz 3 erfassen",
+    "onePointToSwitch": "Noch 1 Punkt bis Seitenwechsel",
+    "onePointToTto": "Noch 1 Punkt bis TTO",
+    "transitionFinishing": "Satz wird abgeschlossen…",
+    "transitionSaving": "Satz wird gespeichert…",
+    "transitionSyncing": "Synchronisierung mit der Cloud…",
+    "transitionUploading": "Backup wird hochgeladen…",
+    "transitionDownloading": "Backup-Datei wird gespeichert…"
   },
   "settings": {
     "title": "Einstellungen",

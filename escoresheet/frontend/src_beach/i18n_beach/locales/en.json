@@ -844,7 +844,21 @@
     "undoConfirm": {
       "confirm": "Undo"
     },
-    "confirmFailed": "That was not saved. Check the scoresheet and try again."
+    "confirmFailed": "That was not saved. Check the scoresheet and try again.",
+    "bmpOnlyAfterPoint": "BMP: only after a point, before the next rally",
+    "medicalEnd": "end",
+    "medicalCannotContinue": "Player cannot continue (forfeit)…",
+    "medicalForfeitQuestion": "The team is incomplete and forfeits the match. Confirm?",
+    "medicalConfirmForfeit": "Confirm forfeit",
+    "bmpRequest": "BMP request",
+    "set3TossFirst": "Record the set 3 coin toss first",
+    "onePointToSwitch": "One point to switch",
+    "onePointToTto": "One point to TTO",
+    "transitionFinishing": "Finishing the set…",
+    "transitionSaving": "Saving the set…",
+    "transitionSyncing": "Syncing to the cloud…",
+    "transitionUploading": "Uploading the backup…",
+    "transitionDownloading": "Saving a backup file…"
   },
   "settings": {
     "title": "Settings",

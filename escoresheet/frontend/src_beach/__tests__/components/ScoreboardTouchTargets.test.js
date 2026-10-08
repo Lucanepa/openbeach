@@ -29,7 +29,9 @@ describe('scoring touch targets', () => {
   it('rally buttons, Undo and the points have minimum sizes', () => {
     expect(src).toMatch(/const SB_RALLY_BASE = `inline-flex min-h-12 /)
     expect(src).toContain("minHeight: 'max(52px, calc(60px * var(--scale-factor, 1)))'")
-    expect(src.match(/minHeight: `\$\{Math\.max\(58, 110 \* scaleFactor\)\}px`/g)).toHaveLength(2)
+    // the in-rally row's one sizing rule (Replay, Point A, Point B, Referee BMP)
+    expect(src.match(/minHeight: `\$\{Math\.max\(58, 110 \* scaleFactor\)\}px`/g)).toHaveLength(1)
+    expect(src.match(/style=\{rallyRowButton\(scaleFactor, 'point'\)\}/g)).toHaveLength(2)
     expect(css).toContain('min-height: max(64px, calc(92px * var(--scale-factor)))')
   })
 })
