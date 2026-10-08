@@ -30,6 +30,7 @@ import { NarrowScreenOverlay } from './dashboards/EntryKit_beach.jsx'
 import { HEADER_BAR, HEADER_BTN, HEADER_BTN_ON, MENU_PANEL, MENU_SUBROW, MENU_ROW_ON } from './chromeClasses_beach'
 import { timeSecondsLabel } from '../ui/volleyui/format.js'
 import { BRAND } from '../brand_beach'
+import { discPaint } from '../utils_beach/teamColours_beach'
 
 // Get current version from package.json (injected by Vite at build time)
 const currentVersion = __APP_VERSION__
@@ -1975,11 +1976,15 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     // Position label — pass through as-is (I, II, III, IV)
     const posRoman = position
 
-    // Team color and contrast
+    // Team colour: both discs wear the shirt colour, the number near-black or
+    // white, whichever reads better (outlined on mid-tone shirts), and a ring
+    // of the shirt colour when the disc would melt into the sand
+    // (utils_beach/teamColours_beach.js). An unreadable colour keeps the old look.
     const teamColor = team === 'team1'
       ? (data?.team1?.color || data?.match?.team1Color || '#ef4444')
       : (data?.team2?.color || data?.match?.team2Color || '#3b82f6')
-    const textColor = isBrightColor(teamColor) ? '#000' : '#fff'
+    const paint = discPaint(teamColor)
+    const textColor = paint?.color ?? (isBrightColor(teamColor) ? '#000' : '#fff')
 
     // Player name — "Fname LNAME" format (matching Scoreboard)
     const firstName = player?.firstName || player?.first_name || ''
@@ -1998,13 +2003,13 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         flexShrink: 0
       }}>
         {/* Circle + badges wrapper */}
-        <div style={{
+        <div data-player-disc={position} style={{
           position: 'relative',
           width: vmin(10.5),
           height: vmin(10.5),
           borderRadius: '50%',
-          border: `${vmin(0.2)}px solid rgba(255, 255, 255, 0.35)`,
-          background: teamColor,
+          border: `${vmin(0.2)}px solid ${paint?.ring ?? 'rgba(255, 255, 255, 0.35)'}`,
+          background: paint?.background ?? teamColor,
           color: textColor,
           display: 'flex',
           alignItems: 'center',
@@ -2099,8 +2104,9 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             </div>
           )}
 
-          {/* Player number */}
-          {number}
+          {/* Player number (the outline belongs to the number alone: the
+              badges stay crisp) */}
+          <span data-disc-number="" style={paint?.textShadow ? { textShadow: paint.textShadow } : undefined}>{number}</span>
         </div>
 
         {/* Player name rectangle beneath circle */}

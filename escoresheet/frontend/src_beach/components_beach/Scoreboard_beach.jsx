@@ -52,6 +52,7 @@ import { AppSpinner } from '../ui/volleyui/AppSpinner.jsx'
 import { modalCancelClass, modalPrimaryClass } from '../ui/volleyui/Modal.jsx'
 import { dayLabel, timeSecondsLabel } from '../ui/volleyui/format.js'
 import { openAppWindow } from '../utils_beach/openAppWindow_beach'
+import { discPaint } from '../utils_beach/teamColours_beach'
 
 // ── volleyui chrome for the scoring screen ───────────────────────────────────
 // Only the chrome around the court takes these: the toolbar, the side columns,
@@ -2303,8 +2304,18 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
   }, [buildOnCourt, buildBeachTeamName, data, leftisTeam1, teamAKey])
 
+  // Both players' discs wear the team's shirt colour; the number is near-black
+  // or white, whichever reads better (outlined on mid-tone shirts), and a disc
+  // that would melt into the sand gets a ring of its own colour
+  // (utils_beach/teamColours_beach.js). null: a colour we can't read, the disc
+  // keeps its plain look.
+  const discPaintBySide = useMemo(() => ({
+    left: discPaint(leftTeam.color),
+    right: discPaint(rightTeam.color)
+  }), [leftTeam.color, rightTeam.color])
+
   // Get players for each team
- 
+
   // The Zürich clock, 24-hour, day first: the same on every device on a court
   const formatTimestamp = useCallback(date => `${dayLabel(date, { year: true })} ${timeSecondsLabel(date)}`, [])
 
@@ -9009,7 +9020,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 width: `${playerSize}px`,
                                 height: `${playerSize}px`,
                                 fontSize: `${DESIGN_VMIN * 0.06 * scaleFactor}px`,
-                                background: leftTeam.color
+                                background: discPaintBySide.left?.background ?? leftTeam.color,
+                                borderColor: discPaintBySide.left?.ring ?? undefined
                               }}
                             >
                               {shouldShowBall && (
@@ -9027,7 +9039,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   }}
                                 />
                               )}
-                              <span className="court-player-number" style={{ fontSize: `${DESIGN_VMIN * 0.07 * scaleFactor}px`, color: isBrightColor(leftTeam.color) ? '#000' : undefined }}>{player.number}</span>
+                              {/* the outline belongs to the number alone: the badges stay crisp */}
+                              <span className="court-player-number" style={{ fontSize: `${DESIGN_VMIN * 0.07 * scaleFactor}px`, color: discPaintBySide.left?.color, textShadow: discPaintBySide.left?.textShadow }}>{player.number}</span>
                               <span className="court-player-position" style={{
                                 top: `${-positionOffset}px`,
                                 left: `${-positionOffset}px`,
@@ -9332,6 +9345,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             <div
                               key={`${teamKey}-court-front-${player.position}-${player.id || player.number || idx}`}
                               ref={player.position === 'II' ? rightCourtPositionIIRef : undefined}
+                              data-court-position={player.position}
+                              data-team={teamKey}
+                              data-player-number={player.number}
                               className="court-player"
                               onClick={(e) => handlePlayerClick(teamKey, player.position, player.number, e)}
                               style={{
@@ -9339,7 +9355,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 width: `${playerSize}px`,
                                 height: `${playerSize}px`,
                                 fontSize: `${DESIGN_VMIN * 0.06 * scaleFactor}px`,
-                                background: rightTeam.color
+                                background: discPaintBySide.right?.background ?? rightTeam.color,
+                                borderColor: discPaintBySide.right?.ring ?? undefined
                               }}
                             >
                               {shouldShowBall && (
@@ -9357,7 +9374,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   }}
                                 />
                               )}
-                              <span className="court-player-number" style={{ fontSize: `${DESIGN_VMIN * 0.07 * scaleFactor}px`, color: isBrightColor(rightTeam.color) ? '#000' : undefined }}>{player.number}</span>
+                              {/* the outline belongs to the number alone: the badges stay crisp */}
+                              <span className="court-player-number" style={{ fontSize: `${DESIGN_VMIN * 0.07 * scaleFactor}px`, color: discPaintBySide.right?.color, textShadow: discPaintBySide.right?.textShadow }}>{player.number}</span>
                               <span className="court-player-position" style={{
                                 top: `${-positionOffset}px`,
                                 left: `${-positionOffset}px`,
