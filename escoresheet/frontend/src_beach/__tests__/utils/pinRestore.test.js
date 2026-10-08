@@ -63,13 +63,30 @@ describe('referee PIN checks', () => {
     expect(await validateRefereePin('123456', { checkCloud: cloudDown, checkLan: lanThrows })).toEqual({ match: null })
   })
 
-  it('a wrong PIN the backend answered (404) or a rate limit (429) does not ask the relay too', async () => {
+  it('a wrong PIN the backend answered (404) or a rate limit (429) does not ask the relay too when the relay IS the cloud', async () => {
     const lan = vi.fn(async () => ({ success: true, match: m }))
+    const relayIsCloud = () => true
     const wrong = vi.fn(async () => ({ success: false, error: 'Invalid PIN code', status: 404 }))
-    expect(await validateRefereePin('123456', { checkCloud: wrong, checkLan: lan })).toEqual({ match: null })
+    expect(await validateRefereePin('123456', { checkCloud: wrong, checkLan: lan, relayIsCloud })).toEqual({ match: null })
     const limited = vi.fn(async () => ({ success: false, error: 'Too many failed attempts', status: 429 }))
-    expect(await validateRefereePin('123456', { checkCloud: limited, checkLan: lan })).toEqual({ match: null, error: 'Too many failed attempts' })
-    expect(await revalidateRefereeSession('match_42', '123456', { checkCloud: wrong, checkLan: lan })).toBeNull()
+    expect(await validateRefereePin('123456', { checkCloud: limited, checkLan: lan, relayIsCloud })).toEqual({ match: null, error: 'Too many failed attempts' })
+    expect(await revalidateRefereeSession('match_42', '123456', { checkCloud: wrong, checkLan: lan, relayIsCloud })).toBeNull()
+    expect(lan).not.toHaveBeenCalled()
+  })
+
+  // A test match (and any match not synced yet) lives on the venue relay only:
+  // the cloud's "no such PIN" is no answer for it. The desktop app's referee
+  // window could not join a test match while the laptop was online.
+  it('a venue relay is asked after the cloud does not know the PIN', async () => {
+    const lan = vi.fn(async () => ({ success: true, match: m }))
+    const relayIsCloud = () => false
+    const wrong = vi.fn(async () => ({ success: false, error: 'Invalid PIN code', status: 404 }))
+    expect(await validateRefereePin('123456', { checkCloud: wrong, checkLan: lan, relayIsCloud })).toEqual({ match: m, source: 'websocket' })
+    expect(await revalidateRefereeSession('match_42', '123456', { checkCloud: wrong, checkLan: lan, relayIsCloud })).toBe(m)
+    // a rate limit still stops there
+    lan.mockClear()
+    const limited = vi.fn(async () => ({ success: false, error: 'Too many failed attempts', status: 429 }))
+    expect(await validateRefereePin('123456', { checkCloud: limited, checkLan: lan, relayIsCloud })).toEqual({ match: null, error: 'Too many failed attempts' })
     expect(lan).not.toHaveBeenCalled()
   })
 
