@@ -4199,12 +4199,24 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         }
 
         // Only call onFinishSet for match end, not between sets
-        // (Scoreboard now handles set creation internally)
-        if (onFinishSet) onFinishSet(data.set)
+        // (Scoreboard now handles set creation internally).
+        // The set-end screen stays until Match End replaces it (App opens it
+        // once it has read the match): cleared first, it showed 'Loading...'
+        // and then an empty page (as OpenVolley's OV-14, laptop run
+        // 2026-10-08). Cleared only when App could not open Match End.
+        let matchEndOpened = true
+        if (onFinishSet) {
+          try {
+            await onFinishSet(data.set)
+          } catch (err) {
+            matchEndOpened = false
+            console.error('[SET_END] Opening Match End failed:', err)
+          }
+        }
 
         // Release lock for match end path (no new set to create)
         setCreationInProgressRef.current = false
-        setSetTransitionLoading(null) // Clear loading overlay
+        if (!matchEndOpened) setSetTransitionLoading(null)
 
         return // Exit early for match end - don't fall through to new set creation
       } else {
@@ -7186,7 +7198,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   // status over the scoring screen (it was blanked for seconds, saying
   // "Syncing to cloud…" on a device that was not even signed in).
   if (!data?.set) {
-    const loadingStep = t('common.loading', 'Loading…')
+    // The match end's last step stays (the finished set leaves no current
+    // set) until Match End replaces it: no 'Loading…' between (OV-14)
+    const loadingStep = setTransitionLoading?.step || t('common.loading', 'Loading…')
     return (
       <div className="ov-kit fixed inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-stone-50 to-stone-100 px-4" style={{ zIndex: 9999 }}>
         <AppSpinner size={96} label={loadingStep} />

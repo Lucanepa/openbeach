@@ -5,7 +5,7 @@ import { db } from './db_beach/db_beach'
 import MatchSetup, { preloadMatchSetup } from './components_beach/MatchSetup_beach'
 import Scoreboard from './components_beach/Scoreboard_beach'
 import CoinToss from './components_beach/CoinToss_beach'
-import MatchEnd from './components_beach/MatchEnd_beach'
+import MatchEnd, { preloadMatchEnd } from './components_beach/MatchEnd_beach'
 import ManualAdjustments from './components_beach/ManualAdjustments_beach'
 import InteractiveGuide from './components_beach/InteractiveGuide_beach'
 import ConnectionStatus from './components_beach/ConnectionStatus_beach'
@@ -1029,7 +1029,9 @@ export default function App() {
       // The final result stays on the relay: the referee, the livescore and
       // the LedBox keep showing it (the Scoreboard syncs the final state)
 
-      // Show match end screen
+      // Show match end screen, filled at once: the scoreboard's set-end
+      // screen stays until it has read the match (OV-14 in OpenBeach)
+      await preloadMatchEnd(cur.matchId)
       setShowMatchEnd(true)
       return
     }

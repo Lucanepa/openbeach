@@ -48,6 +48,7 @@ import { Textarea } from '../ui/volleyui/Textarea.jsx'
 import { confirmDialog, toast } from '../ui/volleyui/uiStore.js'
 import { modalCancelClass, modalSaveClass } from '../ui/volleyui/Modal.jsx'
 import { cn } from '../ui/volleyui/cn.js'
+import { preload, usePreloaded } from '../utils_beach/preload_beach'
 
 // volleyui recipes of the match end page (the official result, sanction and
 // remarks boxes inside keep the scoresheet's own black-on-white look, §7)
@@ -314,11 +315,8 @@ function MatchEndPageView({ children }) {
   )
 }
 
-export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualAdjustments }) {
-  const { t, i18n } = useTranslation()
-  const { vmin } = useScaledLayout()
-  const cLogger = useComponentLogging('MatchEnd')
-  const data = useLiveQuery(async () => {
+// Everything Match End shows of a match
+async function readMatchEnd(matchId) {
     const match = await db.matches.get(matchId)
     if (!match) return null
 
@@ -355,7 +353,23 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       sets,
       events
     }
-  }, [matchId])
+}
+
+const matchEndKey = (matchId) => `matchEnd:${matchId}`
+
+/**
+ * Read by App before it opens Match End: the page then shows filled in its
+ * first paint, never empty first (as OpenVolley's OV-14, laptop run
+ * 2026-10-08), and the scoreboard's set-end screen stays until then.
+ */
+export const preloadMatchEnd = (matchId) => preload(matchEndKey(matchId), () => readMatchEnd(matchId))
+
+export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualAdjustments }) {
+  const { t, i18n } = useTranslation()
+  const { vmin } = useScaledLayout()
+  const cLogger = useComponentLogging('MatchEnd')
+  const preloaded = usePreloaded(matchId != null ? matchEndKey(matchId) : null)
+  const data = useLiveQuery(() => readMatchEnd(matchId), [matchId], preloaded)
 
   const { showAlert } = useAlert()
   const [openSignature, setOpenSignature] = useState(null)
