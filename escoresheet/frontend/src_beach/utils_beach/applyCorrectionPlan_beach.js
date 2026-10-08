@@ -91,9 +91,12 @@ export async function applyCorrectionPlan(plan, opts = {}) {
   return withActivityContext({ reason: CORRECTION_REASON, actionId: randomUuid() }, () => writePlan(plan, opts))
 }
 
-const sameInstant = (a, b) => {
+// Same minute: the panel's fields hold minutes, so a stored time with seconds
+// (a set row restored from the cloud, test mode) shown and blurred unchanged
+// is no correction (it logged one and re-sent the set row)
+const sameMinute = (a, b) => {
   if (!a || !b) return (a || null) === (b || null)
-  return new Date(a).getTime() === new Date(b).getTime()
+  return Math.floor(new Date(a).getTime() / 60000) === Math.floor(new Date(b).getTime() / 60000)
 }
 
 /**
@@ -102,7 +105,7 @@ const sameInstant = (a, b) => {
  * set times form does. The scoring screen's older "Manual changes" panel
  * wrote the set row directly, so set 1's "Actual start time: HH:MM" remark
  * did not follow a changed start (it does here: replaced, or removed at the
- * scheduled time). A time equal to the stored one is no change.
+ * scheduled time). A time in the same minute as the stored one is no change.
  *
  * @param {{ db:object, matchId:any, setIndex:number, startTime?:string|null, endTime?:string|null, t?:Function|null, mode?:'live'|'review', hooks?:object }} args
  * @returns {Promise<{ unchanged:true } | { error:string, params?:object } | { addedIds:Array, signaturesCleared:boolean }>}
@@ -116,8 +119,8 @@ export async function correctSetTimes({ db, matchId, setIndex, startTime, endTim
   const row = sets.find(s => s.index === setIndex)
   if (!match || !row) return { error: 'corrections.error.notFound' }
   const changes = {}
-  if (startTime !== undefined && !sameInstant(startTime, row.startTime)) changes.startTime = startTime
-  if (endTime !== undefined && !sameInstant(endTime, row.endTime)) changes.endTime = endTime
+  if (startTime !== undefined && !sameMinute(startTime, row.startTime)) changes.startTime = startTime
+  if (endTime !== undefined && !sameMinute(endTime, row.endTime)) changes.endTime = endTime
   if (Object.keys(changes).length === 0) return { unchanged: true }
   const plan = planSetTimes(events, sets, { setIndex, ...changes }, { t, matchId, mode, match })
   if (plan.error) return { error: plan.error, params: plan.params }

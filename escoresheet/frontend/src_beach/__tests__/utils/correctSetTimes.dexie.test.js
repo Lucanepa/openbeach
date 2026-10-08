@@ -86,6 +86,15 @@ describe('correctSetTimes: the manual panel\'s set times through the corrections
     expect(same.unchanged).toBe(true)
     expect((await db.matches.get(matchId)).manualChanges).toEqual([])
 
+    // a stored time with seconds (a set row restored from the cloud, test
+    // mode) shown in the minute field and blurred: still no change
+    const s1 = await set(matchId, 1)
+    await db.sets.update(s1.id, { startTime: new Date(local(2026, 10, 8, 12, 47).getTime() + 31500).toISOString() })
+    const blurred = await correctSetTimes({ db, matchId, setIndex: 1, startTime: iso(2026, 10, 8, 12, 47) })
+    expect(blurred.unchanged).toBe(true)
+    expect((await db.matches.get(matchId)).manualChanges).toEqual([])
+    expect((await db.sync_queue.toArray()).filter(j => j.resource === 'set')).toEqual([])
+
     const bad = await correctSetTimes({ db, matchId, setIndex: 1, endTime: iso(2026, 10, 8, 12, 40) })
     expect(bad.error).toBe('corrections.error.endBeforeStart')
     expect((await set(matchId, 1)).endTime).toBe(iso(2026, 10, 8, 13, 5))
