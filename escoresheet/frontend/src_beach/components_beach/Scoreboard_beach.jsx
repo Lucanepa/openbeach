@@ -4751,40 +4751,37 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
     await db.matches.update(matchId, { set3CoinTossWinner: winner })
 
-    // Log event for undo
-    const nextSeq = await getNextSeq()
-    const coinTossWinnerEventId = await db.events.add({
-      matchId,
-      setIndex: 3,
-      type: 'set3_coin_toss_winner',
-      // `team`: Last action's team line names the winner. `before`: the
-      // match before the toss, for its undo; `teamA`: the designation its
-      // A/B labels are in (the undo follows a swap made since)
-      payload: { winner, team: winner, before, teamA: matchBefore.coinTossTeamA || 'team1' },
-      ts: new Date().toISOString(),
-      seq: nextSeq
-    })
-
-    // Capture state snapshot for undo system
-    const coinTossWinnerSnapshot = await captureFullStateSnapshot()
-    if (coinTossWinnerSnapshot) {
-      await db.events.update(coinTossWinnerEventId, { stateSnapshot: coinTossWinnerSnapshot })
-    }
-  }), [runAction, matchId, data?.match, getNextSeq, captureFullStateSnapshot])
+    // Logged like every event (as OpenVolley's set 5 setup reaches the
+    // tablets): its snapshot for the undo, its sync job (the server never
+    // had the toss), the referee's match data; it was a bare db.events.add.
+    // `team`: Last action's team line names the winner. `before`: the match
+    // before the toss, for its undo; `teamA`: the designation its A/B labels
+    // are in (the undo follows a swap made since)
+    await logEvent('set3_coin_toss_winner', { winner, team: winner, before, teamA: matchBefore.coinTossTeamA || 'team1' })
+    // The referee and the livescore: set 3's toss now, in the break
+    afterLiveState('set3_coin_toss_winner', winner, { winner })
+  }), [runAction, matchId, data?.match, logEvent, afterLiveState])
 
   // The interval's taps (sides, serve, service order) log no event: the
   // snapshots of the events of this interval take them, in the tap's
   // transaction, so an undo of one of those events keeps them
   // (stateSnapshot_beach refreshIntervalSnapshots). Not an edit of the
   // events: no event history, no revision for the server.
-  const intervalTap = useCallback((setIndex, write) => db.transaction(
-    'rw', [db.matches, db.sync_queue, db.events, db.sets, db.players],
-    async () => {
-      if (await write() === false) return
-      await withoutEventHistory(matchId, () => refreshIntervalSnapshots(
-        db, matchId, setIndex, (id, stateSnapshot) => db.events.update(id, { stateSnapshot })))
-    }
-  ), [matchId])
+  // After it, the referee's match data and the live state (side, serve, in
+  // the break) follow at once, as OpenVolley's set 5 setup (syncSet5Setup):
+  // they learnt of it only with the next action.
+  const intervalTap = useCallback(async (setIndex, write) => {
+    await db.transaction(
+      'rw', [db.matches, db.sync_queue, db.events, db.sets, db.players],
+      async () => {
+        if (await write() === false) return
+        await withoutEventHistory(matchId, () => refreshIntervalSnapshots(
+          db, matchId, setIndex, (id, stateSnapshot) => db.events.update(id, { stateSnapshot })))
+      }
+    )
+    syncToReferee()
+    syncLiveStateToSupabase('manual_interval_setup')
+  }, [matchId, syncToReferee, syncLiveStateToSupabase])
 
   // Switch which team starts on which side for the next set: toggles the
   // side the interval shows, which is the side the set starts on

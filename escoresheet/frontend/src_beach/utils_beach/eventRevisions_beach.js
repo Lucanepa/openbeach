@@ -36,8 +36,11 @@ export const REVISION_OPS = Object.freeze(['void', 'edit', 'restore'])
 // logEvent, which sends it like a point, and Undo takes it back with its
 // point. Only the first rally of a set is added without a sync job; its void
 // is kept by the server as a revision of an event it never had.
+// Not 'set3_coin_toss_winner' since 2026-10-09: the set 3 toss is logged with
+// logEvent (sent), and its undo voids it on the server (a toss logged before
+// was never sent: that void is kept as such a revision too).
 export const LOCAL_ONLY_EVENT_TYPES = Object.freeze([
-  'set_start', 'set3_coin_toss', 'set3_coin_toss_winner',
+  'set_start', 'set3_coin_toss',
   'between_sets_setup_confirmed', 'technical_to'
 ])
 
