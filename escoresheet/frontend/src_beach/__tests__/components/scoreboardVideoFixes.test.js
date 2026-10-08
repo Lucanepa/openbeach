@@ -101,3 +101,30 @@ describe('issue 5: "Referee BMP" button and dialog', () => {
     expect(dialog).toContain('{courtScore(currentScore)}')
   })
 })
+
+describe('issues 11 and 12: scores in court order, the set-end BMP chip', () => {
+  it('Last action and the action descriptions print the left team first, with letters', () => {
+    const desc = between(sb, 'const getActionDescription = useCallback((event) => {', '}, [data, leftisTeam1])')
+    expect(desc).toContain('const scoreText = (t1, t2) => formatCourtScore(')
+    expect(desc).not.toContain('(${team1Label} ${team1Score}:${team2Score} ${team2Label})')
+    expect(sb).toContain('const scoreStr = formatCourtScore({ team1: team1Score, team2: team2Score }, { leftisTeam1, teamAKey })')
+  })
+
+  it('the coin toss names the teams, not the country code', () => {
+    const desc = between(sb, "if (event.type === 'coin_toss') {", "} else if (event.type === 'point')")
+    expect(desc).not.toContain('team1ShortName ||')
+    expect(desc).toMatch(/data\?\.match\?\.team1Name \|\| data\?\.team1Team\?\.name/)
+  })
+
+  it('the court switch and TTO dialogs show the score as on the court', () => {
+    expect(sb).toContain('{courtScoreChips(courtSwitchModal.team1Points, courtSwitchModal.team2Points)}')
+    expect(sb).toContain('{courtScoreChips(ttoModal.team1Points, ttoModal.team2Points)}')
+  })
+
+  it('the set-end BMP chip has the loser\'s letter from the coin toss; "Decision change" in sentence case', () => {
+    const modal = between(sb, 'function SetEndTimeModal(', '\n}\n')
+    expect(modal).toContain("const loserTeamLabel = loserTeam === (teamAKey || 'team1') ? 'A' : 'B'")
+    expect(modal).not.toMatch(/>\s*Decision Change\s*</)
+    expect(modal).toContain("t('scoreboard.buttons.decisionChange', 'Decision change')")
+  })
+})

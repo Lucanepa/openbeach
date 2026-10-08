@@ -848,7 +848,8 @@
     "medicalEnd": "Ende",
     "medicalCannotContinue": "Spieler kann nicht weiterspielen (Forfait)…",
     "medicalForfeitQuestion": "Das Team ist unvollständig und verliert das Spiel forfait. Bestätigen?",
-    "medicalConfirmForfeit": "Forfait bestätigen"
+    "medicalConfirmForfeit": "Forfait bestätigen",
+    "bmpRequest": "BMP-Anfrage"
   },
   "settings": {
     "title": "Einstellungen",

@@ -848,7 +848,8 @@
     "medicalEnd": "fine",
     "medicalCannotContinue": "Il giocatore non può continuare (forfait)…",
     "medicalForfeitQuestion": "La squadra è incompleta e perde la partita per forfait. Confermare?",
-    "medicalConfirmForfeit": "Conferma forfait"
+    "medicalConfirmForfeit": "Conferma forfait",
+    "bmpRequest": "Richiesta BMP"
   },
   "settings": {
     "title": "Impostazioni",

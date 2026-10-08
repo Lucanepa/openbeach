@@ -4508,6 +4508,24 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
 
   // Get action description for an event
+  // A dialog's score as on the court: left team's letter chip, "20 : 16", right chip
+  const courtScoreChips = (team1Points, team2Points) => {
+    const chip = (key) => {
+      const color = (key === 'team1' ? data?.team1Team?.color : data?.team2Team?.color) || (key === 'team1' ? '#ef4444' : '#3b82f6')
+      return <span style={{ background: color, color: isBrightColor(color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>{key === teamAKey ? 'A' : 'B'}</span>
+    }
+    const leftKey = leftisTeam1 ? 'team1' : 'team2'
+    const rightKey = leftisTeam1 ? 'team2' : 'team1'
+    const pts = { team1: team1Points ?? 0, team2: team2Points ?? 0 }
+    return (
+      <>
+        {chip(leftKey)}
+        <strong className="tabular-nums" style={{ fontSize: '20px' }}>{pts[leftKey]} : {pts[rightKey]}</strong>
+        {chip(rightKey)}
+      </>
+    )
+  }
+
   const getActionDescription = useCallback((event) => {
     if (!event || !data) return 'Unknown action'
 
@@ -4541,19 +4559,23 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       }
     }
 
+    // "A 20 : 16 B": the left team first, as on the court
+    const scoreText = (t1, t2) => formatCourtScore({ team1: t1, team2: t2 }, { leftisTeam1, teamAKey: data?.match?.coinTossTeamA || 'team1' })
+
     let eventDescription = ''
     if (event.type === 'coin_toss') {
+      // the team names (the short name is the country code, "CHE" for both)
       const teamAName = event.payload?.teamA === 'team1'
-        ? (data?.match?.team1ShortName || data?.match?.team1Name || data?.team1Team?.shortName || data?.team1Team?.name || 'team1')
-        : (data?.match?.team2ShortName || data?.match?.team2Name || data?.team2Team?.shortName || data?.team2Team?.name || 'team2')
+        ? (data?.match?.team1Name || data?.team1Team?.name || data?.team1Team?.shortName || 'team1')
+        : (data?.match?.team2Name || data?.team2Team?.name || data?.team2Team?.shortName || 'team2')
       const teamBName = event.payload?.teamB === 'team1'
-        ? (data?.match?.team1ShortName || data?.match?.team1Name || data?.team1Team?.shortName || data?.team1Team?.name || 'team1')
-        : (data?.match?.team2ShortName || data?.match?.team2Name || data?.team2Team?.shortName || data?.team2Team?.name || 'team2')
+        ? (data?.match?.team1Name || data?.team1Team?.name || data?.team1Team?.shortName || 'team1')
+        : (data?.match?.team2Name || data?.team2Team?.name || data?.team2Team?.shortName || 'team2')
       // Determine if first serve is Team A or Team B
       const firstServeLabel = event.payload?.firstServe === event.payload?.teamA ? 'A' : 'B'
       eventDescription = `Coin toss - A: ${teamAName}, B: ${teamBName}, First serve: ${firstServeLabel}`
     } else if (event.type === 'point') {
-      eventDescription = `Point — ${teamName} (${team1Label} ${team1Score}:${team2Score} ${team2Label})`
+      eventDescription = `Point — ${teamName} (${scoreText(team1Score, team2Score)})`
     } else if (event.type === 'timeout') {
       eventDescription = `Timeout — ${teamName}`
     } else if (event.type === 'substitution') {
@@ -4561,7 +4583,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const playerIn = event.payload?.playerIn || '?'
       const isExceptional = event.payload?.isExceptional === true
       const substitutionType = isExceptional ? 'Exceptional substitution' : 'Substitution'
-      eventDescription = `${substitutionType} — ${teamName} (OUT: ${playerOut} IN: ${playerIn}) (${team1Label} ${team1Score}:${team2Score} ${team2Label})`
+      eventDescription = `${substitutionType} — ${teamName} (OUT: ${playerOut} IN: ${playerIn}) (${scoreText(team1Score, team2Score)})`
     } else if (event.type === 'set_start') {
       // Format the relative time as MM:SS
       const relativeTime = typeof event.ts === 'number' ? event.ts : 0
@@ -4577,13 +4599,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Show detailed replay info with scores
       const { oldteam1Points, oldteam2Points, newteam1Points, newteam2Points } = event.payload || {}
       if (oldteam1Points !== undefined && newteam1Points !== undefined) {
-        // Get team labels (A/B) based on coin toss
-        const teamAKey = data?.match?.coinTossTeamA || 'team1'
-        const oldLeftScore = teamAKey === 'team1' ? oldteam1Points : oldteam2Points
-        const oldRightScore = teamAKey === 'team1' ? oldteam2Points : oldteam1Points
-        const newLeftScore = teamAKey === 'team1' ? newteam1Points : newteam2Points
-        const newRightScore = teamAKey === 'team1' ? newteam2Points : newteam1Points
-        eventDescription = `${oldLeftScore}:${oldRightScore} Rally Replayed, new score ${newLeftScore}:${newRightScore}`
+        eventDescription = `${scoreText(oldteam1Points, oldteam2Points)} Rally Replayed, new score ${scoreText(newteam1Points, newteam2Points)}`
       } else {
         eventDescription = 'Rally replayed'
       }
@@ -4659,7 +4675,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         target = ' Team'
       }
 
-      eventDescription = `Sanction — ${teamName}${target} (${sanctionLabel}) (${team1Label} ${team1Score}:${team2Score} ${team2Label})`
+      eventDescription = `Sanction — ${teamName}${target} (${sanctionLabel}) (${scoreText(team1Score, team2Score)})`
     } else if (event.type === 'remark') {
       const remarkText = event.payload?.text || ''
       // Show first line or first 50 characters
@@ -4790,7 +4806,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
 
     return eventDescription
-  }, [data])
+  }, [data, leftisTeam1])
 
   // Show undo confirmation
   const showUndoConfirm = useCallback(() => {
@@ -7942,7 +7958,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       }
                     }
                   }
-                  const scoreStr = `${team1Label} ${team1Score}:${team2Score} ${team2Label}`
+                  const scoreStr = formatCourtScore({ team1: team1Score, team2: team2Score }, { leftisTeam1, teamAKey })
 
                   // Determine action label
                   let actionLabel = getActionDescription(lastEvent)
@@ -15990,9 +16006,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               {t('scoreboard.tto.at21')}
             </p>
             <div style={{ marginBottom: '16px', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              <span style={{ background: data?.team1Team?.color || '#ef4444', color: isBrightColor(data?.team1Team?.color || '#ef4444') ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>{teamAKey === 'team1' ? 'A' : 'B'}</span>
-              <strong style={{ fontSize: '20px' }}>{ttoModal.team1Points} : {ttoModal.team2Points}</strong>
-              <span style={{ background: data?.team2Team?.color || '#3b82f6', color: isBrightColor(data?.team2Team?.color || '#3b82f6') ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>{teamAKey === 'team2' ? 'A' : 'B'}</span>
+              {courtScoreChips(ttoModal.team1Points, ttoModal.team2Points)}
             </div>
             {ttoModal.triggerCourtSwitchAfter && (
               <p style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--ov-warning-text)', fontWeight: 500 }}>
@@ -16131,7 +16145,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         }}>
                           {losingTeamLabel}
                         </span>
-                        BMP Request
+                        {t('scoreboard.bmpRequest', 'BMP request')}
                         <span style={{
                           background: '#f97316',
                           color: '#000',
@@ -16550,9 +16564,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               {t('scoreboard.modals.teamsMustSwitchCourts')}
             </p>
             <div style={{ marginBottom: '16px', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              <span style={{ background: data?.team1Team?.color || '#ef4444', color: isBrightColor(data?.team1Team?.color || '#ef4444') ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>{teamAKey === 'team1' ? 'A' : 'B'}</span>
-              <strong style={{ fontSize: '20px' }}>{courtSwitchModal.team1Points} : {courtSwitchModal.team2Points}</strong>
-              <span style={{ background: data?.team2Team?.color || '#3b82f6', color: isBrightColor(data?.team2Team?.color || '#3b82f6') ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>{teamAKey === 'team2' ? 'A' : 'B'}</span>
+              {courtScoreChips(courtSwitchModal.team1Points, courtSwitchModal.team2Points)}
             </div>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
               <button
@@ -16645,7 +16657,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     }}>
                       {losingTeamLabel}
                     </span>
-                    BMP Request
+                    {t('scoreboard.bmpRequest', 'BMP request')}
                     <span style={{
                       background: '#f97316',
                       color: '#000',
@@ -17336,7 +17348,8 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
   const loserTeam = winner === 'team1' ? 'team2' : 'team1'
   const loserTeamName = winner === 'team1' ? team2TeamName : team1TeamName
   const loserTeamColor = winner === 'team1' ? team2TeamColor : team1TeamColor
-  const loserTeamLabel = (winner === 'team1' ? 'team2' : 'team1') === (leftisTeam1 ? 'team1' : 'team2') ? 'A' : 'B'
+  // A / B from the coin toss (it was taken from the side: "B" in team A's colour)
+  const loserTeamLabel = loserTeam === (teamAKey || 'team1') ? 'A' : 'B'
 
   // Calculate left and right team names and scores
   const leftTeamName = leftisTeam1 ? team1TeamName : team2TeamName
@@ -17456,7 +17469,7 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
               opacity: isConfirming ? 0.7 : 1
             }}
           >
-            Decision Change
+            {t('scoreboard.buttons.decisionChange', 'Decision change')}
           </button>
         </div>
         {/* BMP Request button for losing team */}
@@ -17492,7 +17505,7 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
               }}>
                 {loserTeamLabel}
               </span>
-              BMP Request
+              {t('scoreboard.bmpRequest', 'BMP request')}
               <span style={{
                 background: '#f97316',
                 color: '#000',

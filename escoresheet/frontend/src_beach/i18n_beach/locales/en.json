@@ -849,7 +849,8 @@
     "medicalEnd": "end",
     "medicalCannotContinue": "Player cannot continue (forfeit)…",
     "medicalForfeitQuestion": "The team is incomplete and forfeits the match. Confirm?",
-    "medicalConfirmForfeit": "Confirm forfeit"
+    "medicalConfirmForfeit": "Confirm forfeit",
+    "bmpRequest": "BMP request"
   },
   "settings": {
     "title": "Settings",
