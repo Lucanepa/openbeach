@@ -11,6 +11,7 @@ const ballImage = '/beachball.png'
 import JSZip from 'jszip'
 import { setExtId } from '../utils_beach/syncIds_beach'
 import { withActivityContext, wipeMatchEvents } from '../db_beach/eventHistory_beach'
+import { listActivity } from '../utils_beach/activity/index_beach'
 import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 import { uploadScoresheet, uploadScoresheetPdf } from '../utils_beach/scoresheetUploader_beach'
 import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
@@ -958,6 +959,15 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         }
       } catch (logsError) {
         console.warn('[MatchEnd] Failed to add interaction logs to ZIP:', logsError)
+      }
+      // ... and the match's activity log (oldest first, one JSON object per line)
+      try {
+        const activity = await listActivity(db, { matchId })
+        if (activity.length) {
+          zip.file(`activity_${matchDate}.ndjson`, [...activity].reverse().map(({ lid: _lid, ...r }) => JSON.stringify(r)).join('\n') + '\n')
+        }
+      } catch (activityError) {
+        console.warn('[MatchEnd] Failed to add the activity log to ZIP:', activityError)
       }
 
       const zipBlob = await zip.generateAsync({ type: 'blob' })

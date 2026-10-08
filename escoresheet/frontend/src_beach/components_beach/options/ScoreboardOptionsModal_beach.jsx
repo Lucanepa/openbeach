@@ -9,6 +9,7 @@ import BackupTable from '../BackupTable_beach'
 import { SatelliteDish } from '../Icons_beach'
 import { Switch } from '../../ui/volleyui/Switch.jsx'
 import { OptionInfo } from './optionRows_beach'
+import ActivityLogSection from './ActivityLogSection_beach'
 
 // The kit InfoHint (a real button, opens on tap) and Switch (role="switch",
 // aria-checked, named, focus ring): the hand-made dot and toggle had no role,
@@ -718,6 +719,8 @@ export default function ScoreboardOptionsModal({
           </button>
 
         </div>
+
+        <div style={{ marginBottom: '24px' }}><ActivityLogSection matchId={matchId ?? null} /></div>
 
         <Section title={t('options.cloudBackup')}>
           <Row style={{ flexDirection: 'column', alignItems: 'stretch', gap: '12px' }}>

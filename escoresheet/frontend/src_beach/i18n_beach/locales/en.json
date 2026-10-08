@@ -1160,7 +1160,19 @@
     "backUp": "Back up",
     "iconCredits": "Icons",
     "iconCreditsText": "Lucide (ISC) · Phosphor (MIT)",
-    "copyUrl": "Copy link"
+    "copyUrl": "Copy link",
+    "logs": "Logs",
+    "activityLog": "Activity log",
+    "activityLogInfo": "Everything that happened in this match on this device: points, undo and corrections, uploads, errors. It is uploaded to the server with your account. What you click or type is not part of it.",
+    "activityLogAllInfo": "Everything that happened on this device, per match: points, undo and corrections, uploads, errors.",
+    "openActivityLog": "Show activity log",
+    "diagnosticLog": "Diagnostic log",
+    "diagnosticLogInfo": "Every click and key press in this match, for troubleshooting. It stays on this device; passwords and PINs are never recorded.",
+    "exportDiagnosticLog": "Export diagnostic log (.ndjson)",
+    "openLogFolder": "Open log folder",
+    "logFolderOpenFailed": "The log folder could not be opened.",
+    "diagnosticLogFailed": "The diagnostic log could not be exported.",
+    "logFolder": "Log folder"
   },
   "matchEnd": {
     "title": "Match complete",
@@ -2744,6 +2756,67 @@
     "who": {
       "coach": "Coach",
       "player": "Player"
+    }
+  },
+  "activity": {
+    "title": "Activity log",
+    "notUploaded_one": "{{count}} entry not uploaded yet",
+    "notUploaded_other": "{{count}} entries not uploaded yet",
+    "match": "Match",
+    "allMatches": "All matches",
+    "filter": "Show",
+    "empty": "No entries yet.",
+    "exportJson": "Export JSON",
+    "exportCsv": "Export CSV",
+    "set": "Set {{n}}",
+    "game": "Game {{n}}",
+    "localMatch": "Match {{id}} (this device)",
+    "test": "test",
+    "filters": {
+      "all": "All",
+      "scoring": "Scoring",
+      "corrections": "Corrections",
+      "sync": "Sync",
+      "errors": "Errors"
+    },
+    "status": {
+      "uploaded": "uploaded",
+      "waiting": "waiting",
+      "local": "this device only"
+    },
+    "kinds": {
+      "event_add": "Event logged",
+      "event_bulk_add": "Events loaded",
+      "event_undo": "Undone",
+      "event_delete": "Event removed",
+      "event_edit": "Event corrected",
+      "event_restore": "Event restored",
+      "set_start": "Set started",
+      "set_end": "Set ended",
+      "set_reopen": "Set reopened",
+      "set_delete": "Set removed",
+      "match_create": "Match created",
+      "match_status": "Match status",
+      "match_close": "Match closed",
+      "match_coin_toss": "Coin toss",
+      "match_manual_change": "Manual change",
+      "match_signature": "Signature",
+      "match_approval": "Approval",
+      "match_remarks": "Remarks",
+      "match_forfeit": "Forfeit",
+      "match_roster": "Roster changed",
+      "sync_error": "Upload refused",
+      "sync_dropped": "Upload dropped",
+      "sync_state": "Connection",
+      "sync_summary": "Upload summary",
+      "app_start": "App started",
+      "app_update": "App updated",
+      "app_quit": "App closed",
+      "app_error": "App error",
+      "backup_error": "Backup failed",
+      "auth_sign_in": "Signed in",
+      "auth_sign_out": "Signed out",
+      "activity_overflow": "Old entries dropped"
     }
   }
 }
