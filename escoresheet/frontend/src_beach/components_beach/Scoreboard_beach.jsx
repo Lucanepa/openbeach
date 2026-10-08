@@ -40,7 +40,8 @@ import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot } from '../utils_beach/stateSnapshot_beach'
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
 import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
-import { defaultSetStartTime, scheduledClock, withActualStartTimeRemark, startScheduleOf, typedStartNear } from '../utils_beach/setStartTime_beach'
+import { defaultSetStartTime, scheduledClock, withActualStartTimeRemark, actualStartTimeLine, startScheduleOf, typedStartNear } from '../utils_beach/setStartTime_beach'
+import { withoutAutoRemarks } from '../utils_beach/corrections_beach'
 import { cloudSyncWaitNow } from '../utils_beach/cloudStatus_beach'
 import { formatCourtScore } from '../utils_beach/scoreText_beach'
 import { medicalStartPayload, medicalEndPayload, findOpenMedical, formatMedicalDuration, medicalSecondsLeft, MEDICAL_RECOVERY_SECONDS } from '../utils_beach/medicalEvents_beach'
@@ -3792,10 +3793,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     await db.sets.update(data.set.id, { startTime: roundToMinute(time) })
 
     // Set 1 at another time than scheduled: "Actual start time: HH:MM" in
-    // the remarks (replaced when confirmed again, removed at the scheduled time)
+    // the remarks (replaced when confirmed again, removed at the scheduled
+    // time); the set_start event records the line (autoRemark) so undo of the
+    // set start takes it out (discardEvents), as in OpenVolley
     const matchNow = await db.matches.get(matchId)
     const scheduledAt = startScheduleOf(matchNow)
     const actualStartRemarked = setStartTimeModal.setIndex === 1 && !!scheduledClock(scheduledAt)
+    const autoRemark = actualStartRemarked
+      ? actualStartTimeLine({ setIndex: 1, startTime: roundToMinute(time), scheduledAt })
+      : null
     if (actualStartRemarked) {
       const remarks = withActualStartTimeRemark(matchNow?.remarks, {
         setIndex: 1, startTime: roundToMinute(time), scheduledAt
@@ -3815,7 +3821,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       type: 'set_start',
       payload: {
         setIndex: setStartTimeModal.setIndex,
-        startTime: roundToMinute(time)
+        startTime: roundToMinute(time),
+        ...(autoRemark ? { autoRemark } : {})
       },
       ts: roundToMinute(time),
       seq: nextSeq1,
@@ -5051,8 +5058,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   // keeps the row, marked voided, with who undid it, when and why. The reason
   // is the running action's ('undo', 'decision_change'), else `reason`.
   // Undo, Replay, the decision change, cancelling a change of courts and the
-  // event editor's deletes all go through here. Ported from OpenVolley
-  // discardEvents (Scoreboard.jsx).
+  // event editor's deletes all go through here. The remark line a removed
+  // event wrote itself (payload.autoRemark: set 1's "Actual start time")
+  // goes with it. Ported from OpenVolley discardEvents / reverseEventSideEffects
+  // (Scoreboard.jsx).
   const discardEvents = useCallback(async (eventsToRemove, reason = 'delete') => {
     const rows = (eventsToRemove || []).filter(e => e && e.id != null)
     if (rows.length === 0) return
@@ -5061,7 +5070,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     const unsent = await db.sync_queue.where('status').anyOf(...UNSENT_STATUSES).toArray()
     const staleJobs = syncJobsForEvents(unsent, ids)
     if (staleJobs.length > 0) await db.sync_queue.bulkDelete(staleJobs.map(j => j.id))
-  }, [])
+    if (rows.some(e => e.payload?.autoRemark)) {
+      const match = await db.matches.get(matchId)
+      const remarks = withoutAutoRemarks(match?.remarks, rows)
+      if (match && remarks !== (match.remarks || '')) await db.matches.update(matchId, { remarks })
+    }
+  }, [matchId])
 
   // The set score after taking points back: what the removed points added is
   // subtracted (a manual score adjustment stays), the set is open again, and

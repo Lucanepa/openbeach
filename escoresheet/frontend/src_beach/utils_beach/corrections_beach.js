@@ -838,6 +838,21 @@ export function removeRemarkLine(remarks, line) {
   return lines.join('\n')
 }
 
+/**
+ * The remarks after removing events (undo, the event editor's deletes): the
+ * line each removed event wrote itself and recorded as payload.autoRemark
+ * (set 1's "Actual start time: HH:MM") goes, newest event first; the other
+ * lines stay. As OpenVolley's reverseEventSideEffects.
+ */
+export function withoutAutoRemarks(remarks, removedEvents) {
+  let out = remarks || ''
+  const withRemark = (removedEvents || []).filter(e => e?.payload?.autoRemark)
+  for (const e of [...withRemark].sort((a, b) => (b.seq || 0) - (a.seq || 0))) {
+    out = removeRemarkLine(out, e.payload.autoRemark)
+  }
+  return out
+}
+
 /** + Add remark / edit one line of the remarks. */
 export function planRemark(remarks, { text, index = null } = {}, ctx = {}) {
   const line = String(text || '').trim()

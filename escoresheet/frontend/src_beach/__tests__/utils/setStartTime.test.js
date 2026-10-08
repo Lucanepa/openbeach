@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import {
   defaultSetStartTime, scheduledClock, withActualStartTimeRemark, localClock, scheduledStartOn, startScheduleOf, typedStartNear
 } from '../../utils_beach/setStartTime_beach'
-import { planSetTimes } from '../../utils_beach/corrections_beach'
+import { planSetTimes, withoutAutoRemarks } from '../../utils_beach/corrections_beach'
 import { remarksAfter } from '../../utils_beach/applyCorrectionPlan_beach'
 import { plausibleMinutes } from '../../../scoresheet_pdf_beach/components_beach/sheetFormat_beach'
 
@@ -205,5 +205,20 @@ describe('the typed start time is on the day nearest to the proposal (typedStart
     const start = sb.indexOf('function SetStartTimeModal(')
     const modal = sb.slice(start, sb.indexOf('onConfirm(isoString)', start))
     expect(modal).toContain('typedStartNear(defaultTime, time)')
+  })
+})
+
+describe('undoing the set 1 start takes its line out (withoutAutoRemarks, as OpenVolley)', () => {
+  it('the line the removed set_start recorded goes, the other remarks stay', () => {
+    const removed = [{ id: 2, seq: 2, type: 'set_start', payload: { setIndex: 1, autoRemark: 'Actual start time: 12:47' } }]
+    expect(withoutAutoRemarks('Ball changed\nActual start time: 12:47\nWind', removed)).toBe('Ball changed\nWind')
+    expect(withoutAutoRemarks('Actual start time: 12:47', removed)).toBe('')
+  })
+
+  it('events without an autoRemark (or a line already gone) leave the remarks as they are', () => {
+    expect(withoutAutoRemarks('Ball changed', [{ id: 1, seq: 1, type: 'set_start', payload: { setIndex: 1 } }])).toBe('Ball changed')
+    expect(withoutAutoRemarks('Ball changed\nActual start time: 12:45', [{ id: 1, seq: 1, type: 'set_start', payload: { autoRemark: 'Actual start time: 12:47' } }]))
+      .toBe('Ball changed\nActual start time: 12:45')
+    expect(withoutAutoRemarks(null, [])).toBe('')
   })
 })
