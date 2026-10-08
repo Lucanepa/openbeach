@@ -66,7 +66,7 @@ export function getNextTestMatchStartTime() {
 export const TEST_TEAM_SEED_DATA = [
   {
     seedKey: 'test-team-1',
-    name: 'Müller/Weber (CHE)',
+    name: 'Müller / Weber',
     shortName: 'CHE',
     color: '#3b82f6',
     country: 'CHE',
@@ -77,7 +77,7 @@ export const TEST_TEAM_SEED_DATA = [
   },
   {
     seedKey: 'test-team-2',
-    name: 'Schmidt/Fischer (DEU)',
+    name: 'Schmidt / Fischer',
     shortName: 'DEU',
     color: '#a855f7',
     country: 'DEU',

@@ -7,6 +7,7 @@ import { apiFrom } from '../lib_beach/apiClient_beach'
 import { setExtId, eventExtId } from '../utils_beach/syncIds_beach'
 import { isBackendAvailable, getBackendUrl } from '../utils_beach/backendConfig_beach'
 import { cloudSyncWaitNow } from '../utils_beach/cloudStatus_beach'
+import { teamNameForCoinToss } from '../utils_beach/teamNames_beach'
 import SignaturePad from './SignaturePad_beach'
 import { saveMatchSignature, signatureFieldOfRole } from '../utils_beach/signatures_beach'
 import MenuList from './MenuList_beach'
@@ -411,16 +412,6 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           match.team2Id ? db.players.where('teamId').equals(match.team2Id).toArray() : []
         ])
 
-        // Helper to generate beach volleyball team name from players: "LastName1/LastName2 (COUNTRY)"
-        const toTitleCase = (str) => str ? str.replace(/(^|[\s-])(\S)/g, (m, pre, c) => pre + c.toUpperCase()) : ''
-        const generateBeachTeamName = (players, country) => {
-          if (!players || players.length === 0) return null
-          const sorted = [...players].sort((a, b) => (a.number || 999) - (b.number || 999))
-          const lastNames = sorted.map(p => toTitleCase(p.lastName || '')).filter(n => n)
-          if (lastNames.length === 0) return null
-          const namesPart = lastNames.join(' / ')
-          return country ? `${namesPart} (${country.toUpperCase()})` : namesPart
-        }
 
         if (team1Players.length) {
           const sortedTeam1 = team1Players.map(p => ({
@@ -432,8 +423,8 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           })).sort((a, b) => (a.number || 999) - (b.number || 999))
           setTeam1Roster(sortedTeam1)
           // Generate team name from player last names
-          const generatedName = generateBeachTeamName(sortedTeam1, match.team1Country)
-          setTeam1Name(generatedName || team1Data?.name || 'Team 1')
+          // The stored name, else "Last / Last"; never the country (shown apart)
+          setTeam1Name(teamNameForCoinToss(team1Data?.name, sortedTeam1, 'Team 1'))
           // Default first serve to player 1 (or first player's number)
           const player1 = sortedTeam1.find(p => p.number === 1) || sortedTeam1[0]
           if (player1) setTeam1FirstServe(player1.number)
@@ -451,8 +442,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           })).sort((a, b) => (a.number || 999) - (b.number || 999))
           setTeam2Roster(sortedTeam2)
           // Generate team name from player last names
-          const generatedName = generateBeachTeamName(sortedTeam2, match.team2Country)
-          setTeam2Name(generatedName || team2Data?.name || 'Team 2')
+          setTeam2Name(teamNameForCoinToss(team2Data?.name, sortedTeam2, 'Team 2'))
           // Default first serve to player 1 (or first player's number)
           const player1 = sortedTeam2.find(p => p.number === 1) || sortedTeam2[0]
           if (player1) setTeam2FirstServe(player1.number)

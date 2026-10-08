@@ -117,3 +117,20 @@ describe('MatchSetup_beach match info', () => {
     expect(screen.queryByText(/sync pending/)).toBeNull()
   })
 })
+
+describe('MatchSetup_beach test roster (team 2)', () => {
+  it('loads the name and the country it names, and closes its dialog', async () => {
+    const matchId = await db.matches.add({ status: 'setup', seed_key: 'match_seed_vr2', test: false, createdAt: new Date().toISOString() })
+    render(<MatchSetup matchId={matchId} onStart={() => {}} onReturn={() => {}} onOpenOptions={() => {}} onOpenCoinToss={() => {}} />)
+    const edit = await screen.findAllByRole('button', { name: 'Edit roster' })
+    await act(async () => { fireEvent.click(edit[1]) })
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: 'Load test roster' })) })
+    // the dialog names the team without nested parentheses
+    expect(screen.getByText(/\(Schmidt \/ Fischer\)/)).toBeInTheDocument()
+    const load = screen.getAllByRole('button', { name: 'Load test roster' }).at(-1)
+    await act(async () => { fireEvent.click(load) })
+    await waitFor(() => expect(screen.queryByText('Load the test roster?')).toBeNull())
+    expect(screen.getByDisplayValue('Schmidt / Fischer')).toBeInTheDocument()
+    expect(screen.getAllByText('DEU').length).toBeGreaterThan(0)
+  })
+})

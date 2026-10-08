@@ -4401,7 +4401,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         {/* Test Roster Confirmation Modal */}
         {testRosterConfirm === 'team2' && renderTestRosterConfirm(TEST_TEAM_2.name, () => {
           if (!TEST_TEAM_2) return
+          // As team 1: the roster, the name, the short name and the country
+          // (the dialog named DEU but the country stayed empty)
           setTeam2Roster([...TEST_TEAM_2.players])
+          if (!team2Name || team2Name === 'Team 2') setTeam2Name(TEST_TEAM_2.name)
+          if (!team2ShortName) setTeam2ShortName(TEST_TEAM_2.shortName)
+          setTeam2Country(TEST_TEAM_2.country || '')
+          setTestRosterConfirm(null)
         })}
 
         {savedTeamsModals}
