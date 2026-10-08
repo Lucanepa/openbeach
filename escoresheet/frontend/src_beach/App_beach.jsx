@@ -1887,7 +1887,7 @@ export default function App() {
     }
 
     setTestMatchLoading(true)
-    setHomeWhilePreparing({ official: notClosed(currentOfficialMatch), test: notClosed(currentTestMatch) })
+    setHomeWhilePreparing({ official: notClosed(currentOfficialMatch), test: notClosed(currentTestMatch), matchStatus: shownMatchStatus, matchInfoData: shownMatchInfoData })
 
     try {
       // Clear previous test match locally
@@ -2105,6 +2105,10 @@ export default function App() {
   const shownMatchInfoData = notClosed(matchInfoData?.match) === null ? null : matchInfoData
   const homeOfficialMatch = homeWhilePreparing ? homeWhilePreparing.official : notClosed(currentOfficialMatch)
   const homeTestMatch = homeWhilePreparing ? homeWhilePreparing.test : notClosed(currentTestMatch)
+  // The header's match chip is held with the home screen: it went away for
+  // two frames when an older test match was replaced (verification 2026-10-08)
+  const headerMatchStatus = homeWhilePreparing ? homeWhilePreparing.matchStatus : shownMatchStatus
+  const headerMatchInfoData = homeWhilePreparing ? homeWhilePreparing.matchInfoData : shownMatchInfoData
 
   return (
     // Every screen is on the volleyui stone page (light only), match end and
@@ -2181,8 +2185,8 @@ export default function App() {
             currentMatch={shownCurrentMatch}
             matchInfoMenuOpen={matchInfoMenuOpen}
             setMatchInfoMenuOpen={setMatchInfoMenuOpen}
-            matchInfoData={shownMatchInfoData}
-            matchStatus={shownMatchStatus}
+            matchInfoData={headerMatchInfoData}
+            matchStatus={headerMatchStatus}
             currentOfficialMatch={homeOfficialMatch}
             currentTestMatch={homeTestMatch}
             isFullscreen={isFullscreen}
