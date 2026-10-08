@@ -116,7 +116,11 @@
       "confirm": "Confirm forfait",
       "injuredPlayer": "Injured player number",
       "remark": "Remark"
-    }
+    },
+    "receive": "Receive",
+    "winnerChose": "The winner chose",
+    "choiceServe": "Serve or receive",
+    "choiceSide": "Court side"
   },
   "roster": {
     "title": "Roster",

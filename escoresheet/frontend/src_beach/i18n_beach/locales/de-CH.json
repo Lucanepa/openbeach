@@ -116,7 +116,11 @@
       "confirm": "Forfait bestätige",
       "injuredPlayer": "Nummere vom verletzte Spieler",
       "remark": "Bemerkig"
-    }
+    },
+    "receive": "Annahm",
+    "winnerChose": "Gwählt hät",
+    "choiceServe": "Ufschlag oder Annahm",
+    "choiceSide": "Spiilfeldsiite"
   },
   "roster": {
     "title": "Roster",
@@ -428,15 +432,15 @@
     "matchPinLabel": "PIN-Code",
     "enterPinPrompt": "Bitte en PIN-Code iigee, zum das Spiil z schütze (erforderlich):",
     "syncState": {
-      "notSignedIn": "Nicht angemeldet",
+      "notSignedIn": "Nöd aagmäldet",
       "localOnly": "Nur lokal",
-      "savedSignInToSync": "Auf diesem Gerät gespeichert. Melde dich an, um es in die Cloud zu synchronisieren."
+      "savedSignInToSync": "Uf däm Grät gspeicheret. Mäld dich aa, zum es i d Cloud z synchronisiere."
     },
     "matchInfoForm": {
-      "pastDate": "Dieses Datum liegt in der Vergangenheit."
+      "pastDate": "Das Datum isch i de Vergangeheit."
     },
     "setupLayout": {
-      "coinTossNeeds": "Zuerst Spielinfos, Offizielle und beide Teams ausfüllen."
+      "coinTossNeeds": "Zersch Spiilinfo, Offizielli und beidi Teams uusfülle."
     }
   },
   "scoreboard": {
@@ -2587,20 +2591,20 @@
     "medical": {
       "mto": "MTO",
       "rit": "RIT",
-      "ritNoBlood": "ohne Blut",
+      "ritNoBlood": "ohni Bluet",
       "ritToilet": "Toilette",
-      "ritWeather": "Wetter",
-      "end": "Ende",
+      "ritWeather": "Wätter",
+      "end": "Endi",
       "recovered": "erholt",
       "forfeit": "Forfait",
-      "recoveryTime": "Erholungszeit"
+      "recoveryTime": "Erholigsziit"
     },
     "events": {
       "teamBmp": "Team-BMP",
-      "refereeBmp": "Schiedsrichter-BMP",
-      "successful": "erfolgreich",
+      "refereeBmp": "Schiri-BMP",
+      "successful": "erfolgriich",
       "unsuccessful": "erfolglos",
-      "judgmentImpossible": "Beurteilung unmöglich"
+      "judgmentImpossible": "Beurteilig nöd möglich"
     },
     "bmpLeft": "Ballabdruck-Protokoll ({{count}} übrig)"
   }

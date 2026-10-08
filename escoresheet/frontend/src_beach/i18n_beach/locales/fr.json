@@ -116,7 +116,11 @@
       "confirm": "Confirmer le forfait",
       "injuredPlayer": "Numéro du joueur blessé",
       "remark": "Remarque"
-    }
+    },
+    "receive": "Réception",
+    "winnerChose": "Le gagnant a choisi",
+    "choiceServe": "Service ou réception",
+    "choiceSide": "Côté du terrain"
   },
   "roster": {
     "title": "Effectif",

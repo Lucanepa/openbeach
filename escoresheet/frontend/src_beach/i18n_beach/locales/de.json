@@ -116,7 +116,11 @@
       "confirm": "Forfait bestätigen",
       "injuredPlayer": "Nummer des verletzten Spielers",
       "remark": "Bemerkung"
-    }
+    },
+    "receive": "Annahme",
+    "winnerChose": "Gewählt wurde",
+    "choiceServe": "Aufschlag oder Annahme",
+    "choiceSide": "Spielfeldseite"
   },
   "roster": {
     "title": "Kader",

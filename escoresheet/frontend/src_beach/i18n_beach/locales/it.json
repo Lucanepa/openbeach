@@ -116,7 +116,11 @@
       "confirm": "Conferma forfait",
       "injuredPlayer": "Numero del giocatore infortunato",
       "remark": "Osservazione"
-    }
+    },
+    "receive": "Ricezione",
+    "winnerChose": "Il vincitore ha scelto",
+    "choiceServe": "Battuta o ricezione",
+    "choiceSide": "Lato del campo"
   },
   "roster": {
     "title": "Rosa",
