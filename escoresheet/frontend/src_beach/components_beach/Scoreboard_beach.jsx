@@ -105,6 +105,16 @@ function rallyRowButton(scaleFactor, kind) {
   }
 }
 
+/** The serve indicator and the serving ball, as fractions of the design vmin
+ *  (scaled with the screen like the rest of the court). The SERVE box was
+ *  ~75 px with small text, and the ball (0.08) almost the size of the player
+ *  disc (0.10), touching its position badge: now a bigger SERVE box and a
+ *  ball of 60 % of the disc, which keeps clear of the badge. */
+const SERVE_LABEL = 0.033
+const SERVE_NUMBER = 0.083
+const SERVE_BOX = 0.13
+const SERVE_BALL = 0.06
+
 /** The Referee BMP dialog's three choices: equal columns that shrink inside
  *  the dialog (a long team name is cut with an ellipsis, never past the edge). */
 const bmpChoiceButton = {
@@ -7612,14 +7622,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       )}
 
 
-      {/* Main Scoreboard Layout - Scaled proportionally to viewport */}
-      <div style={{
+      {/* Main Scoreboard Layout - Scaled proportionally to viewport. Top-aligned:
+          centred, the spare height became an empty band above the score */}
+      <div data-testid="scoring-layout" style={{
         width: '100%',
         flex: 1,
         overflow: 'hidden',
         display: 'flex',
         justifyContent: 'center',
-        alignItems: 'center'
+        alignItems: 'flex-start'
       }}>
         <div
           className="match-content"
@@ -8003,6 +8014,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     flex: '0 0 15%',
                     minWidth: 0,
                     maxWidth: '15%',
+                    // the card ends with its content (it stretched to the
+                    // bottom: a tall white card of empty space under the stats)
+                    alignSelf: 'flex-start',
+                    maxHeight: '100%',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: `${6 * scaleFactor}px`,
@@ -8504,7 +8519,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           <img
                             src={ballImage} onError={(e) => e.target.src = ballImage}
                             alt="Serving team"
-                            style={{ ...serveBallBaseStyle, width: '100%', maxWidth: `${DESIGN_VMIN * 0.092 * scaleFactor}px`, height: 'auto', aspectRatio: '1' }}
+                            style={{ ...serveBallBaseStyle, width: '100%', maxWidth: `${DESIGN_VMIN * SERVE_BOX * scaleFactor}px`, height: 'auto', aspectRatio: '1' }}
                           />
                         )
                       }
@@ -8518,7 +8533,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           gap: `${4 * scaleFactor}px`
                         }}>
                           <div style={{
-                            fontSize: `${DESIGN_VMIN * 0.0253 * scaleFactor}px`,
+                            fontSize: `${DESIGN_VMIN * SERVE_LABEL * scaleFactor}px`,
                             fontWeight: 700,
                             color: 'var(--ov-success)',
                             textTransform: 'uppercase',
@@ -8528,17 +8543,17 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             {t('scoreboard.serve', 'Serve')}
                           </div>
                           <div className="tabular-nums" style={{
-                            fontSize: `${DESIGN_VMIN * 0.0575 * scaleFactor}px`,
+                            fontSize: `${DESIGN_VMIN * SERVE_NUMBER * scaleFactor}px`,
                             fontWeight: 700,
                             color: 'var(--ov-success)',
-                            width: '80%',
-                            maxWidth: `${DESIGN_VMIN * 0.092 * scaleFactor}px`,
+                            width: '90%',
+                            maxWidth: `${DESIGN_VMIN * SERVE_BOX * scaleFactor}px`,
                             aspectRatio: '1',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             background: '#ecfdf5',
-                            border: `${2 * scaleFactor}px solid #10b981`,
+                            border: `${Math.max(2, 3 * scaleFactor)}px solid #047857`,
                             borderRadius: 'var(--ov-radius-lg)',
                             boxSizing: 'border-box'
                           }}>
@@ -8915,7 +8930,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           const playerSize = DESIGN_VMIN * 0.10 * scaleFactor
                           const positionSize = DESIGN_VMIN * 0.03 * scaleFactor
                           const positionOffset = DESIGN_VMIN * 0.015 * scaleFactor
-                          const ballSize = DESIGN_VMIN * 0.08 * scaleFactor
+                          const ballSize = DESIGN_VMIN * SERVE_BALL * scaleFactor
                           return (
                             <div
                               key={`${teamKey}-court-front-${player.position}-${player.id || player.number || idx}`}
@@ -9122,11 +9137,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   alt="Volleyball"
                                   style={{
                                     position: 'absolute',
-                                    left: `${-(DESIGN_VMIN * 0.08 * scaleFactor) - 12 * scaleFactor}px`,
+                                    left: `${-(DESIGN_VMIN * SERVE_BALL * scaleFactor) - 12 * scaleFactor}px`,
                                     top: '50%',
                                     transform: 'translateY(-50%)',
-                                    width: `${DESIGN_VMIN * 0.08 * scaleFactor}px`,
-                                    height: `${DESIGN_VMIN * 0.08 * scaleFactor}px`,
+                                    width: `${DESIGN_VMIN * SERVE_BALL * scaleFactor}px`,
+                                    height: `${DESIGN_VMIN * SERVE_BALL * scaleFactor}px`,
                                     zIndex: 5
                                   }}
                                 />
@@ -9247,7 +9262,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           const playerSize = DESIGN_VMIN * 0.10 * scaleFactor
                           const positionSize = DESIGN_VMIN * 0.03 * scaleFactor
                           const positionOffset = DESIGN_VMIN * 0.015 * scaleFactor
-                          const ballSize = DESIGN_VMIN * 0.08 * scaleFactor
+                          const ballSize = DESIGN_VMIN * SERVE_BALL * scaleFactor
                           return (
                             <div
                               key={`${teamKey}-court-front-${player.position}-${player.id || player.number || idx}`}
@@ -9436,7 +9451,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           const playerSize = DESIGN_VMIN * 0.10 * scaleFactor
                           const positionSize = DESIGN_VMIN * 0.03 * scaleFactor
                           const positionOffset = DESIGN_VMIN * 0.015 * scaleFactor
-                          const ballSize = DESIGN_VMIN * 0.08 * scaleFactor
+                          const ballSize = DESIGN_VMIN * SERVE_BALL * scaleFactor
                           return (
                             <div
                               key={`${rightTeamKey}-court-back-${player.position}-${player.id || player.number || idx}`}
@@ -9594,7 +9609,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           <img
                             src={ballImage} onError={(e) => e.target.src = ballImage}
                             alt="Serving team"
-                            style={{ ...serveBallBaseStyle, width: '100%', maxWidth: `${DESIGN_VMIN * 0.092 * scaleFactor}px`, height: 'auto', aspectRatio: '1' }}
+                            style={{ ...serveBallBaseStyle, width: '100%', maxWidth: `${DESIGN_VMIN * SERVE_BOX * scaleFactor}px`, height: 'auto', aspectRatio: '1' }}
                           />
                         )
                       }
@@ -9608,7 +9623,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           gap: `${4 * scaleFactor}px`
                         }}>
                           <div style={{
-                            fontSize: `${DESIGN_VMIN * 0.0253 * scaleFactor}px`,
+                            fontSize: `${DESIGN_VMIN * SERVE_LABEL * scaleFactor}px`,
                             fontWeight: 700,
                             color: 'var(--ov-success)',
                             textTransform: 'uppercase',
@@ -9618,17 +9633,17 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             {t('scoreboard.serve', 'Serve')}
                           </div>
                           <div className="tabular-nums" style={{
-                            fontSize: `${DESIGN_VMIN * 0.0575 * scaleFactor}px`,
+                            fontSize: `${DESIGN_VMIN * SERVE_NUMBER * scaleFactor}px`,
                             fontWeight: 700,
                             color: 'var(--ov-success)',
-                            width: '80%',
-                            maxWidth: `${DESIGN_VMIN * 0.092 * scaleFactor}px`,
+                            width: '90%',
+                            maxWidth: `${DESIGN_VMIN * SERVE_BOX * scaleFactor}px`,
                             aspectRatio: '1',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             background: '#ecfdf5',
-                            border: `${2 * scaleFactor}px solid #10b981`,
+                            border: `${Math.max(2, 3 * scaleFactor)}px solid #047857`,
                             borderRadius: 'var(--ov-radius-lg)',
                             boxSizing: 'border-box'
                           }}>
@@ -9884,6 +9899,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     flex: '0 0 15%',
                     minWidth: 0,
                     maxWidth: '15%',
+                    // the card ends with its content (it stretched to the
+                    // bottom: a tall white card of empty space under the stats)
+                    alignSelf: 'flex-start',
+                    maxHeight: '100%',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: `${6 * scaleFactor}px`,
@@ -17116,7 +17135,7 @@ function ScoreboardToolbar({ children, collapsed, onToggle }) {
       >
         {children}
       </div>
-      {/* Thin collapse/expand strip at bottom center (same 16px height) */}
+      {/* Thin collapse/expand tab at bottom center, over the page (no row of its own) */}
       <div
         role="button"
         tabIndex={0}
@@ -17125,7 +17144,11 @@ function ScoreboardToolbar({ children, collapsed, onToggle }) {
         aria-expanded={!collapsed}
         onClick={onToggle}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle() } }}
-        className={cn('flex w-full h-4 items-center justify-center cursor-pointer text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 transition-colors', FOCUS_RING)}
+        data-testid="header-toggle"
+        // a small tab hanging under the toolbar: it took a 16 px row of its own
+        // above the score
+        style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)' }}
+        className={cn('flex w-12 h-4 items-center justify-center rounded-b-md cursor-pointer text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 transition-colors', FOCUS_RING)}
       >
         <Chevron size={14} strokeWidth={2.5} aria-hidden="true" />
       </div>

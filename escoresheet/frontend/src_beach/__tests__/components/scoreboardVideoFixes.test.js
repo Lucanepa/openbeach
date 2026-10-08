@@ -148,3 +148,41 @@ describe('issue 13: interval and set-3 toss panel', () => {
     expect(sb).toContain('payload: { winner, team: winner },')
   })
 })
+
+describe('issue 9: the scoring layout (push up, SERVE, ball)', () => {
+  const num = (name) => Number(sb.match(new RegExp(`const ${name} = ([0-9.]+)`))[1])
+
+  it('the layout is top-aligned: no empty band above the score', () => {
+    const wrap = between(sb, 'data-testid="scoring-layout"', '}}>')
+    expect(wrap).toContain("alignItems: 'flex-start'")
+    expect(wrap).not.toContain("alignItems: 'center'")
+  })
+
+  it('the header toggle hangs over the page instead of taking a row', () => {
+    const toolbar = between(sb, 'function ScoreboardToolbar(', '\n}\n')
+    expect(toolbar).toContain("style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)' }}")
+    expect(toolbar).not.toContain('flex w-full h-4')
+  })
+
+  it('the side cards end with their content', () => {
+    expect(sb.match(/alignSelf: 'flex-start',\n\s*maxHeight: '100%',/g)).toHaveLength(2)
+  })
+
+  it('SERVE is bigger (box, label, number), scaled with the screen', () => {
+    expect(num('SERVE_BOX')).toBeGreaterThanOrEqual(0.092 * 1.35)
+    expect(num('SERVE_LABEL')).toBeGreaterThanOrEqual(0.0253 * 1.25)
+    expect(num('SERVE_NUMBER')).toBeGreaterThanOrEqual(0.0575 * 1.35)
+    expect(sb.match(/maxWidth: `\$\{DESIGN_VMIN \* SERVE_BOX \* scaleFactor\}px`/g)).toHaveLength(4)
+    expect(sb).not.toContain('DESIGN_VMIN * 0.0253 * scaleFactor')
+  })
+
+  it('the serving ball is ~60 % of the player disc (0.10) and clear of the position badge', () => {
+    const ball = num('SERVE_BALL')
+    expect(ball / 0.10).toBeLessThanOrEqual(0.65)
+    // centred on the disc, half the ball stays inside the disc's half height
+    // minus the badge (0.03 at -0.015): 0.05 - 0.015 = 0.035 > ball / 2
+    expect(ball / 2).toBeLessThan(0.05 - 0.015)
+    expect(sb).not.toMatch(/const ballSize = DESIGN_VMIN \* 0\.08/)
+    expect(sb).not.toContain('DESIGN_VMIN * 0.08 * scaleFactor')
+  })
+})
