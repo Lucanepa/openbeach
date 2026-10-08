@@ -335,3 +335,151 @@ describe('Scoreboard_beach: every point path opens the change of courts, the TTO
     cleanup()
   }, 60000)
 })
+
+// Set 3 (changes of courts every 5 points, no TTO): sets 1 and 2 are over
+// (one each), set 3 is to be started ("Start set")
+async function setUpSet3() {
+  const t1 = await db.teams.add({ name: 'Alpha / Beta' })
+  const t2 = await db.teams.add({ name: 'Gamma / Delta' })
+  await db.players.bulkAdd([
+    { teamId: t1, number: 1, name: 'Alpha' }, { teamId: t1, number: 2, name: 'Beta' },
+    { teamId: t2, number: 1, name: 'Gamma' }, { teamId: t2, number: 2, name: 'Delta' }
+  ])
+  const long = new Date(Date.now() - 3600000).toISOString()
+  const end = new Date(Date.now() - 600000).toISOString()
+  const matchId = await db.matches.add({
+    team1Id: t1, team2Id: t2, status: 'live', test: false, seed_key: 'match_point_paths_set3_test',
+    firstServe: 'team1', coinTossTeamA: 'team1', coinTossTeamB: 'team2', team1FirstServe: 1, team2FirstServe: 1,
+    set3CoinTossWinner: 'team1', set3FirstServe: 'team1'
+  })
+  await db.sets.bulkAdd([
+    { matchId, index: 1, team1Points: 21, team2Points: 15, finished: true, startTime: long, endTime: long },
+    { matchId, index: 2, team1Points: 15, team2Points: 21, finished: true, startTime: long, endTime: end },
+    { matchId, index: 3, team1Points: 0, team2Points: 0, finished: false, startTime: new Date().toISOString() }
+  ])
+  await db.events.bulkAdd([
+    { matchId, setIndex: 1, type: 'coin_toss', payload: {}, seq: 1, ts: long },
+    { matchId, setIndex: 1, type: 'set_start', payload: {}, seq: 2, ts: long },
+    { matchId, setIndex: 1, type: 'set_end', payload: {}, seq: 3, ts: long },
+    { matchId, setIndex: 2, type: 'set_start', payload: {}, seq: 4, ts: long },
+    { matchId, setIndex: 2, type: 'set_end', payload: {}, seq: 5, ts: end },
+    { matchId, setIndex: 3, type: 'set_start', payload: {}, seq: 6, ts: end }
+  ])
+  return matchId
+}
+const set3Score = async () => {
+  const set3 = (await db.sets.toArray()).find(s => s.index === 3)
+  return [set3.team1Points, set3.team2Points]
+}
+const set3Events = async (type) => (await ofType(type)).filter(e => e.setIndex === 3)
+
+describe('Scoreboard_beach: point paths at every change total', () => {
+  it('a referee BMP giving the 14th point of set 1 opens the change of courts, once; Undo takes it back', async () => {
+    const matchId = await setUpMatch()
+    mount(matchId)
+    await startSet()
+    // 13 points (the change at 7 made)
+    await rallies(Array.from({ length: 13 }, (_, i) => (i % 2 ? 'Point B' : 'Point A')), { first: true })
+    expect(await score()).toEqual([7, 6])
+    expect(await ofType('court_switch')).toHaveLength(1)
+    const sidesBefore = await sides(matchId)
+
+    await startRally()
+    await refereeBmp('left')
+    expect((await score()).reduce((a, b) => a + b)).toBe(14)
+    await waitFor(() => expect(switchOpen()).toBe(true), { timeout: 5000 })
+    expect(ttoOpen()).toBe(false)
+    await switchCourts()
+    expect(await ofType('court_switch')).toHaveLength(2)
+    expect(await sides(matchId)).not.toBe(sidesBefore)
+
+    await undoLast()
+    expect(await ofType('court_switch')).toHaveLength(1)
+    expect(await sides(matchId)).toBe(sidesBefore)
+    await undoLast()
+    expect(await score()).toEqual([7, 6])
+    expect(switchOpen()).toBe(false)
+    cleanup()
+  }, 90000)
+
+  it('set 3: a referee BMP giving the 5th point opens the change of courts, once; Undo takes it back', async () => {
+    const matchId = await setUpSet3()
+    mount(matchId)
+    await startSet()
+    for (let i = 0; i < 4; i++) {
+      if (i > 0) await startRally()
+      await point(i % 2 ? 'Point B' : 'Point A')
+    }
+    expect(await set3Score()).toEqual([2, 2])
+    expect(switchOpen()).toBe(false)
+    const sidesBefore = await sides(matchId)
+
+    await startRally()
+    await refereeBmp('right')
+    expect((await set3Score()).reduce((a, b) => a + b)).toBe(5)
+    await waitFor(() => expect(switchOpen()).toBe(true), { timeout: 5000 })
+    expect(ttoOpen()).toBe(false)
+    await switchCourts()
+    expect(await set3Events('court_switch')).toHaveLength(1)
+    expect(await sides(matchId)).not.toBe(sidesBefore)
+
+    await undoLast()
+    expect(await set3Events('court_switch')).toHaveLength(0)
+    expect(await sides(matchId)).toBe(sidesBefore)
+    await undoLast()
+    expect(await set3Score()).toEqual([2, 2])
+    expect(switchOpen()).toBe(false)
+    cleanup()
+  }, 90000)
+
+  it('a decision change asked from the set-end dialog and cancelled: the set-end dialog comes back (no TTO, no change of courts)', async () => {
+    const matchId = await setUpMatch()
+    mount(matchId)
+    await startSet()
+    await rallies(Array.from({ length: 21 }, () => 'Point A'), { first: true })
+    await waitFor(() => expect(setEndOpen()).toBe(true), { timeout: 5000 })
+    await settle()
+
+    fireEvent.click(dialogDecisionChange('Confirm'))
+    await waitFor(() => expect(button('Cancel')).toBeTruthy())
+    expect(setEndOpen()).toBe(false)
+    fireEvent.click(button('Cancel'))
+    await waitFor(() => expect(setEndOpen()).toBe(true), { timeout: 5000 })
+    await settle()
+    expect(await score()).toEqual([21, 0])
+    expect(ttoOpen()).toBe(false)
+    expect(switchOpen()).toBe(false)
+    expect(await ofType('technical_to')).toHaveLength(0)
+    expect(await ofType('decision_change')).toHaveLength(0)
+    cleanup()
+  }, 90000)
+
+  it('a delay penalty giving the 7th point opens the change of courts, once', async () => {
+    const matchId = await setUpMatch()
+    mount(matchId)
+    await startSet()
+    await rallies(['Point A', 'Point A', 'Point A', 'Point A', 'Point A', 'Point A'], { first: true })
+    expect(await score()).toEqual([6, 0])
+
+    const sanctionConfirm = () => [...document.querySelectorAll('[data-testid="sanction-confirm"] button')].at(-1)
+    await waitFor(() => expect(button('Delay warning')).toBeTruthy(), { timeout: 5000 })
+    fireEvent.click(button('Delay warning'))
+    await waitFor(() => expect(sanctionConfirm()).toBeTruthy())
+    fireEvent.click(sanctionConfirm())
+    await waitFor(async () => expect(await ofType('sanction')).toHaveLength(1))
+    await settle()
+    await waitFor(() => expect(button('Delay penalty')).toBeTruthy())
+    fireEvent.click(button('Delay penalty'))
+    await waitFor(() => expect(sanctionConfirm()).toBeTruthy())
+    fireEvent.click(sanctionConfirm())
+    await waitFor(async () => expect(await ofType('sanction')).toHaveLength(2))
+    await settle()
+    expect((await score()).reduce((a, b) => a + b)).toBe(7)
+    await waitFor(() => expect(switchOpen()).toBe(true), { timeout: 5000 })
+    await switchCourts()
+    expect(await ofType('court_switch')).toHaveLength(1)
+    await settle()
+    expect(switchOpen()).toBe(false)
+    cleanup()
+  }, 90000)
+})
