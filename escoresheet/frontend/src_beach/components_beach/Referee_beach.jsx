@@ -10,8 +10,9 @@ const ballImage = '/beachball.png'
 
 // Referee court layout contract (vmin units of useScaledLayout). The serve
 // ball is clearly smaller than a player disc and sits outside the server's
-// disc, on the back-line side; the players' column keeps room for it on both
-// sides, so it stays inside the court at any size and after a court switch.
+// disc, on the back-line side; the disc's side margins keep room for it on
+// both sides and the court's halves never grow (a long name is cut with an
+// ellipsis), so it stays inside the court at any size and after a court switch.
 export const REF_DISC_VMIN = 10.5
 export const REF_BALL_RATIO = 0.58
 export const REF_BALL_VMIN = REF_DISC_VMIN * REF_BALL_RATIO
@@ -2173,13 +2174,17 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         flexDirection: 'column',
         alignItems: 'center',
         gap: vmin(0.5),
-        flexShrink: 0
+        flexShrink: 0,
+        maxWidth: '100%',
+        minWidth: 0
       }}>
-        {/* Circle + badges wrapper */}
+        {/* Circle + badges wrapper: its side margins keep the serve ball's
+            room (the ball sits in them), so the ball stays inside the court */}
         <div data-player-disc={position} style={{
           position: 'relative',
           width: vmin(REF_DISC_VMIN),
           height: vmin(REF_DISC_VMIN),
+          margin: `0 ${vmin(REF_BALL_GAP_VMIN + REF_BALL_VMIN)}px`,
           borderRadius: '50%',
           border: `${vmin(0.2)}px solid ${paint?.ring ?? 'rgba(255, 255, 255, 0.35)'}`,
           background: paint?.background ?? teamColor,
@@ -2295,6 +2300,10 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             fontWeight: 600,
             color: '#fff',
             whiteSpace: 'nowrap',
+            maxWidth: '100%',
+            boxSizing: 'border-box',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
             textAlign: 'center',
             letterSpacing: '0.3px',
             lineHeight: 1.2
@@ -2627,7 +2636,9 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
               height: '98%',
               position: 'relative',
               display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
+              // Two equal halves that never grow with a long name: the net
+              // stays between them and the ball inside the court
+              gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
               background: 'linear-gradient(90deg, #e6c288, #dcb67d)',
               border: '1px solid var(--ov-hairline-strong)',
               overflow: 'hidden'
@@ -2653,7 +2664,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                 alignItems: 'center',
                 justifyContent: 'center',
                 position: 'relative',
-                height: '100%'
+                height: '100%',
+                minWidth: 0
               }}>
                 <div data-player-stack="left" style={{
                   display: 'flex',
@@ -2661,7 +2673,10 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                   justifyContent: 'space-around',
                   alignItems: 'center',
                   height: '95%',
-                  padding: `${vmin(3)}px ${vmin(3 + REF_BALL_GAP_VMIN + REF_BALL_VMIN)}px`,
+                  width: '100%',
+                  minWidth: 0,
+                  boxSizing: 'border-box',
+                  padding: `${vmin(3)}px ${vmin(1)}px`,
                   gap: vmin(2)
                 }}>
                   {(() => {
@@ -2682,7 +2697,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                 alignItems: 'center',
                 justifyContent: 'center',
                 position: 'relative',
-                height: '100%'
+                height: '100%',
+                minWidth: 0
               }}>
                 <div data-player-stack="right" style={{
                   display: 'flex',
@@ -2690,7 +2706,10 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                   justifyContent: 'space-around',
                   alignItems: 'center',
                   height: '95%',
-                  padding: `${vmin(3)}px ${vmin(3 + REF_BALL_GAP_VMIN + REF_BALL_VMIN)}px`,
+                  width: '100%',
+                  minWidth: 0,
+                  boxSizing: 'border-box',
+                  padding: `${vmin(3)}px ${vmin(1)}px`,
                   gap: vmin(2)
                 }}>
                   {(() => {

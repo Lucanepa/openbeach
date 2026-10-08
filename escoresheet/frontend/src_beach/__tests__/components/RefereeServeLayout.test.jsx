@@ -128,11 +128,20 @@ describe('Referee_beach: serve ball and SERVE block layout', () => {
     expect(ball().dataset.serveBall).toBe('left')
     expect(ball().style.right).toBe(`calc(100% + ${REF_BALL_GAP_VMIN * 10}px)`)
     expect(ball().style.left).toBe('auto')
-    // Both players' columns keep the ball's room on both sides
+    // Every disc keeps the ball's room on both sides (its side margins)
+    const discs = document.querySelectorAll('[data-player-disc]')
+    expect(discs.length).toBe(4)
+    for (const disc of discs) {
+      expect(px(disc.style.marginLeft)).toBeGreaterThanOrEqual((REF_BALL_VMIN + REF_BALL_GAP_VMIN) * 10)
+      expect(px(disc.style.marginRight)).toBeGreaterThanOrEqual((REF_BALL_VMIN + REF_BALL_GAP_VMIN) * 10)
+    }
+    // ... and the court's halves never grow with a long name
+    const court = document.querySelector('[data-player-stack="left"]').parentElement.parentElement
+    expect(court.style.gridTemplateColumns).toBe('minmax(0, 1fr) minmax(0, 1fr)')
     for (const side of ['left', 'right']) {
       const stack = document.querySelector(`[data-player-stack="${side}"]`)
-      expect(px(stack.style.paddingLeft)).toBeGreaterThanOrEqual((REF_BALL_VMIN + REF_BALL_GAP_VMIN) * 10)
-      expect(px(stack.style.paddingRight)).toBeGreaterThanOrEqual((REF_BALL_VMIN + REF_BALL_GAP_VMIN) * 10)
+      expect(stack.style.width).toBe('100%')
+      expect(stack.style.minWidth).toBe('0px')
     }
   })
 
