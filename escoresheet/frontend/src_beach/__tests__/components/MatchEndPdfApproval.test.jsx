@@ -135,4 +135,29 @@ describe('MatchEnd_beach: the approval PDF', () => {
     expect(await screen.findByRole('button', { name: 'Close match' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Confirm and approve' })).toBeNull()
   })
+
+  it('Results: no nonsense durations (set 1 started at the scheduled date, video 07:04)', async () => {
+    const team1Id = await db.teams.add({ name: 'Müller / Weber' })
+    const team2Id = await db.teams.add({ name: 'Schmidt / Fischer' })
+    matchId = await db.matches.add({ team1Id, team2Id, status: 'ended', test: true, coinTossTeamA: 'team2', scheduledAt: '2025-03-12T11:30:00.000Z' })
+    await db.sets.bulkAdd([
+      { matchId, index: 1, team1Points: 21, team2Points: 15, finished: true, startTime: '2025-03-12T11:30:00.000Z', endTime: '2026-10-08T09:13:00.000Z' },
+      { matchId, index: 2, team1Points: 21, team2Points: 18, finished: true, startTime: '2026-10-08T09:16:00.000Z', endTime: '2026-10-08T09:31:00.000Z' }
+    ])
+    renderMatchEnd()
+    expect((await screen.findAllByText("15'")).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/^\d{4,}'$/)).toBeNull()
+    expect(screen.queryByText(/\d{3,}:\d\d$/)).toBeNull() // the match duration h:mm
+  })
+
+  it('Remarks: the MTO / RIT lines, not "No remarks" (video 07:10)', async () => {
+    await seed()
+    await db.events.bulkAdd([
+      { matchId, seq: 1, setIndex: 2, type: 'mto', ts: '2026-10-08T09:20:00.000Z', payload: { team: 'team1', playerNumber: 2, playerName: 'Weber', startTime: '2026-10-08T09:20:00.000Z', team1Points: 4, team2Points: 6 } },
+      { matchId, seq: 2, setIndex: 2, type: 'medical_end', ts: '2026-10-08T09:23:00.000Z', payload: { kind: 'mto', startSeq: 1, team: 'team1', playerNumber: 2, endTime: '2026-10-08T09:23:00.000Z', duration: 180, outcome: 'recovered' } }
+    ])
+    renderMatchEnd()
+    expect(await screen.findByText(/"Medical Time Out" \(Blood\).*Duration: 00:03:00, Recovered/)).toBeInTheDocument()
+    expect(screen.queryByText('No remarks')).toBeNull()
+  })
 })

@@ -20,6 +20,7 @@ import { sanitizeForFilename } from '../utils_beach/stringUtils_beach'
 import { openAppWindow } from '../utils_beach/openAppWindow_beach'
 import { waitForScoresheetPdf, PDF_FAIL } from '../utils_beach/scoresheetPdfRequest_beach'
 import { remarksWithMedical } from '../utils_beach/medicalRemarks_beach'
+import { plausibleMinutes } from '../../scoresheet_pdf_beach/components_beach/sheetFormat_beach'
 import { formatTimeLocal } from '../utils_beach/timeUtils_beach'
 import { saveMatchSignature, signatureEditLocked, signaturesPayload, clearedPostMatchSignatures } from '../utils_beach/signatures_beach'
 import CountryFlag from './CountryFlag_beach'
@@ -441,20 +442,12 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         ? (teamBPoints > teamAPoints ? 1 : 0)
         : null
 
+      // The set's own start (set 1 used the scheduled date: "827890'"),
+      // and only a plausible duration (start <= end, at most 3 h)
       let duration = ''
-      if (isSetFinished && setInfo?.endTime) {
-        let start
-        if (setNum === 1 && match?.scheduledAt) {
-          start = new Date(match.scheduledAt)
-        } else if (setInfo?.startTime) {
-          start = new Date(setInfo.startTime)
-        } else {
-          start = new Date()
-        }
-        const end = new Date(setInfo.endTime)
-        const durationMs = end.getTime() - start.getTime()
-        const minutes = Math.floor(durationMs / 60000)
-        duration = minutes > 0 ? `${minutes}'` : ''
+      if (isSetFinished) {
+        const minutes = plausibleMinutes(setInfo?.startTime, setInfo?.endTime)
+        duration = minutes != null && minutes > 0 ? `${minutes}'` : ''
       }
 
       results.push({
@@ -609,26 +602,24 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
   const teamACountryCode = teamAKey === 'team1' ? match?.team1Country : match?.team2Country
   const teamBCountryCode = teamBKey === 'team1' ? match?.team1Country : match?.team2Country
 
-  // Match time info - duration is matchEnd - matchStart
-  const matchStartDate = match?.scheduledAt ? new Date(match.scheduledAt) : null
+  // Match time info: from the first set's start (the scheduled time only
+  // when no set start is stored), duration only when plausible
+  const firstSetStart = sets.find(s => s.index === 1)?.startTime || null
+  const matchStartIso = firstSetStart || match?.scheduledAt || null
   const matchEndDate = finishedSets.length > 0 && finishedSets[finishedSets.length - 1].endTime
     ? new Date(finishedSets[finishedSets.length - 1].endTime)
     : null
 
   // Display times in local timezone
-  const matchStart = match?.scheduledAt ? formatTimeLocal(match.scheduledAt) : ''
+  const matchStart = matchStartIso ? formatTimeLocal(matchStartIso) : ''
   const matchEndTime = finishedSets.length > 0 && finishedSets[finishedSets.length - 1].endTime
     ? formatTimeLocal(finishedSets[finishedSets.length - 1].endTime)
     : ''
 
   // Calculate duration as matchEnd - matchStart
   const matchDuration = (() => {
-    if (matchStartDate && matchEndDate) {
-      const durationMs = matchEndDate.getTime() - matchStartDate.getTime()
-      const totalMinutes = Math.floor(durationMs / 60000)
-      return totalMinutes > 0 ? `${totalMinutes}'` : ''
-    }
-    return ''
+    const totalMinutes = plausibleMinutes(matchStartIso, matchEndDate, 300)
+    return totalMinutes != null && totalMinutes > 0 ? `${totalMinutes}'` : ''
   })()
 
   // Split sanctions

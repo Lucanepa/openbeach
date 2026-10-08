@@ -106,4 +106,36 @@ describe('score sheet PDF: the video match', () => {
     const f = fill(data)
     expect(f.res_s2_dur ?? '').toBe('')
   })
+
+  it('improper request: A and B printed, team A\'s crossed (as in the app)', () => {
+    const data = buildVideoMatch()
+    data.events.push({ id: 999, seq: 999, type: 'sanction', setIndex: 3, ts: data.events.at(-1).ts, payload: { team: 'team2', type: 'improper_request' } })
+    const { container } = render(<Sheet matchData={data} />)
+    const a = container.querySelector('[data-improper="a"]')
+    const b = container.querySelector('[data-improper="b"]')
+    expect(a).toHaveTextContent('A')
+    expect(b).toHaveTextContent('B')
+    expect(a.dataset.crossed).toBe('true')
+    expect(b.dataset.crossed).toBe('false')
+    cleanup()
+  })
+
+  it('BMP form: the referee BMP outcome is printed (MUNAV for judgment impossible), empty rows stay plain', () => {
+    const data = buildVideoMatch()
+    const ts = data.events.find(e => e.setIndex === 3 && e.type === 'point').ts
+    data.events.push(
+      { id: 900, seq: 900, type: 'referee_bmp_request', setIndex: 3, ts, payload: { score: { team1: 1, team2: 0 }, servingTeam: 'team1' } },
+      { id: 901, seq: 900.1, type: 'referee_bmp_outcome', setIndex: 3, ts, payload: { result: 'judgment_impossible', pointAwarded: false, newScore: { team1: 1, team2: 0 } } }
+    )
+    let f = null
+    const { container } = render(<Sheet matchData={data} onDataReady={(x) => { f = x }} />)
+    expect(f.bmp_0_request).toBe('Ref')
+    expect(f.bmp_0_outcome).toBe('MUNAV')
+    const used = container.querySelector('[data-bmp-outcome="0"]')
+    const empty = container.querySelector('[data-bmp-outcome="5"]')
+    expect(used).toHaveTextContent('MUNAV')
+    expect(empty.textContent).toBe('')
+    expect(empty.className).not.toMatch(/border-black/)
+    cleanup()
+  })
 })

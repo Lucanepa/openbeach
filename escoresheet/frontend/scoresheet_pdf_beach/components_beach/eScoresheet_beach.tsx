@@ -2733,8 +2733,9 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
         const teamBImproper = improperRequests.filter((e: any) =>
           e.payload?.team === (match?.coinTossTeamB || 'team2')
         ).length > 0;
-        if (teamAImproper) set('improper_a', 'A');
-        if (teamBImproper) set('improper_b', 'B');
+        // the printed A / B circles, the team's crossed (as the match end page)
+        if (teamAImproper) set('improper_a', true);
+        if (teamBImproper) set('improper_b', true);
 
         // Process sanctions
         const sanctions = events.filter((e: any) => e.type === 'sanction');
@@ -2970,10 +2971,12 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
 
           processedBMPs.add(bmpEvents.indexOf(outcomeEvent));
           const result = outcomeEvent.payload?.result || '';
-          // For referee-requested BMPs, show IN or OUT
+          // For referee-requested BMPs: IN, OUT, or the mark unavailable
+          // (judgment_impossible printed "-", video 07:52)
           if (result === 'in') outcome = 'IN';
           else if (result === 'out') outcome = 'OUT';
-          else outcome = ''; // Empty if no clear result
+          else if (result === 'judgment_impossible' || result === 'unavailable') outcome = 'MUNAV';
+          else outcome = '';
 
           scoreAfterDecision = outcomeEvent.payload?.newScore || scoreAtRequest;
 
@@ -4316,8 +4319,27 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                   {/* Improper Request */}
                   <div className="flex items-center gap-1">
                     <span className="font-bold">Improper request:</span>
-                    <ABCircle value={get('improper_a')} onChange={v => set('improper_a', v)} size={16} />
-                    <ABCircle value={get('improper_b')} onChange={v => set('improper_b', v)} size={16} />
+                    {/* A and B always printed; the team that made one is crossed
+                        (was: an empty circle and the letter only when set,
+                        which read differently from the app, video 07:52) */}
+                    {(['a', 'b'] as const).map(k => (
+                      <div
+                        key={k}
+                        data-improper={k}
+                        data-crossed={get(`improper_${k}`) ? 'true' : 'false'}
+                        onClick={() => set(`improper_${k}`, !get(`improper_${k}`))}
+                        className="relative rounded-full border border-black flex items-center justify-center cursor-pointer font-bold bg-white select-none text-black"
+                        style={{ width: 16, height: 16, fontSize: 10 }}
+                      >
+                        {k.toUpperCase()}
+                        {get(`improper_${k}`) && (
+                          <svg width="16" height="16" viewBox="0 0 16 16" className="absolute inset-0 pointer-events-none">
+                            <line x1="3" y1="3" x2="13" y2="13" stroke="black" strokeWidth="1.5" />
+                            <line x1="3" y1="13" x2="13" y2="3" stroke="black" strokeWidth="1.5" />
+                          </svg>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -4453,7 +4475,9 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                       // Team-requested BMPs: SUC, UNSUC, MUNAV
                       // Referee-requested BMPs: IN, OUT
                       const teamOutcomes = ['', 'UNSUC', 'SUC', 'MUNAV'];
-                      const refOutcomes = ['', 'IN', 'OUT'];
+                      const refOutcomes = ['', 'IN', 'OUT', 'MUNAV'];
+                      // an unused row: a plain empty cell, not a bordered "-" box
+                      const rowUsed = !!(requestBy || outcomeValue || get(`bmp_${i}_start`));
                       const outcomes = isRefRequest ? refOutcomes : teamOutcomes;
 
                       return (
@@ -4482,9 +4506,10 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                                 const nextIndex = (currentIndex + 1) % outcomes.length;
                                 set(`bmp_${i}_outcome`, outcomes[nextIndex]);
                               }}
-                              className="border border-black flex items-center justify-center cursor-pointer bg-white hover:bg-gray-50 select-none text-black font-mono text-[9px] w-full h-5 px-0.5"
+                              data-bmp-outcome={i}
+                              className={`${rowUsed ? 'border border-black' : ''} flex items-center justify-center cursor-pointer bg-white hover:bg-gray-50 select-none text-black font-mono text-[9px] w-full h-5 px-0.5`}
                             >
-                              {outcomeValue || '-'}
+                              {outcomeValue || (rowUsed ? '-' : '')}
                             </div>
                           </div>
                           <div style={cellStyle} className="border-r border-black">
