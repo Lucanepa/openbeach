@@ -34,7 +34,8 @@ import {
   TEST_MATCH_DEFAULTS,
   getNextTestMatchStartTime,
   getTestTeam1ShortName,
-  getTestTeam2ShortName
+  getTestTeam2ShortName,
+  refereeConnectionDefault
 } from './constants_beach/testSeeds_beach'
 import { apiFrom } from './lib_beach/apiClient_beach'
 import { setExtId } from './utils_beach/syncIds_beach'
@@ -1821,6 +1822,9 @@ export default function App() {
         team2CaptainSignature: 'xxxxx',
         coinTossConfirmed: false,
         test: true,
+        // The referee tablet can join at once (OB-11b); a new test match over
+        // an older one turns it on again. Connect tablets can turn it off.
+        refereeConnectionEnabled: refereeConnectionDefault({ test: true }),
         seedKey: testSeedKey,
         externalId: TEST_MATCH_EXTERNAL_ID,
         matchInfoConfirmedAt: timestamp // Test matches are pre-configured

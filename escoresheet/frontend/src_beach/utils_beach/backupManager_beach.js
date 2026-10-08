@@ -12,6 +12,7 @@ import { isBackendAvailable, getApiUrl } from '../utils_beach/backendConfig_beac
 import { sanitizeSimple } from './stringUtils'
 import { remarksForServer } from '../db_beach/remarksSync_beach'
 import { isTeam1LeftInSet, leftTeamInSet } from './courtSides_beach'
+import { refereeConnectionDefault } from '../constants_beach/testSeeds_beach'
 
 // IndexedDB key for storing file system directory handle
 const BACKUP_DB_NAME = 'escoresheet_backup'
@@ -339,6 +340,18 @@ export function pinsForRestore(jsonData, previous) {
 }
 
 /**
+ * The referee connection of a restored test match whose backup has none (a
+ * test match made before OB-11b): on, as a new test match. A backup that has
+ * it keeps the scorer's own choice; an official match is left as it is.
+ * @param {object} match the backup's match
+ * @returns {object} what to add to it
+ */
+export function connectionsForRestore(match) {
+  if (match?.test !== true || match.refereeConnectionEnabled !== undefined) return {}
+  return { refereeConnectionEnabled: refereeConnectionDefault(match) }
+}
+
+/**
  * Restore match from JSON backup data
  * WIPE & REPLACE: Clears all local match data, restores from backup, queues Supabase sync
  */
@@ -364,7 +377,7 @@ export async function restoreMatchFromJson(jsonData) {
     // An app backup file has no PINs: keep those of the local copy it
     // replaces (read before the wipe), or make new ones
     const previous = externalId ? await db.matches.filter(m => localMatchKey(m) === externalId).first() : null
-    match = { ...match, ...pinsForRestore(jsonData, previous || null) }
+    match = { ...match, ...pinsForRestore(jsonData, previous || null), ...connectionsForRestore(match) }
 
     // STEP A: WIPE ALL existing match data from IndexedDB
     // (Keep teams/players/referees/scorers as they're reusable)
@@ -603,6 +616,7 @@ export async function restoreMatchInPlace(matchId, jsonData) {
     // Update match data (keep same ID)
     await db.matches.update(matchId, {
       ...match,
+      ...connectionsForRestore(match),
       id: matchId,
       seed_key: externalId, // Ensure seed_key is set for sync
       restoredAt: new Date().toISOString()

@@ -251,3 +251,34 @@ describe('remarks (backend db/017)', () => {
     expect((await db.matches.get(none)).remarks).toBe('')
   })
 })
+
+// OB-11b: a test match starts with the referee connection on
+describe('the referee connection of a restored test match', () => {
+  const restored = async () => (await db.matches.toArray())[0]
+
+  it('a test match backup without one (made before OB-11b): on', async () => {
+    const matchId = await seedMatch({ test: true })
+    const file = JSON.parse(JSON.stringify(await bm.exportMatchData(matchId)))
+    expect(file.match.refereeConnectionEnabled).toBeUndefined()
+    await bm.restoreMatchFromJson(file)
+    expect((await restored()).refereeConnectionEnabled).toBe(true)
+  })
+
+  it('restore in place: on as well', async () => {
+    const matchId = await seedMatch({ test: true })
+    const file = JSON.parse(JSON.stringify(await bm.exportMatchData(matchId)))
+    await bm.restoreMatchInPlace(matchId, file)
+    expect((await db.matches.get(matchId)).refereeConnectionEnabled).toBe(true)
+  })
+
+  it('keeps the scorer\'s own choice, and leaves an official match as it is', async () => {
+    const testId = await seedMatch({ test: true, refereeConnectionEnabled: false })
+    await bm.restoreMatchFromJson(JSON.parse(JSON.stringify(await bm.exportMatchData(testId))))
+    expect((await restored()).refereeConnectionEnabled).toBe(false)
+
+    await Promise.all(db.tables.map(t => t.clear()))
+    const officialId = await seedMatch()
+    await bm.restoreMatchFromJson(JSON.parse(JSON.stringify(await bm.exportMatchData(officialId))))
+    expect((await restored()).refereeConnectionEnabled).toBeUndefined()
+  })
+})

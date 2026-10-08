@@ -3,7 +3,8 @@ import {
   TEST_MATCH_SEED_KEY,
   newTestMatchSeedKey,
   isTestMatchSeedKey,
-  testMatchSeedKeyFor
+  testMatchSeedKeyFor,
+  refereeConnectionDefault
 } from '../../constants_beach/testSeeds_beach'
 import { relayMatchKey } from '../../utils_beach/relayPublisher_beach'
 
@@ -41,5 +42,15 @@ describe('test match seed keys', () => {
     const court1 = { id: 1, test: true, seedKey: testMatchSeedKeyFor(TEST_MATCH_SEED_KEY) }
     const court2 = { id: 1, test: true, seedKey: testMatchSeedKeyFor(TEST_MATCH_SEED_KEY) }
     expect(relayMatchKey(court1)).not.toBe(relayMatchKey(court2))
+  })
+})
+
+// OB-11b: the relay's validatePin lets a referee in only while it is on
+describe('the referee connection a match starts with', () => {
+  it('on for a test match (as OpenVolley), off for an official one', () => {
+    expect(refereeConnectionDefault({ test: true })).toBe(true)
+    expect(refereeConnectionDefault({ test: false })).toBe(false)
+    expect(refereeConnectionDefault({})).toBe(false)
+    expect(refereeConnectionDefault(null)).toBe(false)
   })
 })
