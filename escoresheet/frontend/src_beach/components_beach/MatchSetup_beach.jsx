@@ -785,6 +785,16 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           .equals('error')
           .toArray()
 
+        // Columns of the old match table that no longer exist: a job still
+        // carrying one fails on every retry (list as before 6e4dd1b, which
+        // dropped it and left the check below reading an undefined name)
+        const legacyColumns = [
+          'team2_data_name', 'team1_data_name', 'team2_data_short_name', 'team1_data_short_name',
+          'home_short_name', 'team2_short_name', 'coin_toss_confirmed', 'coin_toss_team_a',
+          'coin_toss_team_b', 'coin_toss_serve_a', 'first_serve', 'referee_pin',
+          'referee_connection_enabled', 'team1_data_connection_enabled', 'team2_data_connection_enabled'
+        ]
+
         for (const job of errorJobs) {
           const payload = job.payload || {}
           const hasLegacyColumn = legacyColumns.some(col => col in payload)
