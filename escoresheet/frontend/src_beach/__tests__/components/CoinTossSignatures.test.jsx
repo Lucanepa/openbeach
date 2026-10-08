@@ -61,6 +61,12 @@ async function openOrderAndSignature(side = 0) {
 
 const clickEl = (el) => act(async () => { fireEvent.click(el) })
 const signatureJobs = async () => (await db.sync_queue.toArray()).filter(j => j.payload?.signatures)
+// saveMatchSignature writes the field, then queues the job: wait for the job
+const waitForSignatureJobs = async (n) => {
+  let jobs
+  await waitFor(async () => { jobs = await signatureJobs(); expect(jobs).toHaveLength(n) }, { timeout: 5000 })
+  return jobs
+}
 
 describe('CoinToss_beach signatures are saved at once', () => {
   it('the captain signature is on the match row and queued before the coin toss is confirmed', async () => {
@@ -70,8 +76,7 @@ describe('CoinToss_beach signatures are saved at once', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Draw' })) })
 
     await waitFor(async () => expect((await db.matches.get(matchId)).team1CaptainSignature).toBe('data:image/png;base64,SIGNED'))
-    const jobs = await signatureJobs()
-    expect(jobs).toHaveLength(1)
+    const jobs = await waitForSignatureJobs(1)
     expect(jobs[0]).toMatchObject({ resource: 'match', action: 'update', status: 'queued' })
     expect(jobs[0].payload.id).toBe('seed-1')
     expect(jobs[0].payload.signatures).toMatchObject({ team1_captain: 'data:image/png;base64,SIGNED', team2_captain: '' })
@@ -97,7 +102,7 @@ describe('CoinToss_beach signatures are saved at once', () => {
     await clickEl(await screen.findByRole('button', { name: 'Sign (coach)' }))
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Draw' })) })
     await waitFor(async () => expect((await db.matches.get(matchId)).team2CoachSignature).toBe('data:image/png;base64,SIGNED'))
-    expect((await signatureJobs())[0].payload.signatures.team2_coach).toBe('data:image/png;base64,SIGNED')
+    expect((await waitForSignatureJobs(1))[0].payload.signatures.team2_coach).toBe('data:image/png;base64,SIGNED')
   })
 
   it('a new captain clears the signature on the match row too', async () => {

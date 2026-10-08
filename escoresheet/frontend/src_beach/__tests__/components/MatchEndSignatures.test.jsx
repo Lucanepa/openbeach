@@ -79,6 +79,12 @@ function renderMatchEnd() {
 
 const clickEl = (el) => act(async () => { fireEvent.click(el) })
 const signatureJobs = async () => (await db.sync_queue.toArray()).filter(j => j.payload?.signatures)
+// saveMatchSignature writes the field, then queues the job: wait for the job
+const waitForSignatureJobs = async (n) => {
+  let jobs
+  await waitFor(async () => { jobs = await signatureJobs(); expect(jobs).toHaveLength(n) }, { timeout: 5000 })
+  return jobs
+}
 
 describe('MatchEnd_beach: Re-sign and Clear', () => {
   it('a signed captain box offers Re-sign and Clear', async () => {
@@ -94,8 +100,7 @@ describe('MatchEnd_beach: Re-sign and Clear', () => {
     renderMatchEnd()
     await clickEl(await screen.findByTestId('signature-clear-captain-a'))
     await waitFor(async () => expect((await db.matches.get(matchId)).team1PostGameCaptainSignature).toBeNull())
-    const jobs = await signatureJobs()
-    expect(jobs).toHaveLength(1)
+    const jobs = await waitForSignatureJobs(1)
     expect(jobs[0].payload.id).toBe('seed-1')
     // the whole object travels: the other signatures are never wiped
     expect(jobs[0].payload.signatures).toMatchObject({
@@ -116,7 +121,7 @@ describe('MatchEnd_beach: Re-sign and Clear', () => {
     await act(async () => { fireEvent.click(screen.getByTestId('signature-resign-ref1')) })
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Draw' })) })
     await waitFor(async () => expect((await db.matches.get(matchId)).ref1Signature).toBe('data:image/png;base64,NEW'))
-    expect((await signatureJobs())[0].payload.signatures.ref1).toBe('data:image/png;base64,NEW')
+    expect((await waitForSignatureJobs(1))[0].payload.signatures.ref1).toBe('data:image/png;base64,NEW')
   })
 
   it('a first signature is queued for the cloud at once too', async () => {
@@ -125,7 +130,7 @@ describe('MatchEnd_beach: Re-sign and Clear', () => {
     await clickEl(await screen.findByRole('button', { name: /1st referee · Tap to sign/ }))
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Draw' })) })
     await waitFor(async () => expect((await db.matches.get(matchId)).ref1Signature).toBe('data:image/png;base64,NEW'))
-    expect(await signatureJobs()).toHaveLength(1)
+    await waitForSignatureJobs(1)
   })
 
   it('an approved match: Re-sign and Clear are closed', async () => {
@@ -159,7 +164,13 @@ describe('MatchEnd_beach: Reopen last set', () => {
     }
     // the pre-match signatures stay
     expect(row.team1CaptainSignature).toBe('data:pre-capt-1')
-    const live = (await db.sync_queue.toArray()).find(j => j.resource === 'match' && j.payload?.status === 'live')
+    // The status is written before the jobs are queued (the set_end event is
+    // deleted in between): wait for the job, not only for the status
+    let live
+    await waitFor(async () => {
+      live = (await db.sync_queue.toArray()).find(j => j.resource === 'match' && j.payload?.status === 'live')
+      expect(live).toBeTruthy()
+    }, { timeout: 5000 })
     expect(live.payload.signatures).toMatchObject({
       team1_captain: 'data:pre-capt-1',
       team1_captain_post_game: null, team2_captain_post_game: null,
