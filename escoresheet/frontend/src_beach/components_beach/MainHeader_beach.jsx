@@ -489,6 +489,27 @@ export default function MainHeader({
     </button>
   )
 
+  // Fullscreen sits in the bar next to the menu (one tap, not a menu row);
+  // the compact layout keeps it in its own actions menu (fullscreenRow)
+  const fullscreenButton = (
+    <span className={KIT_SCOPE}>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          toggleFullscreen()
+        }}
+        aria-pressed={!!isFullscreen}
+        className={cn(HEADER_BTN, 'w-9 px-0', isFullscreen && HEADER_BTN_ON)}
+        aria-label={isFullscreen ? t('header.exitFullscreen') : t('header.fullscreen')}
+        title={isFullscreen ? t('header.exitFullscreen') : t('header.fullscreen')}
+        data-testid="header-fullscreen"
+      >
+        {isFullscreen ? <Minimize size={16} aria-hidden="true" /> : <Maximize size={16} aria-hidden="true" />}
+      </button>
+    </span>
+  )
+
   // The version history is gone, so the version is a plain line (no control).
   const versionRow = (
     <div className={cn(MENU_ROW, 'cursor-default text-stone-500 hover:bg-transparent')} data-testid="header-version">
@@ -894,6 +915,8 @@ export default function MainHeader({
                 </div>
               )}
 
+              {fullscreenButton}
+
               {/* Unified Menu Button (hamburger) */}
               <div style={{ position: 'relative' }}>
                 <span className={KIT_SCOPE}>
@@ -930,8 +953,6 @@ export default function MainHeader({
                     {scaleRow}
                     {scaleMenuOpen && scaleOptionsList}
                     {versionRow}
-                    <div className={MENU_SEP} />
-                    {fullscreenRow}
                     {quitRow}
                   </div>
                 )}
