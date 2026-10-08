@@ -4446,18 +4446,25 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   // side the interval shows, which is the side the set starts on
   const handleBetweenSetsSwitchSides = useCallback(async () => {
     if (!data?.match || !data?.set) return
+    const setIndex = data.set.index
 
-    const update = switchSidesUpdate(data.set.index, data.match, { beforeSetStart: true })
-    await db.matches.update(matchId, update)
-    if (data.match?.seed_key && !data.match?.test) {
-      await db.sync_queue.add({
-        resource: 'match',
-        action: 'update',
-        payload: { id: data.match.seed_key, ...update },
-        ts: new Date().toISOString(),
-        status: 'queued'
-      })
-    }
+    // Toggle the stored side, read in the same transaction: a double tap is
+    // two switches (with the rendered match both taps wrote the same side)
+    await db.transaction('rw', db.matches, db.sync_queue, async () => {
+      const match = await db.matches.get(matchId)
+      if (!match) return
+      const update = switchSidesUpdate(setIndex, match, { beforeSetStart: true })
+      await db.matches.update(matchId, update)
+      if (match.seed_key && !match.test) {
+        await db.sync_queue.add({
+          resource: 'match',
+          action: 'update',
+          payload: { id: match.seed_key, ...update },
+          ts: new Date().toISOString(),
+          status: 'queued'
+        })
+      }
+    })
   }, [data?.match, data?.set, matchId])
 
   // Switch which team serves first for the next set (Set 2 or Set 3 interval)

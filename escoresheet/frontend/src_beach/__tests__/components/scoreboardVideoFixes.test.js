@@ -66,7 +66,9 @@ describe('issue 2: "Switch sides" in the set interval', () => {
 
   it('the button toggles the side the preview shows', () => {
     const h = between(sb, 'const handleBetweenSetsSwitchSides = useCallback', '// Switch which team serves first')
-    expect(h).toContain('switchSidesUpdate(data.set.index, data.match, { beforeSetStart: true })')
+    expect(h).toMatch(/switchSidesUpdate\(setIndex, match, \{ beforeSetStart: true \}\)/)
+    // from the stored match (behaviour: ScoreboardIntervalSides.test.jsx)
+    expect(h).toContain('await db.matches.get(matchId)')
     expect(h).not.toMatch(/setIndex % 2 === 1 \? 'A' : 'B'/)
   })
 
