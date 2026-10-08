@@ -830,7 +830,8 @@
     "detailsSubstitutions": "Wechsel – {{team}}",
     "undoConfirm": {
       "confirm": "Rückgängig machen"
-    }
+    },
+    "confirmFailed": "Das wurde nicht gespeichert. Bitte das Matchblatt prüfen und erneut versuchen."
   },
   "settings": {
     "title": "Einstellungen",

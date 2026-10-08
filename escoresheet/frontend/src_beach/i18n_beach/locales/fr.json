@@ -830,7 +830,8 @@
     "detailsSubstitutions": "Remplacements – {{team}}",
     "undoConfirm": {
       "confirm": "Annuler l'action"
-    }
+    },
+    "confirmFailed": "Cela n'a pas été enregistré. Vérifiez la feuille de match et réessayez."
   },
   "settings": {
     "title": "Paramètres",

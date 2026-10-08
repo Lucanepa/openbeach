@@ -11,6 +11,7 @@ import SyncProgressModal_beach from './SyncProgressModal_beach'
 import ScoreboardOptionsModal from './options/ScoreboardOptionsModal_beach'
 import ConnectionSetupModal from './options/ConnectionSetupModal_beach'
 import { useSyncQueue } from '../hooks_beach/useSyncQueue_beach'
+import { useConfirmAction } from '../hooks_beach/useConfirmAction_beach'
 import { useSequentialSync } from '../hooks_beach/useSequentialSync_beach'
 
 
@@ -129,6 +130,12 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   const { showAlert } = useAlert()
   const { syncStatus, flush: flushSyncQueue } = useSyncQueue()
   const cLogger = useComponentLogging('Scoreboard')
+  // Confirmation dialogs close before they write (useConfirmAction), so a write
+  // that fails must say so: the dialog is no longer there to show it
+  const onConfirmFailed = useCallback((err) => {
+    console.error('[confirm] action failed after its dialog closed', err)
+    showAlert(t('scoreboard.confirmFailed'), 'error')
+  }, [showAlert, t])
   const { syncState, syncSetEnd, resetSyncState } = useSequentialSync()
   const [syncModalOpen, setSyncModalOpen] = useState(false)
   const syncProceedCallbackRef = useRef(null)
@@ -355,6 +362,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   // Short height mode: < 900px - smaller counters, clickable TO counter, hide TO button
   const isShortHeight = viewportHeight < 900
   const relayKeyRef = useRef(null) // The match's relay room key (seed key), set by the relay sync
+  const pointInFlightRef = useRef(false) // A point is being written (double-tap guard)
   const wakeLockRef = useRef(null) // Wake lock to prevent screen sleep
   const syncFunctionRef = useRef(null) // Store sync function for use in action handlers
   const noSleepVideoRef = useRef(null) // Video element for NoSleep fallback
@@ -3286,10 +3294,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     [pointsBySide.left, pointsBySide.right, isCompactMode, isLaptopMode]
   )
 
-  const handlePoint = useCallback(
+  const awardPoint = useCallback(
     async (side, skipConfirmation = false, fromPenalty = false) => {
-      cLogger.logHandler('handlePoint', { side, skipConfirmation, fromPenalty })
-      if (!data?.set) return
       const teamKey = mapSideToTeamKey(side)
 
       // Check for accidental point award (if enabled and rally just started)
@@ -3475,6 +3481,24 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     [data?.set, data?.events, logEvent, mapSideToTeamKey, checkSetEnd, getCurrentServe, matchId, syncToReferee]
   )
 
+  const handlePoint = useCallback(
+    async (side, skipConfirmation = false, fromPenalty = false) => {
+      cLogger.logHandler('handlePoint', { side, skipConfirmation, fromPenalty })
+      if (!data?.set) return
+      // A double tap on a point button (or a tap on both) while the first
+      // point is still being written would give a second point: refused. A
+      // penalty point comes from its own (guarded) sanction confirm.
+      if (pointInFlightRef.current && !fromPenalty) return
+      pointInFlightRef.current = true
+      try {
+        await awardPoint(side, skipConfirmation, fromPenalty)
+      } finally {
+        pointInFlightRef.current = false
+      }
+    },
+    [data?.set, awardPoint]
+  )
+
   const handleStartRally = useCallback(async (skipConfirmation = false) => {
     cLogger.logHandler('handleStartRally', { skipConfirmation })
     // Check for accidental rally start (if enabled and point was just awarded)
@@ -3610,11 +3634,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     setSanctionConfirm({ side, type: sanctionType })
   }, [data?.match, rallyStatus, leftisTeam1])
 
-  // Confirm sanction
-  const confirmSanction = useCallback(async () => {
+  // Confirm sanction: snapshot, close, then write (useConfirmAction). A double
+  // tap logged a delay penalty twice and gave two points.
+  const runSanctionConfirm = useConfirmAction(onConfirmFailed)
+  const confirmSanction = useCallback(() => runSanctionConfirm(async () => {
     if (!sanctionConfirm || !data?.match || !data?.set) return
 
     const { side, type } = sanctionConfirm
+    // Close first, then write
+    setSanctionConfirm(null)
     const teamKey = mapSideToTeamKey(side)
     const teamKeyCapitalized = teamKey === 'team1' ? 'team1' : 'team2'
 
@@ -3646,13 +3674,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // If delay penalty, award point to the other team immediately
     // Beach volleyball has no lineups - always 2 players per team
     if (type === 'delay_penalty') {
-      setSanctionConfirm(null)
       const otherSide = side === 'left' ? 'right' : 'left'
       await handlePoint(otherSide, false, true)
-    } else {
-      setSanctionConfirm(null)
     }
-  }, [sanctionConfirm, data?.match, data?.set, data?.events, mapSideToTeamKey, matchId, logEvent, handlePoint])
+  }), [runSanctionConfirm, sanctionConfirm, data?.match, data?.set, data?.events, mapSideToTeamKey, matchId, logEvent, handlePoint])
 
   // Confirm set start time
   const confirmSetStartTime = useCallback(async (time) => {
@@ -4907,7 +4932,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   // Instead of complex per-event-type logic, we simply:
   // 1. Delete all events with the same base seq
   // 2. Restore state from the previous event's snapshot
-  const handleUndo = useCallback(async () => {
+  const runUndoConfirm = useConfirmAction(onConfirmFailed)
+  const handleUndo = useCallback(() => runUndoConfirm(async () => {
     cLogger.logHandler('handleUndo', { hasUndoConfirm: !!undoConfirm, eventType: undoConfirm?.event?.type })
     if (!undoConfirm || !data?.set) {
       setUndoConfirm(null)
@@ -4915,6 +4941,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
 
     const lastEvent = undoConfirm.event
+    // Close first, then undo (useConfirmAction): a second tap must not undo
+    // the event before it as well
+    setUndoConfirm(null)
     const lastEventSeq = lastEvent.seq || 0
     const baseSeq = Math.floor(lastEventSeq)
 
@@ -5051,15 +5080,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     } catch (error) {
       console.error('[handleUndo] Error:', error)
     } finally {
-      // Always close the modal
-      setUndoConfirm(null)
       // Sync to Referee and Supabase after undo
       syncToReferee()
       syncLiveStateToSupabase('undo', null, null)
       // Refresh eScoresheet if open
       refreshScoresheet()
     }
-  }, [undoConfirm, data?.set, matchId, restoreStateFromSnapshot, discardEvents, syncToReferee, syncLiveStateToSupabase, refreshScoresheet])
+  }), [runUndoConfirm, undoConfirm, data?.set, matchId, restoreStateFromSnapshot, discardEvents, syncToReferee, syncLiveStateToSupabase, refreshScoresheet])
 
   // OLD UNDO LOGIC REMOVED - The following complex per-event-type logic has been replaced
   // by the snapshot-based undo system above. Keeping this comment for reference.
@@ -5141,7 +5168,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   // (only the live state was pushed before). The decision_change keeps what
   // Undo needs to give the point back (pointEventId, fromTeam). Ported from
   // OpenVolley fd74b1e9 / 3c4a88c2.
-  const handleDecisionChange = useCallback(async () => {
+  const runDecisionChange = useConfirmAction(onConfirmFailed)
+  const handleDecisionChange = useCallback(() => runDecisionChange(async () => {
     if (!replayRallyConfirm || !data?.set) {
       setReplayRallyConfirm(null)
       return
@@ -5227,7 +5255,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       await handleReplayRally()
       return // handleReplayRally already closes the modal and syncs
     }
-  }, [replayRallyConfirm, data?.set, matchId, logEvent, discardEvents, handleReplayRally, syncToReferee, syncLiveStateToSupabase, refreshScoresheet])
+  }), [runDecisionChange, replayRallyConfirm, data?.set, matchId, logEvent, discardEvents, handleReplayRally, syncToReferee, syncLiveStateToSupabase, refreshScoresheet])
 
 
 
@@ -5357,12 +5385,18 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     })
   }, [data?.set, getCurrentServe, logEvent])
 
-  const handleBMPOutcome = useCallback(async (result, pointToTeam = null) => {
+  // Close first, then write (useConfirmAction): a double tap on an outcome
+  // gave the point twice
+  const runBMPOutcome = useConfirmAction(onConfirmFailed)
+  const handleBMPOutcome = useCallback((result, pointToTeam = null) => runBMPOutcome(async () => {
     if (!bmpOutcomeModal || !data?.set) return
+    const bmpModal = bmpOutcomeModal
+    setBmpSelectedOutcome(null)
+    setBmpOutcomeModal(null)
 
-    const requestingTeam = bmpOutcomeModal.team
-    const isTeamBMP = bmpOutcomeModal.type === 'team'
-    const isRefereeBMP = bmpOutcomeModal.type === 'referee'
+    const requestingTeam = bmpModal.team
+    const isTeamBMP = bmpModal.type === 'team'
+    const isRefereeBMP = bmpModal.type === 'referee'
     const currentSetId = data.set.id
 
     // Get current score
@@ -5373,7 +5407,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     console.log(`[BMP-LIVE] result=${result}, pointToTeam=${pointToTeam}`)
     console.log(`[BMP-LIVE] requestingTeam=${requestingTeam}, isTeamBMP=${isTeamBMP}, isRefereeBMP=${isRefereeBMP}`)
     console.log(`[BMP-LIVE] Score BEFORE: team1=${team1Points}, team2=${team2Points}`)
-    console.log(`[BMP-LIVE] bmpOutcomeModal:`, JSON.stringify(bmpOutcomeModal))
+    console.log(`[BMP-LIVE] bmpOutcomeModal:`, JSON.stringify(bmpModal))
 
     // Determine if we need to change score
     const shouldChangeScore = (isTeamBMP && result === 'successful') ||
@@ -5420,7 +5454,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         pointAwarded: true,
         pointToTeam: scoringTeam,
         newScore: { team1: team1Points, team2: team2Points }
-      }, { parentSeq: bmpOutcomeModal.requestSeq })
+      }, { parentSeq: bmpModal.requestSeq })
 
       console.log(`[BMP-LIVE] Score AFTER update: team1=${team1Points}, team2=${team2Points}`)
 
@@ -5434,8 +5468,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       if (isTeamBMP && result === 'successful') {
         bmpPointPayload.reversedTeam = requestingTeam === 'team1' ? 'team2' : 'team1'
       }
-      console.log(`[BMP-LIVE] Logging BMP point event:`, JSON.stringify(bmpPointPayload), `parentSeq=${bmpOutcomeModal.requestSeq}`)
-      await logEvent('point', bmpPointPayload, { parentSeq: bmpOutcomeModal.requestSeq })
+      console.log(`[BMP-LIVE] Logging BMP point event:`, JSON.stringify(bmpPointPayload), `parentSeq=${bmpModal.requestSeq}`)
+      await logEvent('point', bmpPointPayload, { parentSeq: bmpModal.requestSeq })
 
       // Check if this point ends the set
       const freshSet = await db.sets.get(currentSetId)
@@ -5450,7 +5484,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         result,
         pointAwarded: false,
         newScore: { team1: team1Points, team2: team2Points }
-      }, { parentSeq: bmpOutcomeModal.requestSeq })
+      }, { parentSeq: bmpModal.requestSeq })
 
       // Re-check set end since modal may have been closed before BMP started
       const freshSet = await db.sets.get(currentSetId)
@@ -5461,9 +5495,6 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
     // Sync live state
     syncLiveStateToSupabase('bmp_outcome', requestingTeam || pointToTeam, { result })
-
-    setBmpSelectedOutcome(null)
-    setBmpOutcomeModal(null)
 
     // Check if court switch/TTO modals need to close due to score change after BMP
     if (shouldChangeScore) {
@@ -5490,7 +5521,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             (e.setIndex || 1) === setIndex
           )
           if (ttoEvent) {
-            db.events.delete(ttoEvent.id)
+            await discardEvents([ttoEvent])
           }
           setTtoModal(null)
           syncLiveStateToSupabase('end_tto')
@@ -5501,7 +5532,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         }
       }
     }
-  }, [bmpOutcomeModal, data?.set, data?.events, logEvent, checkSetEnd, syncLiveStateToSupabase, courtSwitchModal, ttoModal, sendActionToReferee])
+  }), [runBMPOutcome, bmpOutcomeModal, data?.set, data?.events, logEvent, checkSetEnd, syncLiveStateToSupabase, courtSwitchModal, ttoModal, sendActionToReferee, discardEvents])
 
   // Count unsuccessful BMPs per team in current set (each team has 2 unsuccessful per set)
   const getUnsuccessfulBMPsUsed = useCallback((teamKey) => {
@@ -6294,8 +6325,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     return sanctions
   }, [data?.events])
 
-  // Confirm player sanction
-  const confirmPlayerSanction = useCallback(async () => {
+  // Confirm player sanction (useConfirmAction: a double tap logs it once; the
+  // dialog closes before the sanction is written)
+  const runPlayerSanctionConfirm = useConfirmAction(onConfirmFailed)
+  const confirmPlayerSanction = useCallback(() => runPlayerSanctionConfirm(async () => {
     if (!sanctionConfirmModal || !data?.set) return
 
     const { team, type, playerNumber, position, role, sanctionType } = sanctionConfirmModal
@@ -6411,7 +6444,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       return
     }
 
-    // Regular sanction (warning or penalty)
+    // Regular sanction (warning or penalty): close first, then write
+    setSanctionConfirmModal(null)
     await logEvent('sanction', {
       team,
       type: sanctionType,
@@ -6424,15 +6458,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // If penalty, award point to the other team immediately
     // Beach volleyball has no lineups - always 2 players per team
     if (sanctionType === 'penalty') {
-      setSanctionConfirmModal(null)
       // Award point to the opposing team (marked as fromPenalty for circle display on scoresheet)
       const otherTeam = team === 'team1' ? 'team2' : 'team1'
       const otherSide = mapTeamKeyToSide(otherTeam)
       await handlePoint(otherSide, false, true)
-    } else {
-      setSanctionConfirmModal(null)
     }
-  }, [sanctionConfirmModal, data?.set, data?.events, data?.team1Players, data?.team2Players, logEvent, mapTeamKeyToSide, handlePoint, leftisTeam1, getPlayerSanctionLevel, playerHasSanctionType, teamHasFormalWarning, handleForfait, matchId, getPlayerPenaltyCountInCurrentSet])
+  }), [runPlayerSanctionConfirm, sanctionConfirmModal, data?.set, data?.events, data?.team1Players, data?.team2Players, logEvent, mapTeamKeyToSide, handlePoint, leftisTeam1, getPlayerSanctionLevel, playerHasSanctionType, teamHasFormalWarning, handleForfait, matchId, getPlayerPenaltyCountInCurrentSet])
 
   // Execute expulsion/disqualification after secondary confirmation
   const executeExpulsionOrDisqualification = useCallback(async () => {
@@ -6723,10 +6754,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
   }, [matchId, newPin, editPinType])
 
-  const confirmCourtSwitch = useCallback(async () => {
+  // Close first, then switch (useConfirmAction): the switch flips the court
+  // under the dialog, and a double tap switched twice
+  const runCourtSwitchConfirm = useConfirmAction(onConfirmFailed)
+  const confirmCourtSwitch = useCallback(() => runCourtSwitchConfirm(async () => {
     if (!courtSwitchModal || !data?.match || !data?.set) return
+    const modal = courtSwitchModal
+    setCourtSwitchModal(null)
 
-    const setIndex = courtSwitchModal.set.index
+    const setIndex = modal.set.index
     const teamAKey = data.match.coinTossTeamA || 'team1'
     const teamBKey = teamAKey === 'team1' ? 'team2' : 'team1'
 
@@ -6791,38 +6827,22 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       }
     }
 
-    // Log court_switch event for PDF scoresheet
-    const nextSeq = await getNextSeq()
-    const courtSwitchEventId = await db.events.add({
-      matchId,
-      setIndex: setIndex,
-      type: 'court_switch',
-      payload: {
-        score: { team1: courtSwitchModal.team1Points, team2: courtSwitchModal.team2Points },
-        preSwitchOverrides
-      },
-      ts: new Date().toISOString(),
-      seq: nextSeq
-    })
-
-    // Capture state snapshot for undo system
-    const courtSwitchSnapshot = await captureFullStateSnapshot()
-    if (courtSwitchSnapshot) {
-      await db.events.update(courtSwitchEventId, { stateSnapshot: courtSwitchSnapshot })
-    }
+    // Log court_switch event for PDF scoresheet (logEvent: its snapshot for
+    // undo, its sync job, the tablets)
+    await logEvent('court_switch', {
+      score: { team1: modal.team1Points, team2: modal.team2Points },
+      preSwitchOverrides
+    }, { setIndexOverride: setIndex })
 
     // Check if TTO should be triggered after court switch (at 21 points in sets 1-2)
-    const shouldTriggerTto = courtSwitchModal?.triggerTtoAfter
+    const shouldTriggerTto = modal?.triggerTtoAfter
     const ttoData = shouldTriggerTto ? {
-      set: courtSwitchModal.set,
-      team1Points: courtSwitchModal.team1Points,
-      team2Points: courtSwitchModal.team2Points,
+      set: modal.set,
+      team1Points: modal.team1Points,
+      team2Points: modal.team2Points,
       countdown: 45,
       started: false
     } : null
-
-    // Close the court switch modal
-    setCourtSwitchModal(null)
 
     // Trigger TTO if needed (at 21 points)
     if (shouldTriggerTto && ttoData) {
@@ -6832,7 +6852,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // Sync to Supabase with fresh snapshot to update side_a and serving_team after court switch
     const reason = setIndex === 3 ? 'set3_8points' : `set${setIndex}_court_switch`
     syncLiveStateToSupabase('court_switch', null, { reason }, null)
-  }, [courtSwitchModal, matchId, data?.match, data?.set, syncLiveStateToSupabase, getNextSeq])
+  }), [runCourtSwitchConfirm, courtSwitchModal, matchId, data?.match, data?.set, logEvent, syncLiveStateToSupabase])
 
   // Handle TTO end - performs court switch if needed (at 21 points in sets 1-2)
   const handleTtoEnd = useCallback(async () => {
@@ -6906,7 +6926,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   // the rally_start of that rally, their unsent cloud jobs (and a cloud delete
   // for what was sent), and the set score without it; then the tablets and the
   // livescore hear about it. Ported from OpenVolley 81dcb210.
-  const cancelCourtSwitch = useCallback(async () => {
+  const runCourtSwitchCancel = useConfirmAction(onConfirmFailed)
+  const cancelCourtSwitch = useCallback(() => runCourtSwitchCancel(async () => {
     if (!courtSwitchModal) return
     // Close first, then take the point back
     const modal = courtSwitchModal
@@ -6924,7 +6945,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       syncLiveStateToSupabase('undo', null, null)
       refreshScoresheet()
     }
-  }, [courtSwitchModal, matchId, discardEvents, applyPointRemovalScore, syncToReferee, syncLiveStateToSupabase, refreshScoresheet])
+  }), [runCourtSwitchCancel, courtSwitchModal, matchId, discardEvents, applyPointRemovalScore, syncToReferee, syncLiveStateToSupabase, refreshScoresheet])
 
   // Check if match is already finished (loaded a completed match)
   // If so, trigger onFinishSet to navigate to MatchEnd screen

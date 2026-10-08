@@ -831,7 +831,8 @@
     "detailsSubstitutions": "Substitutions – {{team}}",
     "undoConfirm": {
       "confirm": "Undo"
-    }
+    },
+    "confirmFailed": "That was not saved. Check the scoresheet and try again."
   },
   "settings": {
     "title": "Settings",

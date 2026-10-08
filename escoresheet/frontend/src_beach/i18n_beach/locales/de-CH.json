@@ -830,7 +830,8 @@
     "detailsSubstitutions": "Wechsel – {{team}}",
     "undoConfirm": {
       "confirm": "Rückgängig machen"
-    }
+    },
+    "confirmFailed": "Das isch nöd gspeicheret worde. Bitte s Matchblatt prüefe und nomal probiere."
   },
   "settings": {
     "title": "Iistellige",
