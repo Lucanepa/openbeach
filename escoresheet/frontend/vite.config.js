@@ -80,6 +80,11 @@ export default defineConfig({
         clientsClaim: true,
         // Cache all assets for offline use
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        // The phone signing page (public_beach/sign/, OpenVolley cb20be70) is
+        // opened by OTHER phones from a QR code, never by the app: not
+        // precached. (vite-plugin-pwa's own defaults are kept: setting
+        // globIgnores replaces them.)
+        globIgnores: ['**/node_modules/**/*', 'sw.js', 'workbox-*.js', 'sign/**'],
         // A multi-page app: no SPA fallback. With workbox's default every
         // navigation the service worker controls got index.html, so on the
         // desktop / venue relay a tablet's /referee or /livescore (the QR
