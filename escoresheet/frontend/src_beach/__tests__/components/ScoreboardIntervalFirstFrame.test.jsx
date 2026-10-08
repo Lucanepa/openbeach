@@ -66,13 +66,15 @@ describe('Scoreboard_beach: the interval after the set end', () => {
       team1Id: t1, team2Id: t2, status: 'live', test: true,
       firstServe: 'team1', coinTossTeamA: 'team1', coinTossTeamB: 'team2', team1FirstServe: 1, team2FirstServe: 1
     })
-    await db.sets.add({ matchId, index: 1, team1Points: 20, team2Points: 15, finished: false, startTime: start })
+    // 20:16, not a multiple of 7: no change of courts is pending at the start
+    // (a reload asks for one: origin/main 2e758dc)
+    await db.sets.add({ matchId, index: 1, team1Points: 20, team2Points: 16, finished: false, startTime: start })
     let seq = 1
     const events = [
       { matchId, setIndex: 1, type: 'coin_toss', payload: {}, seq: seq++, ts: start },
       { matchId, setIndex: 1, type: 'set_start', payload: {}, seq: seq++, ts: start }
     ]
-    for (let k = 0; k < 35; k++) {
+    for (let k = 0; k < 36; k++) {
       events.push({ matchId, setIndex: 1, type: 'rally_start', payload: {}, seq: seq++, ts: start })
       events.push({ matchId, setIndex: 1, type: 'point', payload: { team: k < 20 ? 'team1' : 'team2' }, seq: seq++, ts: start })
     }
