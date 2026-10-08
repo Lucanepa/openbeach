@@ -423,7 +423,10 @@
       "readyToConfirm": "Prêt à confirmer",
       "incomplete": "Incomplet"
     },
-    "selectCountry": "Choisir le pays"
+    "selectCountry": "Choisir le pays",
+    "matchPinTitle": "Code PIN du match",
+    "matchPinLabel": "Code PIN",
+    "enterPinPrompt": "Entrez un code PIN pour protéger ce match (requis) :"
   },
   "scoreboard": {
     "set": "Set",

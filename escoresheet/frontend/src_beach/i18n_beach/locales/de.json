@@ -423,7 +423,10 @@
       "readyToConfirm": "Bereit zum Bestätigen",
       "incomplete": "Unvollständig"
     },
-    "selectCountry": "Land wählen"
+    "selectCountry": "Land wählen",
+    "matchPinTitle": "Spiel-PIN-Code",
+    "matchPinLabel": "PIN-Code",
+    "enterPinPrompt": "Geben Sie einen PIN-Code ein, um dieses Spiel zu schützen (erforderlich):"
   },
   "scoreboard": {
     "set": "Satz",

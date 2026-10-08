@@ -424,7 +424,10 @@
       "complete": "Complete",
       "readyToConfirm": "Ready to confirm",
       "incomplete": "Incomplete"
-    }
+    },
+    "matchPinTitle": "Match PIN code",
+    "matchPinLabel": "PIN code",
+    "enterPinPrompt": "Enter a PIN code to protect this match (required):"
   },
   "scoreboard": {
     "set": "Set",

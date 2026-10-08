@@ -5,11 +5,16 @@ import deCH from '../../i18n_beach/locales/de-CH.json'
 import fr from '../../i18n_beach/locales/fr.json'
 import it_ from '../../i18n_beach/locales/it.json'
 
-// Keys ported from OpenVolley with its fixes (the kit date and time pickers):
-// in all 5 locales, non-empty, the same placeholders as English, and German
-// written the Swiss way (ss, never ß).
+// Keys ported from OpenVolley with its fixes (the kit date and time pickers,
+// Re-sign / Clear at the match end, the match PIN dialog): in all 5 locales,
+// non-empty, the same placeholders as English, and German written the Swiss
+// way (ss, never ß).
 
-const KEYS = ['picker']
+const KEYS = [
+  'picker',
+  'matchEnd.resign', 'matchEnd.clearSignature', 'matchEnd.signatureLocked', 'matchEnd.signatureSaveFailed',
+  'matchSetup.matchPinTitle', 'matchSetup.matchPinLabel', 'matchSetup.enterPinPrompt'
+]
 const LOCALES = { en, de, 'de-CH': deCH, fr, it: it_ }
 const get = (obj, path) => path.split('.').reduce((o, k) => o?.[k], obj)
 const placeholders = (s) => (String(s).match(/\{\{\w+\}\}/g) || []).sort()

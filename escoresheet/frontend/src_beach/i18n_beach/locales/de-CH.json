@@ -423,7 +423,10 @@
       "readyToConfirm": "Parat zum Bestätige",
       "incomplete": "Unvollständig"
     },
-    "selectCountry": "Land wähle"
+    "selectCountry": "Land wähle",
+    "matchPinTitle": "Spiil-PIN-Code",
+    "matchPinLabel": "PIN-Code",
+    "enterPinPrompt": "Bitte en PIN-Code iigee, zum das Spiil z schütze (erforderlich):"
   },
   "scoreboard": {
     "set": "Satz",

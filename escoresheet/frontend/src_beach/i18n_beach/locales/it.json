@@ -423,7 +423,10 @@
       "readyToConfirm": "Pronto da confermare",
       "incomplete": "Incompleto"
     },
-    "selectCountry": "Scegli il paese"
+    "selectCountry": "Scegli il paese",
+    "matchPinTitle": "Codice PIN della partita",
+    "matchPinLabel": "Codice PIN",
+    "enterPinPrompt": "Inserisci un codice PIN per proteggere questa partita (obbligatorio):"
   },
   "scoreboard": {
     "set": "Set",
