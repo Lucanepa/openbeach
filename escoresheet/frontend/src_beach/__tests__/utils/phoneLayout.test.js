@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { detectDisplayMode, isPhoneScreen, normaliseDisplayMode, phoneHeldSideways, phoneLayoutActive, phoneLayoutKept, recentActions, tintOf } from '../../components_beach/scoreboard/phoneLayout_beach'
+import { PHONE_COURT_MIN_PX, PHONE_SQUARE_MIN_PX, PHONE_SQUARE_RESERVE_PX, detectDisplayMode, isPhoneScreen, normaliseDisplayMode, phoneHeldSideways, phoneLayoutActive, phoneLayoutKept, recentActions, tintOf } from '../../components_beach/scoreboard/phoneLayout_beach'
 
 describe('detectDisplayMode (the automatic display mode)', () => {
   it.each([[390, 844], [360, 740], [412, 915], [599, 1000]])('a %ix%i portrait phone gets the phone layout', (w, h) => {
@@ -120,3 +120,31 @@ describe('phone action grid labels (a 4-column grid on a 360px phone)', () => {
   })
 })
 
+describe('phone layout on a short screen (styles_beach.css)', () => {
+  // The heights a phone page really gets (browser bars, the Android app's
+  // system bars), less the folded app header's 16px bar. At 390x664 (an
+  // iPhone in Safari) and 360x640 the action grid ran 26px and 35px below the
+  // screen: the beach layout has the change-of-courts row on top of what fits
+  // OpenVolley's. The point buttons get lower down to their minimum, then the
+  // court gets lower down to its minimum (two players still fit).
+  it.each([[360, 640], [390, 664]])('everything fits a %ix%i page without scrolling', (width, height) => {
+    expect(PHONE_COURT_MIN_PX).toBeGreaterThan(0)
+    expect(PHONE_SQUARE_RESERVE_PX + PHONE_COURT_MIN_PX + PHONE_SQUARE_MIN_PX).toBeLessThanOrEqual(height - 16)
+    // the court is never taller than half its width (the 2:1 court)
+    expect(PHONE_COURT_MIN_PX).toBeLessThanOrEqual((width - 24) / 2)
+  })
+
+  it('the court gets lower before the point buttons scroll; square buttons and a 2:1 court otherwise', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+    const css = readFileSync(resolve(__dirname, '../../styles_beach.css'), 'utf8')
+    expect(css).toMatch(/\.phone-scoreboard \.phone-court \{[^}]*aspect-ratio: 2 \/ 1/)
+    expect(css).toMatch(/\.phone-scoreboard \.phone-square \{[^}]*aspect-ratio: 1 \/ 1/)
+    const supports = css.match(/@supports \(height: 1cqh\) \{([\s\S]*?)\n\}/)?.[1] || ''
+    const court = '(100cqw - 24px) / 2, max(var(--phone-court-min), 100cqh - var(--phone-square-reserve) - var(--phone-square-min))'
+    expect(supports).toContain(`height: min(${court});`)
+    expect(supports).toContain(`height: min((100cqw - 34px) / 2, max(var(--phone-square-min), 100cqh - var(--phone-square-reserve) - min(${court})));`)
+    // the players get smaller with the court (two of them, one above the other)
+    expect(supports).toMatch(/\.phone-court-player \{[^}]*--phone-disc-size: min\(58px, 26cqw, 40cqh\)/)
+  })
+})
