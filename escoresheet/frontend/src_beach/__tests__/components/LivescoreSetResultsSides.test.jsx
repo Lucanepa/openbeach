@@ -44,6 +44,17 @@ describe('livescore FINAL chips: each set\'s points under the side\'s team', () 
     expect(screen.queryByText('15–21')).toBeNull()
   })
 
+  it('results of an older set end (the relay\'s sets behind its live state): no team told from them', async () => {
+    // Team A is team1, on the left, lost 1:2; the results still have set 1
+    // only (team2 won it 21:15): A's 1 set is team2's 1 win in them, which
+    // told Team A is team2 and put team2's 21 under team1's name
+    rows.list = [ended({ team_a_name: 'Müller/Weber', team_b_name: 'Schmidt/Fischer', sets_won_a: 1, sets_won_b: 2, side_a: 'left', matches: { set_results: [{ set: 1, team1: 15, team2: 21 }] } })]
+    render(<LivescoreApp />)
+    await waitFor(() => expect(screen.getByText('Müller/Weber')).toBeInTheDocument())
+    expect(screen.getByText('15–21')).toBeInTheDocument()
+    expect(screen.queryByText('21–15')).toBeNull()
+  })
+
   it('Team A is team1 (it lost 0:2), on the right: 21–15 (team2 on the left)', async () => {
     rows.list = [ended({ team_a_name: 'Müller/Weber', team_b_name: 'Schmidt/Fischer', sets_won_a: 0, sets_won_b: 2, side_a: 'right' })]
     render(<LivescoreApp />)

@@ -32,12 +32,17 @@ const ballImage = '/beachball.png'
  * Is Team A (the live state's A/B model) team1? matches.set_results are
  * stored by team1 / team2 ([{ set, team1, team2 }]); the live row names
  * neither. A finished match tells: its sets_won_a are team1's or team2's
- * wins in the set results. Defaults to true (also while nothing tells).
+ * wins in the set results, only when the results count the sets the live
+ * row counts (both from the same set end, as OpenVolley 2ba8fa42): the
+ * relay's sets arrive apart from its live state, and the cloud row's
+ * matches stay as first fetched, so results of an older set end could tell
+ * the wrong team. Defaults to true (also while nothing tells).
  * @param {object} game  a match_live_state row with matches.set_results
  */
 function teamAIsTeam1(game) {
   const results = game?.matches?.set_results
   if (!Array.isArray(results) || results.length === 0) return true
+  if (results.length !== (Number(game.sets_won_a) || 0) + (Number(game.sets_won_b) || 0)) return true
   let team1 = 0
   let team2 = 0
   for (const s of results) {
