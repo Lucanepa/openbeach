@@ -4,6 +4,7 @@ import { Loader2, Search } from 'lucide-react'
 import { MENU_PANEL, MENU_ROW } from './chromeClasses_beach'
 import { cn } from '../ui/volleyui/cn.js'
 import { apiFrom } from '../lib_beach/apiClient_beach'
+import { selectAll } from '../lib_beach/selectAll_beach'
 import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 
 // Sport type for beach volleyball
@@ -39,10 +40,10 @@ export default function RefereeSelector({ open, onClose, onSelect, position = {}
         return
       }
 
-      const { data, error } = await apiFrom('referee_database')
-        .select('first_name, last_name, country, dob, created_at')
-        .contains('sport_type', JSON.stringify([SPORT_TYPE]))
-        .order('last_name', { ascending: true })
+      // The whole directory, paged past the server's row cap, by last name
+      const { data, error } = await selectAll(() => apiFrom('referee_database')
+        .select('id, first_name, last_name, country, dob, created_at')
+        .contains('sport_type', JSON.stringify([SPORT_TYPE])), { order: [{ column: 'last_name' }] })
 
       if (error) {
         console.error('Error loading referees from history:', error)
