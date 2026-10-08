@@ -6,7 +6,10 @@ import {
   isLiveSetInterval,
   isScoreOnlySetUpdate,
   openSetOf,
-  queueSetScoreSync
+  queueSetScoreSync,
+  isEventRevisionJob,
+  eventRevisionRequest,
+  eventRevisionOutcome
 } from '../../utils_beach/eventSync_beach'
 
 // The cloud sets row used to stay 0:0 for the whole set while the live state
@@ -124,5 +127,37 @@ describe('isLiveSetInterval', () => {
     expect(isLiveSetInterval({ eventType: 'point', matchStatus: 'interval', snapshotSetFinished: true })).toBe(false)
     expect(isLiveSetInterval({ eventType: 'point', matchStatus: 'live' })).toBe(false)
     expect(isLiveSetInterval()).toBe(false)
+  })
+})
+
+describe('event revision jobs (the event history for the server)', () => {
+  const job = (extra = {}) => ({
+    resource: 'event', action: 'void', status: 'queued',
+    payload: { external_id: 'match_1_a:e:7', match_id: 'match_1_a', rev_uid: 'u-1', op: 'void', reason: 'undo', seq: 7, set_index: 1, type: 'point', client_ts: '2026-10-08T10:00:00.000Z', ...extra }
+  })
+
+  it('tells a revision from an insert or a delete', () => {
+    expect(isEventRevisionJob(job())).toBe(true)
+    expect(isEventRevisionJob({ ...job(), action: 'edit' })).toBe(true)
+    expect(isEventRevisionJob({ ...job(), action: 'insert' })).toBe(false)
+    expect(isEventRevisionJob({ ...job(), action: 'delete' })).toBe(false)
+    expect(isEventRevisionJob({ ...job(), resource: 'set' })).toBe(false)
+  })
+
+  it('builds the request of one revision, scoped to its match', () => {
+    expect(eventRevisionRequest(job())).toEqual({
+      matchExternalId: 'match_1_a',
+      revisions: [expect.objectContaining({ rev_uid: 'u-1', op: 'void', event_external_id: 'match_1_a:e:7', reason: 'undo', seq: 7, set_index: 1 })]
+    })
+    // the match key from the namespaced id when match_id is missing
+    expect(eventRevisionRequest(job({ match_id: undefined })).matchExternalId).toBe('match_1_a')
+    expect(eventRevisionRequest(job({ rev_uid: null }))).toBeNull()
+  })
+
+  it('reads the answer: sent, wait for the match, no route, error', () => {
+    expect(eventRevisionOutcome({ error: null, status: 200 })).toBe('sent')
+    expect(eventRevisionOutcome({ error: { status: 404, code: 'OV_MATCH_NOT_FOUND' } })).toBe('wait')
+    expect(eventRevisionOutcome({ error: { message: 'Not found' }, status: 404 })).toBe('no_route')
+    expect(eventRevisionOutcome({ error: { status: 409, code: 'OV_MATCH_CLOSED' } })).toBe('error')
   })
 })

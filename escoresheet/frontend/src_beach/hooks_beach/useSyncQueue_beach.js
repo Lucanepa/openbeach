@@ -1,7 +1,8 @@
 import { useEffect, useCallback, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db_beach/db_beach'
-import { apiFrom, apiMatchRestore, apiMatchClaim, AUTH_TOKEN_CHANGE_EVENT, AUTH_TOKEN_STORAGE_KEY } from '../lib_beach/apiClient_beach'
+import { apiFrom, apiMatchRestore, apiMatchClaim, apiPostEventRevisions, AUTH_TOKEN_CHANGE_EVENT, AUTH_TOKEN_STORAGE_KEY } from '../lib_beach/apiClient_beach'
+import { isEventRevisionJob, eventRevisionRequest, eventRevisionOutcome } from '../utils_beach/eventSync_beach'
 import { getCloudApiUrl, isCloudOffline, isRelayOriginPage } from '../utils_beach/backendConfig_beach'
 import { ACCESS_CHANGED_EVENT } from '../lib_beach/access_beach'
 import { parseExtId, resolveJobExternalId, jobMatchKey } from '../utils_beach/syncIds_beach'
@@ -1000,6 +1001,30 @@ async function processJobInner(job, ctx) {
         return failureResult(error, ctx)
       }
       return true
+    }
+
+    // ============ EVENT HISTORY (undo / delete / edit / restore) ============
+    // Queued by db_beach/eventHistory_beach's hooks: the server voids or edits
+    // its copy and keeps the revision (POST /api/match/event-revisions).
+    // Resource 'event' on purpose: the per-entity order keeps a void behind
+    // its event's insert. Ported from OpenVolley dcc407f7.
+    if (isEventRevisionJob(job)) {
+      const request = eventRevisionRequest(job)
+      if (!request) return DROP_JOB
+      const answer = await apiPostEventRevisions(request.matchExternalId, request.revisions)
+      const outcome = eventRevisionOutcome(answer)
+      if (outcome === 'sent') return true
+      if (outcome === 'wait') {
+        // The match is not in the cloud yet: retry later, like an event insert
+        ctx.error = summarizeError(answer.error)
+        return null
+      }
+      if (outcome === 'no_route') {
+        ctx.error = { ...summarizeError(answer.error), status: 404, code: answer.error?.code || 'OV_ROUTE_MISSING' }
+        return PERMANENT_FAILURE
+      }
+      safeLog.warn('[SyncQueue] Event revision refused:', answer.error?.code || answer.error?.status || answer.status)
+      return failureResult(answer.error, ctx)
     }
 
     // Unknown resource/action - mark as done to avoid infinite loop

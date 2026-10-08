@@ -356,6 +356,23 @@ export function apiMatchClaim(externalId, pin) {
   return postJson('/api/match/claim', { externalId, pin }, { fallbackError: 'Match take-over failed' })
 }
 
+/**
+ * Send event revisions (undo / delete / edit / restore of logged events, see
+ * db_beach/eventHistory_beach.js) of one match. The server voids or edits its
+ * copy of the events and keeps the revision (POST /api/match/event-revisions,
+ * backend db/015, shared with OpenVolley). Needs a session.
+ * 404 OV_MATCH_NOT_FOUND: the match is not on the server yet; a 404 without
+ * that code: a server without the route (older backend, LAN relay).
+ * @param {string} matchExternalId the match seed_key
+ * @param {object[]} revisions utils_beach/eventRevisions_beach revisionOfJob() bodies
+ * @returns {Promise<{data: {applied: number, pending: number}|null, error: object|null, status: number}>}
+ */
+export function apiPostEventRevisions(matchExternalId, revisions) {
+  return postJson('/api/match/event-revisions', { match_external_id: matchExternalId, revisions }, {
+    fallbackError: 'Event history upload failed'
+  })
+}
+
 // ==================== Base64 (storage uploads) ====================
 
 // btoa() only takes Latin-1 and String.fromCharCode(...bytes) overflows the call
