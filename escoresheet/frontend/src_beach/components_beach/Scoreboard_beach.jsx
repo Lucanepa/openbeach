@@ -8092,8 +8092,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 }}>{pointsBySide.right}</span>
               </div>
 
-              {/* Last Action - 17% */}
-              <div style={{ flex: '0 0 17%', textAlign: 'center', padding: `0 ${4 * scaleFactor}px` }}>
+              {/* Last Action - 17%. minWidth 0: its one-line texts end in an
+                  ellipsis; without it a long team name widened the column past
+                  the window's right edge ("LAST ACTIO" cut at 1400 x 853) */}
+              <div data-testid="last-action-column" style={{ flex: '0 0 17%', minWidth: 0, textAlign: 'center', padding: `0 ${4 * scaleFactor}px` }}>
                 {data?.events && data.events.length > 0 && data?.set && (() => {
                   const currentSetIndex = data.set.index
                   const currentSetEvents = data.events.filter(e => e.setIndex === currentSetIndex)
