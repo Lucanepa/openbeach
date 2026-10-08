@@ -26,15 +26,20 @@ afterEach(() => {
   delete window.__TAURI_INTERNALS__
   vi.unstubAllGlobals()
   sw.updateServiceWorker.mockReset()
+  document.body.inert = false
 })
 
 describe('UpdateBanner on the desktop app', () => {
   it('applies the waiting build at once, no banner', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ json: async () => ({ version: '9.9.9' }) }))
     window.__TAURI_INTERNALS__ = { invoke: vi.fn(), metadata: { currentWindow: { label: 'main' } } }
+    let inertAtApply = null
+    sw.updateServiceWorker.mockImplementation(() => { inertAtApply = document.body.inert })
     const { container } = render(<UpdateBanner />)
     await waitFor(() => expect(sw.updateServiceWorker).toHaveBeenCalledTimes(1))
     expect(container).toBeEmptyDOMElement()
+    // no tap reaches the page between the apply and its reload
+    expect(inertAtApply).toBe(true)
   })
 
   it('a browser still gets the banner', async () => {

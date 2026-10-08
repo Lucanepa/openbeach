@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Download, RefreshCw } from 'lucide-react'
-import useServiceWorker, { autoApplyAllowed, noteAutoApply } from '../hooks_beach/useServiceWorker_beach'
+import useServiceWorker, { autoApplyAllowed, noteAutoApply, holdTapsUntilReload } from '../hooks_beach/useServiceWorker_beach'
 import { cn } from '../ui/volleyui/cn.js'
 import { FOCUS_RING } from '../ui/volleyui/Button.jsx'
 import { isDesktopScoretable, resolveDesktopWindow } from '../utils_beach/appLifecycle_beach'
@@ -38,6 +38,9 @@ export default function UpdateBanner() {
       }
       appliedRef.current = true
       noteAutoApply()
+      // the scorer may be tapping (a tap closed applyUpdateAtStart's grace):
+      // nothing they start may be cut by the reload
+      holdTapsUntilReload()
       updateServiceWorker()
     }).catch(() => { if (live) setApplyAtOnce(false) })
     return () => { live = false }
