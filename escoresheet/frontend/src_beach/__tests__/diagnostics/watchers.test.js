@@ -66,8 +66,16 @@ describe('diagnostics watchers', () => {
     input.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true }))
     document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     await flushDiagnostics()
-    const text = JSON.stringify(sink.lines)
-    expect(text).not.toMatch(/771/)
+    // the button's text (a PIN) is in no string of any line. Not the whole
+    // JSON: a line's time ("...49.771Z") or performance.now can hold 771
+    const strings = []
+    const collect = (v) => {
+      if (typeof v === 'string') strings.push(v)
+      else if (v && typeof v === 'object') Object.values(v).forEach(collect)
+    }
+    sink.lines.forEach(l => collect(l.d))
+    expect(strings.length).toBeGreaterThan(0)
+    expect(strings.filter(s => /771/.test(s))).toEqual([])
     const clicks = kinds('ui.click').map(l => l.d.id)
     expect(clicks[0]).toBe('show-pin')
     expect(clicks[1]).not.toBe('7')

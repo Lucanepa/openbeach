@@ -119,6 +119,10 @@ describe('askText', () => {
   it('Escape answers null', async () => {
     const a = ask({ title: 'Match PIN code' })
     const input = await screen.findByTestId('ask-text-input')
+    // the dialog listens for Escape from its effect, which also gives the
+    // field the focus: the field is on screen a moment before (under load an
+    // Escape sent in between went unheard and the test timed out)
+    await waitFor(() => expect(input).toHaveFocus())
     await act(async () => { fireEvent.keyDown(input, { key: 'Escape' }) })
     await a.p
     expect(a.get()).toBeNull()

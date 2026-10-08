@@ -283,8 +283,10 @@ describe('your approvals (review fix: the official sees every use of their PIN)'
       .mockResolvedValue(ok({ approvals: [] }))
     render(<ApprovalPinSection />)
     const list = await screen.findByTestId('my-approvals')
-    expect(api.mine).toHaveBeenCalledWith({ limit: 10 })
+    // the list's box is drawn before its effect asks the server: the rows
+    // first (under load the call came after the box), then the call
     expect(await within(list).findByText('2nd referee · #12 Home VC – Away FC')).toBeInTheDocument()
+    expect(api.mine).toHaveBeenCalledWith({ limit: 10 })
     expect(within(list).getAllByText('1st referee · #4711 Home VC – Away FC').length).toBe(2)
     expect(within(list).getAllByText('Sent by Olga Owner').length).toBe(3)
     expect(within(list).getByText(en.approval.mine.closed)).toBeInTheDocument()
