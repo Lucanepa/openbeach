@@ -778,7 +778,10 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       const stale = approvalFor(match, role)
       if (stale && !isApprovalValid(stale, sets)) await removeLocalApproval(slot, stale.id)
     }
-    setOpenSignature(null)
+    // Close this slot's pad only: the next box opens as soon as the signature
+    // is on the match row, before its sync job is queued, and on a slow
+    // tablet the pad tapped open in between was closed here (2026-10-08)
+    setOpenSignature(current => (current === role ? null : current))
   }
 
   // "Clear": the signature goes at once (saved and synced), then the pad opens

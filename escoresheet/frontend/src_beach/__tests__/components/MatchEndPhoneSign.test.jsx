@@ -210,6 +210,29 @@ describe('MatchEnd_beach: Sign on phone', () => {
     expect((await row()).ref1Signature).toBeFalsy()
   })
 
+  it('the next box tapped while the last signature is still being queued: its pad stays open', async () => {
+    await seed()
+    renderMatchEnd()
+    // the signature is on the match row (the next box opens) but its sync job
+    // is not queued yet: a slow tablet. The save then closed the pad that was
+    // open by then, the next one (a full-suite run, 2026-10-08)
+    let release
+    const gate = new Promise(r => { release = r })
+    const add = db.sync_queue.add.bind(db.sync_queue)
+    const spy = vi.spyOn(db.sync_queue, 'add').mockImplementationOnce(async (job) => { await gate; return add(job) })
+    await signBox(/Captain A/.source)
+    await waitFor(async () => expect((await row()).team1PostGameCaptainSignature).toBe('data:image/png;base64,PHONE'))
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Captain B.* · Tap to sign/ })).toBeEnabled())
+    await click(screen.getByRole('button', { name: /^Captain B.* · Tap to sign/ }))
+    expect(screen.getByRole('dialog', { name: /^pad Captain B/ })).toBeInTheDocument()
+    await act(async () => { release() })
+    await waitFor(async () => expect(await signatureJobs()).toHaveLength(1))
+    await act(async () => { await new Promise(r => setTimeout(r, 50)) })
+    expect(screen.getByRole('dialog', { name: /^pad Captain B/ })).toBeInTheDocument()
+    spy.mockRestore()
+  })
+
   it('"Reopen last set" forgets the phone records of the post-match signatures, not the pre-match ones', async () => {
     await seed({
       team1CaptainSignature: 'data:pre', scorerSignature: 'data:s', team1PostGameCaptainSignature: 'data:c1', team2PostGameCaptainSignature: 'data:c2',
