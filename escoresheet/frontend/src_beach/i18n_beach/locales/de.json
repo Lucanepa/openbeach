@@ -2571,5 +2571,12 @@
       "serverWhen": "Die Tablets haben mobile Daten, oder das WLAN vor Ort trennt die Geräte. Anmeldung nötig."
     },
     "wifiQrCaption": "Zuerst scannen, um diesem WLAN beizutreten"
+  },
+  "legal": {
+    "nav": "Rechtliches",
+    "privacy": "Datenschutzerklärung",
+    "terms": "Nutzungsbedingungen",
+    "impressum": "Impressum",
+    "opensource": "Open-Source-Hinweis"
   }
 }

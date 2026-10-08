@@ -8,6 +8,7 @@ import {
   MENU_SUBROW, MENU_ROW_ON, MENU_NEST, MENU_SEP, MENU_ICON
 } from './chromeClasses_beach'
 import HeaderMenuItem from './HeaderMenuItem_beach'
+import LegalLinks from './LegalLinks_beach'
 import { BRAND } from '../brand_beach'
 
 // Flag SVG components for language selector
@@ -331,6 +332,11 @@ export default function DashboardHeader({
                     <span className={MENU_ICON}><ClipboardList size={14} aria-hidden="true" /></span>
                     <span className="flex-1 tabular-nums">Version {currentVersion}</span>
                   </button>
+
+                  {/* Privacy policy, terms, legal notice (openvolley.app): the
+                      referee and livescore menus */}
+                  <div className={MENU_SEP} />
+                  <LegalLinks docs={['privacy', 'terms', 'impressum']} className="px-3 py-2 text-[11px]" />
                 </div>
               </>
             )}

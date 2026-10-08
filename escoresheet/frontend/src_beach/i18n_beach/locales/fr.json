@@ -2571,5 +2571,12 @@
       "serverWhen": "Les tablettes ont des données mobiles, ou le Wi-Fi du site isole les appareils. Connexion requise."
     },
     "wifiQrCaption": "Scannez d’abord pour rejoindre ce Wi-Fi"
+  },
+  "legal": {
+    "nav": "Informations légales",
+    "privacy": "Protection des données",
+    "terms": "Conditions d’utilisation",
+    "impressum": "Mentions légales",
+    "opensource": "Avis open source"
   }
 }

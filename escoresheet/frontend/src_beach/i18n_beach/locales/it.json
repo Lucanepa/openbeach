@@ -2571,5 +2571,12 @@
       "serverWhen": "I tablet hanno dati mobili, o il Wi-Fi della struttura separa i dispositivi. Serve l’accesso."
     },
     "wifiQrCaption": "Prima scansiona per collegarti a questo Wi-Fi"
+  },
+  "legal": {
+    "nav": "Note legali",
+    "privacy": "Protezione dei dati",
+    "terms": "Condizioni d’uso",
+    "impressum": "Note legali",
+    "opensource": "Avviso open source"
   }
 }

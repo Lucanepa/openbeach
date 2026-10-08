@@ -2571,5 +2571,12 @@
       "serverWhen": "D Tablets händ mobili Date, oder s WLAN vor Ort trennt d Grät. Aamäldig nötig."
     },
     "wifiQrCaption": "Zersch scanne, zum i das WLAN gah"
+  },
+  "legal": {
+    "nav": "Rechtliches",
+    "privacy": "Datenschutzerklärung",
+    "terms": "Nutzungsbedingungen",
+    "impressum": "Impressum",
+    "opensource": "Open-Source-Hinweis"
   }
 }

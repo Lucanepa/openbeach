@@ -14,6 +14,7 @@ import { GateMessage } from './ui/volleyui/ErrorScreen.jsx'
 import { AppSpinner } from './ui/volleyui/AppSpinner.jsx'
 import { dayLabel } from './ui/volleyui/format.js'
 import { BRAND } from './brand_beach'
+import LegalLinks from './components_beach/LegalLinks_beach'
 
 // Beach scoresheets live under beach/{date}/ in the shared bucket (indoor
 // writes {date}/ at the root)
@@ -573,6 +574,7 @@ const ScoresheetList = () => {
               })()}
             </div>
           )}
+          <LegalLinks docs={['privacy', 'terms', 'impressum']} className="mt-8 text-center text-[11px] text-stone-400" />
         </div>
       </main>
     </div>

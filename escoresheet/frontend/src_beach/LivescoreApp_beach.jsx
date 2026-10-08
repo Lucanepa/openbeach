@@ -6,6 +6,7 @@ import { isBackendAvailable, getApiUrl } from './utils_beach/backendConfig_beach
 import { createRelayLivescoreFeed, fetchRelayLivescoreList, relayLivescoreNow, relayLivescoreWsUrl } from './utils_beach/relayLivescore_beach'
 import UpdateBanner from './components_beach/UpdateBanner_beach'
 import DashboardHeader from './components_beach/DashboardHeader_beach'
+import LegalLinks from './components_beach/LegalLinks_beach'
 import { Radio, RefreshCw } from 'lucide-react'
 import { Button } from './ui/volleyui/Button.jsx'
 import { Card } from './ui/volleyui/Card.jsx'
@@ -422,6 +423,8 @@ export default function LivescoreApp() {
             </RowList>
           </Card>
         )}
+        {/* Public page with the players' names: the privacy policy says what is shown */}
+        <LegalLinks docs={['privacy', 'terms', 'impressum']} className="mt-8 text-center text-[11px] text-stone-400" />
       </div>
     </div>
   )

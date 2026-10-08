@@ -8,6 +8,7 @@ import NativeServerSection from './NativeServerSection_beach'
 import DesktopUpdateSection from './DesktopUpdateSection_beach'
 import KeybindingsModal from './KeybindingsModal_beach'
 import { OptionNumber, OptionRow, OptionSection, OptionSwitch } from './optionRows_beach'
+import LegalLinks from '../LegalLinks_beach'
 import { copyToClipboard } from '../../utils_beach/networkInfo_beach'
 import { clearCachesAndReload } from '../../utils_beach/appReload_beach'
 import { useDesktopUpdate } from '../../hooks_beach/useDesktopUpdate_beach'
@@ -382,6 +383,11 @@ export default function HomeOptionsModal({
             label={t('options.iconCredits', 'Icons')}
             hint={t('options.iconCreditsText', 'Lucide (ISC) · Phosphor (MIT)')}
           />
+          {/* Privacy policy, terms, legal notice and the full open-source
+              notice on openvolley.app, in the app's language. */}
+          <div className="py-3">
+            <LegalLinks />
+          </div>
         </OptionSection>
 
         <OptionSection title={t('options.cacheManagement')}>

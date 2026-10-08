@@ -2572,5 +2572,12 @@
       "serverWhen": "Tablets have mobile data, or the venue Wi-Fi keeps devices apart. Sign-in needed."
     },
     "wifiQrCaption": "Scan to join this Wi-Fi first"
+  },
+  "legal": {
+    "nav": "Legal",
+    "privacy": "Privacy policy",
+    "terms": "Terms of use",
+    "impressum": "Legal notice",
+    "opensource": "Open-source notice"
   }
 }
