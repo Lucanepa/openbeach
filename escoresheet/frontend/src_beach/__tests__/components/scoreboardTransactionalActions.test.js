@@ -21,7 +21,8 @@ const between = (from, to) => {
 
 describe('the scoring screen reads its data in one read transaction', () => {
   it('useActionLiveQuery over db.transaction(\'r\', ...), not useLiveQuery', () => {
-    expect(sb).toContain("const [data, commits] = useActionLiveQuery(() => db.transaction('r', db.matches, db.teams, db.sets, db.players, db.events, async () => {")
+    expect(sb).toContain("function readScoreboard(matchId) {\n  return db.transaction('r', db.matches, db.teams, db.sets, db.players, db.events, async () => {")
+    expect(sb).toContain('const [data, commits] = useActionLiveQuery(() => readScoreboard(matchId), [matchId], preloaded)')
     expect(sb).not.toMatch(/const data = useLiveQuery\(/)
   })
 
