@@ -120,6 +120,22 @@ describe('score sheet PDF: the video match', () => {
     expect([f.match_dur_h, f.match_dur_m]).toEqual(['0', '49'])
   })
 
+  it('a set played without a confirmed start (a penalty before its first rally skips the dialog) prints its first rally', () => {
+    // a delay penalty before the first rally gives a point, so "Start rally"
+    // no longer opens the "Set 1 start time" dialog: no set.startTime, no set_start
+    const data = buildVideoMatch()
+    delete data.sets[0].startTime
+    data.events = data.events.filter(e => !(e.type === 'set_start' && e.setIndex === 1))
+    const firstRally = new Date('2026-10-08T09:01:00.000Z')
+    const hh = (d) => String(d.getHours()).padStart(2, '0')
+    const mm = (d) => String(d.getMinutes()).padStart(2, '0')
+    const f = fill(data)
+    expect([f.s1_start_hh, f.s1_start_mm]).toEqual([hh(firstRally), mm(firstRally)])
+    expect([f.match_start_h, f.match_start_m]).toEqual([hh(firstRally), mm(firstRally)])
+    expect(f.res_s1_dur).toBe('12')
+    expect(f.res_tot_dur).toBe('49')
+  })
+
   it('a set without a rally prints its confirmed start', () => {
     const data = buildVideoMatch()
     data.events = data.events.filter(e => !(e.setIndex === 2 && (e.type === 'rally_start' || e.type === 'point' || e.type === 'set_start')))

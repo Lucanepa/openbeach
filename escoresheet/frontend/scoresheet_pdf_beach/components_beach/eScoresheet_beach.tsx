@@ -771,8 +771,9 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
           // Set start/end times. The start is the set's FIRST RALLY
           // (matchTimes_beach, as in OpenVolley; owner 2026-10-08), never the
           // scheduled time kept in the start dialog; a set without a rally
-          // prints its confirmed start.
-          const actualStart = setItem.startTime ? setStartMs(setItem, events) : null;
+          // prints its confirmed start. Not only a set with a confirmed start:
+          // a penalty point before the first rally skips the dialog.
+          const actualStart = setStartMs(setItem, events);
           if (actualStart !== null) {
             const start = new Date(actualStart);
             const hh = String(start.getHours()).padStart(2, '0');
@@ -919,7 +920,7 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
         if (sortedSets.length > 0) {
           const resFirstSet = sortedSets[0];
           const resLastSet = sortedSets[sortedSets.length - 1];
-          const resTotalMinutes = resFirstSet?.startTime && resLastSet?.endTime
+          const resTotalMinutes = resLastSet?.endTime
             ? plausibleMinutes(isoOf(setStartMs(resFirstSet, events)), isoOf(setEndMs(resLastSet, events)), 300)
             : null;
           if (resTotalMinutes != null) set('res_tot_dur', String(resTotalMinutes));
@@ -931,7 +932,7 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
           const matchLastSet = sortedSets[sortedSets.length - 1];
 
           // match start = set 1's first rally (as the set header prints it)
-          const matchStartMs = matchFirstSet?.startTime ? setStartMs(matchFirstSet, events) : null;
+          const matchStartMs = setStartMs(matchFirstSet, events);
           if (matchStartMs !== null) {
             const matchStart = new Date(matchStartMs);
             set('match_start_h', String(matchStart.getHours()).padStart(2, '0'));
