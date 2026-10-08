@@ -133,8 +133,18 @@ describe('MatchEnd_beach: Re-sign and Clear', () => {
     await waitForSignatureJobs(1)
   })
 
-  it('an approved match: Re-sign and Clear are closed', async () => {
+  it('an approved match: the approved view, no Re-sign or Clear', async () => {
+    // the approval is read from the match row (a remount keeps the approved
+    // view, video 08:28): no signature box to change at all
     await seed({ approved: true })
+    renderMatchEnd()
+    expect(await screen.findByRole('button', { name: 'Close match' })).toBeInTheDocument()
+    expect(screen.queryByTestId('signature-resign-captain-a')).toBeNull()
+    expect(screen.queryByTestId('signature-clear-ref1')).toBeNull()
+  })
+
+  it('a closed match: Re-sign and Clear are closed', async () => {
+    await seed({ status: 'final' })
     renderMatchEnd()
     expect(await screen.findByTestId('signature-resign-captain-a')).toBeDisabled()
     expect(screen.getByTestId('signature-clear-captain-a')).toBeDisabled()
