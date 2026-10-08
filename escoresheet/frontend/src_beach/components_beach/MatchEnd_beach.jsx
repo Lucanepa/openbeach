@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db_beach/db_beach'
+import { remarksSnapshotJob } from '../db_beach/remarksSync_beach'
 import { useAlert } from '../contexts_beach/AlertContext_beach'
 import SignaturePad from './SignaturePad_beach'
 import MenuList from './MenuList_beach'
@@ -1313,6 +1314,10 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
             accounts: approvalSummary(match, allSets)
           }
 
+          // The remarks as approved, in their own job just before the
+          // approval (backend db/017: a server without it refuses only that job)
+          const remarksJob = remarksSnapshotJob((await db.matches.get(matchId)) || match)
+          if (remarksJob) await db.sync_queue.add(remarksJob)
           await db.sync_queue.add({
             resource: 'match',
             action: 'update',

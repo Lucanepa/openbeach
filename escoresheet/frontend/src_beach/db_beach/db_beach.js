@@ -1,6 +1,7 @@
 import Dexie from 'dexie'
 import { rewriteQueuedSyncJobs } from '../utils_beach/syncIds_beach'
 import { installEventHistoryHooks } from './eventHistory_beach'
+import { installRemarksSyncHook } from './remarksSync_beach'
 
 /**
  * ============================================================================
@@ -416,3 +417,6 @@ db.version(20).stores({
 
 // Undo / delete / edit history of events, from Dexie hooks (see eventHistory_beach.js)
 installEventHistoryHooks(db)
+
+// Every change of match.remarks is queued for the server (remarksSync_beach.js, backend db/017)
+installRemarksSyncHook(db)

@@ -21,7 +21,9 @@ export const VALID_MATCH_COLUMNS = [
   'scheduled_at', 'match_info', 'officials', 'players_team1',
   'players_team2', 'team1_data', 'team2_data', 'coin_toss', 'results', 'signatures',
   'approval', 'test', 'created_at', 'updated_at', 'manual_changes', 'current_set',
-  'set_results', 'final_score', 'sanctions', 'winner', 'sport_type'
+  'set_results', 'final_score', 'sanctions', 'winner', 'sport_type',
+  // backend db/017: the scoresheet REMARKS box (text). Not public on the server.
+  'remarks'
 ]
 
 // JSONB columns that are merged with the cloud row on update, not replaced
@@ -301,7 +303,8 @@ const LOG_REDACT_DEPTH = 6
 /**
  * A value for the console (and so for uploaded logs): PIN fields left out at
  * any depth (game_pin, connection_pins, refereePin, ...), PIN values in error
- * texts masked. Anything else is passed through unchanged.
+ * texts masked, the scoresheet remarks as their length only. Anything else is
+ * passed through unchanged.
  */
 export function redactForLog(value, depth = 0) {
   if (typeof value === 'string') return redactText(value)
@@ -315,7 +318,9 @@ export function redactForLog(value, depth = 0) {
   if (proto !== Object.prototype && proto !== null) return value
   const out = {}
   for (const [k, v] of Object.entries(value)) {
-    if (!isSecretLogKey(k)) out[k] = redactForLog(v, depth + 1)
+    if (isSecretLogKey(k)) continue
+    // the scoresheet remarks: their length only, like the activity log
+    out[k] = k === 'remarks' && typeof v === 'string' ? `[${v.length} characters]` : redactForLog(v, depth + 1)
   }
   return out
 }
@@ -687,6 +692,29 @@ async function requeueParkedJobsOf(matchKey, exceptId) {
   }
 }
 
+// The approval (a closing update: approved / final) closes the match on the
+// server, which from then on refuses a change of its remarks (409
+// OV_MATCH_CLOSED). MatchEnd queues the remarks as approved just before the
+// approval (backend db/017), so the approval must not overtake an older
+// remarks job of its match that is still on its way (queued, in flight or
+// waiting out a backoff). A refused one ('failed', e.g. a server without
+// db/017) does not hold it.
+const CLOSING_STATUSES = ['approved', 'final']
+export function isClosingJob(job) {
+  return job?.resource === 'match' && job.action === 'update' && CLOSING_STATUSES.includes(job.payload?.status)
+}
+const isRemarksUpdate = (j) => j?.resource === 'match' && j.action === 'update' && j.payload != null && typeof j.payload === 'object' && 'remarks' in j.payload
+export async function closingMustWait(job) {
+  const matchKey = jobMatchKey(job)
+  if (!matchKey || job?.id == null) return false
+  try {
+    const pending = await db.sync_queue.where('status').anyOf('queued', 'sending', 'error').toArray()
+    return pending.some(j => j.id < job.id && isRemarksUpdate(j) && jobMatchKey(j) === matchKey)
+  } catch {
+    return false
+  }
+}
+
 async function processJobInner(job, ctx) {
   try {
     // Jobs queued before set/event ids were namespaced (or by a call site that
@@ -701,6 +729,12 @@ async function processJobInner(job, ctx) {
         job = { ...job, payload: { ...job.payload, external_id: resolved.external_id, ...(resolved.match_id ? { match_id: resolved.match_id } : {}) } }
         await db.sync_queue.update(job.id, { payload: job.payload })
       }
+    }
+
+    // Closing order: the approval waits for the older remarks job of its match
+    if (isClosingJob(job) && await closingMustWait(job)) {
+      safeLog.log('[SyncQueue] Closing update waits for the older remarks job of its match')
+      return null
     }
 
     // ==================== MATCH ====================
