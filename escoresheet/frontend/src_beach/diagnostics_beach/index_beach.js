@@ -28,7 +28,7 @@ import { createDiagnosticsSink } from './sinks_beach'
 import { installWatchers } from './watchers_beach'
 import { setCommitProfiling, flushCommitCounts } from './commits_beach'
 import { installDexieDiagnostics } from './dexie_beach'
-import { isDesktopPopup, popupForwardSink, receivePopupLines } from './popupForward_beach'
+import { isDesktopApp, desktopDiagnosticsSink, receivePopupLines } from './popupForward_beach'
 
 export { diag, diagActive, noteAction } from './recorder_beach'
 export { reloadWithReason } from './reload_beach'
@@ -70,14 +70,22 @@ let stopReceiver = null
 
 function start({ db, win, source }) {
   if (diagActive()) return
-  // a desktop pop-up window may not write the file: its lines go to the
-  // scoretable window, which writes them with its own (popupForward_beach.js)
-  const sink = isDesktopPopup(win)
-    ? popupForwardSink({ win, page: appName, sessionId: diagSessionId })
+  // desktop: the scoretable writes the file and takes the pop-up windows'
+  // lines; a pop-up may not write it and sends its lines to the scoretable
+  // (popupForward_beach.js: which one this is, the app says)
+  const sink = isDesktopApp(win)
+    ? desktopDiagnosticsSink({
+      win,
+      page: appName,
+      sessionId: diagSessionId,
+      fileSink: createDiagnosticsSink(win),
+      onMain: () => {
+        if (diagSink() === sink && !stopReceiver) stopReceiver = receivePopupLines({ win, append: appendLines })
+      }
+    })
     : createDiagnosticsSink(win)
   startRecorder({ sink })
   Promise.resolve(sink.setNative?.(true)).catch(() => {})
-  if (sink.kind === 'file') stopReceiver = receivePopupLines({ win, append: appendLines })
   if (db) installDexieDiagnostics(db)
   stopWatchers = installWatchers({ win, appVersion: appVersion(), platform: platformName(win), source, app: appName })
   state = { on: true, source }
@@ -104,13 +112,14 @@ export function installDiagnostics({ db = null, win = typeof window !== 'undefin
 }
 
 /**
- * The scoresheet entry: diagnostics only in a desktop pop-up window opened
- * from the scoretable (its lines go into the scoretable's file); in a
- * browser, a LAN tablet or the Android app this does nothing.
+ * The scoresheet entry: diagnostics only in the desktop app, where it runs in
+ * a pop-up window opened from the scoretable (the app says so, and the lines
+ * go into the scoretable's file); in a browser, a LAN tablet or the Android
+ * app this does nothing.
  * @param {{ db?: import('dexie').Dexie, win?: Window, app: string }} opts
  */
 export function installPopupDiagnostics({ db = null, win = typeof window !== 'undefined' ? window : undefined, app = null } = {}) {
-  if (!isDesktopPopup(win)) return { on: false, source: null }
+  if (!isDesktopApp(win)) return { on: false, source: null }
   return installDiagnostics({ db, win, app })
 }
 
@@ -155,7 +164,9 @@ export async function setDiagnosticsEnabled(on, { db = null, win = typeof window
  */
 export async function exportDiagnostics({ win = typeof window !== 'undefined' ? window : undefined } = {}) {
   await flushDiagnostics()
-  const sink = diagSink() || createDiagnosticsSink(win)
+  const running = diagSink()
+  // a desktop window: once the app has said which one (popupForward_beach.js)
+  const sink = (running && (await running.ready?.catch(() => null))) || running || createDiagnosticsSink(win)
   if (sink.kind === 'file') return (await sink.openFolder()) ? 'folder' : false
   // a desktop pop-up window: its lines are in the scoretable's file
   if (typeof sink.exportText !== 'function') return false

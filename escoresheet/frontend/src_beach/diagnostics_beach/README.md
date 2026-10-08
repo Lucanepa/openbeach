@@ -22,7 +22,9 @@ repo has every line kind and the jq recipes.
   (`ob-diagnostics`); it redacts them again and writes them into the same file
   tagged `"win":"popup-<n>"` and `"page":"scoresheet"` or `"referee"`. A pop-up
   keeps up to 2,000 lines while the scoretable is not recording
-  (`popupForward_beach.js`). On Linux and Windows that folder is OpenVolley's
+  (`popupForward_beach.js`). A page asks the app which window it is in (an
+  empty `diagnostics_append`: refused means a pop-up), because on Linux a
+  pop-up's own Tauri metadata names the scoretable's window, `main`. On Linux and Windows that folder is OpenVolley's
   (`~/.local/share/OpenVolley/logs`, `%APPDATA%\OpenVolley\logs`:
   `activity.rs` `log_root` does not depend on the app), so with both apps
   installed their lines share the same daily file. Tell them apart by
