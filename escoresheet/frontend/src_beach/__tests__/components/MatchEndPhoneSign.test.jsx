@@ -24,8 +24,7 @@ vi.mock('../../components_beach/SignaturePad_beach', () => ({
         <button
           type="button"
           onClick={() => {
-            // as the real pad: a locked one starts no session and takes no result
-            if (phone?.locked) return
+            // a result that arrives anyway (the screen must refuse it once locked)
             onSave('data:image/png;base64,PHONE', { source: 'phone', transport: 'cloud' })
             onClose?.()
           }}
