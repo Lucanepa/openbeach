@@ -391,9 +391,13 @@ describe('ConnectTabletsModal_beach', () => {
     // the server has answered, the system not yet: still reading
     expect(screen.getByTestId('hall-panel')).toHaveTextContent('Reading the local server…')
     expect(screen.queryByText(/Tablets join/)).toBeNull()
+    // nor the referee's code (step 3), which needs the same address
+    expect(qrUrl()).toBeNull()
     answer({ supported: true, active: false, platform: 'linux', ssid: 'a', password: 'b', takesOverWifi: true, leavesNetwork: 'Halle-WLAN' })
     await waitFor(() => expect(screen.getByText('Tablets join the Wi-Fi “Halle-WLAN”.')).toBeInTheDocument())
     expect(screen.getByTestId('hall-panel')).not.toHaveTextContent('Reading the local server…')
+
+    expect(qrUrl()).toBeTruthy()
   })
 
   it('Windows with the installer’s firewall rule: no manual firewall step, on either Wi-Fi', async () => {
