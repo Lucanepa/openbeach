@@ -55,6 +55,7 @@ import { BRAND } from '../brand_beach'
 import { useDiagCommits } from '../diagnostics_beach/commits_beach'
 import { diagnosticsState, exportDiagnostics } from '../diagnostics_beach/index_beach'
 import { discPaint } from '../utils_beach/teamColours_beach'
+import { isTeam1LeftInSet } from '../utils_beach/courtSides_beach'
 import { medicalFromAction, medicalRemaining, reconcileMedical, medicalEndInEvents, medicalTypeLabel, medicalPlayerLabel, formatDuration } from '../utils_beach/refereeMedical_beach'
 import { refereeEventLabel, REFEREE_DISPLAYABLE_EVENTS, BMP_PER_SET } from '../utils_beach/refereeEventLabel_beach'
 
@@ -1384,7 +1385,6 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   const team2Label = teamAKey === 'team2' ? 'A' : 'B'
 
   // Determine which team is on the left (from referee's perspective)
-  // Uses same alternating pattern as Scoreboard: odd sets = Team A on left, even sets = Team A on right
   const team1OnLeftFor2ndRef = useMemo(() => {
     if (!data?.currentSet) return true
 
@@ -1395,31 +1395,13 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       return sideA === 'left' ? (teamAKey === 'team1') : (teamAKey !== 'team1')
     }
 
-    const setIndex = data.currentSet.index
-    const setLeftTeamOverrides = data?.match?.setLeftTeamOverrides || {}
-    // Beach volleyball is best-of-3: Set 3 is the tie break
-    const is3rdSet = setIndex === 3
-    const set3CourtSwitched = data?.match?.set3CourtSwitched
-    const set3LeftTeam = data?.match?.set3LeftTeam
-
-    // Determine which side Team A is on this set
-    let sideA
-    if (setLeftTeamOverrides[setIndex] !== undefined) {
-      // Manual override for this set
-      sideA = setLeftTeamOverrides[setIndex] === teamAKey ? 'left' : 'right'
-    } else if (is3rdSet && set3CourtSwitched && set3LeftTeam) {
-      // Set 3 (tie break) special configuration (after 8-point switch)
-      sideA = set3LeftTeam === teamAKey ? 'left' : 'right'
-    } else {
-      // Default alternating pattern: odd sets = Team A on left, even sets = Team A on right
-      sideA = setIndex % 2 === 1 ? 'left' : 'right'
-    }
-
-    // Convert sideA to team1OnLeft:
-    // If sideA='left' (Team A on left), then team1 is on left only if teamAKey='team1'
-    // If sideA='right' (Team A on right), then team1 is on left only if teamAKey!='team1' (i.e., Team B is on left)
-    return sideA === 'left' ? (teamAKey === 'team1') : (teamAKey !== 'team1')
-  }, [data?.currentSet, data?.match?.setLeftTeamOverrides, data?.match?.set3CourtSwitched, data?.match?.set3LeftTeam, teamAKey, data?.liveState?.side_a])
+    // Without it: the match's sides, by the scorer's own rule
+    // (setLeftTeamOverrides holds 'A' / 'B', written by every change of
+    // courts, the TTO's too; set 3 starts on its toss's side; no change
+    // between sets unless asked). It compared 'A' / 'B' with the team key and
+    // alternated the sides every set, so A was never on the left.
+    return isTeam1LeftInSet(data.currentSet.index, data.match)
+  }, [data?.currentSet, data?.match, teamAKey, data?.liveState?.side_a])
 
   const team1OnLeft = refereeView === '1st' ? !team1OnLeftFor2ndRef : team1OnLeftFor2ndRef
 

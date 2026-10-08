@@ -43,11 +43,13 @@
  * - a penalty's point is the opponent's point marked `fromPenalty` (circled
  *   on the scoresheet);
  * - the changes of courts (every 7 points, 5 in the third set) are events of
- *   their own: a point added or removed in the middle of a set does not move
- *   them (a note says so).
+ *   their own (a court_switch, or at 21 in sets 1-2 the technical_to whose
+ *   change was made): a point added or removed in the middle of a set does
+ *   not move them (a note says so).
  */
 import { scoreFromPointEvents } from './scorerCorrections_beach'
 import { actualStartTimeLine, actualStartTimeLines, scheduledClock, startScheduleOf } from './setStartTime_beach'
+import { hasTto, ttoCourtSwitchMade } from './courtSwitchState_beach'
 
 export const TEAMS = Object.freeze(['team1', 'team2'])
 export const TEAM_SANCTIONS = Object.freeze(['improper_request', 'delay_warning', 'delay_penalty'])
@@ -938,7 +940,11 @@ export function planRemoveGroup(events, id, ctx = {}) {
     }
     plan.remove = pointGroupIds(events, ev)
     plan.affectedSets = [setIndex]
-    const later = setEvents(events, setIndex).some(e => e.type === 'court_switch' && compareBySeq(e, ev) > 0)
+    // a court_switch, or the TTO whose change of courts was made (on its
+    // technical_to event, sets 1-2)
+    const inSet = setEvents(events, setIndex)
+    const later = inSet.some(e => compareBySeq(e, ev) > 0 && (e.type === 'court_switch' ||
+      (e.type === 'technical_to' && hasTto(setIndex) && ttoCourtSwitchMade(e, inSet, ctx.match))))
     if (later) plan.notes.push(note('courtSwitches', {}, ctx.t))
   } else {
     plan.remove = (events || []).filter(e => baseOf(e) === baseOf(ev)).map(e => e.id)

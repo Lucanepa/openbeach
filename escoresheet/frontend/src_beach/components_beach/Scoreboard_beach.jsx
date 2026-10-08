@@ -1240,10 +1240,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       else if (isTimeout) matchStatus = 'timeout'
       else if (isSetInterval) matchStatus = 'interval'
 
-      // Calculate side for next set (odd sets: A on left, even sets: A on right)
-      // This follows the standard volleyball alternation pattern
+      // The side team A plays the next set on (the match's end: the last
+      // set's), by the scorer's own rule (courtSides_beach): the teams stay
+      // where they finished the set, its changes of courts and the TTO's
+      // included, unless "Switch sides" is asked (FIVB beach rule 18.1.1);
+      // set 3 starts on its toss's side. Not alternated by the set's number.
       const nextSideA = isSetInterval
-        ? (nextSetIndex % 2 === 1 ? 'left' : 'right')
+        ? (leftTeamInSet(finalSetIndex, match) === 'A' ? 'left' : 'right')
         : snapshot.sideA
 
       // For interval, points reset to 0 for the new set
@@ -3717,10 +3720,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     return true
   }, [runAction, afterPointScored])
 
+  // Only the literal true skips the accidental rally start check (its own
+  // "Yes, start rally"): a button handing its click event in must not, or a
+  // tap on Start rally never asks (it did not, until 2026-10)
   const handleStartRally = useCallback(async (skipConfirmation = false) => {
-    cLogger.logHandler('handleStartRally', { skipConfirmation })
+    const skipCheck = skipConfirmation === true
+    cLogger.logHandler('handleStartRally', { skipConfirmation: skipCheck })
     // Check for accidental rally start (if enabled and point was just awarded)
-    if (checkAccidentalRallyStart && !skipConfirmation && lastPointAwardedTimeRef.current) {
+    if (checkAccidentalRallyStart && !skipCheck && lastPointAwardedTimeRef.current) {
       const timeSinceLastPoint = (Date.now() - lastPointAwardedTimeRef.current) / 1000
       if (timeSinceLastPoint < accidentalRallyStartDuration) {
         setAccidentalRallyConfirmModal({
@@ -10135,7 +10142,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   return (
                                     <button
                                       className={cn('rally-btn start', SB_RALLY_START)}
-                                      onClick={handleStartRally}
+                                      onClick={() => handleStartRally()}
                                       style={{ padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'max(64px, calc(92px * var(--scale-factor, 1)))' }}
                                     >
                                       {t('scoreboard.buttons.startSet', 'Start set')} {(data?.set?.index || 1)}
@@ -10147,7 +10154,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 return (
                                   <button
                                     className={cn('rally-btn start', SB_RALLY_START)}
-                                    onClick={handleStartRally}
+                                    onClick={() => handleStartRally()}
                                     disabled={data?.match?.status === 'complete' || set3TossPending}
                                     title={set3TossPending ? t('scoreboard.set3TossFirst', 'Record the set 3 coin toss first') : undefined}
                                     style={{ padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'max(64px, calc(92px * var(--scale-factor, 1)))' }}
