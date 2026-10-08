@@ -577,7 +577,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     const tracker = liveTrackerRef.current
     if (!tracker.liveState(liveState)) return
     if (tracker.lastBundle) {
-      updateMatchDataState(tracker.lastBundle)
+      // with the bundle the scorer sends next (serve, court): one update
+      tracker.hold(() => updateMatchDataState(tracker.lastBundle))
       return
     }
     lastLiveStateRef.current = tracker.newest
@@ -968,22 +969,33 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             }
           }
 
-          // Store last event for footer display (only specific event types)
-          if (state.last_event_type && REFEREE_DISPLAYABLE_EVENTS.includes(state.last_event_type)) {
-            setLastEvent({
-              type: state.last_event_type,
-              team: state.last_event_team,
-              data: state.last_event_data,
-              timestamp: Date.now()
-            })
+          // Last event for the footer (only specific event types)
+          const showLastEvent = () => {
+            if (state.last_event_type && REFEREE_DISPLAYABLE_EVENTS.includes(state.last_event_type)) {
+              setLastEvent({
+                type: state.last_event_type,
+                team: state.last_event_team,
+                data: state.last_event_data,
+                timestamp: Date.now()
+              })
+            }
           }
 
-          // Show this row's score now when it is newer than the bundle shown
-          // (the scorer's sync can land after its live state), then refetch
-          // on ANY change - handles points, lineups, sanctions, undoes,
-          // replays, etc.; an older copy read back never rolls the score back.
+          // Refetch on ANY change - handles points, lineups, sanctions,
+          // undoes, replays, etc. This row's score, when it is newer than the
+          // bundle shown (the scorer's sync can land after its live state),
+          // and its last event wait for that bundle (tracker.hold): shown
+          // alone, the score changed first and the serve and the court
+          // ~200 ms later. An older copy read back never rolls the score back.
           const tracker = liveTrackerRef.current
-          if (tracker.liveState(state) && tracker.lastBundle) updateMatchDataState(tracker.lastBundle)
+          if (tracker.liveState(state) && tracker.lastBundle) {
+            tracker.hold(() => {
+              showLastEvent()
+              updateMatchDataState(tracker.lastBundle)
+            })
+          } else {
+            showLastEvent()
+          }
           fetchFreshData()
         }
       )
