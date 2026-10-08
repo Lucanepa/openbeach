@@ -41,6 +41,7 @@ import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot } from '../utils_beach/stateSnapshot_beach'
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
 import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
+import { TTO_TOTAL, courtChangeEvery, hasTechnicalTimeout } from '../utils_beach/courtRhythm_beach'
 import { defaultSetStartTime, scheduledClock, withActualStartTimeRemark, actualStartTimeLine, startScheduleOf, typedStartNear } from '../utils_beach/setStartTime_beach'
 import { withoutAutoRemarks, errorText as correctionErrorText } from '../utils_beach/corrections_beach'
 import { correctSetTimes } from '../utils_beach/applyCorrectionPlan_beach'
@@ -3407,9 +3408,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     const totalScore = team1Points + team2Points
     const setIndex = set.index
     const is3rdSet = setIndex === 3
-    const courtChangeInterval = is3rdSet ? 5 : 7
+    // The set's rhythm (courtRhythm_beach): changes of courts every 7 / 5
+    // points, the TTO at 21 in sets 1-2
+    const courtChangeInterval = courtChangeEvery(setIndex)
     const pointsToWin = is3rdSet ? 15 : 21
-    const ttoSet = setIndex >= 1 && setIndex <= 2
+    const ttoSet = hasTechnicalTimeout(setIndex)
 
     // A set-ending point opens the set end, not a change of courts or a TTO
     const setIsEnding = (team1Points >= pointsToWin && team1Points - team2Points >= 2) ||
@@ -3435,7 +3438,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       if (newRally) {
         const pointsUntilSwitch = courtChangeInterval - (totalScore % courtChangeInterval)
         // One point to TTO: at 20 in sets 1-2 only
-        if (totalScore === 20 && ttoSet) {
+        if (totalScore === TTO_TOTAL - 1 && ttoSet) {
           deferUi(() => setPreEventPopup({ message: 'One point to TTO' }))
         }
         // One point to switch (but not at 20 since that shows TTO message)
@@ -3444,7 +3447,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         }
       }
 
-      const atTto = totalScore === 21 && ttoSet
+      const atTto = totalScore === TTO_TOTAL && ttoSet
       const atSwitch = totalScore > 0 && totalScore % courtChangeInterval === 0
       if (atTto || atSwitch) {
         const setEvents = (await db.events.where('matchId').equals(matchId).toArray())
