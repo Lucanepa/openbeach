@@ -40,6 +40,7 @@ import { useDiagCommits } from '../diagnostics_beach/commits_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot } from '../utils_beach/stateSnapshot_beach'
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
+import { staleCourtSwitches, switchBackUpdate, snapshotsAfterSwitchBack, pendingTto, pendingCourtDialog } from '../utils_beach/courtSwitchState_beach'
 import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
 import { defaultSetStartTime, scheduledClock, withActualStartTimeRemark, actualStartTimeLine, startScheduleOf, typedStartNear } from '../utils_beach/setStartTime_beach'
 import { withoutAutoRemarks, errorText as correctionErrorText } from '../utils_beach/corrections_beach'
@@ -3388,6 +3389,26 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     [pointsBySide.left, pointsBySide.right, isCompactMode, isLaptopMode]
   )
 
+  // The courts follow the score (owner's decision, 2026-10-08, as in
+  // OpenVolley's deciding set): a change of courts made at a total the score
+  // no longer reaches (a replay after the change at 7 takes 7 back to 6; after
+  // the TTO's change at 21, back to 20) asks to change the courts back, with
+  // the change-of-courts dialog (`back`). Confirmed, the teams go back and
+  // that change's event goes (with a TTO's change, the TTO), so the change
+  // (and the TTO) is asked again when the score reaches that total again.
+  // True when it asked. Inside the caller's action: Dexie reads only.
+  const askCourtSwitchBackIfDue = useCallback(async (setIndex) => {
+    const set = await db.sets.where({ matchId }).and(s => s.index === setIndex).first()
+    if (!set || set.finished) return false
+    const team1Points = set.team1Points || 0
+    const team2Points = set.team2Points || 0
+    const events = await db.events.where('matchId').equals(matchId).toArray()
+    const match = await db.matches.get(matchId)
+    if (staleCourtSwitches(events, setIndex, team1Points + team2Points, match).length === 0) return false
+    deferUi(() => setCourtSwitchModal({ set, team1Points, team2Points, teamThatScored: null, back: true }))
+    return true
+  }, [matchId, deferUi])
+
   // What a point on the score opens, whatever gave it: the Point buttons, a
   // penalty (delay or misconduct), a referee BMP, a successful team BMP and a
   // decision change all come here (a referee BMP's point reached 7 or 21
@@ -3425,6 +3446,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
 
     if (!setIsEnding) {
+      // The total did not change (a decision change or a BMP asked from the
+      // dialog of the change back, or cancelled): a change of courts made at
+      // a total the score no longer reaches asks again to change back
+      if (!newRally && await askCourtSwitchBackIfDue(setIndex)) return
+
       // The point was moved off a set-ending score: a set-end dialog of this
       // set is out of date (it came back under the BMP dialog asked from it,
       // and confirming it ended the set at 20:1)
@@ -3454,8 +3480,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         if (atTto) {
           if (setEvents.some(e => e.type === 'technical_to')) {
             // Logged already (by the point the BMP or the decision moved): an
-            // open TTO dialog shows the new score
-            deferUi(() => setTtoModal(prev => prev ? { ...prev, team1Points, team2Points, teamThatScored: teamKey } : prev))
+            // open TTO dialog shows the new score. One whose change of courts
+            // is not made has its dialog pending: it opens (the screen was
+            // reloaded with it open)
+            const match = await db.matches.get(matchId)
+            const pending = !!pendingTto(setEvents, setIndex, match)
+            deferUi(() => setTtoModal(prev => prev
+              ? { ...prev, team1Points, team2Points, teamThatScored: teamKey }
+              : (pending ? { set, team1Points, team2Points, countdown: TTO_SECONDS, started: false, triggerCourtSwitchAfter: true, teamThatScored: teamKey } : prev)))
             return
           }
           // Log technical_to event for PDF scoresheet
@@ -3467,7 +3499,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             matchId,
             setIndex,
             type: 'technical_to',
-            payload: { preSwitchOverrides },
+            // courtSwitched: its change of courts, made when it ends
+            payload: { preSwitchOverrides, courtSwitched: false },
             ts: new Date().toISOString(),
             seq: ttoSeq
           })
@@ -3509,7 +3542,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
     // If the set ended, checkSetEnd shows the confirmation modal
     await checkSetEnd(set, team1Points, team2Points)
-  }, [matchId, checkSetEnd, getNextSeq, captureFullStateSnapshot, deferUi])
+  }, [matchId, checkSetEnd, getNextSeq, captureFullStateSnapshot, deferUi, askCourtSwitchBackIfDue])
 
   const awardPoint = useCallback(
     async (side, skipConfirmation = false, fromPenalty = false) => {
@@ -5414,6 +5447,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Go back to idle state - user can then click "Start rally" or "Undo"
       // No automatic rally start
 
+      // The replayed point had reached a change of courts that was made (the
+      // change at 7, 7 back to 6; the TTO's change at 21): change back
+      await askCourtSwitchBackIfDue(plan.setIndex)
+
       // Tablets, livescore (fresh snapshot: data has changed), scoresheet
       afterRefereeSync()
       afterLiveState('replay', null, { reason: 'point_replay', undoneTeam })
@@ -5424,7 +5461,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Rethrown: the replay rolls back as a whole
       throw error
     }
-  }, { reason: 'decision_change' }), [runAction, replayRallyConfirm, data?.set, matchId, discardEvents, applyPointRemovalScore, logEvent, afterRefereeSync, afterLiveState, afterScoresheetRefresh])
+  }, { reason: 'decision_change' }), [runAction, replayRallyConfirm, data?.set, matchId, discardEvents, applyPointRemovalScore, logEvent, askCourtSwitchBackIfDue, afterRefereeSync, afterLiveState, afterScoresheetRefresh])
 
   // Cancelled: nothing changed. Opened from the change-of-courts or the
   // set-end dialog (which it closed), that dialog comes back: the change of
@@ -7022,6 +7059,44 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     const modal = courtSwitchModal
     setCourtSwitchModal(null)
 
+    // The change back (askCourtSwitchBackIfDue), one action: the teams go
+    // back where they were before the change(s) the score no longer reaches,
+    // whose events go (a TTO's change: the TTO too), so the change is asked
+    // again at that total; the tablets, the livescore and the scoresheet follow
+    if (modal.back) {
+      await runAction('courtSwitch', async () => {
+        const setIndex = modal.set.index
+        const set = await db.sets.where({ matchId }).and(s => s.index === setIndex).first()
+        if (!set) return
+        const events = await db.events.where('matchId').equals(matchId).toArray()
+        const match = await db.matches.get(matchId)
+        const stale = staleCourtSwitches(events, setIndex, (set.team1Points || 0) + (set.team2Points || 0), match)
+        if (stale.length === 0) return
+        const update = switchBackUpdate(stale, setIndex, match)
+        if (update) {
+          await db.matches.update(matchId, update)
+          if (match?.seed_key) {
+            await db.sync_queue.add({
+              resource: 'match',
+              action: 'update',
+              payload: { id: match.seed_key, ...update },
+              createdAt: new Date().toISOString()
+            })
+          }
+        }
+        await discardEvents(stale)
+        // The undo snapshots logged since the change have its courts: Undo of
+        // the next event would change them again
+        for (const row of snapshotsAfterSwitchBack(events, stale, setIndex, { ...match, ...(update || {}) })) {
+          await db.events.update(row.id, { stateSnapshot: row.stateSnapshot })
+        }
+        afterRefereeSync()
+        afterLiveState('court_switch', null, { reason: `set${setIndex}_court_switch_back` })
+        afterScoresheetRefresh()
+      }, { reason: 'decision_change' })
+      return
+    }
+
     const setIndex = modal.set.index
     const teamAKey = data.match.coinTossTeamA || 'team1'
     const teamBKey = teamAKey === 'team1' ? 'team2' : 'team1'
@@ -7069,7 +7144,38 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // Sync to Supabase with fresh snapshot to update side_a and serving_team after court switch
     const reason = setIndex === 3 ? 'set3_8points' : `set${setIndex}_court_switch`
     syncLiveStateToSupabase('court_switch', null, { reason }, null)
-  }), [runCourtSwitchConfirm, courtSwitchModal, matchId, data?.match, data?.set, logEvent, syncLiveStateToSupabase])
+  }), [runCourtSwitchConfirm, courtSwitchModal, matchId, data?.match, data?.set, logEvent, syncLiveStateToSupabase, runAction, discardEvents, afterRefereeSync, afterLiveState, afterScoresheetRefresh])
+
+  // The changes of courts on page load/refresh (ported from OpenVolley
+  // e95516eb): the dialogs lived only in the screen's state, so a screen
+  // reloaded (or the app opened again) with the change-of-courts dialog, the
+  // TTO dialog, or a decision change asked from one of them, open came back
+  // without it, the courts not changed, until the next change total. Asked
+  // once per set when it is first shown (pendingCourtDialog): the change
+  // back, else what a point at that total opens (the change of courts, the
+  // TTO; a TTO already logged opens again, not started). Later every way the
+  // score changes asks, and a check on every render would reopen a dialog
+  // under the decision change asked from it.
+  const courtSwitchLoadCheckedRef = useRef(null)
+  useEffect(() => {
+    const set = data?.set
+    if (!set || !data?.match || !data?.events) return
+    if (courtSwitchLoadCheckedRef.current === set.id) return
+    courtSwitchLoadCheckedRef.current = set.id
+    const pending = pendingCourtDialog(data.events, set, data.match)
+    if (!pending) return
+    const team1Points = set.team1Points || 0
+    const team2Points = set.team2Points || 0
+    if (pending === 'back') {
+      setCourtSwitchModal(prev => prev || { set, team1Points, team2Points, teamThatScored: null, back: true })
+      return
+    }
+    const lastPoint = data.events
+      .filter(e => e.type === 'point' && (e.setIndex ?? 1) === set.index)
+      .sort((a, b) => (b.seq || 0) - (a.seq || 0))[0]
+    runAction('courtSwitchLoad', () => afterPointScored({ set, team1Points, team2Points, teamKey: lastPoint?.payload?.team || null, newRally: false }))
+      .catch(err => console.error('[Scoreboard] Could not ask for the pending change of courts:', err))
+  }, [data?.set, data?.match, data?.events, runAction, afterPointScored])
 
   // Handle TTO end - performs court switch if needed (at 21 points in sets 1-2).
   // The one end of a TTO, tapped by the scorer or run out (the countdown
@@ -7118,6 +7224,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         const updatedSnapshot = await captureFullStateSnapshot()
         if (updatedSnapshot) {
           await db.events.update(ttoEvent.id, { stateSnapshot: updatedSnapshot })
+        }
+        // Its change of courts is made (a reload no longer asks for it; a
+        // replay back below 21 asks to change back)
+        if (switchedSetIndex != null) {
+          await db.events.update(ttoEvent.id, { payload: { ...(ttoEvent.payload || {}), courtSwitched: true } })
         }
       }
     }
@@ -16712,10 +16823,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         )
       })()}
 
-      {/* Court Switch Modal (5th Set at 8 points) - highest priority, blocks everything */}
+      {/* Court Switch Modal (every 7 points, every 5 in set 3; or the change
+          back when the score no longer reaches a change made) - highest
+          priority, blocks everything */}
       {courtSwitchModal && (
         <Modal
-          title={t('scoreboard.modals.courtSwitchRequired')}
+          title={t(courtSwitchModal.back ? 'scoreboard.modals.courtSwitchBackRequired' : 'scoreboard.modals.courtSwitchRequired')}
           open={true}
           onClose={() => { }}
           width={450}
@@ -16724,7 +16837,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         >
           <div style={{ padding: '24px', textAlign: 'center' }}>
             <p style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 700, color: 'var(--ov-success)' }}>
-              {t('scoreboard.modals.teamsMustSwitchCourts')}
+              {t(courtSwitchModal.back ? 'scoreboard.modals.teamsMustSwitchCourtsBack' : 'scoreboard.modals.teamsMustSwitchCourts')}
             </p>
             <div style={{ marginBottom: '16px', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
               {courtScoreChips(courtSwitchModal.team1Points, courtSwitchModal.team2Points)}
@@ -16744,7 +16857,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   cursor: 'pointer'
                 }}
               >
-                {t('scoreboard.buttons.switchCourts')}
+                {t(courtSwitchModal.back ? 'scoreboard.buttons.switchCourtsBack' : 'scoreboard.buttons.switchCourts')}
               </button>
               <button
                 onClick={() => {
@@ -16777,8 +16890,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 {t('scoreboard.buttons.decisionChange')}
               </button>
             </div>
-            {/* BMP Request for losing team */}
-            {(() => {
+            {/* BMP Request for losing team (none for the change back: no point
+                reached it, a point was replayed) */}
+            {!courtSwitchModal.back && (() => {
               const losingTeamKey = courtSwitchModal.teamThatScored === 'team1' ? 'team2' : 'team1'
               // once per completed rally (bmpAvailability_beach)
               const bmpRemaining = dialogBmpRemaining(losingTeamKey)
