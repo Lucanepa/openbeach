@@ -142,10 +142,12 @@ describe('Scoreboard_beach: the phone layout', () => {
     fireEvent.click(button('Confirm Unsuccessful'))
     await waitFor(async () => expect(await ofType('challenge_outcome')).toHaveLength(1))
     expect((await ofType('challenge_outcome'))[0].payload.team).toBe('team2')
-    // once per rally: both greyed now, B has one left
+    // once per rally: both greyed now, B has one left (the request greys
+    // them before its outcome is on screen: under the full suite's load the
+    // count was read in between)
     await waitFor(() => expect(view.getByTestId('phone-bmp-right').disabled).toBe(true))
     expect(view.getByTestId('phone-bmp-left').disabled).toBe(true)
-    expect(view.getByTestId('phone-bmp-right').textContent).toBe('BMP left1')
+    await waitFor(() => expect(view.getByTestId('phone-bmp-right').textContent).toBe('BMP left1'))
     await settle()
 
     // ---- time-out A: the screen's request dialog, then its countdown ----
