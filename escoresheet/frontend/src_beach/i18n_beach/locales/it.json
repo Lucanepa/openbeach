@@ -116,7 +116,11 @@
       "confirm": "Conferma forfait",
       "injuredPlayer": "Numero del giocatore infortunato",
       "remark": "Osservazione"
-    }
+    },
+    "receive": "Ricezione",
+    "winnerChose": "Il vincitore ha scelto",
+    "choiceServe": "Battuta o ricezione",
+    "choiceSide": "Lato del campo"
   },
   "roster": {
     "title": "Rosa",
@@ -426,7 +430,18 @@
     "selectCountry": "Scegli il paese",
     "matchPinTitle": "Codice PIN della partita",
     "matchPinLabel": "Codice PIN",
-    "enterPinPrompt": "Inserisci un codice PIN per proteggere questa partita (obbligatorio):"
+    "enterPinPrompt": "Inserisci un codice PIN per proteggere questa partita (obbligatorio):",
+    "syncState": {
+      "notSignedIn": "Non connesso",
+      "localOnly": "Solo locale",
+      "savedSignInToSync": "Salvato su questo dispositivo. Accedi per sincronizzarlo nel cloud."
+    },
+    "matchInfoForm": {
+      "pastDate": "Questa data è nel passato."
+    },
+    "setupLayout": {
+      "coinTossNeeds": "Completa prima le informazioni della partita, gli ufficiali e le due squadre."
+    }
   },
   "scoreboard": {
     "set": "Set",
@@ -2980,5 +2995,26 @@
     "terms": "Condizioni d’uso",
     "impressum": "Note legali",
     "opensource": "Avviso open source"
+  },
+  "referee": {
+    "medical": {
+      "mto": "MTO",
+      "rit": "RIT",
+      "ritNoBlood": "senza sangue",
+      "ritToilet": "toilette",
+      "ritWeather": "meteo",
+      "end": "fine",
+      "recovered": "ristabilito",
+      "forfeit": "forfait",
+      "recoveryTime": "Tempo di recupero"
+    },
+    "events": {
+      "teamBmp": "BMP squadra",
+      "refereeBmp": "BMP arbitro",
+      "successful": "riuscito",
+      "unsuccessful": "non riuscito",
+      "judgmentImpossible": "giudizio impossibile"
+    },
+    "bmpLeft": "Protocollo segno della palla ({{count}} rimasti)"
   }
 }

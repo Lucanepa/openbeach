@@ -156,6 +156,18 @@ describe('shouldWaitForCloudSync', () => {
   })
 })
 
+// The OpenBeach screencast of 2026-10-08: signed out, every match setup
+// save showed "Match created! Syncing to database..." for 10 s, then a
+// "saved locally (sync pending)" box to click away. Signed out the queue
+// sends nothing, and with nothing queued its status is 'synced'.
+describe('shouldWaitForCloudSync: signed out', () => {
+  it('never waits without a session on this device', () => {
+    expect(shouldWaitForCloudSync({ syncStatus: 'synced', signedIn: false })).toBe(false)
+    expect(shouldWaitForCloudSync({ syncStatus: 'syncing', signedIn: false })).toBe(false)
+    expect(shouldWaitForCloudSync({ syncStatus: 'synced', signedIn: true })).toBe(true)
+  })
+})
+
 describe('accountMayWriteCloud', () => {
   afterEach(() => publishAccess(null))
 

@@ -116,7 +116,11 @@
       "confirm": "Confirm forfait",
       "injuredPlayer": "Injured player number",
       "remark": "Remark"
-    }
+    },
+    "receive": "Receive",
+    "winnerChose": "The winner chose",
+    "choiceServe": "Serve or receive",
+    "choiceSide": "Court side"
   },
   "roster": {
     "title": "Roster",
@@ -427,7 +431,18 @@
     },
     "matchPinTitle": "Match PIN code",
     "matchPinLabel": "PIN code",
-    "enterPinPrompt": "Enter a PIN code to protect this match (required):"
+    "enterPinPrompt": "Enter a PIN code to protect this match (required):",
+    "syncState": {
+      "notSignedIn": "Not signed in",
+      "localOnly": "Local only",
+      "savedSignInToSync": "Saved on this device. Sign in to sync it to the cloud."
+    },
+    "matchInfoForm": {
+      "pastDate": "This date is in the past."
+    },
+    "setupLayout": {
+      "coinTossNeeds": "Complete the match info, the officials and both teams first."
+    }
   },
   "scoreboard": {
     "set": "Set",
@@ -2981,5 +2996,26 @@
     "terms": "Terms of use",
     "impressum": "Legal notice",
     "opensource": "Open-source notice"
+  },
+  "referee": {
+    "medical": {
+      "mto": "MTO",
+      "rit": "RIT",
+      "ritNoBlood": "no blood",
+      "ritToilet": "toilet",
+      "ritWeather": "weather",
+      "end": "end",
+      "recovered": "recovered",
+      "forfeit": "forfeit",
+      "recoveryTime": "Recovery time"
+    },
+    "events": {
+      "teamBmp": "Team BMP",
+      "refereeBmp": "Referee BMP",
+      "successful": "successful",
+      "unsuccessful": "unsuccessful",
+      "judgmentImpossible": "judgment impossible"
+    },
+    "bmpLeft": "Ball mark protocol: {{count}} left"
   }
 }

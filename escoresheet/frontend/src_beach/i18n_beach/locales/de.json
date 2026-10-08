@@ -116,7 +116,11 @@
       "confirm": "Forfait bestätigen",
       "injuredPlayer": "Nummer des verletzten Spielers",
       "remark": "Bemerkung"
-    }
+    },
+    "receive": "Annahme",
+    "winnerChose": "Gewählt wurde",
+    "choiceServe": "Aufschlag oder Annahme",
+    "choiceSide": "Spielfeldseite"
   },
   "roster": {
     "title": "Kader",
@@ -426,7 +430,18 @@
     "selectCountry": "Land wählen",
     "matchPinTitle": "Spiel-PIN-Code",
     "matchPinLabel": "PIN-Code",
-    "enterPinPrompt": "Geben Sie einen PIN-Code ein, um dieses Spiel zu schützen (erforderlich):"
+    "enterPinPrompt": "Geben Sie einen PIN-Code ein, um dieses Spiel zu schützen (erforderlich):",
+    "syncState": {
+      "notSignedIn": "Nicht angemeldet",
+      "localOnly": "Nur lokal",
+      "savedSignInToSync": "Auf diesem Gerät gespeichert. Melde dich an, um es in die Cloud zu synchronisieren."
+    },
+    "matchInfoForm": {
+      "pastDate": "Dieses Datum liegt in der Vergangenheit."
+    },
+    "setupLayout": {
+      "coinTossNeeds": "Zuerst Spielinfos, Offizielle und beide Teams ausfüllen."
+    }
   },
   "scoreboard": {
     "set": "Satz",
@@ -2980,5 +2995,26 @@
     "terms": "Nutzungsbedingungen",
     "impressum": "Impressum",
     "opensource": "Open-Source-Hinweis"
+  },
+  "referee": {
+    "medical": {
+      "mto": "MTO",
+      "rit": "RIT",
+      "ritNoBlood": "ohne Blut",
+      "ritToilet": "Toilette",
+      "ritWeather": "Wetter",
+      "end": "Ende",
+      "recovered": "erholt",
+      "forfeit": "Forfait",
+      "recoveryTime": "Erholungszeit"
+    },
+    "events": {
+      "teamBmp": "Team-BMP",
+      "refereeBmp": "Schiedsrichter-BMP",
+      "successful": "erfolgreich",
+      "unsuccessful": "erfolglos",
+      "judgmentImpossible": "Beurteilung unmöglich"
+    },
+    "bmpLeft": "Ballabdruck-Protokoll ({{count}} übrig)"
   }
 }

@@ -7,6 +7,7 @@ import { apiFrom } from '../lib_beach/apiClient_beach'
 import { setExtId, eventExtId } from '../utils_beach/syncIds_beach'
 import { isBackendAvailable, getBackendUrl } from '../utils_beach/backendConfig_beach'
 import { cloudSyncWaitNow } from '../utils_beach/cloudStatus_beach'
+import { teamNameForCoinToss } from '../utils_beach/teamNames_beach'
 import SignaturePad from './SignaturePad_beach'
 import { saveMatchSignature, signatureFieldOfRole } from '../utils_beach/signatures_beach'
 import { phoneSignContext, signatureSourceUpdate, SLOT_OF_ROLE } from '../utils_beach/phoneSignature_beach'
@@ -24,13 +25,15 @@ import { ArrowLeft, ArrowLeftRight, Check, FileText, Loader2, OctagonX, PenLine,
 import { Volleyball } from '@phosphor-icons/react'
 import { cn } from '../ui/volleyui/cn.js'
 import { Button, FOCUS_RING } from '../ui/volleyui/Button.jsx'
+import { SegmentedControl } from '../ui/volleyui/SegmentedControl.jsx'
 import { DateField } from '../ui/volleyui/DateField.jsx'
 import { Modal as KitModal, modalCancelClass, modalPrimaryClass, modalSaveClass, modalDangerClass } from '../ui/volleyui/Modal.jsx'
 import { NOTICE } from '../ui/volleyui/tones.js'
 
 // The coin toss page: one kit page card on the stone page (App_beach paints
 // it), full width, in the `.ov-kit` scope.
-const COIN_TOSS_VIEW = 'ov-kit w-full min-w-0 self-start mx-auto mt-2.5 rounded-2xl border border-stone-200/70 bg-white p-4 shadow-card sm:p-6'
+// A centred card as the other setup screens (max 1200 px), not the full window width
+const COIN_TOSS_VIEW = 'ov-kit w-full max-w-[1200px] min-w-0 self-start mx-auto mt-2.5 rounded-2xl border border-stone-200/70 bg-white p-4 shadow-card sm:p-6'
 // A sunken section inside the page card (kit Block).
 const SETUP_BLOCK = 'rounded-xl border border-stone-200/70 bg-stone-50/60'
 // Dialogs sit above the legacy header (z-index 1000), like the legacy
@@ -198,6 +201,8 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
   const [serveA, setServeA] = useState(true)
   const [serveB, setServeB] = useState(false)
   const [coinTossWinner, setCoinTossWinner] = useState('team1') // Which team won the coin toss
+  // What the winner chose (rule 7.1.2): 'serve' (serve or receive) or 'side'; data only
+  const [coinTossChoice, setCoinTossChoice] = useState(null)
 
   // First serve player within each team (beach volleyball)
   const [team1FirstServe, setTeam1FirstServe] = useState(null) // player number
@@ -413,16 +418,6 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           match.team2Id ? db.players.where('teamId').equals(match.team2Id).toArray() : []
         ])
 
-        // Helper to generate beach volleyball team name from players: "LastName1/LastName2 (COUNTRY)"
-        const toTitleCase = (str) => str ? str.replace(/(^|[\s-])(\S)/g, (m, pre, c) => pre + c.toUpperCase()) : ''
-        const generateBeachTeamName = (players, country) => {
-          if (!players || players.length === 0) return null
-          const sorted = [...players].sort((a, b) => (a.number || 999) - (b.number || 999))
-          const lastNames = sorted.map(p => toTitleCase(p.lastName || '')).filter(n => n)
-          if (lastNames.length === 0) return null
-          const namesPart = lastNames.join(' / ')
-          return country ? `${namesPart} (${country.toUpperCase()})` : namesPart
-        }
 
         if (team1Players.length) {
           const sortedTeam1 = team1Players.map(p => ({
@@ -434,8 +429,8 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           })).sort((a, b) => (a.number || 999) - (b.number || 999))
           setTeam1Roster(sortedTeam1)
           // Generate team name from player last names
-          const generatedName = generateBeachTeamName(sortedTeam1, match.team1Country)
-          setTeam1Name(generatedName || team1Data?.name || 'Team 1')
+          // The stored name, else "Last / Last"; never the country (shown apart)
+          setTeam1Name(teamNameForCoinToss(team1Data?.name, sortedTeam1, 'Team 1'))
           // Default first serve to player 1 (or first player's number)
           const player1 = sortedTeam1.find(p => p.number === 1) || sortedTeam1[0]
           if (player1) setTeam1FirstServe(player1.number)
@@ -453,8 +448,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           })).sort((a, b) => (a.number || 999) - (b.number || 999))
           setTeam2Roster(sortedTeam2)
           // Generate team name from player last names
-          const generatedName = generateBeachTeamName(sortedTeam2, match.team2Country)
-          setTeam2Name(generatedName || team2Data?.name || 'Team 2')
+          setTeam2Name(teamNameForCoinToss(team2Data?.name, sortedTeam2, 'Team 2'))
           // Default first serve to player 1 (or first player's number)
           const player1 = sortedTeam2.find(p => p.number === 1) || sortedTeam2[0]
           if (player1) setTeam2FirstServe(player1.number)
@@ -473,6 +467,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         if (match.coinTossWinner) {
           setCoinTossWinner(match.coinTossWinner)
         }
+        if (match.coinTossChoice) setCoinTossChoice(match.coinTossChoice)
 
         // Load signatures
         if (match.team1CaptainSignature) {
@@ -714,6 +709,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         coinTossServeA: serveA,
         coinTossServeB: serveB,
         coinTossWinner: coinTossWinner,  // Which team won the coin toss
+        coinTossChoice: coinTossChoice || null,  // The winner's choice: 'serve' or 'side' (rule 7.1.2)
         coinTossConfirmed: true,  // Mark coin toss as confirmed
         team1Color,
         team2Color
@@ -758,7 +754,8 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
             serveA: serveA,
             serveB: serveB,
             firstServe: firstServeTeam,
-            coinTossWinner: coinTossWinner
+            coinTossWinner: coinTossWinner,
+            coinTossChoice: coinTossChoice || null
           },
           ts: new Date().toISOString(),
           seq: 1
@@ -818,6 +815,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               confirmed: true,
               first_serve: firstServeTeam,
               winner: coinTossWinner,
+              winner_choice: coinTossChoice || null,
               team1_first_serve: team1FirstServe || null,
               team2_first_serve: team2FirstServe || null
             },
@@ -1595,12 +1593,6 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
       />
     </div>
   )
-  const volleyballPlaceholder = (
-    <div style={{
-      width: '15vmin', height: '15vmin', display: 'flex',
-      alignItems: 'center', justifyContent: 'center', background: 'transparent', flexShrink: 0
-    }} />
-  )
 
   if (!match) {
     return (
@@ -1652,7 +1644,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           aria-pressed={won}
           onClick={() => setCoinTossWinner(key)}
           className={cn(
-            'mb-10 inline-flex min-h-11 max-w-full items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition-colors sm:px-4',
+            'mb-2 inline-flex min-h-11 max-w-full items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition-colors sm:px-4',
             won ? 'border-slate-900 bg-slate-900 text-white hover:bg-slate-800' : 'border-stone-300 bg-white text-stone-600 hover:bg-stone-50',
             FOCUS_RING
           )}
@@ -1660,9 +1652,32 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           {won && <Check size={16} aria-hidden="true" />}
           {t('coinToss.wonCoinToss', 'Won the coin toss')}
         </button>
+        {/* The winner's choice (rule 7.1.2); the same room in both columns */}
+        <div className="mb-4 flex min-h-11 items-center justify-center">
+          {won && (
+            <SegmentedControl
+              ariaLabel={t('coinToss.winnerChose', 'The winner chose')}
+              value={coinTossChoice || ''}
+              onChange={setCoinTossChoice}
+              options={[
+                { value: 'serve', label: t('coinToss.choiceServe', 'Serve or receive') },
+                { value: 'side', label: t('coinToss.choiceSide', 'Court side') }
+              ]}
+            />
+          )}
+        </div>
 
-        <div className={cn('flex items-center justify-center', isCompact ? 'mb-3' : 'mb-4')} style={{ height: sizes.volleyballSize }}>
-          {serves ? volleyballImage : volleyballPlaceholder}
+        {/* Serve or receive: the ball and its word for the serving team, an
+            empty ring and "Receive" for the other (team B's column was empty) */}
+        <div className={cn('flex flex-col items-center justify-center gap-1.5', isCompact ? 'mb-3' : 'mb-4')} style={{ minHeight: sizes.volleyballSize }} data-testid={`coin-toss-serve-${side}`}>
+          {serves ? volleyballImage : (
+            <div style={{ width: '15vmin', height: '15vmin', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <span aria-hidden="true" className="rounded-full border-2 border-dashed border-stone-300" style={{ width: '62%', height: '62%' }} />
+            </div>
+          )}
+          <span className={cn('rounded-full px-3 py-0.5 text-sm font-semibold', serves ? 'bg-slate-900 text-white' : 'bg-stone-100 text-stone-600')}>
+            {serves ? t('coinToss.serve', 'Serve') : t('coinToss.receive', 'Receive')}
+          </span>
         </div>
 
         {/* Order & signature: outline until signed, then the emerald done state (½ while the coach is missing) */}
@@ -1691,7 +1706,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
 
   // The serve / switch keys between the teams: the dark neutral key action,
   // courtside size.
-  const SWITCH_BTN = cn('inline-flex min-h-14 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-slate-900 px-5 text-base font-semibold text-white transition-colors hover:bg-slate-800', FOCUS_RING)
+  const SWITCH_BTN = cn('inline-flex min-h-14 w-48 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-slate-900 px-5 text-base font-semibold text-white transition-colors hover:bg-slate-800', FOCUS_RING)
 
   return (
     <div className={COIN_TOSS_VIEW}>
@@ -1713,14 +1728,16 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         {renderTeamColumn('A')}
 
         {/* Middle buttons */}
-        <div className={cn('order-last col-span-2 flex flex-row flex-wrap items-center justify-center gap-3 self-stretch px-1 sm:order-none sm:col-span-1 sm:flex-col sm:flex-nowrap', isCompact ? 'sm:gap-3' : 'sm:gap-9')}>
+        {/* Top-aligned (it was centred in the row, so the keys sat apart from
+            the team bands), one width for both keys */}
+        <div className={cn('order-last col-span-2 flex flex-row flex-wrap items-center justify-center gap-3 self-start px-1 sm:order-none sm:col-span-1 sm:flex-col sm:flex-nowrap sm:justify-start', isCompact ? 'sm:gap-3' : 'sm:gap-4')} data-testid="coin-toss-switches">
           <div className={cn('flex items-center justify-center', isCompact ? 'sm:mt-6 sm:h-10' : 'sm:mt-[52px] sm:h-14')}>
             <button type="button" className={SWITCH_BTN} onClick={switchTeams}>
               <ArrowLeftRight size={18} aria-hidden="true" />
               {t('coinToss.switchTeamsButton', 'Switch teams')}
             </button>
           </div>
-          <div className="flex items-center justify-center sm:h-[var(--ball-h)]" style={{ '--ball-h': sizes.volleyballSize }}>
+          <div className="flex items-center justify-center">
             <button type="button" className={SWITCH_BTN} onClick={switchServe}>
               <ArrowLeftRight size={18} aria-hidden="true" />
               {t('coinToss.switchServeButton', 'Switch serve')}
@@ -1803,6 +1820,8 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           buttonClassName={cn('inline-flex min-h-11 items-center gap-2 rounded-xl border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 transition-colors hover:bg-stone-50', FOCUS_RING)}
           showArrow={true}
           position="center"
+          // Opens upward: downward it covered "Confirm the coin toss"
+          vertical="top"
           items={[
             {
               key: 'scoresheet-preview',

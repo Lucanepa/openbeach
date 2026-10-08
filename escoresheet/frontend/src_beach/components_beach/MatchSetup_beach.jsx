@@ -19,6 +19,11 @@ import { apiFrom } from '../lib_beach/apiClient_beach'
 import { setExtId } from '../utils_beach/syncIds_beach'
 import { buildConnectionPins } from '../utils_beach/connectionPins_beach'
 import { cloudSyncWaitNow } from '../utils_beach/cloudStatus_beach'
+import { cardSyncStatus, isSignedInOnDevice } from '../utils_beach/syncDisplay_beach'
+import { toast } from '../ui/volleyui/uiStore.js'
+import { DateField, TimeField } from '../ui/volleyui/DateField.jsx'
+import { SegmentedControl, FilterPill } from '../ui/volleyui/SegmentedControl.jsx'
+import { dateTextToIso, isoToFormDate, isPastMatchDate, defaultMatchDateTime } from '../utils_beach/matchInfoForm_beach'
 import { COMPETITIONS_ENABLED } from '../utils_beach/features_beach'
 import { generateMatchSeedKey } from '../utils_beach/serverDataSync_beach'
 import { askText } from '../utils_beach/askText_beach'
@@ -28,12 +33,11 @@ import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { useSavedTeams as useSavedTeams_beach } from '../hooks_beach/useSavedTeams_beach'
 import SavedTeamPickerModal from './SavedTeamPickerModal_beach'
 import { savedTeamToBeachRoster, rosterHasNames, findBeachTeamSuggestions } from '../utils_beach/savedTeams_beach'
-import { ArrowLeft, Check, ChevronDown, ChevronUp, ClipboardList, Database, FileText, Loader2, RotateCcw, Users } from 'lucide-react'
+import { ArrowLeft, Check, ChevronDown, ChevronUp, ClipboardList, Database, FileText, Loader2, PenLine, RotateCcw, Users } from 'lucide-react'
 import { cn } from '../ui/volleyui/cn.js'
 import { Button, FOCUS_RING } from '../ui/volleyui/Button.jsx'
 import { Field } from '../ui/volleyui/Field.jsx'
 import { Input } from '../ui/volleyui/Input.jsx'
-import { Select } from '../ui/volleyui/Select.jsx'
 import { Switch } from '../ui/volleyui/Switch.jsx'
 import { KeyValue } from '../ui/volleyui/KeyValue.jsx'
 import { SectionHeader } from '../ui/volleyui/SectionHeader.jsx'
@@ -66,8 +70,9 @@ const CAPTAIN_OFF = 'border-stone-300 bg-white text-stone-400 hover:bg-stone-50'
 // One roster row: number toggles, last / first name, (date of birth), C,
 // Clear. On a phone the row stacks: numbers, C and Clear on top, one field
 // per line under them (the fields carry their names as placeholders).
-const ROSTER_GRID = 'grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:grid-cols-[96px_minmax(0,1fr)_minmax(0,1fr)_44px_auto]'
-const ROSTER_GRID_DOB = 'sm:grid-cols-[96px_minmax(0,1fr)_minmax(0,1fr)_170px_44px_auto]'
+// The captain column fits its header word ("Captain", not a bare "C")
+const ROSTER_GRID = 'grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:grid-cols-[96px_minmax(0,1fr)_minmax(0,1fr)_84px_auto]'
+const ROSTER_GRID_DOB = 'sm:grid-cols-[96px_minmax(0,1fr)_minmax(0,1fr)_170px_84px_auto]'
 
 // Date formatting helpers (outside component to avoid recreation)
 function formatDateToDDMMYYYY(dateStr) {
@@ -567,6 +572,15 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   const [showRoster, setShowRoster] = useState({ team1: false, team2: false })
   const [colorPickerModal, setColorPickerModal] = useState(null) // { team: 'team1'|'team2', position: { x, y } } | null
   const [noticeModal, setNoticeModal] = useState(null) // { message: string, type?: 'success' | 'error' } | null
+  // A save's outcome: a toast, not a box to click away (closes a "Syncing..." box)
+  const notifySaved = (message, kind = 'success') => {
+    setNoticeModal(prev => (prev?.syncing ? null : prev))
+    toast[kind](message)
+  }
+  // Saved, but not waiting for the cloud: signed out it syncs after a sign-in
+  const savedLocallyMessage = (key) => (isSignedInOnDevice()
+    ? t(key)
+    : t('matchSetup.syncState.savedSignInToSync', 'Saved on this device. Sign in to sync it to the cloud.'))
   const [testRosterConfirm, setTestRosterConfirm] = useState(null) // 'team1' | 'team2' | null
 
   // Saved beach teams (managed in the OpenVolley admin console; read-only
@@ -796,17 +810,14 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         const hasQueued = matchJobs.some(j => j.status === 'queued')
         const hasError = matchJobs.some(j => j.status === 'error')
 
-        // Update sync statuses based on queue
-        if (hasError) {
-          setMatchInfoSyncStatus('error')
-          setOfficialsSyncStatus('error')
-          setTeam1SyncStatus('error')
-          setTeam2SyncStatus('error')
-        } else if (hasQueued) {
-          setMatchInfoSyncStatus('syncing')
-          setOfficialsSyncStatus('syncing')
-          setTeam1SyncStatus('syncing')
-          setTeam2SyncStatus('syncing')
+        // Update sync statuses based on queue. Signed out the jobs wait for a
+        // sign-in: 'local' (on this device), not a pulsing "Syncing..."
+        if (hasError || hasQueued) {
+          const cardStatus = cardSyncStatus({ hasError, hasQueued, signedIn: isSignedInOnDevice() })
+          setMatchInfoSyncStatus(cardStatus)
+          setOfficialsSyncStatus(cardStatus)
+          setTeam1SyncStatus(cardStatus)
+          setTeam2SyncStatus(cardStatus)
         } else {
           // Check if match exists in Supabase
           const { data: supabaseMatch } = await apiFrom('matches')
@@ -953,6 +964,16 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   }
 
   // Restore original state functions (for Back button)
+  // A new match's info starts with today and now (the usual case: the match
+  // is scored as it starts); the scorer changes them for a scheduled one
+  useEffect(() => {
+    if (currentView !== 'info' || matchInfoConfirmed || date || time) return
+    const now = defaultMatchDateTime()
+    handleDateChange(now.date)
+    handleTimeChange(now.time)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentView])
+
   const restoreMatchInfo = () => {
     const o = originalMatchInfoRef.current
     if (!o) return
@@ -1965,9 +1986,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       // Wait for the cloud only when the sync can finish now; a venue tablet
       // (its server is the relay) or offline mode syncs in the background
       const waitForCloud = cloudSyncWaitNow()
-      setNoticeModal(waitForCloud
-        ? { message: isCreating ? t('matchSetup.modals.matchCreatedSyncing') : t('matchSetup.modals.matchUpdatedSyncing'), type: 'success', syncing: true }
-        : { message: t('matchSetup.modals.matchSavedLocalSyncPending'), type: 'success' })
+      if (waitForCloud) {
+        setNoticeModal({ message: isCreating ? t('matchSetup.modals.matchCreatedSyncing') : t('matchSetup.modals.matchUpdatedSyncing'), type: 'success', syncing: true })
+      } else {
+        notifySaved(savedLocallyMessage('matchSetup.modals.matchSavedLocalSyncPending'))
+      }
 
       // Send match info email if provided (non-blocking)
       if (notificationEmail && notificationEmail.trim() && match?.gamePin) {
@@ -2020,13 +2043,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             const job = await db.sync_queue.get(syncJobId)
             if (!job || job.status === 'sent') {
               clearInterval(interval)
-              setNoticeModal({ message: t('matchSetup.modals.matchSynced'), type: 'success' })
+              notifySaved(t('matchSetup.modals.matchSynced'))
             } else if (job.status === 'error') {
               clearInterval(interval)
-              setNoticeModal({ message: t('matchSetup.modals.matchSavedLocalSyncFailed'), type: 'error' })
+              notifySaved(t('matchSetup.modals.matchSavedLocalSyncFailed'), 'error')
             } else if (attempts >= maxAttempts) {
               clearInterval(interval)
-              setNoticeModal({ message: t('matchSetup.modals.matchSavedLocalSyncPending'), type: 'success' })
+              notifySaved(t('matchSetup.modals.matchSavedLocalSyncPending'))
             }
           } catch (err) {
             clearInterval(interval)
@@ -2771,7 +2794,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     // than tell an approved scorer to ask for approval
     if (user && !access?.known) return null
     return (
-      <span data-testid="saved-teams-note" className="max-w-[220px] self-center text-xs text-stone-500">
+      <span data-testid="saved-teams-note" className="max-w-[260px] self-center text-sm text-stone-600">
         {user ? t('savedTeams.noAccessNote') : t('savedTeams.signInNote')}
       </span>
     )
@@ -3021,7 +3044,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             <h3 className="mb-3 text-sm font-semibold text-stone-700">{t('matchSetup.competitionName')}</h3>
             <div className="flex flex-1 flex-col gap-3">
               <Field className={FIELD} label={t('matchSetup.competitionName')}>
-                <Input size="lg" className="capitalize" value={league} onChange={async e => {
+                <Input size="lg" value={league} onChange={async e => {
                   const newLeague = e.target.value
                   setLeague(newLeague)
                   // Re-check game number duplicate with new league
@@ -3058,41 +3081,30 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                   placeholder="e.g. M01"
                 />
               </Field>
-              <Field className={FIELD} label={t('matchSetup.date')} error={dateError || undefined}>
-                <Input
+              <Field
+                className={FIELD}
+                label={t('matchSetup.date')}
+                error={dateError || undefined}
+                hint={isPastMatchDate(date) ? t('matchSetup.matchInfoForm.pastDate', 'This date is in the past.') : undefined}
+              >
+                {/* The kit's field: "12.3.2025", "12032025" or a pick in its calendar */}
+                <DateField
                   size="lg"
-                  type="text"
-                  inputMode="numeric"
-                  className="max-w-[180px] tabular-nums"
-                  value={date}
-                  onChange={e => {
-                    let val = e.target.value
-                    // Auto-format as user types: dd.mm.yyyy
-                    val = val.replace(/[^\d.]/g, '') // Remove non-digits and dots
-                    if (val.length > 2 && val[2] !== '.') val = val.slice(0, 2) + '.' + val.slice(2)
-                    if (val.length > 5 && val[5] !== '.') val = val.slice(0, 5) + '.' + val.slice(5)
-                    if (val.length > 10) val = val.slice(0, 10)
-                    handleDateChange(val)
-                  }}
-                  placeholder="dd.mm.yyyy"
+                  // The width on the wrapper: its calendar button sits inside it
+                  wrapperClassName="max-w-[200px]"
+                  data-testid="match-info-date"
+                  value={dateTextToIso(date)}
+                  onChange={iso => handleDateChange(isoToFormDate(iso))}
                 />
               </Field>
               <Field className={FIELD} label={t('matchSetup.time')} error={timeError || undefined}>
-                <Input
+                <TimeField
                   size="lg"
-                  type="text"
-                  inputMode="numeric"
-                  className="max-w-[120px] tabular-nums"
+                  wrapperClassName="max-w-[140px]"
+                  data-testid="match-info-time"
+                  step={5}
                   value={time}
-                  onChange={e => {
-                    let val = e.target.value
-                    // Only allow digits and colon, format as HH:MM
-                    val = val.replace(/[^\d:]/g, '')
-                    if (val.length > 2 && val[2] !== ':') val = val.slice(0, 2) + ':' + val.slice(2)
-                    if (val.length > 5) val = val.slice(0, 5)
-                    handleTimeChange(val)
-                  }}
-                  placeholder="HH:MM"
+                  onChange={v => handleTimeChange(v || '')}
                 />
               </Field>
             </div>
@@ -3102,10 +3114,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             <h3 className="mb-3 text-sm font-semibold text-stone-700">{t('matchSetup.location')}</h3>
             <div className="flex flex-1 flex-col gap-3">
               <Field className={FIELD} label={t('matchSetup.site')}>
-                <Input size="lg" className="capitalize" value={city} onChange={e => setCity(e.target.value)} placeholder={t('matchSetup.enterSite')} />
+                <Input size="lg" value={city} onChange={e => setCity(e.target.value)} placeholder={t('matchSetup.enterSite')} />
               </Field>
               <Field className={FIELD} label={t('matchSetup.beach')}>
-                <Input size="lg" className="capitalize" value={hall} onChange={e => setHall(e.target.value)} placeholder={t('matchSetup.enterBeach')} />
+                <Input size="lg" value={hall} onChange={e => setHall(e.target.value)} placeholder={t('matchSetup.enterBeach')} />
               </Field>
               <Field className={FIELD} label={t('matchSetup.court')}>
                 <Input size="lg" value={court} onChange={e => setCourt(e.target.value)} placeholder="e.g. 1, Center" />
@@ -3116,32 +3128,44 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           <div className={cn('flex flex-col p-4', SETUP_BLOCK)}>
             <h3 className="mb-3 text-sm font-semibold text-stone-700">{t('matchSetup.category', 'Category')}</h3>
             <div className="flex flex-1 flex-col gap-3">
+              {/* Kit choices, not native selects: the Linux desktop app opened
+                  those as a dark GTK list */}
               <Field className={FIELD} label={t('matchSetup.gender')}>
-                <Select size="lg" block value={type2} onChange={e => setType2(e.target.value)}>
-                  <option value="men">{t('matchSetup.men')}</option>
-                  <option value="women">{t('matchSetup.women')}</option>
-                </Select>
+                <SegmentedControl
+                  ariaLabel={t('matchSetup.gender')}
+                  value={type2}
+                  onChange={setType2}
+                  options={[{ value: 'men', label: t('matchSetup.men') }, { value: 'women', label: t('matchSetup.women') }]}
+                />
               </Field>
               <Field className={FIELD} label={t('matchSetup.phase')}>
-                <Select size="lg" block value={phase} onChange={e => setPhase(e.target.value)}>
-                  <option value="main">{t('matchSetup.mainDraw')}</option>
-                  <option value="qualification">{t('matchSetup.qualification')}</option>
-                </Select>
+                <SegmentedControl
+                  ariaLabel={t('matchSetup.phase')}
+                  value={phase}
+                  onChange={setPhase}
+                  options={[{ value: 'main', label: t('matchSetup.mainDraw') }, { value: 'qualification', label: t('matchSetup.qualification') }]}
+                />
               </Field>
               <Field className={FIELD} label={t('matchSetup.round')}>
-                <Select size="lg" block value={round} onChange={e => setRound(e.target.value)}>
-                  <option value="pool">{t('matchSetup.poolPlay')}</option>
-                  <option value="winner">{t('matchSetup.winnerBracket')}</option>
-                  <option value="class">{t('matchSetup.classificationRound')}</option>
-                  <option value="semifinals">{t('matchSetup.semifinals')}</option>
-                  <option value="finals">{t('matchSetup.finals')}</option>
-                </Select>
+                <div role="group" aria-label={t('matchSetup.round')} className="flex flex-wrap gap-1.5">
+                  {[
+                    ['pool', t('matchSetup.poolPlay')],
+                    ['winner', t('matchSetup.winnerBracket')],
+                    ['class', t('matchSetup.classificationRound')],
+                    ['semifinals', t('matchSetup.semifinals')],
+                    ['finals', t('matchSetup.finals')]
+                  ].map(([value, label]) => (
+                    <FilterPill key={value} active={round === value} onClick={() => setRound(value)}>{label}</FilterPill>
+                  ))}
+                </div>
               </Field>
               <Field className={FIELD} label={t('matchSetup.coach')}>
-                <Select size="lg" block value={hasCoach ? 'yes' : 'no'} onChange={e => setHasCoach(e.target.value === 'yes')}>
-                  <option value="no">{t('common.no')}</option>
-                  <option value="yes">{t('common.yes')}</option>
-                </Select>
+                <SegmentedControl
+                  ariaLabel={t('matchSetup.coach')}
+                  value={hasCoach ? 'yes' : 'no'}
+                  onChange={v => setHasCoach(v === 'yes')}
+                  options={[{ value: 'no', label: t('common.no') }, { value: 'yes', label: t('common.yes') }]}
+                />
               </Field>
             </div>
           </div>
@@ -3470,9 +3494,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               }
 
               const waitForCloud = cloudSyncWaitNow()
-              setNoticeModal(waitForCloud
-                ? { message: t('matchSetup.officialsSaved'), type: 'success', syncing: true }
-                : { message: t('matchSetup.officialsSavedLocal'), type: 'success' })
+              if (waitForCloud) {
+                setNoticeModal({ message: t('matchSetup.officialsSaved'), type: 'success', syncing: true })
+              } else {
+                notifySaved(savedLocallyMessage('matchSetup.officialsSavedLocal'))
+              }
 
               // Poll to check when sync completes
               const checkSyncStatus = async () => {
@@ -3484,10 +3510,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     const queued = await db.sync_queue.where('status').equals('queued').count()
                     if (queued === 0) {
                       clearInterval(interval)
-                      setNoticeModal({ message: t('matchSetup.officialsSynced'), type: 'success' })
+                      notifySaved(t('matchSetup.officialsSynced'))
                     } else if (attempts >= maxAttempts) {
                       clearInterval(interval)
-                      setNoticeModal({ message: t('matchSetup.officialsSavedLocal'), type: 'success' })
+                      notifySaved(t('matchSetup.officialsSavedLocal'))
                     }
                   } catch (err) {
                     clearInterval(interval)
@@ -3511,18 +3537,23 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             <Button variant="ghost" size="xl" icon={ArrowLeft} className="bg-white" onClick={() => { restoreTeam1(); setCurrentView('main') }}>{t('common.back')}</Button>
           </div>
           <div className="flex min-w-0 flex-col items-center gap-1.5">
-            <input
-              type="text"
-              spellCheck={false}
-              autoCorrect="off"
-              autoCapitalize="off"
-              aria-label={t('matchSetup.teamName')}
-              value={team1Name || getTeamDisplayName(team1Roster, 'team1', team1Country)}
-              onChange={e => setTeam1Name(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
-              className="h-12 w-auto min-w-[100px] max-w-full rounded-xl border border-stone-200 bg-white px-3 text-center text-xl font-bold tracking-tight text-stone-900 sm:max-w-[500px] focus:border-red-700/40 focus:outline-none focus:ring-2 focus:ring-red-700/20"
-              size={Math.max(10, (team1Name || getTeamDisplayName(team1Roster, 'team1', team1Country)).length)}
-            />
+            <label className="inline-flex max-w-full cursor-text items-center gap-1">
+              <input
+                type="text"
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+                aria-label={t('matchSetup.teamName')}
+                value={team1Name || getTeamDisplayName(team1Roster, 'team1', team1Country)}
+                onChange={e => setTeam1Name(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
+                // A title that can be renamed: no input box until hovered or focused
+                data-testid="roster-team-name"
+                className="h-12 w-auto min-w-[100px] max-w-full rounded-xl border border-transparent bg-transparent px-3 text-center text-2xl font-bold tracking-tight text-stone-900 hover:border-stone-200 sm:max-w-[500px] focus:border-red-700/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-700/20"
+                size={Math.max(10, (team1Name || getTeamDisplayName(team1Roster, 'team1', team1Country)).length)}
+              />
+              <PenLine size={16} aria-hidden="true" className="shrink-0 text-stone-400" />
+            </label>
             {team1Name && team1Name !== getTeamDisplayName(team1Roster, 'team1', team1Country) && (
               <Button
                 variant="ghost"
@@ -3598,7 +3629,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             <div>{t('matchSetup.lastName')}</div>
             <div>{t('matchSetup.firstName')}</div>
             {manageDob && <div>{t('matchSetup.dateOfBirth')}</div>}
-            <div className="text-center" title={t('matchSetup.captain')}>C</div>
+            <div className="text-center" data-testid="roster-captain-header">{t('matchSetup.captain')}</div>
             <div />
           </div>
           <div className="divide-y divide-stone-100">
@@ -3891,9 +3922,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               }
 
               const waitForCloud = cloudSyncWaitNow()
-              setNoticeModal(waitForCloud
-                ? { message: t('matchSetup.team1Saved'), type: 'success', syncing: true }
-                : { message: t('matchSetup.team1SavedLocal'), type: 'success' })
+              if (waitForCloud) {
+                setNoticeModal({ message: t('matchSetup.team1Saved'), type: 'success', syncing: true })
+              } else {
+                notifySaved(savedLocallyMessage('matchSetup.team1SavedLocal'))
+              }
 
               // Poll to check when sync completes
               const checkSyncStatus = async () => {
@@ -3905,10 +3938,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     const queued = await db.sync_queue.where('status').equals('queued').count()
                     if (queued === 0) {
                       clearInterval(interval)
-                      setNoticeModal({ message: t('matchSetup.team1Synced'), type: 'success' })
+                      notifySaved(t('matchSetup.team1Synced'))
                     } else if (attempts >= maxAttempts) {
                       clearInterval(interval)
-                      setNoticeModal({ message: t('matchSetup.team1SavedLocal'), type: 'success' })
+                      notifySaved(t('matchSetup.team1SavedLocal'))
                     }
                   } catch (err) {
                     clearInterval(interval)
@@ -3956,18 +3989,23 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             <Button variant="ghost" size="xl" icon={ArrowLeft} className="bg-white" onClick={() => { restoreTeam2(); setCurrentView('main') }}>{t('common.back')}</Button>
           </div>
           <div className="flex min-w-0 flex-col items-center gap-1.5">
-            <input
-              type="text"
-              spellCheck={false}
-              autoCorrect="off"
-              autoCapitalize="off"
-              aria-label={t('matchSetup.teamName')}
-              value={team2Name || getTeamDisplayName(team2Roster, 'team2', team2Country)}
-              onChange={e => setTeam2Name(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
-              className="h-12 w-auto min-w-[100px] max-w-full rounded-xl border border-stone-200 bg-white px-3 text-center text-xl font-bold tracking-tight text-stone-900 sm:max-w-[500px] focus:border-red-700/40 focus:outline-none focus:ring-2 focus:ring-red-700/20"
-              size={Math.max(10, (team2Name || getTeamDisplayName(team2Roster, 'team2', team2Country)).length)}
-            />
+            <label className="inline-flex max-w-full cursor-text items-center gap-1">
+              <input
+                type="text"
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+                aria-label={t('matchSetup.teamName')}
+                value={team2Name || getTeamDisplayName(team2Roster, 'team2', team2Country)}
+                onChange={e => setTeam2Name(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
+                // A title that can be renamed: no input box until hovered or focused
+                data-testid="roster-team-name"
+                className="h-12 w-auto min-w-[100px] max-w-full rounded-xl border border-transparent bg-transparent px-3 text-center text-2xl font-bold tracking-tight text-stone-900 hover:border-stone-200 sm:max-w-[500px] focus:border-red-700/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-700/20"
+                size={Math.max(10, (team2Name || getTeamDisplayName(team2Roster, 'team2', team2Country)).length)}
+              />
+              <PenLine size={16} aria-hidden="true" className="shrink-0 text-stone-400" />
+            </label>
             {team2Name && team2Name !== getTeamDisplayName(team2Roster, 'team2', team2Country) && (
               <Button
                 variant="ghost"
@@ -4043,7 +4081,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             <div>{t('matchSetup.lastName')}</div>
             <div>{t('matchSetup.firstName')}</div>
             {manageDob && <div>{t('matchSetup.dateOfBirth')}</div>}
-            <div className="text-center" title={t('matchSetup.captain')}>C</div>
+            <div className="text-center" data-testid="roster-captain-header">{t('matchSetup.captain')}</div>
             <div />
           </div>
           <div className="divide-y divide-stone-100">
@@ -4337,9 +4375,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               }
 
               const waitForCloud = cloudSyncWaitNow()
-              setNoticeModal(waitForCloud
-                ? { message: t('matchSetup.team2Saved'), type: 'success', syncing: true }
-                : { message: t('matchSetup.team2SavedLocal'), type: 'success' })
+              if (waitForCloud) {
+                setNoticeModal({ message: t('matchSetup.team2Saved'), type: 'success', syncing: true })
+              } else {
+                notifySaved(savedLocallyMessage('matchSetup.team2SavedLocal'))
+              }
 
               // Poll to check when sync completes
               const checkSyncStatus = async () => {
@@ -4351,10 +4391,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     const queued = await db.sync_queue.where('status').equals('queued').count()
                     if (queued === 0) {
                       clearInterval(interval)
-                      setNoticeModal({ message: t('matchSetup.team2Synced'), type: 'success' })
+                      notifySaved(t('matchSetup.team2Synced'))
                     } else if (attempts >= maxAttempts) {
                       clearInterval(interval)
-                      setNoticeModal({ message: t('matchSetup.team2SavedLocal'), type: 'success' })
+                      notifySaved(t('matchSetup.team2SavedLocal'))
                     }
                   } catch (err) {
                     clearInterval(interval)
@@ -4373,7 +4413,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         {/* Test Roster Confirmation Modal */}
         {testRosterConfirm === 'team2' && renderTestRosterConfirm(TEST_TEAM_2.name, () => {
           if (!TEST_TEAM_2) return
+          // As team 1: the roster, the name, the short name and the country
+          // (the dialog named DEU but the country stayed empty)
           setTeam2Roster([...TEST_TEAM_2.players])
+          if (!team2Name || team2Name === 'Team 2') setTeam2Name(TEST_TEAM_2.name)
+          if (!team2ShortName) setTeam2ShortName(TEST_TEAM_2.shortName)
+          setTeam2Country(TEST_TEAM_2.country || '')
+          setTestRosterConfirm(null)
         })}
 
         {savedTeamsModals}
@@ -4414,16 +4460,19 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       synced: { pill: 'border-emerald-200 bg-emerald-50 text-emerald-800', dot: 'bg-emerald-500' },
       syncing: { pill: 'border-amber-200 bg-amber-50 text-amber-800', dot: 'bg-amber-500 animate-pulse' },
       error: { pill: 'border-red-200 bg-red-50 text-red-700', dot: 'bg-red-500' },
-      idle: { pill: 'border-stone-200 bg-stone-100 text-stone-600', dot: 'bg-stone-400' }
+      idle: { pill: 'border-stone-200 bg-stone-100 text-stone-600', dot: 'bg-stone-400' },
+      local: { pill: 'border-stone-200 bg-stone-100 text-stone-600', dot: 'bg-stone-400' }
     }
     const labels = {
       synced: t('matchSetup.syncStatus.synced', 'Synced'),
       syncing: t('matchSetup.syncStatus.syncing', 'Syncing...'),
       error: t('matchSetup.syncStatus.error', 'Sync error'),
-      idle: isSupabaseAvailable ? t('matchSetup.syncStatus.notSynced') : t('matchSetup.syncStatus.offline', 'Offline')
+      idle: isSupabaseAvailable ? t('matchSetup.syncStatus.notSynced') : t('matchSetup.syncStatus.offline', 'Offline'),
+      local: t('matchSetup.syncState.notSignedIn', 'Not signed in')
     }
     const c = tones[status] || tones.synced
-    const retry = status !== 'synced' && onRetry
+    // Nothing to retry while the jobs wait for a sign-in
+    const retry = status !== 'synced' && status !== 'local' && onRetry
 
     return (
       <div
@@ -4580,10 +4629,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               const queued = await db.sync_queue.where('status').equals('queued').count()
               if (queued === 0) {
                 clearInterval(interval)
-                setNoticeModal({ message: t('matchSetup.modals.syncedToDatabase'), type: 'success' })
+                notifySaved(t('matchSetup.modals.syncedToDatabase'))
               } else if (attempts >= maxAttempts) {
                 clearInterval(interval)
-                setNoticeModal({ message: t('matchSetup.modals.matchSavedLocalSyncPending'), type: 'success' })
+                notifySaved(t('matchSetup.modals.matchSavedLocalSyncPending'))
               }
             } catch (err) {
               clearInterval(interval)
@@ -4708,36 +4757,51 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 <StatusBadge ready={matchInfoConfirmed} pending={!matchInfoConfirmed && canConfirmMatchInfo} />
                 <h3 className={BLOCK_TITLE}>{t('matchSetup.matchInfo')}</h3>
               </div>
-              <SyncStatusIndicator status={matchInfoSyncStatus} onRetry={() => retrySyncForCard('matchInfo')} />
+              {/* Edit in the heading row, not a row of its own: the setup
+                  page did not fit a 900 px window */}
+              <div className="flex items-center gap-2">
+                <SyncStatusIndicator status={matchInfoSyncStatus} onRetry={() => retrySyncForCard('matchInfo')} />
+                {matchInfoConfirmed && (
+                  <Button variant="secondary" size="xl" onClick={() => setCurrentView('info')}>{t('common.edit')}</Button>
+                )}
+              </div>
             </div>
+            {/* Six rows, not ten: date and time, site and court, and the
+                category on one row each (the setup did not fit a 900 px
+                window) */}
             <KeyValue variant="detail" className={SUMMARY_KV} items={[
               { label: t('matchSetup.competitionName'), value: <span className={TRUNC} title={league}>{league || t('common.notSet')}</span> },
               { label: t('matchSetup.matchNumber'), value: <span className={cn(TRUNC, 'tabular-nums')}>{gameN || t('common.notSet')}</span> },
-              { label: t('matchSetup.date'), value: <span className={cn(TRUNC, 'tabular-nums')}>{formatDisplayDate(date) || t('common.notSet')}</span> },
-              { label: t('matchSetup.time'), value: <span className={cn(TRUNC, 'tabular-nums')}>{formatDisplayTime(time) || t('common.notSet')}</span> },
-              { label: t('matchSetup.site'), value: <span className={TRUNC} title={city}>{city || t('common.notSet')}</span> },
-              { label: t('matchSetup.court'), value: <span className={TRUNC}>{court || t('common.notSet')}</span> },
-              { label: t('matchSetup.gender'), value: <span className={TRUNC}>{type2 === 'men' ? t('matchSetup.men') : t('matchSetup.women')}</span> },
-              { label: t('matchSetup.coach'), value: <span className={TRUNC}>{hasCoach ? t('common.yes') : t('common.no')}</span> },
-              { label: t('matchSetup.phase'), value: <span className={TRUNC}>{phase === 'main' ? t('matchSetup.mainDraw') : t('matchSetup.qualification')}</span> },
               {
-                label: t('matchSetup.round'),
+                label: t('matchSetup.dateTime'),
+                value: <span className={cn(TRUNC, 'tabular-nums')}>{[formatDisplayDate(date), formatDisplayTime(time)].filter(Boolean).join(' ') || t('common.notSet')}</span>
+              },
+              {
+                label: t('matchSetup.location'),
+                value: <span className={TRUNC} title={city}>{[city, court ? `${t('matchSetup.court')} ${court}` : ''].filter(Boolean).join(' · ') || t('common.notSet')}</span>
+              },
+              {
+                label: t('matchSetup.category', 'Category'),
                 value: (
                   <span className={TRUNC}>
-                    {round === 'pool' ? t('matchSetup.poolPlay') :
-                      round === 'winner' ? t('matchSetup.winnerBracket') :
-                        round === 'class' ? t('matchSetup.classificationRound') :
-                          round === 'semifinals' ? t('matchSetup.semifinals') :
-                            t('matchSetup.finals')}
+                    {[
+                      type2 === 'men' ? t('matchSetup.men') : t('matchSetup.women'),
+                      phase === 'main' ? t('matchSetup.mainDraw') : t('matchSetup.qualification'),
+                      round === 'pool' ? t('matchSetup.poolPlay') :
+                        round === 'winner' ? t('matchSetup.winnerBracket') :
+                          round === 'class' ? t('matchSetup.classificationRound') :
+                            round === 'semifinals' ? t('matchSetup.semifinals') :
+                              t('matchSetup.finals')
+                    ].join(' · ')}
                   </span>
                 )
-              }
+              },
+              { label: t('matchSetup.coach'), value: <span className={TRUNC}>{hasCoach ? t('common.yes') : t('common.no')}</span> }
             ]} />
           </div>
+          {!matchInfoConfirmed && (
           <div className="flex flex-wrap justify-end gap-2">
-            {matchInfoConfirmed ? (
-              <Button variant="secondary" size="xl" onClick={() => setCurrentView('info')}>{t('common.edit')}</Button>
-            ) : (
+            {(
               <>
                 {onLoadCompetitionMatch && (
                   <Button variant="secondary" size="xl" onClick={onLoadCompetitionMatch}>
@@ -4750,6 +4814,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               </>
             )}
           </div>
+          )}
         </div>
 
         {/* Match Officials Card */}
@@ -4760,7 +4825,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 <StatusBadge ready={officialsConfigured} />
                 <h3 className={BLOCK_TITLE}>{t('matchSetup.matchOfficials')}</h3>
               </div>
-              <SyncStatusIndicator status={officialsSyncStatus} onRetry={() => retrySyncForCard('officials')} />
+              <div className="flex items-center gap-2">
+                <SyncStatusIndicator status={officialsSyncStatus} onRetry={() => retrySyncForCard('officials')} />
+                <Button variant="secondary" size="xl" onClick={() => setCurrentView('officials')} disabled={!matchInfoConfirmed}>{t('common.edit')}</Button>
+              </div>
             </div>
             <KeyValue variant="detail" className={SUMMARY_KV} items={[
               { label: t('matchSetup.referee1'), value: <span className={TRUNC} title={formatOfficial(ref1Last, ref1First)}>{formatOfficial(ref1Last, ref1First)}</span> },
@@ -4776,9 +4844,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 )
               }] : [])
             ]} />
-          </div>
-          <div className="flex justify-end">
-            <Button variant="secondary" size="xl" onClick={() => setCurrentView('officials')} disabled={!matchInfoConfirmed}>{t('common.edit')}</Button>
           </div>
         </div>
       </div>
@@ -4952,8 +5017,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           <Button
             variant="primary"
             size="xl"
-            className="min-w-40 disabled:cursor-not-allowed"
+            // Disabled, still readable (white on stone-300 could not be read)
+            className="min-w-40 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-600"
+            data-testid="setup-coin-toss"
             disabled={!canProceedToCoinToss}
+            title={!canProceedToCoinToss ? t('matchSetup.setupLayout.coinTossNeeds', 'Complete the match info, the officials and both teams first.') : undefined}
             onClick={async () => {
               // Check if match has no data (no sets, no signatures)
               if (matchId && match) {

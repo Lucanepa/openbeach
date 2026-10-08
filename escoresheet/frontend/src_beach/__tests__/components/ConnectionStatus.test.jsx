@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import ConnectionStatus, { venueBadge } from '../../components_beach/ConnectionStatus_beach'
+import { useMemoryLocalStorage } from '../helpers/memoryStorage'
 
 // Mock db import
 vi.mock('../../db_beach/db_beach', () => ({
@@ -58,7 +59,9 @@ describe('ConnectionStatus', () => {
       expect(screen.getByText('Ready')).toBeInTheDocument()
     })
 
-    it('should show "Syncing..." when there are pending items', () => {
+    it('should show "Syncing..." when there are pending items (signed in)', () => {
+      useMemoryLocalStorage()
+      localStorage.setItem('api_auth_token', JSON.stringify({ access_token: 'tok', expires_at: Date.now() / 1000 + 3600 }))
       render(
         <ConnectionStatus
           {...defaultProps}
@@ -72,6 +75,36 @@ describe('ConnectionStatus', () => {
       )
 
       expect(screen.getByText('Syncing...')).toBeInTheDocument()
+    })
+
+    // The OpenBeach screencast of 2026-10-08: signed out, the pill said
+    // "Syncing..." for the whole match (the queue waits for a sign-in)
+    it('says "Not signed in", not "Syncing...", while jobs wait for a sign-in', () => {
+      useMemoryLocalStorage()
+      localStorage.removeItem('api_auth_token')
+      render(
+        <ConnectionStatus
+          {...defaultProps}
+          connectionStatuses={{ server: 'connected', websocket: 'connected', supabase: 'connected' }}
+          queueStats={{ pending: 5, error: 0 }}
+        />
+      )
+      expect(screen.getByText('Not signed in')).toBeInTheDocument()
+      expect(screen.queryByText('Syncing...')).toBeNull()
+    })
+
+    it('says "Local only" when no cloud is here', () => {
+      useMemoryLocalStorage()
+      localStorage.setItem('api_auth_token', JSON.stringify({ access_token: 'tok' }))
+      render(
+        <ConnectionStatus
+          {...defaultProps}
+          connectionStatuses={{ server: 'connected', websocket: 'connected', supabase: 'not_configured' }}
+          queueStats={{ pending: 2, error: 0 }}
+        />
+      )
+      expect(screen.getByText('Local only')).toBeInTheDocument()
+      localStorage.removeItem('api_auth_token')
     })
 
     it('should show error count badge when there are errors', () => {

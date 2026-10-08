@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '../ui/volleyui/cn.js'
 import { FOCUS_RING, MENU_TITLE, POPOVER_PANEL, STATUS_PILL, STATUS_TONES } from './chromeClasses_beach'
+import { isSignedInOnDevice, pendingSyncLabel } from '../utils_beach/syncDisplay_beach'
 
 /**
  * The header badge in venue mode (backendConfig_beach isVenueMode: a page a
@@ -213,6 +214,15 @@ export default function ConnectionStatus({
         : { tone: 'error', text: t('connectionStatus.venueNoRelay', 'No relay') })
     : getStatusColor(overallStatus)
 
+  // Jobs waiting: "Syncing..." only when they can go now; signed out they
+  // wait for a sign-in, without a cloud here they stay on the device
+  const pendingKey = pendingSyncLabel({ pending: queueStats.pending, signedIn: isSignedInOnDevice(), cloudStatus: connectionStatuses.supabase })
+  const pendingWord = pendingKey === 'not_signed_in'
+    ? t('matchSetup.syncState.notSignedIn', 'Not signed in')
+    : pendingKey === 'local_only'
+      ? t('matchSetup.syncState.localOnly', 'Local only')
+      : pendingKey === 'syncing' ? 'Syncing...' : null
+
   // Trigger sizes: the header uses 'normal' (h-8, the bar's button height).
   const sizeClasses = {
     normal: { trigger: 'h-8 text-xs', dot: 'h-2 w-2' },
@@ -241,7 +251,7 @@ export default function ConnectionStatus({
         <span className={cn('inline-block shrink-0 rounded-full', currentSize.dot, overallTone.dot)}></span>
         <span className="inline-flex items-center">
           {venue ? statusInfo.text :
-            overallStatus === 'connected' ? (queueStats.pending > 0 ? 'Syncing...' : 'Connected') :
+            overallStatus === 'connected' ? (pendingWord || 'Connected') :
               overallStatus === 'awaiting_match' ? 'Ready' :
                 'Error'}
           {queueStats.error > 0 && (

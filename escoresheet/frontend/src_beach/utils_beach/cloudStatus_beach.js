@@ -11,6 +11,7 @@
  */
 import { getCloudApiUrl, isCloudOffline, isRelayOriginPage } from './backendConfig_beach'
 import { getSyncStatus } from '../hooks_beach/useSyncQueue_beach'
+import { isSignedInOnDevice } from './syncDisplay_beach'
 import { accountMayWriteCloud } from '../lib_beach/access_beach'
 
 /** Cloud statuses that count as fine for the startup check. */
@@ -80,10 +81,12 @@ export function isCloudStatusOk(status) {
  * joined OpenBeach, not one waiting for approval; the backend refuses those
  * matches, and each setup step used to wait ~9 s for nothing).
  * Anywhere else the save is local and the sync runs in the background.
- * @param {{ syncStatus?: string|null, offlineMode?: boolean, relayOrigin?: boolean, hasCloud?: boolean, canWrite?: boolean }} p
+ * Signed out: never. The queue then sends nothing, and with nothing queued
+ * its status is 'synced', so every save waited 10 s for nothing.
+ * @param {{ syncStatus?: string|null, offlineMode?: boolean, relayOrigin?: boolean, hasCloud?: boolean, canWrite?: boolean, signedIn?: boolean }} p
  */
-export function shouldWaitForCloudSync({ syncStatus = null, offlineMode = false, relayOrigin = false, hasCloud = true, canWrite = true } = {}) {
-  if (offlineMode || relayOrigin || !hasCloud || !canWrite) return false
+export function shouldWaitForCloudSync({ syncStatus = null, offlineMode = false, relayOrigin = false, hasCloud = true, canWrite = true, signedIn = true } = {}) {
+  if (offlineMode || relayOrigin || !hasCloud || !canWrite || !signedIn) return false
   return syncStatus === 'synced' || syncStatus === 'syncing'
 }
 
@@ -97,6 +100,7 @@ export function cloudSyncWaitNow() {
     offlineMode: isCloudOffline(),
     relayOrigin: isRelayOriginPage(),
     hasCloud: !!getCloudApiUrl('/api/db'),
-    canWrite: accountMayWriteCloud()
+    canWrite: accountMayWriteCloud(),
+    signedIn: isSignedInOnDevice()
   })
 }

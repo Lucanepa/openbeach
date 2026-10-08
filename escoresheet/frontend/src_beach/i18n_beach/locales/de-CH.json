@@ -116,7 +116,11 @@
       "confirm": "Forfait bestätige",
       "injuredPlayer": "Nummere vom verletzte Spieler",
       "remark": "Bemerkig"
-    }
+    },
+    "receive": "Annahm",
+    "winnerChose": "Gwählt hät",
+    "choiceServe": "Ufschlag oder Annahm",
+    "choiceSide": "Spiilfeldsiite"
   },
   "roster": {
     "title": "Roster",
@@ -426,7 +430,18 @@
     "selectCountry": "Land wähle",
     "matchPinTitle": "Spiil-PIN-Code",
     "matchPinLabel": "PIN-Code",
-    "enterPinPrompt": "Bitte en PIN-Code iigee, zum das Spiil z schütze (erforderlich):"
+    "enterPinPrompt": "Bitte en PIN-Code iigee, zum das Spiil z schütze (erforderlich):",
+    "syncState": {
+      "notSignedIn": "Nöd aagmäldet",
+      "localOnly": "Nur lokal",
+      "savedSignInToSync": "Uf däm Grät gspeicheret. Mäld dich aa, zum es i d Cloud z synchronisiere."
+    },
+    "matchInfoForm": {
+      "pastDate": "Das Datum isch i de Vergangeheit."
+    },
+    "setupLayout": {
+      "coinTossNeeds": "Zersch Spiilinfo, Offizielli und beidi Teams uusfülle."
+    }
   },
   "scoreboard": {
     "set": "Satz",
@@ -2980,5 +2995,26 @@
     "terms": "Nutzungsbedingungen",
     "impressum": "Impressum",
     "opensource": "Open-Source-Hinweis"
+  },
+  "referee": {
+    "medical": {
+      "mto": "MTO",
+      "rit": "RIT",
+      "ritNoBlood": "ohni Bluet",
+      "ritToilet": "Toilette",
+      "ritWeather": "Wätter",
+      "end": "Endi",
+      "recovered": "erholt",
+      "forfeit": "Forfait",
+      "recoveryTime": "Erholigsziit"
+    },
+    "events": {
+      "teamBmp": "Team-BMP",
+      "refereeBmp": "Schiri-BMP",
+      "successful": "erfolgriich",
+      "unsuccessful": "erfolglos",
+      "judgmentImpossible": "Beurteilig nöd möglich"
+    },
+    "bmpLeft": "Ballabdruck-Protokoll ({{count}} übrig)"
   }
 }
