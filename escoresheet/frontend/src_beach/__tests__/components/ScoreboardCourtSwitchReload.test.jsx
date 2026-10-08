@@ -329,6 +329,89 @@ describe('Scoreboard_beach B1: the courts follow the score', () => {
     cleanup()
   }, 60000)
 
+  // Undo takes the change of courts (or the ended TTO) back before its point.
+  // A rally started then went on past that total: 7:1 with the courts never
+  // changed at 7, and nothing asked again (verifier finding). The change owed
+  // is asked instead of the rally; Undo can still go further back.
+  it('a rally started after Undo took the change of courts back asks for the change first', async () => {
+    const matchId = await setUpMatch()
+    mount(matchId)
+    await startSet()
+    const sidesBefore = await sides(matchId)
+    await rallies(Array.from({ length: 7 }, () => 'Point A'), { first: true })
+    const sidesSwitched = await sides(matchId)
+    await undoLast()
+    expect(await ofType('court_switch')).toHaveLength(0)
+    expect(await sides(matchId)).toBe(sidesBefore)
+    expect(switchOpen()).toBe(false)
+
+    fireEvent.click(button('Start rally'))
+    await waitFor(() => expect(switchOpen()).toBe(true), { timeout: 5000 })
+    expect(button('Point A')).toBeFalsy()
+    await switchCourts()
+    expect(await ofType('court_switch')).toHaveLength(1)
+    expect(await sides(matchId)).toBe(sidesSwitched)
+    await startRally()
+    await point('Point B')
+    expect(await score()).toEqual([7, 1])
+    expect(await sides(matchId)).toBe(sidesSwitched)
+
+    // Undo further back: the point at 7 goes, and the next rally asks nothing
+    await undoLast()
+    await undoLast()
+    await undoLast()
+    expect(await score()).toEqual([6, 0])
+    expect(await sides(matchId)).toBe(sidesBefore)
+    await startRally()
+    expect(switchOpen()).toBe(false)
+    cleanup()
+  }, 90000)
+
+  it('a rally started after Undo took the ended TTO back asks for the TTO, its change made once', async () => {
+    const matchId = await setUpMatch()
+    mount(matchId)
+    await toTto()
+    const sidesBeforeTto = await sides(matchId)
+    await endTto()
+    const sidesAfterTto = await sides(matchId)
+    await undoLast()
+    expect(await ofType('technical_to')).toHaveLength(0)
+    expect(await sides(matchId)).toBe(sidesBeforeTto)
+
+    fireEvent.click(button('Start rally'))
+    await waitFor(() => expect(ttoOpen()).toBe(true), { timeout: 5000 })
+    expect(await ofType('technical_to')).toHaveLength(1)
+    await endTto()
+    expect(await sides(matchId)).toBe(sidesAfterTto)
+    await startRally()
+    await point('Point B')
+    expect(await score()).toEqual([11, 11])
+    expect(await sides(matchId)).toBe(sidesAfterTto)
+    expect(await ofType('technical_to')).toHaveLength(1)
+    cleanup()
+  }, 120000)
+
+  it('the keyboard shortcuts start no rally and score no point under the TTO dialog', async () => {
+    // (localStorage is a mock in these tests)
+    const getItem = vi.spyOn(window.localStorage, 'getItem').mockImplementation(key => (key === 'keybindingsEnabled' ? 'true' : null))
+    try {
+      const matchId = await setUpMatch()
+      mount(matchId)
+      await toTto()
+      await settle()
+      fireEvent.keyDown(window, { key: 'Enter' })
+      await settle()
+      fireEvent.keyDown(window, { key: 'a' })
+      await settle()
+      expect(await score()).toEqual([11, 10])
+      expect(await ofType('rally_start')).toHaveLength(21)
+      expect(ttoOpen()).toBe(true)
+    } finally {
+      getItem.mockReset()
+    }
+    cleanup()
+  }, 120000)
+
   it('a change of courts the score no longer reaches (7 back to 6) asks to change back; at 7 again the change is asked again', async () => {
     const matchId = await setUpMatch()
     mount(matchId)

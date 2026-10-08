@@ -3679,6 +3679,31 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     [data?.set, awardPoint, runAction]
   )
 
+  // A dialog of the courts the set's score is owed and that is not open
+  // (pendingCourtDialog): the change back, else what a point at that total
+  // opens (the change of courts; at 21 in sets 1-2 the TTO, logged again
+  // when it was undone). Asked when the screen is first shown on a set (a
+  // reload) and before a rally starts: Undo takes the change of courts (or
+  // the ended TTO) back before its point, and a rally started then and
+  // played on past that total lost the change for good. True when it asked.
+  const askPendingCourtDialog = useCallback((set, events, match) => {
+    if (!set || !events || !match) return false
+    const pending = pendingCourtDialog(events, set, match)
+    if (!pending) return false
+    const team1Points = set.team1Points || 0
+    const team2Points = set.team2Points || 0
+    if (pending === 'back') {
+      setCourtSwitchModal(prev => prev || { set, team1Points, team2Points, teamThatScored: null, back: true })
+      return true
+    }
+    const lastPoint = events
+      .filter(e => e.type === 'point' && (e.setIndex ?? 1) === set.index)
+      .sort((a, b) => (b.seq || 0) - (a.seq || 0))[0]
+    runAction('courtSwitchPending', () => afterPointScored({ set, team1Points, team2Points, teamKey: lastPoint?.payload?.team || null, newRally: false }))
+      .catch(err => console.error('[Scoreboard] Could not ask for the pending change of courts:', err))
+    return true
+  }, [runAction, afterPointScored])
+
   const handleStartRally = useCallback(async (skipConfirmation = false) => {
     cLogger.logHandler('handleStartRally', { skipConfirmation })
     // Check for accidental rally start (if enabled and point was just awarded)
@@ -3709,6 +3734,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       return
     }
 
+    // A change of courts (or the TTO) owed and not made, its dialog not
+    // open (its event undone): asked instead of the rally
+    if (!courtSwitchModal && !ttoModal && askPendingCourtDialog(data?.set, data?.events, data?.match)) return
+
     // Get current serving team and player
     const servingTeam = getCurrentServe()
     const servingTeamKey = servingTeam
@@ -3724,7 +3753,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     })
     // Track when rally started (for accidental point award check)
     rallyStartTimeRef.current = Date.now()
-  }, [logEvent, isFirstRally, data?.team1Players, data?.team2Players, data?.events, data?.set, data?.match, matchId, getNextSubSeq, syncToReferee, checkAccidentalRallyStart, accidentalRallyStartDuration, getCurrentServe, getServingPlayer, leftisTeam1, leftTeam, rightTeam])
+  }, [logEvent, isFirstRally, data?.team1Players, data?.team2Players, data?.events, data?.set, data?.match, matchId, getNextSubSeq, syncToReferee, checkAccidentalRallyStart, accidentalRallyStartDuration, getCurrentServe, getServingPlayer, leftisTeam1, leftTeam, rightTeam, courtSwitchModal, ttoModal, askPendingCourtDialog])
 
   const handleReplay = useCallback(async () => {
     // During rally: ask first, confirmReplay logs the replay event (no point to undo)
@@ -6835,8 +6864,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // These modals need a decision: Enter confirms them, Escape does not
       // close them, and the point keys wait. (It was never defined: every
       // key press threw a ReferenceError.)
+      // The TTO dialog too: Enter started a rally under it, and the point
+      // keys scored past 21 while the TTO (and its change of courts) waited
       const hasDecisionModal = !!(sanctionConfirmModal || sanctionConfirm || accidentalRallyConfirmModal ||
-        accidentalPointConfirmModal || undoConfirm || replayConfirm || replayRallyConfirm || courtSwitchModal)
+        accidentalPointConfirmModal || undoConfirm || replayConfirm || replayRallyConfirm || courtSwitchModal || ttoModal)
 
       // Confirm key (Enter)
       if (key === keyBindings.confirm) {
@@ -6937,7 +6968,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     keybindingsEnabled, keyBindings, editingKey, showOptionsInMenu, keybindingsModalOpen,
     rallyStatus, handleStartRally, handlePoint, handleTimeout, handleUndo,
     playerActionMenu, sanctionDropdown,
-    timeoutModal, menuModal, sanctionConfirmModal, sanctionConfirm, courtSwitchModal, accidentalRallyConfirmModal,
+    timeoutModal, menuModal, sanctionConfirmModal, sanctionConfirm, courtSwitchModal, ttoModal, accidentalRallyConfirmModal,
     accidentalPointConfirmModal, undoConfirm, replayConfirm, replayRallyConfirm, confirmReplay, handleReplayRally, handleDecisionChange
   ])
 
@@ -7162,20 +7193,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     if (!set || !data?.match || !data?.events) return
     if (courtSwitchLoadCheckedRef.current === set.id) return
     courtSwitchLoadCheckedRef.current = set.id
-    const pending = pendingCourtDialog(data.events, set, data.match)
-    if (!pending) return
-    const team1Points = set.team1Points || 0
-    const team2Points = set.team2Points || 0
-    if (pending === 'back') {
-      setCourtSwitchModal(prev => prev || { set, team1Points, team2Points, teamThatScored: null, back: true })
-      return
-    }
-    const lastPoint = data.events
-      .filter(e => e.type === 'point' && (e.setIndex ?? 1) === set.index)
-      .sort((a, b) => (b.seq || 0) - (a.seq || 0))[0]
-    runAction('courtSwitchLoad', () => afterPointScored({ set, team1Points, team2Points, teamKey: lastPoint?.payload?.team || null, newRally: false }))
-      .catch(err => console.error('[Scoreboard] Could not ask for the pending change of courts:', err))
-  }, [data?.set, data?.match, data?.events, runAction, afterPointScored])
+    askPendingCourtDialog(set, data.events, data.match)
+  }, [data?.set, data?.match, data?.events, askPendingCourtDialog])
 
   // Handle TTO end - performs court switch if needed (at 21 points in sets 1-2).
   // The one end of a TTO, tapped by the scorer or run out (the countdown
