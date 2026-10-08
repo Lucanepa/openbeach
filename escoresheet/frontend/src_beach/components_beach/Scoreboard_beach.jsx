@@ -7265,12 +7265,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         const update = switchBackUpdate(stale, setIndex, match)
         if (update) {
           await db.matches.update(matchId, update)
-          if (match?.seed_key) {
+          if (match?.seed_key && !match.test) {
             await db.sync_queue.add({
               resource: 'match',
               action: 'update',
               payload: { id: match.seed_key, ...update },
-              createdAt: new Date().toISOString()
+              ts: new Date().toISOString(),
+              status: 'queued'
             })
           }
         }
@@ -7299,12 +7300,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       await db.matches.update(matchId, update)
 
       // Sync to Supabase
-      if (data.match?.seed_key) {
+      if (data.match?.seed_key && !data.match.test) {
         await db.sync_queue.add({
           resource: 'match',
           action: 'update',
           payload: { id: data.match.seed_key, ...update },
-          createdAt: new Date().toISOString()
+          ts: new Date().toISOString(),
+          status: 'queued'
         })
       }
     }
@@ -7382,12 +7384,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         await db.matches.update(matchId, update)
 
         // Sync to Supabase
-        if (data.match?.seed_key) {
+        if (data.match?.seed_key && !data.match.test) {
           await db.sync_queue.add({
             resource: 'match',
             action: 'update',
             payload: { id: data.match.seed_key, ...update },
-            createdAt: new Date().toISOString()
+            ts: new Date().toISOString(),
+            status: 'queued'
           })
         }
         switchedSetIndex = setIndex
@@ -12255,12 +12258,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 const oldLeft = getTeamLabel(currentLeftAB)
                                 const newLeft = getTeamLabel(newLeftAB)
                                 await db.matches.update(matchId, update)
-                                if (data.match?.seed_key) {
+                                if (data.match?.seed_key && !data.match.test) {
                                   db.sync_queue.add({
                                     resource: 'match',
                                     action: 'update',
                                     payload: { id: data.match.seed_key, ...update },
-                                    createdAt: new Date().toISOString()
+                                    ts: new Date().toISOString(),
+                                    status: 'queued'
                                   })
                                 }
                                 logManualChange('Teams Setup', 'Court Sides', `${oldLeft} on left`, `${newLeft} on left`, `Switched court sides (Set ${setIdx})`)
@@ -12288,7 +12292,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
                                 await db.matches.update(matchId, patch)
 
-                                if (data.match?.seed_key) {
+                                if (data.match?.seed_key && !data.match.test) {
                                   await db.sync_queue.add({
                                     resource: 'match',
                                     action: 'update',
@@ -12296,7 +12300,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                       id: data.match.seed_key,
                                       coin_toss: coinTossCloud({ ...data.match, ...patch })
                                     },
-                                    createdAt: new Date().toISOString()
+                                    ts: new Date().toISOString(),
+                                    status: 'queued'
                                   })
                                 }
 
@@ -12369,12 +12374,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
                                   await db.matches.update(matchId, { team1FirstServe: newFirstServe })
 
-                                  if (data.match?.seed_key) {
+                                  if (data.match?.seed_key && !data.match.test) {
                                     db.sync_queue.add({
                                       resource: 'match',
                                       action: 'update',
                                       payload: { id: data.match.seed_key, team1FirstServe: newFirstServe },
-                                      createdAt: new Date().toISOString()
+                                      ts: new Date().toISOString(),
+                                      status: 'queued'
                                     })
                                   }
 
@@ -12408,12 +12414,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
                                   await db.matches.update(matchId, { team2FirstServe: newFirstServe })
 
-                                  if (data.match?.seed_key) {
+                                  if (data.match?.seed_key && !data.match.test) {
                                     db.sync_queue.add({
                                       resource: 'match',
                                       action: 'update',
                                       payload: { id: data.match.seed_key, team2FirstServe: newFirstServe },
-                                      createdAt: new Date().toISOString()
+                                      ts: new Date().toISOString(),
+                                      status: 'queued'
                                     })
                                   }
 
