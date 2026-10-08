@@ -36,6 +36,19 @@ export function testMatchSeedKeyFor(existing) {
   return isTestMatchSeedKey(existing) && existing !== TEST_MATCH_SEED_KEY ? existing : newTestMatchSeedKey()
 }
 export const TEST_MATCH_EXTERNAL_ID = 'test-match-default'
+
+/**
+ * Whether a match starts with the referee connection on: a test match does
+ * (as OpenVolley's test match, whose seed row has referee_enabled), so a
+ * referee tablet can join the rehearsal at once (laptop finding OB-11b: the
+ * relay's validatePin lets a referee in only while it is true). The scorer
+ * can still turn it off in Connect tablets. An official match starts off.
+ * @param {object} match  the Dexie match
+ * @returns {boolean}
+ */
+export function refereeConnectionDefault(match) {
+  return match?.test === true
+}
 export const TEST_TEAM_1_EXTERNAL_ID = 'test-team-1'
 export const TEST_TEAM_2_EXTERNAL_ID = 'test-team-2'
 

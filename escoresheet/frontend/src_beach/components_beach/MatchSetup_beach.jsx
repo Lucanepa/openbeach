@@ -27,7 +27,7 @@ import { dateTextToIso, isoToFormDate, isPastMatchDate, defaultMatchDateTime } f
 import { COMPETITIONS_ENABLED } from '../utils_beach/features_beach'
 import { generateMatchSeedKey } from '../utils_beach/serverDataSync_beach'
 import { askText } from '../utils_beach/askText_beach'
-import { TEST_TEAM_SEED_DATA } from '../constants_beach/testSeeds_beach'
+import { TEST_TEAM_SEED_DATA, refereeConnectionDefault } from '../constants_beach/testSeeds_beach'
 import { splitLocalDateTime, parseLocalDateTimeToISO, roundToMinute } from '../utils_beach/timeUtils_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { useSavedTeams as useSavedTeams_beach } from '../hooks_beach/useSavedTeams_beach'
@@ -1289,9 +1289,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           }
         }
 
-        // Migrate old matches: ensure connection fields are explicitly set to false if undefined
+        // Migrate old matches: ensure connection fields are explicitly set if
+        // undefined (off; the referee of a test match on, refereeConnectionDefault)
         const connectionUpdates = {}
-        if (match.refereeConnectionEnabled === undefined) connectionUpdates.refereeConnectionEnabled = false
+        if (match.refereeConnectionEnabled === undefined) connectionUpdates.refereeConnectionEnabled = refereeConnectionDefault(match)
         if (match.team1TeamConnectionEnabled === undefined) connectionUpdates.team1TeamConnectionEnabled = false
         if (match.team2TeamConnectionEnabled === undefined) connectionUpdates.team2TeamConnectionEnabled = false
         if (Object.keys(connectionUpdates).length > 0) {
