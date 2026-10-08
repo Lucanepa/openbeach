@@ -42,6 +42,7 @@ import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot } from '../utils_beach/stateSnapshot_beach'
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
 import { swapTeamDesignation, coinTossCloud } from '../utils_beach/coinToss_beach'
+import { set3TossBefore, set3TossUndoUpdate, undoKeepsMatch } from '../utils_beach/set3Toss_beach'
 import { staleCourtSwitches, switchBackUpdate, snapshotsAfterSwitchBack, pendingTto, pendingCourtDialog } from '../utils_beach/courtSwitchState_beach'
 import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
 import { TTO_TOTAL, courtChangeEvery, hasTechnicalTimeout, nextCourtEvents } from '../utils_beach/courtRhythm_beach'
@@ -4709,6 +4710,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   const handleSet3CoinToss = useCallback((winner) => runAction('set3CoinToss', async () => {
     if (!data?.match) return
 
+    // The match as it is before the toss (read in the action, not the
+    // rendered match): what undoing the toss writes back (set3Toss_beach)
+    const matchBefore = await db.matches.get(matchId)
+    if (!matchBefore || matchBefore.set3CoinTossWinner) return
+    const before = set3TossBefore(matchBefore)
+
     await db.matches.update(matchId, { set3CoinTossWinner: winner })
 
     // Log event for undo
@@ -4717,8 +4724,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       matchId,
       setIndex: 3,
       type: 'set3_coin_toss_winner',
-      // `team`: Last action's team line names the winner
-      payload: { winner, team: winner },
+      // `team`: Last action's team line names the winner. `before`: the
+      // match before the toss, for its undo
+      payload: { winner, team: winner, before },
       ts: new Date().toISOString(),
       seq: nextSeq
     })
@@ -5429,8 +5437,20 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
         const previousEvent = remainingEvents[0]
 
-        // 3. Restore state from the previous event's snapshot
-        if (previousEvent?.stateSnapshot) {
+        // 3. Restore state from the previous event's snapshot. Not one of
+        // another set: the event before the first one of a set (its start,
+        // the set 3 toss) is the previous set's end, and its snapshot
+        // reopened that set (set3Toss_beach). The set's score is as it was
+        // (nothing was scored in it yet); the team sanction flags follow the
+        // events that remain. Not for a set start either: the event before it
+        // (the set 3 toss) can be older than the sides and serve the set was
+        // started with (undoKeepsMatch).
+        if (undoKeepsMatch(previousEvent?.stateSnapshot, lastEvent)) {
+          const removedIds = new Set(eventsToDelete.map(e => e.id))
+          const remaining = allEvents.filter(e => !removedIds.has(e.id))
+          const sanctionMatch = await db.matches.get(matchId)
+          await db.matches.update(matchId, { sanctions: teamSanctionFlags(remaining, sanctionMatch?.sanctions) })
+        } else if (previousEvent?.stateSnapshot) {
           await restoreStateFromSnapshot(previousEvent.stateSnapshot)
         } else {
           // No previous event with snapshot - calculate state from remaining events
@@ -5486,6 +5506,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           if (preSwitchOverrides !== undefined) {
             await db.matches.update(matchId, { setLeftTeamOverrides: preSwitchOverrides })
           }
+        }
+
+        // The set 3 toss: the winner, the sides, the serve and the service
+        // orders as they were before it (set3Toss_beach), so the toss buttons
+        // come back with the sides and serve set 3 had before
+        if (lastEvent.type === 'set3_coin_toss_winner') {
+          await db.matches.update(matchId, set3TossUndoUpdate(lastEvent))
         }
 
         // Handle special cases for set_end undo
