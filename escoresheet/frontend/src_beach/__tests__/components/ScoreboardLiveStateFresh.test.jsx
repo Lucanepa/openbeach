@@ -149,6 +149,7 @@ describe('Scoreboard_beach: the live state reads the current TTO, time-out and a
     await waitFor(() => expect(button('Point A')).toBeTruthy(), { timeout: 5000 })
     fireEvent.click(button('Point A'))
     await waitFor(() => expect(button('Start TTO')).toBeTruthy(), { timeout: 5000 })
+    const beforeStart = Date.now()
     fireEvent.click(button('Start TTO'))
     await waitFor(() => expect(liveRows('tto_start')).toHaveLength(1), { timeout: 5000 })
     await waitFor(() => expect(document.body.textContent).toContain('Click to end & switch courts'))
@@ -161,7 +162,7 @@ describe('Scoreboard_beach: the live state reads the current TTO, time-out and a
     expect(switchRow).toMatchObject({ tto_active: true, last_event_data: { reason: 'set1_tto_court_switch' } })
     // the TTO's own start (set on Start TTO), not a fallback "now"
     expect(Date.parse(switchRow.tto_started_at)).toBeLessThanOrEqual(startedAt)
-    expect(startedAt - Date.parse(switchRow.tto_started_at)).toBeLessThan(1000)
+    expect(Date.parse(switchRow.tto_started_at)).toBeGreaterThanOrEqual(beforeStart)
     expect(liveRows('end_tto')[0]).toMatchObject({ tto_active: false, tto_started_at: null })
   }, 30000)
 })
