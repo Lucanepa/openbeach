@@ -38,6 +38,7 @@ vi.mock('../../db_beach/db_beach', () => {
 })
 
 import { fetchMatchByPin, importMatchFromSupabase } from '../../utils_beach/backupManager_beach'
+import { leftTeamInSet, switchSidesUpdate } from '../../utils_beach/courtSides_beach'
 
 const rich = (a, b, serving = false) => ({ I: { number: a, ...(serving ? { isServing: true } : {}) }, II: { number: b, ...(serving ? { isServing: true } : {}) } })
 const T1 = (serving) => rich(7, 12, serving) // team1's players
@@ -155,5 +156,26 @@ describe('the restored match keeps its court sides', () => {
     const out = await fetchMatchByPin('123456', 12, { restoreByPin })
     await importMatchFromSupabase(out)
     expect(added.matches[0].setLeftTeamOverrides).toEqual({ 2: 'B' })
+  })
+
+  it('without a snapshot, in set 3: its start side, so the set 3 toss still moves the court', async () => {
+    const restoreByPin = async () => ({
+      data: {
+        match: { id: 'uuid', external_id: 'seed', game_n: 12, status: 'live', sport_type: 'beach', coin_toss: { team_a: 'team1', team_b: 'team2' } },
+        sets: [],
+        events: [],
+        liveState: { current_set: 3, match_status: 'interval', side_a: 'right', lineup_a: T1(false), lineup_b: T2(false) }
+      },
+      error: null,
+      status: 200
+    })
+    const out = await fetchMatchByPin('123456', 12, { restoreByPin })
+    await importMatchFromSupabase(out)
+    const restored = added.matches[0]
+    expect(leftTeamInSet(3, restored)).toBe('B')
+    // the set 3 toss (it writes set3LeftTeam) puts A on the left: the court follows
+    expect(leftTeamInSet(3, { ...restored, set3LeftTeam: 'A' })).toBe('A')
+    // a change of courts in set 3 still swaps it
+    expect(leftTeamInSet(3, { ...restored, ...switchSidesUpdate(3, restored) })).toBe('A')
   })
 })

@@ -768,7 +768,13 @@ export function savedCourtSides(events, liveState) {
   }
   const set = Number(liveState?.current_set)
   if (set >= 1 && (liveState.side_a === 'left' || liveState.side_a === 'right')) {
-    return { setLeftTeamOverrides: { [set]: liveState.side_a === 'left' ? 'A' : 'B' } }
+    const left = liveState.side_a === 'left' ? 'A' : 'B'
+    // Set 3 as its start side (set3LeftTeam), not an override: an override
+    // [3] outranks set3LeftTeam, so a restore in the interval before set 3
+    // would pin the court and the set 3 toss (it writes set3LeftTeam) would
+    // no longer move it. A later change of courts writes the override.
+    if (set === 3) return { set3LeftTeam: left }
+    return { setLeftTeamOverrides: { [set]: left } }
   }
   return {}
 }
