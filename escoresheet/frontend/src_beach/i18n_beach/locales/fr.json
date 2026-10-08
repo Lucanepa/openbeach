@@ -2959,5 +2959,12 @@
       "offline": "Hors ligne : l’approbation avec un PIN revient dès que la connexion revient",
       "beachOff": "Ce serveur n’approuve pas encore les résultats de beach avec un PIN : signer à la main"
     }
+  },
+  "legal": {
+    "nav": "Informations légales",
+    "privacy": "Protection des données",
+    "terms": "Conditions d’utilisation",
+    "impressum": "Mentions légales",
+    "opensource": "Avis open source"
   }
 }

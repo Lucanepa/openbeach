@@ -2960,5 +2960,12 @@
       "offline": "Offline: approval with a PIN is offered again when back online",
       "beachOff": "This server does not approve beach results with a PIN yet: sign by hand"
     }
+  },
+  "legal": {
+    "nav": "Legal",
+    "privacy": "Privacy policy",
+    "terms": "Terms of use",
+    "impressum": "Legal notice",
+    "opensource": "Open-source notice"
   }
 }

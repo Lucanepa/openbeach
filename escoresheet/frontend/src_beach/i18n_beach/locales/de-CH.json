@@ -2959,5 +2959,12 @@
       "offline": "Offline: d Genehmigung mit PIN chunnt wieder, sobald Sie online sind",
       "beachOff": "De Server genehmiget Beachresultat no nöd mit PIN: vo Hand underschriibe"
     }
+  },
+  "legal": {
+    "nav": "Rechtliches",
+    "privacy": "Datenschutzerklärung",
+    "terms": "Nutzungsbedingungen",
+    "impressum": "Impressum",
+    "opensource": "Open-Source-Hinweis"
   }
 }

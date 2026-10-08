@@ -2959,5 +2959,12 @@
       "offline": "Offline: l’approvazione con PIN torna disponibile appena sei online",
       "beachOff": "Questo server non approva ancora i risultati di beach con un PIN: firma a mano"
     }
+  },
+  "legal": {
+    "nav": "Note legali",
+    "privacy": "Protezione dei dati",
+    "terms": "Condizioni d’uso",
+    "impressum": "Note legali",
+    "opensource": "Avviso open source"
   }
 }

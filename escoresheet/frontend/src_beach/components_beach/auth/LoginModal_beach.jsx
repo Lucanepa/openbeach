@@ -9,6 +9,7 @@ import { Field, FormError } from '../../ui/volleyui/Field.jsx'
 import { Input } from '../../ui/volleyui/Input.jsx'
 import { Button } from '../../ui/volleyui/Button.jsx'
 import AuthLayer from './AuthLayer_beach'
+import LegalLinks from '../LegalLinks_beach'
 import { cn } from '../../ui/volleyui/cn.js'
 import { BRAND } from '../../brand_beach'
 
@@ -113,6 +114,9 @@ export default function LoginModal({ open, onClose }) {
               <a href="/admin_beach.html" className={LINK}>{t('account.competitionsAdmin', 'Competitions admin')}</a>
             )}
           </div>
+          {/* Next to "Create account" the privacy policy matters most: the
+              account is made on manager-beach, which shows the terms sentence */}
+          <LegalLinks docs={['privacy', 'terms', 'impressum']} className="pt-2 text-center text-[11px] text-stone-400" />
         </form>
       </Modal>
     </AuthLayer>
