@@ -162,6 +162,10 @@ const bmpChoiceButton = {
 /** A label that some locales break with a soft "-\n" (de: "Verzögerungs-\nwarnung"), on one line. */
 const oneLine = (text) => String(text).replace(/-\n/g, '').replace(/\n/g, ' ')
 
+// Finished sets a team won. A set row holds its points, not its winner.
+const setsWonBy = (sets, teamKey) => (sets || []).filter(s => s.finished &&
+  (teamKey === 'team1' ? s.team1Points > s.team2Points : s.team2Points > s.team1Points)).length
+
 /** Every dialog of the scoring screen is the volleyui one (Modal_beach tone="light"). */
 function Modal(props) {
   return <LegacyModal tone="light" {...props} />
@@ -844,8 +848,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       team1Timeouts: data.set?.team1Timeouts,
       team2Timeouts: data.set?.team2Timeouts,
       rallyInProgress: data.set?.rallyInProgress,
-      team1SetsWon: data.sets?.filter(s => s.winner === 'team1').length,
-      team2SetsWon: data.sets?.filter(s => s.winner === 'team2').length,
+      team1SetsWon: setsWonBy(data.sets, 'team1'),
+      team2SetsWon: setsWonBy(data.sets, 'team2'),
       totalEvents: data.events?.length
     }
   }, [data])
@@ -6607,7 +6611,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           setSanctionConfirmModal(null)
           const opponentKey = team === 'team1' ? 'team2' : 'team1'
           const allSets = await db.sets.where({ matchId }).toArray()
-          const opponentSetsWon = allSets.filter(s => s.finished && s.winner === opponentKey).length
+          const opponentSetsWon = setsWonBy(allSets, opponentKey)
           setExpulsionConfirmModal({ team, type, role, sanctionType: 'expulsion', endsMatch: opponentSetsWon >= 1 })
           return
         }
@@ -6638,7 +6642,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           setSanctionConfirmModal(null)
           const opponentKey = team === 'team1' ? 'team2' : 'team1'
           const allSets = await db.sets.where({ matchId }).toArray()
-          const opponentSetsWon = allSets.filter(s => s.finished && s.winner === opponentKey).length
+          const opponentSetsWon = setsWonBy(allSets, opponentKey)
           const endsMatch = opponentSetsWon >= 1
           setExpulsionConfirmModal({
             team,
@@ -6671,7 +6675,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Check if this expulsion would end the match (opponent wins their 2nd set)
       const opponentKey = team === 'team1' ? 'team2' : 'team1'
       const allSets = await db.sets.where({ matchId }).toArray()
-      const opponentSetsWon = allSets.filter(s => s.finished && s.winner === opponentKey).length
+      const opponentSetsWon = setsWonBy(allSets, opponentKey)
       const endsMatch = opponentSetsWon >= 1 // If opponent already has 1 set, winning this one ends the match
 
       // Show secondary confirmation modal
