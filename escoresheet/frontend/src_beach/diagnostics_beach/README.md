@@ -17,7 +17,12 @@ repo has every line kind and the jq recipes.
 
 - **Desktop app:** `diagnostics-YYYY-MM-DD.jsonl` in the log folder, written
   by the OpenVolley repo's `src-tauri/src/diagnostics.rs`. Only the scoretable
-  window writes there. On Linux and Windows that folder is OpenVolley's
+  window writes there. The app's pop-up windows (the scoresheet, a referee view
+  opened from the scoretable) send their lines to it over a BroadcastChannel
+  (`ob-diagnostics`); it redacts them again and writes them into the same file
+  tagged `"win":"popup-<n>"` and `"page":"scoresheet"` or `"referee"`. A pop-up
+  keeps up to 2,000 lines while the scoretable is not recording
+  (`popupForward_beach.js`). On Linux and Windows that folder is OpenVolley's
   (`~/.local/share/OpenVolley/logs`, `%APPDATA%\OpenVolley\logs`:
   `activity.rs` `log_root` does not depend on the app), so with both apps
   installed their lines share the same daily file. Tell them apart by

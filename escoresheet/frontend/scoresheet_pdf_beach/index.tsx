@@ -3,6 +3,12 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { closeAppWindow, getOpenerWindow } from '../src_beach/utils_beach/appWindowGuest_beach.js';
 import './scoresheet_beach.css'; // compiled Tailwind (was cdn.tailwindcss.com: unstyled offline)
+import { installPopupDiagnostics } from '../src_beach/diagnostics_beach/index_beach';
+
+// Diagnostics mode, in the desktop app's pop-up window only (opened from the
+// scoretable): its lines go into the scoretable's diagnostics file
+// (src_beach/diagnostics_beach/popupForward_beach.js). Elsewhere this does nothing.
+installPopupDiagnostics({ app: 'scoresheet' });
 
 // Helper function to send errors to parent window
 const sendErrorToParent = (error: Error | string, details?: string) => {
