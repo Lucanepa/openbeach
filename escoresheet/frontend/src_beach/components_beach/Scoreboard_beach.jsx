@@ -2566,35 +2566,6 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         }
       }
 
-      // Function to generate fillable PDF (simple form filling)
-      window.debugGenerateFillablePDF = async () => {
-        try {
-          const match = data?.match
-          if (!match) {
-            console.error('No match data available')
-            return
-          }
-
-          // Prepare match data in the format expected by fillPdfForm
-          const fillableData = {
-            match_type_1: match.matchType || match.match_type_1 || 'championship',
-            match_type_2: match.gender || match.match_type_2 || '',
-            league: match.league || '',
-            gameNumber: match.gameNumber || match.externalId || '',
-            team1Team: data?.team1Team?.name || '',
-            team2Team: data?.team2Team?.name || '',
-            city: match.city || '',
-            hall: match.venue || match.hall || '',
-            scheduledAt: match.scheduledAt,
-            officials: match.officials || []
-          }
-
-          await generateFillablePdf(fillableData)
-        } catch (error) {
-          console.error('Error generating fillable PDF:', error)
-        }
-      }
-
       // Debug function to check games in progress
       window.debugCheckGamesInProgress = async () => {
         try {
@@ -2694,7 +2665,6 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     return () => {
       if (typeof window !== 'undefined') {
         if (window.debugExportMatchData) delete window.debugExportMatchData
-        if (window.debugGenerateFillablePDF) delete window.debugGenerateFillablePDF
         if (window.debugCheckGamesInProgress) delete window.debugCheckGamesInProgress
       }
     }
