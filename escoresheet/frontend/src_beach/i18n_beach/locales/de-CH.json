@@ -2597,6 +2597,8 @@
     "wait": "Bitte warten, das Matchblatt wird umgewandelt.",
     "downloadPdf": "PDF herunterladen",
     "pdfSaved": "PDF gespeichert",
-    "pdfFailed": "Das PDF konnte nicht erstellt werden: {{error}}"
+    "pdfFailed": "Das PDF konnte nicht erstellt werden: {{error}}",
+    "sentTitle": "PDF bereit",
+    "sent": "Es ist bei der Spielende-Seite angekommen. Sie können dieses Fenster schliessen."
   }
 }

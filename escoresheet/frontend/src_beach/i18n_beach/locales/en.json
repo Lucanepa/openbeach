@@ -2598,6 +2598,8 @@
     "wait": "Please wait while the scoresheet is converted.",
     "downloadPdf": "Download PDF",
     "pdfSaved": "PDF saved",
-    "pdfFailed": "The PDF could not be made: {{error}}"
+    "pdfFailed": "The PDF could not be made: {{error}}",
+    "sentTitle": "PDF ready",
+    "sent": "It went to the match end page. You can close this window."
   }
 }

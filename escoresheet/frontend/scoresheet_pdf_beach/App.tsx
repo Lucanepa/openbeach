@@ -22,10 +22,12 @@ export const pageAction = (search = typeof window !== 'undefined' ? window.locat
   new URLSearchParams(search).get('action');
 
 /** The progress line under "Generating…". */
-export function progressLabel(p: { step: string; page?: number; pages?: number } | null) {
+export function progressLabel(p: { step: string; page?: number; pages?: number; error?: string } | null) {
   if (!p) return t('scoresheet.wait');
   if (p.step === 'page') return t('scoresheet.page', { page: p.page, pages: p.pages });
   if (p.step === 'finishing') return t('scoresheet.finishing');
+  if (p.step === 'sent') return t('scoresheet.sent');
+  if (p.step === 'failed') return t('scoresheet.pdfFailed', { error: p.error || '' });
   return t('scoresheet.preparing');
 }
 
@@ -45,7 +47,7 @@ export default function App({ matchData }: { matchData?: any }) {
   const contentRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isPdfGenerating, setIsPdfGenerating] = useState(approvalMode);
-  const [pdfProgress, setPdfProgress] = useState<{ step: string; page?: number; pages?: number } | null>(approvalMode ? { step: 'preparing' } : null);
+  const [pdfProgress, setPdfProgress] = useState<{ step: string; page?: number; pages?: number; error?: string } | null>(approvalMode ? { step: 'preparing' } : null);
   // While the approval waits for this window: its heartbeat to the opener,
   // and closing the window tells the opener at once (it then asks the scorer)
   const approvalBusyRef = useRef(approvalMode);
@@ -383,6 +385,9 @@ export default function App({ matchData }: { matchData?: any }) {
         // delivered: closing the window from now on cancels nothing
         approvalBusyRef.current = false;
         finishPDF(pdf, true);
+        // where window.close() does nothing (macOS app windows) the window
+        // stays: it must not keep saying "Generating…, closing cancels"
+        setPdfProgress({ step: 'sent' });
       } else {
         savePdf(pdf, generateFilename());
         setSavedNotice(true);
@@ -395,6 +400,7 @@ export default function App({ matchData }: { matchData?: any }) {
         // The approval waits for this window: say so at once (no blocking alert)
         approvalBusyRef.current = false;
         deliverPdfToOpener({ error: message });
+        setPdfProgress({ step: 'failed', error: message });
       } else {
         alert(t('scoresheet.pdfFailed', { error: message }));
       }
@@ -410,6 +416,8 @@ export default function App({ matchData }: { matchData?: any }) {
   };
 
   const zoomPercentage = Math.round(zoom * 100);
+  // the approval's PDF went back (or its error did): nothing left to cancel
+  const pdfDone = pdfProgress?.step === 'sent' || pdfProgress?.step === 'failed';
 
   return (
     <div ref={containerRef} className="scoresheet-app h-screen flex flex-col bg-gray-200 overflow-hidden">
@@ -490,15 +498,19 @@ export default function App({ matchData }: { matchData?: any }) {
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           padding: '24px', textAlign: 'center'
         }}>
-          <div style={{ fontSize: '48px', marginBottom: '24px', animation: 'spin 1s linear infinite' }}>⏳</div>
+          {pdfDone ? (
+            <div style={{ fontSize: '48px', marginBottom: '24px', color: pdfProgress?.step === 'sent' ? '#047857' : '#b91c1c' }} aria-hidden="true">{pdfProgress?.step === 'sent' ? '✓' : '!'}</div>
+          ) : (
+            <div style={{ fontSize: '48px', marginBottom: '24px', animation: 'spin 1s linear infinite' }}>⏳</div>
+          )}
           <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
           <h2 style={{ color: '#1c1917', fontSize: '24px', fontWeight: 'bold', marginBottom: '16px' }}>
-            {t('scoresheet.generating')}
+            {pdfProgress?.step === 'sent' ? t('scoresheet.sentTitle') : t('scoresheet.generating')}
           </h2>
           <p role="status" aria-live="polite" style={{ color: '#57534e', fontSize: '16px', maxWidth: '400px' }}>
             {progressLabel(pdfProgress)}
           </p>
-          {approvalMode && (
+          {approvalMode && !pdfDone && (
             <p style={{ color: '#b45309', fontSize: '15px', fontWeight: 600, maxWidth: '420px', marginTop: '16px' }}>
               {t('scoresheet.closeCancels')}
             </p>

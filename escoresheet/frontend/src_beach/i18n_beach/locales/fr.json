@@ -2597,6 +2597,8 @@
     "wait": "Veuillez patienter pendant la conversion de la feuille de match.",
     "downloadPdf": "Télécharger le PDF",
     "pdfSaved": "PDF enregistré",
-    "pdfFailed": "Le PDF n'a pas pu être créé : {{error}}"
+    "pdfFailed": "Le PDF n'a pas pu être créé : {{error}}",
+    "sentTitle": "PDF prêt",
+    "sent": "Il a été transmis à la page de fin de match. Vous pouvez fermer cette fenêtre."
   }
 }

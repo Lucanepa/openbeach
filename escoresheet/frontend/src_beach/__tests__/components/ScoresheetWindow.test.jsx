@@ -31,6 +31,16 @@ describe('the scoresheet window', () => {
     expect(screen.queryByTitle('Zoom in')).toBeNull()
   })
 
+  it('approval: once the PDF went back it says so (a macOS window stays open after window.close())', async () => {
+    const { progressLabel } = await import('../../../scoresheet_pdf_beach/App.tsx')
+    expect(progressLabel({ step: 'sent' })).toBe('It went to the match end page. You can close this window.')
+    expect(progressLabel({ step: 'failed', error: 'boom' })).toBe('The PDF could not be made: boom')
+    // the overlay drops "closing cancels" and the spinner once done
+    const src = readFileSync(resolve(__dirname, '../../../scoresheet_pdf_beach/App.tsx'), 'utf8')
+    expect(src).toMatch(/approvalMode && !pdfDone && \(/)
+    expect(src).toMatch(/finishPDF\(pdf, true\);[\s\S]{0,200}setPdfProgress\(\{ step: 'sent' \}\)/)
+  })
+
   it('preview: Download PDF and zoom, no overlay; the pages are shown only once fitted (no zoom jump)', () => {
     vi.useFakeTimers()
     window.history.replaceState(null, '', '/scoresheet_beach.html')
