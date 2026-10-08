@@ -6,6 +6,10 @@ import { DateField, TimeField } from '../ui/volleyui/DateField.jsx'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db_beach/db_beach'
 import { useAlert } from '../contexts_beach/AlertContext_beach'
+import { withActivityContext } from '../db_beach/eventHistory_beach'
+import { randomUuid } from '../utils_beach/deviceId_beach'
+import { sanctionLabel } from '../utils_beach/corrections_beach'
+import CorrectionsPanel from './corrections/CorrectionsPanel_beach'
 
 // Standard volleyball team colors - keys for translation
 const TEAM_COLORS = [
@@ -77,7 +81,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
   // Track all changes for audit log
   const [changes, setChanges] = useState([])
   const [saving, setSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState('scores')
+  const [activeTab, setActiveTab] = useState('corrections')
 
   // Editable state - Sets
   const [editedSets, setEditedSets] = useState([])
@@ -420,7 +424,11 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
   }, [recordChange])
 
   // ==================== SAVE FUNCTION ====================
-  const handleSave = async () => {
+  // Teams, players and match info. Every event deleted or edited by the save
+  // is recorded as a manual adjustment in the event history
+  // (db_beach/eventHistory_beach); scores, time-outs and sanctions are
+  // corrected in the Corrections tab, one by one.
+  const handleSave = async () => withActivityContext({ reason: 'manual_adjustment', actionId: randomUuid() }, async () => {
     if (changes.length === 0) {
       showAlert(t('manualAdjustmentsEditor.noChanges', 'No changes to save'), 'info')
       return
@@ -428,14 +436,8 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
 
     setSaving(true)
     try {
-      // Update sets in IndexedDB
-      for (const set of editedSets) {
-        await db.sets.update(set.id, {
-          team1Points: set.team1Points,
-          team2Points: set.team2Points,
-          finished: set.finished
-        })
-      }
+      // Set scores are not written here: the Corrections tab counts them from
+      // the points (a typed score here could overwrite a correction)
 
       // Update teams in IndexedDB
       if (editedTeam1?.id) {
@@ -544,7 +546,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
     } finally {
       setSaving(false)
     }
-  }
+  })
 
   // Queue the changes for the cloud (the sync queue sends them)
   const syncToSupabase = async () => {
@@ -641,11 +643,21 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
   }
 
   const tabs = [
-    { id: 'scores', label: t('manualAdjustmentsEditor.tabScores', 'Scores') },
+    { id: 'corrections', label: t('corrections.title', 'Corrections') },
     { id: 'teams', label: t('manualAdjustmentsEditor.tabTeams', 'Teams & Players') },
-    { id: 'events', label: t('manualAdjustmentsEditor.tabEvents', 'Timeouts & Sanctions') },
     { id: 'info', label: t('manualAdjustmentsEditor.tabInfo', 'Match Info') }
   ]
+  // An approved / final match is read-only here: reopen it at the match end first
+  const closed = ['approved', 'final'].includes(data.match?.status) || data.match?.approved === true
+
+  // The scoresheet window follows a correction at once
+  const notifyScoresheet = () => {
+    try {
+      const channel = new BroadcastChannel('escoresheet-updates')
+      channel.postMessage({ type: 'MANUAL_ADJUSTMENT', matchId, reason: 'correction' })
+      channel.close()
+    } catch { /* no BroadcastChannel */ }
+  }
 
   // The scheduled date and time as the fields show them (local time)
   const scheduledLocal = localDateTime(editedMatch?.scheduledAt)
@@ -727,7 +739,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
       {/* Sections: a segmented control, not tabs */}
       <div className="border-b border-stone-200 bg-white/60 px-4 py-3 sm:px-6">
         <SegmentedControl
-          className="max-w-2xl grid-cols-2 sm:grid-cols-4"
+          className="max-w-2xl grid-cols-3"
           ariaLabel={t('manualAdjustmentsEditor.title', 'Manual adjustments')}
           options={tabs.map(tab => ({ value: tab.id, label: tab.label }))}
           value={activeTab}
@@ -737,71 +749,24 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
 
       {/* Content */}
       <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
-        {/* ==================== SCORES TAB ==================== */}
-        {activeTab === 'scores' && (
-          <div>
-            <h2 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '20px', color: 'var(--ov-text)' }}>
-              {t('manualAdjustmentsEditor.setScores', 'Set Scores')}
-            </h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {editedSets.map(set => (
-                <div
-                  key={set.id}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '80px 1fr 60px 1fr 100px',
-                    gap: '12px',
-                    alignItems: 'center',
-                    ...cardStyle
-                  }}
-                >
-                  <div style={{ fontWeight: 600 }}>{t('manualAdjustmentsEditor.setN', { n: set.index })}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ color: 'var(--ov-text-secondary)', minWidth: '80px' }}>
-                      {editedTeam1?.name || t('common.team1', 'Team 1')}:
-                    </span>
-                    <input
-                      type="number"
-                      value={set.team1Points}
-                      onChange={(e) => updateSetScore(set.id, 'team1Points', e.target.value)}
-                      style={{ ...inputStyle, width: '80px', textAlign: 'center', fontWeight: 600 }}
-                    />
-                  </div>
-                  <div style={{ textAlign: 'center', color: 'var(--ov-text-secondary)' }}>vs</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ color: 'var(--ov-text-secondary)', minWidth: '80px' }}>
-                      {editedTeam2?.name || t('common.team2', 'Team 2')}:
-                    </span>
-                    <input
-                      type="number"
-                      value={set.team2Points}
-                      onChange={(e) => updateSetScore(set.id, 'team2Points', e.target.value)}
-                      style={{ ...inputStyle, width: '80px', textAlign: 'center', fontWeight: 600 }}
-                    />
-                  </div>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={set.finished}
-                      onChange={(e) => {
-                        setEditedSets(prev => prev.map(s => {
-                          if (s.id === set.id) {
-                            const oldValue = s.finished
-                            if (oldValue !== e.target.checked) {
-                              recordChange('set', 'finished', oldValue, e.target.checked, `Set ${s.index} finished: ${oldValue} → ${e.target.checked}`)
-                            }
-                            return { ...s, finished: e.target.checked }
-                          }
-                          return s
-                        }))
-                      }}
-                      style={{ width: '18px', height: '18px' }}
-                    />
-                    <span style={{ fontSize: '13px', color: 'var(--ov-text-secondary)' }}>{t('manualAdjustmentsEditor.finished', 'Finished')}</span>
-                  </label>
-                </div>
-              ))}
-            </div>
+        {/* ==================== CORRECTIONS TAB ==================== */}
+        {/* Scores, time-outs, sanctions, remarks: planned, previewed and saved
+            one by one (components_beach/corrections), never typed in */}
+        {activeTab === 'corrections' && (
+          <div style={{ maxWidth: '960px', margin: '0 auto' }}>
+            <CorrectionsPanel
+              mode="review"
+              matchId={matchId}
+              events={data.events}
+              match={data.match}
+              sets={data.sets}
+              team1Team={data.team1}
+              team2Team={data.team2}
+              team1Players={data.team1Players}
+              team2Players={data.team2Players}
+              readOnly={closed}
+              hooks={{ notifyScoresheetUpdate: notifyScoresheet }}
+            />
           </div>
         )}
 
@@ -912,53 +877,22 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                             </label>
                             <button onClick={() => removePlayer(player.id, true)} style={{ ...deleteButtonStyle, padding: '4px 8px', marginLeft: 'auto' }}>{t('manualAdjustmentsEditor.remove', 'Remove')}</button>
                           </div>
-                          {/* Player Sanctions */}
-                          <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid var(--ov-sunken-strong)', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                            {playerSanctions.map(s => (
-                              <span key={s.id} style={{ fontSize: '11px', color: 'var(--ov-danger-text)', background: 'rgba(239,68,68,0.2)', padding: '2px 6px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
-                                onClick={() => setEditingSanction({ ...s, type: s.payload?.sanctionType || s.payload?.type, scoreA: s.stateSnapshot?.pointsA ?? s.stateSnapshot?.scoreA ?? 0, scoreB: s.stateSnapshot?.pointsB ?? s.stateSnapshot?.scoreB ?? 0 })}
-                              >
-                                {s.payload?.sanctionType || s.payload?.type} (Set {s.setIndex})
-                                <button onClick={(e) => { e.stopPropagation(); deleteEvent(s.id) }} style={{ background: 'none', border: 'none', color: 'var(--ov-danger-text)', cursor: 'pointer', padding: 0, fontSize: '10px' }}>×</button>
-                              </span>
-                            ))}
-                            <button
-                              onClick={() => setShowAddSanction({ team: 'team1', playerNumber: player.number, playerType: 'player' })}
-                              style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(239,68,68,0.1)', color: 'var(--ov-danger-text)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '4px', cursor: 'pointer' }}
-                            >
-                              {t('manualAdjustmentsEditor.sanction', '+ Sanction')}
-                            </button>
-                          </div>
+                          {/* Player sanctions (read-only): corrected in the Corrections tab */}
+                          {playerSanctions.length > 0 && (
+                            <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid var(--ov-sunken-strong)', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                              {playerSanctions.map(s => (
+                                <span key={s.id} style={{ fontSize: '11px', color: 'var(--ov-danger-text)', background: 'rgba(239,68,68,0.12)', padding: '2px 6px', borderRadius: '4px' }}>
+                                  {sanctionLabel(s.payload?.type, t)} ({t('manualAdjustmentsEditor.setN', { n: s.setIndex })})
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )
                     })}
                   </div>
                 </div>
 
-                {/* Coach Sanctions - Team 1 */}
-                {editedMatch?.hasCoach && (
-                  <div style={cardStyle}>
-                    <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: '#a855f7' }}>
-                      Coach {editedMatch?.team1CoachName ? `(${editedMatch.team1CoachName})` : ''}
-                    </h3>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
-                      {(editedEvents || []).filter(e => e.type === 'sanction' && e.payload?.team === 'team1' && e.payload?.role === 'coach').map(s => (
-                        <span key={s.id} style={{ fontSize: '11px', color: 'var(--ov-danger-text)', background: 'rgba(239,68,68,0.2)', padding: '2px 6px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
-                          onClick={() => setEditingSanction({ ...s, type: s.payload?.sanctionType || s.payload?.type, scoreA: s.stateSnapshot?.pointsA ?? s.stateSnapshot?.scoreA ?? 0, scoreB: s.stateSnapshot?.pointsB ?? s.stateSnapshot?.scoreB ?? 0 })}
-                        >
-                          {s.payload?.sanctionType || s.payload?.type} (Set {s.setIndex})
-                          <button onClick={(e) => { e.stopPropagation(); deleteEvent(s.id) }} style={{ background: 'none', border: 'none', color: 'var(--ov-danger-text)', cursor: 'pointer', padding: 0, fontSize: '10px' }}>×</button>
-                        </span>
-                      ))}
-                      <button
-                        onClick={() => setShowAddSanction({ team: 'team1', playerType: 'coach', role: 'coach' })}
-                        style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(168,85,247,0.1)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.3)', borderRadius: '4px', cursor: 'pointer' }}
-                      >
-                        + Coach Sanction
-                      </button>
-                    </div>
-                  </div>
-                )}
 
               </div>
 
@@ -1061,114 +995,23 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                             </label>
                             <button onClick={() => removePlayer(player.id, false)} style={{ ...deleteButtonStyle, padding: '4px 8px', marginLeft: 'auto' }}>{t('manualAdjustmentsEditor.remove', 'Remove')}</button>
                           </div>
-                          {/* Player Sanctions */}
-                          <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid var(--ov-sunken-strong)', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                            {playerSanctions.map(s => (
-                              <span key={s.id} style={{ fontSize: '11px', color: 'var(--ov-danger-text)', background: 'rgba(239,68,68,0.2)', padding: '2px 6px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
-                                onClick={() => setEditingSanction({ ...s, type: s.payload?.sanctionType || s.payload?.type, scoreA: s.stateSnapshot?.pointsA ?? s.stateSnapshot?.scoreA ?? 0, scoreB: s.stateSnapshot?.pointsB ?? s.stateSnapshot?.scoreB ?? 0 })}
-                              >
-                                {s.payload?.sanctionType || s.payload?.type} (Set {s.setIndex})
-                                <button onClick={(e) => { e.stopPropagation(); deleteEvent(s.id) }} style={{ background: 'none', border: 'none', color: 'var(--ov-danger-text)', cursor: 'pointer', padding: 0, fontSize: '10px' }}>×</button>
-                              </span>
-                            ))}
-                            <button
-                              onClick={() => setShowAddSanction({ team: 'team2', playerNumber: player.number, playerType: 'player' })}
-                              style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(239,68,68,0.1)', color: 'var(--ov-danger-text)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '4px', cursor: 'pointer' }}
-                            >
-                              {t('manualAdjustmentsEditor.sanction', '+ Sanction')}
-                            </button>
-                          </div>
+                          {/* Player sanctions (read-only): corrected in the Corrections tab */}
+                          {playerSanctions.length > 0 && (
+                            <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid var(--ov-sunken-strong)', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                              {playerSanctions.map(s => (
+                                <span key={s.id} style={{ fontSize: '11px', color: 'var(--ov-danger-text)', background: 'rgba(239,68,68,0.12)', padding: '2px 6px', borderRadius: '4px' }}>
+                                  {sanctionLabel(s.payload?.type, t)} ({t('manualAdjustmentsEditor.setN', { n: s.setIndex })})
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )
                     })}
                   </div>
                 </div>
 
-                {/* Coach Sanctions - Team 2 */}
-                {editedMatch?.hasCoach && (
-                  <div style={cardStyle}>
-                    <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: '#a855f7' }}>
-                      Coach {editedMatch?.team2CoachName ? `(${editedMatch.team2CoachName})` : ''}
-                    </h3>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
-                      {(editedEvents || []).filter(e => e.type === 'sanction' && e.payload?.team === 'team2' && e.payload?.role === 'coach').map(s => (
-                        <span key={s.id} style={{ fontSize: '11px', color: 'var(--ov-danger-text)', background: 'rgba(239,68,68,0.2)', padding: '2px 6px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
-                          onClick={() => setEditingSanction({ ...s, type: s.payload?.sanctionType || s.payload?.type, scoreA: s.stateSnapshot?.pointsA ?? s.stateSnapshot?.scoreA ?? 0, scoreB: s.stateSnapshot?.pointsB ?? s.stateSnapshot?.scoreB ?? 0 })}
-                        >
-                          {s.payload?.sanctionType || s.payload?.type} (Set {s.setIndex})
-                          <button onClick={(e) => { e.stopPropagation(); deleteEvent(s.id) }} style={{ background: 'none', border: 'none', color: 'var(--ov-danger-text)', cursor: 'pointer', padding: 0, fontSize: '10px' }}>×</button>
-                        </span>
-                      ))}
-                      <button
-                        onClick={() => setShowAddSanction({ team: 'team2', playerType: 'coach', role: 'coach' })}
-                        style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(168,85,247,0.1)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.3)', borderRadius: '4px', cursor: 'pointer' }}
-                      >
-                        + Coach Sanction
-                      </button>
-                    </div>
-                  </div>
-                )}
 
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ==================== TIMEOUTS & SANCTIONS TAB ==================== */}
-        {activeTab === 'events' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 480px), 1fr))', gap: '24px' }}>
-            {/* Timeouts Section */}
-            <div style={cardStyle}>
-              <h2 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '16px', color: 'var(--ov-text)' }}>
-                {t('manualAdjustmentsEditor.timeouts', 'Timeouts')} ({timeoutEvents.length})
-              </h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
-                {timeoutEvents.map(event => (
-                  <div key={event.id} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 100px 40px', gap: '8px', alignItems: 'center', padding: '8px', background: 'rgba(251, 191, 36, 0.1)', borderRadius: '4px' }}>
-                    <span style={{ fontSize: '13px' }}>{t('manualAdjustmentsEditor.setN', { n: event.setIndex })}</span>
-                    <span style={{ fontSize: '13px', fontWeight: 500 }}>{event.payload?.team === 'team1' ? editedTeam1?.name || t('common.team1', 'Team 1') : editedTeam2?.name || t('common.team2', 'Team 2')}</span>
-                    <span style={{ fontSize: '12px', color: 'var(--ov-text-secondary)' }}>
-                      {event.stateSnapshot?.pointsA ?? event.stateSnapshot?.scoreA ?? 0}-{event.stateSnapshot?.pointsB ?? event.stateSnapshot?.scoreB ?? 0}
-                    </span>
-                    <button onClick={() => deleteEvent(event.id)} style={{ ...deleteButtonStyle, padding: '4px 8px' }}>×</button>
-                  </div>
-                ))}
-              </div>
-              <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--ov-sunken-strong)' }}>
-                <button onClick={() => setShowAddTimeout(true)} style={buttonStyle}>
-                  {t('manualAdjustmentsEditor.addTimeout', '+ Add Timeout')}
-                </button>
-              </div>
-            </div>
-
-            {/* Sanctions Section */}
-            <div style={{ ...cardStyle, gridColumn: 'span 2' }}>
-              <h2 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '16px', color: 'var(--ov-text)' }}>
-                {t('manualAdjustmentsEditor.allSanctions', 'All Sanctions')} ({sanctionEvents.length})
-              </h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '300px', overflowY: 'auto' }}>
-                {sanctionEvents.map(event => (
-                  <div
-                    key={event.id}
-                    style={{ display: 'grid', gridTemplateColumns: '80px 80px 120px 100px 100px 1fr 40px 40px', gap: '8px', alignItems: 'center', padding: '8px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '4px', cursor: 'pointer' }}
-                    onClick={() => setEditingSanction({ ...event, type: event.payload?.sanctionType || event.payload?.type, scoreA: event.stateSnapshot?.pointsA ?? event.stateSnapshot?.scoreA ?? 0, scoreB: event.stateSnapshot?.pointsB ?? event.stateSnapshot?.scoreB ?? 0 })}
-                  >
-                    <span style={{ fontSize: '13px' }}>{t('manualAdjustmentsEditor.setN', { n: event.setIndex })}</span>
-                    <span style={{ fontSize: '13px', fontWeight: 500 }}>{event.payload?.team === 'team1' ? editedTeam1?.name || t('common.team1', 'Team 1') : editedTeam2?.name || t('common.team2', 'Team 2')}</span>
-                    <span style={{ fontSize: '13px', textTransform: 'capitalize', color: 'var(--ov-danger-text)' }}>
-                      {event.payload?.sanctionType || event.payload?.type}
-                    </span>
-                    <span style={{ fontSize: '13px' }}>
-                      {event.payload?.playerType}: #{event.payload?.playerNumber}
-                    </span>
-                    <span style={{ fontSize: '12px', color: 'var(--ov-text-secondary)' }}>
-                      Score: {event.stateSnapshot?.pointsA ?? event.stateSnapshot?.scoreA ?? 0}-{event.stateSnapshot?.pointsB ?? event.stateSnapshot?.scoreB ?? 0}
-                    </span>
-                    <span />
-                    <button onClick={(e) => { e.stopPropagation(); setEditingSanction({ ...event, type: event.payload?.sanctionType || event.payload?.type, scoreA: event.stateSnapshot?.pointsA ?? event.stateSnapshot?.scoreA ?? 0, scoreB: event.stateSnapshot?.pointsB ?? event.stateSnapshot?.scoreB ?? 0 }) }} style={{ ...buttonStyle, padding: '4px 8px', fontSize: '10px' }}>{t('manualAdjustmentsEditor.edit', 'Edit')}</button>
-                    <button onClick={(e) => { e.stopPropagation(); deleteEvent(event.id) }} style={{ ...deleteButtonStyle, padding: '4px 8px' }}>×</button>
-                  </div>
-                ))}
               </div>
             </div>
           </div>
@@ -1443,343 +1286,6 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
         )}
       </div>
 
-      {/* Add Sanction Modal */}
-      {showAddSanction && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'var(--ov-overlay)',
-          backdropFilter: 'blur(4px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 2000
-        }}>
-          <div style={{
-            background: 'var(--ov-card)',
-            borderRadius: 'var(--ov-radius-xl)',
-            padding: '24px',
-            minWidth: 'min(400px, 92vw)',
-            boxShadow: 'var(--ov-shadow-pop)'
-          }}>
-            <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', color: 'var(--ov-text)' }}>
-              {t('manualAdjustmentsEditor.addSanction', 'Add Sanction')}
-            </h3>
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{ fontSize: '13px', color: 'var(--ov-text-secondary)', marginBottom: '4px' }}>
-                {t('manualAdjustmentsEditor.target', 'Target')}: {showAddSanction.team === 'team1' ? editedTeam1?.name : editedTeam2?.name}
-                {showAddSanction.playerType === 'player' && ` - ${t('manualAdjustmentsEditor.player', 'Player')} #${showAddSanction.playerNumber}`}
-                {showAddSanction.playerType === 'coach' && ` – ${t('manualAdjustmentsEditor.coach', 'Coach')}`}
-              </div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-              <div>
-                <label style={labelStyle}>{t('manualAdjustmentsEditor.sanctionType', 'Sanction Type')}</label>
-                <select
-                  value={newSanctionData.type}
-                  onChange={(e) => setNewSanctionData(prev => ({ ...prev, type: e.target.value }))}
-                  style={{ ...inputStyle, width: '100%' }}
-                >
-                  <option value="warning">{t('manualAdjustmentsEditor.warningYellow', 'Warning (Yellow)')}</option>
-                  <option value="penalty">{t('manualAdjustmentsEditor.penaltyRed', 'Penalty (Red)')}</option>
-                  <option value="expulsion">{t('manualAdjustmentsEditor.expulsionRedYellow', 'Expulsion (Red+Yellow)')}</option>
-                  <option value="disqualification">{t('manualAdjustmentsEditor.disqualificationRedYellow', 'Disqualification (Red+Yellow)')}</option>
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>{t('manualAdjustmentsEditor.set', 'Set')}</label>
-                <select
-                  value={newSanctionData.setIndex}
-                  onChange={(e) => setNewSanctionData(prev => ({ ...prev, setIndex: parseInt(e.target.value, 10) }))}
-                  style={{ ...inputStyle, width: '100%' }}
-                >
-                  {editedSets.map(s => (
-                    <option key={s.index} value={s.index}>{t('manualAdjustmentsEditor.setN', { n: s.index })}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>{t('manualAdjustmentsEditor.scoreA', 'Score A')}</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="99"
-                  value={newSanctionData.scoreA}
-                  onChange={(e) => setNewSanctionData(prev => ({ ...prev, scoreA: parseInt(e.target.value, 10) || 0 }))}
-                  style={{ ...inputStyle, width: '100%' }}
-                />
-              </div>
-              <div>
-                <label style={labelStyle}>{t('manualAdjustmentsEditor.scoreB', 'Score B')}</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="99"
-                  value={newSanctionData.scoreB}
-                  onChange={(e) => setNewSanctionData(prev => ({ ...prev, scoreB: parseInt(e.target.value, 10) || 0 }))}
-                  style={{ ...inputStyle, width: '100%' }}
-                />
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => {
-                  setShowAddSanction(null)
-                  setNewSanctionData({ type: 'warning', setIndex: 1, scoreA: 0, scoreB: 0 })
-                }}
-                style={{
-                  padding: '10px 20px',
-                  fontSize: '14px',
-                  background: 'var(--ov-sunken-strong)',
-                  color: 'var(--ov-text)',
-                  border: '1px solid var(--ov-hairline)',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
-                {t('common.cancel', 'Cancel')}
-              </button>
-              <button
-                onClick={handleAddSanctionSubmit}
-                style={{
-                  padding: '10px 20px',
-                  fontSize: '14px',
-                  background: 'var(--ov-selected)',
-                  color: 'var(--ov-on-dark)',
-                  fontWeight: 600,
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
-                {t('manualAdjustmentsEditor.addSanction', 'Add Sanction')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Sanction Modal */}
-      {editingSanction && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'var(--ov-overlay)',
-          backdropFilter: 'blur(4px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 2000
-        }}>
-          <div style={{
-            background: 'var(--ov-card)',
-            borderRadius: 'var(--ov-radius-xl)',
-            padding: '24px',
-            minWidth: 'min(400px, 92vw)',
-            boxShadow: 'var(--ov-shadow-pop)'
-          }}>
-            <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', color: 'var(--ov-text)' }}>
-              {t('manualAdjustmentsEditor.editSanction', 'Edit Sanction')}
-            </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-              <div>
-                <label style={labelStyle}>{t('manualAdjustmentsEditor.sanctionType', 'Sanction Type')}</label>
-                <select
-                  value={editingSanction.type || 'warning'}
-                  onChange={(e) => setEditingSanction(prev => ({ ...prev, type: e.target.value }))}
-                  style={{ ...inputStyle, width: '100%' }}
-                >
-                  <option value="warning">{t('manualAdjustmentsEditor.warningYellow', 'Warning (Yellow)')}</option>
-                  <option value="penalty">{t('manualAdjustmentsEditor.penaltyRed', 'Penalty (Red)')}</option>
-                  <option value="expulsion">{t('manualAdjustmentsEditor.expulsionRedYellow', 'Expulsion (Red+Yellow)')}</option>
-                  <option value="disqualification">{t('manualAdjustmentsEditor.disqualificationRedYellow', 'Disqualification (Red+Yellow)')}</option>
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>{t('manualAdjustmentsEditor.set', 'Set')}</label>
-                <select
-                  value={editingSanction.setIndex}
-                  onChange={(e) => setEditingSanction(prev => ({ ...prev, setIndex: parseInt(e.target.value, 10) }))}
-                  style={{ ...inputStyle, width: '100%' }}
-                >
-                  {editedSets.map(s => (
-                    <option key={s.index} value={s.index}>{t('manualAdjustmentsEditor.setN', { n: s.index })}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>{t('manualAdjustmentsEditor.scoreA', 'Score A')}</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="99"
-                  value={editingSanction.scoreA || 0}
-                  onChange={(e) => setEditingSanction(prev => ({ ...prev, scoreA: parseInt(e.target.value, 10) || 0 }))}
-                  style={{ ...inputStyle, width: '100%' }}
-                />
-              </div>
-              <div>
-                <label style={labelStyle}>{t('manualAdjustmentsEditor.scoreB', 'Score B')}</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="99"
-                  value={editingSanction.scoreB || 0}
-                  onChange={(e) => setEditingSanction(prev => ({ ...prev, scoreB: parseInt(e.target.value, 10) || 0 }))}
-                  style={{ ...inputStyle, width: '100%' }}
-                />
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setEditingSanction(null)}
-                style={{
-                  padding: '10px 20px',
-                  fontSize: '14px',
-                  background: 'var(--ov-sunken-strong)',
-                  color: 'var(--ov-text)',
-                  border: '1px solid var(--ov-hairline)',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
-                {t('common.cancel', 'Cancel')}
-              </button>
-              <button
-                onClick={handleEditSanctionSubmit}
-                style={{
-                  padding: '10px 20px',
-                  fontSize: '14px',
-                  background: 'var(--ov-selected)',
-                  color: 'var(--ov-on-dark)',
-                  fontWeight: 600,
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
-                {t('manualAdjustmentsEditor.saveChanges', 'Save Changes')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add Timeout Modal */}
-      {showAddTimeout && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'var(--ov-overlay)',
-          backdropFilter: 'blur(4px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 2000
-        }}>
-          <div style={{
-            background: 'var(--ov-card)',
-            borderRadius: 'var(--ov-radius-xl)',
-            padding: '24px',
-            minWidth: 'min(400px, 92vw)',
-            boxShadow: 'var(--ov-shadow-pop)'
-          }}>
-            <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', color: 'var(--ov-text)' }}>
-              {t('manualAdjustmentsEditor.addTimeoutTitle', 'Add Timeout')}
-            </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-              <div>
-                <label style={labelStyle}>{t('manualAdjustmentsEditor.team', 'Team')}</label>
-                <select
-                  value={newTimeoutData.team}
-                  onChange={(e) => setNewTimeoutData(prev => ({ ...prev, team: e.target.value }))}
-                  style={{ ...inputStyle, width: '100%' }}
-                >
-                  <option value="team1">{editedTeam1?.name || t('common.team1', 'Team 1')}</option>
-                  <option value="team2">{editedTeam2?.name || t('common.team2', 'Team 2')}</option>
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>{t('manualAdjustmentsEditor.set', 'Set')}</label>
-                <select
-                  value={newTimeoutData.setIndex}
-                  onChange={(e) => setNewTimeoutData(prev => ({ ...prev, setIndex: parseInt(e.target.value, 10) }))}
-                  style={{ ...inputStyle, width: '100%' }}
-                >
-                  {editedSets.map(s => (
-                    <option key={s.index} value={s.index}>{t('manualAdjustmentsEditor.setN', { n: s.index })}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>{t('manualAdjustmentsEditor.scoreA', 'Score A')}</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="99"
-                  value={newTimeoutData.scoreA}
-                  onChange={(e) => setNewTimeoutData(prev => ({ ...prev, scoreA: parseInt(e.target.value, 10) || 0 }))}
-                  style={{ ...inputStyle, width: '100%' }}
-                />
-              </div>
-              <div>
-                <label style={labelStyle}>{t('manualAdjustmentsEditor.scoreB', 'Score B')}</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="99"
-                  value={newTimeoutData.scoreB}
-                  onChange={(e) => setNewTimeoutData(prev => ({ ...prev, scoreB: parseInt(e.target.value, 10) || 0 }))}
-                  style={{ ...inputStyle, width: '100%' }}
-                />
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => {
-                  setShowAddTimeout(false)
-                  setNewTimeoutData({ team: 'team1', setIndex: 1, scoreA: 0, scoreB: 0 })
-                }}
-                style={{
-                  padding: '10px 20px',
-                  fontSize: '14px',
-                  background: 'var(--ov-sunken-strong)',
-                  color: 'var(--ov-text)',
-                  border: '1px solid var(--ov-hairline)',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
-                {t('common.cancel', 'Cancel')}
-              </button>
-              <button
-                onClick={handleAddTimeoutSubmit}
-                style={{
-                  padding: '10px 20px',
-                  fontSize: '14px',
-                  background: 'var(--ov-selected)',
-                  color: 'var(--ov-on-dark)',
-                  fontWeight: 600,
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
-                {t('manualAdjustmentsEditor.addTimeoutTitle', 'Add Timeout')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

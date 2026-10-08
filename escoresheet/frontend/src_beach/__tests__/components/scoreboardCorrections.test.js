@@ -174,3 +174,13 @@ describe('manual edits reach the cloud through the sync queue (also offline)', (
     expect(sb).toMatch(/queueManualCloudUpdate\('set', \{ finished: e\.target\.checked \}, set\.id\)/)
   })
 })
+
+describe('the corrections panel during the match', () => {
+  it('opens live in "Manual changes", at the set being played, with the tablets and the livescore told', () => {
+    const b = between('{/* Manual Changes Modal */}', '{/* Collapsible Section: Current Set */}')
+    expect(b).toMatch(/<CorrectionsPanel mode="live" matchId=\{matchId\}/)
+    expect(b).toMatch(/liveSetIndex=\{data\?\.set\?\.index \?\? null\}/)
+    expect(b).toMatch(/syncToReferee/)
+    expect(b).toMatch(/syncLiveStateToSupabase\('manual_score_update'\)/)
+  })
+})

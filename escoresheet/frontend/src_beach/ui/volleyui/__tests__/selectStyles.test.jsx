@@ -209,7 +209,7 @@ describe('select call sites', () => {
   // one more in these files) fails here; use <Select> from ui/volleyui.
   const RAW_SELECTS_ALLOWED = {
     'components_beach/Scoreboard_beach.jsx': 12, // manual-edit panel, small inline fields
-    'components_beach/ManualAdjustments_beach.jsx': 10, // inputStyle, as its inputs
+    'components_beach/ManualAdjustments_beach.jsx': 4, // inputStyle, as its inputs
     'components_beach/admin/CompMatchEditor_beach.jsx': 1, // dark admin console field
   };
 

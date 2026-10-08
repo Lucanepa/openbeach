@@ -2571,5 +2571,178 @@
       "serverWhen": "I tablet hanno dati mobili, o il Wi-Fi della struttura separa i dispositivi. Serve l’accesso."
     },
     "wifiQrCaption": "Prima scansiona per collegarti a questo Wi-Fi"
+  },
+  "corrections": {
+    "action": {
+      "addPointFor": "Un punto in più per {{team}}",
+      "back": "Indietro",
+      "cancel": "Annulla",
+      "confirm": "Conferma",
+      "correctFinalScore": "Correggi punteggio finale",
+      "edit": "Modifica",
+      "editRemark": "Modifica osservazione",
+      "editWhat": "Modifica {{what}}",
+      "keepPoint": "Mantieni il punto",
+      "remove": "Rimuovi",
+      "removeBoth": "Rimuovi anche il punto",
+      "removeEntry": "Rimuovi {{what}}",
+      "removePointFor": "Un punto in meno per {{team}}",
+      "removeRemark": "Rimuovi osservazione",
+      "setTimes": "Orari del set",
+      "showAutomatic": "Mostra le voci automatiche"
+    },
+    "add": {
+      "remark": "Aggiungi osservazione",
+      "sanction": "Aggiungi sanzione",
+      "timeout": "Aggiungi tempo di riposo"
+    },
+    "allSets": "Tutti i set",
+    "banner": {
+      "readOnly": "La partita è approvata: le correzioni sono in sola lettura.",
+      "signaturesCleared": "Le firme sono state cancellate perché il referto è cambiato. Raccoglile di nuovo alla fine della partita."
+    },
+    "chip": {
+      "paperCode": "Come sul referto",
+      "teamsNotSetBeach": "Squadra A/B non ancora definita: la squadra 1 è mostrata come A"
+    },
+    "confirm": {
+      "removePoint": "Il punto assegnato è ancora l'ultimo punto del set. Rimuoverlo anche (come Annulla)?",
+      "removePointTitle": "Rimuovere anche il punto di penalizzazione?",
+      "removeRemarkTitle": "Rimuovere questa osservazione?",
+      "removeTitle": "Rimuovere questa voce?",
+      "removes": "Rimuove:",
+      "timeoutFree": "{{team}} potrà di nuovo chiedere il suo time-out nel set {{set}}."
+    },
+    "describe": {
+      "coach": "Allenatore",
+      "coinToss": "Sorteggio",
+      "courtSwitch": "Cambio di campo",
+      "decisionChange": "Decisione modificata",
+      "point": "Punto",
+      "rallyStart": "Scambio iniziato",
+      "replay": "Scambio ripetuto",
+      "setEnd": "Fine del set",
+      "setStart": "Inizio set",
+      "technicalTimeout": "Time-out tecnico",
+      "timeout": "Time-out"
+    },
+    "empty": {
+      "log": "Ancora nessuna correzione.",
+      "players": "Nessun/a giocatore/trice da scegliere.",
+      "remarks": "Nessuna osservazione.",
+      "sanctions": "Nessuna sanzione registrata.",
+      "sets": "Ancora nessun set terminato.",
+      "timeouts": "Nessun tempo di riposo registrato."
+    },
+    "error": {
+      "choosePlayer": "Scegli il giocatore.",
+      "chooseTarget": "Scegli chi è stato sanzionato.",
+      "endBeforeStart": "Il set {{set}} non può finire prima di iniziare.",
+      "forfeitOnScoreboard": "Un'espulsione o una squalifica fa perdere il set o la partita per forfait: assegnala sul tabellone.",
+      "invalidFinalScore": "{{score}} non è un punteggio finale possibile del set {{set}}.",
+      "ladder": "Secondo le regole è un/a {{expected}} (sanzioni precedenti della squadra).",
+      "noLaterOpponentPoint": "{{team}} non ha un punto successivo nel set {{set}} da segnare come punto di penalità. Se il punto non è mai stato registrato, assegna la penalità sul tabellone (durante la partita) o usa «Correggi il punteggio finale».",
+      "noScoreChange": "Niente da cambiare.",
+      "noSuchScore": "Il set {{set}} non ha mai avuto questo punteggio.",
+      "notFound": "Questa voce non esiste più.",
+      "notLastPoint": "L'ultimo punto del set {{set}} non è stato vinto da {{team}}.",
+      "removePointNotLast": "Il punto di penalizzazione si può rimuovere solo se è l'ultimo punto del set in corso.",
+      "sameSanctionTwice": "Questo giocatore ha già questa sanzione.",
+      "setNotFinished": "Il set {{set}} non è terminato.",
+      "subEvent": "Questa riga appartiene a un'altra voce; rimuovi invece quella.",
+      "teamAlreadyWarned": "La squadra è già stata ammonita: un'ammonizione per cattiva condotta per squadra e per partita.",
+      "thirdPenalty": "#{{n}} ha già due penalità nel set {{set}}: una terza è un'espulsione, da assegnare sul tabellone.",
+      "timeoutLimit": "Il time-out di questa squadra nel set {{set}} è già registrato (uno per squadra e per set).",
+      "useUndo": "Questa voce si corregge con Annulla o Riapri set, non rimuovendola qui.",
+      "winnerWouldChange": "Questo cambierebbe il vincitore del set {{set}}. Usa «Riapri l'ultimo set» o chiedi all'arbitro."
+    },
+    "field": {
+      "atScore": "Sul punteggio",
+      "currentFinal": "Ora",
+      "endTime": "Fine",
+      "player": "Giocatore",
+      "sanction": "Sanzione",
+      "set": "Set",
+      "startTime": "Inizio",
+      "team": "Squadra",
+      "text": "Testo",
+      "who": "Chi"
+    },
+    "form": {
+      "addRemark": "Aggiungi osservazione",
+      "addSanction": "Aggiungi sanzione",
+      "addTimeout": "Aggiungi tempo di riposo",
+      "editRemark": "Modifica osservazione",
+      "editSanction": "Modifica sanzione",
+      "editTimeout": "Modifica tempo di riposo",
+      "finalScore": "Set {{set}}: correggi il punteggio finale",
+      "setTimes": "Set {{set}}: ora di inizio e di fine"
+    },
+    "help": "Ogni correzione viene salvata quando la confermi ed è elencata nel registro delle correzioni per l'arbitro.",
+    "hint": {
+      "advanced": "Tutte le voci del registro della partita. Rimuovere una voce rimuove tutto ciò che le appartiene. Per aggiungere o modificare usa le schede qui sopra.",
+      "current": "punteggio attuale",
+      "finalScoreBeach": "Si può correggere solo la fine del set: un punto aggiunto alla fine, o l'ultimo punto tolto. I set si vincono a 21 punti (il terzo a 15) con due punti di scarto.",
+      "forfeitSanctions": "Un'espulsione o una squalifica si assegna sul tabellone: fa perdere il set o la partita per forfait.",
+      "penaltyPoint": "Il punto di penalità è il prossimo punto di {{team}} dopo questo punteggio; deve essere già registrato.",
+      "timeoutsBeach": "Un time-out per squadra e per set. Il time-out tecnico non si corregge qui."
+    },
+    "log": {
+      "added": "Aggiunto: {{what}}",
+      "afterMatchSuffix": " (inserito dopo la partita)",
+      "changed": "Modificato: {{what}} (prima: {{from}})",
+      "remarkAdded": "Osservazione aggiunta: «{{text}}»",
+      "remarkChanged": "Osservazione modificata: «{{text}}»",
+      "remarkRemoved": "Osservazione rimossa: «{{text}}»",
+      "removed": "Rimosso: {{what}}",
+      "setTimes": "Orari del set {{set}} corretti",
+      "unknown": "Correzione"
+    },
+    "note": {
+      "afterMatch": "Inserito dopo la partita.",
+      "circledPoint": "Il punto di {{team}} sul {{score}} diventa il punto di penalizzazione cerchiato.",
+      "courtSwitches": "I cambi di campo registrati dopo questo punto non vengono spostati.",
+      "ladder": "Secondo le regole sarebbe un/a {{expected}}; registrato come deciso dall'arbitro.",
+      "penaltyNotNext": "Lo scambio dopo il {{score}} è stato vinto da {{team}}, non dall’avversario: verifica che la sanzione sia stata data a questo punteggio.",
+      "pointStays": "Il punto resta un punto normale (non più cerchiato).",
+      "sameSanctionTwice": "Questo giocatore ha già questa sanzione.",
+      "teamAlreadyWarned": "La squadra era già stata ammonita (un'ammonizione per cattiva condotta per squadra e per partita).",
+      "thirdPenalty": "#{{n}} aveva già due penalità nel set {{set}} (una terza è un'espulsione); registrato come ha deciso l'arbitro."
+    },
+    "preview": {
+      "finalScore": "Il punteggio finale {{before}} diventa {{after}}.",
+      "incomplete": "Compila i campi qui sopra.",
+      "paperSanctionBeach": "{{code}} · Squadra {{letter}} · Set {{set}} · {{score}}",
+      "paperTimeout": "«T» sul {{score}} nella casella tempi di riposo di {{team}}, set {{set}}.",
+      "title": "Cosa cambia sul referto"
+    },
+    "sanction": {
+      "delay_penalty": "Penalizzazione per ritardo",
+      "delay_warning": "Avvertimento per ritardo",
+      "disqualification": "Squalifica",
+      "expulsion": "Espulsione",
+      "improper_request": "Richiesta impropria",
+      "penalty": "Penalizzazione",
+      "warning": "Ammonizione (cattiva condotta)"
+    },
+    "saveError": "Impossibile salvare la correzione: {{message}}",
+    "saved": "Correzione salvata",
+    "section": {
+      "advanced": "Avanzate: registro eventi",
+      "log": "Registro delle correzioni (per l'arbitro)",
+      "sanctions": "Sanzioni",
+      "sets": "Risultati dei set",
+      "timeouts": "Tempi di riposo"
+    },
+    "setFilter": "Mostra set",
+    "term": {
+      "remarks": "Osservazioni",
+      "set": "Set {{n}}"
+    },
+    "title": "Correzioni",
+    "who": {
+      "coach": "Allenatore/trice",
+      "player": "Giocatore"
+    }
   }
 }

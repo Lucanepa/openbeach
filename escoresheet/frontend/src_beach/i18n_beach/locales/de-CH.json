@@ -2571,5 +2571,178 @@
       "serverWhen": "D Tablets händ mobili Date, oder s WLAN vor Ort trennt d Grät. Aamäldig nötig."
     },
     "wifiQrCaption": "Zersch scanne, zum i das WLAN gah"
+  },
+  "corrections": {
+    "action": {
+      "addPointFor": "En Punkt meh für {{team}}",
+      "back": "Zrugg",
+      "cancel": "Abbräche",
+      "confirm": "Bestätige",
+      "correctFinalScore": "Endstand korrigiere",
+      "edit": "Bearbeite",
+      "editRemark": "Bemerkig bearbeite",
+      "editWhat": "{{what}} bearbeite",
+      "keepPoint": "Punkt bhalte",
+      "remove": "Entferne",
+      "removeBoth": "Punkt au entferne",
+      "removeEntry": "{{what}} entferne",
+      "removePointFor": "En Punkt weniger für {{team}}",
+      "removeRemark": "Bemerkig entferne",
+      "setTimes": "Satzziite",
+      "showAutomatic": "Automatischi Iiträg aazeige"
+    },
+    "add": {
+      "remark": "Bemerkig hinzuefüege",
+      "sanction": "Sanktion hinzuefüege",
+      "timeout": "Auszeit hinzuefüege"
+    },
+    "allSets": "Alli Sätz",
+    "banner": {
+      "readOnly": "De Match isch gnehmigt: Korrekture sind schriibgschützt.",
+      "signaturesCleared": "D Underschrifte sind glöscht worde, will sich s Matchblatt gänderet het. Hol sie am Matchend neu ii."
+    },
+    "chip": {
+      "paperCode": "So wie ufem Matchblatt",
+      "teamsNotSetBeach": "Team A/B no nöd festgleit: Team 1 wird als A aazeigt"
+    },
+    "confirm": {
+      "removePoint": "De vergäbni Punkt isch no de letscht Punkt vo dem Satz. Au entferne (wie Rückgängig)?",
+      "removePointTitle": "Strafpunkt au entferne?",
+      "removeRemarkTitle": "Die Bemerkig entferne?",
+      "removeTitle": "Dä Iitrag entferne?",
+      "removes": "Entfernt:",
+      "timeoutFree": "{{team}} cha sis Time-out im Satz {{set}} wieder näh."
+    },
+    "describe": {
+      "coach": "Coach",
+      "coinToss": "Siitewahl",
+      "courtSwitch": "Siitewächsel",
+      "decisionChange": "Entscheid gänderet",
+      "point": "Punkt",
+      "rallyStart": "Ballwächsel gstartet",
+      "replay": "Ballwächsel wiederholt",
+      "setEnd": "Satzänd",
+      "setStart": "Satzbeginn",
+      "technicalTimeout": "Technischs Time-out",
+      "timeout": "Time-out"
+    },
+    "empty": {
+      "log": "No kei Korrekture.",
+      "players": "Kei Spieler/innen zur Uswahl.",
+      "remarks": "Kei Bemerkige.",
+      "sanctions": "Kei Sanktione erfasst.",
+      "sets": "No kei Satz fertig.",
+      "timeouts": "Kei Auszeite erfasst."
+    },
+    "error": {
+      "choosePlayer": "Wähl de Spieler.",
+      "chooseTarget": "Wähl, wer sanktioniert worde isch.",
+      "endBeforeStart": "Satz {{set}} cha nöd vor sim Aafang ändi.",
+      "forfeitOnScoreboard": "En Uswiisig oder e Disqualifikation bedüütet Forfait für de Satz oder s Spiel: gib si uf em Scoreboard.",
+      "invalidFinalScore": "{{score}} isch kein mögliche Endstand vo Satz {{set}}.",
+      "ladder": "Nach de Regle isch das e {{expected}} (früecheri Sanktione vo de Mannschaft).",
+      "noLaterOpponentPoint": "{{team}} hät im Satz {{set}} kein spätere Punkt, wo als Strafpunkt markiert werde chan. Isch de Punkt nie erfasst worde, gib d Straf uf em Scoreboard (während em Spiel) oder bruuch «Ändstand korrigiere».",
+      "noScoreChange": "Nüüt z ändere.",
+      "noSuchScore": "Satz {{set}} het dä Spielstand nie gha.",
+      "notFound": "De Iitrag gits nüme.",
+      "notLastPoint": "De letscht Punkt vo Satz {{set}} het nöd {{team}} gwunne.",
+      "removePointNotLast": "De Strafpunkt chan nur entfernt werde, solang er de letscht Punkt vom laufende Satz isch.",
+      "sameSanctionTwice": "De Spieler hät die Sanktion scho.",
+      "setNotFinished": "Satz {{set}} isch nöd fertig.",
+      "subEvent": "Die Ziile ghört zu emene andere Iitrag; entfern stattdesse dä.",
+      "teamAlreadyWarned": "S Team isch scho verwarnt worde: e Verwarnig für Fehlverhalte pro Team und Spiel.",
+      "thirdPenalty": "#{{n}} hät im Satz {{set}} scho zwei Strafe: e dritti isch e Uswiisig und wird uf em Scoreboard gä.",
+      "timeoutLimit": "S Time-out vo dem Team im Satz {{set}} isch scho erfasst (eis pro Team und Satz).",
+      "useUndo": "De Iitrag wird mit Rückgängig oder Satz wieder öffne korrigiert, nöd da entfernt.",
+      "winnerWouldChange": "Das würd de Gwünner vo Satz {{set}} ändere. Nimm «Letschte Satz wieder öffne» oder frög de Schiri."
+    },
+    "field": {
+      "atScore": "Bim Spielstand",
+      "currentFinal": "Jetzt",
+      "endTime": "Endi",
+      "player": "Spieler",
+      "sanction": "Sanktion",
+      "set": "Satz",
+      "startTime": "Beginn",
+      "team": "Mannschaft",
+      "text": "Text",
+      "who": "Wer"
+    },
+    "form": {
+      "addRemark": "Bemerkig hinzuefüege",
+      "addSanction": "Sanktion hinzuefüege",
+      "addTimeout": "Auszeit hinzuefüege",
+      "editRemark": "Bemerkig bearbeite",
+      "editSanction": "Sanktion bearbeite",
+      "editTimeout": "Auszeit bearbeite",
+      "finalScore": "Satz {{set}}: Endstand korrigiere",
+      "setTimes": "Satz {{set}}: Beginn und Endi"
+    },
+    "help": "Jedi Korrektur wird bim Bestätige gspeicheret und im Korrekturprotokoll für de Schiri ufgfüehrt.",
+    "hint": {
+      "advanced": "Alli Iiträg vom Matchprotokoll. Bim Entferne gaht alles mit, wo zum Iitrag ghört. Hinzuefüege und Ändere i de Charte obe.",
+      "current": "aktuelle Spielstand",
+      "finalScoreBeach": "Nur s Satzänd chan korrigiert werde: en Punkt am Änd dezue oder de letscht Punkt weg. Sätz wärded mit 21 Pünkt (de dritt mit 15) und zwei Pünkt Vorsprung gwunne.",
+      "forfeitSanctions": "En Uswiisig oder e Disqualifikation wird uf em Scoreboard gä: si bedüütet Forfait für de Satz oder s Spiel.",
+      "penaltyPoint": "De Strafpunkt isch de nächscht Punkt vo {{team}} nach dem Spielstand; er mues scho erfasst sii.",
+      "timeoutsBeach": "Eis Time-out pro Team und Satz. S technische Time-out wird da nöd korrigiert."
+    },
+    "log": {
+      "added": "Hinzuegfüegt: {{what}}",
+      "afterMatchSuffix": " (nach em Match erfasst)",
+      "changed": "Gänderet: {{what}} (vorher: {{from}})",
+      "remarkAdded": "Bemerkig hinzuegfüegt: «{{text}}»",
+      "remarkChanged": "Bemerkig gänderet: «{{text}}»",
+      "remarkRemoved": "Bemerkig entfernt: «{{text}}»",
+      "removed": "Entfernt: {{what}}",
+      "setTimes": "Ziite vo Satz {{set}} korrigiert",
+      "unknown": "Korrektur"
+    },
+    "note": {
+      "afterMatch": "Nach em Match erfasst.",
+      "circledPoint": "De Punkt vo {{team}} bi {{score}} wird als Strafpunkt iikreist.",
+      "courtSwitches": "D Siitewächsel, wo nach dem Punkt erfasst sind, wärded nöd verschobe.",
+      "ladder": "Nach de Regle wär das e {{expected}} gsi; erfasst, wie de Schiri entschiede het.",
+      "penaltyNotNext": "De Ballwächsel nach {{score}} het {{team}} gwunne, nöd de Gegner: Prüef, öb d Sanktion bi dem Spielstand usgsproche worde isch.",
+      "pointStays": "De Punkt blibt als normale Punkt (nüme iikreist).",
+      "sameSanctionTwice": "De Spieler hät die Sanktion scho.",
+      "teamAlreadyWarned": "S Team isch scho verwarnt gsi (e Verwarnig für Fehlverhalte pro Team und Spiel).",
+      "thirdPenalty": "#{{n}} hät im Satz {{set}} scho zwei Strafe gha (e dritti isch e Uswiisig); so erfasst, wie de Schiri entschiede hät."
+    },
+    "preview": {
+      "finalScore": "Endstand {{before}} wird zu {{after}}.",
+      "incomplete": "Füll d Fälder obe us.",
+      "paperSanctionBeach": "{{code}} · Team {{letter}} · Satz {{set}} · {{score}}",
+      "paperTimeout": "«T» bi {{score}} im Auszeit-Fäld vo {{team}}, Satz {{set}}.",
+      "title": "Was sich ufem Matchblatt änderet"
+    },
+    "sanction": {
+      "delay_penalty": "Verzögerungsbestrafung",
+      "delay_warning": "Verzögerungsverwarnung",
+      "disqualification": "Disqualifikation",
+      "expulsion": "Hinausstellung",
+      "improper_request": "Nicht ordnungsgemässer Antrag",
+      "penalty": "Bestrafung",
+      "warning": "Verwarnig (Fehlverhalte)"
+    },
+    "saveError": "D Korrektur het nöd chöne gspeicheret werde: {{message}}",
+    "saved": "Korrektur gspeicheret",
+    "section": {
+      "advanced": "Erwiiteret: Ereignisprotokoll",
+      "log": "Korrekturprotokoll (für de Schiri)",
+      "sanctions": "Sanktione",
+      "sets": "Satzresultat",
+      "timeouts": "Auszeite"
+    },
+    "setFilter": "Satz aazeige",
+    "term": {
+      "remarks": "Bemerkige",
+      "set": "Satz {{n}}"
+    },
+    "title": "Korrekture",
+    "who": {
+      "coach": "Trainer/in",
+      "player": "Spieler"
+    }
   }
 }

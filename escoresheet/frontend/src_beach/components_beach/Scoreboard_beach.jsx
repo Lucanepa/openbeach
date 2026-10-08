@@ -16,6 +16,7 @@ import { useConfirmAction } from '../hooks_beach/useConfirmAction_beach'
 import { useActionLiveQuery } from '../hooks_beach/useActionLiveQuery_beach'
 import { useScorerActions, pickLiveStateSnapshot, isReportedActionError } from '../hooks_beach/useScorerActions_beach'
 import { withActivityContext, currentActivityContext, maxVoidedSeq } from '../db_beach/eventHistory_beach'
+import CorrectionsPanel from './corrections/CorrectionsPanel_beach'
 import { useSequentialSync } from '../hooks_beach/useSequentialSync_beach'
 
 
@@ -11516,6 +11517,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           width={650}
         >
           <div style={{ padding: '16px', maxHeight: '80vh', overflowY: 'auto' }}>
+            <div style={{ marginBottom: '16px' }}><CorrectionsPanel mode="live" matchId={matchId} events={data?.events} match={data?.match} sets={data?.sets} team1Team={data?.team1Team} team2Team={data?.team2Team} team1Players={data?.team1Players} team2Players={data?.team2Players} liveSetIndex={data?.set?.index ?? null} hooks={{ notifyScoresheetUpdate: refreshScoresheet, syncToReferee, syncLiveState: () => syncLiveStateToSupabase('manual_score_update') }} /></div>
             {/* Collapsible Section: Current Set */}
             <div style={{
               marginBottom: '12px',
