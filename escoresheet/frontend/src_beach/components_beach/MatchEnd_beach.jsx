@@ -29,7 +29,7 @@ import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 
 import { sanitizeForFilename } from '../utils_beach/stringUtils_beach'
 import { openAppWindow } from '../utils_beach/openAppWindow_beach'
-import { waitForScoresheetPdf, PDF_FAIL } from '../utils_beach/scoresheetPdfRequest_beach'
+import { waitForScoresheetPdf, PDF_FAIL, PDF_REQUEST_PARAM } from '../utils_beach/scoresheetPdfRequest_beach'
 import { remarksWithMedical } from '../utils_beach/medicalRemarks_beach'
 import { plausibleMinutes } from '../../scoresheet_pdf_beach/components_beach/sheetFormat_beach'
 import { formatTimeLocal } from '../utils_beach/timeUtils_beach'
@@ -1203,8 +1203,10 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         setExportPdfProgress(null)
         try {
           pdfResult = await waitForScoresheetPdf(
-            // a popup, a desktop app window or the Android in-app view
-            () => openAppWindow('/scoresheet_beach.html?action=getBlob', { features: 'width=1600,height=1200', title: t('matchEnd.scoresheet') }),
+            // a popup, a desktop app window or the Android in-app view;
+            // pdfReq: the page's answers name this attempt (a window of an
+            // earlier one, closed by Cancel or a stall, is ignored)
+            (req) => openAppWindow(`/scoresheet_beach.html?action=getBlob&${PDF_REQUEST_PARAM}=${encodeURIComponent(req)}`, { features: 'width=1600,height=1200', title: t('matchEnd.scoresheet') }),
             { signal: abort.signal, onProgress: setExportPdfProgress }
           )
           break

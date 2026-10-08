@@ -20,8 +20,8 @@ vi.mock('../../utils_beach/backendConfig_beach', async (orig) => ({ ...(await or
 // The scoresheet window: each open gets a fresh fake window the test can close
 const opened = []
 vi.mock('../../utils_beach/openAppWindow_beach', () => ({
-  openAppWindow: vi.fn(() => {
-    const w = { closed: false, close() { this.closed = true } }
+  openAppWindow: vi.fn((url) => {
+    const w = { url, closed: false, close() { this.closed = true } }
     opened.push(w)
     return { ok: true, mode: 'window', platform: 'tauri', window: w }
   })
@@ -127,6 +127,34 @@ describe('MatchEnd_beach: the approval PDF', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm and approve' })).toBeEnabled())
     expect(opened[0].closed).toBe(true) // the window is not left behind
     expect((await db.matches.get(matchId)).approved).toBeFalsy()
+  })
+
+  // Cancel closes the window, but one busy capturing runs its pagehide only
+  // when the capture is done: its late "closed" ended the NEXT approval's
+  // wait (false failure while the new window kept working).
+  it('a late "closed" from the window of an earlier attempt does not end the next one', async () => {
+    await seed()
+    renderMatchEnd()
+    await approve()
+    await waitFor(() => expect(opened).toHaveLength(1))
+    const reqOf = (w) => new URL(w.url, 'http://x').searchParams.get('pdfReq')
+    const firstReq = reqOf(opened[0])
+    expect(firstReq).toBeTruthy()
+    await click(await screen.findByTestId('export-cancel'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm and approve' })).toBeEnabled())
+    await approve()
+    await waitFor(() => expect(opened).toHaveLength(2))
+    const secondReq = reqOf(opened[1])
+    expect(secondReq).toBeTruthy()
+    expect(secondReq).not.toBe(firstReq)
+    // the first window's pagehide arrives only now (it was busy capturing)
+    await postFromSheet({ type: 'pdfError', reason: 'closed', req: firstReq })
+    await act(() => new Promise(r => setTimeout(r, 50)))
+    expect(screen.queryByTestId('export-pdf-failed')).toBeNull()
+    expect(opened[1].closed).toBe(false)
+    await postFromSheet({ type: 'pdfBlob', arrayBuffer: new ArrayBuffer(8), filename: 'x.pdf', req: secondReq })
+    expect(await screen.findByRole('button', { name: 'Close match' }, { timeout: 3000 })).toBeEnabled()
+    expect((await db.matches.get(matchId)).approved).toBe(true)
   })
 
   it('an approved match shows the approved view after a remount', async () => {

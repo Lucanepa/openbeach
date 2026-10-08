@@ -14,9 +14,22 @@
  * ends at once when the window is gone (polled), when the page stops
  * sending its heartbeat, on the scorer's Cancel (an AbortSignal) or after a
  * hard timeout, and the error says which (`error.reason`).
+ *
+ * Each wait has a request id: `open(requestId)` puts it in the window's URL
+ * (`pdfReq`, PDF_REQUEST_PARAM) and the page echoes it as `req`. An answer
+ * for another request (a window of an earlier attempt, closed by Cancel or a
+ * stall, whose pagehide comes late) is ignored; one without `req` counts.
  */
 
-import { MSG_PDF_BLOB, MSG_PDF_ERROR, MSG_PDF_PROGRESS } from './appWindowGuest_beach.js'
+import { MSG_PDF_BLOB, MSG_PDF_ERROR, MSG_PDF_PROGRESS, PDF_REQUEST_PARAM } from './appWindowGuest_beach.js'
+
+export { PDF_REQUEST_PARAM }
+
+let requestSeq = 0
+function newRequestId() {
+  requestSeq += 1
+  return `${Date.now().toString(36)}-${requestSeq}-${Math.random().toString(36).slice(2, 8)}`
+}
 
 /** Hard limit for the whole PDF (the heartbeat normally ends a stuck wait first). */
 export const PDF_TIMEOUT_MS = 90000
@@ -64,8 +77,9 @@ function closeOpened(opened) {
  * with { blob, filename } when its PDF arrives. Rejects with an Error whose
  * `reason` is one of PDF_FAIL. On a stall, timeout or cancel the window is
  * closed, so none is left behind.
- * @param {() => ({ ok?: boolean, window?: Window|null, close?: () => void, isClosed?: () => boolean } | undefined)} open
- * @param {{ win?: Window, timeoutMs?: number, stallMs?: number, pollMs?: number, signal?: AbortSignal, onProgress?: (p: { page?: number, pages?: number }) => void }} [opts]
+ * @param {(requestId: string) => ({ ok?: boolean, window?: Window|null, close?: () => void, isClosed?: () => boolean } | undefined)} open
+ *   opens the page with `pdfReq=<requestId>` in its URL
+ * @param {{ win?: Window, timeoutMs?: number, stallMs?: number, pollMs?: number, signal?: AbortSignal, onProgress?: (p: { page?: number, pages?: number }) => void, requestId?: string }} [opts]
  */
 export function waitForScoresheetPdf(open, {
   win = window,
@@ -73,7 +87,8 @@ export function waitForScoresheetPdf(open, {
   stallMs = PDF_STALL_MS,
   pollMs = PDF_CLOSED_POLL_MS,
   signal,
-  onProgress
+  onProgress,
+  requestId = newRequestId()
 } = {}) {
   let opened
   let settled = false
@@ -105,6 +120,9 @@ export function waitForScoresheetPdf(open, {
     function handler(event) {
       // only the app's own pages (same origin) answer
       if (event.origin !== win.location.origin) return
+      // an answer for another request: a window of an earlier attempt
+      const req = event.data?.req
+      if (req != null && req !== requestId) return
       const type = event.data?.type
       if (type === MSG_PDF_PROGRESS) {
         armStall()
@@ -133,7 +151,7 @@ export function waitForScoresheetPdf(open, {
     armStall()
 
     try {
-      opened = open()
+      opened = open(requestId)
     } catch (e) {
       fail(PDF_FAIL.BLOCKED, e?.message || 'The scoresheet window could not be opened', { close: false })
       return

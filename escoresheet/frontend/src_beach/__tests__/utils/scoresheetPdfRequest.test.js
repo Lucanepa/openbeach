@@ -130,3 +130,61 @@ describe('the scoresheet window side', () => {
     vi.useRealTimers()
   })
 })
+
+// A window of an earlier attempt (Cancel, then "Confirm and approve" again;
+// or Retry after a stall) can still answer while the new one works: its
+// late pagehide said "closed" and ended the NEW wait, whose window was left
+// open. Each wait now has a request id (pdfReq in the window's URL), the page
+// echoes it, and answers for another request are ignored.
+describe('answers from an earlier attempt\'s window', () => {
+  beforeEach(() => { vi.useFakeTimers() })
+  afterEach(() => { vi.useRealTimers() })
+
+  it('open() gets the request id; another request\'s answers are ignored', async () => {
+    let req = null
+    const close = vi.fn()
+    const progress = vi.fn()
+    const p = waitForScoresheetPdf((id) => { req = id; return { ok: true, window: { closed: false }, close } }, { onProgress: progress })
+    expect(typeof req).toBe('string')
+    expect(req.length).toBeGreaterThan(0)
+    let settled = false
+    p.then(() => { settled = true }, () => { settled = true })
+    post({ type: MSG_PDF_PROGRESS, page: 1, pages: 2, req: 'old-attempt' })
+    post({ type: MSG_PDF_ERROR, reason: 'closed', req: 'old-attempt' })
+    post({ type: MSG_PDF_ERROR, reason: 'failed', req: 'old-attempt' })
+    post({ type: MSG_PDF_BLOB, arrayBuffer: new ArrayBuffer(4), filename: 'old.pdf', req: 'old-attempt' })
+    await vi.advanceTimersByTimeAsync(10)
+    expect(settled).toBe(false)
+    expect(close).not.toHaveBeenCalled()
+    expect(progress).not.toHaveBeenCalled()
+    post({ type: MSG_PDF_BLOB, arrayBuffer: new ArrayBuffer(4), filename: 'mine.pdf', req })
+    expect((await p).filename).toBe('mine.pdf')
+  })
+
+  it('an answer without a request id still counts (a page of an older build)', async () => {
+    const p = waitForScoresheetPdf(() => ({ ok: true, window: { closed: false } }))
+    post({ type: MSG_PDF_BLOB, arrayBuffer: new ArrayBuffer(4), filename: 'b.pdf' })
+    expect((await p).filename).toBe('b.pdf')
+  })
+
+  it('the scoresheet window echoes the pdfReq of its URL in every answer', () => {
+    const opener = { closed: false, postMessage: vi.fn() }
+    const listeners = {}
+    const w = {
+      opener,
+      parent: null,
+      location: { origin: 'http://x', search: '?action=getBlob&pdfReq=r42' },
+      addEventListener: (t, f) => { (listeners[t] ||= []).push(f) },
+      removeEventListener: () => {},
+      close: vi.fn()
+    }
+    reportPdfProgress({ page: 1, pages: 2 }, w)
+    watchPdfWindowClose(() => true, w)
+    listeners.pagehide.forEach(f => f())
+    deliverPdfToOpener({ arrayBuffer: new ArrayBuffer(4), filename: 'a.pdf' }, w)
+    deliverPdfToOpener({ error: 'boom' }, w)
+    const sent = opener.postMessage.mock.calls.map(c => c[0])
+    expect(sent).toHaveLength(4)
+    for (const m of sent) expect(m.req).toBe('r42')
+  })
+})
