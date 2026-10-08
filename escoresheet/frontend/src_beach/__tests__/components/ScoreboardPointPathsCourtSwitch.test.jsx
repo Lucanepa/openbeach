@@ -513,8 +513,8 @@ describe('Scoreboard_beach: point paths at every change total', () => {
 
     const sanctionConfirm = () => [...document.querySelectorAll('[data-testid="sanction-confirm"] button')].at(-1)
     // The sixth point on screen too (the rally over): a sanction is asked
-    // only between rallies, and a tap while the screen still has the rally in
-    // play is ignored (rallies() waits for the database only)
+    // only between rallies, its buttons disabled while the screen still has
+    // the rally in play (point() waits for that already; kept as a check)
     await waitFor(() => expect(button('Start rally')).toBeTruthy())
     await waitFor(() => expect(button('Delay warning')).toBeTruthy())
     fireEvent.click(button('Delay warning'))
