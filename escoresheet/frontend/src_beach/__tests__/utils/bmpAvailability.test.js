@@ -145,6 +145,92 @@ describe('BMP: once per completed rally', () => {
     expect(teamBmpBlockReason({ events, setIndex: 2 })).toBeNull()
   })
 
+  // The owner, 2026-10-08: after a decision change gives the rally's point to
+  // the other team, a BMP may be asked on that rally ("yes") - still once per
+  // rally. A decision change that replays the rally completes none: no BMP.
+  describe('after a decision change', () => {
+    let ids = 1000
+    // a rally whose point has an id (the decision change names it)
+    const rallyWithId = (team = 'team1') => {
+      const [start, point] = rally(team)
+      return [start, { ...point, id: ++ids }]
+    }
+    // (events sort by seq: each test logs them in order, set start first)
+    // the decision change "Assign to other team": the point keeps its event,
+    // its team swapped; the decision_change names it
+    const swap = (rallyEvents) => {
+      const point = rallyEvents[rallyEvents.length - 1]
+      const from = point.payload.team
+      const to = from === 'team1' ? 'team2' : 'team1'
+      point.payload = { ...point.payload, team: to, swappedFrom: from }
+      return { ...ev('decision_change'), payload: { reason: 'point_swap', pointEventId: point.id, fromTeam: from, toTeam: to } }
+    }
+
+    it('the point given to the other team: a BMP on that rally is allowed', () => {
+      const s = ev('set_start')
+      const r = rallyWithId('team1')
+      expect(reason([s, ...r, swap(r)])).toBeNull()
+    })
+
+    it('a decision change logged without the point it swapped (older matches): allowed', () => {
+      const s = ev('set_start')
+      const r = rallyWithId('team1')
+      const dc = swap(r)
+      delete dc.payload.pointEventId
+      expect(reason([s, ...r, dc])).toBeNull()
+    })
+
+    it('still once per rally: a BMP before the decision change, or after it, closes it', () => {
+      const s1 = ev('set_start')
+      const r1 = rallyWithId('team1')
+      const before = teamBmp('team2')
+      expect(reason([s1, ...r1, ...before, swap(r1)])).toBe('bmp_taken')
+      const s2 = ev('set_start')
+      const r2 = rallyWithId('team1')
+      const dc = swap(r2)
+      expect(reason([s2, ...r2, dc, ...teamBmp('team1')])).toBe('bmp_taken')
+    })
+
+    it('a decision change on a successful BMP\'s point: that rally already had its BMP', () => {
+      const s = ev('set_start')
+      const r = rallyWithId('team1')
+      const bmp = teamBmp('team2', 'successful')
+      const bmpPoint = { ...bmp[bmp.length - 1], id: ++ids }
+      bmp[bmp.length - 1] = bmpPoint
+      expect(reason([s, ...r, ...bmp, swap([bmpPoint])])).toBe('bmp_taken')
+    })
+
+    it('greyed again once the game moves on: the next rally, a time-out', () => {
+      const s = ev('set_start')
+      const r = rallyWithId('team1')
+      const events = [s, ...r, swap(r)]
+      expect(reason([...events, ev('rally_start')], { rallyStatus: 'in_play' })).toBe('rally')
+      expect(reason([...events, ev('rally_start')])).toBe('moved_on')
+      expect(reason([...events, ev('timeout')])).toBe('moved_on')
+    })
+
+    it('the decision change "replay the rally": the point is gone, no completed rally, no BMP', () => {
+      const head = [ev('set_start'), ...rallyWithId('team2')]
+      const [start] = rallyWithId('team1')
+      // the replayed point is deleted, a replay is logged
+      expect(reason([...head, start, ev('replay')])).toBe('moved_on')
+      expect(reason([ev('set_start'), ev('rally_start'), ev('replay')])).toBe('no_point')
+    })
+
+    it('a decision change on a penalty point opens nothing (it ended no rally)', () => {
+      const s = ev('set_start')
+      const r = rallyWithId('team1')
+      const penalty = { ...ev('point'), id: ++ids, payload: { team: 'team2', fromPenalty: true } }
+      expect(reason([s, ...r, ev('sanction'), penalty, swap([penalty])])).toBe('moved_on')
+    })
+
+    it('from the TTO dialog of the point: offered after the decision change', () => {
+      const s = ev('set_start')
+      const r = rallyWithId('team1')
+      expect(reason([s, ...r, ev('technical_to'), swap(r)], { dialog: true })).toBeNull()
+    })
+  })
+
   describe('from the court switch / TTO / set-end dialog of the point', () => {
     it('offered for the rally that just ended, past the TTO / court switch it logged', () => {
       expect(reason([ev('set_start'), ...rally()], { dialog: true })).toBeNull()

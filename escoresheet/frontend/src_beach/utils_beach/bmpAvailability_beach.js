@@ -14,8 +14,13 @@
  *    team BMP of either team, any outcome, or a referee BMP that decided the
  *    rally. Two BMPs one completed rally apart are fine;
  *  - not once the game has moved on after the point ('moved_on'): a court
- *    switch, a technical time-out, a time-out, a decision change, a penalty
- *    point, the next rally's start, a replay;
+ *    switch, a technical time-out, a time-out, a penalty point, the next
+ *    rally's start, a replay (the decision change "replay the rally" takes the
+ *    point away: no completed rally, no BMP);
+ *  - a decision change that gives the rally's point to the other team does
+ *    NOT close it (owner, 2026-10-08: "yes"): the team that now loses the
+ *    point may ask for a BMP on that rally. Still once per rally: a BMP taken
+ *    on the rally before the decision change (or after it) closes it;
  *  - the per-set limit stays (two unsuccessful team BMPs: 'exhausted').
  * The court switch / TTO / set-end dialogs open on the point that ended the
  * rally and keep their own "BMP request" button for it (`dialog: true`): the
@@ -56,22 +61,36 @@ export function teamBmpBlockReason({ events = [], setIndex, setFinished = false,
   if (setFinished && !dialog) return 'set_over'
   if (remaining <= 0) return 'exhausted'
   if (rallyStatus === 'in_play') return 'rally'
-  const after = sinceLastRally(events, setIndex)
-  if (!after) return 'no_point'
+  const last = lastRally(events, setIndex)
+  if (!last) return 'no_point'
+  const { point, after } = last
   if (after.some(isBmpPart)) return 'bmp_taken'
-  const movedOn = dialog ? after.filter(e => !DIALOG_EVENTS.has(e.type)) : after
+  const movedOn = after
+    .filter(e => !(dialog && DIALOG_EVENTS.has(e.type)))
+    .filter(e => !isSwapOf(e, point))
   return movedOn.length ? 'moved_on' : null
 }
 
-// What the set logged after its last completed rally's point (null: no rally
-// completed in the set yet)
-function sinceLastRally(events, setIndex) {
+// The decision change "Assign to other team" of that point: the point keeps
+// its event (its team swapped), so the rally stays the last completed one.
+// Older decision changes do not name their point: a decision change is made
+// on the last point only, and a later point (a penalty point) closes the
+// window by itself.
+function isSwapOf(e, point) {
+  if (e?.type !== 'decision_change' || e.payload?.reason !== 'point_swap') return false
+  const swapped = e.payload.pointEventId
+  return swapped == null || point.id == null || swapped === point.id
+}
+
+// The set's last completed rally: its point and what the set logged after it
+// (null: no rally completed in the set yet)
+function lastRally(events, setIndex) {
   const inSet = (events || [])
     .filter(e => e && e.setIndex === setIndex && !NEUTRAL.has(e.type))
     // sub-events (seq 7.1) belong to their parent: they sort after it
     .sort((a, b) => seqOf(a) - seqOf(b))
   for (let i = inSet.length - 1; i >= 0; i--) {
-    if (isRallyPoint(inSet[i])) return inSet.slice(i + 1)
+    if (isRallyPoint(inSet[i])) return { point: inSet[i], after: inSet.slice(i + 1) }
   }
   return null
 }
