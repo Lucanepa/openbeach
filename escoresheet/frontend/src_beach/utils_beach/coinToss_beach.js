@@ -71,3 +71,45 @@ export function coinTossCloud(match = {}) {
     first_serve: firstServe
   }
 }
+
+/**
+ * The team serving first in set `setIndex` as the scoreboard plays it (the
+ * snapshot's rule): set 1 firstServe; set 2 set2FirstServe, else the other
+ * team; set 3 its toss (set3FirstServe, 'A' / 'B'), else the other team than
+ * set 2's. Beach's deciding set is 3 (indoor's is 5).
+ */
+export function setFirstServer(match = {}, setIndex = 1) {
+  const set1 = playedFirstServe(match)
+  const set2 = match.set2FirstServe || otherTeam(set1)
+  if (Number(setIndex) === 3) {
+    const teamA = match.coinTossTeamA || 'team1'
+    if (match.set3FirstServe === 'A') return teamA
+    if (match.set3FirstServe === 'B') return otherTeam(teamA)
+    return otherTeam(set2)
+  }
+  if (Number(setIndex) === 2) return set2
+  return set1
+}
+
+/**
+ * "Switch serve" of Manual changes > Current set: who serves first.
+ * Set 3: its own toss (set3FirstServe flips, from the server it has now).
+ * Sets 1 and 2: the match's first server (firstServe) with both A/B serve
+ * flags, as OpenVolley's switchFirstServe; the cloud gets the coin toss.
+ * @returns {{ update: object, cloud: object, before: string, after: string }}
+ *   `update` for db.matches, `cloud` the match fields for the sync job
+ */
+export function switchFirstServeUpdate(match = {}, setIndex = 1) {
+  if (Number(setIndex) === 3) {
+    const teamA = match.coinTossTeamA || 'team1'
+    const current = setFirstServer(match, 3) === teamA ? 'A' : 'B'
+    const next = flipLabel(current)
+    return { update: { set3FirstServe: next }, cloud: { set3FirstServe: next }, before: current, after: next }
+  }
+  const before = playedFirstServe(match)
+  const firstServe = otherTeam(before)
+  const teamA = match.coinTossTeamA || 'team1'
+  const teamB = match.coinTossTeamB || otherTeam(teamA)
+  const update = { firstServe, coinTossServeA: firstServe === teamA, coinTossServeB: firstServe === teamB }
+  return { update, cloud: { coin_toss: coinTossCloud({ ...match, ...update }) }, before, after: firstServe }
+}

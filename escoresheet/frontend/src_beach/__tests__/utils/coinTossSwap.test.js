@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { swapTeamDesignation, coinTossCloud } from '../../utils_beach/coinToss_beach'
+import { swapTeamDesignation, coinTossCloud, setFirstServer, switchFirstServeUpdate } from '../../utils_beach/coinToss_beach'
 
 // what a restore makes of the cloud coin toss (backupManager_beach importMatch)
 const restored = (coinToss) => ({
@@ -118,5 +118,36 @@ describe('Scoreboard "Swap team A ↔ B" writes one patch to both places', () =>
   it('sends the cloud coin toss built from that same patch', () => {
     expect(handler).toMatch(/coin_toss: coinTossCloud\(\{ \.\.\.data\.match, \.\.\.patch \}\)/)
     expect(handler).not.toContain('currentServeA ? newTeamA : newTeamB')
+  })
+})
+
+// Manual changes > "Switch serve": beach's deciding set is 3 (the button
+// checked indoor's 5 and changed firstServe in set 3)
+describe('setFirstServer / switchFirstServeUpdate', () => {
+  const match = { coinTossTeamA: 'team2', coinTossTeamB: 'team1', firstServe: 'team1', coinTossServeA: false, coinTossServeB: true }
+
+  it('the first server of each set as the scoreboard plays it', () => {
+    expect(setFirstServer(match, 1)).toBe('team1')
+    expect(setFirstServer(match, 2)).toBe('team2')
+    expect(setFirstServer({ ...match, set2FirstServe: 'team1' }, 2)).toBe('team1')
+    // set 3 without its toss: the other team than set 2's
+    expect(setFirstServer(match, 3)).toBe('team1')
+    expect(setFirstServer({ ...match, set3FirstServe: 'A' }, 3)).toBe('team2')
+    expect(setFirstServer({ ...match, set3FirstServe: 'B' }, 3)).toBe('team1')
+    expect(setFirstServer({}, 1)).toBe('team1')
+  })
+
+  it('set 3 flips its own toss, from the server it has now, and leaves firstServe alone', () => {
+    expect(switchFirstServeUpdate({ ...match, set3FirstServe: 'A' }, 3)).toMatchObject({ update: { set3FirstServe: 'B' }, cloud: { set3FirstServe: 'B' } })
+    // no toss yet: team1 serves (B), so it becomes A
+    const { update } = switchFirstServeUpdate(match, 3)
+    expect(update).toEqual({ set3FirstServe: 'A' })
+  })
+
+  it('sets 1 and 2 flip firstServe with both serve flags, and the cloud coin toss follows', () => {
+    const { update, cloud } = switchFirstServeUpdate(match, 1)
+    expect(update).toEqual({ firstServe: 'team2', coinTossServeA: true, coinTossServeB: false })
+    expect(cloud.coin_toss).toMatchObject({ team_a: 'team2', team_b: 'team1', serve_a: true, first_serve: 'team2' })
+    expect(switchFirstServeUpdate(match, 2).update.firstServe).toBe('team2')
   })
 })

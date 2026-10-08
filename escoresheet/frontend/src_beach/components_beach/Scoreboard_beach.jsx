@@ -41,7 +41,7 @@ import { useDiagCommits } from '../diagnostics_beach/commits_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot, refreshIntervalSnapshots } from '../utils_beach/stateSnapshot_beach'
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
-import { swapTeamDesignation, coinTossCloud } from '../utils_beach/coinToss_beach'
+import { swapTeamDesignation, coinTossCloud, setFirstServer, switchFirstServeUpdate } from '../utils_beach/coinToss_beach'
 import { set3TossBefore, set3TossUndoUpdate, undoKeepsMatch } from '../utils_beach/set3Toss_beach'
 import { staleCourtSwitches, switchBackUpdate, snapshotsAfterSwitchBack, pendingTto, pendingCourtDialog } from '../utils_beach/courtSwitchState_beach'
 import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
@@ -12153,8 +12153,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     const leftisTeam1 = sideA === 'left' ? (teamAKey === 'team1') : (teamAKey !== 'team1')
                     const rightIsTeam1 = !leftisTeam1
 
-                    // Determine current serving team
-                    const servingTeam = data.match.firstServe || 'team1'
+                    // Who serves first in this set (set 3: its own toss)
+                    const servingTeam = setFirstServer(data.match, currentSetIndex)
                     const leftTeamKey = leftisTeam1 ? 'team1' : 'team2'
                     const rightTeamKey = leftisTeam1 ? 'team2' : 'team1'
                     const leftTeamName = leftisTeam1 ? (data.team1Team?.shortName || data.team1Team?.name || 'team1') : (data.team2Team?.shortName || data.team2Team?.name || 'team2')
@@ -12318,51 +12318,23 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             <button
                               className="secondary"
                               onClick={async () => {
-                                const oldServing = servingTeam === 'team1' ? 'team1' : 'team2'
-                                const newServe = servingTeam === 'team1' ? 'team2' : 'team1'
-                                const newServing = newServe === 'team1' ? 'team1' : 'team2'
-
-                                if (data.set?.index === 5) {
-                                  const currentSet5Serve = data.match.set3FirstServe || 'A'
-                                  const newSet5Serve = currentSet5Serve === 'A' ? 'B' : 'A'
-                                  await db.matches.update(matchId, { set3FirstServe: newSet5Serve })
-                                  // Sync to Supabase
-                                  if (data.match?.seed_key) {
-                                    db.sync_queue.add({
-                                      resource: 'match',
-                                      action: 'update',
-                                      payload: { id: data.match.seed_key, set3FirstServe: newSet5Serve },
-                                      createdAt: new Date().toISOString()
-                                    })
-                                  }
-                                } else {
-                                  const coinTossTeamA = data.match.coinTossTeamA || 'team1'
-                                  const coinTossTeamB = coinTossTeamA === 'team1' ? 'team2' : 'team1'
-                                  const coinTossServeA = newServe === coinTossTeamA
-                                  await db.matches.update(matchId, { firstServe: newServe, coinTossServeA })
-
-                                  // Sync coin_toss JSONB to Supabase
-                                  if (data.match?.seed_key) {
-                                    await db.sync_queue.add({
-                                      resource: 'match',
-                                      action: 'update',
-                                      payload: {
-                                        id: data.match.seed_key,
-                                        coin_toss: {
-                                          team_a: coinTossTeamA,
-                                          team_b: coinTossTeamB,
-                                          serve_a: coinTossServeA,
-                                          confirmed: true,
-                                          first_serve: newServe
-                                        }
-                                      },
-                                      createdAt: new Date().toISOString()
-                                    })
-                                  }
+                                // Set 3: its own toss's first server; sets 1-2:
+                                // the match's, with both A/B serve flags
+                                // (coinToss_beach switchFirstServeUpdate)
+                                const { update, cloud, before, after } = switchFirstServeUpdate(data.match, currentSetIndex)
+                                await db.matches.update(matchId, update)
+                                if (data.match?.seed_key && !data.match.test) {
+                                  await db.sync_queue.add({
+                                    resource: 'match',
+                                    action: 'update',
+                                    payload: { id: data.match.seed_key, ...cloud },
+                                    ts: new Date().toISOString(),
+                                    status: 'queued'
+                                  })
                                 }
-                                logManualChange('Teams Setup', 'First Serve', oldServing, newServing, `Changed first serve from ${oldServing} to ${newServing}`)
+                                logManualChange('Teams Setup', 'First Serve', before, after, `Changed first serve from ${before} to ${after}${currentSetIndex === 3 ? ' (set 3)' : ''}`)
                                 // Sync updated serve to Supabase live state
-                                syncLiveStateToSupabase('manual_serve_change', null, { oldServe: oldServing, newServe: newServing })
+                                syncLiveStateToSupabase('manual_serve_change', null, { oldServe: before, newServe: after })
                               }}
                               style={{
                                 flex: 1,
