@@ -2087,6 +2087,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // Clear countdown and mark as dismissed so it doesn't restart
     setBetweenSetsCountdown(null)
     countdownDismissedRef.current = true
+    // The next interval starts its own clock, not this one's
+    betweenSetsStartTimestampRef.current = null
     // Notify referee to also close their countdown
     sendActionToReferee('end_interval', {})
     // Sync match_status back to 'in_progress' in Supabase
