@@ -100,6 +100,34 @@ describe('score sheet PDF: the video match', () => {
     expect(f.match_dur_h ?? '').toBe('')
   })
 
+  it('set start = its first rally (owner 2026-10-08), not the confirmed scheduled time', () => {
+    const data = buildVideoMatch()
+    // the scorer kept the scheduled 08:30 in the "Set 1 start time" dialog
+    const scheduled = '2026-10-08T08:30:00.000Z'
+    data.sets[0].startTime = scheduled
+    const setStart = data.events.find(e => e.type === 'set_start' && e.setIndex === 1)
+    Object.assign(setStart, { ts: scheduled, payload: { setIndex: 1, startTime: scheduled } })
+    const firstRally = new Date(data.events.find(e => e.type === 'rally_start' && e.setIndex === 1).ts)
+    const hh = (d) => String(d.getHours()).padStart(2, '0')
+    const mm = (d) => String(d.getMinutes()).padStart(2, '0')
+    const f = fill(data)
+    expect([f.s1_start_hh, f.s1_start_mm]).toEqual([hh(firstRally), mm(firstRally)])
+    expect([f.match_start_h, f.match_start_m]).toEqual([hh(firstRally), mm(firstRally)])
+    // durations from the same start: set 1 09:01-09:13, match 09:01-09:50
+    expect(firstRally.toISOString()).toBe('2026-10-08T09:01:00.000Z')
+    expect(f.res_s1_dur).toBe('12')
+    expect(f.res_tot_dur).toBe('49')
+    expect([f.match_dur_h, f.match_dur_m]).toEqual(['0', '49'])
+  })
+
+  it('a set without a rally prints its confirmed start', () => {
+    const data = buildVideoMatch()
+    data.events = data.events.filter(e => !(e.setIndex === 2 && (e.type === 'rally_start' || e.type === 'point' || e.type === 'set_start')))
+    const f = fill(data)
+    const d = new Date('2026-10-08T09:16:00.000Z')
+    expect([f.s2_start_hh, f.s2_start_mm]).toEqual([String(d.getHours()).padStart(2, '0'), String(d.getMinutes()).padStart(2, '0')])
+  })
+
   it('an end before the start is never a duration', () => {
     const data = buildVideoMatch()
     data.sets[1].endTime = '2026-10-08T09:10:00.000Z' // before its start 09:16

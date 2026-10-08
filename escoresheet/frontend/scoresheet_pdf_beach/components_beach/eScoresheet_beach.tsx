@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from
 import countries from 'i18n-iso-countries';
 import enLocale from 'i18n-iso-countries/langs/en.json';
 import { capitalizeWords, cleanTeamName, plausibleMinutes } from './sheetFormat_beach';
+import { isoOf, setEndMs, setStartMs } from './matchTimes_beach';
 // MTO / RIT: the chart marks and the remarks lines (shared with MatchEnd)
 import { medicalChartMarks, medicalRemarkLines } from '../../src_beach/utils_beach/medicalRemarks_beach.js';
 
@@ -767,9 +768,13 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
           set(`${prefix}_team_up`, teamUp);
           set(`${prefix}_team_down`, teamDown);
 
-          // Set start/end times
-          if (setItem.startTime) {
-            const start = new Date(setItem.startTime);
+          // Set start/end times. The start is the set's FIRST RALLY
+          // (matchTimes_beach, as in OpenVolley; owner 2026-10-08), never the
+          // scheduled time kept in the start dialog; a set without a rally
+          // prints its confirmed start.
+          const actualStart = setItem.startTime ? setStartMs(setItem, events) : null;
+          if (actualStart !== null) {
+            const start = new Date(actualStart);
             const hh = String(start.getHours()).padStart(2, '0');
             const mm = String(start.getMinutes()).padStart(2, '0');
             set(`${prefix}_start_hh`, hh);
@@ -863,9 +868,11 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
               set(`res_s${setNum}_w_b`, teamBPoints > teamAPoints ? '1' : '0');
             }
 
-            // Set duration (calculate from start/end times)
+            // Set duration: its end - its first rally (the printed times),
             // only a real duration (an end before the start, or months, is blank)
-            const setMinutes = plausibleMinutes(setItem.startTime, setItem.endTime);
+            const setMinutes = setItem.endTime
+              ? plausibleMinutes(isoOf(setStartMs(setItem, events)), isoOf(setEndMs(setItem, events)))
+              : null;
             if (setMinutes != null) set(`res_s${setNum}_dur`, String(setMinutes));
           }
         });
@@ -912,7 +919,9 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
         if (sortedSets.length > 0) {
           const resFirstSet = sortedSets[0];
           const resLastSet = sortedSets[sortedSets.length - 1];
-          const resTotalMinutes = plausibleMinutes(resFirstSet?.startTime, resLastSet?.endTime, 300);
+          const resTotalMinutes = resFirstSet?.startTime && resLastSet?.endTime
+            ? plausibleMinutes(isoOf(setStartMs(resFirstSet, events)), isoOf(setEndMs(resLastSet, events)), 300)
+            : null;
           if (resTotalMinutes != null) set('res_tot_dur', String(resTotalMinutes));
         }
 
@@ -921,14 +930,16 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
           const matchFirstSet = sortedSets[0];
           const matchLastSet = sortedSets[sortedSets.length - 1];
 
-          if (matchFirstSet?.startTime) {
-            const matchStart = new Date(matchFirstSet.startTime);
+          // match start = set 1's first rally (as the set header prints it)
+          const matchStartMs = matchFirstSet?.startTime ? setStartMs(matchFirstSet, events) : null;
+          if (matchStartMs !== null) {
+            const matchStart = new Date(matchStartMs);
             set('match_start_h', String(matchStart.getHours()).padStart(2, '0'));
             set('match_start_m', String(matchStart.getMinutes()).padStart(2, '0'));
 
             if (matchLastSet?.endTime) {
               const matchEnd = new Date(matchLastSet.endTime);
-              const totalMinutes = plausibleMinutes(matchFirstSet.startTime, matchLastSet.endTime, 300);
+              const totalMinutes = plausibleMinutes(isoOf(matchStartMs), isoOf(setEndMs(matchLastSet, events)), 300);
               if (totalMinutes != null) {
                 set('match_dur_h', String(Math.floor(totalMinutes / 60)));
                 set('match_dur_m', String(totalMinutes % 60));
