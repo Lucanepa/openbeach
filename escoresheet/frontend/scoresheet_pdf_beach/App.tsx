@@ -3,6 +3,8 @@ import jsPDF from 'jspdf';
 import OpenbeachScoresheet from './components_beach/eScoresheet_beach';
 // Opened as a popup, a desktop app window or the Android app's in-app view
 import { closeAppWindow, deliverPdfToOpener, getOpenerWindow, savePdfThroughApp } from '../src_beach/utils_beach/appWindowGuest_beach.js';
+// The desktop app's quit question says a PDF is still being saved here
+import { setPdfBusy } from '../src_beach/utils_beach/openAppWindow_beach.js';
 
 // Count actual pages in the DOM
 const countPages = (): number => {
@@ -283,6 +285,8 @@ export default function App({ matchData }: { matchData?: any }) {
   const handleSavePDF = async (returnBlob = false) => {
     setIsPdfGenerating(true);
     setPdfProgress('Preparing...');
+    // the desktop app's quit question says a PDF is still being saved here
+    setPdfBusy(true);
 
     try {
       const rasterizeHTML = (await import('rasterizehtml')).default;
@@ -345,6 +349,7 @@ export default function App({ matchData }: { matchData?: any }) {
     } finally {
       setIsPdfGenerating(false);
       setPdfProgress('');
+      setPdfBusy(false);
     }
   };
 

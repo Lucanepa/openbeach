@@ -2169,7 +2169,12 @@
     "trayNoTablets": "Aucune tablette connectée",
     "trayOneTablet": "1 tablette connectée",
     "trayMatchLive": "Match en cours",
-    "trayTestMatchLive": "Match test en cours"
+    "trayTestMatchLive": "Match test en cours",
+    "quitAlsoCloses": "Ferme aussi : {{windows}}",
+    "quitWindowGroup_one": "{{name}} ({{count}} fenêtre)",
+    "quitWindowGroup_other": "{{name}} ({{count}} fenêtres)",
+    "windowScoresheet": "Feuille de match",
+    "quitPdfBusy": "Un PDF est encore en cours d'enregistrement dans la fenêtre de la feuille de match."
   },
   "screenTooSmall": {
     "title": "Pour utiliser cette application, utilisez une tablette ou un écran plus grand (au moins 800×600).",

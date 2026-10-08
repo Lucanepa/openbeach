@@ -2169,7 +2169,12 @@
     "trayNoTablets": "Kei Tablets verbunde",
     "trayOneTablet": "1 Tablet verbunde",
     "trayMatchLive": "Spiil lauft",
-    "trayTestMatchLive": "Testspiil lauft"
+    "trayTestMatchLive": "Testspiil lauft",
+    "quitAlsoCloses": "Schliesst au: {{windows}}",
+    "quitWindowGroup_one": "{{name}} ({{count}} Fänschter)",
+    "quitWindowGroup_other": "{{name}} ({{count}} Fänschter)",
+    "windowScoresheet": "Matchblatt",
+    "quitPdfBusy": "Im Matchblatt-Fänschter wird no es PDF gspeicheret."
   },
   "screenTooSmall": {
     "title": "Bitte bruuched Sie für die App es Tablet oder en grössere Bildschirm (mindestens 800×600).",

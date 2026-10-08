@@ -2169,7 +2169,12 @@
     "trayNoTablets": "Keine Tablets verbunden",
     "trayOneTablet": "1 Tablet verbunden",
     "trayMatchLive": "Spiel läuft",
-    "trayTestMatchLive": "Testspiel läuft"
+    "trayTestMatchLive": "Testspiel läuft",
+    "quitAlsoCloses": "Schliesst auch: {{windows}}",
+    "quitWindowGroup_one": "{{name}} ({{count}} Fenster)",
+    "quitWindowGroup_other": "{{name}} ({{count}} Fenster)",
+    "windowScoresheet": "Matchblatt",
+    "quitPdfBusy": "Im Matchblatt-Fenster wird noch ein PDF gespeichert."
   },
   "screenTooSmall": {
     "title": "Bitte verwenden Sie für diese App ein Tablet oder einen grösseren Bildschirm (mindestens 800×600).",

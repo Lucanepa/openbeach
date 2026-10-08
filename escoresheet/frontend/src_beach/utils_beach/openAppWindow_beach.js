@@ -41,6 +41,9 @@ export const APP_VIEW_ATTR = 'data-ov-app-window'
 export const MSG_CLOSE = 'ov-app-window:close'
 export const MSG_SAVE_PDF = 'ov-app-window:save-pdf'
 export const MSG_OPEN = 'ov-app-window:open'
+/** Set on a page's window while it makes / saves a PDF (setPdfBusy); the
+ *  desktop app's quit question reads it (pdfBusyInAppWindows). */
+export const PDF_BUSY_FLAG = '__obPdfBusy'
 
 const t = (key, fallback, opts) => {
   try {
@@ -137,6 +140,7 @@ function openOn(platform, url, { features, title, win }) {
   if (platform === 'tauri') {
     const w = win.open(href, '_blank', features)
     if (external) return { ok: true, mode: 'external', window: null }
+    if (w) trackAppWindow(w)
     return { ok: !!w, mode: w ? 'window' : 'blocked', window: w || null }
   }
 
@@ -147,6 +151,60 @@ function openOn(platform, url, { features, title, win }) {
   }
   const w = win.open(href, '_blank', features)
   return { ok: !!w, mode: w ? 'popup' : 'blocked', window: w || null }
+}
+
+// ---------------------------------------------------------------------------
+// The desktop app's windows opened from this page (the scoresheets): the quit
+// question says when one of them is still saving a PDF (appLifecycle_beach).
+
+const appWindows = new Set()
+
+function trackAppWindow(w) {
+  for (const old of appWindows) {
+    try { if (old.closed) appWindows.delete(old) } catch { appWindows.delete(old) }
+  }
+  appWindows.add(w)
+}
+
+/** The app windows this page opened that are still open. */
+export function openedAppWindows() {
+  const open = []
+  for (const w of appWindows) {
+    try {
+      if (w.closed) appWindows.delete(w)
+      else open.push(w)
+    } catch {
+      appWindows.delete(w)
+    }
+  }
+  return open
+}
+
+/** Whether one of `windows` is making or saving a PDF right now. */
+export function pdfBusyInAppWindows(windows = openedAppWindows()) {
+  return windows.some((w) => {
+    try {
+      return !w.closed && w[PDF_BUSY_FLAG] === true
+    } catch {
+      return false // not readable (another origin): unknown, not busy
+    }
+  })
+}
+
+/**
+ * The scoresheet page is making / saving a PDF (true) or done (false), set on
+ * its own window. The desktop app's quit question reads it from the
+ * scoretable: "A PDF is still being saved in the scoresheet window".
+ */
+export function setPdfBusy(busy, win = window) {
+  try {
+    win[PDF_BUSY_FLAG] = !!busy
+  } catch { /* ignore */ }
+}
+
+/** Tests: forget the tracked windows. */
+export function resetAppWindowsForTests() {
+  appWindows.clear()
 }
 
 /**

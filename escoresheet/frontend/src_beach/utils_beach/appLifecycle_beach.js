@@ -14,6 +14,11 @@
  * so the app then asks natively instead of waiting for a page that no longer
  * answers. The updater (updater.rs) starts only once the page has reported:
  * without app_page_state an installed OpenBeach never updates itself.
+ * Quitting closes every app window (the scoresheet windows too): the one
+ * question says so ("Also closes: Scoresheet (2 windows)", `app_windows`),
+ * and that a scoresheet window is still saving a PDF when it is. A quit
+ * request hides the scoresheet windows (only the scoretable shows); Keep
+ * running brings them back (`app_quit_cancel`).
  *
  * Android app (Capacitor): MainActivity goes back in the WebView's history
  * first (from the referee or livescore view to the scorer). On the app's
@@ -34,6 +39,7 @@
 
 import i18n from 'i18next'
 import { confirmDialog, hasConfirmHost } from '../ui/volleyui/uiStore.js'
+import { pdfBusyInAppWindows } from './openAppWindow_beach.js'
 
 export const LIFECYCLE_EVENT = 'ov-app-lifecycle'
 
@@ -79,12 +85,39 @@ export function onLiveMatchChange(listener) {
 // ---------------------------------------------------------------------------
 // Questions (plain data, tested)
 
+/** What a window is called in the quit question: a scoresheet window (its
+ *  page title, or the app's title before the page set one) by its translated
+ *  name, anything else by its title. */
+function windowName(title) {
+  const printable = [...String(title ?? '')].filter((c) => c.charCodeAt(0) >= 32 && c.charCodeAt(0) !== 127).join('')
+  const clean = printable.trim().slice(0, 60).trim()
+  return !clean || /scoresheet/i.test(clean) ? t('appLifecycle.windowScoresheet', 'Scoresheet') : clean
+}
+
+/**
+ * "Also closes: Scoresheet (2 windows)": the other app windows a quit closes,
+ * grouped by name in the order they were opened; '' without any.
+ * @param {string[]} titles their window titles (app_windows)
+ */
+export function windowsLine(titles = []) {
+  const groups = new Map()
+  for (const title of Array.isArray(titles) ? titles : []) {
+    const name = windowName(title)
+    groups.set(name, (groups.get(name) || 0) + 1)
+  }
+  if (groups.size === 0) return ''
+  const list = [...groups].map(([name, count]) => t('appLifecycle.quitWindowGroup', count === 1 ? `${name} (1 window)` : `${name} (${count} windows)`, { name, count }))
+  return t('appLifecycle.quitAlsoCloses', `Also closes: ${list.join(', ')}`, { windows: list.join(', ') })
+}
+
 /**
  * "Quit OpenBeach?" in the desktop app.
- * @param {{ live?: 'none'|'official'|'test', wifi?: boolean, bluetooth?: boolean }} state
- *   wifi / bluetooth: the laptop's own network for the tablets is on (it stops with the app)
+ * @param {{ live?: 'none'|'official'|'test', wifi?: boolean, bluetooth?: boolean, windows?: string[], pdfBusy?: boolean }} state
+ *   wifi / bluetooth: the laptop's own network for the tablets is on (it stops with the app);
+ *   windows: the titles of the other app windows the quit closes too (app_windows);
+ *   pdfBusy: one of them is still making / saving a PDF
  */
-export function quitQuestion({ live: liveNow = 'none', wifi = false, bluetooth = false } = {}) {
+export function quitQuestion({ live: liveNow = 'none', wifi = false, bluetooth = false, windows = [], pdfBusy = false } = {}) {
   const lines = []
   if (liveNow === 'official') {
     lines.push(t('appLifecycle.quitMatchLive', 'A match is in progress. It is saved on this computer: start OpenBeach again and continue it from the home screen.'))
@@ -95,6 +128,9 @@ export function quitQuestion({ live: liveNow = 'none', wifi = false, bluetooth =
   if (wifi && bluetooth) lines.push(t('appLifecycle.quitWifiBluetooth', "The laptop's Wi-Fi and Bluetooth network for tablets will stop."))
   else if (wifi) lines.push(t('appLifecycle.quitWifi', "The laptop's Wi-Fi for tablets will stop."))
   else if (bluetooth) lines.push(t('appLifecycle.quitBluetooth', "The laptop's Bluetooth network for tablets will stop."))
+  const closes = windowsLine(windows)
+  if (closes) lines.push(closes)
+  if (pdfBusy) lines.push(t('appLifecycle.quitPdfBusy', 'A PDF is still being saved in the scoresheet window.'))
   const title = liveNow === 'official'
     ? t('appLifecycle.quitTitleMatch', 'Quit OpenBeach during the match?')
     : liveNow === 'test'
@@ -151,9 +187,18 @@ export function trayLabels() {
     quitConfirm: t('appLifecycle.quitConfirm', 'Quit OpenBeach'),
     keepRunning: t('appLifecycle.keepRunning', 'Keep running'),
     updateReady: updateReady.includes('{{version}}') ? updateReady : 'Restart to update to {{version}}',
-    updateStatus: t('update.trayStatus', 'Update ready')
+    updateStatus: t('update.trayStatus', 'Update ready'),
+    // the other app windows the quit closes, in the native question;
+    // {{windows}}, {{name}} and {{count}} stay for the app to fill in
+    alsoCloses: keep(t('appLifecycle.quitAlsoCloses', 'Also closes: {{windows}}', { windows: '{{windows}}' }), ['{{windows}}'], 'Also closes: {{windows}}'),
+    windowGroupOne: keep(t('appLifecycle.quitWindowGroup_one', '{{name}} ({{count}} window)', { name: '{{name}}', count: '{{count}}' }), ['{{name}}'], '{{name}} ({{count}} window)'),
+    windowGroupOther: keep(t('appLifecycle.quitWindowGroup_other', '{{name}} ({{count}} windows)', { name: '{{name}}', count: '{{count}}' }), ['{{name}}', '{{count}}'], '{{name}} ({{count}} windows)'),
+    windowScoresheet: t('appLifecycle.windowScoresheet', 'Scoresheet')
   }
 }
+
+/** `text` when it still has every placeholder the app fills in, else `fallback`. */
+const keep = (text, placeholders, fallback) => (placeholders.every((p) => text.includes(p)) ? text : fallback)
 
 // ---------------------------------------------------------------------------
 // Desktop app (Tauri)
@@ -200,6 +245,22 @@ async function laptopNetworks(invoke) {
   return { wifi: !!(wifi?.active && !wifi?.external), bluetooth: !!(bt?.active && !bt?.external) }
 }
 
+/** The titles of the other app windows (the scoresheets, hidden ones too)
+ *  the quit closes; [] when the app does not say in time. */
+async function appWindows(invoke) {
+  const titles = await within(invoke('app_windows'), 1500, [])
+  return Array.isArray(titles) ? titles.filter((x) => typeof x === 'string') : []
+}
+
+/** Whether a scoresheet window this page opened is still making / saving a PDF. */
+function pdfBusyNow() {
+  try {
+    return pdfBusyInAppWindows()
+  } catch {
+    return false
+  }
+}
+
 /** Tell the app this page took its quit request (its question is on screen);
  *  without it the app asks natively after a few seconds (lifecycle.rs). */
 function ackQuit(invoke) {
@@ -227,16 +288,23 @@ export async function requestDesktopQuit(win = desktopWin || window, ask = confi
   quitAsking = true
   // The first-close notice gives way to the quit question.
   noticeAbort?.abort()
+  let quitting = false
   try {
-    const nets = await laptopNetworks(invoke)
-    if (!(await ask(quitQuestion({ live, ...nets })))) return false
+    const [nets, windows] = await Promise.all([laptopNetworks(invoke), appWindows(invoke)])
+    // ONE question for every app window: the quit closes the scoresheets too
+    if (!(await ask(quitQuestion({ live, ...nets, windows, pdfBusy: pdfBusyNow() })))) return false
+    quitting = true
     await invoke('app_quit')
     return true
   } catch (e) {
     console.error('[app] quit failed', e)
+    quitting = false
     return false
   } finally {
     quitAsking = false
+    // Keep running: the scoresheet windows the quit request hid come back
+    // with the scoretable (the request showed only the scoretable)
+    if (!quitting) Promise.resolve(invoke('app_quit_cancel')).catch((e) => console.warn('[app] app_quit_cancel failed', e))
   }
 }
 

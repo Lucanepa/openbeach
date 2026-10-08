@@ -2170,7 +2170,12 @@
     "trayNoTablets": "No tablets connected",
     "trayOneTablet": "1 tablet connected",
     "trayMatchLive": "Match in progress",
-    "trayTestMatchLive": "Test match in progress"
+    "trayTestMatchLive": "Test match in progress",
+    "quitAlsoCloses": "Also closes: {{windows}}",
+    "quitWindowGroup_one": "{{name}} ({{count}} window)",
+    "quitWindowGroup_other": "{{name}} ({{count}} windows)",
+    "windowScoresheet": "Scoresheet",
+    "quitPdfBusy": "A PDF is still being saved in the scoresheet window."
   },
   "screenTooSmall": {
     "title": "To use this application, please use a tablet or larger screen (minimum 800×600).",

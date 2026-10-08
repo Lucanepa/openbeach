@@ -2169,7 +2169,12 @@
     "trayNoTablets": "Nessun tablet connesso",
     "trayOneTablet": "1 tablet connesso",
     "trayMatchLive": "Partita in corso",
-    "trayTestMatchLive": "Partita di prova in corso"
+    "trayTestMatchLive": "Partita di prova in corso",
+    "quitAlsoCloses": "Chiude anche: {{windows}}",
+    "quitWindowGroup_one": "{{name}} ({{count}} finestra)",
+    "quitWindowGroup_other": "{{name}} ({{count}} finestre)",
+    "windowScoresheet": "Referto",
+    "quitPdfBusy": "Nella finestra del referto si sta ancora salvando un PDF."
   },
   "screenTooSmall": {
     "title": "Per usare questa applicazione serve un tablet o uno schermo più grande (almeno 800×600).",

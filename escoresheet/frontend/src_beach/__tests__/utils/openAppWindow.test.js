@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { readFileSync, readdirSync } from 'fs'
 import { join, resolve } from 'path'
 import {
@@ -7,7 +7,11 @@ import {
   MSG_SAVE_PDF,
   currentInAppView,
   detectAppPlatform,
-  openAppWindow
+  openAppWindow,
+  openedAppWindows,
+  pdfBusyInAppWindows,
+  resetAppWindowsForTests,
+  setPdfBusy
 } from '../../utils_beach/openAppWindow_beach'
 import {
   MSG_PDF_BLOB,
@@ -94,6 +98,46 @@ describe('openAppWindow', () => {
       }
     }
     expect(offenders).toEqual([])
+  })
+})
+
+describe('the desktop app windows this page opened (quit question)', () => {
+  beforeEach(() => resetAppWindowsForTests())
+  afterEach(() => resetAppWindowsForTests())
+
+  it('tracks the app windows, not external links, and forgets closed ones', () => {
+    const scoresheet = { closed: false }
+    openAppWindow('/scoresheet_beach.html?matchId=7', { win: fakeWin({ opened: scoresheet }), platform: 'tauri' })
+    openAppWindow('https://openvolley.app/help', { win: fakeWin({ opened: null }), platform: 'tauri' })
+    // a browser popup is not an app window
+    openAppWindow('/scoresheet_beach.html', { win: fakeWin({ opened: { closed: false } }), platform: 'web' })
+    expect(openedAppWindows()).toEqual([scoresheet])
+    scoresheet.closed = true
+    expect(openedAppWindows()).toEqual([])
+  })
+
+  it('knows when one of them is still making / saving a PDF', () => {
+    const a = { closed: false }
+    const b = { closed: false }
+    openAppWindow('/scoresheet_beach.html?matchId=7', { win: fakeWin({ opened: a }), platform: 'tauri' })
+    openAppWindow('/scoresheet_beach.html?matchId=7&action=save', { win: fakeWin({ opened: b }), platform: 'tauri' })
+    expect(pdfBusyInAppWindows()).toBe(false)
+    setPdfBusy(true, b) // the scoresheet page sets it on its own window
+    expect(pdfBusyInAppWindows()).toBe(true)
+    setPdfBusy(false, b)
+    expect(pdfBusyInAppWindows()).toBe(false)
+    // a window that cannot be read is not counted as busy
+    const locked = { closed: false, get __obPdfBusy() { throw new Error('SecurityError') } }
+    expect(pdfBusyInAppWindows([locked])).toBe(false)
+    expect(pdfBusyInAppWindows([{ closed: true, __obPdfBusy: true }])).toBe(false)
+  })
+
+  it('the scoresheet page sets the flag while it makes a PDF', () => {
+    const src = readFileSync(resolve(__dirname, '../../../scoresheet_pdf_beach/App.tsx'), 'utf8')
+    const save = src.slice(src.indexOf('const handleSavePDF'))
+    expect(save).toMatch(/setPdfBusy\(true\)/)
+    // cleared in the finally, so a failed PDF does not stay "busy"
+    expect(save).toMatch(/finally \{[^}]*setPdfBusy\(false\)/)
   })
 })
 
