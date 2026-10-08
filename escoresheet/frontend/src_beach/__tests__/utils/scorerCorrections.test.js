@@ -103,7 +103,10 @@ describe('sync jobs of removed events', () => {
       { id: 4, resource: 'event', action: 'insert', status: 'error', payload: { external_id: 'm:e:11' } },
       { id: 5, resource: 'event', action: 'insert', status: 'queued', payload: { external_id: 'm:e:7' } },
       { id: 6, resource: 'set', action: 'update', status: 'queued', payload: { external_id: 'm:s:12' } },
-      { id: 7, resource: 'event', action: 'delete', status: 'queued', payload: { external_id: 'm:e:12' } }
+      { id: 7, resource: 'event', action: 'delete', status: 'queued', payload: { external_id: 'm:e:12' } },
+      // the void / edit the removal itself queued (the event history) stay
+      { id: 8, resource: 'event', action: 'void', status: 'queued', payload: { external_id: 'm:e:12', rev_uid: 'u1' } },
+      { id: 9, resource: 'event', action: 'edit', status: 'error', payload: { external_id: 'm:e:11', rev_uid: 'u2' } }
     ]
     expect(syncJobsForEvents(jobs, [11, 12]).map(j => j.id)).toEqual([1, 2, 4])
   })

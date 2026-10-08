@@ -21,12 +21,29 @@ const between = (from, to) => {
 describe('discardEvents: removed events leave nothing behind in the cloud', () => {
   const body = () => between('const discardEvents = useCallback(', 'const applyPointRemovalScore')
 
-  it('drops their unsent sync jobs and queues a cloud delete for a synced match', () => {
+  it('drops their unsent insert jobs; the event history voids the server rows (no delete job)', () => {
     const b = body()
-    expect(b).toMatch(/db\.events\.bulkDelete\(ids\)/)
+    expect(b).toMatch(/withActivityContext\(\{ reason: currentActivityContext\(\)\?\.reason \|\| reason \}, \(\) => db\.events\.bulkDelete\(ids\)\)/)
     expect(b).toMatch(/syncJobsForEvents\(unsent, ids\)/)
-    expect(b).toMatch(/eventDeleteJob\(match\.seed_key, id, now\)/)
-    expect(b).toMatch(/!match\.test && match\.seed_key/)
+    expect(b).not.toMatch(/eventDeleteJob/)
+  })
+})
+
+describe('the event history: reasons and seqs', () => {
+  it('Undo is one \'undo\' action, Replay and the decision change \'decision_change\'', () => {
+    expect(between('const handleUndo = useCallback(', 'const cancelUndo = useCallback(')).toMatch(/\}, \{ reason: 'undo' \}\)\n  \}\), \[runUndoConfirm/)
+    expect(between('const handleReplayRally = useCallback(', 'const runDecisionChange')).toMatch(/\}, \{ reason: 'decision_change' \}\), \[runAction/)
+    expect(between('const handleDecisionChange = useCallback(', '\n  // ')).toMatch(/\}, \{ reason: 'decision_change' \}\)\), \[runDecisionChange/)
+  })
+
+  it('cancelling a change of courts takes the point back as an undo', () => {
+    const b = between('const cancelCourtSwitch = useCallback(', '// Check if match is already finished')
+    expect(b).toMatch(/await discardEvents\(allEvents\.filter\(e => deleteIds\.has\(e\.id\)\), 'undo'\)/)
+  })
+
+  it('an undone seq is never given out again (main events and N.x sub-events)', () => {
+    expect(between('const getNextSeq = useCallback(', 'const getNextSubSeq')).toMatch(/Math\.floor\(await maxVoidedSeq\(db, matchId\)\)/)
+    expect(between('const getNextSubSeq = useCallback(', '// Debug functions')).toMatch(/await maxVoidedSeq\(db, matchId, \{ from: baseSeq, to: baseSeq \+ 0\.99 \}\)/)
   })
 })
 

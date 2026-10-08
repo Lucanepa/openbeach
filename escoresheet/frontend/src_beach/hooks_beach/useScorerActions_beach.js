@@ -1,10 +1,13 @@
 import { useCallback, useMemo, useRef } from 'react'
 import Dexie from 'dexie'
 
+import { withActivityContext, currentActivityContext } from '../db_beach/eventHistory_beach'
+import { randomUuid } from '../utils_beach/deviceId_beach'
+
 // Ported from OpenVolley src/hooks/useScorerActions.js (415151d8, dc06a825,
-// b6ca08e8) without the event history (OpenBeach has no db/eventHistory yet:
-// an action's deletes and edits reach the cloud through their own sync jobs,
-// queued inside the same transaction).
+// b6ca08e8, 248c239b). The deletes and edits of an action are recorded by the
+// event history (db_beach/eventHistory_beach) in the action's own transaction
+// (it covers every table), with the action's reason.
 
 // The event mutex (eventInProgressRef) is waited for at most this long, as
 // logEvent always did, before an action goes ahead anyway.
@@ -87,6 +90,20 @@ export function runActionEffects(effects, finalSnapshot) {
   }
 }
 
+/**
+ * Run `fn` with the event-history reason of an action (db_beach/eventHistory_beach:
+ * why its deletes and edits void or edit the server's events). A top-level
+ * action gets its own action id; an action that joins a running one (the
+ * replay of a decision change) keeps the outer reason and id, so the rows it
+ * voids are labelled as what the scorer did.
+ */
+export function inActivityContext(reason, fn, { joined = false } = {}) {
+  if (!reason) return fn()
+  const current = currentActivityContext()
+  if (joined && current?.reason) return fn()
+  return withActivityContext({ reason, actionId: current?.actionId ?? randomUuid() }, fn)
+}
+
 /** An action failure already shown to the scorer (onError, or by the action itself). */
 export function isReportedActionError(err) {
   return !!(err && typeof err === 'object' && err.scorerActionReported)
@@ -133,6 +150,10 @@ export function markActionErrorReported(err) {
  * - Only calls from inside the action's transaction (its body and what it
  *   awaits) are part of it: a tap, a timer or an effect that runs meanwhile
  *   is applied / sent at once, as without an action.
+ * - The event history rows of the events it deletes or edits are written in
+ *   the action's transaction. `reason` ('undo', 'decision_change', ...)
+ *   labels them (inActivityContext); without it a delete is 'delete', an
+ *   edit 'other'.
  */
 export function useScorerActions({ db, commits, mutexRef, captureFinalSnapshot, onError }) {
   const ctxRef = useRef(null)
@@ -153,10 +174,10 @@ export function useScorerActions({ db, commits, mutexRef, captureFinalSnapshot, 
     return trans && trans.idbtrans === ctx.idbtrans ? ctx : null
   }, [])
 
-  const runAction = useCallback(async (key, body, { skipMutex = false } = {}) => {
+  const runAction = useCallback(async (key, body, { skipMutex = false, reason = null } = {}) => {
     // Called from inside a running action (e.g. the delay penalty's point): join it
     const outer = actionOfCaller()
-    if (outer) return body(outer)
+    if (outer) return inActivityContext(reason, () => body(outer), { joined: true })
 
     const inFlight = inFlightRef.current
     if (key != null) {
@@ -183,7 +204,7 @@ export function useScorerActions({ db, commits, mutexRef, captureFinalSnapshot, 
         result = await db.transaction('rw', db.tables, async () => {
           ctx.idbtrans = Dexie.currentTransaction.idbtrans
           ctxRef.current = ctx
-          const value = await body(ctx)
+          const value = await inActivityContext(reason, () => body(ctx))
           // Writes started without awaiting them (logManualChange) finish inside
           while (ctx.pending.length > 0) await ctx.pending.shift()
           ctx.wrote = 'mutatedParts' in ctx.idbtrans

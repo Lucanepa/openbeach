@@ -120,9 +120,11 @@ export function localIdOfExtId(externalId, kind) {
 export const UNSENT_STATUSES = Object.freeze(['queued', 'error', 'failed'])
 
 /**
- * Unsent sync jobs that write one of the given events: to be dropped when the
- * events are removed locally, so the cloud never receives a phantom row.
- * Event delete jobs are never returned (they are what removes the row).
+ * Unsent INSERT jobs of the given events: to be dropped when the events are
+ * removed locally, so the cloud never receives a phantom row. Only inserts:
+ * the void / edit / restore jobs the removal itself queued (the event history,
+ * db_beach/eventHistory_beach) carry the event's history to the server and
+ * must stay, as must a delete job of an older app version.
  * @param {Array} jobs sync_queue rows
  * @param {Iterable} eventIds local Dexie ids
  * @returns {Array} the jobs to delete
@@ -130,7 +132,7 @@ export const UNSENT_STATUSES = Object.freeze(['queued', 'error', 'failed'])
 export function syncJobsForEvents(jobs, eventIds) {
   const ids = new Set([...(eventIds || [])].map(String))
   return (jobs || []).filter(j => {
-    if (!j || j.resource !== 'event' || j.action === 'delete') return false
+    if (!j || j.resource !== 'event' || j.action !== 'insert') return false
     if (!UNSENT_STATUSES.includes(j.status)) return false
     const localId = localIdOfExtId(j.payload?.external_id, 'event')
     return localId != null && ids.has(localId)
