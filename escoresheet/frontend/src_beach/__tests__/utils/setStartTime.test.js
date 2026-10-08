@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
-  defaultSetStartTime, scheduledClock, withActualStartTimeRemark, localClock
+  defaultSetStartTime, scheduledClock, withActualStartTimeRemark, localClock, scheduledStartOn
 } from '../../utils_beach/setStartTime_beach'
 import { planSetTimes } from '../../utils_beach/corrections_beach'
 import { remarksAfter } from '../../utils_beach/applyCorrectionPlan_beach'
@@ -28,6 +28,12 @@ describe('defaultSetStartTime: set 1 proposes the scheduled time', () => {
     const start = defaultSetStartTime({ setIndex: 1, sets: [{ index: 1 }], now: TODAY, scheduledAt: SCHEDULED })
     const d = new Date(start)
     expect([d.getFullYear(), d.getMonth() + 1, d.getDate()]).toEqual([2026, 10, 8])
+  })
+
+  it('a late match confirmed after midnight keeps the evening before (as OpenVolley)', () => {
+    expect(scheduledStartOn(iso(2026, 10, 1, 23, 30), local(2026, 10, 9, 0, 10))).toBe(iso(2026, 10, 8, 23, 30))
+    // a match scheduled tomorrow and played today (an hour ahead): today
+    expect(scheduledStartOn(iso(2026, 10, 9, 18, 0), local(2026, 10, 8, 17, 0))).toBe(iso(2026, 10, 8, 18, 0))
   })
 
   it('no scheduled time (none, a bare date, a date saved without a time): now', () => {

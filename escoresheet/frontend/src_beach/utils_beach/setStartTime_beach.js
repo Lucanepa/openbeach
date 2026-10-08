@@ -57,13 +57,20 @@ export function scheduledClock(scheduledAt) {
   return clock && clock !== '00:00' ? clock : null
 }
 
-/** The scheduled time of day on the local date of `now` (ISO), or null. */
+const HOUR = 3600 * 1000
+
+/**
+ * The scheduled time of day on the local date of `now` (ISO), or null. When
+ * today's occurrence is more than 12 hours ahead (a 23:30 match confirmed at
+ * 00:10) it is the day before, as in OpenVolley.
+ */
 export function scheduledStartOn(scheduledAt, now = new Date()) {
   const clock = scheduledClock(scheduledAt)
   if (!clock) return null
   const [h, m] = clock.split(':').map(Number)
   const d = new Date(now.getTime())
   d.setHours(h, m, 0, 0)
+  if (d.getTime() - now.getTime() > 12 * HOUR) d.setDate(d.getDate() - 1)
   return d.toISOString()
 }
 
