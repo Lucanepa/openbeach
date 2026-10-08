@@ -88,6 +88,11 @@ export default function App() {
   // for, until its Match Setup opens: the new match's 'Continue match /
   // Delete match' showed for a frame first (laptop run 2026-10-08, OB-2)
   const [homeWhilePreparing, setHomeWhilePreparing] = useState(null)
+  // The match just closed from Match End (deleted): left out of the home
+  // screen and the header at once, while the live queries still see it for
+  // a moment (OpenVolley OV-17, laptop run 2026-10-08: one frame of its
+  // 'Continue match / Delete match')
+  const [closedMatchId, setClosedMatchId] = useState(null)
   const [deleteMatchModal, setDeleteMatchModal] = useState(null)
   const [deletePinInput, setDeletePinInput] = useState('')
   const [deletePinError, setDeletePinError] = useState('')
@@ -1882,7 +1887,7 @@ export default function App() {
     }
 
     setTestMatchLoading(true)
-    setHomeWhilePreparing({ official: currentOfficialMatch, test: currentTestMatch })
+    setHomeWhilePreparing({ official: notClosed(currentOfficialMatch), test: notClosed(currentTestMatch) })
 
     try {
       // Clear previous test match locally
@@ -2094,8 +2099,12 @@ export default function App() {
   // The scoring screen is on (not setup, coin toss, match end or manual changes)
   const onScoringScreen = !!(matchId && !showCoinToss && !showMatchSetup && !showMatchEnd && !showManualAdjustments)
 
-  const homeOfficialMatch = homeWhilePreparing ? homeWhilePreparing.official : currentOfficialMatch
-  const homeTestMatch = homeWhilePreparing ? homeWhilePreparing.test : currentTestMatch
+  const notClosed = (m) => (m && closedMatchId != null && m.id === closedMatchId ? null : m)
+  const shownCurrentMatch = notClosed(currentMatch)
+  const shownMatchStatus = notClosed(matchStatus?.match) === null ? null : matchStatus
+  const shownMatchInfoData = notClosed(matchInfoData?.match) === null ? null : matchInfoData
+  const homeOfficialMatch = homeWhilePreparing ? homeWhilePreparing.official : notClosed(currentOfficialMatch)
+  const homeTestMatch = homeWhilePreparing ? homeWhilePreparing.test : notClosed(currentTestMatch)
 
   return (
     // Every screen is on the volleyui stone page (light only), match end and
@@ -2169,11 +2178,11 @@ export default function App() {
             connectionDebugInfo={connectionDebugInfo}
             showMatchSetup={showMatchSetup}
             matchId={matchId}
-            currentMatch={currentMatch}
+            currentMatch={shownCurrentMatch}
             matchInfoMenuOpen={matchInfoMenuOpen}
             setMatchInfoMenuOpen={setMatchInfoMenuOpen}
-            matchInfoData={matchInfoData}
-            matchStatus={matchStatus}
+            matchInfoData={shownMatchInfoData}
+            matchStatus={shownMatchStatus}
             currentOfficialMatch={homeOfficialMatch}
             currentTestMatch={homeTestMatch}
             isFullscreen={isFullscreen}
@@ -2314,7 +2323,8 @@ export default function App() {
               ) : showMatchEnd && matchId ? (
                 <MatchEnd
                   matchId={matchId}
-                  onGoHome={() => {
+                  onGoHome={({ closed = false } = {}) => {
+                    if (closed) setClosedMatchId(matchId)
                     setMatchId(null)
                     setShowMatchEnd(false)
                     setShowManualAdjustments(false)
