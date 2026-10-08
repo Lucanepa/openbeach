@@ -1,57 +1,109 @@
 import { useState, useEffect, useCallback } from 'react'
 
+async function deleteAllIndexedDB() {
+  if (typeof indexedDB === 'undefined' || !indexedDB.databases) return
+  const databases = await indexedDB.databases()
+  await Promise.all(
+    databases.map((db) => {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.deleteDatabase(db.name)
+        req.onsuccess = () => resolve()
+        req.onerror = () => reject(req.error)
+        req.onblocked = () => {
+          console.warn(`[SW] IndexedDB ${db.name} is blocked`)
+          resolve()
+        }
+      })
+    })
+  )
+}
+
+/** Resolves with the worker once it is installed (waiting), or null on failure/timeout. */
+function waitUntilInstalled(worker, timeoutMs) {
+  if (worker.state === 'installed') return Promise.resolve(worker)
+  return new Promise((resolve) => {
+    const done = (value) => {
+      clearTimeout(timer)
+      worker.removeEventListener('statechange', onState)
+      resolve(value)
+    }
+    const onState = () => {
+      if (worker.state === 'installed') done(worker)
+      else if (worker.state === 'redundant' || worker.state === 'activated') done(null)
+    }
+    const timer = setTimeout(() => done(null), timeoutMs)
+    worker.addEventListener('statechange', onState)
+  })
+}
+
 /**
- * Hook to detect service worker updates and provide update functionality
- * Works with vite-plugin-pwa in 'prompt' mode
+ * "Refresh to update" (UpdateBanner): activate the waiting service worker and
+ * reload this page with it (same URL, query and hash kept).
+ *
+ * Only this page reloads. Other pages of the app (the desktop app's scoreboard
+ * and scoresheet windows, a livescore tab next to the scorer) keep running;
+ * they get the new version the next time they load. Caches are not wiped and
+ * no worker is unregistered: the waiting worker is already fully precached and
+ * Workbox drops the outdated precache when it activates, so the app still
+ * loads offline right after the update. (Unregistering every worker made the
+ * next load install a fresh one, whose clients.claim() then took over every
+ * open page of the app.)
+ */
+export async function applyServiceWorkerUpdate({ clearIndexedDB = false, timeoutMs = 4000 } = {}) {
+  try {
+    if (clearIndexedDB) await deleteAllIndexedDB()
+
+    const sw = typeof navigator !== 'undefined' ? navigator.serviceWorker : null
+    const reg = sw ? await sw.getRegistration() : null
+    const waiting = reg?.waiting || (reg?.installing ? await waitUntilInstalled(reg.installing, timeoutMs) : null)
+    if (waiting) {
+      // Reload once the new worker controls this page, so the reload is served
+      // by it (with a timeout in case controllerchange never comes).
+      await new Promise((resolve) => {
+        const timer = setTimeout(resolve, timeoutMs)
+        sw.addEventListener('controllerchange', () => {
+          clearTimeout(timer)
+          resolve()
+        }, { once: true })
+        waiting.postMessage({ type: 'SKIP_WAITING' })
+      })
+    }
+  } catch (error) {
+    console.error('[SW] Update error:', error)
+  }
+  window.location.reload()
+}
+
+/**
+ * Hook to detect service worker updates and provide update functionality.
+ * Works with vite-plugin-pwa in 'prompt' mode (vite.config.js): a new worker
+ * stays waiting until the scorer taps "Refresh to update", so an update never
+ * activates, or reloads a page, on its own.
+ *
+ * It never reloads the page by itself. There used to be a global
+ * controllerchange -> reload listener here; with clients.claim() it reloaded
+ * every open page of the app whenever a worker activated: on the first
+ * install (a moment after the app opened), after every desktop app update or
+ * deploy (with skipWaiting the new worker activated on its own, possibly
+ * minutes later and mid-match) and whenever another page asked for the update
+ * or cleared the cache. The listener was also never removed, so it stayed
+ * armed after the home screen (UpdateBanner) gave way to a match.
  */
 export function useServiceWorker() {
   const [needRefresh, setNeedRefresh] = useState(false)
   const [offlineReady, setOfflineReady] = useState(false)
-  const [registration, setRegistration] = useState(null)
 
   useEffect(() => {
-    // Check if service worker is supported
     if (!('serviceWorker' in navigator)) {
       return
     }
 
-    let refreshing = false
-
-    // Listen for controller change (new SW activated)
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (refreshing) return
-      refreshing = true
-      window.location.reload()
-    })
-
-    // Check for existing registration
-    navigator.serviceWorker.getRegistration().then((reg) => {
-      if (!reg) return
-
-      setRegistration(reg)
-
-      // If there's a waiting worker, an update is available
-      if (reg.waiting) {
-        setNeedRefresh(true)
-        return
-      }
-
-      // If there's an installing worker, wait for it
-      if (reg.installing) {
-        trackInstalling(reg.installing)
-        return
-      }
-
-      // Listen for new updates
-      reg.addEventListener('updatefound', () => {
-        if (reg.installing) {
-          trackInstalling(reg.installing)
-        }
-      })
-    })
+    let cancelled = false
+    let registration = null
 
     function trackInstalling(worker) {
       worker.addEventListener('statechange', () => {
+        if (cancelled) return
         if (worker.state === 'installed') {
           if (navigator.serviceWorker.controller) {
             // New update available
@@ -64,72 +116,49 @@ export function useServiceWorker() {
       })
     }
 
+    function onUpdateFound() {
+      if (registration?.installing) {
+        trackInstalling(registration.installing)
+      }
+    }
+
+    navigator.serviceWorker.getRegistration().then((reg) => {
+      if (!reg || cancelled) return
+      registration = reg
+
+      // Always listen: a worker installing or waiting at mount must not stop
+      // later updates in this session from being noticed
+      reg.addEventListener('updatefound', onUpdateFound)
+
+      if (reg.waiting) {
+        setNeedRefresh(true)
+      } else if (reg.installing) {
+        trackInstalling(reg.installing)
+      }
+    }).catch(() => {})
+
     // Check for updates periodically (every 5 minutes)
     const intervalId = setInterval(() => {
       navigator.serviceWorker.getRegistration().then((reg) => {
         if (reg) {
-          reg.update().catch(console.error)
+          reg.update().catch(() => {}) // offline: nothing to do
         }
-      })
+      }).catch(() => {})
     }, 5 * 60 * 1000)
 
-    return () => clearInterval(intervalId)
+    return () => {
+      cancelled = true
+      clearInterval(intervalId)
+      registration?.removeEventListener('updatefound', onUpdateFound)
+    }
   }, [])
 
   /**
-   * Clear all caches and reload with the new version
+   * Activate the waiting worker and reload this page (URL kept)
    */
-  const updateServiceWorker = useCallback(async (clearIndexedDB = false) => {
-    try {
-      // Clear all caches
-      if ('caches' in window) {
-        const cacheNames = await caches.keys()
-        await Promise.all(
-          cacheNames.map((cacheName) => caches.delete(cacheName))
-        )
-      }
-
-      // Unregister all service workers (same as Options > Clear Cache)
-      if ('serviceWorker' in navigator) {
-        const registrations = await navigator.serviceWorker.getRegistrations()
-        await Promise.all(
-          registrations.map((reg) => reg.unregister())
-        )
-      }
-
-      // Optionally clear IndexedDB
-      if (clearIndexedDB) {
-        const databases = await indexedDB.databases()
-        await Promise.all(
-          databases.map((db) => {
-            return new Promise((resolve, reject) => {
-              const req = indexedDB.deleteDatabase(db.name)
-              req.onsuccess = () => {
-                resolve()
-              }
-              req.onerror = () => reject(req.error)
-              req.onblocked = () => {
-                console.warn(`[SW] IndexedDB ${db.name} is blocked`)
-                resolve()
-              }
-            })
-          })
-        )
-      }
-
-      // Tell waiting service worker to skip waiting and activate
-      if (registration?.waiting) {
-        registration.waiting.postMessage({ type: 'SKIP_WAITING' })
-      }
-
-      // Force reload from server (bypass cache)
-      window.location.reload()
-    } catch (error) {
-      console.error('[SW] Update error:', error)
-      // Still reload even if cache clearing fails
-      window.location.reload()
-    }
-  }, [registration])
+  const updateServiceWorker = useCallback((clearIndexedDB = false) => {
+    return applyServiceWorkerUpdate({ clearIndexedDB })
+  }, [])
 
   /**
    * Dismiss the update notification

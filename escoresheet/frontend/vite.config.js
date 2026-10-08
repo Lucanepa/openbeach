@@ -68,9 +68,16 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       disable: isCapacitor || isSubdomainBuild,
-      registerType: 'autoUpdate',
+      // 'prompt', not 'autoUpdate': a new worker waits until the scorer taps
+      // "Refresh to update" (UpdateBanner_beach). autoUpdate (skipWaiting) let
+      // it take over by itself after a deploy or a desktop app update, and
+      // clients.claim() then swapped the worker under every open page, the
+      // scoretable mid-match included (useServiceWorker_beach).
+      registerType: 'prompt',
       includeAssets: PWA_INCLUDE_ASSETS,
       workbox: {
+        skipWaiting: false,
+        clientsClaim: true,
         // Cache all assets for offline use
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
         // A multi-page app: no SPA fallback. With workbox's default every
