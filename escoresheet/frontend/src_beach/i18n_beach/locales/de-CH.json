@@ -1409,7 +1409,8 @@
     },
     "selected": "Uusgwählt",
     "scorerAttention": "Schriiber bruucht Ufmerksamkeit",
-    "acknowledge": "Bestätige"
+    "acknowledge": "Bestätige",
+    "linkDown": "Offline: kei Verbindig zum Matchblatt. Spielstand und Ufschlag sind villicht nöd aktuell."
   },
   "connection": {
     "title": "Verbindigsiirichtig",

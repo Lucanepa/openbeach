@@ -1409,7 +1409,8 @@
     },
     "selected": "Sélectionné",
     "scorerAttention": "Le marqueur demande votre attention",
-    "acknowledge": "Confirmer"
+    "acknowledge": "Confirmer",
+    "linkDown": "Hors ligne : pas de connexion à la feuille de match. Le score et le service peuvent ne pas être à jour."
   },
   "connection": {
     "title": "Configuration de connexion",

@@ -1409,7 +1409,8 @@
     },
     "selected": "Selezionato",
     "scorerAttention": "Il segnapunti chiede attenzione",
-    "acknowledge": "Conferma"
+    "acknowledge": "Conferma",
+    "linkDown": "Offline: nessuna connessione al referto. Punteggio e servizio potrebbero non essere aggiornati."
   },
   "connection": {
     "title": "Configurazione connessione",

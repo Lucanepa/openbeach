@@ -1409,7 +1409,8 @@
     },
     "selected": "Ausgewählt",
     "scorerAttention": "Schreiber braucht Aufmerksamkeit",
-    "acknowledge": "Bestätigen"
+    "acknowledge": "Bestätigen",
+    "linkDown": "Offline: keine Verbindung zum Matchblatt. Spielstand und Aufschlag sind evtl. nicht aktuell."
   },
   "connection": {
     "title": "Verbindungseinrichtung",

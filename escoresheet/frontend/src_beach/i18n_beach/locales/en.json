@@ -1410,7 +1410,8 @@
     },
     "selected": "Selected",
     "scorerAttention": "Scorer needs attention",
-    "acknowledge": "Acknowledge"
+    "acknowledge": "Acknowledge",
+    "linkDown": "Offline: no connection to the scoresheet. Score and server may be out of date."
   },
   "connection": {
     "title": "Connection setup",
