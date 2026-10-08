@@ -860,6 +860,7 @@
     },
     "confirmFailed": "Cela n'a pas été enregistré. Vérifiez la feuille de match et réessayez.",
     "bmpOnlyAfterPoint": "BMP : seulement après un point, avant l'échange suivant",
+    "bmpOncePerRally": "BMP : une fois par échange, de nouveau après le prochain échange terminé",
     "medicalEnd": "fin",
     "medicalCannotContinue": "Le joueur ne peut pas continuer (forfait)…",
     "medicalForfeitQuestion": "L'équipe est incomplète et perd le match par forfait. Confirmer ?",

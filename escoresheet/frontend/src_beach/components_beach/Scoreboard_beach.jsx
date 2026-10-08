@@ -5718,6 +5718,17 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     ).length
   }, [data?.events, data?.set])
 
+  // The "BMP request" of the court switch / TTO / set-end dialog: the BMPs the
+  // team has left, or 0 (no button) when a BMP was already taken on the rally
+  // that ended with the dialog's point. One BMP per completed rally
+  // (bmpAvailability_beach): the set-end dialog reopens after an unsuccessful
+  // BMP and offered a second one on the same rally.
+  const dialogBmpRemaining = useCallback((teamKey) => {
+    const remaining = Math.max(0, 2 - getUnsuccessfulBMPsUsed(teamKey))
+    const block = teamBmpBlockReason({ events: data?.events, setIndex: data?.set?.index, remaining, dialog: true })
+    return block ? 0 : remaining
+  }, [data?.events, data?.set?.index, getUnsuccessfulBMPsUsed])
+
   // Track previous timeout modal state to detect when countdown ends
   const prevTimeoutModalRef = useRef(null)
 
@@ -8213,7 +8224,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             const bmpUsed = getUnsuccessfulBMPsUsed(leftTeamKey)
                             const bmpRemaining = 2 - bmpUsed
                             const bmpExhausted = bmpRemaining <= 0
-                            // only between the point and the next rally (bmpAvailability_beach)
+                            // only between the point and the next rally, once per completed rally (bmpAvailability_beach)
                             const bmpBlock = teamBmpBlockReason({ events: data?.events, setIndex: data?.set?.index, setFinished: !data?.set || data.set.finished, rallyStatus, remaining: bmpRemaining })
                             const bmpAvailable = !bmpBlock
                             return (
@@ -8237,7 +8248,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   justifyContent: 'center',
                                   gap: `${6 * scaleFactor}px`
                                 }}
-                                title={bmpBlock === 'rally' || bmpBlock === 'moved_on' || bmpBlock === 'no_point' ? t('scoreboard.bmpOnlyAfterPoint', 'BMP: only after a point, before the next rally') : t('scoreboard.bmpRemaining', { count: bmpRemaining, defaultValue: 'Ball mark protocol ({{count}} left)' })}
+                                title={bmpBlock === 'bmp_taken' ? t('scoreboard.bmpOncePerRally', 'BMP: once per rally, again after the next completed rally') : bmpBlock === 'rally' || bmpBlock === 'moved_on' || bmpBlock === 'no_point' ? t('scoreboard.bmpOnlyAfterPoint', 'BMP: only after a point, before the next rally') : t('scoreboard.bmpRemaining', { count: bmpRemaining, defaultValue: 'Ball mark protocol ({{count}} left)' })}
                               >
                                 <span>BMP</span>
                                 <span className="tabular-nums" style={{
@@ -10112,7 +10123,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             const bmpUsed = getUnsuccessfulBMPsUsed(rightTeamKey)
                             const bmpRemaining = 2 - bmpUsed
                             const bmpExhausted = bmpRemaining <= 0
-                            // only between the point and the next rally (bmpAvailability_beach)
+                            // only between the point and the next rally, once per completed rally (bmpAvailability_beach)
                             const bmpBlock = teamBmpBlockReason({ events: data?.events, setIndex: data?.set?.index, setFinished: !data?.set || data.set.finished, rallyStatus, remaining: bmpRemaining })
                             const bmpAvailable = !bmpBlock
                             return (
@@ -10136,7 +10147,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   justifyContent: 'center',
                                   gap: `${6 * scaleFactor}px`
                                 }}
-                                title={bmpBlock === 'rally' || bmpBlock === 'moved_on' || bmpBlock === 'no_point' ? t('scoreboard.bmpOnlyAfterPoint', 'BMP: only after a point, before the next rally') : t('scoreboard.bmpRemaining', { count: bmpRemaining, defaultValue: 'Ball mark protocol ({{count}} left)' })}
+                                title={bmpBlock === 'bmp_taken' ? t('scoreboard.bmpOncePerRally', 'BMP: once per rally, again after the next completed rally') : bmpBlock === 'rally' || bmpBlock === 'moved_on' || bmpBlock === 'no_point' ? t('scoreboard.bmpOnlyAfterPoint', 'BMP: only after a point, before the next rally') : t('scoreboard.bmpRemaining', { count: bmpRemaining, defaultValue: 'Ball mark protocol ({{count}} left)' })}
                               >
                                 <span>BMP</span>
                                 <span className="tabular-nums" style={{
@@ -15747,11 +15758,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           team2TeamName={leftisTeam1 ? rightTeam.name : leftTeam.name}
           team1TeamColor={data?.team1Team?.color || '#ef4444'}
           team2TeamColor={data?.team2Team?.color || '#3b82f6'}
-          losingTeamBmpRemaining={(() => {
-            const losingTeam = setEndTimeModal.winner === 'team1' ? 'team2' : 'team1'
-            const unsuccessfulUsed = getUnsuccessfulBMPsUsed(losingTeam)
-            return Math.max(0, 2 - unsuccessfulUsed)
-          })()}
+          losingTeamBmpRemaining={dialogBmpRemaining(setEndTimeModal.winner === 'team1' ? 'team2' : 'team1')}
           onBmpRequest={(teamKey) => {
             // Close set end modal and open BMP modal
             setSetEndTimeModal(null)
@@ -16230,8 +16237,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 {/* BMP Request for losing team - only before countdown starts */}
                 {(() => {
                   const losingTeamKey = ttoModal.teamThatScored === 'team1' ? 'team2' : 'team1'
-                  const bmpUsed = getUnsuccessfulBMPsUsed(losingTeamKey)
-                  const bmpRemaining = 2 - bmpUsed
+                  // once per completed rally (bmpAvailability_beach)
+                  const bmpRemaining = dialogBmpRemaining(losingTeamKey)
                   const bmpAvailable = bmpRemaining > 0
 
                   if (!bmpAvailable) return null
@@ -16721,8 +16728,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             {/* BMP Request for losing team */}
             {(() => {
               const losingTeamKey = courtSwitchModal.teamThatScored === 'team1' ? 'team2' : 'team1'
-              const bmpUsed = getUnsuccessfulBMPsUsed(losingTeamKey)
-              const bmpRemaining = 2 - bmpUsed
+              // once per completed rally (bmpAvailability_beach)
+              const bmpRemaining = dialogBmpRemaining(losingTeamKey)
               const bmpAvailable = bmpRemaining > 0
 
               if (!bmpAvailable) return null

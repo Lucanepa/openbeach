@@ -861,6 +861,7 @@
     },
     "confirmFailed": "That was not saved. Check the scoresheet and try again.",
     "bmpOnlyAfterPoint": "BMP: only after a point, before the next rally",
+    "bmpOncePerRally": "BMP: once per rally, again after the next completed rally",
     "medicalEnd": "end",
     "medicalCannotContinue": "Player cannot continue (forfeit)…",
     "medicalForfeitQuestion": "The team is incomplete and forfeits the match. Confirm?",

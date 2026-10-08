@@ -860,6 +860,7 @@
     },
     "confirmFailed": "Das isch nöd gspeicheret worde. Bitte s Matchblatt prüefe und nomal probiere.",
     "bmpOnlyAfterPoint": "BMP: nur nach einem Punkt, vor dem nächsten Ballwechsel",
+    "bmpOncePerRally": "BMP: einmal pro Ballwechsel, wieder nach dem nächsten beendeten Ballwechsel",
     "medicalEnd": "Ende",
     "medicalCannotContinue": "Spieler kann nicht weiterspielen (Forfait)…",
     "medicalForfeitQuestion": "Das Team ist unvollständig und verliert das Spiel forfait. Bestätigen?",
