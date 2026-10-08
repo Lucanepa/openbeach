@@ -99,3 +99,24 @@ describe('tintOf', () => {
     expect(tintOf('red')).toBeNull()
   })
 })
+
+describe('phone action grid labels (a 4-column grid on a 360px phone)', () => {
+  // A word longer than its button broke anywhere ("Osservazio|ni" in Italian
+  // at 360-390px): every long word of the grid's labels carries a soft
+  // hyphen where it may break (the grid breaks words only there)
+  it('every word of 10+ letters among the grid labels has a soft hyphen, in every locale', async () => {
+    const SHY = '­'
+    for (const lang of ['en', 'de', 'de-CH', 'fr', 'it']) {
+      const { default: locale } = await import(`../../i18n_beach/locales/${lang}.json`)
+      const phone = locale.scoreboard.phone
+      const labels = [locale.scoreboard.sanction, phone.medical, phone.replay, phone.decision, locale.scoreboard.rosters, phone.scoresheet, phone.remarks, phone.refBmp]
+      for (const label of labels) {
+        // a hyphen ("Schiri-BMP") is a break point of its own
+        for (const word of label.split(/[\s-]+/)) {
+          if (word.replaceAll(SHY, '').length >= 10) expect(word, `${lang}: ${label}`).toContain(SHY)
+        }
+      }
+    }
+  })
+})
+
