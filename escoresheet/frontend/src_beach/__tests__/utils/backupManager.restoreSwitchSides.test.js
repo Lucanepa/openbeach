@@ -197,6 +197,19 @@ describe('restore by PIN: the live row\'s own Team A', () => {
     expect(lineup(out, 'team2')).toEqual({ I: 3, II: 21 })
   })
 
+  it('a row placed by the rule (no snapshot, no serve mark) synced before the swap: by its own Team A, the cloud coin toss\'s', async () => {
+    // set 1, no change of courts: A = team1 on the left when the row was
+    // written; the restored match takes the live row's Team A (team2)
+    const row = {
+      seq: 5, set_index: 1, type: 'point', payload: { team: 'team1' }, created_at: '2026-10-08T10:00:00.000Z',
+      lineup_left: T1(), lineup_right: T2()
+    }
+    const { out, restored } = await restore({ events: [row], liveState: swapped({ current_set: 1 }) })
+    expect(restored.coinTossTeamA).toBe('team2')
+    expect(lineup(out, 'team1')).toEqual({ I: 7, II: 12 })
+    expect(lineup(out, 'team2')).toEqual({ I: 3, II: 21 })
+  })
+
   it('names that do not tell (the same on both teams, or missing): the cloud coin toss\'s Team A', async () => {
     const same = await restore({
       match: { team1_data: { name: 'X' }, team2_data: { name: 'X' } },

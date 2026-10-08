@@ -927,6 +927,7 @@ export async function fetchMatchByPin(gamePin, gameN, { restoreByPin = apiMatchR
   // Team A from the coin toss (the matches table has the coin_toss JSON, no
   // coin_toss_team_a column: reading only that put Team A on team2 always)
   let teamAKey = matchData.coin_toss?.team_a || matchData.coin_toss_team_a || 'team1'
+  const cloudTeamAKey = teamAKey
   // The live row's own Team A (its team names): "Swap A/B" queues the coin
   // toss and writes the live state at once, so with the swap still in the
   // sync queue the cloud coin toss names the other team. A live row not
@@ -966,11 +967,15 @@ export async function fetchMatchByPin(gamePin, gameN, { restoreByPin = apiMatchR
       const snap = eventWithLineup.state_snapshot
       const bySnapshot = !!(snap && (snap.lineupA || snap.lineupB) &&
         (snap.currentSetIndex == null || Number(snap.currentSetIndex) === Number(setIndex)))
-      const snapAIsTeam1 = (snap?.teamAKey || teamAKey) === 'team1'
+      // The row's own Team A: its snapshot's, else the cloud coin toss's (a
+      // row synced before a "Swap A/B" still in the sync queue, not the live
+      // row's Team A the restored match takes; the swap keeps the A / B sides)
+      const rowTeamAKey = snap?.teamAKey === 'team1' || snap?.teamAKey === 'team2' ? snap.teamAKey : cloudTeamAKey
+      const snapAIsTeam1 = rowTeamAKey === 'team1'
       const markedLeft = rowLeftIsTeam1(eventWithLineup)
       const leftIsTeam1 = markedLeft !== null
         ? markedLeft
-        : isTeam1LeftInSet(setIndex, { coinTossTeamA: teamAKey, ...courtSides })
+        : isTeam1LeftInSet(setIndex, { coinTossTeamA: rowTeamAKey, ...courtSides })
 
       const team1RawLineup = bySnapshot
         ? (snapAIsTeam1 ? snap.lineupA : snap.lineupB)
