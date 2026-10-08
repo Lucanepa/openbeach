@@ -36,6 +36,7 @@ import { ScaleProvider } from '../../contexts_beach/ScaleContext_beach'
 import { LoggingProvider } from '../../contexts_beach/LoggingContext_beach'
 import { db } from '../../db_beach/db_beach'
 import Scoreboard from '../../components_beach/Scoreboard_beach'
+import { GHOST_CLICK_MS } from '../../hooks_beach/useConfirmAction_beach'
 
 class OfflineSocket {
   constructor() { this.readyState = 3 }
@@ -136,6 +137,9 @@ describe('Scoreboard_beach: the live state reads the current TTO, time-out and a
       expect(el).toBeTruthy()
       return el
     })
+    // a deliberate later tap: the clicks right after a confirm are swallowed
+    // (useConfirmAction_beach, GHOST_CLICK_MS)
+    await new Promise(r => setTimeout(r, GHOST_CLICK_MS + 100))
     fireEvent.click(stop)
     await waitFor(() => expect(liveRows('end_timeout')).toHaveLength(1), { timeout: 5000 })
     expect(liveRows('end_timeout')[0]).toMatchObject({ timeout_active: false, timeout_started_at: null, match_status: 'in_progress' })
@@ -157,12 +161,21 @@ describe('Scoreboard_beach: the live state reads the current TTO, time-out and a
     fireEvent.click(hint)
     await waitFor(() => expect(liveRows('end_tto')).toHaveLength(1), { timeout: 5000 })
 
-    const startedAt = Date.parse(liveRows('tto_start')[0].tto_started_at)
-    const [switchRow] = liveRows('court_switch')
-    expect(switchRow).toMatchObject({ tto_active: true, last_event_data: { reason: 'set1_tto_court_switch' } })
-    // the TTO's own start (set on Start TTO), not a fallback "now"
-    expect(Date.parse(switchRow.tto_started_at)).toBeLessThanOrEqual(startedAt)
-    expect(Date.parse(switchRow.tto_started_at)).toBeGreaterThanOrEqual(beforeStart)
-    expect(liveRows('end_tto')[0]).toMatchObject({ tto_active: false, tto_started_at: null })
+    const [startRow] = liveRows('tto_start')
+    const startedAt = Date.parse(startRow.tto_started_at)
+    expect(startRow).toMatchObject({ tto_active: true })
+    expect(startedAt).toBeGreaterThanOrEqual(beforeStart)
+    // The TTO's end is one scorer action with one live-state push
+    // (useScorerActions_beach, mergeLiveStatePushes): its change of courts
+    // goes out in the 'end_tto' push, the courts changed and the TTO over. A
+    // 'court_switch' push of its own, if any, carries the running TTO and its
+    // own start (set on Start TTO), never a fallback "now".
+    for (const switchRow of liveRows('court_switch')) {
+      expect(switchRow).toMatchObject({ tto_active: true })
+      expect(Date.parse(switchRow.tto_started_at)).toBe(startedAt)
+    }
+    const [endRow] = liveRows('end_tto')
+    expect(endRow).toMatchObject({ tto_active: false, tto_started_at: null })
+    expect(endRow.side_a).not.toBe(startRow.side_a)
   }, 30000)
 })
