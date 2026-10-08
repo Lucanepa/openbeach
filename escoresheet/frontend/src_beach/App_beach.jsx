@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useTranslation } from 'react-i18next'
 import { db } from './db_beach/db_beach'
 import MatchSetup, { preloadMatchSetup } from './components_beach/MatchSetup_beach'
-import Scoreboard from './components_beach/Scoreboard_beach'
+import Scoreboard, { preloadScoreboard } from './components_beach/Scoreboard_beach'
 import CoinToss from './components_beach/CoinToss_beach'
 import MatchEnd, { preloadMatchEnd } from './components_beach/MatchEnd_beach'
 import ManualAdjustments from './components_beach/ManualAdjustments_beach'
@@ -2281,13 +2281,19 @@ export default function App() {
                 <CoinToss
                   matchId={matchId}
                   onConfirm={async () => {
-                    setShowCoinToss(false)
-                    // Check if match was ended by forfait (skip to MatchEnd)
+                    // The next screen opens with the match on it: the coin
+                    // toss stays until it has read it (OB-3). A match ended
+                    // by forfait goes to Match End (no scoreboard first).
                     const m = await db.matches.get(matchId)
                     if (m?.status === 'ended') {
+                      await preloadMatchEnd(matchId)
+                      setShowCoinToss(false)
                       setShowMatchEnd(true)
+                      return
                     }
                     // Otherwise match status is set to 'live' by CoinToss component
+                    await preloadScoreboard(matchId)
+                    setShowCoinToss(false)
                   }}
                   onBack={async () => {
                     await preloadMatchSetup(matchId) // filled at once (OB-2)
