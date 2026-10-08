@@ -1,4 +1,4 @@
-// The owner's screencast of 2026-10-08 (batch VS): the team BMP, on the real scoring screen
+// The owner's screencast of 2026-10-08 (batch VS): MTO / RIT, on the real scoring screen
 // over the app's real Dexie database (fake IndexedDB), driven with taps.
 // Network is off: no relay socket, no fetch.
 import '../helpers/fakeIndexedDb'
@@ -75,51 +75,67 @@ async function startSet() {
   await waitFor(() => expect(button('Point A')).toBeTruthy(), { timeout: 5000 })
 }
 
-describe('Scoreboard_beach: team BMP (issues 3 and 14)', () => {
-  it('possible after a point, greyed during the next rally; Cancel logs nothing', async () => {
+describe('Scoreboard_beach: MTO / RIT are recorded (issue 4a)', () => {
+  it('start and end are logged events (synced), with the player; Undo removes them in turn and the countdown follows', async () => {
     const matchId = await setUpMatch()
     render(<ScaleProvider><AlertProvider><LoggingProvider><Scoreboard matchId={matchId} /></LoggingProvider></AlertProvider></ScaleProvider>)
     await startSet()
-
-    // rally in play: both team BMP buttons are greyed
-    expect(bmpButtons()).toHaveLength(2)
-    expect(bmpButtons().every(b => b.disabled)).toBe(true)
-
     fireEvent.click(button('Point A'))
     await waitFor(async () => expect((await ofType('point')).length).toBe(1))
-    await waitFor(() => expect(bmpButtons().every(b => !b.disabled)).toBe(true))
-
-    // ask, then cancel: nothing recorded
-    fireEvent.click(bmpButtons()[1])
-    await waitFor(() => expect(button('Cancel')).toBeTruthy())
-    fireEvent.click(button('Cancel'))
     await settle()
-    expect(await ofType('challenge')).toHaveLength(0)
-    expect((await jobs()).filter(j => j.payload?.payload?.type === 'challenge' || j.payload?.type === 'challenge')).toHaveLength(0)
 
-    // the next rally starts: greyed again
-    await waitFor(() => expect(button('Start rally')).toBeTruthy())
-    fireEvent.click(button('Start rally'))
-    await waitFor(() => expect(button('Point A')).toBeTruthy())
-    await waitFor(() => expect(bmpButtons().every(b => b.disabled)).toBe(true))
+    // Team A's #2 (Beta): player menu > Medical > MTO
+    const player = await waitFor(() => {
+      const el = document.querySelector('.court-player[data-team="team1"][data-player-number="2"]')
+      expect(el).toBeTruthy()
+      return el
+    })
+    fireEvent.click(player)
+    await waitFor(() => expect(document.querySelector('[data-player-action-menu]')).toBeTruthy())
+    fireEvent.click([...document.querySelectorAll('[data-player-action-menu] button')].find(b => b.textContent.includes('Medical')))
+    await waitFor(() => expect(document.querySelector('[data-medical-dropdown]')).toBeTruthy())
+    expect(document.querySelector('[data-medical-dropdown]').textContent).toContain('#2 Beta')
+    fireEvent.click([...document.querySelectorAll('[data-medical-dropdown] button')].find(b => b.textContent.startsWith('MTO')))
 
-    // a confirmed BMP still records the request, then its outcome as a sub-event
-    fireEvent.click(button('Point A'))
-    await waitFor(async () => expect((await ofType('point')).length).toBe(2))
-    await waitFor(() => expect(bmpButtons().every(b => !b.disabled)).toBe(true))
-    fireEvent.click(bmpButtons()[1])
-    await waitFor(() => expect(button('Unsuccessful')).toBeTruthy())
-    fireEvent.click(button('Unsuccessful'))
-    await waitFor(() => expect(button('Confirm Unsuccessful')).toBeTruthy())
-    fireEvent.click(button('Confirm Unsuccessful'))
-    await waitFor(async () => expect(await ofType('challenge_outcome')).toHaveLength(1))
-    const [req] = await ofType('challenge')
-    const [out] = await ofType('challenge_outcome')
-    expect(req.payload).toMatchObject({ team: 'team2', score: { team1: 2, team2: 0 } })
-    expect(Math.floor(out.seq)).toBe(req.seq)
-    // and the BMP is spent for this point
-    await waitFor(() => expect(bmpButtons().every(b => b.disabled)).toBe(true))
+    await waitFor(async () => expect(await ofType('mto')).toHaveLength(1))
+    const [mto] = await ofType('mto')
+    expect(mto.payload).toMatchObject({ team: 'team1', playerNumber: 2, playerName: 'Beta', team1Points: 1, team2Points: 0, servingTeam: 'team1' })
+    expect(mto.payload.startTime).toBeTruthy()
+    await waitFor(() => expect(document.querySelector('[data-testid="medical-player"]')?.textContent).toContain('#2 Beta'))
+
+    // the forfeit asks first; Back returns to the countdown
+    fireEvent.click(document.querySelector('[data-testid="medical-forfeit"]'))
+    await waitFor(() => expect(document.querySelector('[data-testid="medical-forfeit-confirm"]')).toBeTruthy())
+    fireEvent.click(button('Back'))
+    await waitFor(() => expect(document.querySelector('[data-testid="medical-recovered"]')).toBeTruthy())
+    fireEvent.click(document.querySelector('[data-testid="medical-recovered"]'))
+
+    await waitFor(async () => expect(await ofType('medical_end')).toHaveLength(1))
+    await settle()
+    const [end] = await ofType('medical_end')
+    expect(end.payload).toMatchObject({ kind: 'mto', startSeq: mto.seq, team: 'team1', playerNumber: 2, playerName: 'Beta', outcome: 'recovered' })
+    expect(typeof end.payload.duration).toBe('number')
+    // no extra remark, no raw update of the start
+    expect(await ofType('remark')).toHaveLength(0)
+    expect((await ofType('mto'))[0].payload.outcome).toBeUndefined()
+    // both reach the sync queue
+    const q = await jobs()
+    for (const e of [mto, end]) expect(q.some(j => j.payload?.external_id === `${SEED}:e:${e.id}`)).toBe(true)
+    expect(document.querySelector('[data-testid="last-action"]').textContent).toContain('MTO end – A #2 Beta')
+
+    // Undo the end: the countdown is back; undo the start: it is gone
+    fireEvent.click(button('Undo'))
+    await waitFor(() => expect(document.querySelector('[data-testid="undo-confirm"]')).toBeTruthy())
+    fireEvent.click([...document.querySelectorAll('[data-testid="undo-confirm"] button')].at(-1))
+    await waitFor(async () => expect(await ofType('medical_end')).toHaveLength(0))
+    await waitFor(() => expect(document.querySelector('[data-testid="medical-recovered"]')).toBeTruthy())
+    expect(await ofType('mto')).toHaveLength(1)
+    await settle()
+    fireEvent.click(button('Undo'))
+    await waitFor(() => expect(document.querySelector('[data-testid="undo-confirm"]')).toBeTruthy())
+    fireEvent.click([...document.querySelectorAll('[data-testid="undo-confirm"] button')].at(-1))
+    await waitFor(async () => expect(await ofType('mto')).toHaveLength(0))
+    await waitFor(() => expect(document.querySelector('[data-testid="medical-recovered"]')).toBeNull())
     cleanup()
   }, 30000)
 })
-

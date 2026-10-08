@@ -845,7 +845,11 @@
       "confirm": "Undo"
     },
     "confirmFailed": "That was not saved. Check the scoresheet and try again.",
-    "bmpOnlyAfterPoint": "BMP: only after a point, before the next rally"
+    "bmpOnlyAfterPoint": "BMP: only after a point, before the next rally",
+    "medicalEnd": "end",
+    "medicalCannotContinue": "Player cannot continue (forfeit)…",
+    "medicalForfeitQuestion": "The team is incomplete and forfeits the match. Confirm?",
+    "medicalConfirmForfeit": "Confirm forfeit"
   },
   "settings": {
     "title": "Settings",

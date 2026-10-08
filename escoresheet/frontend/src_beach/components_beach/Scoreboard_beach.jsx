@@ -37,6 +37,7 @@ import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot } from '../utils_beach/stateSnapshot_beach'
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
 import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
+import { medicalStartPayload, medicalEndPayload, findOpenMedical, formatMedicalDuration, medicalSecondsLeft, MEDICAL_RECOVERY_SECONDS } from '../utils_beach/medicalEvents_beach'
 
 // Sport type for beach volleyball
 const SPORT_TYPE = 'beach'
@@ -212,7 +213,8 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   })
 
   const [injuryDropdown, setInjuryDropdown] = useState(null)
-  // MTO/RIT countdown modal: { type: 'mto'|'rit', ritType?: 'no_blood'|'toilet'|'weather', team, playerNumber, countdown: 300, started: boolean, startedAt?: ISO string, eventId?: number }
+  // MTO/RIT countdown modal: { type: 'mto'|'rit', ritType?: 'no_blood'|'toilet'|'weather', team, playerNumber, playerName, countdown: 300, started: boolean, startedAt?: ISO string, startSeq?: number }
+  // (the running MTO / RIT is also rebuilt from the events: medicalEvents_beach)
   const [medicalModal, setMedicalModal] = useState(null)
 
   const setIntervalDuration = 60 // 1 minute for beach volleyball (FIVB standard)
@@ -4700,31 +4702,23 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       eventDescription = `${resultLabel}`
     } else if (event.type === 'court_switch') {
       eventDescription = t('scoreboard.courtSwitch', 'Court switch')
-    } else if (event.type === 'mto') {
-      // MTO (Medical Timeout) with team A/B label and player number
-      const mtoTeamLabel = event.payload?.team === data?.match?.coinTossTeamA ? 'A' : 'B'
-      const mtoPlayerNumber = event.payload?.playerNumber || '?'
-      const mtoOutcome = event.payload?.outcome
-      if (mtoOutcome) {
-        const outcomeLabel = mtoOutcome === 'recovered' ? t('scoreboard.recovered', 'Recovered') : t('scoreboard.forfeit', 'Forfeit')
-        eventDescription = `MTO — ${t('scoreboard.team', 'Team')} ${mtoTeamLabel} #${mtoPlayerNumber} (${outcomeLabel})`
+    } else if (event.type === 'mto' || event.type === 'rit' || event.type === 'medical_end') {
+      // "MTO – B #2 Weber", "RIT (Toilet) – B #2 Weber",
+      // "MTO end – B #2 Weber (3:12, recovered)"
+      const mp = event.payload || {}
+      const kind = event.type === 'medical_end' ? mp.kind : event.type
+      const medTeamLabel = mp.team === (data?.match?.coinTossTeamA || 'team1') ? 'A' : 'B'
+      const medWho = `${medTeamLabel} #${mp.playerNumber ?? '?'}${mp.playerName ? ` ${mp.playerName}` : ''}`
+      const ritTypeLabel = mp.ritType === 'no_blood' ? t('scoreboard.ritNoBlood', 'No blood') :
+        mp.ritType === 'toilet' ? t('scoreboard.ritToilet', 'Toilet') :
+          mp.ritType === 'weather' ? t('scoreboard.ritWeather', 'Weather') : ''
+      const kindLabel = kind === 'rit' ? `RIT${ritTypeLabel ? ` (${ritTypeLabel})` : ''}` : 'MTO'
+      if (event.type === 'medical_end' || mp.outcome) {
+        const outcomeLabel = mp.outcome === 'forfeit' ? t('scoreboard.forfeit', 'Forfeit') : t('scoreboard.recovered', 'Recovered')
+        const dur = mp.duration !== undefined ? `${formatMedicalDuration(mp.duration)}, ` : ''
+        eventDescription = `${kindLabel} ${t('scoreboard.medicalEnd', 'end')} – ${medWho} (${dur}${outcomeLabel.toLowerCase()})`
       } else {
-        eventDescription = `MTO — ${t('scoreboard.team', 'Team')} ${mtoTeamLabel} #${mtoPlayerNumber}`
-      }
-    } else if (event.type === 'rit') {
-      // RIT (Recovery Interruption Time) with team A/B label, player number, and type
-      const ritTeamLabel = event.payload?.team === data?.match?.coinTossTeamA ? 'A' : 'B'
-      const ritPlayerNumber = event.payload?.playerNumber || '?'
-      const ritType = event.payload?.ritType
-      const ritTypeLabel = ritType === 'no_blood' ? t('scoreboard.ritNoBlood', 'No blood') :
-                          ritType === 'toilet' ? t('scoreboard.ritToilet', 'Toilet') :
-                          ritType === 'weather' ? t('scoreboard.ritWeather', 'Weather') : ritType
-      const ritOutcome = event.payload?.outcome
-      if (ritOutcome) {
-        const outcomeLabel = ritOutcome === 'recovered' ? t('scoreboard.recovered', 'Recovered') : t('scoreboard.forfeit', 'Forfeit')
-        eventDescription = `RIT (${ritTypeLabel}) — ${t('scoreboard.team', 'Team')} ${ritTeamLabel} #${ritPlayerNumber} (${outcomeLabel})`
-      } else {
-        eventDescription = `RIT (${ritTypeLabel}) — ${t('scoreboard.team', 'Team')} ${ritTeamLabel} #${ritPlayerNumber}`
+        eventDescription = `${kindLabel} – ${medWho}`
       }
     } else if (event.type === 'medical_timeout') {
       // Legacy medical_timeout support
@@ -6109,34 +6103,58 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     setPlayerActionMenu(null)
   }, [playerActionMenu, data?.set])
 
+  // The player's name for the medical dialogs and events
+  const medicalPlayerName = useCallback((team, playerNumber) => {
+    const players = team === 'team1' ? data?.team1Players : data?.team2Players
+    const p = (players || []).find(pl => String(pl.number) === String(playerNumber))
+    if (!p) return ''
+    if (p.lastName) return p.lastName
+    if (p.name) return String(p.name).trim()
+    return p.firstName || ''
+  }, [data?.team1Players, data?.team2Players])
+
+  // Start an MTO (medical time-out) or a RIT (recovery interruption time):
+  // 5 minutes recovery time (FIVB beach rule 17.1.2). One event, logged with
+  // logEvent (synced, undoable), carrying the player, the score and the server
+  // (the scoresheet's medical chart and remarks read it: medicalEvents_beach).
+  const startMedical = useCallback(async (kind, ritType) => {
+    if (!injuryDropdown || !data?.set) return
+    const { team, playerNumber } = injuryDropdown
+    const startedAt = new Date().toISOString()
+    const playerName = medicalPlayerName(team, playerNumber)
+    setInjuryDropdown(null)
+
+    const startSeq = await logEvent(kind, medicalStartPayload({
+      kind,
+      team,
+      playerNumber,
+      playerName,
+      ritType,
+      startTime: startedAt,
+      team1Points: data.set.team1Points || 0,
+      team2Points: data.set.team2Points || 0,
+      servingTeam: getCurrentServe()
+    }))
+
+    setMedicalModal({
+      type: kind,
+      ritType: kind === 'rit' ? ritType : undefined,
+      team,
+      playerNumber,
+      playerName,
+      countdown: MEDICAL_RECOVERY_SECONDS,
+      started: true,
+      startedAt,
+      startSeq
+    })
+    sendActionToReferee('medical', { kind, ritType: kind === 'rit' ? ritType : null, team, playerNumber, playerName, startTime: startedAt, durationSec: MEDICAL_RECOVERY_SECONDS })
+  }, [injuryDropdown, data?.set, logEvent, getCurrentServe, medicalPlayerName, sendActionToReferee])
+
   // Handle Start MTO (Medical Timeout) - 5 minute recovery time, unlimited per match
   const handleStartMTO = useCallback(async () => {
     cLogger.logHandler('handleStartMTO', { team: injuryDropdown?.team, player: injuryDropdown?.playerNumber })
-    if (!injuryDropdown || !data?.set) return
-
-    const { team, playerNumber } = injuryDropdown
-    const startedAt = new Date().toISOString()
-
-    // Log MTO event with start time
-    const eventId = await logEvent('mto', {
-      team,
-      playerNumber,
-      startTime: startedAt
-    })
-
-    // Start countdown modal
-    setMedicalModal({
-      type: 'mto',
-      team,
-      playerNumber,
-      countdown: 300,
-      started: true,
-      startedAt,
-      eventId
-    })
-
-    setInjuryDropdown(null)
-  }, [injuryDropdown, data?.set, logEvent])
+    await startMedical('mto')
+  }, [injuryDropdown, startMedical])
 
   // Handle Start RIT (Recovery Interruption Time) - 5 minute, only ONE per match
   const handleStartRIT = useCallback(async (ritType) => {
@@ -6148,82 +6166,31 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       showAlert(t('scoreboard.ritAlreadyUsed', 'RIT already used this match'), 'error')
       return
     }
+    await startMedical('rit', ritType)
+  }, [injuryDropdown, data?.set, ritUsedThisMatch, showAlert, t, startMedical])
 
-    const { team, playerNumber } = injuryDropdown
-    const startedAt = new Date().toISOString()
-
-    // Log RIT event with start time and type
-    const eventId = await logEvent('rit', {
-      team,
-      playerNumber,
-      ritType,
-      startTime: startedAt
-    })
-
-    // Start countdown modal
-    setMedicalModal({
-      type: 'rit',
-      ritType,
-      team,
-      playerNumber,
-      countdown: 300,
-      started: true,
-      startedAt,
-      eventId
-    })
-
-    setInjuryDropdown(null)
-  }, [injuryDropdown, data?.set, logEvent, ritUsedThisMatch, showAlert, t])
-
-  // Handle MTO/RIT outcome - player recovered or forfeit
-  const handleMedicalOutcome = useCallback(async (outcome) => {
+  // The MTO / RIT ends: the player recovered, or cannot continue (forfeit).
+  // A `medical_end` event (logEvent: synced, undoable) refers to the start; no
+  // separate remark (the scoresheet writes the remark line from the events).
+  const [medicalForfeitConfirm, setMedicalForfeitConfirm] = useState(false)
+  const medicalEndingRef = useRef(new Set())
+  const runMedicalOutcome = useConfirmAction(onConfirmFailed)
+  const handleMedicalOutcome = useCallback((outcome) => runMedicalOutcome(async () => {
     cLogger.logHandler('handleMedicalOutcome', { outcome, medicalModal })
     if (!medicalModal || !data?.set) return
-
-    const { type, ritType, team, playerNumber, startedAt, eventId } = medicalModal
-    const endTime = new Date().toISOString()
-    const startTime = new Date(startedAt).getTime()
-    const endTimeMs = new Date(endTime).getTime()
-    const durationSeconds = Math.floor((endTimeMs - startTime) / 1000)
-    const durationMinutes = Math.floor(durationSeconds / 60)
-    const durationRemainder = durationSeconds % 60
-
-    // Format times for remark
-    const startDate = new Date(startedAt)
-    const endDate = new Date(endTime)
-    const startTimeStr = `${String(startDate.getHours()).padStart(2, '0')}:${String(startDate.getMinutes()).padStart(2, '0')}`
-    const endTimeStr = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`
-    const durationStr = `${durationMinutes}:${String(durationRemainder).padStart(2, '0')}`
-
-    // Get team label (A/B)
-    const teamLabel = team === data?.match?.coinTossTeamA ? 'A' : 'B'
-    const typeLabel = type === 'mto' ? 'MTO' : `RIT (${ritType === 'no_blood' ? 'No blood' : ritType === 'toilet' ? 'Toilet' : 'Weather'})`
-    const outcomeLabel = outcome === 'recovered' ? 'Recovered' : 'Forfeit'
-
-    // Update the event with end time, duration, and outcome
-    if (eventId) {
-      const existingEvent = await db.events.get(eventId)
-      if (existingEvent) {
-        await db.events.update(eventId, {
-          payload: {
-            ...existingEvent.payload,
-            endTime,
-            duration: durationSeconds,
-            outcome
-          }
-        })
-      }
-    }
-
-    // Log remark with all details
-    const remarkText = `${typeLabel} - Team ${teamLabel} #${playerNumber} - Start: ${startTimeStr}, End: ${endTimeStr}, Duration: ${durationStr}, Outcome: ${outcomeLabel}`
-    await logEvent('remark', {
-      text: remarkText,
-      fullRemarks: remarkText
-    })
-
-    // Close the modal
+    const modal = medicalModal
     setMedicalModal(null)
+    setMedicalForfeitConfirm(false)
+
+    const { type, team, playerNumber } = modal
+    const startEvent = (data.events || []).find(e => e.seq === modal.startSeq && e.type === type) || {
+      type,
+      seq: modal.startSeq,
+      payload: { team, playerNumber, playerName: modal.playerName, ritType: modal.ritType, startTime: modal.startedAt }
+    }
+    if (startEvent.seq !== undefined) medicalEndingRef.current.add(startEvent.seq)
+    await logEvent('medical_end', medicalEndPayload(startEvent, { endTime: new Date().toISOString(), outcome }))
+    sendActionToReferee('end_medical', { kind: type, team, playerNumber, outcome })
 
     // If forfeit, generate FIVB remark and trigger forfeit flow
     if (outcome === 'forfeit') {
@@ -6245,7 +6212,43 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
       await handleForfait(team, 'medical', 'match')
     }
-  }, [medicalModal, data?.set, data?.match?.coinTossTeamA, data?.match?.remarks, data?.servingTeam, data?.team1Team?.name, data?.team2Team?.name, matchId, logEvent, handleForfait])
+  }), [runMedicalOutcome, medicalModal, data?.set, data?.events, data?.match?.coinTossTeamA, data?.match?.remarks, data?.servingTeam, data?.team1Team?.name, data?.team2Team?.name, matchId, logEvent, handleForfait, sendActionToReferee])
+
+  // The running MTO / RIT follows the events: a reload (or an undone end)
+  // brings its countdown back, an undone start closes it
+  const openMedicalEvent = useMemo(() => findOpenMedical(data?.events || []), [data?.events])
+  const medicalSeenRef = useRef(null)
+  useEffect(() => {
+    const events = data?.events || []
+    for (const seq of [...medicalEndingRef.current]) {
+      if (events.some(e => e.type === 'medical_end' && e.payload?.startSeq === seq)) medicalEndingRef.current.delete(seq)
+    }
+    if (medicalModal?.started) {
+      const inEvents = events.some(e => e.seq === medicalModal.startSeq && e.type === medicalModal.type)
+      if (inEvents) medicalSeenRef.current = medicalModal.startSeq
+      // seen in the events, now gone: its start was undone
+      else if (medicalSeenRef.current === medicalModal.startSeq) {
+        medicalSeenRef.current = null
+        setMedicalModal(null)
+        setMedicalForfeitConfirm(false)
+      }
+      return
+    }
+    if (!openMedicalEvent || medicalEndingRef.current.has(openMedicalEvent.seq)) return
+    const p = openMedicalEvent.payload || {}
+    const startedAt = p.startTime || openMedicalEvent.ts
+    setMedicalModal({
+      type: openMedicalEvent.type,
+      ritType: p.ritType,
+      team: p.team,
+      playerNumber: p.playerNumber,
+      playerName: p.playerName || medicalPlayerName(p.team, p.playerNumber),
+      countdown: medicalSecondsLeft(startedAt),
+      started: true,
+      startedAt,
+      startSeq: openMedicalEvent.seq
+    })
+  }, [openMedicalEvent, data?.events, medicalModal?.started, medicalModal?.startSeq, medicalModal?.type, medicalPlayerName])
 
   // Cancel medical dropdown
   const cancelMedical = useCallback(() => {
@@ -14704,7 +14707,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           }
         }
 
-        const teamLabel = injuryDropdown.team === data?.match?.coinTossTeamA ? 'A' : 'B'
+        const teamLabel = injuryDropdown.team === (data?.match?.coinTossTeamA || 'team1') ? 'A' : 'B'
         const playerNumber = injuryDropdown.playerNumber
 
         return (
@@ -14737,7 +14740,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 }}
               >
                 <div style={{ marginBottom: '8px', fontSize: '11px', fontWeight: 600, color: 'var(--text)', textAlign: 'center', borderBottom: '1px solid var(--ov-hairline)', paddingBottom: '6px' }}>
-                  {t('scoreboard.medical', 'Medical')} - {t('scoreboard.team', 'Team')} {teamLabel} #{playerNumber}
+                  {t('scoreboard.medical', 'Medical')} – {t('scoreboard.team', 'Team')} {teamLabel} #{playerNumber}{medicalPlayerName(injuryDropdown.team, playerNumber) ? ` ${medicalPlayerName(injuryDropdown.team, playerNumber)}` : ''}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {/* MTO - Medical Timeout */}
@@ -14945,12 +14948,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         >
           <div style={{ padding: '24px', textAlign: 'center' }}>
             {/* Team and Player Info */}
-            <div style={{ marginBottom: '16px', fontSize: '14px', color: 'var(--muted)' }}>
-              {t('scoreboard.team', 'Team')} {medicalModal.team === data?.match?.coinTossTeamA ? 'A' : 'B'} #{medicalModal.playerNumber}
+            <div data-testid="medical-player" style={{ marginBottom: '16px', fontSize: '20px', fontWeight: 600, color: 'var(--text)' }}>
+              {t('scoreboard.team', 'Team')} {medicalModal.team === (data?.match?.coinTossTeamA || 'team1') ? 'A' : 'B'} #{medicalModal.playerNumber}{medicalModal.playerName ? ` ${medicalModal.playerName}` : ''}
             </div>
 
             {/* Countdown Display */}
-            <div style={{
+            <div className="tabular-nums" style={{
               fontSize: '72px',
               fontWeight: 700,
               fontFamily: scoreFont === 'orbitron' ? "'Orbitron', monospace" : 'inherit',
@@ -14958,7 +14961,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               marginBottom: '8px',
               lineHeight: 1
             }}>
-              {Math.floor(medicalModal.countdown / 60)}:{String(medicalModal.countdown % 60).padStart(2, '0')}
+              {formatMedicalDuration(medicalModal.countdown)}
             </div>
 
             {/* Progress Bar */}
@@ -14971,73 +14974,76 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               marginBottom: '24px'
             }}>
               <div style={{
-                width: `${(medicalModal.countdown / 300) * 100}%`,
+                width: `${(medicalModal.countdown / MEDICAL_RECOVERY_SECONDS) * 100}%`,
                 height: '100%',
                 background: medicalModal.countdown <= 30 ? 'var(--ov-danger)' : medicalModal.type === 'mto' ? '#0284c7' : '#f97316',
                 transition: 'width 0.1s linear'
               }} />
             </div>
 
-            {/* Outcome Buttons */}
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-              {/* Player Recovered */}
-              <button
-                onClick={() => handleMedicalOutcome('recovered')}
-                style={{
-                  padding: '12px 24px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  background: 'var(--ov-success)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'var(--ov-success)'
-                  e.currentTarget.style.transform = 'scale(1.02)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'var(--ov-success)'
-                  e.currentTarget.style.transform = 'scale(1)'
-                }}
-              >
-                {t('scoreboard.playerRecovered', 'Player Recovered')}
-              </button>
-
-              {/* Forfeit */}
-              <button
-                onClick={() => handleMedicalOutcome('forfeit')}
-                style={{
-                  padding: '12px 24px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  background: 'var(--ov-danger)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#b91c1c'
-                  e.currentTarget.style.transform = 'scale(1.02)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'var(--ov-danger)'
-                  e.currentTarget.style.transform = 'scale(1)'
-                }}
-              >
-                {t('scoreboard.forfeit', 'Forfeit')}
-              </button>
-            </div>
+            {/* Player recovered: the main action. The forfeit sits apart, small,
+                and asks first (it ends the match). */}
+            {!medicalForfeitConfirm ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '20px' }}>
+                <button
+                  data-testid="medical-recovered"
+                  onClick={() => handleMedicalOutcome('recovered')}
+                  style={{
+                    padding: '14px 24px',
+                    minHeight: '56px',
+                    fontSize: '18px',
+                    fontWeight: 700,
+                    background: 'var(--ov-success)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {t('scoreboard.playerRecovered', 'Player Recovered')}
+                </button>
+                <button
+                  data-testid="medical-forfeit"
+                  className="secondary"
+                  onClick={() => setMedicalForfeitConfirm(true)}
+                  style={{
+                    alignSelf: 'center',
+                    padding: '10px 16px',
+                    minHeight: '44px',
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    background: 'transparent',
+                    color: 'var(--ov-danger-text)',
+                    border: '1px solid var(--ov-hairline-strong)',
+                    borderRadius: '8px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {t('scoreboard.medicalCannotContinue', 'Player cannot continue (forfeit)…')}
+                </button>
+              </div>
+            ) : (
+              <div data-testid="medical-forfeit-confirm" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <p style={{ fontSize: '16px', color: 'var(--text)', margin: 0 }}>
+                  {t('scoreboard.medicalForfeitQuestion', 'The team is incomplete and forfeits the match. Confirm?')}
+                </p>
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                  <button
+                    className="secondary"
+                    onClick={() => setMedicalForfeitConfirm(false)}
+                    style={{ padding: '12px 20px', minHeight: '48px', fontSize: '16px', fontWeight: 600 }}
+                  >
+                    {t('common.back', 'Back')}
+                  </button>
+                  <button
+                    onClick={() => handleMedicalOutcome('forfeit')}
+                    style={{ padding: '12px 20px', minHeight: '48px', fontSize: '16px', fontWeight: 700, background: 'var(--ov-danger)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+                  >
+                    {t('scoreboard.medicalConfirmForfeit', 'Confirm forfeit')}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </Modal>
       )}

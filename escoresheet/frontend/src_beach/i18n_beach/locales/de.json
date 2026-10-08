@@ -844,7 +844,11 @@
       "confirm": "Rückgängig machen"
     },
     "confirmFailed": "Das wurde nicht gespeichert. Bitte das Matchblatt prüfen und erneut versuchen.",
-    "bmpOnlyAfterPoint": "BMP: nur nach einem Punkt, vor dem nächsten Ballwechsel"
+    "bmpOnlyAfterPoint": "BMP: nur nach einem Punkt, vor dem nächsten Ballwechsel",
+    "medicalEnd": "Ende",
+    "medicalCannotContinue": "Spieler kann nicht weiterspielen (Forfait)…",
+    "medicalForfeitQuestion": "Das Team ist unvollständig und verliert das Spiel forfait. Bestätigen?",
+    "medicalConfirmForfeit": "Forfait bestätigen"
   },
   "settings": {
     "title": "Einstellungen",
