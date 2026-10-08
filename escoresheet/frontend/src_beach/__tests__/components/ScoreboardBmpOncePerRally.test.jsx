@@ -6,7 +6,7 @@
 // Network is off: no relay socket, no fetch.
 import '../helpers/fakeIndexedDb'
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest'
-import { render, fireEvent, waitFor, cleanup } from '@testing-library/react'
+import { render, fireEvent, waitFor, cleanup, configure } from '@testing-library/react'
 import '../../i18n_beach'
 import { AlertProvider } from '../../contexts_beach/AlertContext_beach'
 import { ScaleProvider } from '../../contexts_beach/ScaleContext_beach'
@@ -14,6 +14,12 @@ import { LoggingProvider } from '../../contexts_beach/LoggingContext_beach'
 import { db } from '../../db_beach/db_beach'
 import Scoreboard from '../../components_beach/Scoreboard_beach'
 import { GHOST_CLICK_MS } from '../../hooks_beach/useConfirmAction_beach'
+
+// Every wait below ends on what the screen or the database shows, never on a
+// timer. A BMP outcome is several writes: from the tap on "Confirm
+// Unsuccessful" to its outcome row took up to 0.75 s with the machine loaded
+// alone, and past the default 1 s of waitFor in a full-suite run (2026-10-08)
+configure({ asyncUtilTimeout: 10000 })
 
 class OfflineSocket {
   constructor() { this.readyState = 3 }

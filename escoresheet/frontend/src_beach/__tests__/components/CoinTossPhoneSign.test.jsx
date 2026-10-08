@@ -5,7 +5,7 @@
 // a new captain clears the record with the image. SignaturePad is mocked: its
 // phone / draw buttons call onSave as it does.
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest'
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, act, waitFor, configure } from '@testing-library/react'
 import Dexie from 'dexie'
 import { IDBFactory, IDBKeyRange } from 'fake-indexeddb'
 
@@ -68,7 +68,11 @@ async function openOrderAndSignature(side = 0) {
 const click = (el) => act(async () => { fireEvent.click(el) })
 const row = () => db.matches.get(matchId)
 
-describe('CoinToss_beach: Sign on phone', () => {
+// Each test draws the whole coin toss screen and waits on its writes: 2.5 to
+// 3.5 s with the machine loaded, 5.4 s in a full-suite run, past the default
+// 5 s (2026-10-08). Nothing here waits on a timer, so the waits get time too.
+configure({ asyncUtilTimeout: 10000 })
+describe('CoinToss_beach: Sign on phone', { timeout: 30000 }, () => {
   it('the captain\'s pad offers the phone with its team\'s slot, the relay key, the game PIN and the context', async () => {
     await seed()
     await openOrderAndSignature(0)
