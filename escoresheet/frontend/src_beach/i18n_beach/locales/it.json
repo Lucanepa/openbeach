@@ -542,7 +542,9 @@
       "confirmSetEnd": "Conferma fine del set",
       "confirmMatchEnd": "Conferma fine della partita",
       "ballMarkProtocol": "Protocollo segno della palla",
-      "refereeBallMarkProtocol": "Protocollo segno della palla (arbitro)"
+      "refereeBallMarkProtocol": "Protocollo segno della palla (arbitro)",
+      "confirmReplay": "Ripetere lo scambio?",
+      "confirmReplayBody": "Nessun punto viene assegnato e la stessa squadra serve di nuovo."
     },
     "sanctions": {
       "teamSanctions": "Sanzioni di squadra",
@@ -608,7 +610,14 @@
       "keyboardShortcuts": "Scorciatoie da tastiera",
       "searchEvents": "Cerca eventi…",
       "openScoreboard": "Apri tabellone",
-      "showRosters": "Mostra le formazioni"
+      "showRosters": "Mostra le formazioni",
+      "sections": {
+        "matchInfo": "Info partita",
+        "corrections": "Correzioni",
+        "devicesData": "Dispositivi e dati",
+        "settings": "Impostazioni",
+        "endOfMatch": "Fine partita"
+      }
     },
     "stopMatch": {
       "title": "Interrompi la partita",

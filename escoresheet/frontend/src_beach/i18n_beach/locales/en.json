@@ -543,7 +543,9 @@
       "confirmSetEnd": "Confirm set end",
       "confirmMatchEnd": "Confirm match end",
       "ballMarkProtocol": "Ball mark protocol",
-      "refereeBallMarkProtocol": "Referee ball mark protocol"
+      "refereeBallMarkProtocol": "Referee ball mark protocol",
+      "confirmReplay": "Replay rally?",
+      "confirmReplayBody": "No point is scored and the same team serves again."
     },
     "sanctions": {
       "teamSanctions": "Team sanctions",
@@ -609,7 +611,14 @@
       "keyboardShortcuts": "Keyboard shortcuts",
       "searchEvents": "Search events…",
       "openScoreboard": "Open scoreboard",
-      "showRosters": "Show rosters"
+      "showRosters": "Show rosters",
+      "sections": {
+        "matchInfo": "Match info",
+        "corrections": "Corrections",
+        "devicesData": "Devices and data",
+        "settings": "Settings",
+        "endOfMatch": "End of match"
+      }
     },
     "stopMatch": {
       "title": "Stop the match",

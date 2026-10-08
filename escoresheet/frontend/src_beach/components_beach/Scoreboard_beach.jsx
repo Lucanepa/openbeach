@@ -7,6 +7,7 @@ import { db } from '../db_beach/db_beach'
 import LegacyModal from './Modal_beach'
 
 import MenuList from './MenuList_beach'
+import { matchMenuSections, toMenuListItems } from './matchMenu_beach'
 import SyncProgressModal_beach from './SyncProgressModal_beach'
 import ScoreboardOptionsModal from './options/ScoreboardOptionsModal_beach'
 import ConnectionSetupModal from './options/ConnectionSetupModal_beach'
@@ -325,6 +326,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   const [rightDelaysDropdownOpen, setRightDelaysDropdownOpen] = useState(false) // Narrow mode dropdown for right team delays/sanctions buttons
   const [toSubDetailsModal, setToSubDetailsModal] = useState(null) // { type: 'timeout', side: 'left'|'right' } | null
   const [replayRallyConfirm, setReplayRallyConfirm] = useState(null) // { event: Event, description: string, selectedOption: 'swap'|'replay' } | null
+  const [replayConfirm, setReplayConfirm] = useState(false) // "Replay rally" during a rally waits for this confirmation
   const [stopMatchModal, setStopMatchModal] = useState(null) // 'select' | null - Stop the match modal selection
   const [stopMatchTeamSelect, setStopMatchTeamSelect] = useState(null) // { pendingAction: 'forfeit' } | null - Team selection for forfeit
   const [stopMatchConfirm, setStopMatchConfirm] = useState(null) // { type: 'forfeit'|'impossibility', team?: 'team1'|'team2' } | null - Confirmation modal
@@ -3567,9 +3569,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   }, [logEvent, isFirstRally, data?.team1Players, data?.team2Players, data?.events, data?.set, data?.match, matchId, getNextSubSeq, syncToReferee, checkAccidentalRallyStart, accidentalRallyStartDuration, getCurrentServe, getServingPlayer, leftisTeam1, leftTeam, rightTeam])
 
   const handleReplay = useCallback(async () => {
-    // During rally: just log replay event (no point to undo)
+    // During rally: ask first, confirmReplay logs the replay event (no point to undo)
     if (rallyStatus === 'in_play') {
-      await logEvent('replay')
+      setReplayConfirm(true)
       return
     }
     // After point: show confirmation modal to undo point
@@ -3612,7 +3614,20 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         setReplayRallyConfirm({ event: pointEvent, description, selectedOption: 'swap' }) // Default to swap
       }
     }
-  }, [logEvent, rallyStatus, canReplayRally, data?.events, data?.team1Team?.name, data?.team2Team?.name])
+  }, [rallyStatus, canReplayRally, data?.events, data?.team1Team?.name, data?.team2Team?.name])
+
+  // Confirmed "Replay rally": only while the rally is still in play. Closes
+  // first, and a double tap logs one replay (useConfirmAction)
+  const runReplayConfirm = useConfirmAction(onConfirmFailed)
+  const confirmReplay = useCallback(() => runReplayConfirm(async () => {
+    setReplayConfirm(false)
+    if (rallyStatus !== 'in_play') return
+    await logEvent('replay')
+  }), [runReplayConfirm, logEvent, rallyStatus])
+
+  const cancelReplay = useCallback(() => {
+    setReplayConfirm(false)
+  }, [])
 
   // Handle Improper Request sanction
   const handleImproperRequest = useCallback((side) => {
@@ -4743,7 +4758,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const serverNumber = servingLineup?.['I']?.number || servingLineup?.['I'] || '?'
       eventDescription = `${t('scoreboard.team', 'Team')} ${servingTeamLabel} ${t('scoreboard.serves', 'serves')} #${serverNumber}`
     } else {
-      eventDescription = event.type
+      // Never show an internal type name: "some_event" reads "Some event"
+      const readable = String(event.type || '').replace(/_/g, ' ')
+      eventDescription = readable.charAt(0).toUpperCase() + readable.slice(1)
       if (teamName) {
         eventDescription += ` — ${teamName}`
       }
@@ -6577,6 +6594,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
       const key = e.key
 
+      // These modals need a decision: Enter confirms them, Escape does not
+      // close them, and the point keys wait. (It was never defined: every
+      // key press threw a ReferenceError.)
+      const hasDecisionModal = !!(sanctionConfirmModal || sanctionConfirm || accidentalRallyConfirmModal ||
+        accidentalPointConfirmModal || undoConfirm || replayConfirm || replayRallyConfirm || courtSwitchModal)
 
       // Confirm key (Enter)
       if (key === keyBindings.confirm) {
@@ -6600,6 +6622,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         if (undoConfirm) {
           e.preventDefault()
           handleUndo()
+          return
+        }
+        if (replayConfirm) {
+          e.preventDefault()
+          confirmReplay()
           return
         }
         if (replayRallyConfirm) {
@@ -6672,8 +6699,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     keybindingsEnabled, keyBindings, editingKey, showOptionsInMenu, keybindingsModalOpen,
     rallyStatus, handleStartRally, handlePoint, handleTimeout, handleUndo,
     playerActionMenu, sanctionDropdown,
-    timeoutModal, menuModal,sanctionConfirmModal, accidentalRallyConfirmModal,
-    accidentalPointConfirmModal, undoConfirm, replayRallyConfirm, handleReplayRally, handleDecisionChange
+    timeoutModal, menuModal, sanctionConfirmModal, sanctionConfirm, courtSwitchModal, accidentalRallyConfirmModal,
+    accidentalPointConfirmModal, undoConfirm, replayConfirm, replayRallyConfirm, confirmReplay, handleReplayRally, handleDecisionChange
   ])
 
   // Team-column sanctions: scoring actions, so at least 44 px (volleyui §7),
@@ -7329,137 +7356,79 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             buttonClassName={SB_TOOLBAR_BTN}
             showArrow={false}
             position="right"
-            items={[
-              {
-                key: 'open-scoreboard',
-                icon: <MonitorPlay size={18} />,
-                label: t('scoreboard.menu.openScoreboard', 'Open scoreboard'),
-                onClick: () => {
-                  const opened = openAppWindow('/scoreboard_beach.html?mode=local', { features: 'width=1280,height=720' })
-                  if (!opened.ok) {
-                    showAlert(t('header.allowPopups'), 'warning')
-                  }
+            items={toMenuListItems(matchMenuSections(t, {
+              showRosters: () => {
+                setShowRosters(true)
+              },
+              showSanctions: () => {
+                setShowSanctions(true)
+              },
+              showActionLog: () => {
+                setShowLogs(true)
+              },
+              openRemarks: () => {
+                setShowRemarks(true)
+              },
+              openMatchSetup: onOpenMatchSetup ? () => { onOpenMatchSetup() } : undefined,
+              manualChanges: () => {
+                setShowManualPanel(true)
+              },
+              openScoreboard: () => {
+                const opened = openAppWindow('/scoreboard_beach.html?mode=local', { features: 'width=1280,height=720' })
+                if (!opened.ok) {
+                  showAlert(t('header.allowPopups'), 'warning')
                 }
               },
-              {
-                key: 'action-log',
-                icon: <ScrollText size={18} />,
-                label: t('scoreboard.menu.showActionLog', 'Show action log'),
-                onClick: () => {
-                  setShowLogs(true)
-                }
+              showPins: () => {
+                setShowPinsModal(true)
               },
-              {
-                key: 'sanctions',
-                icon: <ListChecks size={18} />,
-                label: t('scoreboard.menu.showSanctionsResults', 'Show sanctions and results'),
-                onClick: () => {
-                  setShowSanctions(true)
-                }
-              },
-              {
-                key: 'manual',
-                icon: <SlidersHorizontal size={18} />,
-                label: t('scoreboard.menu.manualChanges', 'Manual changes'),
-                onClick: () => {
-                  setShowManualPanel(true)
-                }
-              },
-              {
-                key: 'remarks',
-                icon: <MessageSquareText size={18} />,
-                label: t('scoreboard.menu.openRemarksRecording', 'Open remarks recording'),
-                onClick: () => {
-                  setShowRemarks(true)
-                }
-              },
-              {
-                key: 'stop-match',
-                label: t('scoreboard.menu.stopMatch', 'Stop the match'),
-                icon: <Ban size={18} className="text-red-600" />,
-                onClick: () => {
-                  setStopMatchModal('select')
-                },
-                className: 'text-red-600 hover:bg-red-50'
-              },
-              {
-                key: 'rosters',
-                icon: <Users size={18} />,
-                label: t('scoreboard.menu.showRosters', 'Show rosters'),
-                onClick: () => {
-                  setShowRosters(true)
-                }
-              },
-              {
-                key: 'pins',
-                icon: <KeyRound size={18} />,
-                label: t('scoreboard.menu.showPins', 'Show PINs'),
-                onClick: () => {
-                  setShowPinsModal(true)
-                }
-              },
-              ...(onOpenMatchSetup ? [{
-                key: 'match-setup',
-                icon: <IdCard size={18} />,
-                label: t('scoreboard.menu.showMatchSetup', 'Show match setup'),
-                onClick: () => {
-                  onOpenMatchSetup()
-                }
-              }] : []),
-              { separator: true },
-              {
-                key: 'export',
-                icon: <Download size={18} />,
-                label: t('scoreboard.menu.downloadGameData', 'Download game data (JSON)'),
-                onClick: async () => {
-                  try {
-                    // Export all database data
-                    const allMatches = await db.matches.toArray()
-                    const allTeams = await db.teams.toArray()
-                    const allPlayers = await db.players.toArray()
-                    const allSets = await db.sets.toArray()
-                    const allEvents = await db.events.toArray()
-                    const allReferees = await db.referees.toArray()
-                    const allScorers = await db.scorers.toArray()
+              downloadGameData: async () => {
+                try {
+                  // Export all database data
+                  const allMatches = await db.matches.toArray()
+                  const allTeams = await db.teams.toArray()
+                  const allPlayers = await db.players.toArray()
+                  const allSets = await db.sets.toArray()
+                  const allEvents = await db.events.toArray()
+                  const allReferees = await db.referees.toArray()
+                  const allScorers = await db.scorers.toArray()
 
-                    const exportData = {
-                      exportDate: new Date().toISOString(),
-                      matchId: matchId,
-                      matches: allMatches,
-                      teams: allTeams,
-                      players: allPlayers,
-                      sets: allSets,
-                      events: allEvents,
-                      referees: allReferees,
-                      scorers: allScorers
-                    }
-
-                    // Create a blob and download
-                    const jsonString = JSON.stringify(exportData, null, 2)
-                    const blob = new Blob([jsonString], { type: 'application/json' })
-                    const url = URL.createObjectURL(blob)
-                    const link = document.createElement('a')
-                    link.href = url
-                    link.download = `database_export_${matchId}_${new Date().toISOString().split('T')[0]}.json`
-                    document.body.appendChild(link)
-                    link.click()
-                    document.body.removeChild(link)
-                    URL.revokeObjectURL(url)
-                  } catch (error) {
-                    console.error('Error exporting database:', error)
-                    showAlert(t('scoreboard.errors.exportFailed'), 'error')
+                  const exportData = {
+                    exportDate: new Date().toISOString(),
+                    matchId: matchId,
+                    matches: allMatches,
+                    teams: allTeams,
+                    players: allPlayers,
+                    sets: allSets,
+                    events: allEvents,
+                    referees: allReferees,
+                    scorers: allScorers
                   }
+
+                  // Create a blob and download
+                  const jsonString = JSON.stringify(exportData, null, 2)
+                  const blob = new Blob([jsonString], { type: 'application/json' })
+                  const url = URL.createObjectURL(blob)
+                  const link = document.createElement('a')
+                  link.href = url
+                  link.download = `database_export_${matchId}_${new Date().toISOString().split('T')[0]}.json`
+                  document.body.appendChild(link)
+                  link.click()
+                  document.body.removeChild(link)
+                  URL.revokeObjectURL(url)
+                } catch (error) {
+                  console.error('Error exporting database:', error)
+                  showAlert(t('scoreboard.errors.exportFailed'), 'error')
                 }
               },
-              {
-                key: 'options',
-                icon: <Settings size={18} />,
-                label: t('scoreboard.menu.options', 'Options'),
-                onClick: () => {
-                  setShowOptionsInMenu(true)
-                }
-              }
-            ]}
+              options: () => {
+                setShowOptionsInMenu(true)
+              },
+              stopMatch: () => {
+                setStopMatchModal('select')
+              },
+              className: 'text-red-600 hover:bg-red-50'
+            }))}
           />
         </div>
       </ScoreboardToolbar>
@@ -7839,12 +7808,21 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 <div style={{
                   padding: '4px 8px',
                   fontSize: '12px',
-                  background: 'rgba(250, 204, 21, 0.15)',
-                  border: '1px solid rgba(250, 204, 21, 0.3)',
+                  background: '#fffbeb', // amber-50
+                  border: '1px solid #fcd34d', // amber-300
                   borderRadius: '4px',
-                  color: '#fde047'
+                  color: '#92400e', // amber-800 (pale yellow text was unreadable on the light screen)
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5em'
                 }}>
-                  {t('scoreboard.sanctions.sanctionedFormalWarning')} <Card fill="currentColor" />
+                  {/* A real yellow card, in line with the text (OpenVolley a2d056c6) */}
+                  <span
+                    className="sanction-card yellow"
+                    aria-hidden="true"
+                    style={{ width: '0.75em', height: '1.05em', borderRadius: '0.15em', flexShrink: 0, boxShadow: '0 0 0 1px rgba(146, 64, 14, 0.25)' }}
+                  />
+                  <span>{t('scoreboard.sanctions.sanctionedFormalWarning')}</span>
                 </div>
               )}
             </div>
@@ -7990,20 +7968,23 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   const dashIdx = actionLabel.indexOf(' — ')
                   if (dashIdx !== -1) actionLabel = actionLabel.substring(0, dashIdx)
 
+                  // Each line is one fixed line (ellipsis, the full text on
+                  // hover), and the team line is always there: a description
+                  // that wrapped, or a team line that came and went, made the
+                  // court shrink, then grow back with the next action
+                  const oneLineStyle = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.25 }
                   return (
-                    <div style={{ wordBreak: 'break-word' }}>
-                      <div className="font-semibold uppercase tracking-[0.12em] text-stone-500" style={{ fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px` }}>
+                    <div data-testid="last-action" title={[actionLabel, teamName, scoreStr].filter(Boolean).join(' · ')} style={{ minWidth: 0, maxWidth: '100%' }}>
+                      <div className="font-semibold uppercase tracking-[0.12em] text-stone-500" style={{ ...oneLineStyle, fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px` }}>
                         {t('scoreboard.labels.lastAction', 'Last action')}
                       </div>
-                      <div className="text-stone-900" style={{ fontSize: `${DESIGN_VMIN * 0.018 * scaleFactor}px`, fontWeight: 600, marginTop: `${2 * scaleFactor}px` }}>
+                      <div className="text-stone-900" style={{ ...oneLineStyle, fontSize: `${DESIGN_VMIN * 0.018 * scaleFactor}px`, fontWeight: 600, marginTop: `${2 * scaleFactor}px` }}>
                         {actionLabel}
                       </div>
-                      {teamName && (
-                        <div style={{ fontSize: `${DESIGN_VMIN * 0.015 * scaleFactor}px`, color: 'var(--muted)', marginTop: `${1 * scaleFactor}px` }}>
-                          {teamName}
-                        </div>
-                      )}
-                      <div className="tabular-nums" style={{ fontSize: `${DESIGN_VMIN * 0.015 * scaleFactor}px`, color: 'var(--muted)', marginTop: `${1 * scaleFactor}px` }}>
+                      <div style={{ ...oneLineStyle, fontSize: `${DESIGN_VMIN * 0.015 * scaleFactor}px`, color: 'var(--muted)', marginTop: `${1 * scaleFactor}px` }}>
+                        {teamName || '\u00a0'}
+                      </div>
+                      <div className="tabular-nums" style={{ ...oneLineStyle, fontSize: `${DESIGN_VMIN * 0.015 * scaleFactor}px`, color: 'var(--muted)', marginTop: `${1 * scaleFactor}px` }}>
                         {scoreStr}
                       </div>
                     </div>
@@ -10603,12 +10584,21 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 <div style={{
                   padding: '4px 8px',
                   fontSize: '12px',
-                  background: 'rgba(250, 204, 21, 0.15)',
-                  border: '1px solid rgba(250, 204, 21, 0.3)',
+                  background: '#fffbeb', // amber-50
+                  border: '1px solid #fcd34d', // amber-300
                   borderRadius: '4px',
-                  color: '#fde047'
+                  color: '#92400e', // amber-800 (pale yellow text was unreadable on the light screen)
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5em'
                 }}>
-                  {t('scoreboard.sanctions.sanctionedFormalWarning')} <Card fill="currentColor" />
+                  {/* A real yellow card, in line with the text (OpenVolley a2d056c6) */}
+                  <span
+                    className="sanction-card yellow"
+                    aria-hidden="true"
+                    style={{ width: '0.75em', height: '1.05em', borderRadius: '0.15em', flexShrink: 0, boxShadow: '0 0 0 1px rgba(146, 64, 14, 0.25)' }}
+                  />
+                  <span>{t('scoreboard.sanctions.sanctionedFormalWarning')}</span>
                 </div>
               )}
             </div>
@@ -13699,9 +13689,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         >
           <div style={{ padding: '20px', maxHeight: '80vh', overflowY: 'auto' }}>
             <section className="panel">
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px', overflowX: 'auto' }}>
+              {/* Sanctions and results side by side while each keeps ~22rem, stacked
+                  below that; both columns may shrink (min-width 0): long team
+                  names (two players each) wrap instead of pushing the results
+                  table out of the dialog. As OpenVolley 190ae045. */}
+              <div data-testid="sanctions-results-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 22rem), 1fr))', gap: '32px' }}>
                 {/* Left half: Sanctions */}
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <h4 style={{ marginBottom: '16px', fontSize: '14px', fontWeight: 600 }}>{t('scoreboard.sanctions.title')}</h4>
                   {/* Improper Request Row */}
                   <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -13831,7 +13825,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 </div>
 
                 {/* Right half: Results */}
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <h4 style={{ marginBottom: '16px', fontSize: '14px', fontWeight: 600 }}>Results</h4>
                   {(() => {
                     // Get current left and right teams
@@ -13937,12 +13931,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
                       return (
                         <div>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px', tableLayout: 'fixed' }}>
                             <thead>
                               <tr>
                                 <th colSpan="4" style={{ padding: '4px', textAlign: 'center', borderBottom: '1px solid var(--ov-hairline-strong)', width: '42%' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                    <span style={{ fontSize: '10px', wordBreak: 'break-word' }}>{leftTeamName}</span>
+                                    <span style={{ fontSize: '10px', fontWeight: 700, overflowWrap: 'anywhere', minWidth: 0 }}>{leftTeamName}</span>
                                     <span style={{
                                       padding: '1px 6px',
                                       borderRadius: '3px',
@@ -13956,7 +13950,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 <th style={{ padding: '4px', fontSize: '8px', width: '16%' }}>Dur</th>
                                 <th colSpan="4" style={{ padding: '4px', textAlign: 'center', borderBottom: '1px solid var(--ov-hairline-strong)', width: '42%' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                    <span style={{ fontSize: '10px', wordBreak: 'break-word' }}>{rightTeamName}</span>
+                                    <span style={{ fontSize: '10px', fontWeight: 700, overflowWrap: 'anywhere', minWidth: 0 }}>{rightTeamName}</span>
                                     <span style={{
                                       padding: '1px 6px',
                                       borderRadius: '3px',
@@ -14010,7 +14004,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               </tr>
                               <tr>
                                 <td style={{ padding: '4px 2px', textAlign: 'left', fontWeight: 600, fontSize: '8px' }}>Winner:</td>
-                                <td colSpan="5" style={{ padding: '4px 2px', textAlign: 'left', fontSize: '8px' }}>
+                                <td colSpan="5" style={{ padding: '4px 2px', textAlign: 'left', fontSize: '8px', overflowWrap: 'anywhere' }}>
                                   {winnerTeamName} ({winnerScore})
                                 </td>
                               </tr>
@@ -14087,13 +14081,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     const playedSets = allSets.filter(s => s.team1Points > 0 || s.team2Points > 0 || s.finished || s.startTime)
 
                     return (
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px', tableLayout: 'fixed' }}>
                         <thead>
                           <tr>
                             <th style={{ padding: '4px 2px', textAlign: 'center', width: '8%' }}></th>
                             <th colSpan="4" style={{ padding: '4px', textAlign: 'center', borderBottom: '1px solid var(--ov-hairline-strong)', width: '38%' }}>
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                <span style={{ fontSize: '10px', wordBreak: 'break-word' }}>{leftTeamName}</span>
+                                <span style={{ fontSize: '10px', fontWeight: 700, overflowWrap: 'anywhere', minWidth: 0 }}>{leftTeamName}</span>
                                 <span style={{
                                   padding: '1px 6px',
                                   borderRadius: '3px',
@@ -14107,7 +14101,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             <th style={{ padding: '4px 2px', fontSize: '8px', width: '8%' }}>Dur</th>
                             <th colSpan="4" style={{ padding: '4px', textAlign: 'center', borderBottom: '1px solid var(--ov-hairline-strong)', width: '38%' }}>
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                <span style={{ fontSize: '10px', wordBreak: 'break-word' }}>{rightTeamName}</span>
+                                <span style={{ fontSize: '10px', fontWeight: 700, overflowWrap: 'anywhere', minWidth: 0 }}>{rightTeamName}</span>
                                 <span style={{
                                   padding: '1px 6px',
                                   borderRadius: '3px',
@@ -16960,6 +16954,27 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               </button>
               <button type="button" onClick={handleUndo} className={cn(modalPrimaryClass, 'h-12 px-5')}>
                 {t('scoreboard.undoConfirm.confirm')}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {replayConfirm && (
+        <Modal
+          title={t('scoreboard.modals.confirmReplay')}
+          open={true}
+          onClose={cancelReplay}
+          width={420}
+        >
+          <div className="ov-kit" data-testid="replay-confirm">
+            <p className="m-0 text-sm text-stone-600">{t('scoreboard.modals.confirmReplayBody')}</p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="button" onClick={cancelReplay} className={cn(modalCancelClass, 'h-12 px-5')}>
+                {t('common.cancel')}
+              </button>
+              <button type="button" onClick={confirmReplay} className={cn(modalPrimaryClass, 'h-12 px-5')}>
+                {t('scoreboard.buttons.replay')}
               </button>
             </div>
           </div>
