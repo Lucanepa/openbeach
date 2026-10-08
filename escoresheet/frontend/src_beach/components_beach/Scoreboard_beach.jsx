@@ -16587,7 +16587,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             width={500}
             zIndex={2100}
           >
-            <div style={{ padding: '24px' }}>
+            <div className="bmp-outcome-body" style={{ padding: '24px' }}>
               <p style={{ marginBottom: '16px', fontSize: '18px', color: 'var(--muted)', textAlign: 'center' }}>
                 {isReferee ? (
                   'Referee ball mark check'
@@ -16786,7 +16786,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   <>
                     {/* Team BMP: Successful | Unsuccessful | Mark Unavailable in a row */}
                     {/* Button row */}
-                    <div style={{ display: 'flex', flexDirection: 'row', gap: '8px' }}>
+                    <div className="bmp-outcome-row" style={{ display: 'flex', flexDirection: 'row', gap: '8px' }}>
                       <button
                         onClick={() => setBmpSelectedOutcome(bmpSelectedOutcome === 'successful' ? null : 'successful')}
                         style={{
