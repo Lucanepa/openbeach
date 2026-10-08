@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { reloadWithReason } from '../diagnostics_beach/reload_beach'
 
 async function deleteAllIndexedDB() {
   if (typeof indexedDB === 'undefined' || !indexedDB.databases) return
@@ -71,7 +72,7 @@ export async function applyServiceWorkerUpdate({ clearIndexedDB = false, timeout
   } catch (error) {
     console.error('[SW] Update error:', error)
   }
-  window.location.reload()
+  reloadWithReason(clearIndexedDB ? 'sw-update-clear-db' : 'sw-update')
 }
 
 /**

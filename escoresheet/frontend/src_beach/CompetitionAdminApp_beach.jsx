@@ -5,6 +5,7 @@ import ExcelUpload from './components_beach/admin/ExcelUpload_beach'
 import CompMatchEditor from './components_beach/admin/CompMatchEditor_beach'
 import { COMPETITIONS_ENABLED } from './utils_beach/features_beach'
 import { BRAND } from './brand_beach'
+import { reloadWithReason } from './diagnostics_beach/reload_beach'
 
 const headerStyle = {
   display: 'flex',
@@ -206,7 +207,7 @@ function CompetitionAdmin() {
           <button onClick={() => { setView('upload'); setEditingMatch(null) }} style={navBtnStyle(view === 'upload')}>Upload Excel</button>
           <div style={{ width: 1, height: 24, background: '#374151', margin: '0 8px' }} />
           <span style={{ color: '#9ca3af', fontSize: 13 }}>{profile?.first_name || user.email}</span>
-          <button onClick={() => window.location.href = '/'} style={{ padding: '6px 12px', background: '#374151', color: '#9ca3af', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>
+          <button onClick={() => reloadWithReason('admin-back-home', { how: 'href', url: '/' })} style={{ padding: '6px 12px', background: '#374151', color: '#9ca3af', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>
             Scorer App
           </button>
         </div>

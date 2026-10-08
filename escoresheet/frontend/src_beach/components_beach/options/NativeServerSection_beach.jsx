@@ -7,6 +7,7 @@ import { getBackendOverride, isNativeApp } from '../../utils_beach/backendConfig
 import { OptionRow, OptionSection } from './optionRows_beach'
 import { Button } from '../../ui/volleyui/Button.jsx'
 import { IconButton } from '../../ui/volleyui/IconButton.jsx'
+import { reloadWithReason } from '../../diagnostics_beach/reload_beach'
 
 /**
  * Android app only (Capacitor), after OpenVolley's NativeServerSection: the
@@ -36,7 +37,7 @@ export default function NativeServerSection() {
   }
 
   // A history entry: Android's Back returns to the scorer (MainActivity)
-  const openView = (path) => { window.location.assign(path) }
+  const openView = (path) => { reloadWithReason('open-view', { how: 'assign', url: path }) }
 
   return (
     <OptionSection title={t('options.nativeServerTitle', 'Server')}>
@@ -80,7 +81,7 @@ export default function NativeServerSection() {
           </div>
           <ServerConnectionScreen
             skipIfAutoConnect={false}
-            onConnected={() => window.location.reload()}
+            onConnected={() => reloadWithReason('server-connected')}
           />
         </div>,
         document.body

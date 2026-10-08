@@ -19,7 +19,7 @@ import { apiFrom } from '../lib_beach/apiClient_beach'
 import { isBackendAvailable, isVenueMode } from '../utils_beach/backendConfig_beach'
 import { useSyncQueue } from '../hooks_beach/useSyncQueue_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
-import { Bell, ChevronDown, Loader2, Maximize, Moon, RefreshCw, Sun, TriangleAlert, X } from 'lucide-react'
+import { Bell, ChevronDown, Download, Loader2, Maximize, Moon, RefreshCw, Sun, TriangleAlert, X } from 'lucide-react'
 import { cn } from '../ui/volleyui/cn.js'
 import { Card } from '../ui/volleyui/Card.jsx'
 import { Button } from '../ui/volleyui/Button.jsx'
@@ -30,6 +30,8 @@ import { NarrowScreenOverlay } from './dashboards/EntryKit_beach.jsx'
 import { HEADER_BAR, HEADER_BTN, HEADER_BTN_ON, MENU_PANEL, MENU_SUBROW, MENU_ROW_ON } from './chromeClasses_beach'
 import { timeSecondsLabel } from '../ui/volleyui/format.js'
 import { BRAND } from '../brand_beach'
+import { useDiagCommits } from '../diagnostics_beach/commits_beach'
+import { diagnosticsState, exportDiagnostics } from '../diagnostics_beach/index_beach'
 
 // Get current version from package.json (injected by Vite at build time)
 const currentVersion = __APP_VERSION__
@@ -172,6 +174,8 @@ function useSyncedFontSize(texts, containerWidth, baseFontSize, minFontSize, isS
 const LINK_DOWN_AFTER_MS = 5000
 
 export default function Referee({ matchId, onExit, isMasterMode }) {
+  // diagnostics mode: React commits per user action (nothing while it is off)
+  useDiagCommits('referee')
   const { t } = useTranslation()
   const { vmin } = useScaledLayout()
   const { showAlert } = useAlert()
@@ -2182,7 +2186,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   }
 
   return (
-    <div style={{
+    <div data-diag="referee" style={{
       height: '100dvh', // Use dynamic viewport height (respects iOS browser chrome)
       maxHeight: '100dvh',
       width: '100vw',
@@ -2242,6 +2246,20 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             },
             { divider: true }
           ] : []),
+          // Diagnostics mode on (?diag=1): the referee tablet's lines leave
+          // only through this export (no Options on this screen)
+          ...(diagnosticsState().on ? [
+            {
+              icon: <Download size={14} aria-hidden="true" />,
+              label: t('options.exportDiagnostics'),
+              onClick: async () => {
+                const result = await exportDiagnostics().catch(() => false)
+                if (result === 'empty') showAlert(t('options.diagnosticsEmpty'), 'info')
+                else if (!result) showAlert(t('options.diagnosticsExportFailed'), 'error')
+              }
+            },
+            { divider: true }
+          ] : []),
           // Refresh (always visible)
           {
             icon: <RefreshCw size={14} aria-hidden="true" />,
@@ -2261,7 +2279,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       />
 
       {/* Main content wrapper - percentage-based heights */}
-      <div style={{
+      <div data-diag="referee-content" style={{
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
@@ -2270,7 +2288,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       }}>
 
         {/* SECTION 2A: Set Counter Row - 8% */}
-        <div style={{ flex: '0 0 10%', padding: `${vmin(0.6)}px ${vmin(1.2)}px`, background: 'var(--ov-card)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--ov-hairline)', width: '100%', minHeight: 0, overflow: 'hidden' }}>
+        <div data-diag="referee-sets" style={{ flex: '0 0 10%', padding: `${vmin(0.6)}px ${vmin(1.2)}px`, background: 'var(--ov-card)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--ov-hairline)', width: '100%', minHeight: 0, overflow: 'hidden' }}>
           {/* Left: Team Name (centered in its space) + A/B */}
           <div style={{ flex: '1 1 0', display: 'flex', alignItems: 'center', gap: vmin(1.2), minWidth: 0 }}>
             <div ref={section2AContainerRef} style={{ flex: '1 1 0', display: 'flex', justifyContent: 'center', minWidth: 0, overflow: 'hidden' }}>
@@ -2350,7 +2368,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         </div>
 
         {/* SECTION 2B: Score & Serve - 12% */}
-        <div style={{
+        <div data-diag="referee-score" style={{
           flex: '0 0 15%',
           padding: `${vmin(0.4)}px 0`,
           background: 'var(--ov-card)',
@@ -2478,7 +2496,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         </div>
 
         {/* SECTION 3: Court Area - Beach Volleyball (2 players per team) */}
-        <div style={{
+        <div data-diag="referee-court" style={{
           flex: '0 0 40%',
           display: 'flex',
           flexDirection: 'column',
@@ -2580,7 +2598,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         </div>{/* End SECTION 3: Court Area */}
 
         {/* SECTION 4: TO counters + Sanctions - Beach volleyball (no substitutions) */}
-        <div style={{
+        <div data-diag="referee-counters" style={{
           flex: '1 1 auto',
           borderTop: '1px solid var(--ov-hairline)',
           display: 'grid',
@@ -3044,7 +3062,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         </div>
 
         {/* SECTION 5: Footer - Last Action - 40px */}
-        <div style={{
+        <div data-diag="referee-footer" style={{
           flex: '0 0 40px',
           display: 'flex',
           alignItems: 'center',

@@ -14,6 +14,7 @@ import { GateMessage } from './ui/volleyui/ErrorScreen.jsx'
 import { AppSpinner } from './ui/volleyui/AppSpinner.jsx'
 import { dayLabel } from './ui/volleyui/format.js'
 import { BRAND } from './brand_beach'
+import { reloadWithReason } from './diagnostics_beach/reload_beach'
 
 // Beach scoresheets live under beach/{date}/ in the shared bucket (indoor
 // writes {date}/ at the root)
@@ -248,7 +249,7 @@ const ScoresheetViewer = ({ date, game }) => {
           icon={FileX2}
           title={t('scoresheetApp.scoresheetNotFound')}
           body={error}
-          action={{ label: t('scoresheetApp.backToList'), icon: <ArrowLeft className="h-4 w-4" aria-hidden />, onClick: () => { window.location.href = '/' } }}
+          action={{ label: t('scoresheetApp.backToList'), icon: <ArrowLeft className="h-4 w-4" aria-hidden />, onClick: () => { reloadWithReason('scoresheet-back-to-list', { how: 'href', url: '/' }) } }}
         />
       </div>
     )

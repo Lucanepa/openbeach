@@ -21,7 +21,8 @@ const SCREENS = [
   'components_beach/auth/LoginModal_beach.jsx',
   'components_beach/auth/ProfileModal_beach.jsx',
   'components_beach/auth/UserButton_beach.jsx',
-  'components_beach/auth/InviteCodeForm_beach.jsx'
+  'components_beach/auth/InviteCodeForm_beach.jsx',
+  'diagnostics_beach/DiagnosticsSection_beach.jsx'
 ]
 
 function keysOf(file) {

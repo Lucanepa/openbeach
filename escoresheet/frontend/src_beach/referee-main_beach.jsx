@@ -9,6 +9,12 @@ import './i18n_beach'  // Initialize i18n for localization
 import { AlertProvider } from './contexts_beach/AlertContext_beach'
 import { AuthProvider } from './contexts_beach/AuthContext_beach'
 import { ScaleProvider } from './contexts_beach/ScaleContext_beach'
+import { db } from './db_beach/db_beach'
+import { installDiagnostics } from './diagnostics_beach/index_beach'
+
+// Diagnostics mode (off unless ?diag=1 or this device's Options switch):
+// first, so it sees this load and the database opening
+installDiagnostics({ db, app: 'referee' })
 
 // Remove the cache_bust a reload added (Options > Clear cache); the rest of
 // the query stays: ?match= keeps a tablet on its live match.

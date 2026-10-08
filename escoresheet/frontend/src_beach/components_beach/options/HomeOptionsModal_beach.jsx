@@ -18,6 +18,7 @@ import { NOTICE } from '../../ui/volleyui/tones.js'
 import { confirmDialog } from '../../ui/volleyui/uiStore.js'
 import { timeLabel } from '../../ui/volleyui/format.js'
 import { cn } from '../../ui/volleyui/cn.js'
+import DiagnosticsSection from '../../diagnostics_beach/DiagnosticsSection_beach'
 
 const currentVersion = __APP_VERSION__
 
@@ -382,6 +383,10 @@ export default function HomeOptionsModal({
             label={t('options.iconCredits', 'Icons')}
             hint={t('options.iconCreditsText', 'Lucide (ISC) · Phosphor (MIT)')}
           />
+        </OptionSection>
+
+        <OptionSection title={t('options.diagnostics')}>
+          <DiagnosticsSection showAlert={showAlert} testIdPrefix="home-options" />
         </OptionSection>
 
         <OptionSection title={t('options.cacheManagement')}>

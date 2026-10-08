@@ -55,6 +55,7 @@ export default function SimpleHeader({
 
   return (
     <div
+      data-diag="header"
       className={cn('ov-kit', HEADER_BAR, 'flex items-center justify-between')}
       style={{ height: '40px', minHeight: '40px', maxHeight: '40px', padding: '0 12px' }}
     >

@@ -13,6 +13,12 @@ import { AuthProvider } from './contexts_beach/AuthContext_beach'
 import { LoggingProvider } from './contexts_beach/LoggingContext_beach'
 import { ScaleProvider } from './contexts_beach/ScaleContext_beach'
 import AndroidExitPrompt from './components_beach/AndroidExitPrompt_beach'
+import { db } from './db_beach/db_beach'
+import { installDiagnostics } from './diagnostics_beach/index_beach'
+
+// Diagnostics mode (off unless Options, ?diag=1 or OPENVOLLEY_DIAGNOSTICS=1
+// in the desktop app): first, so it sees this load and the database opening
+installDiagnostics({ db, app: 'scorer' })
 
 // Remove the cache_bust a reload added (Options > Clear cache); the rest of
 // the query stays: ?match= keeps a tablet on its live match.

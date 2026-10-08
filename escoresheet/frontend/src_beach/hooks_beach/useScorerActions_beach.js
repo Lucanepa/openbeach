@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef } from 'react'
 import Dexie from 'dexie'
+import { diag } from '../diagnostics_beach/recorder_beach'
 
 // Ported from OpenVolley src/hooks/useScorerActions.js (415151d8, dc06a825,
 // b6ca08e8) without the event history (OpenBeach has no db/eventHistory yet:
@@ -160,9 +161,14 @@ export function useScorerActions({ db, commits, mutexRef, captureFinalSnapshot, 
 
     const inFlight = inFlightRef.current
     if (key != null) {
-      if (inFlight.has(key)) return undefined
+      if (inFlight.has(key)) {
+        diag('action.drop', { key })
+        return undefined
+      }
       inFlight.add(key)
     }
+    const t0 = performance.now()
+    diag('action.start', { key })
     let released = false
     const release = () => {
       if (released || key == null) return
@@ -201,6 +207,7 @@ export function useScorerActions({ db, commits, mutexRef, captureFinalSnapshot, 
         if (acquired) mutexRef.current = false
       }
       if (failure) {
+        diag('action.fail', { key, ms: Math.round(performance.now() - t0), message: failure?.message || String(failure) })
         release()
         if (key != null && onErrorRef.current && !isReportedActionError(failure)) {
           try { onErrorRef.current(failure) } catch (err) { console.error('[action] onError failed', err) }
@@ -211,7 +218,10 @@ export function useScorerActions({ db, commits, mutexRef, captureFinalSnapshot, 
       // The screen changes with the data; then the side effects (their reads,
       // e.g. the backup export, would otherwise delay the live query's
       // re-read); the key is free once the change is shown
+      const committedAt = performance.now()
+      diag('action.commit', { key, ms: Math.round(committedAt - t0), wrote: !!ctx.wrote, gen: ctx.gen, ui: ctx.ui.length, effects: ctx.effects.length })
       commits.afterCommit(ctx.wrote ? ctx.gen : 0, () => {
+        diag('action.ui', { key, gen: ctx.wrote ? ctx.gen : 0, ui: ctx.ui.length, ms: Math.round(performance.now() - committedAt) })
         for (const apply of ctx.ui) {
           try { apply() } catch (err) { console.error('[action] screen change failed', err) }
         }

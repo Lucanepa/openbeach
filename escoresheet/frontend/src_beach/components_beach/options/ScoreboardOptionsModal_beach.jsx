@@ -9,6 +9,8 @@ import BackupTable from '../BackupTable_beach'
 import { SatelliteDish } from '../Icons_beach'
 import { Switch } from '../../ui/volleyui/Switch.jsx'
 import { OptionInfo } from './optionRows_beach'
+import { reloadWithReason } from '../../diagnostics_beach/reload_beach'
+import DiagnosticsSection from '../../diagnostics_beach/DiagnosticsSection_beach'
 
 // The kit InfoHint (a real button, opens on tap) and Switch (role="switch",
 // aria-checked, named, focus ring): the hand-made dot and toggle had no role,
@@ -159,7 +161,7 @@ export default function ScoreboardOptionsModal({
       setShowCloudBackups(false)
       setRestoreConfirm(null)
       onClose?.()
-      window.location.reload()
+      reloadWithReason('backup-restored')
     } catch (err) {
       console.error('Failed to restore backup:', err)
       showAlert(t('options.alerts.failedToRestoreBackup', { error: err.message }), 'error')
@@ -750,6 +752,10 @@ export default function ScoreboardOptionsModal({
               </p>
             )}
           </Row>
+        </Section>
+
+        <Section title={t('options.diagnostics')}>
+          <DiagnosticsSection showAlert={showAlert} testIdPrefix="options" />
         </Section>
 
         <Section title={t('options.cacheManagement')} borderBottom={false}>

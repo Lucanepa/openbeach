@@ -33,6 +33,7 @@ import { isBackendAvailable, getApiUrl, isNativeApp } from '../utils_beach/backe
 import { lockLandscape as lockNativeLandscape, unlockOrientation as unlockNativeOrientation } from '../utils_beach/nativeOrientation_beach'
 import { scorerRelay, scorerPublisher, scorerRelayUrl, readRelayBundle, relayMatchKey } from '../utils_beach/relayPublisher_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
+import { useDiagCommits } from '../diagnostics_beach/commits_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot } from '../utils_beach/stateSnapshot_beach'
 
@@ -130,6 +131,8 @@ async function queueCurrentSet(seedKey, index) {
 const liveStateErrorShown = new Set()
 
 export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onFinishSet, onOpenSetup, onOpenMatchSetup, onOpenCoinToss, onTriggerEventBackup }) {
+  // diagnostics mode: React commits per user action (nothing while it is off)
+  useDiagCommits('scoreboard')
   const { t } = useTranslation()
   const { vmin } = useScaledLayout()
   const { showAlert } = useAlert()

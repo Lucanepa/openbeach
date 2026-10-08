@@ -607,6 +607,7 @@ export default function MainHeader({
     <div className="no-print" style={{ position: 'relative', zIndex: 1000 }}>
       <div
         ref={headerRef}
+        data-diag="header"
         className={effectivelyCollapsed ? 'bg-white' : HEADER_BAR}
         style={{
           display: 'flex',
