@@ -78,6 +78,17 @@ describe('ManualAdjustments_beach dates', () => {
     expect(screen.getByLabelText('Scheduled time (24 h)')).toHaveValue('18:30')
   })
 
+  it('retyping the date (half-typed on the way) keeps the time of day', async () => {
+    // A typed field reports '' while the date is incomplete; the time of day
+    // must survive that and come back when the date is complete again.
+    await openTab('Match info')
+    const date = await screen.findByLabelText('Scheduled date')
+    await act(async () => { fireEvent.change(date, { target: { value: '10.07.202' } }) })
+    await act(async () => { fireEvent.change(date, { target: { value: '10.07.2027' } }) })
+    expect(screen.getByLabelText('Scheduled date')).toHaveValue('10.07.2027')
+    expect(screen.getByLabelText('Scheduled time (24 h)')).toHaveValue('18:30')
+  })
+
   it('officials: a kit date field (DD.MM.YYYY with the calendar), no native picker', async () => {
     await openTab('Match info')
     const dob = await screen.findByLabelText('1st referee Date of birth')

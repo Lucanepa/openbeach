@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../ui/volleyui/Button.jsx'
 import { SegmentedControl } from '../ui/volleyui/SegmentedControl.jsx'
@@ -84,6 +84,9 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
 
   // Editable state - Match
   const [editedMatch, setEditedMatch] = useState(null)
+  // The scheduled time of day, kept while the date is retyped: the typed date
+  // field reports '' while half-typed (scheduledAt empties for that moment)
+  const scheduledTimeRef = useRef('')
 
   // Editable state - Teams
   const [editedTeam1, setEditedTeam1] = useState(null)
@@ -1258,8 +1261,9 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                     size="bare"
                     value={scheduledLocal.date}
                     onChange={(v) => {
+                      if (scheduledLocal.time) scheduledTimeRef.current = scheduledLocal.time
                       if (v) {
-                        updateMatchInfo('scheduledAt', new Date(`${v}T${scheduledLocal.time || '00:00'}:00`).toISOString())
+                        updateMatchInfo('scheduledAt', new Date(`${v}T${scheduledLocal.time || scheduledTimeRef.current || '00:00'}:00`).toISOString())
                       } else {
                         updateMatchInfo('scheduledAt', null)
                       }
@@ -1277,6 +1281,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                     value={scheduledLocal.time}
                     onChange={(v) => {
                       if (!v) return
+                      scheduledTimeRef.current = v
                       updateMatchInfo('scheduledAt', new Date(`${scheduledLocal.date || localDateTime(new Date()).date}T${v}:00`).toISOString())
                     }}
                     style={{ ...inputStyle, width: '100%' }}
