@@ -3857,8 +3857,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // Show loading overlay
     setSetTransitionLoading({ step: t('scoreboard.transitionFinishing', 'Finishing the set…') })
 
-    // Show sync progress modal
-    setSyncModalOpen(true)
+    // Show sync progress modal, only when a cloud sync can finish now: signed
+    // out, offline or with the cloud off the set is saved locally and the
+    // background queue sends it (the scorer was held up by a modal of
+    // "warning" steps at every set end)
+    const waitForCloudSync = cloudSyncWaitNow()
+    if (waitForCloudSync) setSyncModalOpen(true)
 
     // CRITICAL: Acquire lock IMMEDIATELY to prevent ensureActiveSet from creating duplicate sets
     // This must happen BEFORE we mark the current set as finished
@@ -4014,7 +4018,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         // - Warning (offline): 1.5s delay, then proceed
         // - Error: wait for user to click button in modal (with 5s timeout fallback)
         if (!syncResult.success) {
-          // Error - wait for modal callback or timeout
+          // Error - wait for modal callback or timeout (the modal shows the error)
+          setSyncModalOpen(true)
           const SYNC_MODAL_TIMEOUT = 5000
           let syncTimeoutId = null
 
@@ -4039,8 +4044,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           ])
         } else {
           // Success or warning - show completion briefly then proceed
-          const delay = syncResult.hasWarning ? 1500 : 1000
-          await new Promise(resolve => setTimeout(resolve, delay))
+          if (waitForCloudSync) {
+            const delay = syncResult.hasWarning ? 1500 : 1000
+            await new Promise(resolve => setTimeout(resolve, delay))
+          }
           setSyncModalOpen(false)
           resetSyncState()
         }
