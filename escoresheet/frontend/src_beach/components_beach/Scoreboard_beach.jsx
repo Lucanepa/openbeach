@@ -40,7 +40,7 @@ import { useDiagCommits } from '../diagnostics_beach/commits_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot } from '../utils_beach/stateSnapshot_beach'
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
-import { set3TossBefore, set3TossUndoUpdate, snapshotOfOtherSet } from '../utils_beach/set3Toss_beach'
+import { set3TossBefore, set3TossUndoUpdate, undoKeepsMatch } from '../utils_beach/set3Toss_beach'
 import { staleCourtSwitches, switchBackUpdate, snapshotsAfterSwitchBack, pendingTto, pendingCourtDialog } from '../utils_beach/courtSwitchState_beach'
 import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
 import { TTO_TOTAL, courtChangeEvery, hasTechnicalTimeout, nextCourtEvents } from '../utils_beach/courtRhythm_beach'
@@ -5437,8 +5437,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         // the set 3 toss) is the previous set's end, and its snapshot
         // reopened that set (set3Toss_beach). The set's score is as it was
         // (nothing was scored in it yet); the team sanction flags follow the
-        // events that remain.
-        if (snapshotOfOtherSet(previousEvent?.stateSnapshot, lastEvent)) {
+        // events that remain. Not for a set start either: the event before it
+        // (the set 3 toss) can be older than the sides and serve the set was
+        // started with (undoKeepsMatch).
+        if (undoKeepsMatch(previousEvent?.stateSnapshot, lastEvent)) {
           const removedIds = new Set(eventsToDelete.map(e => e.id))
           const remaining = allEvents.filter(e => !removedIds.has(e.id))
           const sanctionMatch = await db.matches.get(matchId)

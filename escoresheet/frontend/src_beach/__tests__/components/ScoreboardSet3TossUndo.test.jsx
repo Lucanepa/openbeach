@@ -310,4 +310,48 @@ describe('Scoreboard_beach: an undo never reopens the set before', () => {
     expect(button('Point A')).toBeFalsy()
     cleanup()
   }, 60000)
+
+  // Verifier (2026-10-08): undoing set 3's start restored the toss's
+  // snapshot, taken before the winner switched sides and serve (those buttons
+  // log no event): the interval came back with the toss's sides and serve,
+  // not the ones set 3 was started with
+  it('toss, sides and serve switched, set 3 started, its rally start and set start undone: sides and serve as set 3 was started', async () => {
+    const matchId = await setUpSet2()
+    mount(matchId)
+    await endSet('Point B', 2)
+    await waitFor(() => expect(toss('A')).toBeTruthy(), { timeout: 8000 })
+    await settle()
+    fireEvent.click(toss('B'))
+    await waitFor(() => expect(button('Switch sides')).toBeTruthy(), { timeout: 5000 })
+    await settle()
+    fireEvent.click(button('Switch sides'))
+    await waitFor(async () => expect((await db.matches.get(matchId)).set3LeftTeam).toBe('B'))
+    await settle()
+    fireEvent.click(button('Switch serve'))
+    await waitFor(async () => expect((await db.matches.get(matchId)).set3FirstServe).toBe('A'))
+    await settle()
+    const atStart = set3Fields(await db.matches.get(matchId))
+    expect(atStart).toMatchObject({ set3CoinTossWinner: 'team2', set3LeftTeam: 'B', set3FirstServe: 'A' })
+
+    fireEvent.click(button('End set interval'))
+    await settle()
+    await startSet()
+    const set3Starts = async () => (await ofType(matchId, 'set_start')).filter(e => e.setIndex === 3)
+    await waitFor(async () => expect(await set3Starts()).toHaveLength(1), { timeout: 5000 })
+    await settle()
+
+    await undoLast() // the rally start
+    await waitFor(async () => expect((await ofType(matchId, 'rally_start')).filter(e => e.setIndex === 3)).toHaveLength(0), { timeout: 5000 })
+    await settle()
+    await undoLast() // set 3's start
+    await waitFor(async () => expect(await set3Starts()).toHaveLength(0), { timeout: 5000 })
+    await settle()
+
+    expect(set3Fields(await db.matches.get(matchId))).toEqual(atStart)
+    expect((await setRows(matchId)).map(s => [s.index, s.team1Points, s.team2Points, s.finished]))
+      .toEqual([[1, 21, 15, true], [2, 15, 21, true], [3, 0, 0, false]])
+    // the toss stays made: its buttons do not come back
+    expect(toss('A')).toBeFalsy()
+    cleanup()
+  }, 60000)
 })

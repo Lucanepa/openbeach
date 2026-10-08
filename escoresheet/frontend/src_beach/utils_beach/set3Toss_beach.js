@@ -68,3 +68,17 @@ export function snapshotOfOtherSet(snapshot, undoneEvent) {
   if (setIndex == null) return false
   return Number(snapshot.currentSetIndex) !== Number(setIndex)
 }
+
+/**
+ * True when an undo of `undoneEvent` keeps the match as it is instead of
+ * restoring `snapshot` (the stateSnapshot of the event before it): a snapshot
+ * of another set (above), or a set start. A set start writes nothing the
+ * snapshot holds (the score is 0:0, the sides and the serve are the ones the
+ * set was started with), and the event before it can be older than the
+ * interval's choices: the set 3 toss, whose snapshot has the sides and the
+ * serve from before the winner switched them (those buttons log no event), so
+ * undoing set 3's start put them back to the toss's.
+ */
+export function undoKeepsMatch(snapshot, undoneEvent) {
+  return undoneEvent?.type === 'set_start' || snapshotOfOtherSet(snapshot, undoneEvent)
+}

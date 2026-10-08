@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { set3TossBefore, set3TossUndoUpdate, snapshotOfOtherSet, SET3_TOSS_FIELDS } from '../../utils_beach/set3Toss_beach'
+import { set3TossBefore, set3TossUndoUpdate, snapshotOfOtherSet, undoKeepsMatch, SET3_TOSS_FIELDS } from '../../utils_beach/set3Toss_beach'
 
 describe('set3Toss_beach', () => {
   it('keeps every field the toss and the interval after it write, null when the match has none', () => {
@@ -32,5 +32,13 @@ describe('set3Toss_beach', () => {
     expect(snapshotOfOtherSet(null, { setIndex: 3 })).toBe(false)
     expect(snapshotOfOtherSet({}, { setIndex: 3 })).toBe(false)
     expect(snapshotOfOtherSet({ currentSetIndex: 2 }, {})).toBe(false)
+  })
+
+  it('a set start undo keeps the match; other undos restore a snapshot of their own set', () => {
+    expect(undoKeepsMatch({ currentSetIndex: 3, set3LeftTeam: 'A' }, { type: 'set_start', setIndex: 3 })).toBe(true)
+    expect(undoKeepsMatch(null, { type: 'set_start', setIndex: 1 })).toBe(true)
+    expect(undoKeepsMatch({ currentSetIndex: 2 }, { type: 'set3_coin_toss_winner', setIndex: 3 })).toBe(true)
+    expect(undoKeepsMatch({ currentSetIndex: 3 }, { type: 'rally_start', setIndex: 3 })).toBe(false)
+    expect(undoKeepsMatch({ currentSetIndex: 3 }, { type: 'point', setIndex: 3 })).toBe(false)
   })
 })
