@@ -178,7 +178,7 @@ describe('the scoresheet page side (appWindowGuest_beach)', () => {
     const opener = { closed: false, postMessage: vi.fn() }
     const popup = frameWin({ inView: false, opener })
     deliverPdfToOpener({ error: 'canvas too large' }, popup.win)
-    expect(opener.postMessage).toHaveBeenCalledWith({ type: MSG_PDF_ERROR, message: 'canvas too large' }, ORIGIN)
+    expect(opener.postMessage).toHaveBeenCalledWith({ type: MSG_PDF_ERROR, reason: 'failed', message: 'canvas too large' }, ORIGIN)
     expect(deliverPdfToOpener({ error: 'x' }, frameWin({ inView: false }).win)).toBe(false)
   })
 

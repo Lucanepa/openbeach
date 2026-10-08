@@ -10,6 +10,9 @@
     <title>OpenBeach Scoresheet</title>
     <!-- Tailwind is compiled into scoresheet_pdf_beach/scoresheet_beach.css (no CDN: must work offline) -->
     <style>
+      /* Light from the first paint: the desktop app opens this window on
+         about:blank, which flashed black before the page's CSS arrived */
+      html, body { background: #f5f5f4; color-scheme: light; }
       /* Global Font Setting */
       body {
         font-family: 'Inter', sans-serif;

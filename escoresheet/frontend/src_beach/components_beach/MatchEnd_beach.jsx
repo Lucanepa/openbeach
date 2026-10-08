@@ -19,6 +19,7 @@ import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { sanitizeForFilename } from '../utils_beach/stringUtils_beach'
 import { openAppWindow } from '../utils_beach/openAppWindow_beach'
 import { waitForScoresheetPdf, PDF_FAIL } from '../utils_beach/scoresheetPdfRequest_beach'
+import { remarksWithMedical } from '../utils_beach/medicalRemarks_beach'
 import { formatTimeLocal } from '../utils_beach/timeUtils_beach'
 import { saveMatchSignature, signatureEditLocked, signaturesPayload, clearedPostMatchSignatures } from '../utils_beach/signatures_beach'
 import CountryFlag from './CountryFlag_beach'
@@ -1372,7 +1373,11 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
           )}
         </div>
         <div className={cn(SHEET_BOX, 'min-h-[60px]')}>
-          <RemarksBox overflowSanctions={overflowSanctions} remarks={match?.remarks || ''} />
+          {/* the scorer's remarks, then the MTO / RIT lines (as on the sheet) */}
+          <RemarksBox
+            overflowSanctions={overflowSanctions}
+            remarks={remarksWithMedical(match?.remarks || '', events, { teamAKey: match?.coinTossTeamA || 'team1', teamNames: { team1: team1?.name || '', team2: team2?.name || '' } })}
+          />
         </div>
       </section>
 
