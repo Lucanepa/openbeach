@@ -84,3 +84,36 @@ describe('Scoreboard_beach: the set interval clock', () => {
     cleanup()
   }, 30000)
 })
+
+describe('Scoreboard_beach: the set interval starts at the set end', () => {
+  it('counts from the set end event, not from the set end time rounded down to the minute', async () => {
+    cleanup()
+    const t1 = await db.teams.add({ name: 'Alpha / Beta' })
+    const t2 = await db.teams.add({ name: 'Gamma / Delta' })
+    await db.players.bulkAdd([
+      { teamId: t1, number: 1, name: 'Alpha' }, { teamId: t1, number: 2, name: 'Beta' },
+      { teamId: t2, number: 1, name: 'Gamma' }, { teamId: t2, number: 2, name: 'Delta' }
+    ])
+    // confirmed 10 s ago; the set row keeps the minute (here 55 s earlier)
+    const confirmedAt = new Date(Date.now() - 10000).toISOString()
+    const roundedEnd = new Date(Date.now() - 55000).toISOString()
+    const matchId = await db.matches.add({
+      team1Id: t1, team2Id: t2, status: 'live', test: true,
+      firstServe: 'team1', coinTossTeamA: 'team1', coinTossTeamB: 'team2', team1FirstServe: 1, team2FirstServe: 1,
+      setLeftTeamOverrides: { 1: 'B', 2: 'B' }
+    })
+    await db.sets.add({ matchId, index: 1, team1Points: 21, team2Points: 15, finished: true, startTime: roundedEnd, endTime: roundedEnd })
+    await db.sets.add({ matchId, index: 2, team1Points: 0, team2Points: 0, finished: false })
+    await db.events.bulkAdd([
+      { matchId, setIndex: 1, type: 'coin_toss', payload: {}, seq: 1, ts: roundedEnd },
+      { matchId, setIndex: 1, type: 'set_start', payload: {}, seq: 2, ts: roundedEnd },
+      { matchId, setIndex: 1, type: 'set_end', payload: { endTime: roundedEnd }, seq: 3, ts: confirmedAt }
+    ])
+
+    render(<ScaleProvider><AlertProvider><LoggingProvider><Scoreboard matchId={matchId} /></LoggingProvider></AlertProvider></ScaleProvider>)
+    const countdown = (re) => [...document.querySelectorAll('div')].filter(e => e.children.length === 0 && re.test(e.textContent.trim())).map(e => e.textContent.trim())
+    await waitFor(() => expect(countdown(/^\d\d$/).length).toBeGreaterThan(0), { timeout: 8000 })
+    expect(countdown(/^\d\d?$/)).toEqual(expect.arrayContaining([expect.stringMatching(/^(4[89]|50)$/)]))
+    cleanup()
+  }, 30000)
+})
