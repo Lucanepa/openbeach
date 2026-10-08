@@ -182,3 +182,102 @@ describe('Scoreboard_beach: one BMP per completed rally', () => {
     cleanup()
   }, 90000)
 })
+
+const allGrey = () => bmpButtons().length === 2 && bmpButtons().every(b => b.disabled)
+const allOn = () => bmpButtons().length === 2 && bmpButtons().every(b => !b.disabled)
+const bAll = (text) => [...document.querySelectorAll('button')].filter(b => b.textContent.trim() === text)
+
+describe('Scoreboard_beach: one BMP per completed rally, event by event', () => {
+  it('the scoring screen: a BMP, its undo, a referee BMP, a successful BMP, reloads', async () => {
+    const matchId = await setUpMatch()
+    mount(matchId)
+    await startSet()
+    expect(allGrey()).toBe(true)
+    await pointA()
+    await waitFor(() => expect(allOn()).toBe(true))
+    // team B (right) unsuccessful BMP from the main button
+    await unsuccessfulBmp(bmpButtons()[1])
+    await waitFor(() => expect(allGrey()).toBe(true))
+    expect(bmpButtons()[0].title).toContain('once per rally')
+    // reload
+    cleanup(); mount(matchId)
+    await waitFor(() => expect(bmpButtons().length).toBe(2), { timeout: 5000 })
+    await settle()
+    expect(allGrey()).toBe(true)
+    // undo the BMP: available again
+    await waitFor(() => expect(button('Undo')).toBeTruthy())
+    fireEvent.click(button('Undo'))
+    await waitFor(() => expect(bAll('Undo').length).toBeGreaterThan(1))
+    fireEvent.click(bAll('Undo').at(-1))
+    await waitFor(async () => expect(await ofType('challenge')).toHaveLength(0))
+    await settle()
+    await waitFor(() => expect(allOn()).toBe(true))
+    // next rally: referee BMP awards A
+    await startRally()
+    expect(allGrey()).toBe(true)
+    fireEvent.click(button('Referee BMP'))
+    await waitFor(() => expect(document.querySelector('[data-testid="referee-bmp-left"]')).toBeTruthy())
+    fireEvent.click(document.querySelector('[data-testid="referee-bmp-left"]'))
+    await waitFor(() => expect(button('IN')).toBeTruthy())
+    fireEvent.click(button('IN'))
+    await waitFor(async () => expect(await ofType('referee_bmp_outcome')).toHaveLength(1))
+    await settle()
+    await waitFor(() => expect(button('Start rally')).toBeTruthy())
+    expect(allGrey()).toBe(true)
+    // the referee BMP decided that rally: no team BMP on it
+    expect(bmpButtons()[0].title).toContain('once per rally')
+    // next rally completed: on
+    await startRally()
+    await pointA()
+    await waitFor(() => expect(allOn()).toBe(true))
+    // team B successful BMP
+    fireEvent.click(bmpButtons()[1])
+    await waitFor(() => expect(button('Successful')).toBeTruthy())
+    fireEvent.click(button('Successful'))
+    await waitFor(() => expect(button('Confirm Successful')).toBeTruthy())
+    fireEvent.click(button('Confirm Successful'))
+    await waitFor(async () => expect((await ofType('challenge_outcome')).length).toBe(1))
+    await settle()
+    expect(allGrey()).toBe(true)
+    // the point went to team B (2:1), and no second BMP on that rally
+    const [set1] = await db.sets.toArray()
+    expect([set1.team1Points, set1.team2Points]).toEqual([2, 1])
+    cleanup(); mount(matchId)
+    await waitFor(() => expect(bmpButtons().length).toBe(2), { timeout: 5000 })
+    await settle()
+    expect(allGrey()).toBe(true)
+    cleanup()
+  }, 60000)
+
+  it('the TTO dialog at 21 offers one BMP on the rally, not a second; the next completed rally opens it again', async () => {
+    const matchId = await setUpMatch()
+    mount(matchId)
+    await startSet()
+    const pointB = async () => {
+      const before = (await ofType('point')).length
+      fireEvent.click(button('Point B'))
+      await waitFor(async () => expect((await ofType('point')).length).toBe(before + 1))
+    }
+    for (let i = 1; i <= 21; i++) {
+      if (i > 1) await startRally()
+      if (i % 2) await pointA(); else await pointB()
+      if (i === 7 || i === 14) await switchCourts()
+    }
+    await waitFor(() => expect(button('Start TTO')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(dialogBmp()).toBeTruthy())
+    await unsuccessfulBmp(dialogBmp())
+    await waitFor(() => expect(button('Start TTO')).toBeTruthy())
+    expect(dialogBmp()).toBeFalsy()
+    // reload: the scoring screen's buttons stay greyed (a BMP was taken on that rally)
+    cleanup(); mount(matchId)
+    await waitFor(() => expect(bmpButtons().length).toBe(2), { timeout: 5000 })
+    await settle()
+    expect(allGrey()).toBe(true)
+    await startRally()
+    expect(allGrey()).toBe(true)
+    await pointB()
+    await waitFor(() => expect(allOn()).toBe(true))
+    cleanup()
+  }, 90000)
+})
+
