@@ -93,13 +93,22 @@ export function activeMedicalFromEvents(events, now = Date.now()) {
  * show as ended goes away; one the events show as running is shown (on
  * reconnect, when the action was missed). A recovery started by an action
  * stays until its end arrives (its start event may not have synced yet).
+ * Once its start is in the events, the events decide: an undone start
+ * clears it (the scorer relays no end for an undo).
+ * `endedStarts`: start times (ms) of recoveries the scorer's end_medical
+ * action already closed; events that lack the end yet (a read older than
+ * the end's sync) do not bring them back.
  */
-export function reconcileMedical(current, events, now = Date.now()) {
+export function reconcileMedical(current, events, now = Date.now(), endedStarts = []) {
+  const closedByAction = (startMs) => Array.isArray(endedStarts) && endedStarts.some(ms => Math.abs(ms - startMs) <= 2000)
   const fromEvents = activeMedicalFromEvents(events, now)
-  if (fromEvents) {
-    if (current && Math.abs(current.startTimestamp - fromEvents.startTimestamp) <= 2000) return current
+  if (fromEvents && !closedByAction(fromEvents.startTimestamp)) {
+    if (current && Math.abs(current.startTimestamp - fromEvents.startTimestamp) <= 2000) {
+      return current.source === 'events' ? current : { ...current, source: 'events', startSeq: fromEvents.startSeq }
+    }
     return fromEvents
   }
+  if (fromEvents) return current && !closedByAction(current.startTimestamp) ? current : null
   if (!current) return null
   if (current.source === 'events') return null
   // Started by an action: it ends when the events hold its end
@@ -118,6 +127,20 @@ export function reconcileMedical(current, events, now = Date.now()) {
     return false
   })
   return ended ? null : current
+}
+
+/**
+ * Do the events hold the end of the recovery started at `startMs` (its
+ * medical_end, or the old format's end on the start event)?
+ */
+export function medicalEndInEvents(events, startMs) {
+  if (!Array.isArray(events) || startMs == null) return false
+  return events.some(e => {
+    const p = e?.payload || {}
+    const ms = toMs(p.startTime)
+    if (ms == null || Math.abs(ms - startMs) > 2000) return false
+    return e.type === 'medical_end' || (isStart(e) && !!(p.endTime || p.outcome))
+  })
 }
 
 /** "MTO" or "RIT (no blood)"; `t` is i18next's. */

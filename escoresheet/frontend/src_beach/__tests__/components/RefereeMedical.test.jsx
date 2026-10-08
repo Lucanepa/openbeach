@@ -100,6 +100,34 @@ describe('Referee_beach: MTO / RIT', () => {
     expect(document.body.textContent).toContain('RIT (toilet) end – B #2 Fischer (0:00, recovered)')
   })
 
+  it('an undone MTO start goes away; an ended one does not come back from an older read of the events', async () => {
+    const startTime = new Date().toISOString()
+    const start = { seq: 5, setIndex: 1, type: 'mto', payload: { team: 'team1', playerNumber: 1, playerName: 'Müller', startTime } }
+    await mountWith(bundle(10, 8))
+    await act(async () => { relay.onAction('medical', { kind: 'mto', team: 'team1', playerNumber: 1, playerName: 'Müller', startTime, durationSec: 300 }) })
+    await screen.findByTestId('referee-medical')
+    // its start syncs, then the scorer undoes it (no end is relayed for an undo)
+    await act(async () => { relay.subscriber(bundle(10, 8, [start])) })
+    await settle()
+    expect(screen.queryByTestId('referee-medical')).not.toBeNull()
+    await act(async () => { relay.subscriber(bundle(10, 8, [])) })
+    await settle()
+    expect(screen.queryByTestId('referee-medical')).toBeNull()
+
+    // A second one, ended by the scorer; a read from before the end synced
+    // still has the start only
+    const start2 = { ...start, seq: 7, payload: { ...start.payload, startTime: new Date(Date.now() + 5000).toISOString() } }
+    await act(async () => { relay.onAction('medical', { kind: 'mto', team: 'team1', playerNumber: 1, playerName: 'Müller', startTime: start2.payload.startTime, durationSec: 300 }) })
+    await act(async () => { relay.subscriber(bundle(10, 8, [start2])) })
+    await settle()
+    expect(screen.queryByTestId('referee-medical')).not.toBeNull()
+    await act(async () => { relay.onAction('end_medical', { kind: 'mto', team: 'team1', playerNumber: 1, outcome: 'recovered' }) })
+    await waitFor(() => expect(screen.queryByTestId('referee-medical')).toBeNull())
+    await act(async () => { relay.subscriber(bundle(11, 8, [start2])) })
+    await settle()
+    expect(screen.queryByTestId('referee-medical')).toBeNull()
+  })
+
   it('a running MTO is rebuilt from the events on reconnect (player name from the roster)', async () => {
     const startTime = new Date(NOW - 60_000).toISOString()
     await mountWith(bundle(10, 8, [{ seq: 5, setIndex: 1, type: 'mto', payload: { team: 'team1', playerNumber: 1, startTime } }]))

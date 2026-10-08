@@ -7,6 +7,7 @@ import {
   medicalRemaining,
   activeMedicalFromEvents,
   reconcileMedical,
+  medicalEndInEvents,
   medicalEventLabel,
   medicalTypeLabel
 } from '../../utils_beach/refereeMedical_beach'
@@ -66,6 +67,33 @@ describe('referee medical state (rule 17.1.2: 5 minutes recovery)', () => {
     expect(reconcileMedical(current, ended, T0 + 100_000)).toBeNull()
   })
 
+  it('reconcile: a start relayed by an action, then seen in the events and undone, clears it', () => {
+    // The scorer undoes the MTO start: the event goes away, and no
+    // end_medical is relayed (the scorer only closes its own countdown)
+    const startTime = new Date(T0).toISOString()
+    const fromAction = medicalFromAction({ kind: 'mto', team: 'team2', playerNumber: 2, startTime }, T0)
+    const synced = [{ seq: 11, type: 'mto', payload: { team: 'team2', playerNumber: 2, startTime } }]
+    const seen = reconcileMedical(fromAction, synced, T0 + 1000)
+    expect(seen).not.toBeNull()
+    // the same recovery: its countdown does not restart
+    expect(seen.startTimestamp).toBe(T0)
+    // unchanged while the events keep it running (no re-render loop)
+    expect(reconcileMedical(seen, synced, T0 + 2000)).toBe(seen)
+    expect(reconcileMedical(seen, [], T0 + 5000)).toBeNull()
+  })
+
+  it('reconcile: a recovery the end_medical action closed is not brought back by events read before the end synced', () => {
+    const startTime = new Date(T0).toISOString()
+    const startOnly = [{ seq: 11, type: 'mto', payload: { team: 'team2', playerNumber: 2, startTime } }]
+    expect(reconcileMedical(null, startOnly, T0 + 60_000, [T0])).toBeNull()
+    // another recovery (a later start) still shows
+    const later = [...startOnly, { seq: 12, type: 'medical_end', payload: { startSeq: 11, startTime } },
+      { seq: 20, type: 'rit', payload: { team: 'team1', playerNumber: 1, ritType: 'toilet', startTime: new Date(T0 + 120_000).toISOString() } }]
+    expect(reconcileMedical(null, later, T0 + 130_000, [T0])).toMatchObject({ kind: 'rit', team: 'team1' })
+    expect(medicalEndInEvents(startOnly, T0)).toBe(false)
+    expect(medicalEndInEvents(later, T0)).toBe(true)
+  })
+
   it('reconcile: an undone start (events only) clears it', () => {
     const fromEvents = activeMedicalFromEvents([{ seq: 11, type: 'mto', payload: { team: 'team2', playerNumber: 2, startTime: new Date(T0).toISOString() } }], T0 + 1000)
     expect(reconcileMedical(fromEvents, [], T0 + 2000)).toBeNull()
@@ -113,7 +141,7 @@ describe('referee screen contract', () => {
     const src = readSource('components_beach/Referee_beach.jsx')
     expect(src).toMatch(/action === 'medical'/)
     expect(src).toMatch(/action === 'end_medical'/)
-    expect(src).toMatch(/reconcileMedical\(prev, data\.events\)/)
+    expect(src).toMatch(/reconcileMedical\(prev, data\.events, Date\.now\(\), medicalEndedRef\.current\)/)
     expect(src).toMatch(/REFEREE_DISPLAYABLE_EVENTS\.includes/)
     // the BMP counter shows what is left (scorer: 2 - unsuccessful used), not what was used
     expect(src).not.toMatch(/\{(left|right)Stats\.challengesUsed\}/)

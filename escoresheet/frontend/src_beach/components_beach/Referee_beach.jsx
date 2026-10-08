@@ -30,7 +30,7 @@ import { NarrowScreenOverlay } from './dashboards/EntryKit_beach.jsx'
 import { HEADER_BAR, HEADER_BTN, HEADER_BTN_ON, MENU_PANEL, MENU_SUBROW, MENU_ROW_ON } from './chromeClasses_beach'
 import { timeSecondsLabel } from '../ui/volleyui/format.js'
 import { BRAND } from '../brand_beach'
-import { medicalFromAction, medicalRemaining, reconcileMedical, medicalTypeLabel, medicalPlayerLabel, formatDuration } from '../utils_beach/refereeMedical_beach'
+import { medicalFromAction, medicalRemaining, reconcileMedical, medicalEndInEvents, medicalTypeLabel, medicalPlayerLabel, formatDuration } from '../utils_beach/refereeMedical_beach'
 import { refereeEventLabel, REFEREE_DISPLAYABLE_EVENTS, BMP_PER_SET } from '../utils_beach/refereeEventLabel_beach'
 
 // Get current version from package.json (injected by Vite at build time)
@@ -217,6 +217,9 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   const [medicalNow, setMedicalNow] = useState(() => Date.now())
   const medicalRef = useRef(null)
   medicalRef.current = medicalModal
+  // Start times of recoveries the scorer's end_medical closed: a read of the
+  // events from before the end synced must not show them again
+  const medicalEndedRef = useRef([])
   const [preEventPopup, setPreEventPopup] = useState(null) // { message: string }
   const prevTotalScoreRef = useRef(null)
   const prevSetIndexRef = useRef(null)
@@ -657,6 +660,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       // The end names the kind and the player; the type, the name and the
       // duration come from the running recovery
       const running = medicalRef.current
+      if (running) medicalEndedRef.current = [...medicalEndedRef.current.slice(-9), running.startTimestamp]
       const endData = {
         ...(running ? {
           ritType: running.ritType,
@@ -1067,7 +1071,9 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   // undone start), and its countdown ticks while it runs
   useEffect(() => {
     if (!data?.events) return
-    setMedicalModal(prev => reconcileMedical(prev, data.events))
+    // An end the events hold now: from here on the events decide (an undone end reopens it)
+    medicalEndedRef.current = medicalEndedRef.current.filter(ms => !medicalEndInEvents(data.events, ms))
+    setMedicalModal(prev => reconcileMedical(prev, data.events, Date.now(), medicalEndedRef.current))
   }, [data?.events])
   useEffect(() => {
     if (!medicalModal) return undefined
