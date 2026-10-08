@@ -3,7 +3,9 @@
  * scoring, corrections (undo, delete, edit, manual changes), sync results,
  * app start / update / quit and errors - with the device id, app version,
  * platform and account. Stored in Dexie (activity_log, db_beach v20) and
- * uploaded in batches through the sync queue (POST /api/activity).
+ * uploaded in batches through the sync queue (POST /api/activity); in the
+ * desktop and Android apps also appended to a daily JSONL file next to the
+ * native backups (./fileSink_beach).
  *
  * Click and keystroke streams are NOT part of it: they stay on the device
  * (utils_beach/comprehensiveLogger_beach).
@@ -19,6 +21,7 @@ import { setActivitySink, emitActivity } from './bus_beach'
 import { appVersion, platformName, currentAccountId } from '../identity_beach'
 import { AUTH_TOKEN_CHANGE_EVENT } from '../../lib_beach/apiClient_beach'
 import { scheduleActivityUpload, ensureActivityFlushJob } from './upload_beach'
+import { createActivityFileSink } from './fileSink_beach'
 
 export { emitActivity, flushActivityNow } from './bus_beach'
 export { SYNC } from './writer_beach'
@@ -28,6 +31,9 @@ const PRUNE_INTERVAL_MS = 60 * 60 * 1000
 const SUMMARY_INTERVAL_MS = 5 * 60 * 1000
 
 let started = null
+// The daily JSONL file of the desktop / Android app (null in a browser)
+let fileSink = null
+let fileSinkReady = null
 
 /** Stored rows written after a batch (the upload, the daily file). */
 const afterWrite = new Set()
@@ -73,11 +79,22 @@ export function startActivityLog({ db, win = typeof window !== 'undefined' ? win
     summary.at = Date.now()
   }
 
+  // The apps also keep the log as daily files next to the backups
+  fileSinkReady = createActivityFileSink({ win })
+    .then((s) => { fileSink = s; return s })
+    .catch(() => null)
+  const fileListener = (rows) => {
+    if (fileSink) fileSink.add(rows)
+    else fileSinkReady.then((s) => s?.add(rows))
+  }
+  afterWrite.add(fileListener)
+
   const sink = {
     record: (kind, data, opts) => writer.record(kind, data, opts),
     flush: async () => {
       flushWaiting()
       await writer.flush()
+      await fileSink?.flush()
     },
     noteSyncPass: (o) => {
       if (!o) return
@@ -95,7 +112,7 @@ export function startActivityLog({ db, win = typeof window !== 'undefined' ? win
   const flushWaiting = () => {
     try { uninstallHooks.flushWaiting?.() } catch { /* logging never breaks the app */ }
   }
-  const cleanups = [uninstallHooks]
+  const cleanups = [uninstallHooks, () => afterWrite.delete(fileListener)]
 
   // app.start / app.update
   const version = appVersion()
@@ -176,6 +193,19 @@ const onSignIn = new Set()
 export function onActivitySignIn(fn) {
   onSignIn.add(fn)
   return () => onSignIn.delete(fn)
+}
+
+/** Can this app open the log folder (desktop)? */
+export async function canOpenLogFolder() {
+  const s = fileSink || (await fileSinkReady)
+  return !!s?.canOpenFolder
+}
+
+/** Open the log folder in the file manager (desktop); false when not possible. */
+export async function openLogFolder() {
+  const s = fileSink || (await fileSinkReady)
+  if (!s?.canOpenFolder) return false
+  return s.openFolder()
 }
 
 /** The writer of the running log (tests, the upload). */
