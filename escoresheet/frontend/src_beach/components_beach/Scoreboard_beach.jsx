@@ -7,10 +7,14 @@ import { db } from '../db_beach/db_beach'
 import LegacyModal from './Modal_beach'
 
 import MenuList from './MenuList_beach'
+import { matchMenuSections, toMenuListItems } from './matchMenu_beach'
 import SyncProgressModal_beach from './SyncProgressModal_beach'
 import ScoreboardOptionsModal from './options/ScoreboardOptionsModal_beach'
 import ConnectionSetupModal from './options/ConnectionSetupModal_beach'
 import { useSyncQueue } from '../hooks_beach/useSyncQueue_beach'
+import { useConfirmAction } from '../hooks_beach/useConfirmAction_beach'
+import { useActionLiveQuery } from '../hooks_beach/useActionLiveQuery_beach'
+import { useScorerActions, pickLiveStateSnapshot, isReportedActionError } from '../hooks_beach/useScorerActions_beach'
 import { useSequentialSync } from '../hooks_beach/useSequentialSync_beach'
 
 
@@ -21,6 +25,9 @@ import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { apiFrom } from '../lib_beach/apiClient_beach'
 import { setExtId, eventExtId } from '../utils_beach/syncIds_beach'
 import { changesSetScore, isLiveSetInterval, queueSetScoreSync } from '../utils_beach/eventSync_beach'
+import { planPointRemoval, scoreAfterRemoval, syncJobsForEvents, syncJobsForSets, eventDeleteJob, eventUpsertJob, setReopenJob, planDecisionChangeReversal, scoreDeltaOfRemoval, teamSanctionFlags, UNSENT_STATUSES } from '../utils_beach/scorerCorrections_beach'
+import { askConfirm } from '../utils_beach/askConfirm_beach'
+import { toast } from '../ui/volleyui/uiStore.js'
 import { buildConnectionPins } from '../utils_beach/connectionPins_beach'
 import { isBackendAvailable, getApiUrl, isNativeApp } from '../utils_beach/backendConfig_beach'
 import { lockLandscape as lockNativeLandscape, unlockOrientation as unlockNativeOrientation } from '../utils_beach/nativeOrientation_beach'
@@ -128,6 +135,14 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   const { showAlert } = useAlert()
   const { syncStatus, flush: flushSyncQueue } = useSyncQueue()
   const cLogger = useComponentLogging('Scoreboard')
+  // Confirmation dialogs close before they write (useConfirmAction), so a write
+  // that fails must say so: the dialog is no longer there to show it
+  const onConfirmFailed = useCallback((err) => {
+    // A scorer action's failure is reported once (useScorerActions_beach)
+    if (isReportedActionError(err)) return
+    console.error('[confirm] action failed after its dialog closed', err)
+    showAlert(t('scoreboard.confirmFailed'), 'error')
+  }, [showAlert, t])
   const { syncState, syncSetEnd, resetSyncState } = useSequentialSync()
   const [syncModalOpen, setSyncModalOpen] = useState(false)
   const syncProceedCallbackRef = useRef(null)
@@ -315,6 +330,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   const [rightDelaysDropdownOpen, setRightDelaysDropdownOpen] = useState(false) // Narrow mode dropdown for right team delays/sanctions buttons
   const [toSubDetailsModal, setToSubDetailsModal] = useState(null) // { type: 'timeout', side: 'left'|'right' } | null
   const [replayRallyConfirm, setReplayRallyConfirm] = useState(null) // { event: Event, description: string, selectedOption: 'swap'|'replay' } | null
+  const [replayConfirm, setReplayConfirm] = useState(false) // "Replay rally" during a rally waits for this confirmation
   const [stopMatchModal, setStopMatchModal] = useState(null) // 'select' | null - Stop the match modal selection
   const [stopMatchTeamSelect, setStopMatchTeamSelect] = useState(null) // { pendingAction: 'forfeit' } | null - Team selection for forfeit
   const [stopMatchConfirm, setStopMatchConfirm] = useState(null) // { type: 'forfeit'|'impossibility', team?: 'team1'|'team2' } | null - Confirmation modal
@@ -623,7 +639,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     viewportHeight / DESIGN_HEIGHT
   )
 
-  const data = useLiveQuery(async () => {
+  // The scoring screen's data, read in ONE read transaction (useActionLiveQuery:
+  // a scorer action's dialogs change in the render that shows its data)
+  const [data, commits] = useActionLiveQuery(() => db.transaction('r', db.matches, db.teams, db.sets, db.players, db.events, async () => {
     const match = await db.matches.get(matchId)
     if (!match) return null
 
@@ -704,7 +722,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
 
     return result
-  }, [matchId])
+  }), [matchId])
 
   // --- Live connection health monitoring ---
   const handleDeviceDisconnected = useCallback(({ label }) => {
@@ -764,6 +782,18 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   // Capture FULL state snapshot for snapshot-based undo system
   // This captures everything needed to restore the match state completely
   const captureFullStateSnapshot = useCallback(() => captureStateSnapshot(db, matchId), [matchId])
+
+  // A scorer action is ONE Dexie transaction and ONE screen change
+  // (useScorerActions_beach): the score, the point event, the technical
+  // time-out and the dialog the point opens (change of courts, set end) show
+  // together, not one after the other. Ported from OpenVolley beb40826.
+  const { runAction, deferUi, deferEffect, inAction } = useScorerActions({
+    db,
+    commits,
+    mutexRef: eventInProgressRef,
+    captureFinalSnapshot: captureFullStateSnapshot,
+    onError: onConfirmFailed
+  })
 
   // Restore match state from a snapshot (used by undo)
   const restoreStateFromSnapshot = useCallback(async (snapshot) => {
@@ -2511,6 +2541,28 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
   }, [matchId, data?.match, data?.team1Team, data?.team2Team, data?.team1Players, data?.team2Players])
 
+  // Manual edits reach the cloud through the sync queue (kept while offline,
+  // retried). They went straight to the cloud before and were lost offline;
+  // the set ones also used a bare id, which the backend refuses. Test
+  // matches are never queued. Ported from OpenVolley 38509c25.
+  const queueManualCloudUpdate = useCallback(async (resource, fields, setId = null) => {
+    try {
+      const match = await db.matches.get(matchId)
+      if (!match || match.test || !match.seed_key) return
+      await db.sync_queue.add({
+        resource,
+        action: 'update',
+        payload: resource === 'set'
+          ? { external_id: setExtId(match.seed_key, setId), ...fields }
+          : { id: match.seed_key, ...fields },
+        ts: new Date().toISOString(),
+        status: 'queued'
+      })
+    } catch (err) {
+      console.warn('[ManualChange] Could not queue the cloud update:', err?.message)
+    }
+  }, [matchId])
+
   // Helper function to log manual changes for the summary
   const logManualChange = useCallback((category, field, before, after, description) => {
     const change = {
@@ -2531,29 +2583,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         console.error('[ManualChange] IndexedDB error:', err)
       })
 
-      // Sync to Supabase
-      if (isBackendAvailable() && data.match?.seed_key) {
-        apiFrom('matches')
-          .update({ manual_changes: updatedChanges })
-          .eq('external_id', data.match.seed_key)
-          .eq('sport_type', SPORT_TYPE)
-          .select('id, external_id, manual_changes')
-          .then((result) => {
-            if (result.data && result.data.length > 0) {
-            } else {
-              console.warn('[ManualChange] NO ROWS UPDATED! external_id not found:', data.match.seed_key)
-            }
-          })
-          .catch((err) => {
-            console.error('[ManualChange] Supabase error:', err)
-          })
-      } else {
-      }
-    } else {
+      // To the cloud through the sync queue (kept while offline, retried)
+      void queueManualCloudUpdate('match', { manual_changes: updatedChanges })
     }
 
     return change
-  }, [matchId, data?.match])
+  }, [matchId, data?.match, queueManualCloudUpdate])
 
   // Refresh the eScoresheet window with latest data
   const refreshScoresheet = useCallback(async () => {
@@ -2623,14 +2658,38 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     return () => window.removeEventListener('message', handleRefreshRequest)
   }, [refreshScoresheet])
 
+  // Side effects of a write (tablets, live state, backup, scoresheet window):
+  // inside an action they run once after its commit (they read the database,
+  // which they must not do inside the transaction, and the live state then
+  // goes out once with the action's final state); outside, at once.
+  const runOrDefer = useCallback((effect) => {
+    if (!deferEffect(effect)) effect.run(null)
+  }, [deferEffect])
+  const afterRefereeSync = useCallback(() => {
+    runOrDefer({ once: 'referee', run: () => syncToReferee() })
+  }, [runOrDefer, syncToReferee])
+  const afterLiveState = useCallback((eventType, eventTeam = null, eventData = null, cachedSnapshot = null) => {
+    runOrDefer({
+      wantsSnapshot: true,
+      liveState: { cachedSnapshot, eventType },
+      run: (finalSnapshot) => syncLiveStateToSupabase(eventType, eventTeam, eventData,
+        finalSnapshot ? pickLiveStateSnapshot(cachedSnapshot, finalSnapshot) : cachedSnapshot)
+    })
+  }, [runOrDefer, syncLiveStateToSupabase])
+  const afterScoresheetRefresh = useCallback(() => {
+    runOrDefer({ once: 'scoresheet', run: () => refreshScoresheet() })
+  }, [runOrDefer, refreshScoresheet])
+
   const logEvent = useCallback(
     async (type, payload = {}, options = {}) => {
       const _t0 = performance.now()
 
       if (!data?.set) return null
 
-      // skipMutex: true if caller already holds the mutex (e.g., confirmSubstitution)
-      const shouldAcquireMutex = !options.skipMutex
+      // skipMutex: true if caller already holds the mutex (e.g., confirmSubstitution);
+      // inside an action, runAction holds it for the whole transaction (waiting
+      // on a timer there would commit the transaction early)
+      const shouldAcquireMutex = !options.skipMutex && !inAction()
 
       // MUTEX: Wait for any in-progress event to complete to prevent race conditions
       // This ensures snapshots always see all previous events
@@ -2906,10 +2965,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         }
 
         // Sync to referee after every event
-        syncToReferee()
+        afterRefereeSync()
 
         // Broadcast to local scoreboard (works offline, every event)
-        broadcastToScoreboard(stateSnapshot)
+        runOrDefer({ wantsSnapshot: true, run: (finalSnapshot) => broadcastToScoreboard(finalSnapshot ? pickLiveStateSnapshot(stateSnapshot, finalSnapshot) : stateSnapshot) })
 
         // Sync live state to Supabase for key events
         const keyEvents = ['point', 'timeout', 'substitution', 'set_start', 'set_end', 'lineup', 'sanction', 'court_captain_designation']
@@ -2937,17 +2996,17 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           // was added to the database. Let syncLiveStateToSupabase fetch a fresh one.
           const lineupChangingEvents = ['substitution', 'lineup']
           const useSnapshot = lineupChangingEvents.includes(type) ? null : stateSnapshot
-          syncLiveStateToSupabase(type, eventTeam, eventData, useSnapshot)
+          afterLiveState(type, eventTeam, eventData, useSnapshot)
         }
 
         // Continuous cloud backup after every event (non-blocking, throttled)
         if (!isTest) {
           const gameNum = data?.match?.gameNumber || data?.match?.game_n || null
-          triggerContinuousBackup(matchId, () => exportMatchData(matchId), gameNum)
+          runOrDefer({ once: 'backup', run: () => triggerContinuousBackup(matchId, () => exportMatchData(matchId), gameNum) })
         }
 
         // Refresh eScoresheet if open
-        refreshScoresheet()
+        afterScoresheetRefresh()
 
         // Return the sequence number so it can be used for related events
         return nextSeq
@@ -2958,7 +3017,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         }
       }
     },
-    [data?.set, matchId, getNextSeq, getNextSubSeq, captureFullStateSnapshot, syncToReferee, broadcastToScoreboard, syncLiveStateToSupabase, refreshScoresheet]
+    [data?.set, matchId, getNextSeq, getNextSubSeq, captureFullStateSnapshot, broadcastToScoreboard, inAction, runOrDefer, afterRefereeSync, afterLiveState, afterScoresheetRefresh]
   )
 
   // Keep logEventRef updated with latest function to avoid circular dependencies
@@ -2987,7 +3046,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
       // Show set end time confirmation modal
       const defaultTime = new Date().toISOString()
-      setSetEndTimeModal({ setIndex: set.index, winner: 'team1', team1Points, team2Points, defaultTime, isMatchEnd })
+      deferUi(() => setSetEndTimeModal({ setIndex: set.index, winner: 'team1', team1Points, team2Points, defaultTime, isMatchEnd }))
       return true
     }
     if (team2Points >= pointsToWin && team2Points - team1Points >= 2) {
@@ -3002,11 +3061,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
       // Show set end time confirmation modal
       const defaultTime = new Date().toISOString()
-      setSetEndTimeModal({ setIndex: set.index, winner: 'team2', team1Points, team2Points, defaultTime, isMatchEnd })
+      deferUi(() => setSetEndTimeModal({ setIndex: set.index, winner: 'team2', team1Points, team2Points, defaultTime, isMatchEnd }))
       return true
     }
     return false
-  }, [matchId, setEndTimeModal])
+  }, [matchId, setEndTimeModal, deferUi])
 
   // Determine who has serve based on events
   const getCurrentServe = useCallback(() => {
@@ -3285,23 +3344,21 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     [pointsBySide.left, pointsBySide.right, isCompactMode, isLaptopMode]
   )
 
-  const handlePoint = useCallback(
+  const awardPoint = useCallback(
     async (side, skipConfirmation = false, fromPenalty = false) => {
-      cLogger.logHandler('handlePoint', { side, skipConfirmation, fromPenalty })
-      if (!data?.set) return
       const teamKey = mapSideToTeamKey(side)
 
       // Check for accidental point award (if enabled and rally just started)
       if (checkAccidentalPointAward && !skipConfirmation && rallyStartTimeRef.current) {
         const timeSinceRallyStart = (Date.now() - rallyStartTimeRef.current) / 1000
         if (timeSinceRallyStart < accidentalPointAwardDuration) {
-          setAccidentalPointConfirmModal({
+          deferUi(() => setAccidentalPointConfirmModal({
             team: teamKey,
             onConfirm: () => {
               setAccidentalPointConfirmModal(null)
               handlePoint(side, true, fromPenalty) // Call with skipConfirmation = true, preserve fromPenalty
             }
-          })
+          }))
           return
         }
       }
@@ -3414,11 +3471,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
         // One point to TTO: at 20 in sets 1-2 only
         if (totalScore === 20 && currentSetIndex >= 1 && currentSetIndex <= 2) {
-          setPreEventPopup({ message: 'One point to TTO' })
+          deferUi(() => setPreEventPopup({ message: 'One point to TTO' }))
         }
         // One point to switch (but not at 20 since that shows TTO message)
         else if (pointsUntilSwitch === 1 && totalScore > 0) {
-          setPreEventPopup({ message: 'One point to switch' })
+          deferUi(() => setPreEventPopup({ message: 'One point to switch' }))
         }
 
         // At 21 points in Sets 1-2: TTO modal that triggers court switch when dismissed
@@ -3443,35 +3500,57 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           }
 
           // Show TTO modal directly - court switch will happen when TTO ends
-          setTtoModal({
-            set: data.set,
+          const ttoSet = data.set
+          deferUi(() => setTtoModal({
+            set: ttoSet,
             team1Points,
             team2Points,
             countdown: 45,
             started: false,
             triggerCourtSwitchAfter: true,  // Flag to trigger court switch when TTO ends
             teamThatScored: teamKey  // Track which team scored to allow BMP for losing team
-          })
+          }))
           return // Don't check for set end yet, wait for TTO + court switch
         }
 
         // Regular court change: every 7 pts in S1/S2, every 5 pts in S3
         if (totalScore > 0 && totalScore % courtChangeInterval === 0) {
           // Show court switch modal
-          setCourtSwitchModal({
-            set: data.set,
+          const switchSet = data.set
+          deferUi(() => setCourtSwitchModal({
+            set: switchSet,
             team1Points,
             team2Points,
             teamThatScored: teamKey
-          })
+          }))
           return // Don't check for set end yet, wait for court switch confirmation
         }
       }
 
-      const setEnded = checkSetEnd(freshCurrentSet, team1Points, team2Points)
+      // Awaited: inside the point's transaction (its dialog opens with the score)
+      await checkSetEnd(freshCurrentSet, team1Points, team2Points)
       // If set didn't end, we're done. If it did, checkSetEnd will show the confirmation modal
     },
-    [data?.set, data?.events, logEvent, mapSideToTeamKey, checkSetEnd, getCurrentServe, matchId, syncToReferee]
+    [data?.set, data?.events, logEvent, mapSideToTeamKey, checkSetEnd, getCurrentServe, matchId, deferUi]
+  )
+
+  const handlePoint = useCallback(
+    async (side, skipConfirmation = false, fromPenalty = false) => {
+      cLogger.logHandler('handlePoint', { side, skipConfirmation, fromPenalty })
+      if (!data?.set) return
+      // ONE action (one transaction, one screen change): the score, the point
+      // event, the technical time-out and the dialog the point opens. A double
+      // tap on a point button (or a tap on both) while the first point is
+      // written or not on screen yet is dropped (key 'point'). A penalty point
+      // joins its sanction's action (or runs unkeyed: its confirm is guarded).
+      try {
+        await runAction(fromPenalty ? null : 'point', () => awardPoint(side, skipConfirmation, fromPenalty))
+      } catch (err) {
+        // A failed point wrote nothing and was reported (onConfirmFailed)
+        if (!isReportedActionError(err)) throw err
+      }
+    },
+    [data?.set, awardPoint, runAction]
   )
 
   const handleStartRally = useCallback(async (skipConfirmation = false) => {
@@ -3535,9 +3614,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   }, [logEvent, isFirstRally, data?.team1Players, data?.team2Players, data?.events, data?.set, data?.match, matchId, getNextSubSeq, syncToReferee, checkAccidentalRallyStart, accidentalRallyStartDuration, getCurrentServe, getServingPlayer, leftisTeam1, leftTeam, rightTeam])
 
   const handleReplay = useCallback(async () => {
-    // During rally: just log replay event (no point to undo)
+    // During rally: ask first, confirmReplay logs the replay event (no point to undo)
     if (rallyStatus === 'in_play') {
-      await logEvent('replay')
+      setReplayConfirm(true)
       return
     }
     // After point: show confirmation modal to undo point
@@ -3580,7 +3659,20 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         setReplayRallyConfirm({ event: pointEvent, description, selectedOption: 'swap' }) // Default to swap
       }
     }
-  }, [logEvent, rallyStatus, canReplayRally, data?.events, data?.team1Team?.name, data?.team2Team?.name])
+  }, [rallyStatus, canReplayRally, data?.events, data?.team1Team?.name, data?.team2Team?.name])
+
+  // Confirmed "Replay rally": only while the rally is still in play. Closes
+  // first, and a double tap logs one replay (useConfirmAction)
+  const runReplayConfirm = useConfirmAction(onConfirmFailed)
+  const confirmReplay = useCallback(() => runReplayConfirm(async () => {
+    setReplayConfirm(false)
+    if (rallyStatus !== 'in_play') return
+    await logEvent('replay')
+  }), [runReplayConfirm, logEvent, rallyStatus])
+
+  const cancelReplay = useCallback(() => {
+    setReplayConfirm(false)
+  }, [])
 
   // Handle Improper Request sanction
   const handleImproperRequest = useCallback((side) => {
@@ -3609,49 +3701,54 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     setSanctionConfirm({ side, type: sanctionType })
   }, [data?.match, rallyStatus, leftisTeam1])
 
-  // Confirm sanction
-  const confirmSanction = useCallback(async () => {
+  // Confirm sanction: snapshot, close, then write (useConfirmAction). A double
+  // tap logged a delay penalty twice and gave two points.
+  const runSanctionConfirm = useConfirmAction(onConfirmFailed)
+  const confirmSanction = useCallback(() => runSanctionConfirm(async () => {
     if (!sanctionConfirm || !data?.match || !data?.set) return
 
     const { side, type } = sanctionConfirm
+    // Close first, then write
+    setSanctionConfirm(null)
     const teamKey = mapSideToTeamKey(side)
     const teamKeyCapitalized = teamKey === 'team1' ? 'team1' : 'team2'
 
-    // Update match sanctions for improper request and delay warning
-    // Store by team key (team1/team2) so sanctions follow the team when sides switch
-    if (type === 'improper_request' || type === 'delay_warning') {
-      const currentSanctions = data.match.sanctions || {}
-      await db.matches.update(matchId, {
-        sanctions: {
-          ...currentSanctions,
-          [`${type === 'improper_request' ? 'improperRequest' : 'delayWarning'}${teamKeyCapitalized}`]: true
-        }
+    // ONE action: the sanction, its flag and a delay penalty's point (which
+    // joins it) commit and show together
+    await runAction('sanction', async () => {
+      // Update match sanctions for improper request and delay warning
+      // Store by team key (team1/team2) so sanctions follow the team when sides switch
+      if (type === 'improper_request' || type === 'delay_warning') {
+        const currentSanctions = data.match.sanctions || {}
+        await db.matches.update(matchId, {
+          sanctions: {
+            ...currentSanctions,
+            [`${type === 'improper_request' ? 'improperRequest' : 'delayWarning'}${teamKeyCapitalized}`]: true
+          }
+        })
+      }
+
+      // Log the sanction event
+      await logEvent('sanction', {
+        team: teamKey,
+        type: type
       })
-    }
 
-    // Log the sanction event
-    await logEvent('sanction', {
-      team: teamKey,
-      type: type
+      // Debug log: sanction
+      debugLogger.log('SANCTION', {
+        team: teamKey,
+        type,
+        side
+      }, getStateSnapshot())
+
+      // If delay penalty, award point to the other team immediately
+      // Beach volleyball has no lineups - always 2 players per team
+      if (type === 'delay_penalty') {
+        const otherSide = side === 'left' ? 'right' : 'left'
+        await handlePoint(otherSide, false, true)
+      }
     })
-
-    // Debug log: sanction
-    debugLogger.log('SANCTION', {
-      team: teamKey,
-      type,
-      side
-    }, getStateSnapshot())
-
-    // If delay penalty, award point to the other team immediately
-    // Beach volleyball has no lineups - always 2 players per team
-    if (type === 'delay_penalty') {
-      setSanctionConfirm(null)
-      const otherSide = side === 'left' ? 'right' : 'left'
-      await handlePoint(otherSide, false, true)
-    } else {
-      setSanctionConfirm(null)
-    }
-  }, [sanctionConfirm, data?.match, data?.set, data?.events, mapSideToTeamKey, matchId, logEvent, handlePoint])
+  }), [runSanctionConfirm, runAction, sanctionConfirm, data?.match, data?.set, data?.events, mapSideToTeamKey, matchId, logEvent, handlePoint])
 
   // Confirm set start time
   const confirmSetStartTime = useCallback(async (time) => {
@@ -4710,7 +4807,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const serverNumber = servingLineup?.['I']?.number || servingLineup?.['I'] || '?'
       eventDescription = `${t('scoreboard.team', 'Team')} ${servingTeamLabel} ${t('scoreboard.serves', 'serves')} #${serverNumber}`
     } else {
-      eventDescription = event.type
+      // Never show an internal type name: "some_event" reads "Some event"
+      const readable = String(event.type || '').replace(/_/g, ' ')
+      eventDescription = readable.charAt(0).toUpperCase() + readable.slice(1)
       if (teamName) {
         eventDescription += ` — ${teamName}`
       }
@@ -4868,11 +4967,71 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     return false
   }, [data?.events, data?.set, getActionDescription])
 
+  // Remove events from the log AND from the cloud: their unsent sync jobs are
+  // dropped (the cloud never gets a phantom row) and, for a synced match, a
+  // delete is queued for each (the insert may already be sent, or on its way).
+  // Undo, Replay, the decision change, cancelling a change of courts and the
+  // event editor's deletes all go through here. Ported from OpenVolley
+  // discardEvents (Scoreboard.jsx).
+  const discardEvents = useCallback(async (eventsToRemove) => {
+    const rows = (eventsToRemove || []).filter(e => e && e.id != null)
+    if (rows.length === 0) return
+    const ids = rows.map(e => e.id)
+    await db.events.bulkDelete(ids)
+    const unsent = await db.sync_queue.where('status').anyOf(...UNSENT_STATUSES).toArray()
+    const staleJobs = syncJobsForEvents(unsent, ids)
+    if (staleJobs.length > 0) await db.sync_queue.bulkDelete(staleJobs.map(j => j.id))
+    const match = await db.matches.get(matchId)
+    if (match && !match.test && match.seed_key) {
+      const now = new Date()
+      await db.sync_queue.bulkAdd(ids.map(id => eventDeleteJob(match.seed_key, id, now)))
+    }
+  }, [matchId])
+
+  // The set score after taking points back: what the removed points added is
+  // subtracted (a manual score adjustment stays), the set is open again, and
+  // the cloud sets row follows through the sync queue (also offline).
+  const applyPointRemovalScore = useCallback(async (plan) => {
+    if (!plan) return null
+    const setRow = await db.sets.where({ matchId }).and(s => s.index === plan.setIndex).first()
+    if (!setRow) return null
+    const score = scoreAfterRemoval(setRow, plan.delta)
+    await db.sets.update(setRow.id, { ...score, finished: false })
+    await queueSetScoreSync(db, { matchId, setIndex: plan.setIndex })
+    return score
+  }, [matchId])
+
+  // The event editor's deletes (Edit match > event history): asked in the
+  // app's own dialog (askConfirm: a native confirm() reads as "yes" in the
+  // desktop app), then removed like every correction (discardEvents: the
+  // cloud row too, it stayed on the server before). A point takes the set
+  // score with it, a sanction the team's sanction flag; then the tablets,
+  // the livescore and the scoresheet follow. Ported from OpenVolley 07c7bbce,
+  // 38509c25.
+  const deleteEventByHand = useCallback(async (event, extraEvents = []) => {
+    const allEvents = await db.events.where('matchId').equals(matchId).toArray()
+    const rows = [event, ...extraEvents].filter(Boolean)
+    await discardEvents(rows)
+    if (rows.some(e => e.type === 'point')) {
+      const delta = scoreDeltaOfRemoval(allEvents, rows.map(e => e.id), event.setIndex)
+      await applyPointRemovalScore({ setIndex: event.setIndex, delta })
+    }
+    if (rows.some(e => e.type === 'sanction')) {
+      const match = await db.matches.get(matchId)
+      const remaining = allEvents.filter(e => !rows.some(r => r.id === e.id))
+      await db.matches.update(matchId, { sanctions: teamSanctionFlags(remaining, match?.sanctions) })
+    }
+    syncToReferee()
+    syncLiveStateToSupabase(rows.some(e => e.type === 'point') ? 'manual_score_update' : 'manual_event_delete', null, null)
+    refreshScoresheet()
+  }, [matchId, discardEvents, applyPointRemovalScore, syncToReferee, syncLiveStateToSupabase, refreshScoresheet])
+
   // NEW SNAPSHOT-BASED UNDO SYSTEM
   // Instead of complex per-event-type logic, we simply:
   // 1. Delete all events with the same base seq
   // 2. Restore state from the previous event's snapshot
-  const handleUndo = useCallback(async () => {
+  const runUndoConfirm = useConfirmAction(onConfirmFailed)
+  const handleUndo = useCallback(() => runUndoConfirm(async () => {
     cLogger.logHandler('handleUndo', { hasUndoConfirm: !!undoConfirm, eventType: undoConfirm?.event?.type })
     if (!undoConfirm || !data?.set) {
       setUndoConfirm(null)
@@ -4880,126 +5039,158 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
 
     const lastEvent = undoConfirm.event
+    // Close first, then undo (useConfirmAction): a second tap must not undo
+    // the event before it as well
+    setUndoConfirm(null)
     const lastEventSeq = lastEvent.seq || 0
     const baseSeq = Math.floor(lastEventSeq)
 
+    // ONE action (one transaction, one screen change): the removed events,
+    // the restored score and state and their sync jobs; a failure writes
+    // nothing and says so (useScorerActions_beach)
+    await runAction('undo', async () => {
+      try {
+        // 1. Find and delete ALL events with the same base seq (main + sub-events)
+        const allEvents = await db.events.where('matchId').equals(matchId).toArray()
+        const eventsToDelete = allEvents.filter(e => Math.floor(e.seq || 0) === baseSeq)
 
-    try {
-      // 1. Find and delete ALL events with the same base seq (main + sub-events)
-      const allEvents = await db.events.where('matchId').equals(matchId).toArray()
-      const eventsToDelete = allEvents.filter(e => Math.floor(e.seq || 0) === baseSeq)
-
-      // For point events, also delete the preceding rally_start
-      if (lastEvent.type === 'point') {
-        const rallyStartEvent = allEvents
-          .filter(e => e.type === 'rally_start' && e.setIndex === data.set.index && (e.seq || 0) < lastEventSeq)
-          .sort((a, b) => (b.seq || 0) - (a.seq || 0))[0]
-        if (rallyStartEvent && !eventsToDelete.some(e => e.id === rallyStartEvent.id)) {
-          eventsToDelete.push(rallyStartEvent)
-        }
-      }
-
-      for (const e of eventsToDelete) {
-        await db.events.delete(e.id)
-        // Also remove from sync_queue if pending
-        const syncItems = await db.sync_queue.where('status').equals('queued').toArray()
-        const undoMatch = await db.matches.get(matchId)
-        const undoExtIds = new Set([String(e.id), ...(undoMatch?.seed_key ? [eventExtId(undoMatch.seed_key, e.id)] : [])])
-        const matchingSyncItem = syncItems.find(s => s.resource === 'event' && undoExtIds.has(s.payload?.external_id))
-        if (matchingSyncItem) {
-          await db.sync_queue.delete(matchingSyncItem.id)
-        }
-      }
-
-      // 2. Find the previous event's snapshot
-      const remainingEvents = allEvents
-        .filter(e => Math.floor(e.seq || 0) < baseSeq)
-        .sort((a, b) => (b.seq || 0) - (a.seq || 0))
-
-      const previousEvent = remainingEvents[0]
-
-      // 3. Restore state from the previous event's snapshot
-      if (previousEvent?.stateSnapshot) {
-        await restoreStateFromSnapshot(previousEvent.stateSnapshot)
-      } else {
-        // No previous event with snapshot - calculate state from remaining events
-
-        // Re-query remaining events (after deletion)
-        const remainingAllEvents = await db.events.where({ matchId }).toArray()
-        const currentSetIndex = data.set.index
-        const remainingPointEvents = remainingAllEvents.filter(e =>
-          e.type === 'point' && e.setIndex === currentSetIndex
-        )
-
-        // Count points for each team from remaining point events
-        let team1Points = 0
-        let team2Points = 0
-        for (const pe of remainingPointEvents) {
-          // Handle BMP reversal: subtract from reversed team
-          if (pe.payload?.reversedTeam === 'team1') team1Points = Math.max(0, team1Points - 1)
-          else if (pe.payload?.reversedTeam === 'team2') team2Points = Math.max(0, team2Points - 1)
-          if (pe.payload?.team === 'team1') team1Points++
-          else if (pe.payload?.team === 'team2') team2Points++
+        // For point events, also delete the preceding rally_start
+        if (lastEvent.type === 'point') {
+          const rallyStartEvent = allEvents
+            .filter(e => e.type === 'rally_start' && e.setIndex === data.set.index && (e.seq || 0) < lastEventSeq)
+            .sort((a, b) => (b.seq || 0) - (a.seq || 0))[0]
+          if (rallyStartEvent && !eventsToDelete.some(e => e.id === rallyStartEvent.id)) {
+            eventsToDelete.push(rallyStartEvent)
+          }
         }
 
+        // Their unsent cloud jobs go, and what was already sent is deleted in
+        // the cloud too (it stayed on the server before)
+        await discardEvents(eventsToDelete)
 
-        // Update set with calculated score
-        const currentSet = await db.sets.where({ matchId }).and(s => s.index === currentSetIndex).first()
-        if (currentSet) {
-          await db.sets.update(currentSet.id, { team1Points, team2Points, finished: false })
-        }
-
-        // Recalculate match-level sanctions from remaining events
-        const sanctions = {}
-        for (const e of remainingAllEvents) {
-          if (e.type === 'sanction') {
-            const sType = e.payload?.type
-            const sTeam = e.payload?.team
-            if (sType === 'improper_request' && sTeam) {
-              sanctions[`improperRequest${sTeam}`] = true
-            } else if (sType === 'delay_warning' && sTeam) {
-              sanctions[`delayWarning${sTeam}`] = true
+        // A decision change: the point goes back to the team it was first given
+        // to (the point's snapshot restores the score, not the point's team)
+        if (lastEvent.type === 'decision_change') {
+          const reversal = planDecisionChangeReversal(lastEvent, allEvents)
+          if (reversal) {
+            await db.events.update(reversal.pointEventId, { payload: reversal.pointPayload })
+            const pointRow = await db.events.get(reversal.pointEventId)
+            const reversalMatch = await db.matches.get(matchId)
+            if (pointRow && reversalMatch && !reversalMatch.test && reversalMatch.seed_key) {
+              await db.sync_queue.add(eventUpsertJob(reversalMatch.seed_key, pointRow))
             }
           }
         }
 
-        // Reset match status to live and restore sanctions
-        await db.matches.update(matchId, { status: 'live', sanctions })
-      }
+        // 2. Find the previous event's snapshot
+        const remainingEvents = allEvents
+          .filter(e => Math.floor(e.seq || 0) < baseSeq)
+          .sort((a, b) => (b.seq || 0) - (a.seq || 0))
 
-      // Handle special cases for court switch undo (technical_to and court_switch events)
-      // These events write setLeftTeamOverrides directly to the match before the event is created,
-      // so we store preSwitchOverrides in the payload to enable reliable restoration
-      if (lastEvent.type === 'technical_to' || lastEvent.type === 'court_switch') {
-        const preSwitchOverrides = lastEvent.payload?.preSwitchOverrides
-        if (preSwitchOverrides !== undefined) {
-          await db.matches.update(matchId, { setLeftTeamOverrides: preSwitchOverrides })
+        const previousEvent = remainingEvents[0]
+
+        // 3. Restore state from the previous event's snapshot
+        if (previousEvent?.stateSnapshot) {
+          await restoreStateFromSnapshot(previousEvent.stateSnapshot)
+        } else {
+          // No previous event with snapshot - calculate state from remaining events
+
+          // Re-query remaining events (after deletion)
+          const remainingAllEvents = await db.events.where({ matchId }).toArray()
+          const currentSetIndex = data.set.index
+          const remainingPointEvents = remainingAllEvents.filter(e =>
+            e.type === 'point' && e.setIndex === currentSetIndex
+          )
+
+          // Count points for each team from remaining point events
+          let team1Points = 0
+          let team2Points = 0
+          for (const pe of remainingPointEvents) {
+            // Handle BMP reversal: subtract from reversed team
+            if (pe.payload?.reversedTeam === 'team1') team1Points = Math.max(0, team1Points - 1)
+            else if (pe.payload?.reversedTeam === 'team2') team2Points = Math.max(0, team2Points - 1)
+            if (pe.payload?.team === 'team1') team1Points++
+            else if (pe.payload?.team === 'team2') team2Points++
+          }
+
+
+          // Update set with calculated score
+          const currentSet = await db.sets.where({ matchId }).and(s => s.index === currentSetIndex).first()
+          if (currentSet) {
+            await db.sets.update(currentSet.id, { team1Points, team2Points, finished: false })
+          }
+
+          // Recalculate match-level sanctions from remaining events
+          const sanctions = {}
+          for (const e of remainingAllEvents) {
+            if (e.type === 'sanction') {
+              const sType = e.payload?.type
+              const sTeam = e.payload?.team
+              if (sType === 'improper_request' && sTeam) {
+                sanctions[`improperRequest${sTeam}`] = true
+              } else if (sType === 'delay_warning' && sTeam) {
+                sanctions[`delayWarning${sTeam}`] = true
+              }
+            }
+          }
+
+          // Reset match status to live and restore sanctions
+          await db.matches.update(matchId, { status: 'live', sanctions })
         }
-      }
 
-      // Handle special cases for set_end undo
-      if (lastEvent.type === 'set_end') {
-        // Delete the next set if it was created
-        const allSets = await db.sets.where({ matchId }).toArray()
-        const nextSet = allSets.find(s => s.index === data.set.index + 1)
-        if (nextSet) {
-          await db.events.where('matchId').equals(matchId).and(e => e.setIndex === nextSet.index).delete()
-          await db.sets.delete(nextSet.id)
+        // Handle special cases for court switch undo (technical_to and court_switch events)
+        // These events write setLeftTeamOverrides directly to the match before the event is created,
+        // so we store preSwitchOverrides in the payload to enable reliable restoration
+        if (lastEvent.type === 'technical_to' || lastEvent.type === 'court_switch') {
+          const preSwitchOverrides = lastEvent.payload?.preSwitchOverrides
+          if (preSwitchOverrides !== undefined) {
+            await db.matches.update(matchId, { setLeftTeamOverrides: preSwitchOverrides })
+          }
         }
-      }
 
-    } catch (error) {
-      console.error('[handleUndo] Error:', error)
-    } finally {
-      // Always close the modal
-      setUndoConfirm(null)
-      // Sync to Referee and Supabase after undo
-      syncToReferee()
-      syncLiveStateToSupabase('undo', null, null)
-      // Refresh eScoresheet if open
-      refreshScoresheet()
-    }
-  }, [undoConfirm, data?.set, matchId, restoreStateFromSnapshot, syncToReferee, syncLiveStateToSupabase, refreshScoresheet])
+        // Handle special cases for set_end undo
+        if (lastEvent.type === 'set_end') {
+          // Delete the next set if it was created
+          const allSets = await db.sets.where({ matchId }).toArray()
+          const nextSet = allSets.find(s => s.index === data.set.index + 1)
+          if (nextSet) {
+            const nextSetEvents = await db.events.where('matchId').equals(matchId).and(e => e.setIndex === nextSet.index).toArray()
+            await discardEvents(nextSetEvents)
+            await db.sets.delete(nextSet.id)
+            // Its set insert (and score updates) not sent yet go too
+            const unsent = await db.sync_queue.where('status').anyOf(...UNSENT_STATUSES).toArray()
+            const staleSetJobs = syncJobsForSets(unsent, [nextSet.id])
+            if (staleSetJobs.length > 0) await db.sync_queue.bulkDelete(staleSetJobs.map(j => j.id))
+          }
+          // The ended set is open again, in the cloud too
+          const undoMatch = await db.matches.get(matchId)
+          const endedSetIndex = lastEvent.payload?.setIndex ?? lastEvent.setIndex
+          const endedSet = (await db.sets.where({ matchId }).toArray()).find(s => s.index === endedSetIndex)
+          if (endedSet) {
+            await db.sets.update(endedSet.id, { finished: false, endTime: null })
+            if (undoMatch && !undoMatch.test && undoMatch.seed_key) {
+              const reopened = await db.sets.get(endedSet.id)
+              await db.sync_queue.add(setReopenJob(undoMatch.seed_key, reopened))
+            }
+          }
+        } else {
+          // The cloud set row follows the restored score (queued: also offline)
+          await queueSetScoreSync(db, { matchId, setIndex: lastEvent.setIndex ?? data.set.index })
+        }
+
+        // Sync to Referee and Supabase after undo (after the commit, once)
+        afterRefereeSync()
+        afterLiveState('undo')
+        // Refresh eScoresheet if open
+        afterScoresheetRefresh()
+      } catch (error) {
+        console.error('[handleUndo] Error:', error)
+        // Rethrown: the undo rolls back as a whole (a half-done undo, e.g. the
+        // events gone and the score not restored, is never committed)
+        throw error
+      }
+    })
+  }), [runUndoConfirm, runAction, undoConfirm, data?.set, matchId, restoreStateFromSnapshot, discardEvents, afterRefereeSync, afterLiveState, afterScoresheetRefresh])
 
   // OLD UNDO LOGIC REMOVED - The following complex per-event-type logic has been replaced
   // by the snapshot-based undo system above. Keeping this comment for reference.
@@ -5012,158 +5203,92 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   }, [])
 
   // Handle replay rally - undo last point (go back to state before the point, no rally restart)
-  const handleReplayRally = useCallback(async () => {
+  // A replayed rally scores no point, here or on the server: the point (with
+  // its BMP group when a BMP decided it) is taken back through
+  // planPointRemoval and discardEvents (its unsent sync job dropped, a cloud
+  // delete queued for what was sent: raw db.events.delete calls left the
+  // point's job queued and the server kept it), the set score goes to the
+  // cloud through the sync queue, the replay event is logged like every
+  // event (logEvent: sync job, snapshot, tablets), and the tablets and the
+  // livescore are synced as after an undo. Ported from OpenVolley 93359315.
+  // ONE action (key 'decision'; reached from handleDecisionChange it joins
+  // that action): the removed point, the score, the replay event.
+  const handleReplayRally = useCallback(() => runAction('decision', async () => {
     if (!replayRallyConfirm || !data?.set) {
       setReplayRallyConfirm(null)
       return
     }
 
     const lastEvent = replayRallyConfirm.event
-    const lastEventSeq = lastEvent.seq || 0
-    const baseSeq = Math.floor(lastEventSeq)
-
-    // Find and delete ALL events with the same base ID (point and any related rotation events)
-    const allEvents = await db.events.where('matchId').equals(matchId).toArray()
-    const eventsToDelete = allEvents.filter(e => {
-      const eSeq = e.seq || 0
-      return Math.floor(eSeq) === baseSeq
-    })
+    // Close first, then write: the dialog's score preview is live and redrew
+    // from the replayed score otherwise
+    setReplayRallyConfirm(null)
 
     try {
-      // If it's a point, undo the score change
-      if (lastEvent.type === 'point' && lastEvent.payload?.team) {
-        const team = lastEvent.payload.team
-        const field = team === 'team1' ? 'team1Points' : 'team2Points'
-        const currentPoints = data.set[field]
+      const allEvents = await db.events.where('matchId').equals(matchId).toArray()
+      const plan = planPointRemoval(allEvents, lastEvent)
+      if (!plan) return
+      const deleteIds = new Set(plan.deleteEventIds)
+      await discardEvents(allEvents.filter(e => deleteIds.has(e.id)))
 
-        // Decrement the score
-        if (currentPoints > 0) {
-          await db.sets.update(data.set.id, {
-            [field]: currentPoints - 1,
-            finished: false
-          })
-        }
-
-        // Check if there was a rotation after this point (sideout)
-        // Find the lineup event that came right after this point (rotation)
-        const pointEvents = data.events.filter(e => e.type === 'point' && e.setIndex === data.set.index)
-        const sortedPoints = pointEvents.sort((a, b) => (b.seq || 0) - (a.seq || 0))
-
-        // Get the team that had the point before this one (to determine who had serve)
-        // Calculate first serve for current set based on alternation pattern
-        const replaySetIndex = data.set.index
-        const replaySet1FirstServe = data?.match?.firstServe || 'team1'
-        let replayCurrentSetFirstServe
-        if (replaySetIndex === 3 && data.match?.set3FirstServe) {
-          const replayTeamAKey = data.match.coinTossTeamA || 'team1'
-          const replayTeamBKey = data.match.coinTossTeamB || 'team2'
-          replayCurrentSetFirstServe = data.match.set3FirstServe === 'A' ? replayTeamAKey : replayTeamBKey
-        } else if (replaySetIndex === 3) {
-          const set2First = data.match?.set2FirstServe || (replaySet1FirstServe === 'team1' ? 'team2' : 'team1')
-          replayCurrentSetFirstServe = set2First === 'team1' ? 'team2' : 'team1'
-        } else if (replaySetIndex === 2 && data.match?.set2FirstServe) {
-          replayCurrentSetFirstServe = data.match.set2FirstServe
-        } else if (replaySetIndex === 2) {
-          replayCurrentSetFirstServe = replaySet1FirstServe === 'team1' ? 'team2' : 'team1'
-        } else {
-          replayCurrentSetFirstServe = replaySet1FirstServe
-        }
-        let previousServeTeam = replayCurrentSetFirstServe
-        if (sortedPoints.length > 1) {
-          // The second point is the one before the current one
-          previousServeTeam = sortedPoints[1].payload?.team || previousServeTeam
-        }
-
-        // If the scoring team didn't have serve (sideout), a rotation was logged after the point
-        // We need to undo that rotation too
-        if (lastEvent.payload.team !== previousServeTeam) {
-          // Find the rotation lineup that was created after this point
-          const lineupEvents = data.events.filter(e =>
-            e.type === 'lineup' &&
-            e.setIndex === data.set.index &&
-            !e.payload?.isInitial &&
-            !e.payload?.fromSubstitution &&
-            (e.seq || 0) > lastEventSeq
-          ).sort((a, b) => (a.seq || 0) - (b.seq || 0)) // Ascending by seq
-
-          // The first lineup event after the point is the rotation
-          if (lineupEvents.length > 0 && lineupEvents[0].payload?.team === lastEvent.payload.team) {
-            const rotationEvent = lineupEvents[0]
-            await db.events.delete(rotationEvent.id)
-          }
-        }
-      }
-
-      // Capture the old score (before undoing the point)
+      // The set score loses the replayed point, locally and in the cloud
       const oldteam1Points = data.set.team1Points
       const oldteam2Points = data.set.team2Points
-
-      // Delete all events with this base seq
-      for (const eventToDelete of eventsToDelete) {
-        await db.events.delete(eventToDelete.id)
-      }
-
-      // Calculate the new score (after undoing the point)
-      const undoneTeam = lastEvent.payload?.team
-      const newteam1Points = undoneTeam === 'team1' ? oldteam1Points - 1 : oldteam1Points
-      const newteam2Points = undoneTeam === 'team2' ? oldteam2Points - 1 : oldteam2Points
+      const newScore = await applyPointRemovalScore(plan)
 
       // Log the replay event (this is important for match records)
-      const nextSeq = await getNextSeq()
-      const replayStateBefore = getStateSnapshot()
-
-      const replayEventId = await db.events.add({
-        matchId,
-        setIndex: data.set.index,
-        type: 'replay',
-        payload: {
-          reason: 'point_replay',
-          undonePointTeam: undoneTeam,
-          oldteam1Points,
-          oldteam2Points,
-          newteam1Points,
-          newteam2Points
-        },
-        ts: new Date().toISOString(),
-        seq: nextSeq,
-        stateBefore: replayStateBefore
-      })
-
-      // Capture state snapshot for undo system
-      const replaySnapshot = await captureFullStateSnapshot()
-      if (replaySnapshot) {
-        await db.events.update(replayEventId, { stateSnapshot: replaySnapshot })
-      }
+      const undoneTeam = lastEvent.payload?.team
+      await logEvent('replay', {
+        reason: 'point_replay',
+        undonePointTeam: undoneTeam,
+        oldteam1Points,
+        oldteam2Points,
+        newteam1Points: newScore?.team1Points ?? oldteam1Points,
+        newteam2Points: newScore?.team2Points ?? oldteam2Points
+      }, { setIndexOverride: plan.setIndex })
 
       // Go back to idle state - user can then click "Start rally" or "Undo"
       // No automatic rally start
 
-      // Sync to Supabase with fresh snapshot (data has changed)
-      syncLiveStateToSupabase('replay', null, { reason: 'point_replay', undoneTeam }, null)
+      // Tablets, livescore (fresh snapshot: data has changed), scoresheet
+      afterRefereeSync()
+      afterLiveState('replay', null, { reason: 'point_replay', undoneTeam })
+      afterScoresheetRefresh()
 
     } catch (error) {
-      // Error during replay - silently handle
-    } finally {
-      setReplayRallyConfirm(null)
-      // Refresh eScoresheet if open
-      refreshScoresheet()
+      console.error('[handleReplayRally] Error:', error)
+      // Rethrown: the replay rolls back as a whole
+      throw error
     }
-  }, [replayRallyConfirm, data?.events, data?.set, data?.match, matchId, getNextSeq, syncLiveStateToSupabase, refreshScoresheet])
+  }), [runAction, replayRallyConfirm, data?.set, matchId, discardEvents, applyPointRemovalScore, logEvent, afterRefereeSync, afterLiveState, afterScoresheetRefresh])
 
   const cancelReplayRally = useCallback(() => {
     setReplayRallyConfirm(null)
   }, [])
 
   // Handle decision change - either swap point to other team or replay rally
-  const handleDecisionChange = useCallback(async () => {
+  // The swap reaches the server and the tablets: the point is written to the
+  // cloud again with its new team (the event insert is an upsert), the
+  // decision_change event is logged like every event (logEvent: sync job,
+  // snapshot), the set score is queued, and the tablets get the swapped point
+  // (only the live state was pushed before). The decision_change keeps what
+  // Undo needs to give the point back (pointEventId, fromTeam). Ported from
+  // OpenVolley fd74b1e9 / 3c4a88c2.
+  const runDecisionChange = useConfirmAction(onConfirmFailed)
+  const handleDecisionChange = useCallback(() => runDecisionChange(() => runAction('decision', async () => {
     if (!replayRallyConfirm || !data?.set) {
       setReplayRallyConfirm(null)
       return
     }
 
-    const { event: lastEvent, selectedOption } = replayRallyConfirm
+    const { event: lastEvent } = replayRallyConfirm
+    // The dialog pre-selects "Assign to other team"; record what it shows
+    const selectedOption = replayRallyConfirm.selectedOption || 'swap'
 
     if (selectedOption === 'swap') {
+      // Close first, then write: the dialog's live score preview never shows
+      // the swapped score
+      setReplayRallyConfirm(null)
       // Swap the point to the other team
       const oldTeam = lastEvent.payload?.team
       const newTeam = oldTeam === 'team1' ? 'team2' : 'team1'
@@ -5172,84 +5297,73 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
       try {
         // Update scores: decrement old team, increment new team
-        const oldTeamPoints = data.set[oldField]
-        const newTeamPoints = data.set[newField]
-
-        await db.sets.update(data.set.id, {
-          [oldField]: Math.max(0, oldTeamPoints - 1),
-          [newField]: newTeamPoints + 1,
-          finished: false
-        })
+        const setRow = (await db.sets.get(data.set.id)) || data.set
+        const oldScore = { team1Points: setRow.team1Points || 0, team2Points: setRow.team2Points || 0 }
+        const newScore = {
+          ...oldScore,
+          [oldField]: Math.max(0, oldScore[oldField] - 1),
+          [newField]: oldScore[newField] + 1
+        }
+        await db.sets.update(data.set.id, { ...newScore, finished: false })
 
         // Update the point event's team
-        await db.events.update(lastEvent.id, {
-          payload: {
-            ...lastEvent.payload,
-            team: newTeam,
-            swappedFrom: oldTeam // Track that this was swapped
-          }
-        })
-
-        // Log a decision_change event for the record
-        const nextSeq = await getNextSeq()
-        const decisionChangeEventId = await db.events.add({
-          matchId,
-          setIndex: data.set.index,
-          type: 'decision_change',
-          payload: {
-            reason: 'point_swap',
-            fromTeam: oldTeam,
-            toTeam: newTeam,
-            oldteam1Points: data.set.team1Points,
-            oldteam2Points: data.set.team2Points,
-            newteam1Points: oldTeam === 'team1' ? data.set.team1Points - 1 : data.set.team1Points + 1,
-            newteam2Points: oldTeam === 'team2' ? data.set.team2Points - 1 : data.set.team2Points + 1
-          },
-          ts: new Date().toISOString(),
-          seq: nextSeq
-        })
-
-        // Capture state snapshot for undo system
-        const decisionChangeSnapshot = await captureFullStateSnapshot()
-        if (decisionChangeSnapshot) {
-          await db.events.update(decisionChangeEventId, { stateSnapshot: decisionChangeSnapshot })
+        const swappedPayload = {
+          ...lastEvent.payload,
+          team: newTeam,
+          swappedFrom: oldTeam // Track that this was swapped
         }
+        await db.events.update(lastEvent.id, { payload: swappedPayload })
 
-        // Handle rotation changes if serve changed
-        // If old team was NOT serving (sideout happened), we need to undo their rotation
-        // and apply rotation to new team if new team wasn't serving
+        // Older matches logged a rotation line-up after a side-out: the old
+        // team's one goes (with its cloud row)
         const lastEventSeq = lastEvent.seq || 0
-
-        // Find rotation events that happened after the point
-        const rotationEvents = data.events.filter(e =>
+        const rotationEvents = (await db.events.where('matchId').equals(matchId).toArray()).filter(e =>
           e.type === 'lineup' &&
           e.setIndex === data.set.index &&
           !e.payload?.isInitial &&
           !e.payload?.fromSubstitution &&
-          (e.seq || 0) > lastEventSeq
-        ).sort((a, b) => (a.seq || 0) - (b.seq || 0))
+          (e.seq || 0) > lastEventSeq &&
+          e.payload?.team === oldTeam
+        )
+        await discardEvents(rotationEvents)
 
-        // Delete any rotations that were for the old team (sideout that shouldn't have happened)
-        for (const rotEvent of rotationEvents) {
-          if (rotEvent.payload?.team === oldTeam) {
-            await db.events.delete(rotEvent.id)
-          }
+        // Log a decision_change event for the record (snapshot after the swap)
+        await logEvent('decision_change', {
+          reason: 'point_swap',
+          pointEventId: lastEvent.id,
+          fromTeam: oldTeam,
+          toTeam: newTeam,
+          oldteam1Points: oldScore.team1Points,
+          oldteam2Points: oldScore.team2Points,
+          newteam1Points: newScore.team1Points,
+          newteam2Points: newScore.team2Points
+        }, { setIndexOverride: data.set.index })
+
+        // The cloud: the point with its new team, and the set score
+        const match = await db.matches.get(matchId)
+        if (match && !match.test && match.seed_key) {
+          await db.sync_queue.add(eventUpsertJob(match.seed_key, { ...lastEvent, payload: swappedPayload }))
         }
+        await queueSetScoreSync(db, { matchId, setIndex: data.set.index })
 
-        // Sync to Supabase with fresh snapshot (data has changed)
-        syncLiveStateToSupabase('decision_change', null, { reason: 'point_swap', fromTeam: oldTeam, toTeam: newTeam }, null)
+        // The tablets get the swapped point (they kept the old team's point:
+        // only the live state was pushed), the live state its fresh snapshot
+        afterRefereeSync()
+        afterLiveState('decision_change', null, { reason: 'point_swap', fromTeam: oldTeam, toTeam: newTeam })
+        afterScoresheetRefresh()
 
       } catch (error) {
         console.error('[handleDecisionChange] Error swapping point:', error)
+        // Rethrown: a swallowed failure committed the swapped point without
+        // its score; now the decision change rolls back as a whole
+        throw error
       }
     } else {
       // Replay rally - use existing logic
       await handleReplayRally()
       return // handleReplayRally already closes the modal and syncs
     }
-
-    setReplayRallyConfirm(null)
-  }, [replayRallyConfirm, data?.set, data?.events, matchId, getNextSeq, handleReplayRally, syncLiveStateToSupabase])
+  })), [runDecisionChange, runAction, replayRallyConfirm, data?.set, matchId, logEvent, discardEvents, handleReplayRally, afterRefereeSync, afterLiveState, afterScoresheetRefresh])
 
 
 
@@ -5379,12 +5493,18 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     })
   }, [data?.set, getCurrentServe, logEvent])
 
-  const handleBMPOutcome = useCallback(async (result, pointToTeam = null) => {
+  // Close first, then write (useConfirmAction): a double tap on an outcome
+  // gave the point twice
+  const runBMPOutcome = useConfirmAction(onConfirmFailed)
+  const handleBMPOutcome = useCallback((result, pointToTeam = null) => runBMPOutcome(async () => {
     if (!bmpOutcomeModal || !data?.set) return
+    const bmpModal = bmpOutcomeModal
+    setBmpSelectedOutcome(null)
+    setBmpOutcomeModal(null)
 
-    const requestingTeam = bmpOutcomeModal.team
-    const isTeamBMP = bmpOutcomeModal.type === 'team'
-    const isRefereeBMP = bmpOutcomeModal.type === 'referee'
+    const requestingTeam = bmpModal.team
+    const isTeamBMP = bmpModal.type === 'team'
+    const isRefereeBMP = bmpModal.type === 'referee'
     const currentSetId = data.set.id
 
     // Get current score
@@ -5395,7 +5515,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     console.log(`[BMP-LIVE] result=${result}, pointToTeam=${pointToTeam}`)
     console.log(`[BMP-LIVE] requestingTeam=${requestingTeam}, isTeamBMP=${isTeamBMP}, isRefereeBMP=${isRefereeBMP}`)
     console.log(`[BMP-LIVE] Score BEFORE: team1=${team1Points}, team2=${team2Points}`)
-    console.log(`[BMP-LIVE] bmpOutcomeModal:`, JSON.stringify(bmpOutcomeModal))
+    console.log(`[BMP-LIVE] bmpOutcomeModal:`, JSON.stringify(bmpModal))
 
     // Determine if we need to change score
     const shouldChangeScore = (isTeamBMP && result === 'successful') ||
@@ -5442,7 +5562,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         pointAwarded: true,
         pointToTeam: scoringTeam,
         newScore: { team1: team1Points, team2: team2Points }
-      }, { parentSeq: bmpOutcomeModal.requestSeq })
+      }, { parentSeq: bmpModal.requestSeq })
 
       console.log(`[BMP-LIVE] Score AFTER update: team1=${team1Points}, team2=${team2Points}`)
 
@@ -5456,8 +5576,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       if (isTeamBMP && result === 'successful') {
         bmpPointPayload.reversedTeam = requestingTeam === 'team1' ? 'team2' : 'team1'
       }
-      console.log(`[BMP-LIVE] Logging BMP point event:`, JSON.stringify(bmpPointPayload), `parentSeq=${bmpOutcomeModal.requestSeq}`)
-      await logEvent('point', bmpPointPayload, { parentSeq: bmpOutcomeModal.requestSeq })
+      console.log(`[BMP-LIVE] Logging BMP point event:`, JSON.stringify(bmpPointPayload), `parentSeq=${bmpModal.requestSeq}`)
+      await logEvent('point', bmpPointPayload, { parentSeq: bmpModal.requestSeq })
 
       // Check if this point ends the set
       const freshSet = await db.sets.get(currentSetId)
@@ -5472,7 +5592,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         result,
         pointAwarded: false,
         newScore: { team1: team1Points, team2: team2Points }
-      }, { parentSeq: bmpOutcomeModal.requestSeq })
+      }, { parentSeq: bmpModal.requestSeq })
 
       // Re-check set end since modal may have been closed before BMP started
       const freshSet = await db.sets.get(currentSetId)
@@ -5483,9 +5603,6 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
     // Sync live state
     syncLiveStateToSupabase('bmp_outcome', requestingTeam || pointToTeam, { result })
-
-    setBmpSelectedOutcome(null)
-    setBmpOutcomeModal(null)
 
     // Check if court switch/TTO modals need to close due to score change after BMP
     if (shouldChangeScore) {
@@ -5512,7 +5629,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             (e.setIndex || 1) === setIndex
           )
           if (ttoEvent) {
-            db.events.delete(ttoEvent.id)
+            await discardEvents([ttoEvent])
           }
           setTtoModal(null)
           syncLiveStateToSupabase('end_tto')
@@ -5523,7 +5640,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         }
       }
     }
-  }, [bmpOutcomeModal, data?.set, data?.events, logEvent, checkSetEnd, syncLiveStateToSupabase, courtSwitchModal, ttoModal, sendActionToReferee])
+  }), [runBMPOutcome, bmpOutcomeModal, data?.set, data?.events, logEvent, checkSetEnd, syncLiveStateToSupabase, courtSwitchModal, ttoModal, sendActionToReferee, discardEvents])
 
   // Count unsuccessful BMPs per team in current set (each team has 2 unsuccessful per set)
   const getUnsuccessfulBMPsUsed = useCallback((teamKey) => {
@@ -6316,8 +6433,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     return sanctions
   }, [data?.events])
 
-  // Confirm player sanction
-  const confirmPlayerSanction = useCallback(async () => {
+  // Confirm player sanction (useConfirmAction: a double tap logs it once; the
+  // dialog closes before the sanction is written)
+  const runPlayerSanctionConfirm = useConfirmAction(onConfirmFailed)
+  const confirmPlayerSanction = useCallback(() => runPlayerSanctionConfirm(async () => {
     if (!sanctionConfirmModal || !data?.set) return
 
     const { team, type, playerNumber, position, role, sanctionType } = sanctionConfirmModal
@@ -6433,28 +6552,29 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       return
     }
 
-    // Regular sanction (warning or penalty)
-    await logEvent('sanction', {
-      team,
-      type: sanctionType,
-      playerType: type,
-      playerNumber,
-      position,
-      role
-    })
+    // Regular sanction (warning or penalty): close first, then write, as ONE
+    // action (a penalty's point joins it)
+    setSanctionConfirmModal(null)
+    await runAction('sanction', async () => {
+      await logEvent('sanction', {
+        team,
+        type: sanctionType,
+        playerType: type,
+        playerNumber,
+        position,
+        role
+      })
 
-    // If penalty, award point to the other team immediately
-    // Beach volleyball has no lineups - always 2 players per team
-    if (sanctionType === 'penalty') {
-      setSanctionConfirmModal(null)
-      // Award point to the opposing team (marked as fromPenalty for circle display on scoresheet)
-      const otherTeam = team === 'team1' ? 'team2' : 'team1'
-      const otherSide = mapTeamKeyToSide(otherTeam)
-      await handlePoint(otherSide, false, true)
-    } else {
-      setSanctionConfirmModal(null)
-    }
-  }, [sanctionConfirmModal, data?.set, data?.events, data?.team1Players, data?.team2Players, logEvent, mapTeamKeyToSide, handlePoint, leftisTeam1, getPlayerSanctionLevel, playerHasSanctionType, teamHasFormalWarning, handleForfait, matchId, getPlayerPenaltyCountInCurrentSet])
+      // If penalty, award point to the other team immediately
+      // Beach volleyball has no lineups - always 2 players per team
+      if (sanctionType === 'penalty') {
+        // Award point to the opposing team (marked as fromPenalty for circle display on scoresheet)
+        const otherTeam = team === 'team1' ? 'team2' : 'team1'
+        const otherSide = mapTeamKeyToSide(otherTeam)
+        await handlePoint(otherSide, false, true)
+      }
+    })
+  }), [runPlayerSanctionConfirm, runAction, sanctionConfirmModal, data?.set, data?.events, data?.team1Players, data?.team2Players, logEvent, mapTeamKeyToSide, handlePoint, leftisTeam1, getPlayerSanctionLevel, playerHasSanctionType, teamHasFormalWarning, handleForfait, matchId, getPlayerPenaltyCountInCurrentSet])
 
   // Execute expulsion/disqualification after secondary confirmation
   const executeExpulsionOrDisqualification = useCallback(async () => {
@@ -6536,6 +6656,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
       const key = e.key
 
+      // These modals need a decision: Enter confirms them, Escape does not
+      // close them, and the point keys wait. (It was never defined: every
+      // key press threw a ReferenceError.)
+      const hasDecisionModal = !!(sanctionConfirmModal || sanctionConfirm || accidentalRallyConfirmModal ||
+        accidentalPointConfirmModal || undoConfirm || replayConfirm || replayRallyConfirm || courtSwitchModal)
 
       // Confirm key (Enter)
       if (key === keyBindings.confirm) {
@@ -6559,6 +6684,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         if (undoConfirm) {
           e.preventDefault()
           handleUndo()
+          return
+        }
+        if (replayConfirm) {
+          e.preventDefault()
+          confirmReplay()
           return
         }
         if (replayRallyConfirm) {
@@ -6631,8 +6761,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     keybindingsEnabled, keyBindings, editingKey, showOptionsInMenu, keybindingsModalOpen,
     rallyStatus, handleStartRally, handlePoint, handleTimeout, handleUndo,
     playerActionMenu, sanctionDropdown,
-    timeoutModal, menuModal,sanctionConfirmModal, accidentalRallyConfirmModal,
-    accidentalPointConfirmModal, undoConfirm, replayRallyConfirm, handleReplayRally, handleDecisionChange
+    timeoutModal, menuModal, sanctionConfirmModal, sanctionConfirm, courtSwitchModal, accidentalRallyConfirmModal,
+    accidentalPointConfirmModal, undoConfirm, replayConfirm, replayRallyConfirm, confirmReplay, handleReplayRally, handleDecisionChange
   ])
 
   // Team-column sanctions: scoring actions, so at least 44 px (volleyui §7),
@@ -6745,10 +6875,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
   }, [matchId, newPin, editPinType])
 
-  const confirmCourtSwitch = useCallback(async () => {
+  // Close first, then switch (useConfirmAction): the switch flips the court
+  // under the dialog, and a double tap switched twice
+  const runCourtSwitchConfirm = useConfirmAction(onConfirmFailed)
+  const confirmCourtSwitch = useCallback(() => runCourtSwitchConfirm(async () => {
     if (!courtSwitchModal || !data?.match || !data?.set) return
+    const modal = courtSwitchModal
+    setCourtSwitchModal(null)
 
-    const setIndex = courtSwitchModal.set.index
+    const setIndex = modal.set.index
     const teamAKey = data.match.coinTossTeamA || 'team1'
     const teamBKey = teamAKey === 'team1' ? 'team2' : 'team1'
 
@@ -6813,38 +6948,22 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       }
     }
 
-    // Log court_switch event for PDF scoresheet
-    const nextSeq = await getNextSeq()
-    const courtSwitchEventId = await db.events.add({
-      matchId,
-      setIndex: setIndex,
-      type: 'court_switch',
-      payload: {
-        score: { team1: courtSwitchModal.team1Points, team2: courtSwitchModal.team2Points },
-        preSwitchOverrides
-      },
-      ts: new Date().toISOString(),
-      seq: nextSeq
-    })
-
-    // Capture state snapshot for undo system
-    const courtSwitchSnapshot = await captureFullStateSnapshot()
-    if (courtSwitchSnapshot) {
-      await db.events.update(courtSwitchEventId, { stateSnapshot: courtSwitchSnapshot })
-    }
+    // Log court_switch event for PDF scoresheet (logEvent: its snapshot for
+    // undo, its sync job, the tablets)
+    await logEvent('court_switch', {
+      score: { team1: modal.team1Points, team2: modal.team2Points },
+      preSwitchOverrides
+    }, { setIndexOverride: setIndex })
 
     // Check if TTO should be triggered after court switch (at 21 points in sets 1-2)
-    const shouldTriggerTto = courtSwitchModal?.triggerTtoAfter
+    const shouldTriggerTto = modal?.triggerTtoAfter
     const ttoData = shouldTriggerTto ? {
-      set: courtSwitchModal.set,
-      team1Points: courtSwitchModal.team1Points,
-      team2Points: courtSwitchModal.team2Points,
+      set: modal.set,
+      team1Points: modal.team1Points,
+      team2Points: modal.team2Points,
       countdown: 45,
       started: false
     } : null
-
-    // Close the court switch modal
-    setCourtSwitchModal(null)
 
     // Trigger TTO if needed (at 21 points)
     if (shouldTriggerTto && ttoData) {
@@ -6854,7 +6973,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // Sync to Supabase with fresh snapshot to update side_a and serving_team after court switch
     const reason = setIndex === 3 ? 'set3_8points' : `set${setIndex}_court_switch`
     syncLiveStateToSupabase('court_switch', null, { reason }, null)
-  }, [courtSwitchModal, matchId, data?.match, data?.set, syncLiveStateToSupabase, getNextSeq])
+  }), [runCourtSwitchConfirm, courtSwitchModal, matchId, data?.match, data?.set, logEvent, syncLiveStateToSupabase])
 
   // Handle TTO end - performs court switch if needed (at 21 points in sets 1-2)
   const handleTtoEnd = useCallback(async () => {
@@ -6920,43 +7039,34 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     sendActionToReferee('end_tto', {})
   }, [ttoModal, matchId, data?.match, data?.set, syncLiveStateToSupabase, captureFullStateSnapshot, sendActionToReferee])
 
-  const cancelCourtSwitch = useCallback(async () => {
-    if (!courtSwitchModal || !data?.events) return
-
-    // Undo the last point that caused the 8-point threshold
-    // Find the last event by sequence number
-    const sortedEvents = [...data.events].sort((a, b) => {
-      const aSeq = a.seq || 0
-      const bSeq = b.seq || 0
-      if (aSeq !== 0 || bSeq !== 0) {
-        return bSeq - aSeq // Descending
-      }
-      const aTime = typeof a.ts === 'number' ? a.ts : new Date(a.ts).getTime()
-      const bTime = typeof b.ts === 'number' ? b.ts : new Date(b.ts).getTime()
-      return bTime - aTime
-    })
-
-    const lastEvent = sortedEvents[0]
-    if (lastEvent) {
-      // Delete the last event (point or sanction)
-      await db.events.delete(lastEvent.id)
-
-      // Update set points
-      const newteam1Points = courtSwitchModal.teamThatScored === 'team1'
-        ? courtSwitchModal.team1Points - 1
-        : courtSwitchModal.team1Points
-      const newteam2Points = courtSwitchModal.teamThatScored === 'team2'
-        ? courtSwitchModal.team2Points - 1
-        : courtSwitchModal.team2Points
-
-      await db.sets.update(courtSwitchModal.set.id, {
-        team1Points: newteam1Points,
-        team2Points: newteam2Points
-      })
-    }
-
+  // The change of courts (every 7 points, every 5 in set 3) is mandatory; a
+  // missed one is made as soon as it is noticed, the score unchanged. So
+  // "cancel" never means "do not switch": it can only mean the point that
+  // reached the change was recorded in error. It is taken back exactly like
+  // Undo of that point: the point (with its BMP group when a BMP decided it),
+  // the rally_start of that rally, their unsent cloud jobs (and a cloud delete
+  // for what was sent), and the set score without it; then the tablets and the
+  // livescore hear about it. Ported from OpenVolley 81dcb210.
+  const runCourtSwitchCancel = useConfirmAction(onConfirmFailed)
+  const cancelCourtSwitch = useCallback(() => runCourtSwitchCancel(async () => {
+    if (!courtSwitchModal) return
+    // Close first, then take the point back
+    const modal = courtSwitchModal
     setCourtSwitchModal(null)
-  }, [courtSwitchModal, data?.events])
+
+    try {
+      const allEvents = await db.events.where('matchId').equals(matchId).toArray()
+      const plan = planPointRemoval(allEvents, null, { setIndex: modal.set.index, includeRallyStart: true })
+      if (!plan) return
+      const deleteIds = new Set(plan.deleteEventIds)
+      await discardEvents(allEvents.filter(e => deleteIds.has(e.id)))
+      await applyPointRemovalScore(plan)
+    } finally {
+      syncToReferee()
+      syncLiveStateToSupabase('undo', null, null)
+      refreshScoresheet()
+    }
+  }), [runCourtSwitchCancel, courtSwitchModal, matchId, discardEvents, applyPointRemovalScore, syncToReferee, syncLiveStateToSupabase, refreshScoresheet])
 
   // Check if match is already finished (loaded a completed match)
   // If so, trigger onFinishSet to navigate to MatchEnd screen
@@ -7308,137 +7418,79 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             buttonClassName={SB_TOOLBAR_BTN}
             showArrow={false}
             position="right"
-            items={[
-              {
-                key: 'open-scoreboard',
-                icon: <MonitorPlay size={18} />,
-                label: t('scoreboard.menu.openScoreboard', 'Open scoreboard'),
-                onClick: () => {
-                  const opened = openAppWindow('/scoreboard_beach.html?mode=local', { features: 'width=1280,height=720' })
-                  if (!opened.ok) {
-                    showAlert(t('header.allowPopups'), 'warning')
-                  }
+            items={toMenuListItems(matchMenuSections(t, {
+              showRosters: () => {
+                setShowRosters(true)
+              },
+              showSanctions: () => {
+                setShowSanctions(true)
+              },
+              showActionLog: () => {
+                setShowLogs(true)
+              },
+              openRemarks: () => {
+                setShowRemarks(true)
+              },
+              openMatchSetup: onOpenMatchSetup ? () => { onOpenMatchSetup() } : undefined,
+              manualChanges: () => {
+                setShowManualPanel(true)
+              },
+              openScoreboard: () => {
+                const opened = openAppWindow('/scoreboard_beach.html?mode=local', { features: 'width=1280,height=720' })
+                if (!opened.ok) {
+                  showAlert(t('header.allowPopups'), 'warning')
                 }
               },
-              {
-                key: 'action-log',
-                icon: <ScrollText size={18} />,
-                label: t('scoreboard.menu.showActionLog', 'Show action log'),
-                onClick: () => {
-                  setShowLogs(true)
-                }
+              showPins: () => {
+                setShowPinsModal(true)
               },
-              {
-                key: 'sanctions',
-                icon: <ListChecks size={18} />,
-                label: t('scoreboard.menu.showSanctionsResults', 'Show sanctions and results'),
-                onClick: () => {
-                  setShowSanctions(true)
-                }
-              },
-              {
-                key: 'manual',
-                icon: <SlidersHorizontal size={18} />,
-                label: t('scoreboard.menu.manualChanges', 'Manual changes'),
-                onClick: () => {
-                  setShowManualPanel(true)
-                }
-              },
-              {
-                key: 'remarks',
-                icon: <MessageSquareText size={18} />,
-                label: t('scoreboard.menu.openRemarksRecording', 'Open remarks recording'),
-                onClick: () => {
-                  setShowRemarks(true)
-                }
-              },
-              {
-                key: 'stop-match',
-                label: t('scoreboard.menu.stopMatch', 'Stop the match'),
-                icon: <Ban size={18} className="text-red-600" />,
-                onClick: () => {
-                  setStopMatchModal('select')
-                },
-                className: 'text-red-600 hover:bg-red-50'
-              },
-              {
-                key: 'rosters',
-                icon: <Users size={18} />,
-                label: t('scoreboard.menu.showRosters', 'Show rosters'),
-                onClick: () => {
-                  setShowRosters(true)
-                }
-              },
-              {
-                key: 'pins',
-                icon: <KeyRound size={18} />,
-                label: t('scoreboard.menu.showPins', 'Show PINs'),
-                onClick: () => {
-                  setShowPinsModal(true)
-                }
-              },
-              ...(onOpenMatchSetup ? [{
-                key: 'match-setup',
-                icon: <IdCard size={18} />,
-                label: t('scoreboard.menu.showMatchSetup', 'Show match setup'),
-                onClick: () => {
-                  onOpenMatchSetup()
-                }
-              }] : []),
-              { separator: true },
-              {
-                key: 'export',
-                icon: <Download size={18} />,
-                label: t('scoreboard.menu.downloadGameData', 'Download game data (JSON)'),
-                onClick: async () => {
-                  try {
-                    // Export all database data
-                    const allMatches = await db.matches.toArray()
-                    const allTeams = await db.teams.toArray()
-                    const allPlayers = await db.players.toArray()
-                    const allSets = await db.sets.toArray()
-                    const allEvents = await db.events.toArray()
-                    const allReferees = await db.referees.toArray()
-                    const allScorers = await db.scorers.toArray()
+              downloadGameData: async () => {
+                try {
+                  // Export all database data
+                  const allMatches = await db.matches.toArray()
+                  const allTeams = await db.teams.toArray()
+                  const allPlayers = await db.players.toArray()
+                  const allSets = await db.sets.toArray()
+                  const allEvents = await db.events.toArray()
+                  const allReferees = await db.referees.toArray()
+                  const allScorers = await db.scorers.toArray()
 
-                    const exportData = {
-                      exportDate: new Date().toISOString(),
-                      matchId: matchId,
-                      matches: allMatches,
-                      teams: allTeams,
-                      players: allPlayers,
-                      sets: allSets,
-                      events: allEvents,
-                      referees: allReferees,
-                      scorers: allScorers
-                    }
-
-                    // Create a blob and download
-                    const jsonString = JSON.stringify(exportData, null, 2)
-                    const blob = new Blob([jsonString], { type: 'application/json' })
-                    const url = URL.createObjectURL(blob)
-                    const link = document.createElement('a')
-                    link.href = url
-                    link.download = `database_export_${matchId}_${new Date().toISOString().split('T')[0]}.json`
-                    document.body.appendChild(link)
-                    link.click()
-                    document.body.removeChild(link)
-                    URL.revokeObjectURL(url)
-                  } catch (error) {
-                    console.error('Error exporting database:', error)
-                    showAlert(t('scoreboard.errors.exportFailed'), 'error')
+                  const exportData = {
+                    exportDate: new Date().toISOString(),
+                    matchId: matchId,
+                    matches: allMatches,
+                    teams: allTeams,
+                    players: allPlayers,
+                    sets: allSets,
+                    events: allEvents,
+                    referees: allReferees,
+                    scorers: allScorers
                   }
+
+                  // Create a blob and download
+                  const jsonString = JSON.stringify(exportData, null, 2)
+                  const blob = new Blob([jsonString], { type: 'application/json' })
+                  const url = URL.createObjectURL(blob)
+                  const link = document.createElement('a')
+                  link.href = url
+                  link.download = `database_export_${matchId}_${new Date().toISOString().split('T')[0]}.json`
+                  document.body.appendChild(link)
+                  link.click()
+                  document.body.removeChild(link)
+                  URL.revokeObjectURL(url)
+                } catch (error) {
+                  console.error('Error exporting database:', error)
+                  showAlert(t('scoreboard.errors.exportFailed'), 'error')
                 }
               },
-              {
-                key: 'options',
-                icon: <Settings size={18} />,
-                label: t('scoreboard.menu.options', 'Options'),
-                onClick: () => {
-                  setShowOptionsInMenu(true)
-                }
-              }
-            ]}
+              options: () => {
+                setShowOptionsInMenu(true)
+              },
+              stopMatch: () => {
+                setStopMatchModal('select')
+              },
+              className: 'text-red-600 hover:bg-red-50'
+            }))}
           />
         </div>
       </ScoreboardToolbar>
@@ -7818,12 +7870,21 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 <div style={{
                   padding: '4px 8px',
                   fontSize: '12px',
-                  background: 'rgba(250, 204, 21, 0.15)',
-                  border: '1px solid rgba(250, 204, 21, 0.3)',
+                  background: '#fffbeb', // amber-50
+                  border: '1px solid #fcd34d', // amber-300
                   borderRadius: '4px',
-                  color: '#fde047'
+                  color: '#92400e', // amber-800 (pale yellow text was unreadable on the light screen)
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5em'
                 }}>
-                  {t('scoreboard.sanctions.sanctionedFormalWarning')} <Card fill="currentColor" />
+                  {/* A real yellow card, in line with the text (OpenVolley a2d056c6) */}
+                  <span
+                    className="sanction-card yellow"
+                    aria-hidden="true"
+                    style={{ width: '0.75em', height: '1.05em', borderRadius: '0.15em', flexShrink: 0, boxShadow: '0 0 0 1px rgba(146, 64, 14, 0.25)' }}
+                  />
+                  <span>{t('scoreboard.sanctions.sanctionedFormalWarning')}</span>
                 </div>
               )}
             </div>
@@ -7969,20 +8030,23 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   const dashIdx = actionLabel.indexOf(' — ')
                   if (dashIdx !== -1) actionLabel = actionLabel.substring(0, dashIdx)
 
+                  // Each line is one fixed line (ellipsis, the full text on
+                  // hover), and the team line is always there: a description
+                  // that wrapped, or a team line that came and went, made the
+                  // court shrink, then grow back with the next action
+                  const oneLineStyle = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.25 }
                   return (
-                    <div style={{ wordBreak: 'break-word' }}>
-                      <div className="font-semibold uppercase tracking-[0.12em] text-stone-500" style={{ fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px` }}>
+                    <div data-testid="last-action" title={[actionLabel, teamName, scoreStr].filter(Boolean).join(' · ')} style={{ minWidth: 0, maxWidth: '100%' }}>
+                      <div className="font-semibold uppercase tracking-[0.12em] text-stone-500" style={{ ...oneLineStyle, fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px` }}>
                         {t('scoreboard.labels.lastAction', 'Last action')}
                       </div>
-                      <div className="text-stone-900" style={{ fontSize: `${DESIGN_VMIN * 0.018 * scaleFactor}px`, fontWeight: 600, marginTop: `${2 * scaleFactor}px` }}>
+                      <div className="text-stone-900" style={{ ...oneLineStyle, fontSize: `${DESIGN_VMIN * 0.018 * scaleFactor}px`, fontWeight: 600, marginTop: `${2 * scaleFactor}px` }}>
                         {actionLabel}
                       </div>
-                      {teamName && (
-                        <div style={{ fontSize: `${DESIGN_VMIN * 0.015 * scaleFactor}px`, color: 'var(--muted)', marginTop: `${1 * scaleFactor}px` }}>
-                          {teamName}
-                        </div>
-                      )}
-                      <div className="tabular-nums" style={{ fontSize: `${DESIGN_VMIN * 0.015 * scaleFactor}px`, color: 'var(--muted)', marginTop: `${1 * scaleFactor}px` }}>
+                      <div style={{ ...oneLineStyle, fontSize: `${DESIGN_VMIN * 0.015 * scaleFactor}px`, color: 'var(--muted)', marginTop: `${1 * scaleFactor}px` }}>
+                        {teamName || '\u00a0'}
+                      </div>
+                      <div className="tabular-nums" style={{ ...oneLineStyle, fontSize: `${DESIGN_VMIN * 0.015 * scaleFactor}px`, color: 'var(--muted)', marginTop: `${1 * scaleFactor}px` }}>
                         {scoreStr}
                       </div>
                     </div>
@@ -10582,12 +10646,21 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 <div style={{
                   padding: '4px 8px',
                   fontSize: '12px',
-                  background: 'rgba(250, 204, 21, 0.15)',
-                  border: '1px solid rgba(250, 204, 21, 0.3)',
+                  background: '#fffbeb', // amber-50
+                  border: '1px solid #fcd34d', // amber-300
                   borderRadius: '4px',
-                  color: '#fde047'
+                  color: '#92400e', // amber-800 (pale yellow text was unreadable on the light screen)
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5em'
                 }}>
-                  {t('scoreboard.sanctions.sanctionedFormalWarning')} <Card fill="currentColor" />
+                  {/* A real yellow card, in line with the text (OpenVolley a2d056c6) */}
+                  <span
+                    className="sanction-card yellow"
+                    aria-hidden="true"
+                    style={{ width: '0.75em', height: '1.05em', borderRadius: '0.15em', flexShrink: 0, boxShadow: '0 0 0 1px rgba(146, 64, 14, 0.25)' }}
+                  />
+                  <span>{t('scoreboard.sanctions.sanctionedFormalWarning')}</span>
                 </div>
               )}
             </div>
@@ -11876,13 +11949,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     const update = leftisTeam1 ? { team1Points: newPoints } : { team2Points: newPoints }
                                     await db.sets.update(data.set.id, update)
 
-                                    // Sync to Supabase
-                                    if (isBackendAvailable() && data.match?.seed_key) {
-                                      try {
-                                        const sbUpdate = leftisTeam1 ? { team1_points: newPoints } : { team2_points: newPoints }
-                                        await apiFrom('sets').update(sbUpdate).eq('external_id', String(data.set.id))
-                                      } catch (err) { /* ignore */ }
-                                    }
+                                    // To the cloud through the sync queue (also offline)
+                                    await queueSetScoreSync(db, { matchId, setIndex: data.set.index })
 
                                     // Update Live State immediately
                                     syncLiveStateToSupabase('manual_score_update')
@@ -11913,13 +11981,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     const update = rightIsTeam1 ? { team1Points: newPoints } : { team2Points: newPoints }
                                     await db.sets.update(data.set.id, update)
 
-                                    // Sync to Supabase
-                                    if (isBackendAvailable() && data.match?.seed_key) {
-                                      try {
-                                        const sbUpdate = rightIsTeam1 ? { team1_points: newPoints } : { team2_points: newPoints }
-                                        await apiFrom('sets').update(sbUpdate).eq('external_id', String(data.set.id))
-                                      } catch (err) { /* ignore */ }
-                                    }
+                                    // To the cloud through the sync queue (also offline)
+                                    await queueSetScoreSync(db, { matchId, setIndex: data.set.index })
 
                                     // Update Live State immediately
                                     syncLiveStateToSupabase('manual_score_update')
@@ -12057,12 +12120,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   onChange={async (e) => {
                                     const newPoints = Math.max(0, Math.min(99, parseInt(e.target.value) || 0))
                                     await db.sets.update(set.id, { team1Points: newPoints })
-                                    // Sync to Supabase
-                                    if (isBackendAvailable() && data.match?.seed_key) {
-                                      try {
-                                        await apiFrom('sets').update({ team1_points: newPoints }).eq('external_id', String(set.id))
-                                      } catch (err) { /* ignore */ }
-                                    }
+                                    // To the cloud through the sync queue (also offline)
+                                    await queueSetScoreSync(db, { matchId, setIndex: set.index })
                                   }}
                                   style={{
                                     width: '50px',
@@ -12085,12 +12144,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   onChange={async (e) => {
                                     const newPoints = Math.max(0, Math.min(99, parseInt(e.target.value) || 0))
                                     await db.sets.update(set.id, { team2Points: newPoints })
-                                    // Sync to Supabase
-                                    if (isBackendAvailable() && data.match?.seed_key) {
-                                      try {
-                                        await apiFrom('sets').update({ team2_points: newPoints }).eq('external_id', String(set.id))
-                                      } catch (err) { /* ignore */ }
-                                    }
+                                    // To the cloud through the sync queue (also offline)
+                                    await queueSetScoreSync(db, { matchId, setIndex: set.index })
                                   }}
                                   style={{
                                     width: '50px',
@@ -12110,12 +12165,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   checked={set.finished || false}
                                   onChange={async (e) => {
                                     await db.sets.update(set.id, { finished: e.target.checked })
-                                    // Sync to Supabase
-                                    if (isBackendAvailable() && data.match?.seed_key) {
-                                      try {
-                                        await apiFrom('sets').update({ finished: e.target.checked }).eq('external_id', String(set.id))
-                                      } catch (err) { /* ignore */ }
-                                    }
+                                    // To the cloud through the sync queue (also offline)
+                                    await queueManualCloudUpdate('set', { finished: e.target.checked }, set.id)
                                   }}
                                   style={{
                                     width: '18px',
@@ -12195,16 +12246,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               // Update local IndexedDB
                               await db.matches.update(matchId, { status: newStatus })
 
-                              // Also sync to Supabase if match has seed_key
-                              if (isBackendAvailable() && data.match?.seed_key) {
-                                try {
-                                  await apiFrom('matches')
-                                    .update({ status: newStatus })
-                                    .eq('external_id', data.match.seed_key)
-                                } catch (err) {
-                                  // Failed to sync status to Supabase
-                                }
-                              }
+                              // To the cloud through the sync queue (also offline)
+                              await queueManualCloudUpdate('match', { status: newStatus })
                             }}
                             style={{
                               flex: 1,
@@ -12367,9 +12410,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 <button
                                   className="danger"
                                   onClick={async () => {
-                                    if (confirm(t('scoreboard.confirm.deletePointEvent'))) {
-                                      await db.events.delete(event.id)
-                                    }
+                                    if (!(await askConfirm({ title: t('scoreboard.confirm.deletePointEvent'), confirmLabel: t('common.delete'), tone: 'danger' }))) return
+                                    await deleteEventByHand(event)
                                   }}
                                   style={{
                                     padding: '4px 8px',
@@ -12468,9 +12510,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 <button
                                   className="danger"
                                   onClick={async () => {
-                                    if (confirm(t('scoreboard.confirm.deleteTimeoutEvent'))) {
-                                      await db.events.delete(event.id)
-                                    }
+                                    if (!(await askConfirm({ title: t('scoreboard.confirm.deleteTimeoutEvent'), confirmLabel: t('common.delete'), tone: 'danger' }))) return
+                                    await deleteEventByHand(event)
                                   }}
                                   style={{
                                     padding: '4px 8px',
@@ -12689,14 +12730,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 <button
                                   className="danger"
                                   onClick={async () => {
-                                    if (confirm(t('scoreboard.confirm.deleteSubstitutionEvent'))) {
+                                    if (await askConfirm({ title: t('scoreboard.confirm.deleteSubstitutionEvent'), confirmLabel: t('common.delete'), tone: 'danger' })) {
                                       const subTeam = event.payload?.team
                                       const subPosition = event.payload?.position
                                       const subPlayerOut = event.payload?.playerOut
                                       const subSetIndex = event.setIndex
 
-                                      // Delete the substitution event
-                                      await db.events.delete(event.id)
+                                      // Delete the substitution event (its cloud row too)
+                                      await discardEvents([event])
 
                                       // Find and delete the lineup event created by this substitution
                                       // Then restore the previous lineup with the original player
@@ -12709,7 +12750,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                         if (lineupEvents.length > 1) {
                                           // Delete the most recent lineup (created by the substitution)
                                           const mostRecentLineup = lineupEvents[0]
-                                          await db.events.delete(mostRecentLineup.id)
+                                          await discardEvents([mostRecentLineup])
 
                                           // Get the previous lineup and restore it with the original player
                                           const previousLineup = lineupEvents[1]?.payload?.lineup || {}
@@ -12917,9 +12958,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 <button
                                   className="danger"
                                   onClick={async () => {
-                                    if (confirm(t('scoreboard.confirm.deleteSanctionEvent'))) {
-                                      await db.events.delete(event.id)
-                                    }
+                                    if (!(await askConfirm({ title: t('scoreboard.confirm.deleteSanctionEvent'), confirmLabel: t('common.delete'), tone: 'danger' }))) return
+                                    await deleteEventByHand(event)
                                   }}
                                   style={{
                                     padding: '4px 8px',
@@ -13255,9 +13295,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 <button
                                   className="danger"
                                   onClick={async () => {
-                                    if (confirm(t('scoreboard.confirm.deleteEventGeneric', { type: eventType }))) {
-                                      await db.events.delete(event.id)
-                                    }
+                                    if (!(await askConfirm({ title: t('scoreboard.confirm.deleteEventGeneric', { type: eventType }), confirmLabel: t('common.delete'), tone: 'danger' }))) return
+                                    await deleteEventByHand(event)
                                   }}
                                   style={{
                                     padding: '4px 8px',
@@ -13712,9 +13751,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         >
           <div style={{ padding: '20px', maxHeight: '80vh', overflowY: 'auto' }}>
             <section className="panel">
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px', overflowX: 'auto' }}>
+              {/* Sanctions and results side by side while each keeps ~22rem, stacked
+                  below that; both columns may shrink (min-width 0): long team
+                  names (two players each) wrap instead of pushing the results
+                  table out of the dialog. As OpenVolley 190ae045. */}
+              <div data-testid="sanctions-results-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 22rem), 1fr))', gap: '32px' }}>
                 {/* Left half: Sanctions */}
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <h4 style={{ marginBottom: '16px', fontSize: '14px', fontWeight: 600 }}>{t('scoreboard.sanctions.title')}</h4>
                   {/* Improper Request Row */}
                   <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -13844,7 +13887,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 </div>
 
                 {/* Right half: Results */}
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <h4 style={{ marginBottom: '16px', fontSize: '14px', fontWeight: 600 }}>Results</h4>
                   {(() => {
                     // Get current left and right teams
@@ -13950,12 +13993,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
                       return (
                         <div>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px', tableLayout: 'fixed' }}>
                             <thead>
                               <tr>
                                 <th colSpan="4" style={{ padding: '4px', textAlign: 'center', borderBottom: '1px solid var(--ov-hairline-strong)', width: '42%' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                    <span style={{ fontSize: '10px', wordBreak: 'break-word' }}>{leftTeamName}</span>
+                                    <span style={{ fontSize: '10px', fontWeight: 700, overflowWrap: 'anywhere', minWidth: 0 }}>{leftTeamName}</span>
                                     <span style={{
                                       padding: '1px 6px',
                                       borderRadius: '3px',
@@ -13969,7 +14012,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 <th style={{ padding: '4px', fontSize: '8px', width: '16%' }}>Dur</th>
                                 <th colSpan="4" style={{ padding: '4px', textAlign: 'center', borderBottom: '1px solid var(--ov-hairline-strong)', width: '42%' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                    <span style={{ fontSize: '10px', wordBreak: 'break-word' }}>{rightTeamName}</span>
+                                    <span style={{ fontSize: '10px', fontWeight: 700, overflowWrap: 'anywhere', minWidth: 0 }}>{rightTeamName}</span>
                                     <span style={{
                                       padding: '1px 6px',
                                       borderRadius: '3px',
@@ -14023,7 +14066,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               </tr>
                               <tr>
                                 <td style={{ padding: '4px 2px', textAlign: 'left', fontWeight: 600, fontSize: '8px' }}>Winner:</td>
-                                <td colSpan="5" style={{ padding: '4px 2px', textAlign: 'left', fontSize: '8px' }}>
+                                <td colSpan="5" style={{ padding: '4px 2px', textAlign: 'left', fontSize: '8px', overflowWrap: 'anywhere' }}>
                                   {winnerTeamName} ({winnerScore})
                                 </td>
                               </tr>
@@ -14100,13 +14143,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     const playedSets = allSets.filter(s => s.team1Points > 0 || s.team2Points > 0 || s.finished || s.startTime)
 
                     return (
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px', tableLayout: 'fixed' }}>
                         <thead>
                           <tr>
                             <th style={{ padding: '4px 2px', textAlign: 'center', width: '8%' }}></th>
                             <th colSpan="4" style={{ padding: '4px', textAlign: 'center', borderBottom: '1px solid var(--ov-hairline-strong)', width: '38%' }}>
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                <span style={{ fontSize: '10px', wordBreak: 'break-word' }}>{leftTeamName}</span>
+                                <span style={{ fontSize: '10px', fontWeight: 700, overflowWrap: 'anywhere', minWidth: 0 }}>{leftTeamName}</span>
                                 <span style={{
                                   padding: '1px 6px',
                                   borderRadius: '3px',
@@ -14120,7 +14163,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             <th style={{ padding: '4px 2px', fontSize: '8px', width: '8%' }}>Dur</th>
                             <th colSpan="4" style={{ padding: '4px', textAlign: 'center', borderBottom: '1px solid var(--ov-hairline-strong)', width: '38%' }}>
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                <span style={{ fontSize: '10px', wordBreak: 'break-word' }}>{rightTeamName}</span>
+                                <span style={{ fontSize: '10px', fontWeight: 700, overflowWrap: 'anywhere', minWidth: 0 }}>{rightTeamName}</span>
                                 <span style={{
                                   padding: '1px 6px',
                                   borderRadius: '3px',
@@ -16979,6 +17022,27 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         </Modal>
       )}
 
+      {replayConfirm && (
+        <Modal
+          title={t('scoreboard.modals.confirmReplay')}
+          open={true}
+          onClose={cancelReplay}
+          width={420}
+        >
+          <div className="ov-kit" data-testid="replay-confirm">
+            <p className="m-0 text-sm text-stone-600">{t('scoreboard.modals.confirmReplayBody')}</p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="button" onClick={cancelReplay} className={cn(modalCancelClass, 'h-12 px-5')}>
+                {t('common.cancel')}
+              </button>
+              <button type="button" onClick={confirmReplay} className={cn(modalPrimaryClass, 'h-12 px-5')}>
+                {t('scoreboard.buttons.replay')}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {replayRallyConfirm && (() => {
         const lastEvent = replayRallyConfirm.event
         const oldTeam = lastEvent?.payload?.team
@@ -17256,7 +17320,7 @@ function SetStartTimeModal({ setIndex, defaultTime, onConfirm, onCancel }) {
     // Validate time format (HH:MM, 24-hour)
     const timeRegex = /^([01][0-9]|2[0-3]):[0-5][0-9]$/
     if (!timeRegex.test(time)) {
-      alert(t('scoreboard.confirm.invalidTimeFormat'))
+      toast.error(t('scoreboard.confirm.invalidTimeFormat'))
       return
     }
     // Get the date component from defaultTime and combine with entered time
@@ -17329,6 +17393,7 @@ function SetStartTimeModal({ setIndex, defaultTime, onConfirm, onCancel }) {
 }
 
 function ToSubDetailsModal({ type, side, timeoutDetails, substitutionDetails, teamName, onClose }) {
+  const { t } = useTranslation()
   return (
     <Modal
       title={type === 'timeout' ? t('scoreboard.detailsTimeouts', { team: teamName }) : t('scoreboard.detailsSubstitutions', { team: teamName })}
@@ -17454,7 +17519,7 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
     // Validate time format (HH:MM, 24-hour)
     const timeRegex = /^([01][0-9]|2[0-3]):[0-5][0-9]$/
     if (!timeRegex.test(time)) {
-      alert(t('scoreboard.confirm.invalidTimeFormat'))
+      toast.error(t('scoreboard.confirm.invalidTimeFormat'))
       setIsConfirming(false)
       return
     }

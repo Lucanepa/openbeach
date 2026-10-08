@@ -986,6 +986,22 @@ async function processJobInner(job, ctx) {
       return true
     }
 
+    if (job.resource === 'event' && job.action === 'delete') {
+      // A correction removed the event locally (Undo, Replay, decision change,
+      // the event editor): the cloud row goes too. A row that never reached
+      // the cloud is no error, the delete simply matches nothing. Scoped by the
+      // namespaced external_id (`${seedKey}:e:${id}`), which the backend
+      // requires for a child-row delete. As OpenVolley's useSyncQueue.js.
+      const externalId = job.payload?.external_id
+      if (!externalId) return DROP_JOB
+      const { error } = await apiFrom('events').delete().eq('external_id', externalId)
+      if (error) {
+        safeLog.error('[SyncQueue] Event delete error:', error, externalId)
+        return failureResult(error, ctx)
+      }
+      return true
+    }
+
     // Unknown resource/action - mark as done to avoid infinite loop
     safeLog.warn('[SyncQueue] Unknown job type:', job.resource, job.action)
     return true

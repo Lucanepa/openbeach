@@ -542,7 +542,9 @@
       "confirmSetEnd": "Satzänd bestätige",
       "confirmMatchEnd": "Spiiländ bestätige",
       "ballMarkProtocol": "Ballabdruck-Protokoll",
-      "refereeBallMarkProtocol": "Ballabdruck-Protokoll (Schiri)"
+      "refereeBallMarkProtocol": "Ballabdruck-Protokoll (Schiri)",
+      "confirmReplay": "Ballwechsel wiederhole?",
+      "confirmReplayBody": "Es git kei Punkt, s glich Team schlaht nomal uf."
     },
     "sanctions": {
       "teamSanctions": "Mannschaftssanktione",
@@ -608,7 +610,14 @@
       "keyboardShortcuts": "Tastaturchürzel",
       "searchEvents": "Ereignis sueche…",
       "openScoreboard": "Aazeigetafle öffne",
-      "showRosters": "Mannschaftslischte aazeige"
+      "showRosters": "Mannschaftslischte aazeige",
+      "sections": {
+        "matchInfo": "Spiilinfos",
+        "corrections": "Korrekture",
+        "devicesData": "Grät und Date",
+        "settings": "Iistellige",
+        "endOfMatch": "Spiiländ"
+      }
     },
     "stopMatch": {
       "title": "Spiil abbreche",
@@ -830,7 +839,8 @@
     "detailsSubstitutions": "Wechsel – {{team}}",
     "undoConfirm": {
       "confirm": "Rückgängig machen"
-    }
+    },
+    "confirmFailed": "Das isch nöd gspeicheret worde. Bitte s Matchblatt prüefe und nomal probiere."
   },
   "settings": {
     "title": "Iistellige",

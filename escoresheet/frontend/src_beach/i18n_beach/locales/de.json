@@ -542,7 +542,9 @@
       "confirmSetEnd": "Satzende bestätigen",
       "confirmMatchEnd": "Spielende bestätigen",
       "ballMarkProtocol": "Ballabdruck-Protokoll",
-      "refereeBallMarkProtocol": "Ballabdruck-Protokoll (Schiedsrichter)"
+      "refereeBallMarkProtocol": "Ballabdruck-Protokoll (Schiedsrichter)",
+      "confirmReplay": "Ballwechsel wiederholen?",
+      "confirmReplayBody": "Es wird kein Punkt vergeben, dasselbe Team schlägt erneut auf."
     },
     "sanctions": {
       "teamSanctions": "Mannschaftssanktionen",
@@ -608,7 +610,14 @@
       "keyboardShortcuts": "Tastaturkürzel",
       "searchEvents": "Ereignisse suchen…",
       "openScoreboard": "Anzeigetafel öffnen",
-      "showRosters": "Mannschaftslisten anzeigen"
+      "showRosters": "Mannschaftslisten anzeigen",
+      "sections": {
+        "matchInfo": "Spielinfos",
+        "corrections": "Korrekturen",
+        "devicesData": "Geräte und Daten",
+        "settings": "Einstellungen",
+        "endOfMatch": "Spielende"
+      }
     },
     "stopMatch": {
       "title": "Spiel abbrechen",
@@ -830,7 +839,8 @@
     "detailsSubstitutions": "Wechsel – {{team}}",
     "undoConfirm": {
       "confirm": "Rückgängig machen"
-    }
+    },
+    "confirmFailed": "Das wurde nicht gespeichert. Bitte das Matchblatt prüfen und erneut versuchen."
   },
   "settings": {
     "title": "Einstellungen",

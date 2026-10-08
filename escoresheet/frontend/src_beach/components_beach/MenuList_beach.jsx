@@ -1,8 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { ChevronDown } from 'lucide-react'
-import { MENU_PANEL, MENU_ROW, MENU_SEP, MENU_ICON, MENU_TITLE } from './chromeClasses_beach'
+import { MENU_PANEL, MENU_ROW, MENU_SEP, MENU_ICON, MENU_TITLE, MENU_SECTION } from './chromeClasses_beach'
 import { cn } from '../ui/volleyui/cn.js'
 
+/**
+ * A toolbar dropdown. `items`: rows ({ key, icon, label, onClick, className,
+ * style }), { separator: true }, or { header: 'Title' } (a group label, not a
+ * row: the scorer's Match menu is grouped, as OpenVolley's matchMenu.jsx).
+ */
 export default function MenuList({
   items = [],
   position = 'right', // 'left' | 'right' | 'center'
@@ -121,6 +126,7 @@ export default function MenuList({
             {menuTitle && <div className={cn(MENU_TITLE, 'px-3 pb-2 pt-1')}>{menuTitle}</div>}
             {items.map((item, index) => {
               if (item.separator) return <div key={`separator-${index}`} className={MENU_SEP} />
+              if (item.header) return <div key={item.key || `header-${index}`} role="presentation" className={MENU_SECTION}>{item.header}</div>
               return (
                 <button
                   type="button"
@@ -211,6 +217,13 @@ export default function MenuList({
             </div>
           )}
           {items.map((item, index) => {
+            if (item.header) {
+              return (
+                <div key={item.key || `header-${index}`} role="presentation" style={{ padding: '6px 12px 4px', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'rgba(255, 255, 255, 0.6)' }}>
+                  {item.header}
+                </div>
+              )
+            }
             if (item.separator) {
               return (
                 <div

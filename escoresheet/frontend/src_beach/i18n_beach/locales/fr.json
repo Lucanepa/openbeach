@@ -542,7 +542,9 @@
       "confirmSetEnd": "Confirmer la fin du set",
       "confirmMatchEnd": "Confirmer la fin du match",
       "ballMarkProtocol": "Protocole de marque de balle",
-      "refereeBallMarkProtocol": "Protocole de marque de balle (arbitre)"
+      "refereeBallMarkProtocol": "Protocole de marque de balle (arbitre)",
+      "confirmReplay": "Rejouer l'échange ?",
+      "confirmReplayBody": "Aucun point n'est marqué et la même équipe sert à nouveau."
     },
     "sanctions": {
       "teamSanctions": "Sanctions d'équipe",
@@ -608,7 +610,14 @@
       "keyboardShortcuts": "Raccourcis clavier",
       "searchEvents": "Rechercher des événements…",
       "openScoreboard": "Ouvrir le tableau de score",
-      "showRosters": "Afficher les compositions"
+      "showRosters": "Afficher les compositions",
+      "sections": {
+        "matchInfo": "Infos du match",
+        "corrections": "Corrections",
+        "devicesData": "Appareils et données",
+        "settings": "Réglages",
+        "endOfMatch": "Fin du match"
+      }
     },
     "stopMatch": {
       "title": "Arrêter le match",
@@ -830,7 +839,8 @@
     "detailsSubstitutions": "Remplacements – {{team}}",
     "undoConfirm": {
       "confirm": "Annuler l'action"
-    }
+    },
+    "confirmFailed": "Cela n'a pas été enregistré. Vérifiez la feuille de match et réessayez."
   },
   "settings": {
     "title": "Paramètres",
