@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Download, RefreshCw } from 'lucide-react'
 import useServiceWorker, { autoApplyAllowed, noteAutoApply } from '../hooks_beach/useServiceWorker_beach'
 import { cn } from '../ui/volleyui/cn.js'
 import { FOCUS_RING } from '../ui/volleyui/Button.jsx'
-import { isDesktopScoretable } from '../utils_beach/appLifecycle_beach'
+import { isDesktopScoretable, resolveDesktopWindow } from '../utils_beach/appLifecycle_beach'
 
 // Get current version from package.json (injected by Vite at build time)
 const currentVersion = __APP_VERSION__
@@ -22,12 +22,25 @@ export default function UpdateBanner() {
   // at once (this banner is on the home screen only, never mid-match). Not a
   // second time within a short while (autoApplyAllowed): an update that did
   // not take reloaded into itself every few seconds; then the banner asks.
-  const [applyAtOnce] = useState(() => isDesktopScoretable() && autoApplyAllowed())
+  // The scoretable only, as the app says (a Linux pop-up's own metadata says
+  // "main"): a pop-up asks too.
+  const [applyAtOnce, setApplyAtOnce] = useState(() => isDesktopScoretable() && autoApplyAllowed())
+  const appliedRef = useRef(false)
 
   useEffect(() => {
-    if (!needRefresh || !applyAtOnce) return
-    noteAutoApply()
-    updateServiceWorker()
+    if (!needRefresh || !applyAtOnce || appliedRef.current) return
+    let live = true
+    resolveDesktopWindow().then((scoretable) => {
+      if (!live || appliedRef.current) return
+      if (!scoretable) {
+        setApplyAtOnce(false)
+        return
+      }
+      appliedRef.current = true
+      noteAutoApply()
+      updateServiceWorker()
+    }).catch(() => { if (live) setApplyAtOnce(false) })
+    return () => { live = false }
   }, [needRefresh, applyAtOnce, updateServiceWorker])
 
   // Fetch the new version from server when update is detected (the label

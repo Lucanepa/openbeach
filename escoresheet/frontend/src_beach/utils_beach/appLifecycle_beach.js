@@ -41,6 +41,7 @@ import i18n from 'i18next'
 import { confirmDialog, hasConfirmHost } from '../ui/volleyui/uiStore.js'
 import { pdfBusyInAppWindows } from './openAppWindow_beach.js'
 import { emitActivity, flushActivityNow } from './activity/bus_beach'
+import { desktopWindowRoleOnce, knownDesktopWindowRole } from '../diagnostics_beach/popupForward_beach.js'
 
 export const LIFECYCLE_EVENT = 'ov-app-lifecycle'
 
@@ -213,11 +214,49 @@ function tauriInvoke(win) {
   }
 }
 
-/** The desktop app's scoretable window (not a scoresheet window, not a browser). */
+function hasOpener(win) {
+  try {
+    return !!win.opener
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The desktop app's scoretable window (not a pop-up: a scoresheet or referee
+ * window; not a browser).
+ *
+ * The page's own metadata proves nothing: in a pop-up on Linux (WebKitGTK)
+ * __TAURI_INTERNALS__.metadata.currentWindow.label says "main" (measured in
+ * the real app, 2026-10-08), so a pop-up took itself for the scoretable (and
+ * could apply an update and reload). A pop-up is known by any of:
+ * - its metadata naming another window (Windows, macOS);
+ * - window.opener: every app pop-up is a window.open() child of the
+ *   scoretable (popups.rs keeps the opener), while the app opens the
+ *   scoretable itself, with none;
+ * - the app's own answer (desktopWindowRole, diagnostics_beach/popupForward_beach: only the scoretable may append to
+ *   the diagnostics file), asked once (resolveDesktopWindow, at start) and
+ *   kept. Until it has answered, the first two decide.
+ * Synchronous for the callers that need it (the header's quit row, the
+ * lifecycle handlers, the update banner).
+ */
 export function isDesktopScoretable(win = typeof window !== 'undefined' ? window : undefined) {
   if (!tauriInvoke(win)) return false
   const label = win.__TAURI_INTERNALS__?.metadata?.currentWindow?.label
-  return !label || label === 'main'
+  if (label && label !== 'main') return false
+  if (hasOpener(win)) return false
+  return knownDesktopWindowRole(win)?.popup !== true
+}
+
+/**
+ * Ask the app once which window this page is in (kept for
+ * isDesktopScoretable); resolves to isDesktopScoretable(win) with the answer.
+ * Outside the desktop app: false, nothing asked.
+ */
+export async function resolveDesktopWindow(win = typeof window !== 'undefined' ? window : undefined) {
+  if (!tauriInvoke(win)) return false
+  await desktopWindowRoleOnce(win)
+  return isDesktopScoretable(win)
 }
 
 let desktopWin = null

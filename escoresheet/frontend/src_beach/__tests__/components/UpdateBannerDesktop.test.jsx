@@ -13,6 +13,7 @@ vi.mock('../../hooks_beach/useServiceWorker_beach', async (importOriginal) => ({
 
 import UpdateBanner from '../../components_beach/UpdateBanner_beach'
 import { AUTO_UPDATE_KEY } from '../../hooks_beach/useServiceWorker_beach'
+import { forgetDesktopWindowRole } from '../../diagnostics_beach/popupForward_beach'
 
 beforeAll(async () => {
   await i18n.use(initReactI18next).init({ lng: 'en', fallbackLng: 'en', resources: { en: { translation: en } } })
@@ -21,6 +22,7 @@ beforeAll(async () => {
 afterEach(() => {
   cleanup()
   sessionStorage.clear()
+  forgetDesktopWindowRole(window)
   delete window.__TAURI_INTERNALS__
   vi.unstubAllGlobals()
   sw.updateServiceWorker.mockReset()
@@ -50,6 +52,19 @@ describe('UpdateBanner on the desktop app', () => {
     const { container } = render(<UpdateBanner />)
     await new Promise((r) => setTimeout(r, 0))
     expect(container).not.toBeEmptyDOMElement()
+    expect(sw.updateServiceWorker).not.toHaveBeenCalled()
+  })
+
+  it('a desktop pop-up (Linux: its metadata says "main"; the app refuses it): the banner, never on its own', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ json: async () => ({ version: '9.9.9' }) }))
+    const invoke = vi.fn(async (cmd) => {
+      if (cmd === 'diagnostics_append') throw 'diagnostics_append not allowed on window "popup-1", webview "popup-1", URL: http://localhost:5173/referee/'
+      return null
+    })
+    window.__TAURI_INTERNALS__ = { invoke, metadata: { currentWindow: { label: 'main' } } }
+    const { container } = render(<UpdateBanner />)
+    await waitFor(() => expect(container).not.toBeEmptyDOMElement())
+    expect(invoke).toHaveBeenCalledWith('diagnostics_append', { lines: [] })
     expect(sw.updateServiceWorker).not.toHaveBeenCalled()
   })
 })
