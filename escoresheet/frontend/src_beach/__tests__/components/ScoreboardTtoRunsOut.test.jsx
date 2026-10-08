@@ -97,6 +97,9 @@ async function point(label) {
   const before = (await ofType('point')).length
   fireEvent.click(button(label))
   await waitFor(async () => expect((await ofType('point')).length).toBe(before + 1))
+  // and on screen (the rally over): an Undo tapped before the screen has the
+  // point offers the rally start (found under the full suite's load)
+  await waitFor(() => expect(button(label)).toBeFalsy(), { timeout: 5000 })
 }
 async function switchCourts() {
   await waitFor(() => expect(button('Switch courts')).toBeTruthy(), { timeout: 5000 })
