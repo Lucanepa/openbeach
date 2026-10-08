@@ -74,7 +74,7 @@ describe('logEvent inside an action', () => {
 describe('sanctions, undo, replay and decision change are one action each', () => {
   it('a delay penalty: the sanction and its point commit together', () => {
     const b = between('const confirmSanction = useCallback(', 'const confirmSetStartTime = useCallback(')
-    expect(b).toContain("await runAction('sanction', async () => {")
+    expect(b).toContain("runAction('sanction', async () => {")
     expect(b.indexOf("runAction('sanction'")).toBeLessThan(b.indexOf('await handlePoint(otherSide, false, true)'))
     const p = between('const confirmPlayerSanction = useCallback(', 'const executeExpulsionOrDisqualification')
     expect(p).toContain("await runAction('sanction', async () => {")
@@ -98,5 +98,25 @@ describe('sanctions, undo, replay and decision change are one action each', () =
   it('a failure is reported once (the action, not the confirm again)', () => {
     const b = between('const onConfirmFailed = useCallback(', '}, [showAlert, t])')
     expect(b).toContain('if (isReportedActionError(err)) return')
+  })
+})
+
+// A sanction painted in two frames in the desktop app: the dialog closed,
+// the score / sanction list changed 64-97 ms later. The dialog now closes in
+// the render that shows the action's data (deferUi), as in OpenVolley.
+describe('a sanction is one screen change', () => {
+  it('confirmSanction (improper request, delay warning, delay penalty)', () => {
+    const b = between('const confirmSanction = useCallback(', '// Confirm set start time')
+    expect(b).toContain("runSanctionConfirm(() => runAction('sanction', async () => {")
+    expect(b).toContain('deferUi(() => setSanctionConfirm(null))')
+    expect(b.replace(/deferUi\(\(\) => setSanctionConfirm\(null\)\)/g, '')).not.toContain('setSanctionConfirm(null)')
+  })
+
+  it('confirmPlayerSanction: a warning or a penalty', () => {
+    const b = between('const confirmPlayerSanction = useCallback(', 'const executeExpulsionOrDisqualification')
+    const regular = b.slice(b.indexOf('// Regular sanction'))
+    expect(regular).toContain("await runAction('sanction', async () => {")
+    expect(regular).toContain('deferUi(() => setSanctionConfirmModal(null))')
+    expect(regular.replace(/deferUi\(\(\) => setSanctionConfirmModal\(null\)\)/g, '')).not.toContain('setSanctionConfirmModal(null)')
   })
 })

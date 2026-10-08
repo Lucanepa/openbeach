@@ -3720,54 +3720,51 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     setSanctionConfirm({ side, type: sanctionType })
   }, [data?.match, rallyStatus, leftisTeam1])
 
-  // Confirm sanction: snapshot, close, then write (useConfirmAction). A double
-  // tap logged a delay penalty twice and gave two points.
+  // Confirm sanction (useConfirmAction: a double tap logged a delay penalty
+  // twice and gave two points). ONE action: the sanction, its flag, a delay
+  // penalty's point (which joins it) and the dialog closing (deferUi) commit
+  // and show together; closed first, the dialog went one render before them.
   const runSanctionConfirm = useConfirmAction(onConfirmFailed)
-  const confirmSanction = useCallback(() => runSanctionConfirm(async () => {
+  const confirmSanction = useCallback(() => runSanctionConfirm(() => runAction('sanction', async () => {
     if (!sanctionConfirm || !data?.match || !data?.set) return
 
     const { side, type } = sanctionConfirm
-    // Close first, then write
-    setSanctionConfirm(null)
+    deferUi(() => setSanctionConfirm(null))
     const teamKey = mapSideToTeamKey(side)
     const teamKeyCapitalized = teamKey === 'team1' ? 'team1' : 'team2'
 
-    // ONE action: the sanction, its flag and a delay penalty's point (which
-    // joins it) commit and show together
-    await runAction('sanction', async () => {
-      // Update match sanctions for improper request and delay warning
-      // Store by team key (team1/team2) so sanctions follow the team when sides switch
-      if (type === 'improper_request' || type === 'delay_warning') {
-        const currentSanctions = data.match.sanctions || {}
-        await db.matches.update(matchId, {
-          sanctions: {
-            ...currentSanctions,
-            [`${type === 'improper_request' ? 'improperRequest' : 'delayWarning'}${teamKeyCapitalized}`]: true
-          }
-        })
-      }
-
-      // Log the sanction event
-      await logEvent('sanction', {
-        team: teamKey,
-        type: type
+    // Update match sanctions for improper request and delay warning
+    // Store by team key (team1/team2) so sanctions follow the team when sides switch
+    if (type === 'improper_request' || type === 'delay_warning') {
+      const currentSanctions = data.match.sanctions || {}
+      await db.matches.update(matchId, {
+        sanctions: {
+          ...currentSanctions,
+          [`${type === 'improper_request' ? 'improperRequest' : 'delayWarning'}${teamKeyCapitalized}`]: true
+        }
       })
+    }
 
-      // Debug log: sanction
-      debugLogger.log('SANCTION', {
-        team: teamKey,
-        type,
-        side
-      }, getStateSnapshot())
-
-      // If delay penalty, award point to the other team immediately
-      // Beach volleyball has no lineups - always 2 players per team
-      if (type === 'delay_penalty') {
-        const otherSide = side === 'left' ? 'right' : 'left'
-        await handlePoint(otherSide, false, true)
-      }
+    // Log the sanction event
+    await logEvent('sanction', {
+      team: teamKey,
+      type: type
     })
-  }), [runSanctionConfirm, runAction, sanctionConfirm, data?.match, data?.set, data?.events, mapSideToTeamKey, matchId, logEvent, handlePoint])
+
+    // Debug log: sanction
+    debugLogger.log('SANCTION', {
+      team: teamKey,
+      type,
+      side
+    }, getStateSnapshot())
+
+    // If delay penalty, award point to the other team immediately
+    // Beach volleyball has no lineups - always 2 players per team
+    if (type === 'delay_penalty') {
+      const otherSide = side === 'left' ? 'right' : 'left'
+      await handlePoint(otherSide, false, true)
+    }
+  })), [runSanctionConfirm, runAction, deferUi, sanctionConfirm, data?.match, data?.set, data?.events, mapSideToTeamKey, matchId, logEvent, handlePoint])
 
   // Confirm set start time
   const confirmSetStartTime = useCallback(async (time) => {
@@ -6609,10 +6606,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       return
     }
 
-    // Regular sanction (warning or penalty): close first, then write, as ONE
-    // action (a penalty's point joins it)
-    setSanctionConfirmModal(null)
+    // Regular sanction (warning or penalty): ONE action (a penalty's point
+    // joins it); the dialog closes in the render that shows it (deferUi)
     await runAction('sanction', async () => {
+      deferUi(() => setSanctionConfirmModal(null))
       await logEvent('sanction', {
         team,
         type: sanctionType,
@@ -6631,7 +6628,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         await handlePoint(otherSide, false, true)
       }
     })
-  }), [runPlayerSanctionConfirm, runAction, sanctionConfirmModal, data?.set, data?.events, data?.team1Players, data?.team2Players, logEvent, mapTeamKeyToSide, handlePoint, leftisTeam1, getPlayerSanctionLevel, playerHasSanctionType, teamHasFormalWarning, handleForfait, matchId, getPlayerPenaltyCountInCurrentSet])
+  }), [runPlayerSanctionConfirm, runAction, deferUi, sanctionConfirmModal, data?.set, data?.events, data?.team1Players, data?.team2Players, logEvent, mapTeamKeyToSide, handlePoint, leftisTeam1, getPlayerSanctionLevel, playerHasSanctionType, teamHasFormalWarning, handleForfait, matchId, getPlayerPenaltyCountInCurrentSet])
 
   // Execute expulsion/disqualification after secondary confirmation
   const executeExpulsionOrDisqualification = useCallback(async () => {
