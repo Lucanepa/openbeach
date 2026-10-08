@@ -197,3 +197,13 @@ describe('issue 9: the scoring layout (push up, SERVE, ball)', () => {
     expect(sb).not.toContain('DESIGN_VMIN * 0.08 * scaleFactor')
   })
 })
+
+describe('issue 15: "One point to switch / TTO" does not cover the players', () => {
+  it('is a chip under the rally status, out of the flow, not a banner over the court', () => {
+    expect(sb).not.toContain("animation: 'preEventPulse 1s ease-in-out infinite'")
+    const chip = between(sb, 'data-testid="pre-event-chip"', '</div>')
+    expect(chip).toContain("position: 'absolute'")
+    expect(chip).toContain("pointerEvents: 'none'")
+    expect(chip).toContain("t('scoreboard.onePointToSwitch', 'One point to switch')")
+  })
+})

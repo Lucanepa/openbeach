@@ -851,7 +851,9 @@
     "medicalForfeitQuestion": "The team is incomplete and forfeits the match. Confirm?",
     "medicalConfirmForfeit": "Confirm forfeit",
     "bmpRequest": "BMP request",
-    "set3TossFirst": "Record the set 3 coin toss first"
+    "set3TossFirst": "Record the set 3 coin toss first",
+    "onePointToSwitch": "One point to switch",
+    "onePointToTto": "One point to TTO"
   },
   "settings": {
     "title": "Settings",

@@ -355,13 +355,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   const [bmpOutcomeModal, setBmpOutcomeModal] = useState(null) // { type: 'team'|'referee', team?: 'team1'|'team2', requestedAt, currentScore, currentServe } | null - the request is logged with its outcome
   const [bmpSelectedOutcome, setBmpSelectedOutcome] = useState(null) // 'successful'|'unsuccessful'|'judgment_impossible'|'in'|'out' - selected outcome awaiting confirmation
 
-  // Auto-dismiss preEventPopup after 3 seconds or on click
+  // "One point to switch / TTO": a chip under the rally status (it was a big
+  // banner over the players, gone on the next tap). It covers nothing, so it
+  // stays a few seconds.
   useEffect(() => {
     if (preEventPopup) {
-      const timer = setTimeout(() => setPreEventPopup(null), 3000)
-      const dismiss = () => { setPreEventPopup(null); clearTimeout(timer) }
-      document.addEventListener('click', dismiss, { once: true })
-      return () => { clearTimeout(timer); document.removeEventListener('click', dismiss) }
+      const timer = setTimeout(() => setPreEventPopup(null), 8000)
+      return () => clearTimeout(timer)
     }
   }, [preEventPopup])
 
@@ -7859,8 +7859,33 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               width: '100%',
               minHeight: `${DESIGN_VMIN * 0.12 * scaleFactor}px`
             }}>
-              {/* Rally Status - 17% */}
-              <div style={{ flex: '0 0 17%', textAlign: 'center', padding: `0 ${4 * scaleFactor}px` }}>
+              {/* Rally Status - 17% (and the "One point to switch / TTO" chip
+                  under it, out of the flow: nothing moves) */}
+              <div style={{ flex: '0 0 17%', textAlign: 'center', padding: `0 ${4 * scaleFactor}px`, position: 'relative' }}>
+                {preEventPopup && (
+                  <div data-testid="pre-event-chip" role="status" style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    marginTop: `${2 * scaleFactor}px`,
+                    width: 'max-content',
+                    maxWidth: '100%',
+                    lineHeight: 1.2,
+                    background: 'var(--ov-success)',
+                    color: '#fff',
+                    padding: `${Math.max(4, 6 * scaleFactor)}px ${Math.max(10, 14 * scaleFactor)}px`,
+                    borderRadius: '999px',
+                    fontSize: `max(14px, ${DESIGN_VMIN * 0.02 * scaleFactor}px)`,
+                    fontWeight: 700,
+                    zIndex: 5,
+                    pointerEvents: 'none'
+                  }}>
+                    {preEventPopup.message === 'One point to TTO'
+                      ? t('scoreboard.onePointToTto', 'One point to TTO')
+                      : t('scoreboard.onePointToSwitch', 'One point to switch')}
+                  </div>
+                )}
                 <div className="font-semibold uppercase tracking-[0.12em] text-stone-500" style={{ fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px` }}>
                   {t('scoreboard.labels.rallyStatus')}
                 </div>
@@ -16177,26 +16202,6 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         </Modal>
       )}
 
-      {/* "One point to switch/TTO" popup notification */}
-      {preEventPopup && (
-        <div style={{
-          position: 'fixed',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          backgroundColor: 'rgb(34, 197, 94)',
-          color: 'white',
-          padding: '31px 62px',
-          borderRadius: '16px',
-          fontSize: '39px',
-          fontWeight: 'bold',
-          zIndex: 1500,
-          pointerEvents: 'none',
-          animation: 'preEventPulse 1s ease-in-out infinite'
-        }}>
-          {preEventPopup.message}
-        </div>
-      )}
 
       {/* BMP Outcome Modal */}
       {bmpOutcomeModal && (() => {

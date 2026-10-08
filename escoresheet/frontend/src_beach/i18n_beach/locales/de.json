@@ -850,7 +850,9 @@
     "medicalForfeitQuestion": "Das Team ist unvollständig und verliert das Spiel forfait. Bestätigen?",
     "medicalConfirmForfeit": "Forfait bestätigen",
     "bmpRequest": "BMP-Anfrage",
-    "set3TossFirst": "Zuerst den Münzwurf für Satz 3 erfassen"
+    "set3TossFirst": "Zuerst den Münzwurf für Satz 3 erfassen",
+    "onePointToSwitch": "Noch 1 Punkt bis Seitenwechsel",
+    "onePointToTto": "Noch 1 Punkt bis TTO"
   },
   "settings": {
     "title": "Einstellungen",

@@ -850,7 +850,9 @@
     "medicalForfeitQuestion": "L'équipe est incomplète et perd le match par forfait. Confirmer ?",
     "medicalConfirmForfeit": "Confirmer le forfait",
     "bmpRequest": "Demande de BMP",
-    "set3TossFirst": "Saisissez d'abord le tirage au sort du set 3"
+    "set3TossFirst": "Saisissez d'abord le tirage au sort du set 3",
+    "onePointToSwitch": "Encore 1 point avant changement",
+    "onePointToTto": "Encore 1 point avant le TTO"
   },
   "settings": {
     "title": "Paramètres",
