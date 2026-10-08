@@ -1224,7 +1224,11 @@
     "reopenMatch": "Reopen match",
     "showLarger": "Show larger",
     "setsWon": "Sets won",
-    "matchDataJson": "Match data (JSON)"
+    "matchDataJson": "Match data (JSON)",
+    "resign": "Re-sign",
+    "clearSignature": "Clear",
+    "signatureLocked": "Match approved or closed: signatures can no longer change",
+    "signatureSaveFailed": "The signature could not be saved. Try again."
   },
   "scoresheetPdf": {
     "zoomOut": "Zoom Out",

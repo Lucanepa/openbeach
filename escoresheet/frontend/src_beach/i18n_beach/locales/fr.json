@@ -1223,7 +1223,11 @@
     "reopenMatch": "Rouvrir le match",
     "showLarger": "Agrandir",
     "setsWon": "Sets gagnés",
-    "matchDataJson": "Données du match (JSON)"
+    "matchDataJson": "Données du match (JSON)",
+    "resign": "Signer à nouveau",
+    "clearSignature": "Effacer",
+    "signatureLocked": "Match approuvé ou clôturé : les signatures ne changent plus",
+    "signatureSaveFailed": "La signature n’a pas pu être enregistrée. Réessayez."
   },
   "scoresheetPdf": {
     "zoomOut": "Réduire",

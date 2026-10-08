@@ -59,13 +59,14 @@ async function openOrderAndSignature(side = 0) {
   await screen.findByText(/Order & signature – team/)
 }
 
+const clickEl = (el) => act(async () => { fireEvent.click(el) })
 const signatureJobs = async () => (await db.sync_queue.toArray()).filter(j => j.payload?.signatures)
 
 describe('CoinToss_beach signatures are saved at once', () => {
   it('the captain signature is on the match row and queued before the coin toss is confirmed', async () => {
     await seed()
     await openOrderAndSignature(0)
-    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: /Sign \(captain #1\)/ })) })
+    await clickEl(await screen.findByRole('button', { name: /Sign \(captain #1\)/ }))
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Draw' })) })
 
     await waitFor(async () => expect((await db.matches.get(matchId)).team1CaptainSignature).toBe('data:image/png;base64,SIGNED'))
@@ -81,7 +82,7 @@ describe('CoinToss_beach signatures are saved at once', () => {
   it('a reload shows the saved signature', async () => {
     await seed()
     await openOrderAndSignature(0)
-    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: /Sign \(captain #1\)/ })) })
+    await clickEl(await screen.findByRole('button', { name: /Sign \(captain #1\)/ }))
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Draw' })) })
     await waitFor(async () => expect((await db.matches.get(matchId)).team1CaptainSignature).toBeTruthy())
 
@@ -93,7 +94,7 @@ describe('CoinToss_beach signatures are saved at once', () => {
   it('the coach signature is saved at once too', async () => {
     await seed({ hasCoach: true })
     await openOrderAndSignature(1)
-    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: 'Sign (coach)' })) })
+    await clickEl(await screen.findByRole('button', { name: 'Sign (coach)' }))
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Draw' })) })
     await waitFor(async () => expect((await db.matches.get(matchId)).team2CoachSignature).toBe('data:image/png;base64,SIGNED'))
     expect((await signatureJobs())[0].payload.signatures.team2_coach).toBe('data:image/png;base64,SIGNED')
@@ -102,7 +103,7 @@ describe('CoinToss_beach signatures are saved at once', () => {
   it('a new captain clears the signature on the match row too', async () => {
     await seed()
     await openOrderAndSignature(0)
-    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: /Sign \(captain #1\)/ })) })
+    await clickEl(await screen.findByRole('button', { name: /Sign \(captain #1\)/ }))
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Draw' })) })
     await waitFor(async () => expect((await db.matches.get(matchId)).team1CaptainSignature).toBeTruthy())
 
@@ -118,7 +119,7 @@ describe('CoinToss_beach signatures are saved at once', () => {
     await seed({ test: true })
     await openOrderAndSignature(0)
     // (a browser pre-fills placeholder signatures for test matches; jsdom has no canvas)
-    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: /Sign \(captain #1\)|Signed by #1/ })) })
+    await clickEl(await screen.findByRole('button', { name: /Sign \(captain #1\)|Signed by #1/ }))
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Draw' })) })
     await waitFor(async () => expect((await db.matches.get(matchId)).team1CaptainSignature).toBe('data:image/png;base64,SIGNED'))
     expect(await signatureJobs()).toHaveLength(0)

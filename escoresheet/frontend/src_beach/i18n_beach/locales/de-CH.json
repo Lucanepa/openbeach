@@ -1223,7 +1223,11 @@
     "reopenMatch": "Spiel wieder öffnen",
     "showLarger": "Grösser anzeigen",
     "setsWon": "Gewonnene Sätze",
-    "matchDataJson": "Spieldaten (JSON)"
+    "matchDataJson": "Spieldaten (JSON)",
+    "resign": "Neu underschriibe",
+    "clearSignature": "Lösche",
+    "signatureLocked": "Spiil genehmigt oder abgschlosse: d Underschrifte sind fix",
+    "signatureSaveFailed": "D Underschrift het nöd chöne gspeicheret werde. Probiered Sie s nomal."
   },
   "scoresheetPdf": {
     "zoomOut": "Verchliinere",

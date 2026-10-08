@@ -1223,7 +1223,11 @@
     "reopenMatch": "Riapri partita",
     "showLarger": "Ingrandisci",
     "setsWon": "Set vinti",
-    "matchDataJson": "Dati della partita (JSON)"
+    "matchDataJson": "Dati della partita (JSON)",
+    "resign": "Firma di nuovo",
+    "clearSignature": "Cancella",
+    "signatureLocked": "Partita approvata o chiusa: le firme non cambiano più",
+    "signatureSaveFailed": "Non è stato possibile salvare la firma. Riprova."
   },
   "scoresheetPdf": {
     "zoomOut": "Riduci",

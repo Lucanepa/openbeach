@@ -1223,7 +1223,11 @@
     "reopenMatch": "Spiel wieder öffnen",
     "showLarger": "Grösser anzeigen",
     "setsWon": "Gewonnene Sätze",
-    "matchDataJson": "Spieldaten (JSON)"
+    "matchDataJson": "Spieldaten (JSON)",
+    "resign": "Neu unterschreiben",
+    "clearSignature": "Löschen",
+    "signatureLocked": "Spiel genehmigt oder abgeschlossen: die Unterschriften sind fix",
+    "signatureSaveFailed": "Die Unterschrift konnte nicht gespeichert werden. Versuche es noch einmal."
   },
   "scoresheetPdf": {
     "zoomOut": "Verkleinern",

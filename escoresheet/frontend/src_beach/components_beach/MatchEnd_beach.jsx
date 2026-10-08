@@ -19,10 +19,12 @@ import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { sanitizeForFilename } from '../utils_beach/stringUtils_beach'
 import { openAppWindow } from '../utils_beach/openAppWindow_beach'
 import { formatTimeLocal } from '../utils_beach/timeUtils_beach'
+import { saveMatchSignature, signatureEditLocked, signaturesPayload, clearedPostMatchSignatures } from '../utils_beach/signatures_beach'
 import CountryFlag from './CountryFlag_beach'
 import { ChartColumn, FileText, Save, Search } from './Icons_beach'
-import { Check, Loader2, Maximize2, PenLine, X } from 'lucide-react'
+import { Check, Eraser, Loader2, Maximize2, PenLine, X } from 'lucide-react'
 import { Button } from '../ui/volleyui/Button.jsx'
+import { RowTool } from '../ui/volleyui/Row.jsx'
 import { IconButton } from '../ui/volleyui/IconButton.jsx'
 import { Textarea } from '../ui/volleyui/Textarea.jsx'
 import { confirmDialog } from '../ui/volleyui/uiStore.js'
@@ -643,21 +645,39 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
   const currentStep = getCurrentStep()
   const allSignaturesDone = currentStep === 'complete'
 
+  // Re-sign and Clear close once the match is approved or closed
+  const signaturesLocked = signatureEditLocked(match, { isApproved })
+
+  const signatureFieldMap = {
+    'captain-a': team1Label === 'A' ? 'team1PostGameCaptainSignature' : 'team2PostGameCaptainSignature',
+    'captain-b': team1Label === 'B' ? 'team1PostGameCaptainSignature' : 'team2PostGameCaptainSignature',
+    'asst-scorer': 'asstScorerSignature',
+    'scorer': 'scorerSignature',
+    'ref2': 'ref2Signature',
+    'ref1': 'ref1Signature'
+  }
+
+  // Every signature change is written at once and queued for the cloud: the
+  // match's whole `signatures` object (utils_beach/signatures_beach.js)
+  const writeSignature = async (role, signatureData) => {
+    const saved = await saveMatchSignature(db, matchId, signatureFieldMap[role], signatureData)
+    if (!saved && signatureFieldMap[role]) showAlert(t('matchEnd.signatureSaveFailed'), 'error')
+    return saved
+  }
+
   const handleSaveSignature = async (role, signatureData) => {
     cLogger.logHandler('handleSaveSignature', { role })
-    const fieldMap = {
-      'captain-a': team1Label === 'A' ? 'team1PostGameCaptainSignature' : 'team2PostGameCaptainSignature',
-      'captain-b': team1Label === 'B' ? 'team1PostGameCaptainSignature' : 'team2PostGameCaptainSignature',
-      'asst-scorer': 'asstScorerSignature',
-      'scorer': 'scorerSignature',
-      'ref2': 'ref2Signature',
-      'ref1': 'ref1Signature'
-    }
-    const field = fieldMap[role]
-    if (field) {
-      await db.matches.update(matchId, { [field]: signatureData })
-    }
+    if (signaturesLocked) return
+    await writeSignature(role, signatureData)
     setOpenSignature(null)
+  }
+
+  // "Clear": the signature goes at once (saved and synced), then the pad opens
+  // empty. "Re-sign" only opens the pad: Cancel keeps the old signature.
+  const handleClearSignature = async (role) => {
+    cLogger.logHandler('handleClearSignature', { role })
+    if (signaturesLocked) return
+    if (await writeSignature(role, null)) setOpenSignature(role)
   }
 
   const getSignatureData = (role) => {
@@ -698,8 +718,8 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         <div className="text-xs font-semibold text-stone-700">{label}</div>
         <button
           type="button"
-          onClick={() => !disabled && !isSigned && setOpenSignature(role)}
-          disabled={disabled || isSigned}
+          onClick={() => !disabled && !isSigned && !signaturesLocked && setOpenSignature(role)}
+          disabled={disabled || isSigned || signaturesLocked}
           aria-label={isSigned ? `${label} · ${t('matchEnd.signed', 'Signed')}` : `${label} · ${t('matchEnd.tapToSign')}`}
           className={cn(
             'relative flex h-16 items-center justify-center overflow-hidden rounded-xl border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60 focus-visible:ring-offset-1',
@@ -720,6 +740,33 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
             </span>
           )}
         </button>
+        {isSigned && (
+          // Change a collected signature (OpenVolley b1b15d8f)
+          <div className="flex gap-2" data-testid={`signature-actions-${role}`}>
+            <RowTool
+              className="h-11 flex-1 disabled:cursor-not-allowed disabled:opacity-50 sm:h-11 sm:flex-1"
+              disabled={signaturesLocked}
+              title={signaturesLocked ? t('matchEnd.signatureLocked') : undefined}
+              aria-label={`${label} · ${t('matchEnd.resign')}`}
+              onClick={() => setOpenSignature(role)}
+              data-testid={`signature-resign-${role}`}
+            >
+              <PenLine size={14} aria-hidden="true" />
+              {t('matchEnd.resign')}
+            </RowTool>
+            <RowTool
+              className="h-11 flex-1 disabled:cursor-not-allowed disabled:opacity-50 sm:h-11 sm:flex-1"
+              disabled={signaturesLocked}
+              title={signaturesLocked ? t('matchEnd.signatureLocked') : undefined}
+              aria-label={`${label} · ${t('matchEnd.clearSignature')}`}
+              onClick={() => handleClearSignature(role)}
+              data-testid={`signature-clear-${role}`}
+            >
+              <Eraser size={14} aria-hidden="true" />
+              {t('matchEnd.clearSignature')}
+            </RowTool>
+          </div>
+        )}
       </div>
     )
   }
@@ -1097,13 +1144,9 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         status: 'live',
         approved: false,
         approvedAt: null,
-        // Clear all signature fields - they must be re-collected after changes
-        team1PostGameCaptainSignature: null,
-        team2PostGameCaptainSignature: null,
-        assistantScorerSignature: null,
-        scorerSignature: null,
-        referee2Signature: null,
-        referee1Signature: null
+        // Clear all post-match signature fields (the ones the boxes write) -
+        // they must be re-collected after changes
+        ...clearedPostMatchSignatures()
       })
 
       // Delete the set_end event for this set to keep event log clean
@@ -1149,7 +1192,9 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
           action: 'update',
           payload: {
             id: match.seed_key,
-            status: 'live'
+            status: 'live',
+            // the post-match signatures were synced as they were made: clear them there too
+            ...(match.test ? {} : { signatures: signaturesPayload({ ...match, ...clearedPostMatchSignatures() }) })
           },
           ts: new Date().toISOString(),
           status: 'queued'
