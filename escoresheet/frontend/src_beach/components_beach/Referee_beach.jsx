@@ -30,6 +30,8 @@ import { NarrowScreenOverlay } from './dashboards/EntryKit_beach.jsx'
 import { HEADER_BAR, HEADER_BTN, HEADER_BTN_ON, MENU_PANEL, MENU_SUBROW, MENU_ROW_ON } from './chromeClasses_beach'
 import { timeSecondsLabel } from '../ui/volleyui/format.js'
 import { BRAND } from '../brand_beach'
+import { medicalFromAction, medicalRemaining, reconcileMedical, medicalTypeLabel, medicalPlayerLabel, formatDuration } from '../utils_beach/refereeMedical_beach'
+import { refereeEventLabel, REFEREE_DISPLAYABLE_EVENTS, BMP_PER_SET } from '../utils_beach/refereeEventLabel_beach'
 
 // Get current version from package.json (injected by Vite at build time)
 const currentVersion = __APP_VERSION__
@@ -210,6 +212,11 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   const timeoutActiveRef = useRef(false) // Track if timeout is active (for closure-safe checks)
   const [ttoModal, setTtoModal] = useState(null) // { countdown, startTimestamp, initialCountdown, started }
   const ttoActiveRef = useRef(false)
+  // MTO / RIT recovery time (rule 17.1.2): { kind, ritType, team, playerNumber, playerName, startTimestamp, initialCountdown, source }
+  const [medicalModal, setMedicalModal] = useState(null)
+  const [medicalNow, setMedicalNow] = useState(() => Date.now())
+  const medicalRef = useRef(null)
+  medicalRef.current = medicalModal
   const [preEventPopup, setPreEventPopup] = useState(null) // { message: string }
   const prevTotalScoreRef = useRef(null)
   const prevSetIndexRef = useRef(null)
@@ -639,6 +646,27 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     } else if (action === 'end_tto') {
       ttoActiveRef.current = false
       setTtoModal(null)
+    } else if (action === 'medical') {
+      // MTO / RIT: 5 minutes recovery time for the player (rule 17.1.2)
+      const medical = medicalFromAction(actionData)
+      setMedicalModal(medical)
+      if (medical) {
+        setLastEvent({ type: medical.kind, team: medical.team, data: { ...actionData }, timestamp: receiveTimestamp })
+      }
+    } else if (action === 'end_medical') {
+      // The end names the kind and the player; the type, the name and the
+      // duration come from the running recovery
+      const running = medicalRef.current
+      const endData = {
+        ...(running ? {
+          ritType: running.ritType,
+          playerName: running.playerName,
+          duration: Math.max(0, Math.round((receiveTimestamp - running.startTimestamp) / 1000))
+        } : {}),
+        ...actionData
+      }
+      setMedicalModal(null)
+      setLastEvent({ type: 'medical_end', team: actionData?.team || null, data: endData, timestamp: receiveTimestamp })
     }
   }, [])
 
@@ -932,8 +960,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           }
 
           // Store last event for footer display (only specific event types)
-          const displayableEvents = ['point', 'timeout', 'set_end', 'sanction', 'court_captain_designation', 'challenge', 'challenge_outcome', 'referee_bmp_request', 'referee_bmp_outcome']
-          if (state.last_event_type && displayableEvents.includes(state.last_event_type)) {
+          if (state.last_event_type && REFEREE_DISPLAYABLE_EVENTS.includes(state.last_event_type)) {
             setLastEvent({
               type: state.last_event_type,
               team: state.last_event_team,
@@ -1035,6 +1062,19 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
     return () => clearInterval(timer)
   }, [ttoModal?.started, ttoModal?.startTimestamp, ttoModal?.initialCountdown])
+
+  // MTO / RIT: rebuilt from the events (reconnect, a missed action, an
+  // undone start), and its countdown ticks while it runs
+  useEffect(() => {
+    if (!data?.events) return
+    setMedicalModal(prev => reconcileMedical(prev, data.events))
+  }, [data?.events])
+  useEffect(() => {
+    if (!medicalModal) return undefined
+    setMedicalNow(Date.now())
+    const timer = setInterval(() => setMedicalNow(Date.now()), 500)
+    return () => clearInterval(timer)
+  }, [medicalModal])
 
   // Auto-dismiss preEventPopup after 3 seconds
   useEffect(() => {
@@ -1615,6 +1655,9 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   const rightStats = (isInSetInterval || isMatchEnded)
     ? { timeouts: 0, challengesUsed: 0 }
     : (rightTeam === 'team1' ? stats.team1 : stats.team2)
+  // BMP left in the set, as the scorer's BMP button shows it (two unsuccessful
+  // requests per set)
+  const bmpLeft = (teamStats) => Math.max(0, BMP_PER_SET - (teamStats?.challengesUsed || 0))
 
   // Get the last finished set's final score for display when match ends
   const lastFinishedSet = useMemo(() => {
@@ -2620,16 +2663,16 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
               <span style={{ fontWeight: 600, color: 'var(--ov-text-muted)', fontSize: '0.6em' }}>BMP</span>
               <span style={{
-                background: leftStats.challengesUsed >= 1 ? 'var(--ov-warning-soft)' : 'var(--ov-sunken-strong)',
+                background: bmpLeft(leftStats) <= 0 ? 'var(--ov-danger-soft)' : 'var(--ov-sunken-strong)',
                 padding: `${vmin(0.7)}px ${vmin(1.4)}px`,
                 borderRadius: vmin(0.6),
-                border: leftStats.challengesUsed >= 1 ? '1px solid #fcd34d' : '1px solid var(--ov-hairline-strong)',
+                border: bmpLeft(leftStats) <= 0 ? '1px solid #fca5a5' : '1px solid var(--ov-hairline-strong)',
                 minWidth: vmin(4.2),
                 aspectRatio: '1',
                 textAlign: 'center',
-                color: leftStats.challengesUsed >= 1 ? 'var(--ov-warning-text)' : 'var(--ov-text)',
+                color: bmpLeft(leftStats) <= 0 ? 'var(--ov-danger-text)' : 'var(--ov-text)',
                 fontVariantNumeric: 'tabular-nums'
-              }}>{leftStats.challengesUsed}</span>
+              }} title={t('referee.bmpLeft', { count: bmpLeft(leftStats), defaultValue: 'Ball mark protocol: {{count}} left' })}>{bmpLeft(leftStats)}</span>
             </div>
           </div>
 
@@ -2828,6 +2871,33 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                     Courts will switch when TTO ends
                   </div>
                 </div>
+              ) : medicalModal ? (
+                (() => {
+                  // MTO / RIT: 5:00 recovery time (rule 17.1.2)
+                  const remaining = medicalRemaining(medicalModal, medicalNow)
+                  const medTeamLetter = medicalModal.team === 'team1' ? team1Label : medicalModal.team === 'team2' ? team2Label : ''
+                  const medPlayers = medicalModal.team === 'team1' ? data?.team1Players : data?.team2Players
+                  const medPlayer = (medPlayers || []).find(p => String(p.number) === String(medicalModal.playerNumber))
+                  const medName = medicalModal.playerName || medPlayer?.lastName || medPlayer?.last_name || ''
+                  return (
+                    <div style={{ textAlign: 'center' }} data-testid="referee-medical">
+                      <div style={{ fontSize: '16px', color: 'var(--ov-danger-text)', fontWeight: 700, marginBottom: '2px' }}>
+                        {medicalTypeLabel(medicalModal.kind, medicalModal.ritType, t)}
+                      </div>
+                      <div style={{ fontSize: '14px', color: 'var(--ov-text)', fontWeight: 600, marginBottom: '6px' }}>
+                        {medicalPlayerLabel({ teamLetter: medTeamLetter, playerNumber: medicalModal.playerNumber, playerName: medName })}
+                      </div>
+                      <DonutCountdown current={remaining} total={medicalModal.initialCountdown} size={130} strokeWidth={6}>
+                        <div style={{ fontSize: vmin(5), fontFamily: getScoreFont(), fontWeight: 600, color: remaining <= 60 ? 'var(--ov-danger-text)' : 'var(--ov-success)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+                          {formatDuration(remaining)}
+                        </div>
+                      </DonutCountdown>
+                      <div style={{ fontSize: '12px', color: 'var(--ov-text-muted)', fontWeight: 500, marginTop: '4px' }}>
+                        {t('referee.medical.recoveryTime', 'Recovery time')}
+                      </div>
+                    </div>
+                  )
+                })()
               ) : betweenSetsCountdown && betweenSetsCountdown.countdown > 0 ? (
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: '12px', color: 'var(--ov-text-muted)', fontWeight: 600, marginBottom: '4px' }}>INTERVAL</div>
@@ -3029,16 +3099,16 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
               <span style={{ fontWeight: 600, color: 'var(--ov-text-muted)', fontSize: '0.6em' }}>BMP</span>
               <span style={{
-                background: rightStats.challengesUsed >= 1 ? 'var(--ov-warning-soft)' : 'var(--ov-sunken-strong)',
+                background: bmpLeft(rightStats) <= 0 ? 'var(--ov-danger-soft)' : 'var(--ov-sunken-strong)',
                 padding: `${vmin(0.7)}px ${vmin(1.4)}px`,
                 borderRadius: vmin(0.6),
                 aspectRatio: '1',
-                border: rightStats.challengesUsed >= 1 ? '1px solid #fcd34d' : '1px solid var(--ov-hairline-strong)',
+                border: bmpLeft(rightStats) <= 0 ? '1px solid #fca5a5' : '1px solid var(--ov-hairline-strong)',
                 minWidth: vmin(4.2),
                 textAlign: 'center',
-                color: rightStats.challengesUsed >= 1 ? 'var(--ov-warning-text)' : 'var(--ov-text)',
+                color: bmpLeft(rightStats) <= 0 ? 'var(--ov-danger-text)' : 'var(--ov-text)',
                 fontVariantNumeric: 'tabular-nums'
-              }}>{rightStats.challengesUsed}</span>
+              }} title={t('referee.bmpLeft', { count: bmpLeft(rightStats), defaultValue: 'Ball mark protocol: {{count}} left' })}>{bmpLeft(rightStats)}</span>
             </div>
           </div>
         </div>
@@ -3072,68 +3142,17 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                   {timeSecondsLabel(lastEvent.timestamp)}
                 </span>
                 <span style={{ fontWeight: 600, color: 'var(--ov-text-body)' }}>
-                  {(() => {
-                    // lastEvent.team is 'team1' or 'team2', need to map to display values
-                    const teamLbl = lastEvent.team === 'team1' ? team1Label : lastEvent.team === 'team2' ? team2Label : ''
-                    const teamShort = lastEvent.team === 'team1' ? (data?.match?.team1ShortName || data?.team1?.name || 'Team 1') : lastEvent.team === 'team2' ? (data?.match?.team2ShortName || data?.team2?.name || 'Team 2') : ''
-                    const scoreStr = `(${leftDisplayScore}-${rightDisplayScore})`
-                    const teamInfo = teamLbl ? `${teamLbl} ${teamShort} ${scoreStr}` : ''
-
-                    if (lastEvent.type === 'point') return `${t('refereeDashboard.events.point')} ${teamInfo}`
-                    if (lastEvent.type === 'timeout') return `${t('refereeDashboard.events.timeout')} ${teamInfo}`
-                    if (lastEvent.type === 'challenge') return `${t('refereeDashboard.events.challenge', 'Team BMP')} ${teamInfo}`
-                    if (lastEvent.type === 'challenge_outcome') {
-                      const result = lastEvent.data?.result
-                      const resultLabel = result === 'successful' ? 'Successful' :
-                        result === 'unsuccessful' ? 'Unsuccessful' :
-                          result === 'judgment_impossible' ? 'Judgment impossible' : result
-                      return `Team BMP: ${resultLabel} ${teamInfo}`
-                    }
-                    if (lastEvent.type === 'referee_bmp_request') return 'Referee BMP'
-                    if (lastEvent.type === 'referee_bmp_outcome') {
-                      const result = lastEvent.data?.result
-                      const resultLabel = result === 'in' ? 'IN' :
-                        result === 'out' ? 'OUT' :
-                          result === 'judgment_impossible' ? 'Judgment impossible' : result
-                      const pointToTeam = lastEvent.data?.pointToTeam
-                      let pointInfo = ''
-                      if (lastEvent.data?.pointAwarded && pointToTeam) {
-                        const pointTeamLbl = pointToTeam === 'team1' ? team1Label : team2Label
-                        pointInfo = ` → ${pointTeamLbl}`
-                      }
-                      return `Referee BMP: ${resultLabel}${pointInfo}`
-                    }
-                    if (lastEvent.type === 'set_end') return t('refereeDashboard.events.setEnd', { set: lastEvent.data?.setIndex || '' })
-                    if (lastEvent.type === 'sanction') {
-                      const sanctionData = lastEvent.data || {}
-                      // Short sanction type labels
-                      const sanctionTypeShort = {
-                        'improper_request': 'IR',
-                        'delay_warning': 'DW',
-                        'delay_penalty': 'DP',
-                        'warning': 'W',
-                        'penalty': 'P',
-                        'expulsion': 'EXP',
-                        'disqualification': 'DQ'
-                      }[sanctionData.type] || sanctionData.type || ''
-
-                      // For delay and IR, no member info needed
-                      const isDelayOrIR = ['delay_warning', 'delay_penalty', 'improper_request'].includes(sanctionData.type)
-
-                      let memberInfo = ''
-                      if (!isDelayOrIR && sanctionData.playerNumber) {
-                        memberInfo = `#${sanctionData.playerNumber}`
-                      }
-
-                      const parts = [sanctionTypeShort, teamInfo, memberInfo].filter(Boolean)
-                      return parts.join(' ')
-                    }
-                    if (lastEvent.type === 'court_captain_designation') {
-                      const playerNumber = lastEvent.data?.playerNumber || '?'
-                      return `${t('refereeDashboard.events.courtCaptainDesignation')} ${teamInfo} #${playerNumber}`
-                    }
-                    return ''
-                  })()}
+                  {refereeEventLabel(lastEvent, {
+                    team1Label,
+                    team2Label,
+                    team1Short: data?.match?.team1ShortName || data?.team1?.name || 'Team 1',
+                    team2Short: data?.match?.team2ShortName || data?.team2?.name || 'Team 2',
+                    leftLabel,
+                    rightLabel,
+                    leftPoints: leftDisplayScore,
+                    rightPoints: rightDisplayScore,
+                    t
+                  })}
                 </span>
               </>
             ) : (

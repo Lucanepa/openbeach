@@ -2572,5 +2572,26 @@
       "serverWhen": "Tablets have mobile data, or the venue Wi-Fi keeps devices apart. Sign-in needed."
     },
     "wifiQrCaption": "Scan to join this Wi-Fi first"
+  },
+  "referee": {
+    "medical": {
+      "mto": "MTO",
+      "rit": "RIT",
+      "ritNoBlood": "no blood",
+      "ritToilet": "toilet",
+      "ritWeather": "weather",
+      "end": "end",
+      "recovered": "recovered",
+      "forfeit": "forfeit",
+      "recoveryTime": "Recovery time"
+    },
+    "events": {
+      "teamBmp": "Team BMP",
+      "refereeBmp": "Referee BMP",
+      "successful": "successful",
+      "unsuccessful": "unsuccessful",
+      "judgmentImpossible": "judgment impossible"
+    },
+    "bmpLeft": "Ball mark protocol: {{count}} left"
   }
 }

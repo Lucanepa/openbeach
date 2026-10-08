@@ -2571,5 +2571,26 @@
       "serverWhen": "Die Tablets haben mobile Daten, oder das WLAN vor Ort trennt die Geräte. Anmeldung nötig."
     },
     "wifiQrCaption": "Zuerst scannen, um diesem WLAN beizutreten"
+  },
+  "referee": {
+    "medical": {
+      "mto": "MTO",
+      "rit": "RIT",
+      "ritNoBlood": "ohne Blut",
+      "ritToilet": "Toilette",
+      "ritWeather": "Wetter",
+      "end": "Ende",
+      "recovered": "erholt",
+      "forfeit": "Forfait",
+      "recoveryTime": "Erholungszeit"
+    },
+    "events": {
+      "teamBmp": "Team-BMP",
+      "refereeBmp": "Schiedsrichter-BMP",
+      "successful": "erfolgreich",
+      "unsuccessful": "erfolglos",
+      "judgmentImpossible": "Beurteilung unmöglich"
+    },
+    "bmpLeft": "Ballabdruck-Protokoll ({{count}} übrig)"
   }
 }

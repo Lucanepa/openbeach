@@ -2571,5 +2571,26 @@
       "serverWhen": "I tablet hanno dati mobili, o il Wi-Fi della struttura separa i dispositivi. Serve l’accesso."
     },
     "wifiQrCaption": "Prima scansiona per collegarti a questo Wi-Fi"
+  },
+  "referee": {
+    "medical": {
+      "mto": "MTO",
+      "rit": "RIT",
+      "ritNoBlood": "senza sangue",
+      "ritToilet": "toilette",
+      "ritWeather": "meteo",
+      "end": "fine",
+      "recovered": "ristabilito",
+      "forfeit": "forfait",
+      "recoveryTime": "Tempo di recupero"
+    },
+    "events": {
+      "teamBmp": "BMP squadra",
+      "refereeBmp": "BMP arbitro",
+      "successful": "riuscito",
+      "unsuccessful": "non riuscito",
+      "judgmentImpossible": "giudizio impossibile"
+    },
+    "bmpLeft": "Protocollo segno della palla ({{count}} rimasti)"
   }
 }

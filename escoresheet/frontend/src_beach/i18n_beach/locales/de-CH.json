@@ -2571,5 +2571,26 @@
       "serverWhen": "D Tablets händ mobili Date, oder s WLAN vor Ort trennt d Grät. Aamäldig nötig."
     },
     "wifiQrCaption": "Zersch scanne, zum i das WLAN gah"
+  },
+  "referee": {
+    "medical": {
+      "mto": "MTO",
+      "rit": "RIT",
+      "ritNoBlood": "ohne Blut",
+      "ritToilet": "Toilette",
+      "ritWeather": "Wetter",
+      "end": "Ende",
+      "recovered": "erholt",
+      "forfeit": "Forfait",
+      "recoveryTime": "Erholungszeit"
+    },
+    "events": {
+      "teamBmp": "Team-BMP",
+      "refereeBmp": "Schiedsrichter-BMP",
+      "successful": "erfolgreich",
+      "unsuccessful": "erfolglos",
+      "judgmentImpossible": "Beurteilung unmöglich"
+    },
+    "bmpLeft": "Ballabdruck-Protokoll ({{count}} übrig)"
   }
 }
