@@ -3,8 +3,9 @@
  *
  * The coin toss labels team1/team2 as A and B (coinTossTeamA / coinTossTeamB)
  * and records the team that serves first twice: as a team (`firstServe`,
- * 'team1' / 'team2', what the scoreboard plays from) and as an A/B flag
- * (`coinTossServeA`, what the coin toss screen reopens with). The set 3 toss
+ * 'team1' / 'team2', what the scoreboard plays from) and as A/B flags
+ * (`coinTossServeA` / `coinTossServeB`, what the coin toss screen reopens
+ * with: the ball shown next to A or B). The set 3 toss
  * stores its first server as a label too (`set3FirstServe`, 'A' / 'B').
  *
  * "Swap team A ↔ B" re-labels the teams only. The first server is a team, so
@@ -20,6 +21,11 @@
 
 const otherTeam = (key) => (key === 'team1' ? 'team2' : 'team1')
 const flipLabel = (label) => (label === 'A' ? 'B' : label === 'B' ? 'A' : label)
+// The team the scoreboard (and the referee, the snapshots) play first:
+// firstServe, team1 without one. Not the A/B flag: a match restored with the
+// flag and no first server has been played with team1 serving first, and a
+// swap must not change that mid-match.
+const playedFirstServe = (match) => match.firstServe || 'team1'
 
 /**
  * The match fields to write when swapping which team is A and which is B.
@@ -31,16 +37,16 @@ export function swapTeamDesignation(match = {}) {
   const newTeamA = otherTeam(currentA)
   const newTeamB = currentA
 
-  // The team serving first: firstServe when known, otherwise the one the old
-  // A/B flag named (A serving when there is no flag either)
-  const firstServe = match.firstServe ||
-    ((match.coinTossServeA ?? true) ? currentA : otherTeam(currentA))
+  // The team serving first as the scoreboard plays it (firstServe, team1
+  // without one): written, and both A/B serve flags follow it
+  const firstServe = playedFirstServe(match)
 
   const patch = {
     coinTossTeamA: newTeamA,
     coinTossTeamB: newTeamB,
     firstServe,
-    coinTossServeA: firstServe === newTeamA
+    coinTossServeA: firstServe === newTeamA,
+    coinTossServeB: firstServe === newTeamB
   }
   if (match.set3FirstServe === 'A' || match.set3FirstServe === 'B') {
     patch.set3FirstServe = flipLabel(match.set3FirstServe)
@@ -56,8 +62,7 @@ export function swapTeamDesignation(match = {}) {
 export function coinTossCloud(match = {}) {
   const teamA = match.coinTossTeamA || 'team1'
   const teamB = match.coinTossTeamB || otherTeam(teamA)
-  const firstServe = match.firstServe ||
-    ((match.coinTossServeA ?? true) ? teamA : teamB)
+  const firstServe = playedFirstServe(match)
   return {
     team_a: teamA,
     team_b: teamB,

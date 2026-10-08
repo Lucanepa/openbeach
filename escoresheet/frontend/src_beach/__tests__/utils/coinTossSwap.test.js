@@ -60,11 +60,28 @@ describe('swapTeamDesignation (beach)', () => {
     expect(coinTossCloud({ ...patch }).first_serve).toBe('team1')
   })
 
-  it('without firstServe, keeps the team the old serve flag named and writes it', () => {
+  it('the B serve flag follows too: A and B never both serve (or both receive)', () => {
+    for (const firstServe of ['team1', 'team2']) {
+      for (const teamA of ['team1', 'team2']) {
+        const teamB = teamA === 'team1' ? 'team2' : 'team1'
+        const match = { coinTossTeamA: teamA, coinTossTeamB: teamB, firstServe, coinTossServeA: firstServe === teamA, coinTossServeB: firstServe === teamB }
+        const local = { ...match, ...swapTeamDesignation(match) }
+        expect(local.coinTossServeB).toBe(!local.coinTossServeA)
+        // the coin toss screen reopens with the B flag for team B
+        expect(local.coinTossServeB ? local.coinTossTeamB : local.coinTossTeamA).toBe(firstServe)
+      }
+    }
+  })
+
+  it('without firstServe, keeps the team the scoreboard plays first (team1) and writes it', () => {
+    // the serve flag says team2 (A) but the scoreboard, with no firstServe,
+    // has been playing team1 first: the swap must not change that mid-match
     const patch = swapTeamDesignation({ coinTossTeamA: 'team2', coinTossTeamB: 'team1', coinTossServeA: true })
     expect(patch.coinTossTeamA).toBe('team1')
-    expect(patch.firstServe).toBe('team2')
-    expect(patch.coinTossServeA).toBe(false)
+    expect(patch.firstServe).toBe('team1')
+    expect(patch.coinTossServeA).toBe(true)
+    expect(patch.coinTossServeB).toBe(false)
+    expect(coinTossCloud({ coinTossTeamA: 'team2', coinTossServeA: true }).first_serve).toBe('team1')
   })
 
   it('without a coin toss: team1 = A serving (the scoreboard defaults), then swapped', () => {

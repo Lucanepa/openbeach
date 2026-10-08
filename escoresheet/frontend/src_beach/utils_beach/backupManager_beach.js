@@ -932,14 +932,27 @@ export async function fetchMatchByPin(gamePin, gameN, { restoreByPin = apiMatchR
   // toss and writes the live state at once, so with the swap still in the
   // sync queue the cloud coin toss names the other team. A live row not
   // older than the latest event is the scorer's latest: its Team A is the
-  // restored match's (the swap as the scorer's match has it: Team A and B
-  // only). Its side_a and lineup_a are always read for its own Team A.
+  // restored match's (the swap as swapTeamDesignation in coinToss_beach made
+  // it: the first server kept, the A / B serve flag follows). Its side_a and
+  // lineup_a are always read for its own Team A.
   const liveTeamAKey = liveRowTeamAKey(liveState, matchData) || teamAKey
   const cloudTeamA = matchData.coin_toss?.team_a
   if ((cloudTeamA === 'team1' || cloudTeamA === 'team2') && liveTeamAKey !== cloudTeamA &&
       !liveOlderThanEvents(liveState, events)) {
+    const toss = matchData.coin_toss
+    const firstServe = toss.first_serve === 'team1' || toss.first_serve === 'team2'
+      ? toss.first_serve
+      : (typeof toss.serve_a === 'boolean' ? (toss.serve_a ? cloudTeamA : liveTeamAKey) : null)
     teamAKey = liveTeamAKey
-    matchData = { ...matchData, coin_toss: { ...matchData.coin_toss, team_a: liveTeamAKey, team_b: cloudTeamA } }
+    matchData = {
+      ...matchData,
+      coin_toss: {
+        ...toss,
+        team_a: liveTeamAKey,
+        team_b: cloudTeamA,
+        ...(firstServe ? { serve_a: firstServe === liveTeamAKey, first_serve: firstServe } : {})
+      }
+    }
   }
   const liveAIsTeam1 = liveTeamAKey === 'team1'
   // The match's court sides as the scorer last saved them (the restored
