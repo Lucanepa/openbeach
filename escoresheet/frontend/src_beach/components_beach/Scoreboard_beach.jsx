@@ -47,6 +47,12 @@ import { medicalStartPayload, medicalEndPayload, findOpenMedical, formatMedicalD
 
 // Sport type for beach volleyball
 const SPORT_TYPE = 'beach'
+
+// Team time-out and technical time-out countdowns: 45 s ON PURPOSE, do not
+// "fix" them to 30 s. FIVB Beach rules 15.4.1 / 15.4.2 give 30 s, but the
+// referee whistles at 45 s (Swiss practice): the countdown runs to the whistle.
+const TEAM_TIMEOUT_SECONDS = 45
+const TTO_SECONDS = 45
 import CountryFlag from './CountryFlag_beach'
 import { uploadBackupToCloud, uploadLogsToCloud, triggerContinuousBackup } from '../utils_beach/logger_beach'
 import { splitLocalDateTime, parseLocalDateTimeToISO, roundToMinute, formatTimeLocal } from '../utils_beach/timeUtils_beach'
@@ -355,7 +361,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   const setEndModalDismissedRef = useRef(null) // Track setIndex where set end modal was dismissed via undo
   const confirmedSetEndRef = useRef(new Set()) // Track which sets have been confirmed to prevent double-processing
   const timeoutStartTimestampRef = useRef(null) // Timestamp when timeout started
-  const timeoutInitialCountdownRef = useRef(45) // Initial timeout duration (45s for beach volleyball)
+  const timeoutInitialCountdownRef = useRef(TEAM_TIMEOUT_SECONDS) // Initial timeout duration (45 s on purpose: see TEAM_TIMEOUT_SECONDS)
   const betweenSetsStartTimestampRef = useRef(null) // Timestamp when between-sets interval started
   const betweenSetsInitialCountdownRef = useRef(60) // Initial between-sets duration
   const [bmpModal, setBmpModal] = useState(null) // { type: 'team'|'referee', team?: 'team1'|'team2' } | null - Ball Mark Protocol modal
@@ -3540,7 +3546,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             set: ttoSet,
             team1Points,
             team2Points,
-            countdown: 45,
+            countdown: TTO_SECONDS,
             started: false,
             triggerCourtSwitchAfter: true,  // Flag to trigger court switch when TTO ends
             teamThatScored: teamKey  // Track which team scored to allow BMP for losing team
@@ -5430,7 +5436,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const used = (timeoutsUsed && timeoutsUsed[teamKey]) || 0
       if (used >= 1) return
 
-      setTimeoutModal({ team: teamKey, countdown: 45, started: false })
+      setTimeoutModal({ team: teamKey, countdown: TEAM_TIMEOUT_SECONDS, started: false })
     },
     [mapSideToTeamKey, timeoutsUsed]
   )
@@ -5464,7 +5470,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Send timeout action to referee to show modal
       sendActionToReferee('timeout', {
         team: timeoutModal.team,
-        countdown: 45,
+        countdown: TEAM_TIMEOUT_SECONDS,
         startTimestamp: startTimestamp
       })
 
@@ -5481,7 +5487,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     debugLogger.log('TO_CANCEL', { team: timeoutModal?.team })
     // Reset refs in case they were set (safety measure)
     timeoutStartTimestampRef.current = null
-    timeoutInitialCountdownRef.current = 45
+    timeoutInitialCountdownRef.current = TEAM_TIMEOUT_SECONDS
     setTimeoutModal(null)
   }, [timeoutModal])
 
@@ -5491,7 +5497,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     debugLogger.log('TO_STOP', { wasTimestamp: timeoutStartTimestampRef.current })
     // Reset refs so next timeout starts fresh (fixes intermittent countdown failure)
     timeoutStartTimestampRef.current = null
-    timeoutInitialCountdownRef.current = 45
+    timeoutInitialCountdownRef.current = TEAM_TIMEOUT_SECONDS
     setTimeoutModal(null)
   }, [])
 
@@ -5734,7 +5740,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
     // Use startedAt from state if available, otherwise fallback to ref or Date.now()
     const startTimestamp = timeoutModal.startedAt ? new Date(timeoutModal.startedAt).getTime() : (timeoutStartTimestampRef.current || Date.now())
-    const initialCountdown = timeoutInitialCountdownRef.current || 45
+    const initialCountdown = timeoutInitialCountdownRef.current || TEAM_TIMEOUT_SECONDS
 
     // Sync refs for legacy support/internal tracking
     if (!timeoutStartTimestampRef.current) timeoutStartTimestampRef.current = startTimestamp
@@ -6975,7 +6981,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       set: modal.set,
       team1Points: modal.team1Points,
       team2Points: modal.team2Points,
-      countdown: 45,
+      countdown: TTO_SECONDS,
       started: false
     } : null
 
@@ -9818,7 +9824,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 marginTop: '8px'
                               }}>
                                 <div style={{
-                                  width: `${(timeoutModal.countdown / 45) * 100}%`,
+                                  width: `${(timeoutModal.countdown / TEAM_TIMEOUT_SECONDS) * 100}%`,
                                   height: '100%',
                                   background: timeoutModal.countdown <= 10 ? '#dc2626' : '#059669',
                                   borderRadius: '3px',
@@ -16175,7 +16181,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     marginTop: '8px'
                   }}>
                     <div style={{
-                      width: `${(ttoModal.countdown / 45) * 100}%`,
+                      width: `${(ttoModal.countdown / TTO_SECONDS) * 100}%`,
                       height: '100%',
                       background: ttoModal.countdown <= 10 ? 'var(--ov-danger)' : 'var(--ov-success)',
                       borderRadius: '3px',
@@ -16205,8 +16211,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     console.debug('[Scoreboard TTO DEBUG] Start TTO button clicked')
                     const startTimestamp = Date.now()
                     setTtoModal(prev => ({ ...prev, started: true, startedAt: new Date(startTimestamp).toISOString() }))
-                    syncLiveStateToSupabase('tto_start', null, { duration: 45 })
-                    sendActionToReferee('tto', { countdown: 45, startTimestamp })
+                    syncLiveStateToSupabase('tto_start', null, { duration: TTO_SECONDS })
+                    sendActionToReferee('tto', { countdown: TTO_SECONDS, startTimestamp })
                   }}
                   style={{
                     padding: '12px 32px',

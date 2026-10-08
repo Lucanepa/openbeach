@@ -1039,7 +1039,9 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     return () => clearInterval(timer)
   }, [timeoutModal?.started, timeoutModal?.startTimestamp, timeoutModal?.initialCountdown])
 
-  // Handle TTO countdown timer (45 seconds)
+  // Handle TTO countdown timer (45 seconds). 45 s on purpose, like the team
+  // time-out (the whistle at 45 s, Swiss practice; FIVB 15.4.1/15.4.2 say 30 s):
+  // see TEAM_TIMEOUT_SECONDS / TTO_SECONDS in Scoreboard_beach
   useEffect(() => {
     if (!ttoModal || !ttoModal.started) return
 
