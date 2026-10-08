@@ -29,6 +29,29 @@ describe('team BMP: only between the point and the next rally', () => {
     expect(teamBmpBlockReason({ events: [ev('point'), ev('challenge'), { type: 'challenge_outcome', setIndex: 1, seq: seq + 0.1 }], setIndex: 1 })).toBe('moved_on')
   })
 
+  it('after a successful BMP (its point is a sub-event of the request): greyed', () => {
+    const p = ev('point')
+    const req = ev('challenge')
+    const events = [p, req,
+      { type: 'challenge_outcome', setIndex: 1, seq: req.seq + 0.1, payload: { result: 'successful' } },
+      { type: 'point', setIndex: 1, seq: req.seq + 0.2, payload: { team: 'team2', fromBMP: true, reversedTeam: 'team1' } }]
+    expect(teamBmpBlockReason({ events, setIndex: 1 })).toBe('moved_on')
+  })
+
+  it('after a referee BMP that awarded the point: greyed', () => {
+    const p = ev('point')
+    const req = ev('referee_bmp_request')
+    const events = [p, req,
+      { type: 'referee_bmp_outcome', setIndex: 1, seq: req.seq + 0.1, payload: { result: 'in' } },
+      { type: 'point', setIndex: 1, seq: req.seq + 0.2, payload: { team: 'team1', fromBMP: true } }]
+    expect(teamBmpBlockReason({ events, setIndex: 1 })).toBe('moved_on')
+  })
+
+  it('a penalty point ends no rally: no BMP on it', () => {
+    const events = [ev('point'), ev('sanction'), { ...ev('point'), payload: { team: 'team2', fromPenalty: true } }]
+    expect(teamBmpBlockReason({ events, setIndex: 1 })).toBe('moved_on')
+  })
+
   it('while the rally is in play, or once the next rally started: greyed', () => {
     expect(teamBmpBlockReason({ events: [ev('point')], setIndex: 1, rallyStatus: 'in_play' })).toBe('rally')
     expect(teamBmpBlockReason({ events: [ev('point'), ev('rally_start')], setIndex: 1 })).toBe('moved_on')

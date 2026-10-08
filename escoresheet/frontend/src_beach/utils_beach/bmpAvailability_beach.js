@@ -30,5 +30,14 @@ export function teamBmpBlockReason({ events = [], setIndex, setFinished = false,
     .sort((a, b) => seqOf(a) - seqOf(b))
   if (!inSet.some(e => e.type === 'point')) return 'no_point'
   const last = inSet[inSet.length - 1]
-  return last.type === 'point' ? null : 'moved_on'
+  return isRallyPoint(last) ? null : 'moved_on'
+}
+
+// A point won in a rally. A BMP's own point (a successful team BMP or a
+// referee BMP, logged as a `point` sub-event of the request), a penalty point
+// and a forfeit's points end no rally: no BMP on them.
+function isRallyPoint(e) {
+  if (e?.type !== 'point') return false
+  const p = e.payload || {}
+  return !p.fromBMP && !p.fromPenalty && !p.fromForfait
 }
