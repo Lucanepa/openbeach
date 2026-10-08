@@ -10,7 +10,7 @@
 // Network is off: no relay socket, no fetch.
 import '../helpers/fakeIndexedDb'
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest'
-import { render, fireEvent, waitFor, cleanup } from '@testing-library/react'
+import { render, fireEvent, waitFor, cleanup, configure } from '@testing-library/react'
 import '../../i18n_beach'
 import { AlertProvider } from '../../contexts_beach/AlertContext_beach'
 import { ScaleProvider } from '../../contexts_beach/ScaleContext_beach'
@@ -18,6 +18,12 @@ import { LoggingProvider } from '../../contexts_beach/LoggingContext_beach'
 import { db } from '../../db_beach/db_beach'
 import Scoreboard from '../../components_beach/Scoreboard_beach'
 import { GHOST_CLICK_MS } from '../../hooks_beach/useConfirmAction_beach'
+
+// Every wait below ends on what the screen or the database shows, never on a
+// timer; with the machine loaded a point took up to 1 s to commit and the
+// end of a TTO or a change of courts (several writes) longer, past the
+// default 1 s of waitFor (2026-10-08)
+configure({ asyncUtilTimeout: 10000 })
 
 class OfflineSocket {
   constructor() { this.readyState = 3 }
@@ -97,6 +103,10 @@ async function point(label) {
   const before = (await ofType('point')).length
   fireEvent.click(button(label))
   await waitFor(async () => expect((await ofType('point')).length).toBe(before + 1))
+  // and on screen: the rally over. The database has the point a moment
+  // before the screen; a Delay warning tapped in between was refused (the
+  // screen still had the rally in play)
+  await waitFor(() => expect(button(label)).toBeFalsy())
 }
 async function switchCourts() {
   await waitFor(() => expect(button('Switch courts')).toBeTruthy(), { timeout: 5000 })
@@ -291,9 +301,10 @@ describe('Scoreboard_beach: every point path opens the change of courts, the TTO
 
     await successfulBmp(dialogBmp())
     expect(await score()).toEqual([6, 1])
-    // the dialog shows the new score (6:1 is 7 points: the change stays)
+    // the dialog shows the new score (6:1 is 7 points: the change stays). The
+    // BMP's point and the dialog's new score come after its outcome row
     await waitFor(() => expect(switchOpen()).toBe(true), { timeout: 5000 })
-    expect(button('Switch courts').closest('div[style*="padding: 24px"]').textContent).toMatch(/6.*1/)
+    await waitFor(() => expect(button('Switch courts').closest('div[style*="padding: 24px"]').textContent).toMatch(/6.*1/))
     await switchCourts()
     expect(await ofType('court_switch')).toHaveLength(1)
     expect(await sides(matchId)).not.toBe(sidesBefore)
@@ -494,8 +505,17 @@ describe('Scoreboard_beach: point paths at every change total', () => {
     const matchId = await setUpMatch()
     mount(matchId)
     await startSet()
+    // the rally in play: the team sanctions are refused, and so disabled (they
+    // looked tappable and a tap did nothing; one right after a point, before
+    // the screen showed it, was lost the same way)
+    const all = (text) => [...document.querySelectorAll('button')].filter(b => b.textContent.trim() === text)
+    for (const text of ['Improper request', 'Delay warning']) {
+      expect(all(text).length).toBeGreaterThanOrEqual(2)
+      expect(all(text).every(b => b.disabled)).toBe(true)
+    }
     await rallies(['Point A', 'Point A', 'Point A', 'Point A', 'Point A', 'Point A'], { first: true })
     expect(await score()).toEqual([6, 0])
+    for (const text of ['Improper request', 'Delay warning']) expect(all(text).every(b => !b.disabled)).toBe(true)
 
     const sanctionConfirm = () => [...document.querySelectorAll('[data-testid="sanction-confirm"] button')].at(-1)
     // The sixth point on screen too (the rally over): a sanction is asked

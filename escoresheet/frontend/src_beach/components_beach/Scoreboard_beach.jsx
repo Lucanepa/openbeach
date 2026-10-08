@@ -3897,7 +3897,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     setSanctionConfirm({ side, type: 'delay_penalty' })
   }, [data?.match, data?.set, rallyStatus])
 
-  // Handle team sanction (for smartphone mode) - takes team key instead of side
+  // Handle team sanction (for smartphone mode) - takes team key instead of side.
+  // Refused while the rally is in play, so the team panel's Improper request,
+  // Delay warning and Delay penalty are disabled then, as in the other layout
+  // (OpenBeach 2026-10-08: they looked tappable during the rally, and a tap
+  // made right after a point, before a slow screen showed it, did nothing)
   const handleTeamSanction = useCallback((teamKey, sanctionType) => {
     cLogger.logHandler('handleTeamSanction', { teamKey, sanctionType })
     if (!data?.match || rallyStatus !== 'idle') return
@@ -8665,6 +8669,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     {!data?.match?.sanctions?.[leftisTeam1 ? 'improperRequestteam1' : 'improperRequestteam2'] && (
                       <button
                         onClick={() => handleTeamSanction(leftisTeam1 ? 'team1' : 'team2', 'improper_request')}
+                        disabled={rallyStatus === 'in_play'}
                         style={{
                           width: '100%',
                           height: `max(44px, ${DESIGN_VMIN * 0.028 * scaleFactor}px)`,
@@ -8674,7 +8679,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           color: 'var(--ov-text-secondary)',
                           border: `${1 * scaleFactor}px solid var(--ov-hairline-strong)`,
                           borderRadius: 'var(--ov-radius)',
-                          cursor: 'pointer',
+                          cursor: rallyStatus === 'in_play' ? 'not-allowed' : 'pointer',
                           padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
@@ -8693,6 +8698,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         return (
                           <button
                             onClick={() => handleTeamSanction(leftTeamKey, 'delay_penalty')}
+                            disabled={rallyStatus === 'in_play'}
                             style={{
                               width: '100%',
                               height: `max(44px, ${DESIGN_VMIN * 0.028 * scaleFactor}px)`,
@@ -8702,7 +8708,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               color: 'var(--ov-danger-text)',
                               border: `${1 * scaleFactor}px solid #fecaca`,
                               borderRadius: 'var(--ov-radius)',
-                              cursor: 'pointer',
+                              cursor: rallyStatus === 'in_play' ? 'not-allowed' : 'pointer',
                               padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
@@ -8717,6 +8723,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         return (
                           <button
                             onClick={() => handleTeamSanction(leftTeamKey, 'delay_warning')}
+                            disabled={rallyStatus === 'in_play'}
                             style={{
                               width: '100%',
                               height: `max(44px, ${DESIGN_VMIN * 0.028 * scaleFactor}px)`,
@@ -8726,7 +8733,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               color: 'var(--ov-warning-text)',
                               border: `${1 * scaleFactor}px solid #fcd34d`,
                               borderRadius: 'var(--ov-radius)',
-                              cursor: 'pointer',
+                              cursor: rallyStatus === 'in_play' ? 'not-allowed' : 'pointer',
                               padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
@@ -10564,6 +10571,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     {!data?.match?.sanctions?.[leftisTeam1 ? 'improperRequestteam2' : 'improperRequestteam1'] && (
                       <button
                         onClick={() => handleTeamSanction(leftisTeam1 ? 'team2' : 'team1', 'improper_request')}
+                        disabled={rallyStatus === 'in_play'}
                         style={{
                           width: '100%',
                           height: `max(44px, ${DESIGN_VMIN * 0.028 * scaleFactor}px)`,
@@ -10573,7 +10581,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           color: 'var(--ov-text-secondary)',
                           border: `${1 * scaleFactor}px solid var(--ov-hairline-strong)`,
                           borderRadius: 'var(--ov-radius)',
-                          cursor: 'pointer',
+                          cursor: rallyStatus === 'in_play' ? 'not-allowed' : 'pointer',
                           padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
@@ -10592,6 +10600,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         return (
                           <button
                             onClick={() => handleTeamSanction(rightTeamKey, 'delay_penalty')}
+                            disabled={rallyStatus === 'in_play'}
                             style={{
                               width: '100%',
                               height: `max(44px, ${DESIGN_VMIN * 0.028 * scaleFactor}px)`,
@@ -10601,7 +10610,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               color: 'var(--ov-danger-text)',
                               border: `${1 * scaleFactor}px solid #fecaca`,
                               borderRadius: 'var(--ov-radius)',
-                              cursor: 'pointer',
+                              cursor: rallyStatus === 'in_play' ? 'not-allowed' : 'pointer',
                               padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
@@ -10616,6 +10625,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         return (
                           <button
                             onClick={() => handleTeamSanction(rightTeamKey, 'delay_warning')}
+                            disabled={rallyStatus === 'in_play'}
                             style={{
                               width: '100%',
                               height: `max(44px, ${DESIGN_VMIN * 0.028 * scaleFactor}px)`,
@@ -10625,7 +10635,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               color: 'var(--ov-warning-text)',
                               border: `${1 * scaleFactor}px solid #fcd34d`,
                               borderRadius: 'var(--ov-radius)',
-                              cursor: 'pointer',
+                              cursor: rallyStatus === 'in_play' ? 'not-allowed' : 'pointer',
                               padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
