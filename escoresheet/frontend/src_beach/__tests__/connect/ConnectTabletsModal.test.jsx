@@ -374,6 +374,28 @@ describe('ConnectTabletsModal_beach', () => {
     expect(screen.getByText(/pair with “framework”/)).toBeInTheDocument()
   })
 
+  // The hall panel's text came in three steps on opening: "Reading the
+  // local server…", the addresses (server answered), then the Wi-Fi to join
+  // (the system answered). It now waits for both (OpenVolley the same).
+  it('venue Wi-Fi: the addresses and the Wi-Fi name come in one change', async () => {
+    let answer
+    const win = tauri({
+      hotspot_status: () => new Promise(resolve => { answer = resolve }),
+      bluetooth_status: () => ({ supported: false })
+    })
+    const fetchImpl = server()
+    renderModal({ match: MATCH, fetchImpl, win })
+    await waitFor(() => expect(answer).toBeTypeOf('function'))
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalled())
+    await new Promise(r => setTimeout(r, 20))
+    // the server has answered, the system not yet: still reading
+    expect(screen.getByTestId('hall-panel')).toHaveTextContent('Reading the local server…')
+    expect(screen.queryByText(/Tablets join/)).toBeNull()
+    answer({ supported: true, active: false, platform: 'linux', ssid: 'a', password: 'b', takesOverWifi: true, leavesNetwork: 'Halle-WLAN' })
+    await waitFor(() => expect(screen.getByText('Tablets join the Wi-Fi “Halle-WLAN”.')).toBeInTheDocument())
+    expect(screen.getByTestId('hall-panel')).not.toHaveTextContent('Reading the local server…')
+  })
+
   it('Windows with the installer’s firewall rule: no manual firewall step, on either Wi-Fi', async () => {
     const win = tauri({
       firewall_status: () => ({ platform: 'windows', supported: true, ready: true, reason: null }),
