@@ -368,6 +368,15 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   const [ttoModal, setTtoModal] = useState(null) // { set, team1Points, team2Points, countdown?, started? } | null - Technical Timeout
   const [preEventPopup, setPreEventPopup] = useState(null) // { message: string } | null - "One point to switch/TTO" notification
   const [timeoutModal, setTimeoutModal] = useState(null) // { team: 'team1'|'team2', countdown: number, started: boolean }
+  // Latest values for syncLiveStateToSupabase, which does not list them (as
+  // OpenVolley): listing them would remake it, and all that depends on it,
+  // at every countdown tick; reading the state froze them at its last remake.
+  const timeoutModalRef = useRef(null)
+  const ttoModalRef = useRef(null)
+  const scorerAttentionTriggerRef = useRef(scorerAttentionTrigger)
+  useEffect(() => { timeoutModalRef.current = timeoutModal }, [timeoutModal])
+  useEffect(() => { ttoModalRef.current = ttoModal }, [ttoModal])
+  useEffect(() => { scorerAttentionTriggerRef.current = scorerAttentionTrigger }, [scorerAttentionTrigger])
 const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { countdown: number, started: boolean, finished?: boolean } | null
   const countdownDismissedRef = useRef(false) // Track if countdown was manually dismissed
   const setEndModalDismissedRef = useRef(null) // Track setIndex where set end modal was dismissed via undo
@@ -878,8 +887,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     return {
       matchId: data.match?.id,
       setIndex: data.set?.index,
-      team1Score: data.set?.team1Score,
-      team2Score: data.set?.team2Score,
+      team1Score: data.set?.team1Points,
+      team2Score: data.set?.team2Points,
       currentServe: data.set?.currentServe,
       team1Rotation: data.set?.team1Rotation,
       team2Rotation: data.set?.team2Rotation,
@@ -1167,6 +1176,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   // cachedSnapshot: Optional snapshot passed from logEvent to avoid re-fetching/re-computing
   const syncLiveStateToSupabase = useCallback(async (eventType, eventTeam, eventData, cachedSnapshot = null) => {
     const _tl = performance.now()
+    // The time-out, TTO and attention trigger of the call (read before any
+    // await: a TTO ending right after this call is already null by then)
+    const timeoutModal = timeoutModalRef.current
+    const ttoModal = ttoModalRef.current
+    const scorerAttentionTrigger = scorerAttentionTriggerRef.current
 
     // Always broadcast locally (works offline, no Supabase needed)
     broadcastToScoreboard(cachedSnapshot)
@@ -1228,7 +1242,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         matchStatus: match?.status,
         snapshotSetFinished: snapshotSet?.finished === true
       })
-      const isTimeout = eventType === 'timeout' || (timeoutModal !== null)
+      const isTimeout = eventType === 'timeout' || (eventType !== 'end_timeout' && timeoutModal !== null)
       const isTto = eventType !== 'end_tto' && (eventType === 'technical_to' || eventType === 'tto_start' || (ttoModal !== null && ttoModal.started))
 
       console.debug('[Scoreboard TTO DEBUG] syncLiveState called:', {
@@ -2127,6 +2141,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // Clear countdown and mark as dismissed so it doesn't restart
     setBetweenSetsCountdown(null)
     countdownDismissedRef.current = true
+    // The next interval starts its own clock, not this one's
+    betweenSetsStartTimestampRef.current = null
     // Notify referee to also close their countdown
     sendActionToReferee('end_interval', {})
     // Sync match_status back to 'in_progress' in Supabase
@@ -10254,9 +10270,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 const setupConfirmed = betweenSetsSetupConfirmed || (data?.set?.index === 3 && set3SetupConfirmed)
                                 const intervalEnded = !betweenSetsCountdown || betweenSetsCountdown.countdown <= 0
 
-                                if (betweenSetsCountdown && betweenSetsCountdown.isActive && (data?.match?.status === 'between_sets' || data?.match?.status === 'set_complete')) {
+                                // The interval runs (as OpenVolley): End set interval, Start set
+                                // once it has ended. The countdown shows here when the setup
+                                // panel (sides / serve, set 3 coin toss), which has its own, is gone.
+                                if (isBetweenSets && betweenSetsCountdown && betweenSetsCountdown.countdown > 0) {
+                                  const setupPanelShown = data?.set?.index === 3 ? !set3SetupConfirmed : !betweenSetsSetupConfirmed
                                   return (
                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                                      {!setupPanelShown && (<>
                                       {/* Countdown display */}
                                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                         <div className="font-semibold uppercase tracking-[0.12em] text-stone-500" style={{
@@ -10289,16 +10310,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                           transition: 'width 1s linear, background 0.3s'
                                         }} />
                                       </div>
-                                      {/* End Interval button - only show if setup confirmed */}
-                                      {setupConfirmed && (
-                                        <button
-                                          className={cn('rally-btn start', SB_RALLY_START)}
-                                          onClick={endSetInterval}
-                                          style={{ marginTop: '8px', padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'max(64px, calc(92px * var(--scale-factor, 1)))' }}
-                                        >
-                                          {t('scoreboard.buttons.endSetInterval', 'End set interval')}
-                                        </button>
-                                      )}
+                                      </>)}
+                                      <button
+                                        className={cn('rally-btn start', SB_RALLY_START)}
+                                        onClick={endSetInterval}
+                                        style={{ padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'max(64px, calc(92px * var(--scale-factor, 1)))' }}
+                                      >
+                                        {t('scoreboard.buttons.endSetInterval', 'End set interval')}
+                                      </button>
                                     </div>
                                   )
                                 }

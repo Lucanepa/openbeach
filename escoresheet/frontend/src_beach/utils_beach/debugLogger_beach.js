@@ -128,13 +128,13 @@ export function createStateSnapshot(data) {
   return {
     // Match info
     matchId: match?.id,
-    setIndex: currentSet?.setIndex,
+    setIndex: currentSet?.index,
 
-    // Scores
-    team1Score: currentSet?.team1Score,
-    team2Score: currentSet?.team2Score,
-    team1SetsWon: sets?.filter(s => s.winner === 'team1').length,
-    team2SetsWon: sets?.filter(s => s.winner === 'team2').length,
+    // Scores (a set has its points and `finished`, no winner field)
+    team1Score: currentSet?.team1Points,
+    team2Score: currentSet?.team2Points,
+    team1SetsWon: sets?.filter(s => s.finished && s.team1Points > s.team2Points).length,
+    team2SetsWon: sets?.filter(s => s.finished && s.team2Points > s.team1Points).length,
 
     // Service
     currentServe: currentSet?.currentServe,
