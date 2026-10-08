@@ -12,6 +12,7 @@ import { isBackendAvailable, getApiUrl } from '../utils_beach/backendConfig_beac
 import { sanitizeSimple } from './stringUtils'
 import { remarksForServer } from '../db_beach/remarksSync_beach'
 import { isTeam1LeftInSet, leftTeamInSet } from './courtSides_beach'
+import { labelsInDesignation } from './coinToss_beach'
 import { refereeConnectionDefault } from '../constants_beach/testSeeds_beach'
 
 // IndexedDB key for storing file system directory handle
@@ -874,6 +875,54 @@ export function savedCourtSides(events, liveState, { liveAIsOtherTeam = false } 
 }
 
 /**
+ * Set 3's coin toss for a restore by PIN. Its event (set3_coin_toss_winner,
+ * on the server since 621827e; an undone one is left out) hides the toss
+ * buttons once restored, so the restored match needs what the toss decided:
+ * - the winner (`set3CoinTossWinner`, a team: no label);
+ * - set 3's first server (`set3FirstServe`, 'A' / 'B'), from the latest
+ *   snapshot taken with the toss made (the toss's, or a later event's): its
+ *   label in that snapshot's designation, put in the restored match's (a
+ *   "Swap team A ↔ B" since keeps the same team serving, as swapTeamDesignation);
+ * - in the break before set 3, the interval's choices made after the toss
+ *   ("Switch sides", "Switch serve"): they log no event, only the live row
+ *   they push has them, so a live row of that break not older than the
+ *   latest event gives set 3's side (`set3LeftTeam`) and first server.
+ * Without them set 3 was served as if no toss had been made and the toss
+ * buttons were gone. {} when the server has no toss.
+ * @param {Array} events  server event rows (seq, type, payload, state_snapshot)
+ * @param {object|null} liveState
+ * @param {{ teamAKey?: 'team1'|'team2', liveAIsOtherTeam?: boolean }} [opts]
+ *   the restored match's Team A; the live row's Team A is the other team
+ * @returns {{ set3CoinTossWinner?: string, set3FirstServe?: 'A'|'B', set3LeftTeam?: 'A'|'B' }}
+ */
+export function savedSet3Toss(events, liveState, { teamAKey = null, liveAIsOtherTeam = false } = {}) {
+  const isTeam = (v) => v === 'team1' || v === 'team2'
+  const latestFirst = [...(events || [])].sort((a, b) => (b.seq || 0) - (a.seq || 0))
+  const toss = latestFirst.find(e => e?.type === 'set3_coin_toss_winner' && isTeam(e.payload?.winner))
+  if (!toss) return {}
+  const out = { set3CoinTossWinner: toss.payload.winner }
+
+  const snapEvent = latestFirst.find(e => (e.seq || 0) >= (toss.seq || 0) &&
+    e.state_snapshot && typeof e.state_snapshot === 'object' && isAB(e.state_snapshot.set3FirstServe))
+  if (snapEvent) {
+    const snap = snapEvent.state_snapshot
+    const from = isTeam(snap.teamAKey) ? snap.teamAKey : (isTeam(toss.payload.teamA) ? toss.payload.teamA : null)
+    Object.assign(out, labelsInDesignation({ set3FirstServe: snap.set3FirstServe }, from, isTeam(teamAKey) ? teamAKey : null))
+  }
+
+  const side = (v) => v === 'left' || v === 'right'
+  if (liveState?.set_interval_active === true && Number(liveState.current_set) === 3 &&
+      side(liveState.side_a) && side(liveState.serving_team) && !liveOlderThanEvents(liveState, events)) {
+    // the live row's side_a / serving_team are for its own Team A
+    const aLeft = (liveState.side_a === 'left') !== liveAIsOtherTeam
+    const aServes = (liveState.serving_team === liveState.side_a) !== liveAIsOtherTeam
+    out.set3LeftTeam = aLeft ? 'A' : 'B'
+    out.set3FirstServe = aServes ? 'A' : 'B'
+  }
+  return out
+}
+
+/**
  * Which team a synced event row put on the left, from the row itself: the
  * serving team's court-side lineup carries isServing. null when it cannot
  * tell (no serve_team, or no lineup or both lineups marked).
@@ -985,6 +1034,9 @@ export async function fetchMatchByPin(gamePin, gameN, { restoreByPin = apiMatchR
   // The match's court sides as the scorer last saved them (the restored
   // match keeps them, and they place a row's court-side lineups below)
   const courtSides = savedCourtSides(events, liveState, { liveAIsOtherTeam: liveTeamAKey !== teamAKey })
+  // Set 3's toss (its winner, side and first server): restored, its event
+  // hides the toss buttons
+  const set3Toss = savedSet3Toss(events, liveState, { teamAKey, liveAIsOtherTeam: liveTeamAKey !== teamAKey })
 
   // If no lineup type events, create them from event lineup_left/lineup_right columns
   // or from match_live_state
@@ -1104,6 +1156,8 @@ export async function fetchMatchByPin(gamePin, gameN, { restoreByPin = apiMatchR
     // The court sides the scorer last saved (setLeftTeamOverrides /
     // set3LeftTeam): the imported match keeps them
     courtSides,
+    // Set 3's toss (savedSet3Toss): the imported match keeps it
+    set3Toss,
     // The backend never returns game_pin: keep the one that proved access, so
     // the imported match can still claim its cloud copy
     gamePin: String(gamePin ?? '').trim()
@@ -1117,6 +1171,7 @@ export async function fetchMatchByPin(gamePin, gameN, { restoreByPin = apiMatchR
 export async function importMatchFromSupabase(cloudData) {
   const { match, sets, events } = cloudData
   const courtSides = cloudData.courtSides || {}
+  const set3Toss = cloudData.set3Toss || {}
 
   let importedMatchId = null
 
@@ -1196,6 +1251,11 @@ export async function importMatchFromSupabase(cloudData) {
       // Court sides (courtSides_beach): without them the court showed A on the left
       ...(courtSides.setLeftTeamOverrides ? { setLeftTeamOverrides: { ...courtSides.setLeftTeamOverrides } } : {}),
       ...(courtSides.set3LeftTeam ? { set3LeftTeam: courtSides.set3LeftTeam } : {}),
+      // Set 3's toss: its winner hides the toss buttons, so its first server
+      // (and the side chosen in the break since) come with it
+      ...(set3Toss.set3CoinTossWinner ? { set3CoinTossWinner: set3Toss.set3CoinTossWinner } : {}),
+      ...(isAB(set3Toss.set3FirstServe) ? { set3FirstServe: set3Toss.set3FirstServe } : {}),
+      ...(isAB(set3Toss.set3LeftTeam) ? { set3LeftTeam: set3Toss.set3LeftTeam } : {}),
       // Match result: prefer JSONB, fallback to legacy
       setResults: results.set_results || match.set_results,
       winner: results.winner || match.winner,
