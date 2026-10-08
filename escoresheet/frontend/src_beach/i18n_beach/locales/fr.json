@@ -426,7 +426,15 @@
     "selectCountry": "Choisir le pays",
     "matchPinTitle": "Code PIN du match",
     "matchPinLabel": "Code PIN",
-    "enterPinPrompt": "Entrez un code PIN pour protéger ce match (requis) :"
+    "enterPinPrompt": "Entrez un code PIN pour protéger ce match (requis) :",
+    "syncState": {
+      "notSignedIn": "Non connecté",
+      "localOnly": "Local uniquement",
+      "savedSignInToSync": "Enregistré sur cet appareil. Connectez-vous pour le synchroniser dans le cloud."
+    },
+    "matchInfoForm": {
+      "pastDate": "Cette date est dans le passé."
+    }
   },
   "scoreboard": {
     "set": "Set",

@@ -427,7 +427,15 @@
     },
     "matchPinTitle": "Match PIN code",
     "matchPinLabel": "PIN code",
-    "enterPinPrompt": "Enter a PIN code to protect this match (required):"
+    "enterPinPrompt": "Enter a PIN code to protect this match (required):",
+    "syncState": {
+      "notSignedIn": "Not signed in",
+      "localOnly": "Local only",
+      "savedSignInToSync": "Saved on this device. Sign in to sync it to the cloud."
+    },
+    "matchInfoForm": {
+      "pastDate": "This date is in the past."
+    }
   },
   "scoreboard": {
     "set": "Set",
