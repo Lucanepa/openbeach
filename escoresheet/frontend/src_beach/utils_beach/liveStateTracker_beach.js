@@ -160,18 +160,56 @@ const bundleSaysWhenRead = (result) => {
  * - isLate(row): a late copy of an older state than the newest (drop it).
  * @param {{ now?: () => number }} [opts]
  */
+/**
+ * How long a newer live state waits for the scorer's bundle (tracker.hold). A
+ * point sends both: the live state carries the score, the bundle the serve
+ * and the court. Shown apart (the bundle lands ~200 ms later) the referee saw
+ * the score change, then the ball and the teams move. Within this time the
+ * bundle arrives and both are shown in one update; without it the live
+ * state's score is shown alone. Ported from OpenVolley (serverDataSync.js).
+ */
+export const LIVE_STATE_HOLD_MS = 400
+
 export function createLiveStateTracker({ now = () => Date.now() } = {}) {
   let newest = null
   let lastBundle = null
+  let holdTimer = null
+  let holdOnBundle = null
+  const dropHold = () => {
+    clearTimeout(holdTimer)
+    holdTimer = null
+    holdOnBundle = null
+  }
   return {
     get newest() { return newest },
     get lastBundle() { return lastBundle },
     reset() {
       newest = null
       lastBundle = null
+      dropHold()
+    },
+    /**
+     * Show a newer live state (`apply`) only if no bundle comes within
+     * LIVE_STATE_HOLD_MS: the bundle has the serve and the court too and shows
+     * them all in one update. A second hold replaces the first.
+     * `onBundle` runs instead of `apply` when a bundle ends the hold: what the
+     * bundle does not carry (the referee's "Last action" footer) is shown
+     * with it, not dropped.
+     */
+    hold(apply, { onBundle } = {}) {
+      dropHold()
+      holdOnBundle = onBundle || null
+      holdTimer = setTimeout(() => {
+        holdTimer = null
+        holdOnBundle = null
+        apply()
+      }, LIVE_STATE_HOLD_MS)
     },
     bundle(result) {
       if (!result?.success || !Array.isArray(result.sets)) return result
+      const heldOnBundle = holdOnBundle
+      dropHold()
+      heldOnBundle?.()
       lastBundle = result
       if (newest && bundleSaysWhenRead(result) && !isLiveStateNewerThanBundle(newest, result)) {
         newest = null

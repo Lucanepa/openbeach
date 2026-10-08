@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   isLateLiveState,
   newerLiveState,
@@ -6,7 +6,8 @@ import {
   applyNewerLiveState,
   createLiveStateTracker,
   LIVE_STATE_REORDER_WINDOW_MS,
-  LIVE_STATE_MAX_FUTURE_SKEW_MS
+  LIVE_STATE_MAX_FUTURE_SKEW_MS,
+  LIVE_STATE_HOLD_MS
 } from '../../utils_beach/liveStateTracker_beach'
 
 // Ported from OpenVolley serverDataSync.relay.test.js (23054276, 570198f3)
@@ -179,5 +180,83 @@ describe('createLiveStateTracker', () => {
     const failed = { success: false }
     expect(tracker.bundle(failed)).toBe(failed)
     expect(tracker.lastBundle).toBeNull()
+  })
+})
+
+// Ported from OpenVolley (fix(referee): a point shows its score, server and
+// rotation in one update): the score of a newer live state alone, then the
+// bundle with the server and the court ~200 ms later, was two changes on the
+// referee. tracker.hold waits for the bundle.
+describe('tracker.hold: a newer live state waits for the bundle', () => {
+  beforeEach(() => { vi.useFakeTimers() })
+  afterEach(() => { vi.useRealTimers() })
+  const clock = () => NOW
+
+  it('a bundle within the hold shows everything at once; the held score is dropped', () => {
+    const tracker = createLiveStateTracker({ now: clock })
+    tracker.bundle(bundle(10, 8))
+    expect(tracker.liveState(live(1000, 11, 8))).toBe(true)
+    const shown = vi.fn()
+    tracker.hold(shown)
+    vi.advanceTimersByTime(LIVE_STATE_HOLD_MS - 50)
+    tracker.bundle(bundle(11, 8, { liveState: live(1000, 11, 8) }))
+    vi.advanceTimersByTime(LIVE_STATE_HOLD_MS)
+    expect(shown).not.toHaveBeenCalled()
+  })
+
+  it('no bundle: the score is shown once the hold is over', () => {
+    const tracker = createLiveStateTracker({ now: clock })
+    tracker.bundle(bundle(10, 8))
+    tracker.liveState(live(1000, 11, 8))
+    const shown = vi.fn()
+    tracker.hold(shown)
+    vi.advanceTimersByTime(LIVE_STATE_HOLD_MS - 1)
+    expect(shown).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(shown).toHaveBeenCalledTimes(1)
+  })
+
+  it('a second push restarts the hold; reset drops it', () => {
+    const tracker = createLiveStateTracker({ now: clock })
+    tracker.bundle(bundle(10, 8))
+    const first = vi.fn()
+    const second = vi.fn()
+    tracker.hold(first)
+    vi.advanceTimersByTime(200)
+    tracker.hold(second)
+    vi.advanceTimersByTime(LIVE_STATE_HOLD_MS)
+    expect(first).not.toHaveBeenCalled()
+    expect(second).toHaveBeenCalledTimes(1)
+    const third = vi.fn()
+    tracker.hold(third)
+    tracker.reset()
+    vi.advanceTimersByTime(LIVE_STATE_HOLD_MS)
+    expect(third).not.toHaveBeenCalled()
+  })
+
+  // The referee's footer (last action) is not in the bundle: dropped with the
+  // held score, a database-row point never reached the footer
+  it('a bundle that ends the hold runs onBundle once, not apply; the timer does not', () => {
+    const tracker = createLiveStateTracker({ now: clock })
+    tracker.bundle(bundle(10, 8))
+    tracker.liveState(live(1000, 11, 8))
+    const shown = vi.fn()
+    const withBundle = vi.fn()
+    tracker.hold(shown, { onBundle: withBundle })
+    tracker.bundle(bundle(11, 8, { liveState: live(1000, 11, 8) }))
+    expect(withBundle).toHaveBeenCalledTimes(1)
+    tracker.bundle(bundle(11, 8, { liveState: live(1000, 11, 8) }))
+    vi.advanceTimersByTime(LIVE_STATE_HOLD_MS)
+    expect(withBundle).toHaveBeenCalledTimes(1)
+    expect(shown).not.toHaveBeenCalled()
+
+    const shownAlone = vi.fn()
+    const notWithBundle = vi.fn()
+    tracker.liveState(live(2000, 12, 8))
+    tracker.hold(shownAlone, { onBundle: notWithBundle })
+    vi.advanceTimersByTime(LIVE_STATE_HOLD_MS)
+    tracker.bundle(bundle(12, 8, { liveState: live(2000, 12, 8) }))
+    expect(shownAlone).toHaveBeenCalledTimes(1)
+    expect(notWithBundle).not.toHaveBeenCalled()
   })
 })

@@ -166,6 +166,10 @@ const bmpChoiceButton = {
 /** A label that some locales break with a soft "-\n" (de: "Verzögerungs-\nwarnung"), on one line. */
 const oneLine = (text) => String(text).replace(/-\n/g, '').replace(/\n/g, ' ')
 
+// Finished sets a team won. A set row holds its points, not its winner.
+const setsWonBy = (sets, teamKey) => (sets || []).filter(s => s.finished &&
+  (teamKey === 'team1' ? s.team1Points > s.team2Points : s.team2Points > s.team1Points)).length
+
 /** Every dialog of the scoring screen is the volleyui one (Modal_beach tone="light"). */
 function Modal(props) {
   return <LegacyModal tone="light" {...props} />
@@ -321,7 +325,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   // See architecture note at top of file. All event-creating functions acquire this lock.
   const eventInProgressRef = useRef(false)
   const eventQueueRef = useRef([]) // Queue for serializing event creation
-  const confirmingTimeoutRef = useRef(false) // Prevent double-click on timeout confirmation
   const [keybindingsEnabled, setKeybindingsEnabled] = useState(() => {
     const saved = localStorage.getItem('keybindingsEnabled')
     return saved === 'true' // default false
@@ -886,8 +889,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       team1Timeouts: data.set?.team1Timeouts,
       team2Timeouts: data.set?.team2Timeouts,
       rallyInProgress: data.set?.rallyInProgress,
-      team1SetsWon: data.sets?.filter(s => s.winner === 'team1').length,
-      team2SetsWon: data.sets?.filter(s => s.winner === 'team2').length,
+      team1SetsWon: setsWonBy(data.sets, 'team1'),
+      team2SetsWon: setsWonBy(data.sets, 'team2'),
       totalEvents: data.events?.length
     }
   }, [data])
@@ -1278,10 +1281,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       else if (isTimeout) matchStatus = 'timeout'
       else if (isSetInterval) matchStatus = 'interval'
 
-      // Calculate side for next set (odd sets: A on left, even sets: A on right)
-      // This follows the standard volleyball alternation pattern
+      // The side team A plays the next set on (the match's end: the last
+      // set's), by the scorer's own rule (courtSides_beach): the teams stay
+      // where they finished the set, its changes of courts and the TTO's
+      // included, unless "Switch sides" is asked (FIVB beach rule 18.1.1);
+      // set 3 starts on its toss's side. Not alternated by the set's number.
       const nextSideA = isSetInterval
-        ? (nextSetIndex % 2 === 1 ? 'left' : 'right')
+        ? (leftTeamInSet(finalSetIndex, match) === 'A' ? 'left' : 'right')
         : snapshot.sideA
 
       // For interval, points reset to 0 for the new set
@@ -1964,8 +1970,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const previousSet = data?.sets?.find(s => s.index === currentSetIndex - 1)
       let remainingTime = setIntervalDuration
 
-      if (previousSet?.endTime) {
-        const endTime = new Date(previousSet.endTime).getTime()
+      // The interval runs from the set end's confirmation: its set_end event
+      // (the set's endTime is rounded down to the minute, up to 59 s early)
+      const setEndEvent = previousSet && [...(data?.events || [])].reverse().find(e => e.type === 'set_end' && e.setIndex === previousSet.index)
+      const intervalStart = setEndEvent?.ts || previousSet?.endTime
+      if (intervalStart) {
+        const endTime = new Date(intervalStart).getTime()
         const now = Date.now()
         const elapsedSeconds = Math.floor((now - endTime) / 1000)
         remainingTime = Math.max(0, setIntervalDuration - elapsedSeconds)
@@ -1987,7 +1997,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
   // Handle between-sets countdown timer
   useEffect(() => {
-    if (!betweenSetsCountdown || !betweenSetsCountdown.started) return
+    // No interval running (ran out, cut short by the set start, or never
+    // started): the next interval starts its own clock, not this one's
+    if (!betweenSetsCountdown) {
+      betweenSetsStartTimestampRef.current = null
+      return
+    }
+    if (!betweenSetsCountdown.started) return
 
     // Initialize refs when interval starts
     if (!betweenSetsStartTimestampRef.current) {
@@ -3747,10 +3763,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     return true
   }, [runAction, afterPointScored])
 
+  // Only the literal true skips the accidental rally start check (its own
+  // "Yes, start rally"): a button handing its click event in must not, or a
+  // tap on Start rally never asks (it did not, until 2026-10)
   const handleStartRally = useCallback(async (skipConfirmation = false) => {
-    cLogger.logHandler('handleStartRally', { skipConfirmation })
+    const skipCheck = skipConfirmation === true
+    cLogger.logHandler('handleStartRally', { skipConfirmation: skipCheck })
     // Check for accidental rally start (if enabled and point was just awarded)
-    if (checkAccidentalRallyStart && !skipConfirmation && lastPointAwardedTimeRef.current) {
+    if (checkAccidentalRallyStart && !skipCheck && lastPointAwardedTimeRef.current) {
       const timeSinceLastPoint = (Date.now() - lastPointAwardedTimeRef.current) / 1000
       if (timeSinceLastPoint < accidentalRallyStartDuration) {
         setAccidentalRallyConfirmModal({
@@ -3886,57 +3906,56 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     setSanctionConfirm({ side, type: sanctionType })
   }, [data?.match, rallyStatus, leftisTeam1])
 
-  // Confirm sanction: snapshot, close, then write (useConfirmAction). A double
-  // tap logged a delay penalty twice and gave two points.
+  // Confirm sanction (useConfirmAction: a double tap logged a delay penalty
+  // twice and gave two points). ONE action: the sanction, its flag, a delay
+  // penalty's point (which joins it) and the dialog closing (deferUi) commit
+  // and show together; closed first, the dialog went one render before them.
   const runSanctionConfirm = useConfirmAction(onConfirmFailed)
-  const confirmSanction = useCallback(() => runSanctionConfirm(async () => {
+  const confirmSanction = useCallback(() => runSanctionConfirm(() => runAction('sanction', async () => {
     if (!sanctionConfirm || !data?.match || !data?.set) return
 
     const { side, type } = sanctionConfirm
-    // Close first, then write
-    setSanctionConfirm(null)
+    deferUi(() => setSanctionConfirm(null))
     const teamKey = mapSideToTeamKey(side)
     const teamKeyCapitalized = teamKey === 'team1' ? 'team1' : 'team2'
 
-    // ONE action: the sanction, its flag and a delay penalty's point (which
-    // joins it) commit and show together
-    await runAction('sanction', async () => {
-      // Update match sanctions for improper request and delay warning
-      // Store by team key (team1/team2) so sanctions follow the team when sides switch
-      if (type === 'improper_request' || type === 'delay_warning') {
-        const currentSanctions = data.match.sanctions || {}
-        await db.matches.update(matchId, {
-          sanctions: {
-            ...currentSanctions,
-            [`${type === 'improper_request' ? 'improperRequest' : 'delayWarning'}${teamKeyCapitalized}`]: true
-          }
-        })
-      }
-
-      // Log the sanction event
-      await logEvent('sanction', {
-        team: teamKey,
-        type: type
+    // Update match sanctions for improper request and delay warning
+    // Store by team key (team1/team2) so sanctions follow the team when sides switch
+    if (type === 'improper_request' || type === 'delay_warning') {
+      const currentSanctions = data.match.sanctions || {}
+      await db.matches.update(matchId, {
+        sanctions: {
+          ...currentSanctions,
+          [`${type === 'improper_request' ? 'improperRequest' : 'delayWarning'}${teamKeyCapitalized}`]: true
+        }
       })
+    }
 
-      // Debug log: sanction
-      debugLogger.log('SANCTION', {
-        team: teamKey,
-        type,
-        side
-      }, getStateSnapshot())
-
-      // If delay penalty, award point to the other team immediately
-      // Beach volleyball has no lineups - always 2 players per team
-      if (type === 'delay_penalty') {
-        const otherSide = side === 'left' ? 'right' : 'left'
-        await handlePoint(otherSide, false, true)
-      }
+    // Log the sanction event
+    await logEvent('sanction', {
+      team: teamKey,
+      type: type
     })
-  }), [runSanctionConfirm, runAction, sanctionConfirm, data?.match, data?.set, data?.events, mapSideToTeamKey, matchId, logEvent, handlePoint])
+
+    // Debug log: sanction
+    debugLogger.log('SANCTION', {
+      team: teamKey,
+      type,
+      side
+    }, getStateSnapshot())
+
+    // If delay penalty, award point to the other team immediately
+    // Beach volleyball has no lineups - always 2 players per team
+    if (type === 'delay_penalty') {
+      const otherSide = side === 'left' ? 'right' : 'left'
+      await handlePoint(otherSide, false, true)
+    }
+  })), [runSanctionConfirm, runAction, deferUi, sanctionConfirm, data?.match, data?.set, data?.events, mapSideToTeamKey, matchId, logEvent, handlePoint])
 
   // Confirm set start time
-  const confirmSetStartTime = useCallback(async (time) => {
+  // One action: the start time, the set start, the rally start and the closed
+  // dialog appear together (the dialog closed a frame before the set started)
+  const confirmSetStartTime = useCallback((time) => runAction('setStart', async () => {
     if (!setStartTimeModal || !data?.set) return
 
     // Check if the confirmed time differs from the expected time
@@ -3998,10 +4017,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       seq: nextSeq1
     }, setStartStateBefore)
 
-    setSetStartTimeModal(null)
+    deferUi(() => setSetStartTimeModal(null))
 
-    // Trigger event backup for Safari/Firefox
-    onTriggerEventBackup?.('set_start')
+    // Trigger event backup for Safari/Firefox (after the commit)
+    runOrDefer({ run: () => onTriggerEventBackup?.('set_start') })
 
     // Now actually start the rally
     // Get current serving team and player
@@ -4033,15 +4052,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       await db.events.update(rallyStartEventId, { stateSnapshot: rallyStartSnapshot })
     }
 
-    // Sync to referee immediately after set start
-    syncToReferee()
+    // Sync to referee immediately after set start (after the commit)
+    afterRefereeSync()
 
     // If the start time differs from expected, automatically open remarks
     // (set 1 of a scheduled match already has its remark line)
     if (timeDifferent && !actualStartRemarked) {
-      setShowRemarks(true)
+      deferUi(() => setShowRemarks(true))
     }
-  }, [setStartTimeModal, data?.set, matchId, onTriggerEventBackup, syncToReferee, getCurrentServe, getServingPlayer, leftisTeam1, leftTeam, rightTeam])
+  }), [runAction, deferUi, runOrDefer, afterRefereeSync, setStartTimeModal, data?.set, matchId, onTriggerEventBackup, getCurrentServe, getServingPlayer, leftisTeam1, leftTeam, rightTeam])
 
   // Confirm set end time
   const confirmSetEndTime = useCallback(async (time) => {
@@ -5675,45 +5694,42 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     [mapSideToTeamKey, timeoutsUsed]
   )
 
-  const confirmTimeout = useCallback(async () => {
-    if (!timeoutModal) return
-    // Prevent double-click: if already started, skip
-    if (timeoutModal.started) return
-    // Mutex: prevent race condition from rapid double-clicks
-    if (confirmingTimeoutRef.current) return
-    confirmingTimeoutRef.current = true
+  // One action: the time-out event and the started countdown appear together
+  // (the scoreboard showed the time-out taken under the still-open request)
+  const runTimeoutConfirm = useConfirmAction(onConfirmFailed)
+  const confirmTimeout = useCallback(() => runTimeoutConfirm(() => runAction('timeout', async () => {
+    const request = timeoutModal
+    if (!request || request.started) return
 
     debugLogger.log('TO_CONFIRM', {
-      team: timeoutModal.team,
+      team: request.team,
       staleTimestampRef: timeoutStartTimestampRef.current
     })
 
-    try {
-      // Log the timeout event
-      await logEvent('timeout', { team: timeoutModal.team })
+    // The countdown starts with the time-out count (deferUi: same render)
+    const startTimestamp = Date.now()
+    deferUi(() => setTimeoutModal({ ...request, started: true, startedAt: new Date(startTimestamp).toISOString() }))
 
-      // Debug log: timeout
-      debugLogger.log('TIMEOUT', {
-        team: timeoutModal.team
-      }, getStateSnapshot())
+    // Log the timeout event
+    await logEvent('timeout', { team: request.team })
 
-      // Start the timeout countdown
-      const startTimestamp = Date.now()
-      setTimeoutModal({ ...timeoutModal, started: true, startedAt: new Date(startTimestamp).toISOString() })
+    // Debug log: timeout
+    debugLogger.log('TIMEOUT', {
+      team: request.team
+    }, getStateSnapshot())
 
-      // Send timeout action to referee to show modal
-      sendActionToReferee('timeout', {
-        team: timeoutModal.team,
+    // Send timeout action to referee to show modal
+    runOrDefer({
+      run: () => sendActionToReferee('timeout', {
+        team: request.team,
         countdown: TEAM_TIMEOUT_SECONDS,
         startTimestamp: startTimestamp
       })
+    })
 
-      // Trigger event backup for Safari/Firefox
-      onTriggerEventBackup?.('timeout')
-    } finally {
-      confirmingTimeoutRef.current = false
-    }
-  }, [timeoutModal, logEvent, sendActionToReferee, onTriggerEventBackup])
+    // Trigger event backup for Safari/Firefox
+    runOrDefer({ run: () => onTriggerEventBackup?.('timeout') })
+  })), [runTimeoutConfirm, runAction, deferUi, runOrDefer, timeoutModal, logEvent, sendActionToReferee, onTriggerEventBackup])
 
   const cancelTimeout = useCallback(() => {
     // Only cancel if timeout hasn't started yet
@@ -6157,7 +6173,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       side: isRightTeam ? 'right' : 'left',
       canSubstitute: false
     })
-  }, [playerActionMenu, leftisTeam1])
+  }, [playerActionMenu, leftisTeam1, rallyStatus, isRallyReplayed])
 
  
   // Handle forfait - award all remaining points and sets to opponent
@@ -6706,7 +6722,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           setSanctionConfirmModal(null)
           const opponentKey = team === 'team1' ? 'team2' : 'team1'
           const allSets = await db.sets.where({ matchId }).toArray()
-          const opponentSetsWon = allSets.filter(s => s.finished && s.winner === opponentKey).length
+          const opponentSetsWon = setsWonBy(allSets, opponentKey)
           setExpulsionConfirmModal({ team, type, role, sanctionType: 'expulsion', endsMatch: opponentSetsWon >= 1 })
           return
         }
@@ -6737,7 +6753,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           setSanctionConfirmModal(null)
           const opponentKey = team === 'team1' ? 'team2' : 'team1'
           const allSets = await db.sets.where({ matchId }).toArray()
-          const opponentSetsWon = allSets.filter(s => s.finished && s.winner === opponentKey).length
+          const opponentSetsWon = setsWonBy(allSets, opponentKey)
           const endsMatch = opponentSetsWon >= 1
           setExpulsionConfirmModal({
             team,
@@ -6770,7 +6786,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Check if this expulsion would end the match (opponent wins their 2nd set)
       const opponentKey = team === 'team1' ? 'team2' : 'team1'
       const allSets = await db.sets.where({ matchId }).toArray()
-      const opponentSetsWon = allSets.filter(s => s.finished && s.winner === opponentKey).length
+      const opponentSetsWon = setsWonBy(allSets, opponentKey)
       const endsMatch = opponentSetsWon >= 1 // If opponent already has 1 set, winning this one ends the match
 
       // Show secondary confirmation modal
@@ -6800,10 +6816,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       return
     }
 
-    // Regular sanction (warning or penalty): close first, then write, as ONE
-    // action (a penalty's point joins it)
-    setSanctionConfirmModal(null)
+    // Regular sanction (warning or penalty): ONE action (a penalty's point
+    // joins it); the dialog closes in the render that shows it (deferUi)
     await runAction('sanction', async () => {
+      deferUi(() => setSanctionConfirmModal(null))
       await logEvent('sanction', {
         team,
         type: sanctionType,
@@ -6822,10 +6838,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         await handlePoint(otherSide, false, true)
       }
     })
-  }), [runPlayerSanctionConfirm, runAction, sanctionConfirmModal, data?.set, data?.events, data?.team1Players, data?.team2Players, logEvent, mapTeamKeyToSide, handlePoint, leftisTeam1, getPlayerSanctionLevel, playerHasSanctionType, teamHasFormalWarning, handleForfait, matchId, getPlayerPenaltyCountInCurrentSet])
+  }), [runPlayerSanctionConfirm, runAction, deferUi, sanctionConfirmModal, data?.set, data?.events, data?.team1Players, data?.team2Players, logEvent, mapTeamKeyToSide, handlePoint, leftisTeam1, getPlayerSanctionLevel, playerHasSanctionType, teamHasFormalWarning, handleForfait, matchId, getPlayerPenaltyCountInCurrentSet])
 
-  // Execute expulsion/disqualification after secondary confirmation
-  const executeExpulsionOrDisqualification = useCallback(async () => {
+  // Execute expulsion/disqualification after secondary confirmation. ONE
+  // action: the sanction, the points the forfeit awards, the set end and the
+  // forfait commit together, and the dialog closes with them (deferUi).
+  // Written one by one the score counted up point by point under the open
+  // dialog, and the dialog, closed only after the set transition, came back
+  // on the next set's scoreboard.
+  const executeExpulsionOrDisqualification = useCallback(() => runAction('expulsion', async () => {
     console.log('[executeExpulsionOrDisqualification] Called', { expulsionConfirmModal, hasSet: !!data?.set })
     if (!expulsionConfirmModal || !data?.set) {
       console.log('[executeExpulsionOrDisqualification] Early return - missing data', { expulsionConfirmModal, hasSet: !!data?.set })
@@ -6833,6 +6854,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
 
     const { team, type, playerNumber, position, role, sanctionType } = expulsionConfirmModal
+    deferUi(() => setExpulsionConfirmModal(null))
     console.log('[executeExpulsionOrDisqualification] Logging sanction', { team, sanctionType, playerNumber })
 
     // Log the sanction event first (for PDF display)
@@ -6856,9 +6878,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const opponentSetsWon = allSets.filter(s => s.finished && s[`${opponentKey === 'team1' ? 'team1Points' : 'team2Points'}`] > s[`${opponentKey === 'team1' ? 'team2Points' : 'team1Points'}`]).length
       if (opponentSetsWon >= 2) {
         await db.matches.update(matchId, { status: 'ended' })
-        onTriggerEventBackup?.('match_end')
-        setExpulsionConfirmModal(null)
-        if (onFinishSet) onFinishSet(data.set)
+        runOrDefer({ run: () => onTriggerEventBackup?.('match_end') })
+        deferUi(() => { if (onFinishSet) onFinishSet(data.set) })
         return
       }
     } else if (sanctionType === 'disqualification') {
@@ -6881,14 +6902,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Disqualification: forfeit entire match
       await handleForfait(team, 'disqualification', 'match')
       await db.matches.update(matchId, { status: 'ended', forfait: true, forfaitTeam: team, remarks: updatedRemarks })
-      onTriggerEventBackup?.('match_end')
-      setExpulsionConfirmModal(null)
-      if (onFinishSet) onFinishSet(data.set)
-      return
+      runOrDefer({ run: () => onTriggerEventBackup?.('match_end') })
+      deferUi(() => { if (onFinishSet) onFinishSet(data.set) })
     }
-
-    setExpulsionConfirmModal(null)
-  }, [expulsionConfirmModal, data?.set, logEvent, handleForfait, matchId, onTriggerEventBackup, onFinishSet])
+  }), [runAction, deferUi, runOrDefer, expulsionConfirmModal, data?.set, logEvent, handleForfait, matchId, onTriggerEventBackup, onFinishSet])
 
   // Keyboard shortcuts handler
   useEffect(() => {
@@ -7125,13 +7142,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
   }, [matchId, newPin, editPinType])
 
-  // Close first, then switch (useConfirmAction): the switch flips the court
-  // under the dialog, and a double tap switched twice
+  // One action (useConfirmAction refuses a double tap, which switched twice):
+  // the sides, the cloud job and the court_switch event commit together and
+  // the dialog closes in the same render (deferUi). Written one by one, the
+  // serve ball jumped to the other side before the teams did.
   const runCourtSwitchConfirm = useConfirmAction(onConfirmFailed)
-  const confirmCourtSwitch = useCallback(() => runCourtSwitchConfirm(async () => {
+  const confirmCourtSwitch = useCallback(() => runCourtSwitchConfirm(() => runAction('courtSwitch', async () => {
     if (!courtSwitchModal || !data?.match || !data?.set) return
     const modal = courtSwitchModal
-    setCourtSwitchModal(null)
+    deferUi(() => setCourtSwitchModal(null))
 
     // The change back (askCourtSwitchBackIfDue), one action: the teams go
     // back where they were before the change(s) the score no longer reaches,
@@ -7210,15 +7229,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       started: false
     } : null
 
-    // Trigger TTO if needed (at 21 points)
+    // Trigger TTO if needed (at 21 points), shown with the switch
     if (shouldTriggerTto && ttoData) {
-      setTtoModal(ttoData)
+      deferUi(() => setTtoModal(ttoData))
     }
 
-    // Sync to Supabase with fresh snapshot to update side_a and serving_team after court switch
+    // After the commit: side_a and serving_team after the court switch
     const reason = setIndex === 3 ? 'set3_8points' : `set${setIndex}_court_switch`
-    syncLiveStateToSupabase('court_switch', null, { reason }, null)
-  }), [runCourtSwitchConfirm, courtSwitchModal, matchId, data?.match, data?.set, logEvent, syncLiveStateToSupabase, runAction, discardEvents, afterRefereeSync, afterLiveState, afterScoresheetRefresh])
+    afterLiveState('court_switch', null, { reason })
+  })), [runCourtSwitchConfirm, runAction, deferUi, courtSwitchModal, matchId, data?.match, data?.set, logEvent, discardEvents, afterRefereeSync, afterLiveState, afterScoresheetRefresh])
 
   // The changes of courts on page load/refresh (ported from OpenVolley
   // e95516eb): the dialogs lived only in the screen's state, so a screen
@@ -7245,12 +7264,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   // kept its pre-switch undo snapshot, and Undo of the next event (a rally
   // start, a time-out) put the teams back on their old sides. Once per TTO:
   // a tap while the run-out end is pending does not switch twice.
+  // One action: the switch (sides, cloud job, the TTO event's snapshot) and
+  // the closed dialog show together, not the sides flipping under it.
   const ttoEndedRef = useRef(null)
-  const handleTtoEnd = useCallback(async () => {
+  const handleTtoEnd = useCallback(() => runAction('ttoEnd', async () => {
     if (!ttoModal) return
     const ttoKey = ttoModal.startedAt || ttoModal
     if (ttoEndedRef.current === ttoKey) return
     ttoEndedRef.current = ttoKey
+    deferUi(() => setTtoModal(null))
 
     const shouldSwitchCourts = ttoModal.triggerCourtSwitchAfter
     let switchedSetIndex = null
@@ -7295,17 +7317,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       }
     }
 
-    // Sync live state after court switch (after the snapshot: the live state
-    // reads the last event's snapshot)
+    // Live state after the court switch (after the commit and the snapshot:
+    // the live state reads the last event's snapshot)
     if (switchedSetIndex != null) {
-      syncLiveStateToSupabase('court_switch', null, { reason: `set${switchedSetIndex}_tto_court_switch` }, null)
+      afterLiveState('court_switch', null, { reason: `set${switchedSetIndex}_tto_court_switch` })
     }
 
-    // Close the TTO modal
-    setTtoModal(null)
-    syncLiveStateToSupabase('end_tto')
-    sendActionToReferee('end_tto', {})
-  }, [ttoModal, matchId, data?.match, data?.set, syncLiveStateToSupabase, captureFullStateSnapshot, sendActionToReferee])
+    afterLiveState('end_tto')
+    runOrDefer({ run: () => sendActionToReferee('end_tto', {}) })
+  }), [runAction, deferUi, ttoModal, matchId, data?.match, data?.set, afterLiveState, runOrDefer, captureFullStateSnapshot, sendActionToReferee])
   handleTtoEndRef.current = handleTtoEnd
 
   // The change of courts (every 7 points, every 5 in set 3) is mandatory; a
@@ -10288,7 +10308,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   return (
                                     <button
                                       className={cn('rally-btn start', SB_RALLY_START)}
-                                      onClick={handleStartRally}
+                                      onClick={() => handleStartRally()}
                                       style={{ padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'max(64px, calc(92px * var(--scale-factor, 1)))' }}
                                     >
                                       {t('scoreboard.buttons.startSet', 'Start set')} {(data?.set?.index || 1)}
@@ -10300,7 +10320,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 return (
                                   <button
                                     className={cn('rally-btn start', SB_RALLY_START)}
-                                    onClick={handleStartRally}
+                                    onClick={() => handleStartRally()}
                                     disabled={data?.match?.status === 'complete' || set3TossPending}
                                     title={set3TossPending ? t('scoreboard.set3TossFirst', 'Record the set 3 coin toss first') : undefined}
                                     style={{ padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'max(64px, calc(92px * var(--scale-factor, 1)))' }}

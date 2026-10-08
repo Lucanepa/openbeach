@@ -270,6 +270,26 @@ describe('advanced: one entry of the log', () => {
     expect(describeRemoval(events, plan, ctx())).toEqual(['Rally start · Set 1 · A 0:0 B', 'Point · Müller / Weber (A) · Set 1 · A 1:0 B'])
   })
 
+  it('the change of courts made at the TTO (on its technical_to event) is a later change of courts too', () => {
+    // 22 points: at 21 the TTO, whose change of courts is on its event
+    const withTto = (payload) => {
+      const { events } = buildSet('1212121212121212121212')
+      const at21 = events.filter(e => e.type === 'court_switch')[2]
+      return events.map(e => (e === at21 ? { ...e, type: 'technical_to', payload } : e))
+    }
+    const notes = (events, match = { coinTossTeamA: 'team1' }) => {
+      const point = events.find(e => e.type === 'point' && e.payload.score.team1 === 8 && e.payload.score.team2 === 7)
+      return planRemoveGroup(events, point.id, ctx({ match })).notes.map(n => n.key)
+    }
+    // the TTO ended: its change of courts is made
+    expect(notes(withTto({ preSwitchOverrides: { 1: 'A' }, courtSwitched: true }))).toContain('corrections.note.courtSwitches')
+    // a TTO logged before the flag, the side changed since (judged as the scoring screen does)
+    expect(notes(withTto({ preSwitchOverrides: { 1: 'A' } }), { coinTossTeamA: 'team1', setLeftTeamOverrides: { 1: 'B' } }))
+      .toContain('corrections.note.courtSwitches')
+    // the TTO still running: its change of courts is not made yet
+    expect(notes(withTto({ preSwitchOverrides: { 1: 'A' }, courtSwitched: false }))).not.toContain('corrections.note.courtSwitches')
+  })
+
   it('a change of courts or a set end is corrected with Undo / Reopen set', () => {
     const { events } = buildSet('1212121', { end: true })
     for (const type of ['court_switch', 'set_end', 'set_start']) {

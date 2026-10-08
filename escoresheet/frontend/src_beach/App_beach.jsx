@@ -1051,6 +1051,10 @@ export default function App() {
   const openMatchSetup = () => {
     setMatchId(null)
     setShowManualAdjustments(false)
+    // Leaving Match End too: left on, the NEXT match opened as "Match
+    // complete" right after its coin toss (Match End shows while
+    // showMatchEnd && matchId)
+    setShowMatchEnd(false)
   }
 
   const openMatchSetupView = () => setShowMatchSetup(true)
@@ -1074,6 +1078,7 @@ export default function App() {
     setMatchId(null)
     setShowMatchSetup(false)
     setShowManualAdjustments(false)
+    setShowMatchEnd(false)
   }
 
   async function clearLocalTestData() {

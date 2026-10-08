@@ -78,7 +78,7 @@ describe('logEvent inside an action', () => {
 describe('sanctions, undo, replay and decision change are one action each', () => {
   it('a delay penalty: the sanction and its point commit together', () => {
     const b = between('const confirmSanction = useCallback(', 'const confirmSetStartTime = useCallback(')
-    expect(b).toContain("await runAction('sanction', async () => {")
+    expect(b).toContain("runAction('sanction', async () => {")
     expect(b.indexOf("runAction('sanction'")).toBeLessThan(b.indexOf('await handlePoint(otherSide, false, true)'))
     const p = between('const confirmPlayerSanction = useCallback(', 'const executeExpulsionOrDisqualification')
     expect(p).toContain("await runAction('sanction', async () => {")
@@ -102,5 +102,73 @@ describe('sanctions, undo, replay and decision change are one action each', () =
   it('a failure is reported once (the action, not the confirm again)', () => {
     const b = between('const onConfirmFailed = useCallback(', '}, [showAlert, t])')
     expect(b).toContain('if (isReportedActionError(err)) return')
+  })
+})
+
+// A sanction painted in two frames in the desktop app: the dialog closed,
+// the score / sanction list changed 64-97 ms later. The dialog now closes in
+// the render that shows the action's data (deferUi), as in OpenVolley.
+describe('a sanction is one screen change', () => {
+  it('confirmSanction (improper request, delay warning, delay penalty)', () => {
+    const b = between('const confirmSanction = useCallback(', '// Confirm set start time')
+    expect(b).toContain("runSanctionConfirm(() => runAction('sanction', async () => {")
+    expect(b).toContain('deferUi(() => setSanctionConfirm(null))')
+    expect(b.replace(/deferUi\(\(\) => setSanctionConfirm\(null\)\)/g, '')).not.toContain('setSanctionConfirm(null)')
+  })
+
+  it('confirmPlayerSanction: a warning or a penalty', () => {
+    const b = between('const confirmPlayerSanction = useCallback(', 'const executeExpulsionOrDisqualification')
+    const regular = b.slice(b.indexOf('// Regular sanction'))
+    expect(regular).toContain("await runAction('sanction', async () => {")
+    expect(regular).toContain('deferUi(() => setSanctionConfirmModal(null))')
+    expect(regular.replace(/deferUi\(\(\) => setSanctionConfirmModal\(null\)\)/g, '')).not.toContain('setSanctionConfirmModal(null)')
+  })
+})
+
+// An expulsion that forfeits the set: in the desktop app the awarded points
+// were written one by one (the score counted 9:5 ... 21:5 over 760 ms, the
+// dialog open above it), and the "Confirm set end" dialog came back for 77 ms
+// on the next set's scoreboard: it was closed only after the set transition,
+// whose loading screen had unmounted and remounted it.
+describe('an expulsion or a disqualification is one action', () => {
+  it('the sanction, the awarded points and the set end commit together; the dialog closes with them', () => {
+    const b = between('const executeExpulsionOrDisqualification = useCallback(', '// Keyboard shortcuts handler')
+    expect(b).toContain("runAction('expulsion', async () => {")
+    expect(b).toContain('deferUi(() => setExpulsionConfirmModal(null))')
+    expect(b.replace(/deferUi\(\(\) => setExpulsionConfirmModal\(null\)\)/g, '')).not.toContain('setExpulsionConfirmModal(null)')
+    // the close comes before the first write
+    expect(b.indexOf('deferUi(() => setExpulsionConfirmModal(null))')).toBeLessThan(b.indexOf("await logEvent('sanction'"))
+    // after the commit: the backup; with the data: Match End
+    expect(b).not.toMatch(/\n\s+onTriggerEventBackup\?\.\('match_end'\)/)
+    expect(b).toContain("runOrDefer({ run: () => onTriggerEventBackup?.('match_end') })")
+    expect(b).toContain('deferUi(() => { if (onFinishSet) onFinishSet(data.set) })')
+  })
+})
+
+// The change of courts painted in three steps in the desktop app (WebKitGTK,
+// diagnostics + frame recorder): the dialog closed, the serve ball jumped to
+// the other side ~60 ms later with both teams still on their old sides, the
+// teams switched ~30 ms after that. Each write (match sides, cloud job,
+// court_switch event) was its own transaction and its own render.
+describe('the change of courts is one action and one screen change', () => {
+  it('confirmCourtSwitch: the sides, the event and the closed dialog commit and show together', () => {
+    const b = between('const confirmCourtSwitch = useCallback(', '// Handle TTO end')
+    expect(b).toContain("runCourtSwitchConfirm(() => runAction('courtSwitch', async () => {")
+    expect(b).toContain('deferUi(() => setCourtSwitchModal(null))')
+    expect(b.replace(/deferUi\(\(\) => setCourtSwitchModal\(null\)\)/g, '')).not.toContain('setCourtSwitchModal(null)')
+    // the TTO it may start opens with the switch, not before
+    expect(b).toContain('deferUi(() => setTtoModal(ttoData))')
+    // the live state goes out once, after the commit, with the final state
+    expect(b).toContain("afterLiveState('court_switch'")
+    expect(b).not.toContain('syncLiveStateToSupabase(')
+  })
+
+  it('handleTtoEnd: the switch after the technical time-out and the closed dialog commit and show together', () => {
+    const b = between('const handleTtoEnd = useCallback(', '// The change of courts (every 7 points')
+    expect(b).toContain("runAction('ttoEnd', async () => {")
+    expect(b).toContain('deferUi(() => setTtoModal(null))')
+    expect(b.replace(/deferUi\(\(\) => setTtoModal\(null\)\)/g, '')).not.toContain('setTtoModal(null)')
+    expect(b).not.toContain('syncLiveStateToSupabase(')
+    expect(b).toContain("runOrDefer({ run: () => sendActionToReferee('end_tto', {}) })")
   })
 })

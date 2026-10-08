@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import i18n from '../i18n'
 import ConnectionStatus from './ConnectionStatus_beach'
+import { useCollapseTransition } from '../hooks_beach/useCollapseTransition_beach'
 import TabletStatusIndicator from './TabletStatusIndicator_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { Bell, BookOpen, ChevronDown, ChevronUp, ClipboardList, House, Maximize, Menu, Minimize, Power, SatelliteDish, X, ZoomIn } from 'lucide-react'
@@ -152,6 +153,8 @@ export default function MainHeader({
 
   // Effective collapsed state - only collapse when collapsible is true
   const effectivelyCollapsed = collapsible && isCollapsed
+  // Animated only while it collapses or expands, not on an app scale change
+  const headerTransition = useCollapseTransition(effectivelyCollapsed)
 
   // The phone scoring layout fills the screen: the header starts folded
   // away (its thin bar opens it again)
@@ -642,7 +645,7 @@ export default function MainHeader({
           flexShrink: 0,
           gap: `${Math.round(10 * scaleFactor)}px`,
           overflow: effectivelyCollapsed ? 'hidden' : 'visible',
-          transition: 'all 0.3s ease-in-out',
+          transition: headerTransition,
           fontSize: `${Math.round(14 * scaleFactor)}px`
         }}>
         {/* Left: Online/Offline Toggle + Connection Status */}

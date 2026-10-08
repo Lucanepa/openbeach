@@ -1906,23 +1906,13 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
           const delayPenaltyPoints: Set<number> = new Set();
           const misconductPenaltyPoints: Set<number> = new Set();
 
-          // Track court switches to determine which team is on which side at any given point
-          let courtSwitchCount = 0; // Number of court switches that have occurred before current event
+          // Every box of the sheet is placed by team (A/B, team1/team2, the
+          // team up or down), never by court side: the sides need no tracking
+          // (a count of the court_switch events also missed the change of
+          // courts made at the TTO, recorded on the technical_to event).
 
           // Process events in chronological order to track scores at each event
           setEvents.forEach((event: any, eventIndex: number) => {
-            // Track court switches - each switch flips which team is on left/right
-            if (event.type === 'court_switch') {
-              courtSwitchCount++;
-            }
-
-            // Determine which team is on left/right at this point in time
-            // After an even number of switches, teams are in base position (A left, B right)
-            // After an odd number of switches, teams are flipped (B left, A right)
-            const isFlipped = courtSwitchCount % 2 === 1;
-            const leftTeamKey = isFlipped ? teamBKey : teamAKey;
-            const rightTeamKey = isFlipped ? teamAKey : teamBKey;
-
             // Calculate current score before this event
             // Track both teamA/teamB (for calculations) and team_up/team_down (for display)
             const eventsBeforeThis = setEvents.slice(0, eventIndex);
@@ -2266,24 +2256,15 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
               const isMisconduct = sanctionType === 'penalty' || sanctionType === 'rude_conduct' || sanctionType === 'expulsion' || sanctionType === 'disqualification';
               const isFormalWarning = sanctionType === 'warning';
 
-              // Determine which side the sanctioned team is on at this point (accounting for court switches)
-              // leftTeamKey and rightTeamKey are already calculated above based on courtSwitchCount
-              const isSanctionedTeamOnLeft = sanctionTeam === leftTeamKey;
-
               // t1 and t2 are FIXED team positions: t1 = team1, t2 = team2 (not left/right)
               // Determine which team control row to use based on the sanctioned team
               const isSanctionedTeam1 = sanctionTeam === 'team1';
               const teamSuffix = isSanctionedTeam1 ? 't1' : 't2';
 
-              // Get the actual team scores at this point (left team vs right team)
-              const leftTeamScore = leftTeamKey === teamAKey ? pointsBefore.teamA : pointsBefore.teamB;
-              const rightTeamScore = rightTeamKey === teamAKey ? pointsBefore.teamA : pointsBefore.teamB;
-
-              // For delay sanctions, we need to determine which score goes in _a and which in _b
-              // _a = penalized team's score, _b = other team's score
-              // But we need to know which side the penalized team is on to get the correct score
-              const penalizedTeamScore = isSanctionedTeamOnLeft ? leftTeamScore : rightTeamScore;
-              const otherTeamScore = isSanctionedTeamOnLeft ? rightTeamScore : leftTeamScore;
+              // _a = penalized team's score, _b = other team's score (by team,
+              // whatever side of the court it is on)
+              const penalizedTeamScore = sanctionTeam === teamAKey ? pointsBefore.teamA : pointsBefore.teamB;
+              const otherTeamScore = sanctionTeam === teamAKey ? pointsBefore.teamB : pointsBefore.teamA;
 
               if (isDelay) {
                 // Count delay penalties (not warnings) BEFORE this event for the SANCTIONED TEAM to determine which penalty box (p1, p2, p3)
