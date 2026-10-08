@@ -10,6 +10,7 @@ import { wipeMatchEvents } from '../db_beach/eventHistory_beach'
 import { apiFrom, apiStorage, apiMatchRestoreByPin } from '../lib_beach/apiClient_beach'
 import { isBackendAvailable, getApiUrl } from '../utils_beach/backendConfig_beach'
 import { sanitizeSimple } from './stringUtils'
+import { remarksForServer } from '../db_beach/remarksSync_beach'
 
 // IndexedDB key for storing file system directory handle
 const BACKUP_DB_NAME = 'escoresheet_backup'
@@ -25,13 +26,21 @@ const VALID_MATCH_COLUMNS = [
   'scheduled_at', 'match_info', 'officials', 'players_team1',
   'players_team2', 'team1_data', 'team2_data', 'coin_toss', 'results', 'signatures',
   'approval', 'test', 'created_at', 'updated_at', 'manual_changes', 'current_set',
-  'set_results', 'final_score', 'sanctions', 'winner', 'sport_type'
+  'set_results', 'final_score', 'sanctions', 'winner', 'sport_type',
+  // backend db/017: the scoresheet REMARKS box (text). Not public on the server.
+  'remarks'
 ]
 
 /**
  * Filter match payload to only include valid Supabase columns
  * Prevents sync errors from old backup formats with invalid column names
  */
+// The backup's remarks for the restore job (backend db/017). A backup without
+// the field (an app before it) sends none, so the server keeps what it has.
+function restoreRemarks(match) {
+  return typeof match?.remarks === 'string' ? { remarks: remarksForServer(match.remarks) } : {}
+}
+
 function filterMatchPayload(payload) {
   return Object.fromEntries(
     Object.entries(payload).filter(([key]) => VALID_MATCH_COLUMNS.includes(key))
@@ -490,6 +499,7 @@ export async function restoreMatchFromJson(jsonData) {
         } : null,
         players_team1: team1Players || [],
         players_team2: team2Players || [],
+        ...restoreRemarks(match),
         // Include match_info fields (stored as JSONB)
         match_info: {
           hall: match.hall,
@@ -650,6 +660,7 @@ export async function restoreMatchInPlace(matchId, jsonData) {
         } : (match.team2_data || match.team2_team || null),
         players_team1: team1Players || match.players_team1 || [],
         players_team2: team2Players || match.players_team2 || [],
+        ...restoreRemarks(match),
         // Include match_info fields (stored as JSONB)
         match_info: {
           hall: match.hall,
@@ -982,6 +993,8 @@ export async function importMatchFromSupabase(cloudData) {
       winner: results.winner || match.winner,
       finalScore: results.final_score || match.final_score,
       sanctions: results.sanctions || match.sanctions,
+      // Scoresheet remarks (backend db/017; '' when the server has none)
+      remarks: typeof match.remarks === 'string' ? match.remarks : '',
       // Approval: prefer JSONB, fallback to legacy
       approved: approval.approved !== undefined ? approval.approved : match.approved,
       approvedAt: approval.approved_at || match.approved_at,

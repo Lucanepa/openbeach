@@ -111,8 +111,11 @@ describe('applyCorrectionPlan (beach)', () => {
     expect(after.remarks).toBe('Ball changed at 1:1')
     expect(after.scorerSignature).toBeNull()
     expect(after.ref1Signature).toBeNull()
-    const matchJob = (await db.sync_queue.toArray()).find(j => j.resource === 'match')
+    const matchJobs = (await db.sync_queue.toArray()).filter(j => j.resource === 'match')
+    const matchJob = matchJobs.find(j => 'signatures' in j.payload)
     expect(matchJob.payload.signatures).toMatchObject({ scorer: null, ref1: null })
+    // the new remarks go to the server too (backend db/017), in their own job
+    expect(matchJobs.find(j => 'remarks' in j.payload).payload.remarks).toBe('Ball changed at 1:1')
   })
 
   it('the final score of a finished set: a missed point added, the set row and the set end follow', async () => {

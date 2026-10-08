@@ -21,7 +21,9 @@ export const VALID_MATCH_COLUMNS = [
   'scheduled_at', 'match_info', 'officials', 'players_team1',
   'players_team2', 'team1_data', 'team2_data', 'coin_toss', 'results', 'signatures',
   'approval', 'test', 'created_at', 'updated_at', 'manual_changes', 'current_set',
-  'set_results', 'final_score', 'sanctions', 'winner', 'sport_type'
+  'set_results', 'final_score', 'sanctions', 'winner', 'sport_type',
+  // backend db/017: the scoresheet REMARKS box (text). Not public on the server.
+  'remarks'
 ]
 
 // JSONB columns that are merged with the cloud row on update, not replaced
@@ -301,7 +303,8 @@ const LOG_REDACT_DEPTH = 6
 /**
  * A value for the console (and so for uploaded logs): PIN fields left out at
  * any depth (game_pin, connection_pins, refereePin, ...), PIN values in error
- * texts masked. Anything else is passed through unchanged.
+ * texts masked, the scoresheet remarks as their length only. Anything else is
+ * passed through unchanged.
  */
 export function redactForLog(value, depth = 0) {
   if (typeof value === 'string') return redactText(value)
@@ -315,7 +318,9 @@ export function redactForLog(value, depth = 0) {
   if (proto !== Object.prototype && proto !== null) return value
   const out = {}
   for (const [k, v] of Object.entries(value)) {
-    if (!isSecretLogKey(k)) out[k] = redactForLog(v, depth + 1)
+    if (isSecretLogKey(k)) continue
+    // the scoresheet remarks: their length only, like the activity log
+    out[k] = k === 'remarks' && typeof v === 'string' ? `[${v.length} characters]` : redactForLog(v, depth + 1)
   }
   return out
 }

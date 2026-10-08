@@ -208,3 +208,46 @@ describe('a restore and the event history', () => {
     expect((await db.sync_queue.toArray()).filter(j => j.action === 'void')).toHaveLength(0)
   })
 })
+
+describe('remarks (backend db/017)', () => {
+  const REMARKS = 'Actual start time: 10:05\nTeam Rossi / Bianchi forfeits the match due to no show'
+  const restoreJob = async () => (await db.sync_queue.toArray()).find(j => j.action === 'restore')
+
+  it('a backup file restored here and on the server keeps its remarks (app file too)', async () => {
+    const matchId = await seedMatch({ remarks: REMARKS })
+    const file = JSON.parse(JSON.stringify(await bm.exportMatchData(matchId)))
+    const appFile = JSON.parse(serializeBackup(await bm.exportMatchData(matchId)).build('2026-10-08T12:00:00.000Z'))
+    expect(appFile.match.remarks).toBe(REMARKS)
+    await Promise.all(db.tables.map(t => t.clear()))
+    const newId = await bm.restoreMatchFromJson(file)
+    expect((await db.matches.get(newId)).remarks).toBe(REMARKS)
+    expect((await restoreJob()).payload.match.remarks).toBe(REMARKS)
+  })
+
+  it('restore in place sends the backup\'s remarks', async () => {
+    const matchId = await seedMatch({ remarks: 'Old' })
+    const file = JSON.parse(JSON.stringify(await bm.exportMatchData(matchId)))
+    file.match.remarks = REMARKS
+    await bm.restoreMatchInPlace(matchId, file)
+    expect((await db.matches.get(matchId)).remarks).toBe(REMARKS)
+    expect((await restoreJob()).payload.match.remarks).toBe(REMARKS)
+  })
+
+  it('a backup without remarks (an app before db/017) does not clear the server\'s', async () => {
+    const matchId = await seedMatch()
+    const file = JSON.parse(JSON.stringify(await bm.exportMatchData(matchId)))
+    await bm.restoreMatchFromJson(file)
+    expect('remarks' in (await restoreJob()).payload.match).toBe(false)
+  })
+
+  it('restore from the server (game number + PIN) brings the remarks back', async () => {
+    const id = await bm.importMatchFromSupabase({
+      match: { external_id: SEED, status: 'live', game_n: 12, sport_type: 'beach', team1_data: { name: 'A' }, team2_data: { name: 'B' }, remarks: REMARKS },
+      sets: [],
+      events: []
+    })
+    expect((await db.matches.get(id)).remarks).toBe(REMARKS)
+    const none = await bm.importMatchFromSupabase({ match: { external_id: 'match_other_ob', status: 'live' }, sets: [], events: [] })
+    expect((await db.matches.get(none)).remarks).toBe('')
+  })
+})
