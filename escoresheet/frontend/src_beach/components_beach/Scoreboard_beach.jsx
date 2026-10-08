@@ -16,7 +16,7 @@ import { useSyncQueue } from '../hooks_beach/useSyncQueue_beach'
 import { useConfirmAction } from '../hooks_beach/useConfirmAction_beach'
 import { useActionLiveQuery } from '../hooks_beach/useActionLiveQuery_beach'
 import { useScorerActions, pickLiveStateSnapshot, isReportedActionError } from '../hooks_beach/useScorerActions_beach'
-import { withActivityContext, currentActivityContext, maxVoidedSeq, rememberSeedKey } from '../db_beach/eventHistory_beach'
+import { withActivityContext, currentActivityContext, maxVoidedSeq, rememberSeedKey, withoutEventHistory } from '../db_beach/eventHistory_beach'
 import CorrectionsPanel from './corrections/CorrectionsPanel_beach'
 import { useSequentialSync } from '../hooks_beach/useSequentialSync_beach'
 
@@ -39,7 +39,7 @@ import { scorerRelay, scorerPublisher, scorerRelayUrl, readRelayBundle, relayMat
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { useDiagCommits } from '../diagnostics_beach/commits_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
-import { captureFullStateSnapshot as captureStateSnapshot } from '../utils_beach/stateSnapshot_beach'
+import { captureFullStateSnapshot as captureStateSnapshot, refreshIntervalSnapshots } from '../utils_beach/stateSnapshot_beach'
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
 import { swapTeamDesignation, coinTossCloud } from '../utils_beach/coinToss_beach'
 import { set3TossBefore, set3TossUndoUpdate, undoKeepsMatch } from '../utils_beach/set3Toss_beach'
@@ -4738,6 +4738,20 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
   }), [runAction, matchId, data?.match, getNextSeq, captureFullStateSnapshot])
 
+  // The interval's taps (sides, serve, service order) log no event: the
+  // snapshots of the events of this interval take them, in the tap's
+  // transaction, so an undo of one of those events keeps them
+  // (stateSnapshot_beach refreshIntervalSnapshots). Not an edit of the
+  // events: no event history, no revision for the server.
+  const intervalTap = useCallback((setIndex, write) => db.transaction(
+    'rw', [db.matches, db.sync_queue, db.events, db.sets, db.players],
+    async () => {
+      if (await write() === false) return
+      await withoutEventHistory(matchId, () => refreshIntervalSnapshots(
+        db, matchId, setIndex, (id, stateSnapshot) => db.events.update(id, { stateSnapshot })))
+    }
+  ), [matchId])
+
   // Switch which team starts on which side for the next set: toggles the
   // side the interval shows, which is the side the set starts on
   const handleBetweenSetsSwitchSides = useCallback(async () => {
@@ -4746,9 +4760,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
     // Toggle the stored side, read in the same transaction: a double tap is
     // two switches (with the rendered match both taps wrote the same side)
-    await db.transaction('rw', db.matches, db.sync_queue, async () => {
+    await intervalTap(setIndex, async () => {
       const match = await db.matches.get(matchId)
-      if (!match) return
+      if (!match) return false
       const update = switchSidesUpdate(setIndex, match, { beforeSetStart: true })
       await db.matches.update(matchId, update)
       if (match.seed_key && !match.test) {
@@ -4761,7 +4775,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         })
       }
     })
-  }, [data?.match, data?.set, matchId])
+  }, [data?.match, data?.set, matchId, intervalTap])
 
   // Switch which team serves first for the next set (Set 2 or Set 3 interval)
   const handleBetweenSetsSwitchServe = useCallback(async () => {
@@ -4776,7 +4790,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const currentFirstServe = data.match.set3FirstServe || 'A'
       const newFirstServe = currentFirstServe === 'A' ? 'B' : 'A'
       console.log('[BetweenSets] Switch serve (Set 3):', { currentFirstServe, newFirstServe })
-      await db.matches.update(matchId, { set3FirstServe: newFirstServe })
+      await intervalTap(setIndex, () => db.matches.update(matchId, { set3FirstServe: newFirstServe }))
     } else if (setIndex === 2) {
       // Set 2: toggle set2FirstServe between team1 and team2
       // Default is opposite of set 1 (who served last in set 1)
@@ -4784,9 +4798,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const currentFirstServe = data.match.set2FirstServe || defaultSet2First
       const newFirstServe = currentFirstServe === 'team1' ? 'team2' : 'team1'
       console.log('[BetweenSets] Switch serve (Set 2):', { currentFirstServe, newFirstServe })
-      await db.matches.update(matchId, { set2FirstServe: newFirstServe })
+      await intervalTap(setIndex, () => db.matches.update(matchId, { set2FirstServe: newFirstServe }))
     }
-  }, [data?.match, data?.set, matchId])
+  }, [data?.match, data?.set, matchId, intervalTap])
 
   // Swap first/second server for a team
   const handleBetweenSetsSwitchServiceOrder = useCallback(async (teamKey) => {
@@ -4803,8 +4817,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     const otherNumber = playerNumbers.find(n => String(n) !== String(currentServer)) ?? playerNumbers[1]
 
     console.log('[BetweenSets] Switch service order:', { teamKey, field, currentServer, playerNumbers, otherNumber })
-    await db.matches.update(matchId, { [field]: otherNumber })
-  }, [data?.match, data?.team1Players, data?.team2Players, matchId])
+    if (data?.set?.index == null) {
+      await db.matches.update(matchId, { [field]: otherNumber })
+      return
+    }
+    await intervalTap(data.set.index, () => db.matches.update(matchId, { [field]: otherNumber }))
+  }, [data?.match, data?.set?.index, data?.team1Players, data?.team2Players, matchId, intervalTap])
 
   // Confirm between-sets setup and allow play to begin
   const confirmBetweenSetsSetup = useCallback(async () => {

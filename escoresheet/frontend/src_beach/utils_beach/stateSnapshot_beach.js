@@ -8,9 +8,11 @@ import { leftTeamInSet } from './courtSides_beach'
  *
  * @param {import('dexie').Dexie} db  the beach Dexie database
  * @param {number} matchId            the local (Dexie) match id
+ * @param {{ uptoSeq?: number }} [opts] uptoSeq: count only the events up to
+ *   this seq (the state right after that event, with the match as it is now)
  * @returns {Promise<object|null>}    null without a match / set, or on error
  */
-export async function captureFullStateSnapshot(db, matchId) {
+export async function captureFullStateSnapshot(db, matchId, { uptoSeq = null } = {}) {
   if (!matchId) return null
 
   try {
@@ -24,7 +26,8 @@ export async function captureFullStateSnapshot(db, matchId) {
     if (!currentSet) return null
 
     // Get all events from database
-    const allEvents = await db.events.where({ matchId }).toArray()
+    const allEvents = (await db.events.where({ matchId }).toArray())
+      .filter(e => uptoSeq == null || (e.seq || 0) <= uptoSeq)
 
     // Get players from database (support both old and new field names)
     const team1TeamIdSnapshot = match.team1Id || match.team1TeamId
@@ -405,4 +408,52 @@ export async function captureFullStateSnapshot(db, matchId) {
     console.error('[captureFullStateSnapshot] Error:', err)
     return null
   }
+}
+
+/**
+ * The snapshot fields the interval's taps change: "Switch sides" (the set's
+ * side: set3LeftTeam or setLeftTeamOverrides), "Switch serve" (set2FirstServe /
+ * set3FirstServe), the service order boxes (team1FirstServe / team2FirstServe),
+ * and what follows from them (the side, the serving team and player, the
+ * line-ups with the servers in their order).
+ */
+export const INTERVAL_CHOICE_FIELDS = Object.freeze([
+  'set3LeftTeam', 'setLeftTeamOverrides', 'set2FirstServe', 'set3FirstServe',
+  'team1FirstServe', 'team2FirstServe',
+  'sideA', 'servingTeam', 'serverNumber', 'lineupA', 'lineupB'
+])
+
+/**
+ * After an interval tap: the snapshots of the events logged in this interval
+ * (the set 3 toss, a sanction, ...) get the tap's sides, serve and service
+ * order. The taps log no event; an undo restores the snapshot of the event
+ * before the one it takes back, and a snapshot from before the tap put the
+ * tap back (toss, sanction, "Switch sides", undo the sanction: set 3 back on
+ * the toss's sides). Each event keeps its own state otherwise (its sanctions,
+ * its flags); only INTERVAL_CHOICE_FIELDS change, recomputed as after that
+ * event with the match as it is now.
+ *
+ * `write(id, snapshot)` stores one refreshed snapshot (the caller writes it
+ * without an event-history edit: the scoresheet content is unchanged).
+ *
+ * @param {import('dexie').Dexie} db
+ * @param {number} matchId
+ * @param {number} setIndex  the set the interval leads to
+ * @param {(id: number, snapshot: object) => Promise<unknown>} write
+ * @returns {Promise<number>} how many snapshots were refreshed
+ */
+export async function refreshIntervalSnapshots(db, matchId, setIndex, write) {
+  const events = (await db.events.where({ matchId }).toArray())
+    .filter(e => e.setIndex === setIndex && e.stateSnapshot &&
+      Number(e.stateSnapshot.currentSetIndex) === Number(setIndex))
+  let refreshed = 0
+  for (const e of events) {
+    const fresh = await captureFullStateSnapshot(db, matchId, { uptoSeq: e.seq || 0 })
+    if (!fresh || Number(fresh.currentSetIndex) !== Number(setIndex)) continue
+    const next = { ...e.stateSnapshot }
+    for (const field of INTERVAL_CHOICE_FIELDS) next[field] = fresh[field]
+    await write(e.id, next)
+    refreshed++
+  }
+  return refreshed
 }
