@@ -105,6 +105,16 @@ function rallyRowButton(scaleFactor, kind) {
   }
 }
 
+/** The player menu's height with Sanction open (4 items + Medical, 44 px+
+ *  each): it opens where that fits, so opening Sanction never moves it. */
+const PLAYER_MENU_OPEN_HEIGHT = 380
+
+/** A popover's top: centred on `centerY`, but inside the window. */
+function clampedMenuTop(centerY, height) {
+  const winH = typeof window !== 'undefined' ? window.innerHeight : 800
+  return Math.max(8, Math.min(centerY - height / 2, winH - height - 8))
+}
+
 /** The serve indicator and the serving ball, as fractions of the design vmin
  *  (scaled with the screen like the rest of the court). The SERVE box was
  *  ~75 px with small text, and the ball (0.08) almost the size of the player
@@ -14201,14 +14211,17 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         // For left side teams, menu opens to the right (use left CSS)
         // For right side teams, menu opens to the left (use right CSS)
         const isRightSide = playerActionMenu.side === 'right'
+        // Anchored by its top, next to the player, and kept on screen with
+        // room for the open Sanction list: centred (translateY(-50%)) the menu
+        // jumped up by half the list when Sanction opened, away from the pointer
+        const menuTop = (centerY) => Math.max(8, Math.min(centerY - 56, window.innerHeight - PLAYER_MENU_OPEN_HEIGHT - 8))
         let menuStyle
         if (playerActionMenu.x !== undefined && playerActionMenu.y !== undefined) {
           menuStyle = {
             position: 'fixed',
             left: isRightSide ? undefined : `${playerActionMenu.x}px`,
             right: isRightSide ? `${window.innerWidth - playerActionMenu.x}px` : undefined,
-            top: `${playerActionMenu.y}px`,
-            transform: 'translateY(-50%)',
+            top: `${menuTop(playerActionMenu.y)}px`,
             zIndex: 1000
           }
         } else {
@@ -14217,8 +14230,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             position: 'fixed',
             left: isRightSide ? undefined : `${rect.right + 30}px`,
             right: isRightSide ? `${window.innerWidth - rect.left + 30}px` : undefined,
-            top: `${rect.top + rect.height / 2}px`,
-            transform: 'translateY(-50%)',
+            top: `${menuTop(rect.top + rect.height / 2)}px`,
             zIndex: 1000
           } : {
             position: 'absolute',
@@ -14461,8 +14473,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             position: 'fixed',
             left: isRightSide ? undefined : `${sanctionDropdown.x}px`,
             right: isRightSide ? `${window.innerWidth - sanctionDropdown.x}px` : undefined,
-            top: `${sanctionDropdown.y}px`,
-            transform: 'translateY(-50%)',
+            // centred on the player but kept on screen (it ran off the top)
+            top: `${clampedMenuTop(sanctionDropdown.y, 300)}px`,
             zIndex: 1000
           }
         } else {
@@ -14471,8 +14483,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             position: 'fixed',
             left: isRightSide ? undefined : `${rect.right + 30}px`,
             right: isRightSide ? `${window.innerWidth - rect.left + 30}px` : undefined,
-            top: `${rect.top + rect.height / 2}px`,
-            transform: 'translateY(-50%)',
+            top: `${clampedMenuTop(rect.top + rect.height / 2, 300)}px`,
             zIndex: 1000
           } : {
             position: 'absolute',
@@ -14710,8 +14721,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             position: 'fixed',
             left: isRightSide ? undefined : `${injuryDropdown.x}px`,
             right: isRightSide ? `${window.innerWidth - injuryDropdown.x}px` : undefined,
-            top: `${injuryDropdown.y}px`,
-            transform: 'translateY(-50%)',
+            // centred on the player but kept on screen (it ran off the top)
+            top: `${clampedMenuTop(injuryDropdown.y, 380)}px`,
             zIndex: 1000
           }
         } else {
@@ -14720,8 +14731,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             position: 'fixed',
             left: isRightSide ? undefined : `${rect.right + 30}px`,
             right: isRightSide ? `${window.innerWidth - rect.left + 30}px` : undefined,
-            top: `${rect.top + rect.height / 2}px`,
-            transform: 'translateY(-50%)',
+            top: `${clampedMenuTop(rect.top + rect.height / 2, 380)}px`,
             zIndex: 1000
           } : {
             position: 'absolute',

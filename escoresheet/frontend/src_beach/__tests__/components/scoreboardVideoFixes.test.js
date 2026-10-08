@@ -40,6 +40,17 @@ describe('issue 1: the player / sanction / medical menu keeps one size', () => {
     expect(rule).toMatch(/font-size: max\(15px, calc\(17px \* var\(--scale-factor, 1\)\)\)/)
   })
 
+  it('opening Sanction does not move the menu: anchored by its top, not centred', () => {
+    const menu = between(sb, '{playerActionMenu && (() => {', '// Get available substitutes for this player')
+    expect(menu).not.toContain("transform: 'translateY(-50%)'")
+    expect(menu).toContain('top: `${menuTop(playerActionMenu.y)}px`')
+    for (const key of ['{sanctionDropdown && (() => {', '{injuryDropdown && (() => {']) {
+      const block = between(sb, key, 'return (')
+      expect(block).not.toContain("transform: 'translateY(-50%)'")
+      expect(block).toContain('clampedMenuTop(')
+    }
+  })
+
   it('hovering a menu item does not grow it', () => {
     const menu = between(sb, 'data-player-action-menu', '{sanctionDropdown && (')
     expect(menu).not.toContain("scale(1.02)")
