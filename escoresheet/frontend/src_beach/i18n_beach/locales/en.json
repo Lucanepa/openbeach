@@ -850,7 +850,8 @@
     "medicalCannotContinue": "Player cannot continue (forfeit)…",
     "medicalForfeitQuestion": "The team is incomplete and forfeits the match. Confirm?",
     "medicalConfirmForfeit": "Confirm forfeit",
-    "bmpRequest": "BMP request"
+    "bmpRequest": "BMP request",
+    "set3TossFirst": "Record the set 3 coin toss first"
   },
   "settings": {
     "title": "Settings",

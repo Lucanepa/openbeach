@@ -849,7 +849,8 @@
     "medicalCannotContinue": "Il giocatore non può continuare (forfait)…",
     "medicalForfeitQuestion": "La squadra è incompleta e perde la partita per forfait. Confermare?",
     "medicalConfirmForfeit": "Conferma forfait",
-    "bmpRequest": "Richiesta BMP"
+    "bmpRequest": "Richiesta BMP",
+    "set3TossFirst": "Registra prima il sorteggio del set 3"
   },
   "settings": {
     "title": "Impostazioni",

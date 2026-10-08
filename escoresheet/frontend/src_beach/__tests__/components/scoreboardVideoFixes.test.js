@@ -128,3 +128,23 @@ describe('issues 11 and 12: scores in court order, the set-end BMP chip', () => 
     expect(modal).toContain("t('scoreboard.buttons.decisionChange', 'Decision change')")
   })
 })
+
+describe('issue 13: interval and set-3 toss panel', () => {
+  it('the team cards carry the coin toss letter, without nested parentheses', () => {
+    expect(sb).toContain("const leftLabel = (leftisTeam1 ? 'team1' : 'team2') === teamAKey ? 'A' : 'B'")
+    expect(sb).toContain("const rightLabel = (leftisTeam1 ? 'team2' : 'team1') === teamAKey ? 'A' : 'B'")
+    expect(sb).not.toContain('{leftLabel} ({leftName})')
+    expect(sb).not.toContain('{rightLabel} ({rightName})')
+  })
+
+  it('the set-3 toss buttons follow the court order', () => {
+    expect(sb).toContain("{(leftisTeam1 ? ['team1', 'team2'] : ['team2', 'team1']).map(key => {")
+  })
+
+  it('before the set-3 toss: no SERVE, Start set disabled; the winner is named in Last action', () => {
+    expect(sb).toContain('const set3TossPending = isBetweenSets && data?.set?.index === 3 && !data?.match?.set3CoinTossWinner')
+    expect(sb).toMatch(/data\?\.set && !set3TossPending \? currentServeTeam === leftServeTeamKey/)
+    expect(sb).toContain("disabled={data?.match?.status === 'complete' || set3TossPending}")
+    expect(sb).toContain('payload: { winner, team: winner },')
+  })
+})

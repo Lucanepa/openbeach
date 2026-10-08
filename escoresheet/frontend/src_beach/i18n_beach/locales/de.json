@@ -849,7 +849,8 @@
     "medicalCannotContinue": "Spieler kann nicht weiterspielen (Forfait)…",
     "medicalForfeitQuestion": "Das Team ist unvollständig und verliert das Spiel forfait. Bestätigen?",
     "medicalConfirmForfeit": "Forfait bestätigen",
-    "bmpRequest": "BMP-Anfrage"
+    "bmpRequest": "BMP-Anfrage",
+    "set3TossFirst": "Zuerst den Münzwurf für Satz 3 erfassen"
   },
   "settings": {
     "title": "Einstellungen",

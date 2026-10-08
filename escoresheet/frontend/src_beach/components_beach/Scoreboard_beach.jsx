@@ -3259,12 +3259,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   const currentServeTeam = data?.set ? getCurrentServe() : null
 
   // Show serve on left as placeholder before coin toss or before set starts
+  // Set 3 before its toss: nobody serves yet (no SERVE, no Start set)
+  const set3TossPending = isBetweenSets && data?.set?.index === 3 && !data?.match?.set3CoinTossWinner
   const leftServing = (isBeforeCoinToss || hasNoSet)
     ? true // Placeholder: serve on left (team1) before coin toss
-    : (data?.set ? currentServeTeam === leftServeTeamKey : false)
+    : (data?.set && !set3TossPending ? currentServeTeam === leftServeTeamKey : false)
   const rightServing = (isBeforeCoinToss || hasNoSet)
     ? false
-    : (data?.set ? currentServeTeam === rightServeTeamKey : false)
+    : (data?.set && !set3TossPending ? currentServeTeam === rightServeTeamKey : false)
 
   const serveBallBaseStyle = useMemo(
     () => ({
@@ -4404,7 +4406,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       matchId,
       setIndex: 3,
       type: 'set3_coin_toss_winner',
-      payload: { winner },
+      // `team`: Last action's team line names the winner
+      payload: { winner, team: winner },
       ts: new Date().toISOString(),
       seq: nextSeq
     })
@@ -8593,54 +8596,34 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             }}>
                               {t('scoreboard.set3CoinToss', 'Set 3 coin toss')}
                             </div>
+                            {/* the toss buttons in the court's order (the team cards) */}
                             <div style={{ display: 'flex', gap: '16px' }}>
-                              {(() => {
-                                const team1Color = data?.team1Team?.color || '#ef4444'
-                                const team2Color = data?.team2Team?.color || '#3b82f6'
-                                const team1IsA = teamAKey === 'team1'
-                                const team1Label = team1IsA ? 'A' : 'B'
-                                const team2Label = team1IsA ? 'B' : 'A'
-                                const team1Name = data?.team1Team?.name || data?.team1Team?.shortName || 'Team 1'
-                                const team2Name = data?.team2Team?.name || data?.team2Team?.shortName || 'Team 2'
+                              {(leftisTeam1 ? ['team1', 'team2'] : ['team2', 'team1']).map(key => {
+                                const color = (key === 'team1' ? data?.team1Team?.color : data?.team2Team?.color) || (key === 'team1' ? '#ef4444' : '#3b82f6')
+                                const label = key === teamAKey ? 'A' : 'B'
+                                const name = (key === 'team1' ? (data?.team1Team?.name || data?.team1Team?.shortName) : (data?.team2Team?.name || data?.team2Team?.shortName)) || (key === 'team1' ? 'Team 1' : 'Team 2')
                                 return (
-                                  <>
-                                    <button
-                                      onClick={() => handleSet3CoinToss('team1')}
-                                      style={{
-                                        padding: '16px 24px',
-                                        fontSize: '16px',
-                                        fontWeight: 700,
-                                        background: team1Color,
-                                        color: isBrightColor(team1Color) ? '#000' : '#fff',
-                                        border: 'none',
-                                        borderRadius: 'var(--ov-radius-lg)',
-                                        minHeight: '56px',
-                                        cursor: 'pointer'
-                                      }}
-                                    >
-                                      {team1Label} — {team1Name}
-                                      <div style={{ fontSize: '13px', fontWeight: 600, marginTop: '4px', opacity: 0.85 }}>{t('scoreboard.wonToss', 'Won the toss')}</div>
-                                    </button>
-                                    <button
-                                      onClick={() => handleSet3CoinToss('team2')}
-                                      style={{
-                                        padding: '16px 24px',
-                                        fontSize: '16px',
-                                        fontWeight: 700,
-                                        background: team2Color,
-                                        color: isBrightColor(team2Color) ? '#000' : '#fff',
-                                        border: 'none',
-                                        borderRadius: 'var(--ov-radius-lg)',
-                                        minHeight: '56px',
-                                        cursor: 'pointer'
-                                      }}
-                                    >
-                                      {team2Label} — {team2Name}
-                                      <div style={{ fontSize: '13px', fontWeight: 600, marginTop: '4px', opacity: 0.85 }}>{t('scoreboard.wonToss', 'Won the toss')}</div>
-                                    </button>
-                                  </>
+                                  <button
+                                    key={key}
+                                    data-testid={`set3-toss-${label}`}
+                                    onClick={() => handleSet3CoinToss(key)}
+                                    style={{
+                                      padding: '16px 24px',
+                                      fontSize: '16px',
+                                      fontWeight: 700,
+                                      background: color,
+                                      color: isBrightColor(color) ? '#000' : '#fff',
+                                      border: 'none',
+                                      borderRadius: 'var(--ov-radius-lg)',
+                                      minHeight: '56px',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    {label} · {name}
+                                    <div style={{ fontSize: '13px', fontWeight: 600, marginTop: '4px', opacity: 0.85 }}>{t('scoreboard.wonToss', 'Won the toss')}</div>
+                                  </button>
                                 )
-                              })()}
+                              })}
                             </div>
                             {/* Countdown and Progress bar during coin toss */}
                             {betweenSetsCountdown && (
@@ -8718,7 +8701,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 const leftFirstServeRaw = leftisTeam1 ? data?.match?.team1FirstServe : data?.match?.team2FirstServe
                                 const leftFirstServe = leftFirstServeRaw ?? leftPlayerNumbers[0]
                                 const leftOther = leftPlayerNumbers.find(n => String(n) !== String(leftFirstServe)) ?? leftPlayerNumbers[1]
-                                const leftLabel = leftisTeam1 ? 'A' : 'B'
+                                const leftLabel = (leftisTeam1 ? 'team1' : 'team2') === teamAKey ? 'A' : 'B'
                                 const leftName = leftisTeam1
                                   ? (data?.team1Team?.name || data?.team1Team?.shortName || 'T1')
                                   : (data?.team2Team?.name || data?.team2Team?.shortName || 'T2')
@@ -8751,7 +8734,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                         transition: 'background 0.15s'
                                       }}>
                                       <div style={{ fontWeight: 700, fontSize: '15px', color: leftTextColor }}>
-                                        {leftLabel} ({leftName})
+                                        {leftLabel} · {leftName}
                                       </div>
                                       <div style={{ fontSize: '13px', fontWeight: 700, color: leftSubTextColor, marginTop: '6px' }}>
                                         I: {leftFirstServe || '?'}
@@ -8821,7 +8804,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 const rightFirstServeRaw = leftisTeam1 ? data?.match?.team2FirstServe : data?.match?.team1FirstServe
                                 const rightFirstServe = rightFirstServeRaw ?? rightPlayerNumbers[0]
                                 const rightOther = rightPlayerNumbers.find(n => String(n) !== String(rightFirstServe)) ?? rightPlayerNumbers[1]
-                                const rightLabel = leftisTeam1 ? 'B' : 'A'
+                                const rightLabel = (leftisTeam1 ? 'team2' : 'team1') === teamAKey ? 'A' : 'B'
                                 const rightName = leftisTeam1
                                   ? (data?.team2Team?.name || data?.team2Team?.shortName || 'T2')
                                   : (data?.team1Team?.name || data?.team1Team?.shortName || 'T1')
@@ -8854,7 +8837,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                         transition: 'background 0.15s'
                                       }}>
                                       <div style={{ fontWeight: 700, fontSize: '15px', color: rightTextColor }}>
-                                        {rightLabel} ({rightName})
+                                        {rightLabel} · {rightName}
                                       </div>
                                       <div style={{ fontSize: '13px', fontWeight: 700, color: rightSubTextColor, marginTop: '6px' }}>
                                         I: {rightFirstServe || '?'}
@@ -9803,7 +9786,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   <button
                                     className={cn('rally-btn start', SB_RALLY_START)}
                                     onClick={handleStartRally}
-                                    disabled={data?.match?.status === 'complete'}
+                                    disabled={data?.match?.status === 'complete' || set3TossPending}
+                                    title={set3TossPending ? t('scoreboard.set3TossFirst', 'Record the set 3 coin toss first') : undefined}
                                     style={{ padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'max(64px, calc(92px * var(--scale-factor, 1)))' }}
                                   >
                                     {data?.match?.status === 'not_started'
