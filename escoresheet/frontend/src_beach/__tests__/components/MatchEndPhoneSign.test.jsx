@@ -47,7 +47,7 @@ beforeAll(async () => {
   ;({ db } = await import('../../db_beach/db_beach'))
   ;({ UiHost } = await import('../../ui/volleyui/UiHost.jsx'))
   MatchEnd = (await import('../../components_beach/MatchEnd_beach')).default
-})
+}, 30000) // the first import of the screen is slow on a loaded machine
 afterAll(() => {
   Object.assign(Dexie.dependencies, savedDeps)
 })
@@ -138,7 +138,7 @@ describe('MatchEnd_beach: Sign on phone', () => {
     for (const role of ['captain-a', 'captain-b', 'asst-scorer', 'scorer', 'ref2', 'ref1']) {
       expect(await screen.findByTestId(`signed-on-phone-${role}`)).toHaveAttribute('aria-label', 'Signed on phone')
     }
-  })
+  }, 30000) // six boxes one after the other
 
   it('captain A / B follow the coin toss (team A = team 2)', async () => {
     await seed({ coinTossTeamA: 'team2' })

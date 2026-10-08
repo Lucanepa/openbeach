@@ -35,7 +35,7 @@ beforeAll(async () => {
   await import('../../i18n')
   ;({ db } = await import('../../db_beach/db_beach'))
   CoinToss = (await import('../../components_beach/CoinToss_beach')).default
-})
+}, 30000) // the first import of the screen is slow on a loaded machine
 afterAll(() => {
   Object.assign(Dexie.dependencies, savedDeps)
 })
