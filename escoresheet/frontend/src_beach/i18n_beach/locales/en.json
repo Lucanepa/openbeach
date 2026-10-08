@@ -556,6 +556,8 @@
       "sanctionsAndResults": "Sanctions and results",
       "forfait": "Forfait",
       "setStartTime": "Set {{set}} start time",
+      "actualStartTime": "Actual start time",
+      "actualStartTimeNote": "A time other than the scheduled {{time}} goes to the remarks.",
       "setEnd": "Set {{set}} end",
       "matchEnd": "Match end",
       "confirmSetEnd": "Confirm set end",

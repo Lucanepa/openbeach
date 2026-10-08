@@ -555,6 +555,8 @@
       "sanctionsAndResults": "Sanctions et résultats",
       "forfait": "Forfait",
       "setStartTime": "Début du set {{set}}",
+      "actualStartTime": "Heure de début effective",
+      "actualStartTimeNote": "Une heure autre que l'heure prévue ({{time}}) est inscrite dans les remarques.",
       "setEnd": "Fin du set {{set}}",
       "matchEnd": "Fin du match",
       "confirmSetEnd": "Confirmer la fin du set",

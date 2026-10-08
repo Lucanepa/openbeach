@@ -555,6 +555,8 @@
       "sanctionsAndResults": "Sanktione und Ergebnis",
       "forfait": "Forfait",
       "setStartTime": "Aafang {{set}}. Satz",
+      "actualStartTime": "Tatsächlichi Startziit",
+      "actualStartTimeNote": "En anderi Ziit als di planti ({{time}}) chunnt i d Bemerkige.",
       "setEnd": "Änd {{set}}. Satz",
       "matchEnd": "Spiiländ",
       "confirmSetEnd": "Satzänd bestätige",

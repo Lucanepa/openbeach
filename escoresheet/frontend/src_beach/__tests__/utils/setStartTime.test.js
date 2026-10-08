@@ -1,19 +1,52 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { defaultSetStartTime } from '../../utils_beach/setStartTime_beach'
+import {
+  defaultSetStartTime, scheduledClock, withActualStartTimeRemark, localClock
+} from '../../utils_beach/setStartTime_beach'
+import { planSetTimes } from '../../utils_beach/corrections_beach'
+import { remarksAfter } from '../../utils_beach/applyCorrectionPlan_beach'
+import { plausibleMinutes } from '../../../scoresheet_pdf_beach/components_beach/sheetFormat_beach'
 
 const at = (iso) => new Date(iso)
+// Local wall-clock times: the dialog shows and takes local HH:MM
+const local = (y, mo, d, h, mi, s = 0) => new Date(y, mo - 1, d, h, mi, s)
+const iso = (...a) => local(...a).toISOString()
 
-describe('defaultSetStartTime (as OpenVolley)', () => {
-  it('set 1 starts when its first rally starts, not at the scheduled date and time', () => {
+// The video: scheduled 12.03.2025 12:30, scored on 08.10.2026
+const SCHEDULED = iso(2025, 3, 12, 12, 30)
+const TODAY = local(2026, 10, 8, 12, 41, 20)
+
+describe('defaultSetStartTime: set 1 proposes the scheduled time', () => {
+  it('the scheduled HH:MM on the day the set is played', () => {
+    const start = defaultSetStartTime({ setIndex: 1, sets: [{ index: 1 }], now: TODAY, scheduledAt: SCHEDULED })
+    expect(start).toBe(iso(2026, 10, 8, 12, 30))
+    expect(localClock(start)).toBe('12:30')
+  })
+
+  it('a scheduled date in the past does not leak into the start', () => {
+    const start = defaultSetStartTime({ setIndex: 1, sets: [{ index: 1 }], now: TODAY, scheduledAt: SCHEDULED })
+    const d = new Date(start)
+    expect([d.getFullYear(), d.getMonth() + 1, d.getDate()]).toEqual([2026, 10, 8])
+  })
+
+  it('no scheduled time (none, a bare date, a date saved without a time): now', () => {
+    for (const scheduledAt of [null, undefined, '', '2025-03-12', iso(2025, 3, 12, 0, 0), 'garbage']) {
+      expect(defaultSetStartTime({ setIndex: 1, sets: [{ index: 1 }], now: TODAY, scheduledAt }))
+        .toBe(iso(2026, 10, 8, 12, 41))
+    }
+  })
+
+  it('set 1 starts when its first rally starts when there is no schedule', () => {
     expect(defaultSetStartTime({ setIndex: 1, sets: [{ index: 1 }], now: at('2026-10-08T09:40:40Z') }))
       .toBe('2026-10-08T09:40:00.000Z')
   })
+})
 
-  it('set 2 starts now, not "set 1 end + 1 minute"', () => {
+describe('defaultSetStartTime: later sets unchanged', () => {
+  it('set 2 starts now, not "set 1 end + 1 minute" nor the scheduled time', () => {
     const sets = [{ index: 1, endTime: '2026-10-08T09:55:00Z' }, { index: 2 }]
-    expect(defaultSetStartTime({ setIndex: 2, sets, now: at('2026-10-08T09:57:20Z') }))
+    expect(defaultSetStartTime({ setIndex: 2, sets, now: at('2026-10-08T09:57:20Z'), scheduledAt: SCHEDULED }))
       .toBe('2026-10-08T09:57:00.000Z')
   })
 
@@ -30,13 +63,93 @@ describe('defaultSetStartTime (as OpenVolley)', () => {
   })
 })
 
+describe('scheduledClock', () => {
+  it('the local HH:MM of the schedule, null without a time', () => {
+    expect(scheduledClock(SCHEDULED)).toBe('12:30')
+    expect(scheduledClock(null)).toBeNull()
+    expect(scheduledClock('2025-03-12')).toBeNull()
+    expect(scheduledClock(iso(2025, 3, 12, 0, 0))).toBeNull()
+  })
+})
+
+describe('withActualStartTimeRemark ("Actual start time: HH:MM")', () => {
+  const set1 = (startTime, remarks = '') => withActualStartTimeRemark(remarks, { setIndex: 1, startTime, scheduledAt: SCHEDULED })
+
+  it('the scheduled time confirmed: no remark', () => {
+    expect(set1(iso(2026, 10, 8, 12, 30))).toBe('')
+    expect(set1(iso(2026, 10, 8, 12, 30), 'Ball changed')).toBe('Ball changed')
+  })
+
+  it('a different time adds exactly one remark line', () => {
+    expect(set1(iso(2026, 10, 8, 12, 47))).toBe('Actual start time: 12:47')
+    expect(set1(iso(2026, 10, 8, 12, 47), 'Ball changed')).toBe('Ball changed\nActual start time: 12:47')
+  })
+
+  it('editing again replaces the line, other remarks stay', () => {
+    const first = set1(iso(2026, 10, 8, 12, 47), 'Ball changed')
+    const again = set1(iso(2026, 10, 8, 12, 52), `${first}\nWind`)
+    expect(again).toBe('Ball changed\nWind\nActual start time: 12:52')
+    expect(again.match(/Actual start time/g)).toHaveLength(1)
+  })
+
+  it('back to the scheduled time removes it', () => {
+    const first = set1(iso(2026, 10, 8, 12, 47), 'Ball changed')
+    expect(set1(iso(2026, 10, 8, 12, 30), first)).toBe('Ball changed')
+    expect(set1(iso(2026, 10, 8, 12, 30), set1(iso(2026, 10, 8, 12, 47)))).toBe('')
+  })
+
+  it('later sets and matches without a schedule: no remark, remarks untouched', () => {
+    expect(withActualStartTimeRemark('Ball changed', { setIndex: 2, startTime: iso(2026, 10, 8, 13, 5), scheduledAt: SCHEDULED })).toBe('Ball changed')
+    expect(withActualStartTimeRemark('Actual start time: 12:47', { setIndex: 2, startTime: iso(2026, 10, 8, 13, 5), scheduledAt: SCHEDULED })).toBe('Actual start time: 12:47')
+    expect(withActualStartTimeRemark('', { setIndex: 1, startTime: iso(2026, 10, 8, 12, 47), scheduledAt: null })).toBe('')
+  })
+})
+
+describe('the set 1 start on the scoresheet', () => {
+  it('a sane duration even with a schedule from another year', () => {
+    const start = defaultSetStartTime({ setIndex: 1, sets: [{ index: 1 }], now: TODAY, scheduledAt: SCHEDULED })
+    const end = iso(2026, 10, 8, 12, 58)
+    expect(plausibleMinutes(start, end)).toBe(28)
+  })
+})
+
+describe('correcting set 1 start time afterwards (corrections panel)', () => {
+  const events = [{ id: 1, matchId: 1, setIndex: 1, type: 'set_start', seq: 1, ts: iso(2026, 10, 8, 12, 47), payload: {} }]
+  const sets = [{ index: 1, startTime: iso(2026, 10, 8, 12, 47) }, { index: 2, startTime: iso(2026, 10, 8, 13, 10) }]
+  const ctxWith = (remarks) => ({ t: null, matchId: 1, mode: 'live', match: { scheduledAt: SCHEDULED, remarks } })
+
+  it('replaces the remark line, removes it at the scheduled time', () => {
+    const remarks = 'Ball changed\nActual start time: 12:47'
+    const plan = planSetTimes(events, sets, { setIndex: 1, startTime: iso(2026, 10, 8, 12, 45) }, ctxWith(remarks))
+    expect(remarksAfter(remarks, plan)).toBe('Ball changed\nActual start time: 12:45')
+    const back = planSetTimes(events, sets, { setIndex: 1, startTime: iso(2026, 10, 8, 12, 30) }, ctxWith(remarks))
+    expect(remarksAfter(remarks, back)).toBe('Ball changed')
+  })
+
+  it('later sets and end-time-only corrections leave the remarks alone', () => {
+    const remarks = 'Actual start time: 12:47'
+    const p2 = planSetTimes(events, sets, { setIndex: 2, startTime: iso(2026, 10, 8, 13, 12) }, ctxWith(remarks))
+    expect(p2.remarkAdd).toEqual([])
+    expect(p2.remarkRemove).toEqual([])
+    const pEnd = planSetTimes(events, sets, { setIndex: 1, endTime: iso(2026, 10, 8, 13, 0) }, ctxWith(remarks))
+    expect(remarksAfter(remarks, pEnd)).toBe(remarks)
+  })
+})
+
 describe('the scoring screen uses it', () => {
   const sb = readFileSync(resolve(__dirname, '../../components_beach/Scoreboard_beach.jsx'), 'utf8')
-  it('no default from the scheduled time or the previous end + 1 minute', () => {
+  it('the dialog default comes from defaultSetStartTime with the schedule, never "+ 1 minute"', () => {
     const start = sb.indexOf('// If this is the first rally, show set start time confirmation')
-    const block = sb.slice(start, sb.indexOf('setSetStartTimeModal({ setIndex: data?.set?.index, defaultTime })', start))
+    const block = sb.slice(start, sb.indexOf('setSetStartTimeModal({', start))
     expect(block).toContain('defaultSetStartTime({')
-    expect(block).not.toContain('scheduledAt')
+    expect(block).toContain('scheduledAt: data?.match?.scheduledAt')
     expect(block).not.toContain('getMinutes() + 1')
+  })
+
+  it('the confirmed start writes the remark through withActualStartTimeRemark', () => {
+    const start = sb.indexOf('const confirmSetStartTime = useCallback(')
+    const block = sb.slice(start, sb.indexOf('const confirmSetEndTime = useCallback(', start))
+    expect(block).toContain('withActualStartTimeRemark(')
+    expect(block).toMatch(/db\.matches\.update\(matchId, \{ remarks/)
   })
 })

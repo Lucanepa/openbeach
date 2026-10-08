@@ -555,6 +555,8 @@
       "sanctionsAndResults": "Sanktionen und Ergebnisse",
       "forfait": "Forfait",
       "setStartTime": "Beginn {{set}}. Satz",
+      "actualStartTime": "Tatsächliche Startzeit",
+      "actualStartTimeNote": "Eine andere Zeit als die geplante ({{time}}) kommt in die Bemerkungen.",
       "setEnd": "Ende {{set}}. Satz",
       "matchEnd": "Spielende",
       "confirmSetEnd": "Satzende bestätigen",

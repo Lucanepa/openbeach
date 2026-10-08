@@ -40,7 +40,7 @@ import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot } from '../utils_beach/stateSnapshot_beach'
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
 import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
-import { defaultSetStartTime } from '../utils_beach/setStartTime_beach'
+import { defaultSetStartTime, scheduledClock, withActualStartTimeRemark } from '../utils_beach/setStartTime_beach'
 import { cloudSyncWaitNow } from '../utils_beach/cloudStatus_beach'
 import { formatCourtScore } from '../utils_beach/scoreText_beach'
 import { medicalStartPayload, medicalEndPayload, findOpenMedical, formatMedicalDuration, medicalSecondsLeft, MEDICAL_RECOVERY_SECONDS } from '../utils_beach/medicalEvents_beach'
@@ -3612,12 +3612,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
     // If this is the first rally, show set start time confirmation
     if (isFirstRally) {
-      // Show set start time confirmation: the set starts now (its first
-      // rally), never before the end of a set already played
+      // Show set start time confirmation: set 1 proposes the scheduled time
+      // of day (today), later sets start now (their first rally), never
+      // before the end of a set already played
       const allSets = await db.sets.where('matchId').equals(matchId).toArray()
-      const defaultTime = defaultSetStartTime({ setIndex: data?.set?.index || 1, sets: allSets })
+      const setIndex = data?.set?.index || 1
+      const defaultTime = defaultSetStartTime({ setIndex, sets: allSets, scheduledAt: data?.match?.scheduledAt })
 
-      setSetStartTimeModal({ setIndex: data?.set?.index, defaultTime })
+      setSetStartTimeModal({ setIndex: data?.set?.index, defaultTime, scheduledTime: setIndex === 1 ? scheduledClock(data?.match?.scheduledAt) : null })
       return
     }
 
@@ -3788,6 +3790,17 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // Update set with start time (absolute timestamp)
     await db.sets.update(data.set.id, { startTime: roundToMinute(time) })
 
+    // Set 1 at another time than scheduled: "Actual start time: HH:MM" in
+    // the remarks (replaced when confirmed again, removed at the scheduled time)
+    const matchNow = await db.matches.get(matchId)
+    const actualStartRemarked = setStartTimeModal.setIndex === 1 && !!scheduledClock(matchNow?.scheduledAt)
+    if (actualStartRemarked) {
+      const remarks = withActualStartTimeRemark(matchNow?.remarks, {
+        setIndex: 1, startTime: roundToMinute(time), scheduledAt: matchNow.scheduledAt
+      })
+      if (remarks !== (matchNow?.remarks || '')) await db.matches.update(matchId, { remarks })
+    }
+
     // Get the highest sequence number for this match
     const nextSeq1 = await getNextSeq()
     const nextSeq2 = nextSeq1 + 1
@@ -3859,7 +3872,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     syncToReferee()
 
     // If the start time differs from expected, automatically open remarks
-    if (timeDifferent) {
+    // (set 1 of a scheduled match already has its remark line)
+    if (timeDifferent && !actualStartRemarked) {
       setShowRemarks(true)
     }
   }, [setStartTimeModal, data?.set, matchId, onTriggerEventBackup, syncToReferee, getCurrentServe, getServingPlayer, leftisTeam1, leftTeam, rightTeam])
@@ -15739,6 +15753,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         <SetStartTimeModal
           setIndex={setStartTimeModal.setIndex}
           defaultTime={setStartTimeModal.defaultTime}
+          scheduledTime={setStartTimeModal.scheduledTime}
           onConfirm={confirmSetStartTime}
           onCancel={() => setSetStartTimeModal(null)}
         />
@@ -17276,7 +17291,7 @@ function ScoreboardCourtColumn({ children }) {
   return <section className="court-wrapper">{children}</section>
 }
 
-function SetStartTimeModal({ setIndex, defaultTime, onConfirm, onCancel }) {
+function SetStartTimeModal({ setIndex, defaultTime, scheduledTime = null, onConfirm, onCancel }) {
   const { t } = useTranslation()
   const [time, setTime] = useState(() => {
     // Extract local time from UTC ISO string
@@ -17323,6 +17338,16 @@ function SetStartTimeModal({ setIndex, defaultTime, onConfirm, onCancel }) {
             letterSpacing: '2px'
           }}
         />
+        {/* Set 1: a time other than the scheduled one goes to the remarks */}
+        {scheduledTime && time !== scheduledTime && (
+          <p data-testid="actual-start-time-note" style={{ margin: '0 0 16px', fontSize: '14px', color: 'var(--muted)' }}>
+            <strong style={{ color: 'var(--text)' }}>
+              {t('scoreboard.modals.actualStartTime', 'Actual start time')}: {time}
+            </strong>
+            <br />
+            {t('scoreboard.modals.actualStartTimeNote', { time: scheduledTime, defaultValue: 'A time other than the scheduled {{time}} goes to the remarks.' })}
+          </p>
+        )}
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
           <button
             onClick={handleConfirm}

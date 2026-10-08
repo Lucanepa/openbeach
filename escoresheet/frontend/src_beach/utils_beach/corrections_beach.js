@@ -47,6 +47,7 @@
  *   them (a note says so).
  */
 import { scoreFromPointEvents } from './scorerCorrections_beach'
+import { actualStartTimeLine, actualStartTimeLines, scheduledClock } from './setStartTime_beach'
 
 export const TEAMS = Object.freeze(['team1', 'team2'])
 export const TEAM_SANCTIONS = Object.freeze(['improper_request', 'delay_warning', 'delay_penalty'])
@@ -803,6 +804,16 @@ export function planSetTimes(events, sets, { setIndex, startTime, endTime } = {}
   plan.setUpdates = [{ setIndex, changes }]
   const end = setEvents(events, setIndex).find(e => e.type === 'set_end')
   if (end) plan.update = [{ id: end.id, changes: { payload: { ...end.payload, ...changes } } }]
+  // Set 1 started at another time than scheduled: "Actual start time: HH:MM"
+  // in the remarks, replaced by the new start, gone at the scheduled time
+  if (setIndex === 1 && changes.startTime !== undefined && scheduledClock(ctx.match?.scheduledAt)) {
+    const old = actualStartTimeLines(ctx.match.remarks)
+    const line = actualStartTimeLine({ setIndex, startTime: changes.startTime, scheduledAt: ctx.match.scheduledAt })
+    if (!(line && old.length === 1 && old[0].trim() === line)) {
+      plan.remarkRemove = old
+      plan.remarkAdd = line ? [line] : []
+    }
+  }
   let text = tr(ctx.t, 'corrections.log.setTimes', 'Set {{set}} times corrected', { set: setIndex })
   if (ctx.mode === 'review') text += tr(ctx.t, 'corrections.log.afterMatchSuffix', ' (entered after the match)')
   plan.log = { action: 'setTimes', setIndex, team: null, before: { startTime: row.startTime ?? null, endTime: row.endTime ?? null }, after: changes, text }
