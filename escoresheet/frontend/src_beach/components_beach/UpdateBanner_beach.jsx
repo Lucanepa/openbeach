@@ -17,19 +17,23 @@ export default function UpdateBanner() {
   const { needRefresh, updateServiceWorker, dismissUpdate } = useServiceWorker()
   const [newVersion, setNewVersion] = useState(null)
 
-  // Fetch the new version from server when update is detected
+  // Fetch the new version from server when update is detected (the label
+  // only). Relative to the app's base, so a build served under a path asks its
+  // own server.
   useEffect(() => {
     if (needRefresh) {
-      fetch(`/version.json?t=${Date.now()}`)
+      fetch(`${import.meta.env.BASE_URL}version.json?t=${Date.now()}`, { cache: 'no-store' })
         .then(res => res.json())
-        .then(data => setNewVersion(data.version))
+        .then(data => setNewVersion(typeof data?.version === 'string' ? data.version : null))
         .catch(() => setNewVersion(null))
     }
   }, [needRefresh])
 
-  // Don't show banner if no refresh needed or if versions are the same
+  // The waiting service worker decides whether there is an update; the
+  // version is only the label. A deploy without a version bump still has a
+  // new worker waiting, and hiding the banner then left it waiting for good.
   if (!needRefresh) return null
-  if (newVersion && newVersion === currentVersion) return null
+  const versionLabel = newVersion && newVersion !== currentVersion ? newVersion : t('updateBanner.newVersion', 'new version')
 
   // A sky banner (pending: nothing changes until the scorer refreshes),
   // floating over the top edge; one dark action, Later as the quiet one.
@@ -45,7 +49,7 @@ export default function UpdateBanner() {
         <span className="min-w-0">
           {t('options.updateAvailable', 'Update available')}{' '}
           <span className="font-mono text-xs tabular-nums text-sky-800">
-            {currentVersion} → {newVersion || t('updateBanner.newVersion', 'new version')}
+            {currentVersion} → {versionLabel}
           </span>
         </span>
       </div>

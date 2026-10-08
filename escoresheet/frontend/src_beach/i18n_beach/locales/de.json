@@ -1124,7 +1124,8 @@
       "failedToLoadBackups": "Cloud-Backups konnten nicht geladen werden",
       "failedToLoadBackupData": "Backup-Daten konnten nicht geladen werden",
       "failedToRestoreBackup": "Backup konnte nicht wiederhergestellt werden: {{error}}",
-      "failedToClearCache": "Cache konnte nicht geleert werden: {{error}}"
+      "failedToClearCache": "Cache konnte nicht geleert werden: {{error}}",
+      "clearCacheNeedsServer": "Der Cache kann nicht geleert werden, solange der Server nicht erreichbar ist: Die App könnte danach nicht neu geladen werden."
     },
     "nativeServerTitle": "Server",
     "nativeServerOnline": "Online",

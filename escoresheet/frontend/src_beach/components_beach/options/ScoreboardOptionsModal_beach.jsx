@@ -4,6 +4,7 @@ import { useAlert } from '../../contexts_beach/AlertContext_beach'
 import Modal from '../Modal_beach'
 import { listCloudBackups, loadCloudBackup } from '../../utils_beach/logger_beach'
 import { restoreMatchInPlace } from '../../utils_beach/backupManager_beach'
+import { clearCachesAndReload } from '../../utils_beach/appReload_beach'
 import BackupTable from '../BackupTable_beach'
 import { SatelliteDish } from '../Icons_beach'
 import { Switch } from '../../ui/volleyui/Switch.jsx'
@@ -165,32 +166,14 @@ export default function ScoreboardOptionsModal({
     }
   }
 
-  // Clear cache functions
-  const clearServiceWorkerCaches = async () => {
-    if ('caches' in window) {
-      const cacheNames = await caches.keys()
-      await Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)))
-    }
-  }
-
-  const unregisterServiceWorkers = async () => {
-    if ('serviceWorker' in navigator) {
-      const registrations = await navigator.serviceWorker.getRegistrations()
-      await Promise.all(registrations.map(registration => registration.unregister()))
-    }
-  }
-
   const executeClearCache = async (includeLocalStorage) => {
     try {
-      await clearServiceWorkerCaches()
-      await unregisterServiceWorkers()
-
-      if (includeLocalStorage) {
-        localStorage.clear()
+      // Reachable mid-match: refuse when the server is unreachable, since with
+      // the precache and the service worker gone the reload could not load
+      // the app (the scorer would be stuck on a browser error page)
+      if (!(await clearCachesAndReload({ includeLocalStorage }))) {
+        showAlert(t('options.alerts.clearCacheNeedsServer', 'Cannot clear the cache while the server is unreachable: the app could not be reloaded afterwards.'), 'error')
       }
-
-      // Reload to apply changes
-      window.location.reload()
     } catch (error) {
       console.error('Error clearing cache:', error)
       showAlert(t('options.alerts.failedToClearCache', { error: error.message }), 'error')

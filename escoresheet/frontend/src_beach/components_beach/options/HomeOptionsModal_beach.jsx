@@ -9,6 +9,7 @@ import DesktopUpdateSection from './DesktopUpdateSection_beach'
 import KeybindingsModal from './KeybindingsModal_beach'
 import { OptionNumber, OptionRow, OptionSection, OptionSwitch } from './optionRows_beach'
 import { copyToClipboard } from '../../utils_beach/networkInfo_beach'
+import { clearCachesAndReload } from '../../utils_beach/appReload_beach'
 import { useDesktopUpdate } from '../../hooks_beach/useDesktopUpdate_beach'
 import { Modal as KitModal } from '../../ui/volleyui/Modal.jsx'
 import { Button } from '../../ui/volleyui/Button.jsx'
@@ -66,17 +67,12 @@ export default function HomeOptionsModal({
     })
     if (!ok) return
     try {
-      if ('caches' in window) {
-        const cacheNames = await caches.keys()
-        await Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)))
+      // Reloads with the URL kept (?match= stays). Refused while the server
+      // is unreachable: with the precache and the service worker gone, the
+      // reload could not load the app at all.
+      if (!(await clearCachesAndReload({ includeLocalStorage }))) {
+        showAlert(t('options.alerts.clearCacheNeedsServer', 'Cannot clear the cache while the server is unreachable: the app could not be reloaded afterwards.'), 'error')
       }
-      if ('serviceWorker' in navigator) {
-        const registrations = await navigator.serviceWorker.getRegistrations()
-        await Promise.all(registrations.map(registration => registration.unregister()))
-      }
-      if (includeLocalStorage) localStorage.clear()
-      // Force reload bypassing browser HTTP cache
-      window.location.href = window.location.pathname + '?cache_bust=' + Date.now()
     } catch (error) {
       console.error('Error clearing cache:', error)
       showAlert(t('options.alerts.failedToClearCache', { error: error.message }), 'error')

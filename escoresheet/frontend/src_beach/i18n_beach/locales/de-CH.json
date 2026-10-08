@@ -1124,7 +1124,8 @@
       "failedToLoadBackups": "Cloud-Backups händ nöd chönne glade werde",
       "failedToLoadBackupData": "Backup-Date händ nöd chönne glade werde",
       "failedToRestoreBackup": "Backup hät nöd chönne wiederhergstellt werde: {{error}}",
-      "failedToClearCache": "Cache hät nöd chönne gleert werde: {{error}}"
+      "failedToClearCache": "Cache hät nöd chönne gleert werde: {{error}}",
+      "clearCacheNeedsServer": "Dr Cache cha nöd gleert werde, solang dr Server nöd erreichbar isch: d App chönnti nachher nöd neu glade werde."
     },
     "nativeServerTitle": "Server",
     "nativeServerOnline": "Online",
