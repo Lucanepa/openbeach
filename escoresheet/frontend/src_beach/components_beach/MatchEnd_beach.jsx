@@ -19,10 +19,12 @@ import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { sanitizeForFilename } from '../utils_beach/stringUtils_beach'
 import { openAppWindow } from '../utils_beach/openAppWindow_beach'
 import { formatTimeLocal } from '../utils_beach/timeUtils_beach'
-import { saveMatchSignature, signatureEditLocked, signaturesPayload, clearedPostMatchSignatures } from '../utils_beach/signatures_beach'
+import { saveMatchSignature, signatureEditLocked, signaturesPayload, clearedPostMatchSignatures, POST_MATCH_SIGNATURE_KEYS } from '../utils_beach/signatures_beach'
+import { approvalSignatureSources, phoneSignContext, signatureSourceUpdate, signedOnPhone, SLOT_OF_ROLE } from '../utils_beach/phoneSignature_beach'
+import { relayMatchKey } from '../utils_beach/relayPublisher_beach'
 import CountryFlag from './CountryFlag_beach'
 import { ChartColumn, FileText, Save, Search } from './Icons_beach'
-import { Check, Eraser, Loader2, Maximize2, PenLine, X } from 'lucide-react'
+import { Check, Eraser, Loader2, Maximize2, PenLine, Smartphone, X } from 'lucide-react'
 import { Button } from '../ui/volleyui/Button.jsx'
 import { RowTool } from '../ui/volleyui/Row.jsx'
 import { IconButton } from '../ui/volleyui/IconButton.jsx'
@@ -286,7 +288,7 @@ function MatchEndPageView({ children }) {
 }
 
 export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualAdjustments }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { vmin } = useScaledLayout()
   const cLogger = useComponentLogging('MatchEnd')
   const data = useLiveQuery(async () => {
@@ -658,17 +660,22 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
   }
 
   // Every signature change is written at once and queued for the cloud: the
-  // match's whole `signatures` object (utils_beach/signatures_beach.js)
-  const writeSignature = async (role, signatureData) => {
-    const saved = await saveMatchSignature(db, matchId, signatureFieldMap[role], signatureData)
-    if (!saved && signatureFieldMap[role]) showAlert(t('matchEnd.signatureSaveFailed'), 'error')
+  // match's whole `signatures` object (utils_beach/signatures_beach.js). The
+  // image and its "signed on phone" record go in one update, so a Clear or a
+  // signature drawn here sets the record to null and one from a phone sets it
+  // (OpenVolley d451686d). meta: { source: 'device' } or { source: 'phone', transport }
+  const writeSignature = async (role, signatureData, meta) => {
+    const field = signatureFieldMap[role]
+    const saved = await saveMatchSignature(db, matchId, field, signatureData, field ? signatureSourceUpdate(field, signatureData, meta) : null)
+    if (!saved && field) showAlert(t('matchEnd.signatureSaveFailed'), 'error')
     return saved
   }
 
-  const handleSaveSignature = async (role, signatureData) => {
-    cLogger.logHandler('handleSaveSignature', { role })
+  // A signature drawn here or received from a phone (the pad's onSave)
+  const handleSaveSignature = async (role, signatureData, meta) => {
+    cLogger.logHandler('handleSaveSignature', { role, source: meta?.source || 'device' })
     if (signaturesLocked) return
-    await writeSignature(role, signatureData)
+    await writeSignature(role, signatureData, meta)
     setOpenSignature(null)
   }
 
@@ -712,6 +719,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     const signatureData = getSignatureData(role)
     const isSigned = !!signatureData
     const label = getSignatureLabel(role)
+    const viaPhone = isSigned && signedOnPhone(match, signatureFieldMap[role])
 
     return (
       <div className={cn('flex min-w-[140px] flex-1 flex-col gap-1.5', disabled && 'opacity-50')}>
@@ -732,6 +740,16 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
             <>
               <img src={signatureData} alt="" className="max-h-14 max-w-full object-contain" />
               <Check size={16} aria-hidden="true" className="absolute right-2 top-2 text-emerald-600" />
+              {viaPhone && (
+                <span
+                  className="absolute left-2 top-2 text-emerald-700"
+                  title={t('phoneSign.signedOnPhone')}
+                  aria-label={t('phoneSign.signedOnPhone')}
+                  data-testid={`signed-on-phone-${role}`}
+                >
+                  <Smartphone size={13} aria-hidden="true" />
+                </span>
+              )}
             </>
           ) : (
             <span className="inline-flex items-center gap-1.5 text-sm text-stone-500">
@@ -1010,7 +1028,9 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
             asstScorer: match.asstScorerSignature || null,
             ref1: match.ref1Signature || null,
             ref2: match.ref2Signature || null
-          }
+          },
+          // Signed on a phone or on this device (OpenVolley d451686d)
+          signatureSources: approvalSignatureSources(match)
         }
 
         await db.sync_queue.add({
@@ -1145,8 +1165,9 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         approved: false,
         approvedAt: null,
         // Clear all post-match signature fields (the ones the boxes write) -
-        // they must be re-collected after changes
-        ...clearedPostMatchSignatures()
+        // they must be re-collected after changes - and their "signed on phone" records
+        ...clearedPostMatchSignatures(),
+        ...Object.fromEntries(Object.keys(POST_MATCH_SIGNATURE_KEYS).map(field => [`signatureSources.${field}`, null]))
       })
 
       // Delete the set_end event for this set to keep event log clean
@@ -1457,8 +1478,27 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         open={!!openSignature}
         title={openSignature ? getSignatureLabel(openSignature) : ''}
         existingSignature={openSignature ? getSignatureData(openSignature) : null}
-        onSave={(signatureData) => handleSaveSignature(openSignature, signatureData)}
+        onSave={(signatureData, meta) => handleSaveSignature(openSignature, signatureData, meta)}
         onClose={() => setOpenSignature(null)}
+        phone={openSignature ? {
+          // Approved or closed: no phone session can start
+          locked: signaturesLocked,
+          lockedReason: t('matchEnd.signatureLocked'),
+          slot: SLOT_OF_ROLE[openSignature],
+          matchKey: relayMatchKey(match),
+          gamePin: match.gamePin || null,
+          context: phoneSignContext({
+            match,
+            slot: SLOT_OF_ROLE[openSignature],
+            team1,
+            team2,
+            team1Captain,
+            team2Captain,
+            lang: i18n?.language,
+            fallbackTeam1: t('common.team1'),
+            fallbackTeam2: t('common.team2')
+          })
+        } : null}
       />
 
       {/* Remarks dialog (light) */}
