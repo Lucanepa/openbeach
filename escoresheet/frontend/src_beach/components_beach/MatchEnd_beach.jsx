@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db_beach/db_beach'
@@ -10,7 +10,16 @@ import Modal from './Modal_beach'
 const ballImage = '/beachball.png'
 import JSZip from 'jszip'
 import { setExtId } from '../utils_beach/syncIds_beach'
-import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
+import { isBackendAvailable, getCloudApiUrl } from '../utils_beach/backendConfig_beach'
+import { useAuth } from '../contexts_beach/AuthContext_beach'
+import { approvalsApi, approvalErrorKey, isApprovalUnavailable, isApprovalUnsupported } from '../lib_beach/approvalsApi_beach'
+import {
+  ROLE_TO_SLOT, approvalFor, isApprovalValid, slotComplete, approvalLine, approvalsBySlot, approvalSummary,
+  resultKey, rememberApprovalEmail, namesDiffer, approvalsCompletingSlots, approvalsStillValid, pinApprovalState,
+  callerMayApprove as mayApproveFrom
+} from '../utils_beach/accountApproval_beach'
+import AccountApprovalDialog from './AccountApprovalDialog_beach'
+import { askConfirm } from '../utils_beach/askConfirm_beach'
 import { uploadScoresheet, uploadScoresheetPdf } from '../utils_beach/scoresheetUploader_beach'
 import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { exportLogsAsNDJSON } from '../utils_beach/comprehensiveLogger_beach'
@@ -24,12 +33,12 @@ import { approvalSignatureSources, phoneSignContext, signatureSourceUpdate, sign
 import { relayMatchKey } from '../utils_beach/relayPublisher_beach'
 import CountryFlag from './CountryFlag_beach'
 import { ChartColumn, FileText, Save, Search } from './Icons_beach'
-import { Check, Eraser, Loader2, Maximize2, PenLine, Smartphone, X } from 'lucide-react'
+import { AlertTriangle, Check, Eraser, Info, Loader2, Maximize2, PenLine, ShieldCheck, Smartphone, X } from 'lucide-react'
 import { Button } from '../ui/volleyui/Button.jsx'
 import { RowTool } from '../ui/volleyui/Row.jsx'
 import { IconButton } from '../ui/volleyui/IconButton.jsx'
 import { Textarea } from '../ui/volleyui/Textarea.jsx'
-import { confirmDialog } from '../ui/volleyui/uiStore.js'
+import { confirmDialog, toast } from '../ui/volleyui/uiStore.js'
 import { modalCancelClass, modalSaveClass } from '../ui/volleyui/Modal.jsx'
 import { cn } from '../ui/volleyui/cn.js'
 
@@ -278,6 +287,17 @@ const RemarksBox = ({ overflowSanctions = [], remarks = '' }) => {
   )
 }
 
+// The server answered 409 OV_APPROVAL_UNSUPPORTED (it does not approve beach
+// results yet): remembered for this session, so every box says so at once.
+// A reload asks again (the server may have been switched on meanwhile).
+const BEACH_APPROVAL_OFF_KEY = 'ob.approvalBeachUnsupported'
+function beachApprovalOff() {
+  try { return typeof sessionStorage !== 'undefined' && sessionStorage.getItem(BEACH_APPROVAL_OFF_KEY) === '1' } catch { return false }
+}
+function rememberBeachApprovalOff() {
+  try { sessionStorage.setItem(BEACH_APPROVAL_OFF_KEY, '1') } catch { /* storage blocked */ }
+}
+
 // Page wrapper: the volleyui working page (light, stone), full width up to 1400px
 function MatchEndPageView({ children }) {
   return (
@@ -340,6 +360,53 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
   const [showRemarksModal, setShowRemarksModal] = useState(false)
   const [remarksText, setRemarksText] = useState('')
   const remarksTextareaRef = useRef(null)
+
+  // Approval with an account (scorer, 2nd and 1st referee; OpenVolley
+  // 0fc2661a, b1b15d8f). The server row is the truth: the local copy on the
+  // match row (accountApprovals) is replaced by the server's on mount and
+  // when the connection comes back.
+  let authCtx = null
+  try { authCtx = useAuth() } catch { authCtx = null }
+  const access = authCtx?.access
+  const signedIn = !!authCtx?.user
+  const [approvalRole, setApprovalRole] = useState(null) // 'scorer' | 'ref2' | 'ref1' | null
+  // 'unknown' | 'available' | 'unavailable' (feature off) | 'unsupported' (no beach approvals)
+  const [approvalFeature, setApprovalFeature] = useState(() => (beachApprovalOff() ? 'unsupported' : 'unknown'))
+  const [online, setOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine !== false)
+  const seedKey = data?.match?.seed_key || null
+  const cloudApi = !!getCloudApiUrl('/api/approvals')
+
+  const refreshAccountApprovals = useCallback(async () => {
+    if (!seedKey || !signedIn || !cloudApi) return null
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return null
+    const res = await approvalsApi.list(seedKey)
+    if (res.error) {
+      if (isApprovalUnavailable(res.error)) setApprovalFeature('unavailable')
+      // 404/403 and network errors: keep the local copy
+      return null
+    }
+    setApprovalFeature(f => (f === 'unsupported' ? f : 'available'))
+    const bySlot = approvalsBySlot(res.data?.approvals)
+    try {
+      await db.matches.update(matchId, { accountApprovals: Object.keys(bySlot).length ? bySlot : null })
+    } catch (err) {
+      console.warn('[MatchEnd] Could not store the account approvals:', err?.message)
+    }
+    return { bySlot, server: res.data?.match || null }
+  }, [seedKey, signedIn, cloudApi, matchId])
+
+  useEffect(() => {
+    if (isApproved) return undefined
+    refreshAccountApprovals()
+    const on = () => { setOnline(true); refreshAccountApprovals() }
+    const off = () => setOnline(false)
+    window.addEventListener('online', on)
+    window.addEventListener('offline', off)
+    return () => {
+      window.removeEventListener('online', on)
+      window.removeEventListener('offline', off)
+    }
+  }, [refreshAccountApprovals, isApproved])
 
   // Auto-populate FIVB remarks for forfait matches if remarks are empty
   useEffect(() => {
@@ -618,7 +685,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     (Array.isArray(match.officials) && match.officials.some(o =>
       o.role?.toLowerCase() === 'assistant scorer' || o.role?.toLowerCase() === 'assistant_scorer'
     ))
-  const hasRef2 = match.ref2Signature !== undefined ||
+  const hasRef2 = match.ref2Signature !== undefined || !!approvalFor(match, 'ref2') ||
     (Array.isArray(match.officials) && match.officials.some(o =>
       o.role?.toLowerCase() === '2nd referee' || o.role?.toLowerCase() === '2nd_referee'
     ))
@@ -631,9 +698,11 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
   const captainsDone = captainASigned && captainBSigned
 
   const asstScorerSigned = !hasAsstScorer || !!match.asstScorerSignature
-  const scorerSigned = !!match.scorerSignature
-  const ref2Signed = !hasRef2 || !!match.ref2Signature
-  const ref1Signed = !!match.ref1Signature
+  // The scorer and the referees: a drawn signature OR a valid account
+  // approval (one that still matches the finished sets)
+  const scorerSigned = slotComplete(match, 'scorer', sets)
+  const ref2Signed = !hasRef2 || slotComplete(match, 'ref2', sets)
+  const ref1Signed = slotComplete(match, 'ref1', sets)
 
   // Determine current signature step
   const getCurrentStep = () => {
@@ -649,6 +718,13 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
 
   // Re-sign and Clear close once the match is approved or closed
   const signaturesLocked = signatureEditLocked(match, { isApproved })
+  // The PIN-approval line of an official's box: approved, offered, or why not.
+  // Only a beach scorer or referee account (or an admin) may send approvals
+  // of a beach match (the server checks the same)
+  const pinStateOf = (role) => pinApprovalState({
+    role, approval: approvalFor(match, role), sets, locked: signaturesLocked, hasSeedKey: !!match.seed_key,
+    cloudApi, feature: approvalFeature, signedIn, callerMayApprove: mayApproveFrom(access), online
+  })
 
   const signatureFieldMap = {
     'captain-a': team1Label === 'A' ? 'team1PostGameCaptainSignature' : 'team2PostGameCaptainSignature',
@@ -676,6 +752,13 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     cLogger.logHandler('handleSaveSignature', { role, source: meta?.source || 'device' })
     if (signaturesLocked) return
     await writeSignature(role, signatureData, meta)
+    // A new signature (drawn here or from a phone) completes the slot: a stale
+    // account approval of it (the result changed since) is dropped from the local copy
+    const slot = ROLE_TO_SLOT[role]
+    if (slot && signatureData) {
+      const stale = approvalFor(match, role)
+      if (stale && !isApprovalValid(stale, sets)) await removeLocalApproval(slot, stale.id)
+    }
     setOpenSignature(null)
   }
 
@@ -720,10 +803,30 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     const isSigned = !!signatureData
     const label = getSignatureLabel(role)
     const viaPhone = isSigned && signedOnPhone(match, signatureFieldMap[role])
+    const approval = ROLE_TO_SLOT[role] ? approvalFor(match, role) : null
+    // The PIN line of an official (null for the captains); a drawn signature does not hide it
+    const pin = pinStateOf(role)
+    const approved = pin?.state === 'approved'
+    // Without a drawn signature, a valid approval fills the box
+    const approvalValid = !isSigned && approved
+    const approvalStale = !isSigned && !!approval && !approved
 
     return (
-      <div className={cn('flex min-w-[140px] flex-1 flex-col gap-1.5', disabled && 'opacity-50')}>
+      <div className={cn('flex min-w-[140px] flex-1 flex-col gap-1.5', disabled && 'opacity-50')} data-testid={`signature-slot-${role}`}>
         <div className="text-xs font-semibold text-stone-700">{label}</div>
+        {approvalValid ? (
+          // Approved with an account: the emerald done state, no image
+          <div
+            className="flex h-16 items-center gap-2 overflow-hidden rounded-xl border-2 border-emerald-300 bg-emerald-50 px-3 text-emerald-800"
+            data-testid={`account-approval-${role}`}
+          >
+            <Check size={18} strokeWidth={2.5} aria-hidden="true" className="shrink-0 text-emerald-700" />
+            <div className="min-w-0">
+              <div className="text-sm font-semibold leading-tight">{t('approval.done')}</div>
+              <div className="truncate text-xs leading-tight tabular-nums text-emerald-700" title={approvalLine(approval)}>{approvalLine(approval)}</div>
+            </div>
+          </div>
+        ) : (
         <button
           type="button"
           onClick={() => !disabled && !isSigned && !signaturesLocked && setOpenSignature(role)}
@@ -731,10 +834,13 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
           aria-label={isSigned ? `${label} · ${t('matchEnd.signed', 'Signed')}` : `${label} · ${t('matchEnd.tapToSign')}`}
           className={cn(
             'relative flex h-16 items-center justify-center overflow-hidden rounded-xl border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60 focus-visible:ring-offset-1',
-            isSigned ? 'cursor-default border-emerald-300 bg-emerald-50' : 'border-dashed border-stone-300 bg-white',
-            !disabled && !isSigned && 'cursor-pointer hover:border-stone-400 hover:bg-stone-50',
+            isSigned ? 'cursor-default border-emerald-300 bg-emerald-50'
+              : approvalStale ? 'border-dashed border-amber-300 bg-amber-50 text-amber-800'
+                : 'border-dashed border-stone-300 bg-white',
+            !disabled && !isSigned && (approvalStale ? 'cursor-pointer hover:bg-amber-100' : 'cursor-pointer hover:border-stone-400 hover:bg-stone-50'),
             disabled && 'cursor-not-allowed'
           )}
+          data-testid={approvalStale ? `account-approval-stale-${role}` : undefined}
         >
           {signatureData ? (
             <>
@@ -751,6 +857,11 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
                 </span>
               )}
             </>
+          ) : approvalStale ? (
+            <span className="inline-flex items-center gap-1.5 px-2 text-center text-sm font-medium">
+              <AlertTriangle size={15} aria-hidden="true" className="shrink-0" />
+              {t('approval.stale')}
+            </span>
           ) : (
             <span className="inline-flex items-center gap-1.5 text-sm text-stone-500">
               {!disabled && <PenLine size={15} aria-hidden="true" />}
@@ -758,6 +869,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
             </span>
           )}
         </button>
+        )}
         {isSigned && (
           // Change a collected signature (OpenVolley b1b15d8f)
           <div className="flex gap-2" data-testid={`signature-actions-${role}`}>
@@ -785,8 +897,134 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
             </RowTool>
           </div>
         )}
+        {pin && renderPinLine(role, pin, approval, { isSigned, disabled })}
       </div>
     )
+  }
+
+  // The PIN-approval line under an official's signature: approved (with
+  // Undo), "Approve with PIN", or one line saying why not. Never empty.
+  const renderPinLine = (role, pin, approval, { isSigned, disabled }) => {
+    if (pin.state === 'approved') {
+      return (
+        <div className="flex flex-col gap-1.5">
+          {isSigned && (
+            // Signed by hand AND approved: the approval as a compact line
+            <div
+              className="flex min-h-11 items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-3 text-emerald-800"
+              data-testid={`account-approval-${role}`}
+            >
+              <Check size={16} strokeWidth={2.5} aria-hidden="true" className="shrink-0 text-emerald-700" />
+              <div className="min-w-0">
+                <div className="text-sm font-semibold leading-tight">{t('approval.done')}</div>
+                <div className="truncate text-xs leading-tight tabular-nums text-emerald-700" title={approvalLine(approval)}>{approvalLine(approval)}</div>
+              </div>
+            </div>
+          )}
+          <RowTool
+            className="h-11 w-full flex-1 disabled:cursor-not-allowed disabled:opacity-50 sm:h-11"
+            disabled={!online || signaturesLocked}
+            title={online ? undefined : t('approval.needsInternet')}
+            onClick={() => handleUndoAccountApproval(role, approval)}
+            data-testid={`account-approval-undo-${role}`}
+          >
+            {t('approval.undo')}
+          </RowTool>
+        </div>
+      )
+    }
+    if (pin.state === 'offer') {
+      return (
+        <Button
+          variant="secondary"
+          size="xl"
+          icon={ShieldCheck}
+          className="w-full font-medium"
+          disabled={disabled}
+          onClick={() => setApprovalRole(role)}
+          data-testid={`account-approval-open-${role}`}
+        >
+          {t('approval.approveWithPin')}
+        </Button>
+      )
+    }
+    return (
+      <p
+        className="m-0 flex min-h-11 items-center gap-1.5 text-xs leading-snug text-stone-500"
+        data-testid={`account-approval-why-${role}`}
+        data-reason={pin.reason}
+      >
+        <Info size={14} aria-hidden="true" className="shrink-0" />
+        <span>{t(`approval.why.${pin.reason}`)}</span>
+      </p>
+    )
+  }
+
+  // Undo an account approval (the approver, the owner or an editor; online)
+  const handleUndoAccountApproval = async (role, approval) => {
+    if (!approval?.id) return
+    cLogger.logHandler('handleUndoAccountApproval', { role })
+    const ok = await askConfirm({
+      title: t('approval.undoConfirm'),
+      message: t('approval.undoConfirmBody'),
+      confirmLabel: t('approval.undo'),
+      tone: 'danger'
+    })
+    if (!ok) return
+    const res = await approvalsApi.undo(approval.id)
+    if (res.error && res.error.status !== 404) {
+      toast.error(t(approvalErrorKey(res.error, { context: 'approval' })))
+      return
+    }
+    await removeLocalApproval(ROLE_TO_SLOT[role], approval.id)
+    toast.success(t('approval.undone'))
+  }
+
+  // Drop one slot from the local copy (only if it still holds that record)
+  async function removeLocalApproval(slot, id) {
+    const row = await db.matches.get(matchId)
+    const current = { ...(row?.accountApprovals || {}) }
+    if (current[slot] && (!id || current[slot].id === id)) delete current[slot]
+    await db.matches.update(matchId, { accountApprovals: Object.keys(current).length ? current : null })
+  }
+
+  // After a 200 from POST /api/approvals: keep the record on the match row
+  const handleAccountApproved = async (record, { email, entered }) => {
+    const row = await db.matches.get(matchId)
+    const current = { ...(row?.accountApprovals || {}) }
+    current[record.slot] = record
+    await db.matches.update(matchId, { accountApprovals: current })
+    // A convenience for the next match on this device (never in match.officials)
+    if (record.slot !== 'scorer' && entered) rememberApprovalEmail(entered, email)
+    setApprovalFeature('available')
+    setApprovalRole(null)
+    toast.success(t('approval.approved'))
+    if (entered && namesDiffer(record.name, entered)) {
+      toast.info(t('approval.nameDiffers', { account: record.name, entered }), { duration: 8000 })
+    }
+  }
+
+  // A refusal of the server: 409 OV_APPROVAL_UNSUPPORTED says it does not
+  // approve beach results; every box then says so and the dialog closes
+  const handleApprovalError = (error) => {
+    if (isApprovalUnsupported(error)) {
+      rememberBeachApprovalOff()
+      setApprovalFeature('unsupported')
+      setApprovalRole(null)
+      toast.info(t('approval.why.beachOff'))
+    } else if (isApprovalUnavailable(error)) {
+      setApprovalFeature('unavailable')
+    }
+  }
+
+  // Reopening the last set voids the approvals on the server once the status
+  // change syncs; online and not closed, undo them now as well, and wait for
+  // it so no later read brings them back.
+  const undoAccountApprovalsBestEffort = async (current) => {
+    const records = Object.values(current?.accountApprovals || {}).filter(r => r?.id)
+    if (!records.length || current?.closed_at) return
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return
+    await Promise.allSettled(records.map(r => approvalsApi.undo(r.id)))
   }
 
   const handleShowScoresheet = (action = 'preview') => {
@@ -855,6 +1093,22 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         showAlert(t('matchEnd.pleaseCompleteSignatures'), 'warning')
         setIsSaving(false)
         return
+      }
+
+      // The account approvals that complete a slot (no drawn signature there)
+      // are re-checked with the server before the result is approved (one may
+      // have been voided, or the sets changed). A stale record in a slot that
+      // was signed by hand never blocks: the drawn signature is the fallback.
+      // Offline the local copy is trusted: the approvals were made online.
+      const currentSets = await db.sets.where('matchId').equals(matchId).toArray()
+      const completing = approvalsCompletingSlots(match, currentSets, { hasRef2 })
+      if (completing.length && online && match.seed_key) {
+        const fresh = await refreshAccountApprovals()
+        if (fresh && !approvalsStillValid(completing, fresh.bySlot, resultKey(currentSets))) {
+          showAlert(t('approval.revalidateFailed'), 'warning')
+          setIsSaving(false)
+          return
+        }
       }
 
       // Show download progress
@@ -1030,7 +1284,9 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
             ref2: match.ref2Signature || null
           },
           // Signed on a phone or on this device (OpenVolley d451686d)
-          signatureSources: approvalSignatureSources(match)
+          signatureSources: approvalSignatureSources(match),
+          // Approved with an account: names and short IDs only (no user ids, no emails)
+          accounts: approvalSummary(match, allSets)
         }
 
         await db.sync_queue.add({
@@ -1157,6 +1413,10 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
 
 
       // Mark the last set as not finished
+      // The result changes: account approvals go (server: best-effort undo
+      // now, and its trigger voids them when status 'live' syncs)
+      await undoAccountApprovalsBestEffort(match)
+
       await db.sets.update(lastSet.id, { finished: false })
 
       // Set match status back to 'live' and clear all signature fields
@@ -1499,6 +1759,19 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
             fallbackTeam2: t('common.team2')
           })
         } : null}
+      />
+
+      {/* Approve with an account (scorer, 2nd and 1st referee) */}
+      <AccountApprovalDialog
+        open={!!approvalRole}
+        onClose={() => setApprovalRole(null)}
+        match={match}
+        role={approvalRole}
+        roleLabel={approvalRole ? getSignatureLabel(approvalRole) : ''}
+        sets={sets}
+        userEmail={authCtx?.user?.email || ''}
+        onApproved={handleAccountApproved}
+        onError={handleApprovalError}
       />
 
       {/* Remarks dialog (light) */}
