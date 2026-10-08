@@ -37,6 +37,7 @@ import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot } from '../utils_beach/stateSnapshot_beach'
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
 import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
+import { defaultSetStartTime } from '../utils_beach/setStartTime_beach'
 import { medicalStartPayload, medicalEndPayload, findOpenMedical, formatMedicalDuration, medicalSecondsLeft, MEDICAL_RECOVERY_SECONDS } from '../utils_beach/medicalEvents_beach'
 
 // Sport type for beach volleyball
@@ -3520,26 +3521,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
     // If this is the first rally, show set start time confirmation
     if (isFirstRally) {
-      // Show set start time confirmation
-      // For set 1, use scheduled time, for set 2+, use 1 minute after previous set end
-      let defaultTime = roundToMinute(new Date().toISOString())
-
-      if (data?.set?.index === 1) {
-        // Use scheduled time from match
-        if (data?.match?.scheduledAt) {
-          defaultTime = roundToMinute(data.match.scheduledAt)
-        }
-      } else {
-        // Get previous set's end time
-        const allSets = await db.sets.where('matchId').equals(matchId).toArray()
-        const previousSet = allSets.find(s => s.index === (data.set.index - 1))
-        if (previousSet?.endTime) {
-          // Add 1 minute to previous set end time (standard beach volleyball set interval)
-          const prevEndTime = new Date(previousSet.endTime)
-          prevEndTime.setMinutes(prevEndTime.getMinutes() + 1)
-          defaultTime = prevEndTime.toISOString()
-        }
-      }
+      // Show set start time confirmation: the set starts now (its first
+      // rally), never before the end of a set already played
+      const allSets = await db.sets.where('matchId').equals(matchId).toArray()
+      const defaultTime = defaultSetStartTime({ setIndex: data?.set?.index || 1, sets: allSets })
 
       setSetStartTimeModal({ setIndex: data?.set?.index, defaultTime })
       return
