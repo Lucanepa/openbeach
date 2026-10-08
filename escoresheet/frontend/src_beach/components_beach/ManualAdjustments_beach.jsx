@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../ui/volleyui/Button.jsx'
 import { SegmentedControl } from '../ui/volleyui/SegmentedControl.jsx'
+import { DateField, TimeField } from '../ui/volleyui/DateField.jsx'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db_beach/db_beach'
 import { useAlert } from '../contexts_beach/AlertContext_beach'
@@ -23,7 +24,21 @@ const TEAM_COLORS = [
 ]
 
 /**
- * Convert various date formats to ISO yyyy-MM-dd for HTML date inputs
+ * A stored instant as the local date ('YYYY-MM-DD') and time ('HH:MM') the
+ * fields show. Local, because an edit goes back through new Date('…T…') (local
+ * time): the UTC slice shown before made the time jump by the UTC offset on
+ * every edit (18:30 in Zürich showed as 16:30, and saving it stored 14:30).
+ */
+function localDateTime(value) {
+  if (!value) return { date: '', time: '' }
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return { date: '', time: '' }
+  const p = (n) => String(n).padStart(2, '0')
+  return { date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`, time: `${p(d.getHours())}:${p(d.getMinutes())}` }
+}
+
+/**
+ * Convert various date formats to ISO yyyy-MM-dd for the date fields
  * Handles: DD.MM.YYYY, DD/MM/YYYY, MM/DD/YYYY, ISO format
  */
 function toISODate(dateStr) {
@@ -629,6 +644,9 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
     { id: 'info', label: t('manualAdjustmentsEditor.tabInfo', 'Match Info') }
   ]
 
+  // The scheduled date and time as the fields show them (local time)
+  const scheduledLocal = localDateTime(editedMatch?.scheduledAt)
+
   // volleyui on inline styles (the --ov-* tokens): white fields with a stone
   // border, cards on the stone page, outline buttons, the red outline delete.
   const inputStyle = {
@@ -874,10 +892,13 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                               placeholder={t('manualAdjustmentsEditor.lastName', 'Last Name')}
                               style={{ ...inputStyle, padding: '6px 8px' }}
                             />
-                            <input
-                              type="date"
+                            <DateField
+                              size="bare"
+                              // 90px column: typed only (DD.MM.YYYY)
+                              calendar={false}
                               value={toISODate(player.dob)}
-                              onChange={(e) => updatePlayer(player.id, 'dob', e.target.value, true)}
+                              onChange={(v) => updatePlayer(player.id, 'dob', v, true)}
+                              aria-label={`#${player.number} ${t('roster.dateOfBirth')}`}
                               style={{ ...inputStyle, padding: '4px', fontSize: '11px' }}
                             />
                           </div>
@@ -1020,10 +1041,13 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                               placeholder={t('manualAdjustmentsEditor.lastName', 'Last Name')}
                               style={{ ...inputStyle, padding: '6px 8px' }}
                             />
-                            <input
-                              type="date"
+                            <DateField
+                              size="bare"
+                              // 90px column: typed only (DD.MM.YYYY)
+                              calendar={false}
                               value={toISODate(player.dob)}
-                              onChange={(e) => updatePlayer(player.id, 'dob', e.target.value, false)}
+                              onChange={(v) => updatePlayer(player.id, 'dob', v, false)}
+                              aria-label={`#${player.number} ${t('roster.dateOfBirth')}`}
                               style={{ ...inputStyle, padding: '4px', fontSize: '11px' }}
                             />
                           </div>
@@ -1228,14 +1252,14 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                   </select>
                 </div>
                 <div>
-                  <label style={labelStyle}>{t('manualAdjustmentsEditor.scheduledDate', 'Scheduled Date')}</label>
-                  <input
-                    type="date"
-                    value={editedMatch.scheduledAt ? new Date(editedMatch.scheduledAt).toISOString().slice(0, 10) : ''}
-                    onChange={(e) => {
-                      const currentTime = editedMatch.scheduledAt ? new Date(editedMatch.scheduledAt).toISOString().slice(11, 16) : '00:00'
-                      if (e.target.value) {
-                        updateMatchInfo('scheduledAt', new Date(`${e.target.value}T${currentTime}:00`).toISOString())
+                  <label htmlFor="ma-scheduled-date" style={labelStyle}>{t('manualAdjustmentsEditor.scheduledDate', 'Scheduled Date')}</label>
+                  <DateField
+                    id="ma-scheduled-date"
+                    size="bare"
+                    value={scheduledLocal.date}
+                    onChange={(v) => {
+                      if (v) {
+                        updateMatchInfo('scheduledAt', new Date(`${v}T${scheduledLocal.time || '00:00'}:00`).toISOString())
                       } else {
                         updateMatchInfo('scheduledAt', null)
                       }
@@ -1244,19 +1268,16 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                   />
                 </div>
                 <div>
-                  <label style={labelStyle}>{t('manualAdjustmentsEditor.scheduledTime', 'Scheduled Time (24h)')}</label>
-                  <input
-                    type="text"
-                    placeholder="HH:MM"
-                    value={editedMatch.scheduledAt ? new Date(editedMatch.scheduledAt).toISOString().slice(11, 16) : ''}
-                    onChange={(e) => {
-                      let val = e.target.value.replace(/[^\d:]/g, '')
-                      if (val.length > 2 && val[2] !== ':') val = val.slice(0, 2) + ':' + val.slice(2)
-                      if (val.length > 5) val = val.slice(0, 5)
-                      const currentDate = editedMatch.scheduledAt ? new Date(editedMatch.scheduledAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)
-                      if (val && /^\d{2}:\d{2}$/.test(val)) {
-                        updateMatchInfo('scheduledAt', new Date(`${currentDate}T${val}:00`).toISOString())
-                      }
+                  <label htmlFor="ma-scheduled-time" style={labelStyle}>{t('manualAdjustmentsEditor.scheduledTime', 'Scheduled Time (24h)')}</label>
+                  <TimeField
+                    id="ma-scheduled-time"
+                    size="bare"
+                    // a scheduled match always has a time: no Clear, and half-typed text changes nothing
+                    required
+                    value={scheduledLocal.time}
+                    onChange={(v) => {
+                      if (!v) return
+                      updateMatchInfo('scheduledAt', new Date(`${scheduledLocal.date || localDateTime(new Date()).date}T${v}:00`).toISOString())
                     }}
                     style={{ ...inputStyle, width: '100%' }}
                   />
@@ -1295,10 +1316,11 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                       onChange={(e) => updateOfficial('ref1', 'country', e.target.value)}
                       style={{ ...inputStyle, padding: '6px 8px' }}
                     />
-                    <input
-                      type="date"
+                    <DateField
+                      size="bare"
                       value={toISODate(editedOfficials.ref1.dob)}
-                      onChange={(e) => updateOfficial('ref1', 'dob', e.target.value)}
+                      onChange={(v) => updateOfficial('ref1', 'dob', v)}
+                      aria-label={`${t('manualAdjustmentsEditor.firstReferee', '1st referee')} ${t('roster.dateOfBirth')}`}
                       style={{ ...inputStyle, padding: '4px', fontSize: '11px' }}
                     />
                   </div>
@@ -1329,10 +1351,11 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                       onChange={(e) => updateOfficial('ref2', 'country', e.target.value)}
                       style={{ ...inputStyle, padding: '6px 8px' }}
                     />
-                    <input
-                      type="date"
+                    <DateField
+                      size="bare"
                       value={toISODate(editedOfficials.ref2.dob)}
-                      onChange={(e) => updateOfficial('ref2', 'dob', e.target.value)}
+                      onChange={(v) => updateOfficial('ref2', 'dob', v)}
+                      aria-label={`${t('manualAdjustmentsEditor.secondReferee', '2nd referee')} ${t('roster.dateOfBirth')}`}
                       style={{ ...inputStyle, padding: '4px', fontSize: '11px' }}
                     />
                   </div>
@@ -1356,10 +1379,11 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                       onChange={(e) => updateOfficial('scorer', 'lastName', e.target.value)}
                       style={{ ...inputStyle, padding: '6px 8px' }}
                     />
-                    <input
-                      type="date"
+                    <DateField
+                      size="bare"
                       value={toISODate(editedOfficials.scorer.dob)}
-                      onChange={(e) => updateOfficial('scorer', 'dob', e.target.value)}
+                      onChange={(v) => updateOfficial('scorer', 'dob', v)}
+                      aria-label={`${t('manualAdjustmentsEditor.scorer', 'Scorer')} ${t('roster.dateOfBirth')}`}
                       style={{ ...inputStyle, padding: '4px', fontSize: '11px' }}
                     />
                   </div>
@@ -1383,10 +1407,11 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                       onChange={(e) => updateOfficial('asstScorer', 'lastName', e.target.value)}
                       style={{ ...inputStyle, padding: '6px 8px' }}
                     />
-                    <input
-                      type="date"
+                    <DateField
+                      size="bare"
                       value={toISODate(editedOfficials.asstScorer.dob)}
-                      onChange={(e) => updateOfficial('asstScorer', 'dob', e.target.value)}
+                      onChange={(v) => updateOfficial('asstScorer', 'dob', v)}
+                      aria-label={`${t('manualAdjustmentsEditor.assistantScorer', 'Assistant scorer')} ${t('roster.dateOfBirth')}`}
                       style={{ ...inputStyle, padding: '4px', fontSize: '11px' }}
                     />
                   </div>

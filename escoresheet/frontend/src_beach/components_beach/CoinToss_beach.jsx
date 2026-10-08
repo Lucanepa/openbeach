@@ -21,6 +21,7 @@ import { ArrowLeft, ArrowLeftRight, Check, FileText, Loader2, OctagonX, PenLine,
 import { Volleyball } from '@phosphor-icons/react'
 import { cn } from '../ui/volleyui/cn.js'
 import { Button, FOCUS_RING } from '../ui/volleyui/Button.jsx'
+import { DateField } from '../ui/volleyui/DateField.jsx'
 import { Modal as KitModal, modalCancelClass, modalPrimaryClass, modalSaveClass, modalDangerClass } from '../ui/volleyui/Modal.jsx'
 import { NOTICE } from '../ui/volleyui/tones.js'
 
@@ -2009,18 +2010,20 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                               />
                             </td>
                             {manageDob && <td className="w-[140px] px-2 py-1 align-middle">
-                              <input
-                                type="date"
+                              <DateField
+                                size="bare"
+                                // 140px column: typed only (DD.MM.YYYY); the Add player dialog has the calendar
+                                calendar={false}
                                 aria-label={t('roster.dob')}
                                 value={p.dob ? formatDateToISO(p.dob) : ''}
-                                onChange={e => {
-                                  const value = e.target.value ? formatDateToDDMMYYYY(e.target.value) : ''
+                                onChange={v => {
+                                  const value = v ? formatDateToDDMMYYYY(v) : ''
                                   const updated = [...roster]
                                   updated[originalIdx] = { ...updated[originalIdx], dob: value }
                                   setRoster(updated)
                                 }}
                                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
-                                className={cn('coin-toss-date-input tabular-nums', cellInput)}
+                                className={cn('tabular-nums', cellInput)}
                               />
                             </td>}
                             <td className="px-2 py-1 text-center align-middle">
@@ -2189,16 +2192,15 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                 </div>
                 {manageDob && <div>
                   <label htmlFor="ob-ct-add-dob" className={FIELD_LABEL}>{t('roster.dateOfBirth')}</label>
-                  <input
+                  <DateField
                     id="ob-ct-add-dob"
-                    type="date"
+                    size="lg"
                     value={dob ? formatDateToISO(dob) : ''}
-                    onChange={e => {
-                      const value = e.target.value ? formatDateToDDMMYYYY(e.target.value) : ''
+                    onChange={v => {
+                      const value = v ? formatDateToDDMMYYYY(v) : ''
                       currentTeam === 'team1' ? setTeam1Dob(value) : setTeam2Dob(value)
                     }}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
-                    className={cn(FIELD_INPUT, 'tabular-nums')}
                   />
                 </div>}
                 <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm text-stone-700">
