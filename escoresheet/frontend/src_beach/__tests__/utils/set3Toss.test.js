@@ -42,3 +42,21 @@ describe('set3Toss_beach', () => {
     expect(undoKeepsMatch({ currentSetIndex: 3 }, { type: 'point', setIndex: 3 })).toBe(false)
   })
 })
+
+// "Swap team A ↔ B" after the toss: its undo writes the labels from before
+// it as the teams are named now (the swap is not undone with it)
+describe('set3TossUndoUpdate after a swap of team A / B', () => {
+  const event = {
+    payload: { winner: 'team1', teamA: 'team1', before: { set3CoinTossWinner: null, set3LeftTeam: 'A', set3FirstServe: 'A', setLeftTeamOverrides: { 1: 'A' } } }
+  }
+  it('the first server label follows the swap; the sides stay', () => {
+    expect(set3TossUndoUpdate(event, { coinTossTeamA: 'team2' })).toMatchObject({ set3FirstServe: 'B', set3LeftTeam: 'A', setLeftTeamOverrides: { 1: 'A' } })
+  })
+  it('no swap since: as before the toss', () => {
+    expect(set3TossUndoUpdate(event, { coinTossTeamA: 'team1' })).toMatchObject({ set3FirstServe: 'A' })
+  })
+  it('an older toss without teamA: its snapshot\'s team A', () => {
+    const old = { payload: { before: { set3FirstServe: 'B' } }, stateSnapshot: { teamAKey: 'team1' } }
+    expect(set3TossUndoUpdate(old, { coinTossTeamA: 'team2' }).set3FirstServe).toBe('A')
+  })
+})

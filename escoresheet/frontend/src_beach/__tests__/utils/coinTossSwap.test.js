@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { swapTeamDesignation, coinTossCloud, setFirstServer, switchFirstServeUpdate } from '../../utils_beach/coinToss_beach'
+import { swapTeamDesignation, coinTossCloud, setFirstServer, switchFirstServeUpdate, labelsInDesignation } from '../../utils_beach/coinToss_beach'
 
 // what a restore makes of the cloud coin toss (backupManager_beach importMatch)
 const restored = (coinToss) => ({
@@ -149,5 +149,23 @@ describe('setFirstServer / switchFirstServeUpdate', () => {
     expect(update).toEqual({ firstServe: 'team2', coinTossServeA: true, coinTossServeB: false })
     expect(cloud.coin_toss).toMatchObject({ team_a: 'team2', team_b: 'team1', serve_a: true, first_serve: 'team2' })
     expect(switchFirstServeUpdate(match, 2).update.firstServe).toBe('team2')
+  })
+})
+
+describe('labelsInDesignation', () => {
+  it('flips the labels a swap flips when team A changed since they were written', () => {
+    expect(labelsInDesignation({ set3FirstServe: 'A', set3LeftTeam: 'A', setLeftTeamOverrides: { 1: 'B' }, firstServe: 'team1' }, 'team1', 'team2'))
+      .toEqual({ set3FirstServe: 'B', set3LeftTeam: 'A', setLeftTeamOverrides: { 1: 'B' }, firstServe: 'team1' })
+  })
+  it('keeps them with the same team A, or without a label', () => {
+    const fields = { set3FirstServe: 'A' }
+    expect(labelsInDesignation(fields, 'team1', 'team1')).toBe(fields)
+    expect(labelsInDesignation({ set3FirstServe: null }, 'team1', 'team2')).toEqual({ set3FirstServe: null })
+  })
+  it('is what the swap itself does to the match', () => {
+    const match = { coinTossTeamA: 'team1', set3FirstServe: 'B', set3LeftTeam: 'B' }
+    const patch = swapTeamDesignation(match)
+    expect(labelsInDesignation({ set3FirstServe: 'B', set3LeftTeam: 'B' }, 'team1', patch.coinTossTeamA))
+      .toEqual({ set3FirstServe: patch.set3FirstServe, set3LeftTeam: 'B' })
   })
 })

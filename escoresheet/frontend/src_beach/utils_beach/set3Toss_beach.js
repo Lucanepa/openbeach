@@ -16,6 +16,8 @@
  * and its undo writes them back.
  */
 
+import { labelsInDesignation } from './coinToss_beach'
+
 /** The match fields the set 3 toss and the interval after it write. */
 export const SET3_TOSS_FIELDS = [
   'set3CoinTossWinner',
@@ -43,8 +45,10 @@ export function set3TossBefore(match) {
  * The match update that undoes the set 3 toss `event`: the values from before
  * it. A toss recorded before `payload.before` existed only takes the winner
  * back (the toss is to be made again; the sides and the serve stay as they are).
+ * With the `match` of now, its A/B labels follow a swap of team A / B made
+ * since the toss.
  */
-export function set3TossUndoUpdate(event) {
+export function set3TossUndoUpdate(event, match = null) {
   const before = event?.payload?.before
   if (!before || typeof before !== 'object') return { set3CoinTossWinner: null }
   const update = {}
@@ -52,7 +56,11 @@ export function set3TossUndoUpdate(event) {
     if (field in before) update[field] = copy(before[field])
   }
   update.set3CoinTossWinner = before.set3CoinTossWinner ?? null
-  return update
+  // Its A/B labels as the match names the teams now: "Swap team A ↔ B"
+  // after the toss flipped them (coinToss_beach labelsInDesignation). The
+  // toss's team A: in its payload, else its snapshot's (an older toss)
+  const tossTeamA = event?.payload?.teamA ?? event?.stateSnapshot?.teamAKey ?? null
+  return match ? labelsInDesignation(update, tossTeamA, match.coinTossTeamA || 'team1') : update
 }
 
 /**

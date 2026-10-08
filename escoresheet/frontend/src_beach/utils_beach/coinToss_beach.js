@@ -48,10 +48,36 @@ export function swapTeamDesignation(match = {}) {
     coinTossServeA: firstServe === newTeamA,
     coinTossServeB: firstServe === newTeamB
   }
-  if (match.set3FirstServe === 'A' || match.set3FirstServe === 'B') {
-    patch.set3FirstServe = flipLabel(match.set3FirstServe)
+  for (const field of SWAP_FLIPPED_LABELS) {
+    if (match[field] === 'A' || match[field] === 'B') patch[field] = flipLabel(match[field])
   }
   return patch
+}
+
+/**
+ * The A/B labels that name a team and so move with "Swap team A ↔ B": the
+ * set 3 toss's first server. (The court sides, setLeftTeamOverrides and
+ * set3LeftTeam, stay as they are: see above.)
+ */
+export const SWAP_FLIPPED_LABELS = Object.freeze(['set3FirstServe'])
+
+/**
+ * `fields` (match fields, e.g. an undo's restore) whose A/B labels were
+ * written when team A was `fromTeamA`, in the designation of now (`toTeamA`):
+ * after a swap they are flipped as the swap flipped the match's. An undo of
+ * an unrelated event restores labels from before the swap; written as they
+ * were, they named the other team (set 3's first server changed).
+ * @param {object} fields
+ * @param {'team1'|'team2'|null|undefined} fromTeamA
+ * @param {'team1'|'team2'|null|undefined} toTeamA
+ */
+export function labelsInDesignation(fields, fromTeamA, toTeamA) {
+  if (!fields || !fromTeamA || !toTeamA || fromTeamA === toTeamA) return fields
+  const out = { ...fields }
+  for (const field of SWAP_FLIPPED_LABELS) {
+    if (out[field] === 'A' || out[field] === 'B') out[field] = flipLabel(out[field])
+  }
+  return out
 }
 
 /**

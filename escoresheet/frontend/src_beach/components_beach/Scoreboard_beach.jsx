@@ -41,7 +41,7 @@ import { useDiagCommits } from '../diagnostics_beach/commits_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot, refreshIntervalSnapshots } from '../utils_beach/stateSnapshot_beach'
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
-import { swapTeamDesignation, coinTossCloud, setFirstServer, switchFirstServeUpdate } from '../utils_beach/coinToss_beach'
+import { swapTeamDesignation, coinTossCloud, setFirstServer, switchFirstServeUpdate, labelsInDesignation } from '../utils_beach/coinToss_beach'
 import { set3TossBefore, set3TossUndoUpdate, undoKeepsMatch } from '../utils_beach/set3Toss_beach'
 import { staleCourtSwitches, switchBackUpdate, snapshotsAfterSwitchBack, pendingTto, pendingCourtDialog } from '../utils_beach/courtSwitchState_beach'
 import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
@@ -1017,7 +1017,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           matchUpdate.set3LeftTeam = snapshot.set3LeftTeam
         }
         if (Object.keys(matchUpdate).length > 0) {
-          await db.matches.update(matchId, matchUpdate)
+          // A/B labels as the teams are named now: a "Swap team A ↔ B" since
+          // the snapshot (not an event, so not undone) keeps its designation
+          // (coinToss_beach labelsInDesignation)
+          await db.matches.update(matchId, labelsInDesignation(matchUpdate, snapshot.teamAKey, match.coinTossTeamA || 'team1'))
         }
       }
     } catch (err) {
@@ -4725,8 +4728,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       setIndex: 3,
       type: 'set3_coin_toss_winner',
       // `team`: Last action's team line names the winner. `before`: the
-      // match before the toss, for its undo
-      payload: { winner, team: winner, before },
+      // match before the toss, for its undo; `teamA`: the designation its
+      // A/B labels are in (the undo follows a swap made since)
+      payload: { winner, team: winner, before, teamA: matchBefore.coinTossTeamA || 'team1' },
       ts: new Date().toISOString(),
       seq: nextSeq
     })
@@ -5530,7 +5534,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         // orders as they were before it (set3Toss_beach), so the toss buttons
         // come back with the sides and serve set 3 had before
         if (lastEvent.type === 'set3_coin_toss_winner') {
-          await db.matches.update(matchId, set3TossUndoUpdate(lastEvent))
+          await db.matches.update(matchId, set3TossUndoUpdate(lastEvent, await db.matches.get(matchId)))
         }
 
         // Handle special cases for set_end undo
