@@ -1427,7 +1427,12 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         // Clear all post-match signature fields (the ones the boxes write) -
         // they must be re-collected after changes - and their "signed on phone" records
         ...clearedPostMatchSignatures(),
-        ...Object.fromEntries(Object.keys(POST_MATCH_SIGNATURE_KEYS).map(field => [`signatureSources.${field}`, null]))
+        ...Object.fromEntries(Object.keys(POST_MATCH_SIGNATURE_KEYS).map(field => [`signatureSources.${field}`, null])),
+        // and the local copy of the account approvals: they certify the
+        // result too (OpenVolley clearedPostMatchSignatures). Offline the
+        // server undo above is skipped; a replay to the same score must not
+        // bring them back from this copy.
+        accountApprovals: null
       })
 
       // Delete the set_end event for this set to keep event log clean

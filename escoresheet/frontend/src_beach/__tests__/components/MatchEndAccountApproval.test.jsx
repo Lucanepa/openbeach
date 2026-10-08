@@ -262,6 +262,19 @@ describe('MatchEnd_beach: approve with an account', () => {
     await waitFor(() => expect(api.undo).toHaveBeenCalledWith('referee1-id'))
   })
 
+  it('"Reopen last set" offline drops the local copy too: a replay to the same score does not bring the approval back', async () => {
+    // OpenVolley clearedPostMatchSignatures(): accountApprovals: null
+    await seed({ scorerSignature: 'data:s', accountApprovals: { referee1: record('referee1') } })
+    onLine = false
+    renderMatchEnd()
+    await screen.findByTestId('account-approval-ref1')
+    await click(screen.getByRole('button', { name: 'Reopen last set' }))
+    await click(await screen.findByTestId('confirm-accept'))
+    await waitFor(async () => expect((await row()).status).toBe('live'))
+    expect(api.undo).not.toHaveBeenCalled()
+    expect((await row()).accountApprovals ?? null).toBeNull()
+  })
+
   it('"Confirm and approve" re-checks the approvals with the server and sends the summary (names and short IDs only)', async () => {
     globalThis.URL.createObjectURL = vi.fn(() => 'blob:x')
     api.list = vi.fn(async () => ({ data: { approvals: [record('referee1')] }, error: null, status: 200 }))
