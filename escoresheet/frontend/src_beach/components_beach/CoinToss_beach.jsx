@@ -8,6 +8,7 @@ import { setExtId, eventExtId } from '../utils_beach/syncIds_beach'
 import { isBackendAvailable, getBackendUrl } from '../utils_beach/backendConfig_beach'
 import { cloudSyncWaitNow } from '../utils_beach/cloudStatus_beach'
 import SignaturePad from './SignaturePad_beach'
+import { saveMatchSignature, signatureFieldOfRole } from '../utils_beach/signatures_beach'
 import MenuList from './MenuList_beach'
 import CountryFlag from './CountryFlag_beach'
 import { openAppWindow } from '../utils_beach/openAppWindow_beach'
@@ -536,6 +537,9 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
   }
 
   function handleSignatureSave(signatureImage) {
+    // Saved to the match at once, not on "Confirm coin toss result": a reload
+    // no longer loses it (OpenVolley 703cfa9c)
+    saveMatchSignature(db, matchId, signatureFieldOfRole(openSignature), signatureImage)
     if (openSignature === 'team1-captain') {
       setTeam1CaptainSignature(signatureImage)
     } else if (openSignature === 'team2-captain') {
@@ -2091,11 +2095,13 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                     {t('coinToss.captainSignatureTeam', { team: teamInfo.name })}
                   </h3>
                   <SignaturePad
+                    open
                     onSave={(sig) => {
+                      saveMatchSignature(db, matchId, signatureFieldOfRole(`${currentTeam}-captain`), sig)
                       setCaptainSig(sig)
                       setRosterModalSignature(null)
                     }}
-                    onCancel={() => setRosterModalSignature(null)}
+                    onClose={() => setRosterModalSignature(null)}
                     title={t('matchSetup.captainSignature')}
                   />
                 </div>
@@ -2260,11 +2266,13 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
 
         // Handle captain toggle
         const handleCaptainToggle = (index) => {
+          if (roster[index]?.isCaptain) return
           setRoster(prev => prev.map((p, i) => ({
             ...p,
             isCaptain: i === index
           })))
-          // Clear signature when captain changes
+          // Clear signature when captain changes (saved at once, like a new signature)
+          if (captainSig) saveMatchSignature(db, matchId, signatureFieldOfRole(`${currentTeam}-captain`), null)
           setCaptainSig(null)
         }
 
