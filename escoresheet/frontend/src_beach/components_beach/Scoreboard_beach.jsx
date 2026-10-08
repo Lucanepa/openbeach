@@ -40,6 +40,7 @@ import { useDiagCommits } from '../diagnostics_beach/commits_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot } from '../utils_beach/stateSnapshot_beach'
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
+import { swapTeamDesignation, coinTossCloud } from '../utils_beach/coinToss_beach'
 import { staleCourtSwitches, switchBackUpdate, snapshotsAfterSwitchBack, pendingTto, pendingCourtDialog } from '../utils_beach/courtSwitchState_beach'
 import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
 import { TTO_TOTAL, courtChangeEvery, hasTechnicalTimeout, nextCourtEvents } from '../utils_beach/courtRhythm_beach'
@@ -12233,28 +12234,22 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             <button
                               className="secondary"
                               onClick={async () => {
-                                // Swap Team A and Team B identity (coinTossTeamA)
+                                // Swap Team A and Team B identity (coinTossTeamA). Only the
+                                // labels change: the same team serves first, here and in
+                                // the cloud coin toss (coinToss_beach)
                                 const currentTeamA = data.match.coinTossTeamA || 'team1'
-                                const newTeamA = currentTeamA === 'team1' ? 'team2' : 'team1'
-                                const newTeamB = newTeamA === 'team1' ? 'team2' : 'team1'
+                                const patch = swapTeamDesignation(data.match)
+                                const newTeamA = patch.coinTossTeamA
 
-                                await db.matches.update(matchId, { coinTossTeamA: newTeamA, coinTossTeamB: newTeamB })
+                                await db.matches.update(matchId, patch)
 
                                 if (data.match?.seed_key) {
-                                  const currentServeA = data.match.coinTossServeA ?? true
-                                  const firstServeTeam = currentServeA ? newTeamA : newTeamB
                                   await db.sync_queue.add({
                                     resource: 'match',
                                     action: 'update',
                                     payload: {
                                       id: data.match.seed_key,
-                                      coin_toss: {
-                                        team_a: newTeamA,
-                                        team_b: newTeamB,
-                                        serve_a: currentServeA,
-                                        confirmed: true,
-                                        first_serve: firstServeTeam
-                                      }
+                                      coin_toss: coinTossCloud({ ...data.match, ...patch })
                                     },
                                     createdAt: new Date().toISOString()
                                   })
