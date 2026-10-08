@@ -31,16 +31,16 @@ const VALID_MATCH_COLUMNS = [
   'remarks'
 ]
 
-/**
- * Filter match payload to only include valid Supabase columns
- * Prevents sync errors from old backup formats with invalid column names
- */
 // The backup's remarks for the restore job (backend db/017). A backup without
 // the field (an app before it) sends none, so the server keeps what it has.
 function restoreRemarks(match) {
   return typeof match?.remarks === 'string' ? { remarks: remarksForServer(match.remarks) } : {}
 }
 
+/**
+ * Filter match payload to only include valid Supabase columns
+ * Prevents sync errors from old backup formats with invalid column names
+ */
 function filterMatchPayload(payload) {
   return Object.fromEntries(
     Object.entries(payload).filter(([key]) => VALID_MATCH_COLUMNS.includes(key))
