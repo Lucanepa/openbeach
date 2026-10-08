@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, act, waitFor } from '@testing-library/react'
+import { LIVE_STATE_HOLD_MS } from '../../utils_beach/liveStateTracker_beach'
 
 // Row 14 of the OpenBeach port (OpenVolley 23054276, 570198f3, f887f226,
 // a351046a): the referee shows the newest live state whatever path brought
@@ -94,11 +95,25 @@ describe('Referee_beach: the newest live state wins', () => {
     await waitFor(() => expect(shownScore()).not.toBeNull())
   }
 
-  it('a newer live-state push moves the score at once', async () => {
+  // The push waits for the scorer's bundle (serve, court) to show both in one
+  // update; without a bundle its score is shown after LIVE_STATE_HOLD_MS
+  it('a newer live-state push moves the score once the hold is over (no bundle came)', async () => {
     await mountWith(bundle(10, 8, live(0, 10, 8)))
     expect(shownScore()).toBe('10:8')
     await act(async () => { relay.subscriber({ _liveState: live(1000, 11, 8) }) })
     await settle()
+    expect(shownScore()).toBe('10:8') // not the score alone yet
+    await act(async () => { await new Promise(r => setTimeout(r, LIVE_STATE_HOLD_MS)) })
+    expect(shownScore()).toBe('11:8')
+  })
+
+  it('a newer live-state push followed by the scorer\'s bundle is one change', async () => {
+    await mountWith(bundle(10, 8, live(0, 10, 8)))
+    await act(async () => { relay.subscriber({ _liveState: live(1000, 11, 8) }) })
+    expect(shownScore()).toBe('10:8')
+    await act(async () => { relay.subscriber(bundle(11, 8, live(1000, 11, 8))) })
+    expect(shownScore()).toBe('11:8')
+    await act(async () => { await new Promise(r => setTimeout(r, LIVE_STATE_HOLD_MS)) })
     expect(shownScore()).toBe('11:8')
   })
 
