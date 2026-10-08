@@ -33,7 +33,7 @@ import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { useSavedTeams as useSavedTeams_beach } from '../hooks_beach/useSavedTeams_beach'
 import SavedTeamPickerModal from './SavedTeamPickerModal_beach'
 import { savedTeamToBeachRoster, rosterHasNames, findBeachTeamSuggestions } from '../utils_beach/savedTeams_beach'
-import { ArrowLeft, Check, ChevronDown, ChevronUp, ClipboardList, Database, FileText, Loader2, RotateCcw, Users } from 'lucide-react'
+import { ArrowLeft, Check, ChevronDown, ChevronUp, ClipboardList, Database, FileText, Loader2, PenLine, RotateCcw, Users } from 'lucide-react'
 import { cn } from '../ui/volleyui/cn.js'
 import { Button, FOCUS_RING } from '../ui/volleyui/Button.jsx'
 import { Field } from '../ui/volleyui/Field.jsx'
@@ -70,8 +70,9 @@ const CAPTAIN_OFF = 'border-stone-300 bg-white text-stone-400 hover:bg-stone-50'
 // One roster row: number toggles, last / first name, (date of birth), C,
 // Clear. On a phone the row stacks: numbers, C and Clear on top, one field
 // per line under them (the fields carry their names as placeholders).
-const ROSTER_GRID = 'grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:grid-cols-[96px_minmax(0,1fr)_minmax(0,1fr)_44px_auto]'
-const ROSTER_GRID_DOB = 'sm:grid-cols-[96px_minmax(0,1fr)_minmax(0,1fr)_170px_44px_auto]'
+// The captain column fits its header word ("Captain", not a bare "C")
+const ROSTER_GRID = 'grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:grid-cols-[96px_minmax(0,1fr)_minmax(0,1fr)_84px_auto]'
+const ROSTER_GRID_DOB = 'sm:grid-cols-[96px_minmax(0,1fr)_minmax(0,1fr)_170px_84px_auto]'
 
 // Date formatting helpers (outside component to avoid recreation)
 function formatDateToDDMMYYYY(dateStr) {
@@ -2793,7 +2794,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     // than tell an approved scorer to ask for approval
     if (user && !access?.known) return null
     return (
-      <span data-testid="saved-teams-note" className="max-w-[220px] self-center text-xs text-stone-500">
+      <span data-testid="saved-teams-note" className="max-w-[260px] self-center text-sm text-stone-600">
         {user ? t('savedTeams.noAccessNote') : t('savedTeams.signInNote')}
       </span>
     )
@@ -3535,18 +3536,23 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             <Button variant="ghost" size="xl" icon={ArrowLeft} className="bg-white" onClick={() => { restoreTeam1(); setCurrentView('main') }}>{t('common.back')}</Button>
           </div>
           <div className="flex min-w-0 flex-col items-center gap-1.5">
-            <input
-              type="text"
-              spellCheck={false}
-              autoCorrect="off"
-              autoCapitalize="off"
-              aria-label={t('matchSetup.teamName')}
-              value={team1Name || getTeamDisplayName(team1Roster, 'team1', team1Country)}
-              onChange={e => setTeam1Name(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
-              className="h-12 w-auto min-w-[100px] max-w-full rounded-xl border border-stone-200 bg-white px-3 text-center text-xl font-bold tracking-tight text-stone-900 sm:max-w-[500px] focus:border-red-700/40 focus:outline-none focus:ring-2 focus:ring-red-700/20"
-              size={Math.max(10, (team1Name || getTeamDisplayName(team1Roster, 'team1', team1Country)).length)}
-            />
+            <label className="inline-flex max-w-full cursor-text items-center gap-1">
+              <input
+                type="text"
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+                aria-label={t('matchSetup.teamName')}
+                value={team1Name || getTeamDisplayName(team1Roster, 'team1', team1Country)}
+                onChange={e => setTeam1Name(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
+                // A title that can be renamed: no input box until hovered or focused
+                data-testid="roster-team-name"
+                className="h-12 w-auto min-w-[100px] max-w-full rounded-xl border border-transparent bg-transparent px-3 text-center text-2xl font-bold tracking-tight text-stone-900 hover:border-stone-200 sm:max-w-[500px] focus:border-red-700/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-700/20"
+                size={Math.max(10, (team1Name || getTeamDisplayName(team1Roster, 'team1', team1Country)).length)}
+              />
+              <PenLine size={16} aria-hidden="true" className="shrink-0 text-stone-400" />
+            </label>
             {team1Name && team1Name !== getTeamDisplayName(team1Roster, 'team1', team1Country) && (
               <Button
                 variant="ghost"
@@ -3622,7 +3628,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             <div>{t('matchSetup.lastName')}</div>
             <div>{t('matchSetup.firstName')}</div>
             {manageDob && <div>{t('matchSetup.dateOfBirth')}</div>}
-            <div className="text-center" title={t('matchSetup.captain')}>C</div>
+            <div className="text-center" data-testid="roster-captain-header">{t('matchSetup.captain')}</div>
             <div />
           </div>
           <div className="divide-y divide-stone-100">
@@ -3982,18 +3988,23 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             <Button variant="ghost" size="xl" icon={ArrowLeft} className="bg-white" onClick={() => { restoreTeam2(); setCurrentView('main') }}>{t('common.back')}</Button>
           </div>
           <div className="flex min-w-0 flex-col items-center gap-1.5">
-            <input
-              type="text"
-              spellCheck={false}
-              autoCorrect="off"
-              autoCapitalize="off"
-              aria-label={t('matchSetup.teamName')}
-              value={team2Name || getTeamDisplayName(team2Roster, 'team2', team2Country)}
-              onChange={e => setTeam2Name(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
-              className="h-12 w-auto min-w-[100px] max-w-full rounded-xl border border-stone-200 bg-white px-3 text-center text-xl font-bold tracking-tight text-stone-900 sm:max-w-[500px] focus:border-red-700/40 focus:outline-none focus:ring-2 focus:ring-red-700/20"
-              size={Math.max(10, (team2Name || getTeamDisplayName(team2Roster, 'team2', team2Country)).length)}
-            />
+            <label className="inline-flex max-w-full cursor-text items-center gap-1">
+              <input
+                type="text"
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+                aria-label={t('matchSetup.teamName')}
+                value={team2Name || getTeamDisplayName(team2Roster, 'team2', team2Country)}
+                onChange={e => setTeam2Name(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
+                // A title that can be renamed: no input box until hovered or focused
+                data-testid="roster-team-name"
+                className="h-12 w-auto min-w-[100px] max-w-full rounded-xl border border-transparent bg-transparent px-3 text-center text-2xl font-bold tracking-tight text-stone-900 hover:border-stone-200 sm:max-w-[500px] focus:border-red-700/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-700/20"
+                size={Math.max(10, (team2Name || getTeamDisplayName(team2Roster, 'team2', team2Country)).length)}
+              />
+              <PenLine size={16} aria-hidden="true" className="shrink-0 text-stone-400" />
+            </label>
             {team2Name && team2Name !== getTeamDisplayName(team2Roster, 'team2', team2Country) && (
               <Button
                 variant="ghost"
@@ -4069,7 +4080,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             <div>{t('matchSetup.lastName')}</div>
             <div>{t('matchSetup.firstName')}</div>
             {manageDob && <div>{t('matchSetup.dateOfBirth')}</div>}
-            <div className="text-center" title={t('matchSetup.captain')}>C</div>
+            <div className="text-center" data-testid="roster-captain-header">{t('matchSetup.captain')}</div>
             <div />
           </div>
           <div className="divide-y divide-stone-100">

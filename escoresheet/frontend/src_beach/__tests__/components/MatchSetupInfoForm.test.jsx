@@ -148,3 +148,17 @@ describe('MatchSetup_beach main view layout', () => {
     expect(coinToss.getAttribute('title')).toMatch(/first/)
   })
 })
+
+describe('MatchSetup_beach roster editor', () => {
+  it('the team name reads as a title, the captain column says "Captain", the sign-in note is readable', async () => {
+    const matchId = await db.matches.add({ status: 'setup', seed_key: 'match_seed_vr4', test: false, createdAt: new Date().toISOString() })
+    render(<MatchSetup matchId={matchId} onStart={() => {}} onReturn={() => {}} onOpenOptions={() => {}} onOpenCoinToss={() => {}} />)
+    const edit = await screen.findAllByRole('button', { name: 'Edit roster' })
+    await act(async () => { fireEvent.click(edit[0]) })
+    const title = await screen.findByTestId('roster-team-name')
+    expect(title.className).toMatch(/border-transparent/)
+    expect(title.className).toMatch(/bg-transparent/)
+    expect(screen.getByTestId('roster-captain-header').textContent).toBe('Captain')
+    expect(screen.getByTestId('saved-teams-note').className).toMatch(/text-sm/)
+  })
+})
