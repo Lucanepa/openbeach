@@ -269,7 +269,7 @@ function ScoreDemo({ t }) {
       {/* Score display */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 4 }}>{t('interactiveGuide.demos.home')}</div>
+          <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 4 }}>{t('interactiveGuide.demos.team1')}</div>
           <div style={{
             fontSize: 48,
             fontWeight: 700,
@@ -297,8 +297,8 @@ function ScoreDemo({ t }) {
 
       {/* Point buttons */}
       <div style={{ display: 'flex', gap: 12 }}>
-        <DemoButton label={t('interactiveGuide.demos.pointHome')} color="#3b82f6" onClick={addHomePoint} />
-        <DemoButton label={t('interactiveGuide.demos.pointteam2')} color="#ef4444" onClick={addteam2Point} />
+        <DemoButton label={t('interactiveGuide.demos.pointTeam1')} color="#3b82f6" onClick={addteam1Point} />
+        <DemoButton label={t('interactiveGuide.demos.pointTeam2')} color="#ef4444" onClick={addteam2Point} />
       </div>
 
       <div style={{ fontSize: 11, opacity: 0.5 }}>{t('interactiveGuide.demos.clickToScore')}</div>
