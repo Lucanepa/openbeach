@@ -100,3 +100,31 @@ describe('sanctions, undo, replay and decision change are one action each', () =
     expect(b).toContain('if (isReportedActionError(err)) return')
   })
 })
+
+// The change of courts painted in three steps in the desktop app (WebKitGTK,
+// diagnostics + frame recorder): the dialog closed, the serve ball jumped to
+// the other side ~60 ms later with both teams still on their old sides, the
+// teams switched ~30 ms after that. Each write (match sides, cloud job,
+// court_switch event) was its own transaction and its own render.
+describe('the change of courts is one action and one screen change', () => {
+  it('confirmCourtSwitch: the sides, the event and the closed dialog commit and show together', () => {
+    const b = between('const confirmCourtSwitch = useCallback(', '// Handle TTO end')
+    expect(b).toContain("runCourtSwitchConfirm(() => runAction('courtSwitch', async () => {")
+    expect(b).toContain('deferUi(() => setCourtSwitchModal(null))')
+    expect(b.replace(/deferUi\(\(\) => setCourtSwitchModal\(null\)\)/g, '')).not.toContain('setCourtSwitchModal(null)')
+    // the TTO it may start opens with the switch, not before
+    expect(b).toContain('deferUi(() => setTtoModal(ttoData))')
+    // the live state goes out once, after the commit, with the final state
+    expect(b).toContain("afterLiveState('court_switch'")
+    expect(b).not.toContain('syncLiveStateToSupabase(')
+  })
+
+  it('handleTtoEnd: the switch after the technical time-out and the closed dialog commit and show together', () => {
+    const b = between('const handleTtoEnd = useCallback(', '// The change of courts (every 7 points')
+    expect(b).toContain("runAction('ttoEnd', async () => {")
+    expect(b).toContain('deferUi(() => setTtoModal(null))')
+    expect(b.replace(/deferUi\(\(\) => setTtoModal\(null\)\)/g, '')).not.toContain('setTtoModal(null)')
+    expect(b).not.toContain('syncLiveStateToSupabase(')
+    expect(b).toContain("runOrDefer({ run: () => sendActionToReferee('end_tto', {}) })")
+  })
+})
