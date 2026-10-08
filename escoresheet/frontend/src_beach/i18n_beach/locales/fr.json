@@ -2339,5 +2339,30 @@
     "signInAgain": "Se reconnecter",
     "joinTitle": "Pas encore dans OpenBeach : les matchs restent sur cet appareil",
     "joinBody": "Ce compte OpenVolley peut rejoindre OpenBeach avec le même identifiant. Dès qu'un code d'invitation ou un admin l'approuve, les matchs en attente sont envoyés."
+  },
+  "picker": {
+    "calendar": "Calendrier",
+    "openCalendar": "Ouvrir le calendrier",
+    "prevMonth": "Mois précédent",
+    "nextMonth": "Mois suivant",
+    "month": "Mois",
+    "year": "Année",
+    "today": "Aujourd’hui",
+    "clear": "Effacer",
+    "done": "Terminé",
+    "time": "Heure",
+    "date": "Date",
+    "chooseTime": "Choisir l’heure",
+    "hours": "Heures",
+    "minutes": "Minutes",
+    "now": "Maintenant",
+    "datePlaceholder": "JJ.MM.AAAA",
+    "timePlaceholder": "HH:MM",
+    "invalidDate": "Saisir une date au format JJ.MM.AAAA.",
+    "invalidTime": "Saisir une heure au format HH:MM.",
+    "dateBeforeMin": "Au plus tôt le {{date}}.",
+    "dateAfterMax": "Au plus tard le {{date}}.",
+    "timeBeforeMin": "Au plus tôt à {{time}}.",
+    "timeAfterMax": "Au plus tard à {{time}}."
   }
 }
