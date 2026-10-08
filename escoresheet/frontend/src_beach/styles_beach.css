@@ -1851,39 +1851,77 @@ button.start-rally-button {
   padding: calc(8px * var(--scale-factor)) !important;
 }
 
-/* Modal roll animations - indoor style with zoom effect */
+/* Popover roll-in (scoring screen player / sanction / medical menus), as in
+   OpenVolley: a fade and a short slide only, ending at `transform: none`. The
+   old keyframes ran scale(1.2) -> scale(1.5) and then dropped back to the real
+   size when the animation ended, so every menu opened large and shrank. */
 @keyframes rollDown {
   from {
     opacity: 0;
-    transform: translateY(-30px) scale(1.2);
+    transform: translateY(-6px);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0) scale(1.5);
+    transform: none;
   }
 }
 
 @keyframes rollUp {
   from {
     opacity: 0;
-    transform: translateY(30px) scale(1.2);
+    transform: translateY(6px);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0) scale(1.5);
+    transform: none;
   }
 }
 
 .modal-wrapper-roll-down>div {
-  animation: rollDown 0.3s ease-out;
-  transform-origin: center bottom;
+  animation: rollDown 0.15s ease-out;
 }
 
 .modal-wrapper-roll-up>div {
-  animation: rollUp 0.3s ease-out;
-  transform-origin: center top;
+  animation: rollUp 0.15s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-wrapper-roll-down>div,
+  .modal-wrapper-roll-up>div {
+    animation: none;
+  }
+}
+
+/* The menus' resting size: readable courtside (the inline 9-12 px labels came
+   from the scale(1.5) era). One size for the whole interaction, scaled with
+   the screen but never below a 44 px tap target and 14 px text. */
+.sb-popover {
+  min-width: max(200px, calc(240px * var(--scale-factor, 1))) !important;
+  padding: max(8px, calc(10px * var(--scale-factor, 1))) !important;
+}
+
+.sb-popover div:not(:has(button)) {
+  font-size: max(13px, calc(14px * var(--scale-factor, 1))) !important;
+}
+
+.sb-popover > div:first-child:not(:has(button)) {
+  font-size: max(14px, calc(16px * var(--scale-factor, 1))) !important;
+}
+
+.sb-popover button {
+  min-height: 44px;
+  font-size: max(15px, calc(17px * var(--scale-factor, 1))) !important;
+  padding: max(8px, calc(10px * var(--scale-factor, 1))) max(12px, calc(14px * var(--scale-factor, 1))) !important;
+}
+
+.sb-popover button span {
+  font-size: inherit !important;
+}
+
+.sb-popover button span + span {
+  font-size: max(12px, 0.8em) !important;
 }
 
 @keyframes slideArrowLeft {

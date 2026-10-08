@@ -14397,6 +14397,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             <div style={menuStyle} className="modal-wrapper-roll-down">
               <div
                 data-player-action-menu
+                className="sb-popover"
                 style={{
                   background: 'var(--ov-card)',
                   border: '2px solid var(--ov-hairline-strong)',
@@ -14435,14 +14436,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       gap: '6px',
                       width: '100%'
                     }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = '#1a1a1a'
-                      e.currentTarget.style.transform = 'scale(1.02)'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'var(--ov-card)'
-                      e.currentTarget.style.transform = 'scale(1)'
-                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--ov-sunken)' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--ov-card)' }}
                   >
                     <span>Sanction</span>
                     <ChevronDown size={16} aria-hidden="true" style={{ transform: courtSanctionExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
@@ -14561,14 +14556,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     gap: '6px',
                     width: '100%'
                   }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'var(--ov-danger)'
-                    e.currentTarget.style.transform = 'scale(1.02)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'var(--ov-danger)'
-                    e.currentTarget.style.transform = 'scale(1)'
-                  }}
+
                 >
                   <span>Medical</span>
                   <span style={{ fontSize: '14px', lineHeight: '1' }}>✚</span>
@@ -14635,6 +14623,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             <div style={dropdownStyle} className="modal-wrapper-roll-up">
               <div
                 data-sanction-dropdown
+                className="sb-popover"
                 style={{
                   background: 'var(--ov-card)',
                   border: '2px solid var(--ov-hairline-strong)',
@@ -14885,6 +14874,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             {/* Dropdown */}
             <div style={dropdownStyle} className="modal-wrapper-roll-up">
               <div
+                data-medical-dropdown
+                className="sb-popover"
                 style={{
                   background: 'var(--ov-card)',
                   border: '2px solid rgba(220, 38, 38, 0.5)',
