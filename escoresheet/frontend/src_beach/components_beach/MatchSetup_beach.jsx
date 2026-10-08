@@ -21,6 +21,7 @@ import { buildConnectionPins } from '../utils_beach/connectionPins_beach'
 import { cloudSyncWaitNow } from '../utils_beach/cloudStatus_beach'
 import { COMPETITIONS_ENABLED } from '../utils_beach/features_beach'
 import { generateMatchSeedKey } from '../utils_beach/serverDataSync_beach'
+import { askText } from '../utils_beach/askText_beach'
 import { TEST_TEAM_SEED_DATA } from '../constants_beach/testSeeds_beach'
 import { splitLocalDateTime, parseLocalDateTimeToISO, roundToMinute } from '../utils_beach/timeUtils_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
@@ -2143,6 +2144,22 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       }
     }
 
+    // Match PIN code (for opening/continuing match), in the app's own dialog
+    // (never prompt()). Asked before the transaction: awaiting the user inside
+    // it would commit it early, and a cancel must not leave the two teams
+    // behind. Cancel creates nothing.
+    const matchPin = await askText({
+      title: t('matchSetup.matchPinTitle'),
+      message: t('matchSetup.enterPinPrompt'),
+      label: t('matchSetup.matchPinLabel'),
+      confirmLabel: t('matchSetup.createMatch')
+    })
+    if (matchPin === null) return
+    if (matchPin.trim() === '') {
+      setNoticeModal({ message: t('matchSetup.validation.matchPinRequired') })
+      return
+    }
+
     await db.transaction('rw', db.matches, db.teams, db.players, db.sync_queue, async () => {
       const team1DbId = await db.teams.add({ name: team1Name, color: team1Color, shortName: team1ShortName || team1Name.trim().toUpperCase(), createdAt: new Date().toISOString() })
       const team2DbId = await db.teams.add({ name: team2Name, color: team2Color, shortName: team2ShortName || team2Name.trim().toUpperCase(), createdAt: new Date().toISOString() })
@@ -2167,13 +2184,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         } while (existingPins.includes(pin))
 
         return pin
-      }
-
-      // Generate match PIN code (for opening/continuing match)
-      const matchPin = prompt('Enter a PIN code to protect this match (required):')
-      if (!matchPin || matchPin.trim() === '') {
-        setNoticeModal({ message: t('matchSetup.validation.matchPinRequired') })
-        return
       }
 
       // Auto-generate gamePin for official matches

@@ -423,7 +423,10 @@
       "readyToConfirm": "Prêt à confirmer",
       "incomplete": "Incomplet"
     },
-    "selectCountry": "Choisir le pays"
+    "selectCountry": "Choisir le pays",
+    "matchPinTitle": "Code PIN du match",
+    "matchPinLabel": "Code PIN",
+    "enterPinPrompt": "Entrez un code PIN pour protéger ce match (requis) :"
   },
   "scoreboard": {
     "set": "Set",
@@ -1234,7 +1237,11 @@
     "reopenMatch": "Rouvrir le match",
     "showLarger": "Agrandir",
     "setsWon": "Sets gagnés",
-    "matchDataJson": "Données du match (JSON)"
+    "matchDataJson": "Données du match (JSON)",
+    "resign": "Signer à nouveau",
+    "clearSignature": "Effacer",
+    "signatureLocked": "Match approuvé ou clôturé : les signatures ne changent plus",
+    "signatureSaveFailed": "La signature n’a pas pu être enregistrée. Réessayez."
   },
   "scoresheetPdf": {
     "zoomOut": "Réduire",
@@ -2359,5 +2366,30 @@
     "signInAgain": "Se reconnecter",
     "joinTitle": "Pas encore dans OpenBeach : les matchs restent sur cet appareil",
     "joinBody": "Ce compte OpenVolley peut rejoindre OpenBeach avec le même identifiant. Dès qu'un code d'invitation ou un admin l'approuve, les matchs en attente sont envoyés."
+  },
+  "picker": {
+    "calendar": "Calendrier",
+    "openCalendar": "Ouvrir le calendrier",
+    "prevMonth": "Mois précédent",
+    "nextMonth": "Mois suivant",
+    "month": "Mois",
+    "year": "Année",
+    "today": "Aujourd’hui",
+    "clear": "Effacer",
+    "done": "Terminé",
+    "time": "Heure",
+    "date": "Date",
+    "chooseTime": "Choisir l’heure",
+    "hours": "Heures",
+    "minutes": "Minutes",
+    "now": "Maintenant",
+    "datePlaceholder": "JJ.MM.AAAA",
+    "timePlaceholder": "HH:MM",
+    "invalidDate": "Saisir une date au format JJ.MM.AAAA.",
+    "invalidTime": "Saisir une heure au format HH:MM.",
+    "dateBeforeMin": "Au plus tôt le {{date}}.",
+    "dateAfterMax": "Au plus tard le {{date}}.",
+    "timeBeforeMin": "Au plus tôt à {{time}}.",
+    "timeAfterMax": "Au plus tard à {{time}}."
   }
 }

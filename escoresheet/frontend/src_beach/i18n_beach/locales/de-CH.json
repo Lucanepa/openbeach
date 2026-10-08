@@ -423,7 +423,10 @@
       "readyToConfirm": "Parat zum Bestätige",
       "incomplete": "Unvollständig"
     },
-    "selectCountry": "Land wähle"
+    "selectCountry": "Land wähle",
+    "matchPinTitle": "Spiil-PIN-Code",
+    "matchPinLabel": "PIN-Code",
+    "enterPinPrompt": "Bitte en PIN-Code iigee, zum das Spiil z schütze (erforderlich):"
   },
   "scoreboard": {
     "set": "Satz",
@@ -1234,7 +1237,11 @@
     "reopenMatch": "Spiel wieder öffnen",
     "showLarger": "Grösser anzeigen",
     "setsWon": "Gewonnene Sätze",
-    "matchDataJson": "Spieldaten (JSON)"
+    "matchDataJson": "Spieldaten (JSON)",
+    "resign": "Neu underschriibe",
+    "clearSignature": "Lösche",
+    "signatureLocked": "Spiil genehmigt oder abgschlosse: d Underschrifte sind fix",
+    "signatureSaveFailed": "D Underschrift het nöd chöne gspeicheret werde. Probiered Sie s nomal."
   },
   "scoresheetPdf": {
     "zoomOut": "Verchliinere",
@@ -2359,5 +2366,30 @@
     "signInAgain": "Nomal aamälde",
     "joinTitle": "No nöd bi OpenBeach: Spiel bliibed uf däm Grät",
     "joinBody": "Das OpenVolley-Konto cha OpenBeach mit em gliiche Login biitrete. Sobald en Iiladigscode oder en Admin s freigit, gönd di wartende Spiel use."
+  },
+  "picker": {
+    "calendar": "Kaländer",
+    "openCalendar": "Kaländer öffne",
+    "prevMonth": "Vorhärige Monet",
+    "nextMonth": "Nächschte Monet",
+    "month": "Monet",
+    "year": "Jahr",
+    "today": "Hüt",
+    "clear": "Lääre",
+    "done": "Fertig",
+    "time": "Zyt",
+    "date": "Datum",
+    "chooseTime": "Zyt wähle",
+    "hours": "Stunde",
+    "minutes": "Minute",
+    "now": "Jetzt",
+    "datePlaceholder": "TT.MM.JJJJ",
+    "timePlaceholder": "HH:MM",
+    "invalidDate": "Datum als TT.MM.JJJJ ygä.",
+    "invalidTime": "Zyt als HH:MM ygä.",
+    "dateBeforeMin": "Früehstens am {{date}}.",
+    "dateAfterMax": "Spöötstens am {{date}}.",
+    "timeBeforeMin": "Früehstens um {{time}}.",
+    "timeAfterMax": "Spöötstens um {{time}}."
   }
 }

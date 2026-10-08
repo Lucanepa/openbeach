@@ -423,7 +423,10 @@
       "readyToConfirm": "Pronto da confermare",
       "incomplete": "Incompleto"
     },
-    "selectCountry": "Scegli il paese"
+    "selectCountry": "Scegli il paese",
+    "matchPinTitle": "Codice PIN della partita",
+    "matchPinLabel": "Codice PIN",
+    "enterPinPrompt": "Inserisci un codice PIN per proteggere questa partita (obbligatorio):"
   },
   "scoreboard": {
     "set": "Set",
@@ -1234,7 +1237,11 @@
     "reopenMatch": "Riapri partita",
     "showLarger": "Ingrandisci",
     "setsWon": "Set vinti",
-    "matchDataJson": "Dati della partita (JSON)"
+    "matchDataJson": "Dati della partita (JSON)",
+    "resign": "Firma di nuovo",
+    "clearSignature": "Cancella",
+    "signatureLocked": "Partita approvata o chiusa: le firme non cambiano più",
+    "signatureSaveFailed": "Non è stato possibile salvare la firma. Riprova."
   },
   "scoresheetPdf": {
     "zoomOut": "Riduci",
@@ -2359,5 +2366,30 @@
     "signInAgain": "Accedi di nuovo",
     "joinTitle": "Non ancora in OpenBeach: le partite restano su questo dispositivo",
     "joinBody": "Questo account OpenVolley può unirsi a OpenBeach con lo stesso login. Appena un codice d'invito o un admin lo approva, le partite in attesa vengono inviate."
+  },
+  "picker": {
+    "calendar": "Calendario",
+    "openCalendar": "Apri il calendario",
+    "prevMonth": "Mese precedente",
+    "nextMonth": "Mese successivo",
+    "month": "Mese",
+    "year": "Anno",
+    "today": "Oggi",
+    "clear": "Cancella",
+    "done": "Fatto",
+    "time": "Ora",
+    "date": "Data",
+    "chooseTime": "Scegli l’ora",
+    "hours": "Ore",
+    "minutes": "Minuti",
+    "now": "Adesso",
+    "datePlaceholder": "GG.MM.AAAA",
+    "timePlaceholder": "HH:MM",
+    "invalidDate": "Inserisci una data come GG.MM.AAAA.",
+    "invalidTime": "Inserisci un’ora come HH:MM.",
+    "dateBeforeMin": "Non prima del {{date}}.",
+    "dateAfterMax": "Non oltre il {{date}}.",
+    "timeBeforeMin": "Non prima delle {{time}}.",
+    "timeAfterMax": "Non oltre le {{time}}."
   }
 }
