@@ -47,7 +47,7 @@
  *   them (a note says so).
  */
 import { scoreFromPointEvents } from './scorerCorrections_beach'
-import { actualStartTimeLine, actualStartTimeLines, scheduledClock } from './setStartTime_beach'
+import { actualStartTimeLine, actualStartTimeLines, scheduledClock, startScheduleOf } from './setStartTime_beach'
 
 export const TEAMS = Object.freeze(['team1', 'team2'])
 export const TEAM_SANCTIONS = Object.freeze(['improper_request', 'delay_warning', 'delay_penalty'])
@@ -806,9 +806,10 @@ export function planSetTimes(events, sets, { setIndex, startTime, endTime } = {}
   if (end) plan.update = [{ id: end.id, changes: { payload: { ...end.payload, ...changes } } }]
   // Set 1 started at another time than scheduled: "Actual start time: HH:MM"
   // in the remarks, replaced by the new start, gone at the scheduled time
-  if (setIndex === 1 && changes.startTime !== undefined && scheduledClock(ctx.match?.scheduledAt)) {
+  const scheduledAt = startScheduleOf(ctx.match)
+  if (setIndex === 1 && changes.startTime !== undefined && scheduledClock(scheduledAt)) {
     const old = actualStartTimeLines(ctx.match.remarks)
-    const line = actualStartTimeLine({ setIndex, startTime: changes.startTime, scheduledAt: ctx.match.scheduledAt })
+    const line = actualStartTimeLine({ setIndex, startTime: changes.startTime, scheduledAt })
     if (!(line && old.length === 1 && old[0].trim() === line)) {
       plan.remarkRemove = old
       plan.remarkAdd = line ? [line] : []

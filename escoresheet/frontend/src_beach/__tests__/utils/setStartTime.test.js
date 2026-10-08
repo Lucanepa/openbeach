@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
-  defaultSetStartTime, scheduledClock, withActualStartTimeRemark, localClock, scheduledStartOn
+  defaultSetStartTime, scheduledClock, withActualStartTimeRemark, localClock, scheduledStartOn, startScheduleOf
 } from '../../utils_beach/setStartTime_beach'
 import { planSetTimes } from '../../utils_beach/corrections_beach'
 import { remarksAfter } from '../../utils_beach/applyCorrectionPlan_beach'
@@ -41,6 +41,16 @@ describe('defaultSetStartTime: set 1 proposes the scheduled time', () => {
       expect(defaultSetStartTime({ setIndex: 1, sets: [{ index: 1 }], now: TODAY, scheduledAt }))
         .toBe(iso(2026, 10, 8, 12, 41))
     }
+  })
+
+  it('a test match (made-up 12:00 kickoff) has no schedule: set 1 now, no remark', () => {
+    const testMatch = { test: true, scheduledAt: iso(2026, 10, 8, 12, 0) }
+    expect(startScheduleOf(testMatch)).toBeNull()
+    expect(defaultSetStartTime({ setIndex: 1, sets: [{ index: 1 }], now: TODAY, scheduledAt: startScheduleOf(testMatch) }))
+      .toBe(iso(2026, 10, 8, 12, 41))
+    expect(withActualStartTimeRemark('', { setIndex: 1, startTime: iso(2026, 10, 8, 12, 41), scheduledAt: startScheduleOf(testMatch) })).toBe('')
+    expect(startScheduleOf({ scheduledAt: SCHEDULED })).toBe(SCHEDULED)
+    expect(startScheduleOf(null)).toBeNull()
   })
 
   it('set 1 starts when its first rally starts when there is no schedule', () => {
@@ -132,6 +142,12 @@ describe('correcting set 1 start time afterwards (corrections panel)', () => {
     expect(remarksAfter(remarks, back)).toBe('Ball changed')
   })
 
+  it('a test match: no remark from a set 1 correction', () => {
+    const plan = planSetTimes(events, sets, { setIndex: 1, startTime: iso(2026, 10, 8, 12, 45) },
+      { t: null, matchId: 1, mode: 'live', match: { test: true, scheduledAt: SCHEDULED, remarks: '' } })
+    expect(plan.remarkAdd).toEqual([])
+  })
+
   it('later sets and end-time-only corrections leave the remarks alone', () => {
     const remarks = 'Actual start time: 12:47'
     const p2 = planSetTimes(events, sets, { setIndex: 2, startTime: iso(2026, 10, 8, 13, 12) }, ctxWith(remarks))
@@ -148,7 +164,9 @@ describe('the scoring screen uses it', () => {
     const start = sb.indexOf('// If this is the first rally, show set start time confirmation')
     const block = sb.slice(start, sb.indexOf('setSetStartTimeModal({', start))
     expect(block).toContain('defaultSetStartTime({')
-    expect(block).toContain('scheduledAt: data?.match?.scheduledAt')
+    // a test match's made-up kickoff is no schedule (startScheduleOf)
+    expect(block).toContain('const scheduledAt = startScheduleOf(data?.match)')
+    expect(block).toContain('defaultSetStartTime({ setIndex, sets: allSets, scheduledAt })')
     expect(block).not.toContain('getMinutes() + 1')
   })
 
@@ -156,6 +174,7 @@ describe('the scoring screen uses it', () => {
     const start = sb.indexOf('const confirmSetStartTime = useCallback(')
     const block = sb.slice(start, sb.indexOf('const confirmSetEndTime = useCallback(', start))
     expect(block).toContain('withActualStartTimeRemark(')
+    expect(block).toContain('const scheduledAt = startScheduleOf(matchNow)')
     expect(block).toMatch(/db\.matches\.update\(matchId, \{ remarks/)
   })
 })

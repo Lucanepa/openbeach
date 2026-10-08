@@ -40,7 +40,7 @@ import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot } from '../utils_beach/stateSnapshot_beach'
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
 import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
-import { defaultSetStartTime, scheduledClock, withActualStartTimeRemark } from '../utils_beach/setStartTime_beach'
+import { defaultSetStartTime, scheduledClock, withActualStartTimeRemark, startScheduleOf } from '../utils_beach/setStartTime_beach'
 import { cloudSyncWaitNow } from '../utils_beach/cloudStatus_beach'
 import { formatCourtScore } from '../utils_beach/scoreText_beach'
 import { medicalStartPayload, medicalEndPayload, findOpenMedical, formatMedicalDuration, medicalSecondsLeft, MEDICAL_RECOVERY_SECONDS } from '../utils_beach/medicalEvents_beach'
@@ -3617,9 +3617,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // before the end of a set already played
       const allSets = await db.sets.where('matchId').equals(matchId).toArray()
       const setIndex = data?.set?.index || 1
-      const defaultTime = defaultSetStartTime({ setIndex, sets: allSets, scheduledAt: data?.match?.scheduledAt })
+      const scheduledAt = startScheduleOf(data?.match)
+      const defaultTime = defaultSetStartTime({ setIndex, sets: allSets, scheduledAt })
 
-      setSetStartTimeModal({ setIndex: data?.set?.index, defaultTime, scheduledTime: setIndex === 1 ? scheduledClock(data?.match?.scheduledAt) : null })
+      setSetStartTimeModal({ setIndex: data?.set?.index, defaultTime, scheduledTime: setIndex === 1 ? scheduledClock(scheduledAt) : null })
       return
     }
 
@@ -3793,10 +3794,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // Set 1 at another time than scheduled: "Actual start time: HH:MM" in
     // the remarks (replaced when confirmed again, removed at the scheduled time)
     const matchNow = await db.matches.get(matchId)
-    const actualStartRemarked = setStartTimeModal.setIndex === 1 && !!scheduledClock(matchNow?.scheduledAt)
+    const scheduledAt = startScheduleOf(matchNow)
+    const actualStartRemarked = setStartTimeModal.setIndex === 1 && !!scheduledClock(scheduledAt)
     if (actualStartRemarked) {
       const remarks = withActualStartTimeRemark(matchNow?.remarks, {
-        setIndex: 1, startTime: roundToMinute(time), scheduledAt: matchNow.scheduledAt
+        setIndex: 1, startTime: roundToMinute(time), scheduledAt
       })
       if (remarks !== (matchNow?.remarks || '')) await db.matches.update(matchId, { remarks })
     }

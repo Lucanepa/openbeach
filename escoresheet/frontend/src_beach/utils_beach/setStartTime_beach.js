@@ -57,6 +57,17 @@ export function scheduledClock(scheduledAt) {
   return clock && clock !== '00:00' ? clock : null
 }
 
+/**
+ * The schedule set 1's start is proposed from: the match's scheduledAt, none
+ * for a test match (its scheduledAt is a made-up next 12:00 kickoff,
+ * testSeeds_beach getNextTestMatchStartTime: a test scored at 15:00 was
+ * proposed 12:00, and any real start became an "Actual start time" remark).
+ */
+export function startScheduleOf(match) {
+  if (!match || match.test === true) return null
+  return match.scheduledAt || null
+}
+
 const HOUR = 3600 * 1000
 
 /**
