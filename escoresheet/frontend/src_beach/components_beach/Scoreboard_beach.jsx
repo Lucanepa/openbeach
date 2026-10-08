@@ -5872,25 +5872,20 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     return () => clearInterval(timer)
   }, [timeoutModal?.started, timeoutModal?.startedAt])
 
-  // Track if TTO countdown just finished (for triggering court switch)
-  const ttoCountdownFinishedRef = useRef(false)
+  // The TTO's end (handleTtoEnd, below): the countdown running out ends it
+  // the same way as the scorer's tap
+  const handleTtoEndRef = useRef(null)
 
   // TTO countdown timer
   useEffect(() => {
     if (!ttoModal || !ttoModal.started) return
-    if (ttoModal.countdown <= 0) {
-      // Mark that countdown finished so we can trigger court switch
-      ttoCountdownFinishedRef.current = true
-      return
-    }
+    if (ttoModal.countdown <= 0) return
     const timer = setInterval(() => {
       setTtoModal(prev => {
         if (!prev || !prev.started) return null
         const newCountdown = prev.countdown - 1
         if (newCountdown <= 0) {
-          // Mark that countdown finished
-          ttoCountdownFinishedRef.current = true
-          return { ...prev, countdown: 0 } // Keep modal open briefly to trigger effect
+          return { ...prev, countdown: 0 } // Keep modal open briefly to show "0:00"
         }
         return { ...prev, countdown: newCountdown }
       })
@@ -5923,35 +5918,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     return () => clearInterval(timer)
   }, [medicalModal?.started, medicalModal?.startedAt])
 
-  // Handle TTO countdown finish - trigger court switch if needed
+  // The countdown ran out: the TTO ends as when the scorer taps it (its
+  // change of courts AND its undo snapshot), after "0:00" showed briefly
   useEffect(() => {
-    if (ttoCountdownFinishedRef.current && ttoModal?.countdown === 0) {
-      ttoCountdownFinishedRef.current = false
-      // Call handleTtoEnd after a small delay to show "0:00" briefly
-      const timeout = setTimeout(() => {
-        if (ttoModal?.triggerCourtSwitchAfter && data?.match && data?.set) {
-          const setIndex = ttoModal.set.index
-          if (setIndex >= 1 && setIndex <= 3) {
-            const update = switchSidesUpdate(setIndex, data.match)
-            db.matches.update(matchId, update)
-            if (data.match?.seed_key) {
-              db.sync_queue.add({
-                resource: 'match',
-                action: 'update',
-                payload: { id: data.match.seed_key, ...update },
-                createdAt: new Date().toISOString()
-              })
-            }
-            syncLiveStateToSupabase('court_switch', null, { reason: `set${setIndex}_tto_court_switch` }, null)
-          }
-        }
-        setTtoModal(null)
-        syncLiveStateToSupabase('end_tto')
-        sendActionToReferee('end_tto', {})
-      }, 500)
-      return () => clearTimeout(timeout)
-    }
-  }, [ttoModal?.countdown, ttoModal?.triggerCourtSwitchAfter, ttoModal?.set, matchId, data?.match, data?.set, syncLiveStateToSupabase, sendActionToReferee])
+    if (!ttoModal?.started || ttoModal.countdown !== 0) return
+    const timeout = setTimeout(() => { handleTtoEndRef.current?.() }, 500)
+    return () => clearTimeout(timeout)
+  }, [ttoModal?.started, ttoModal?.countdown]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const getTimeoutsUsed = useCallback(
     side => {
@@ -7097,11 +7070,21 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     syncLiveStateToSupabase('court_switch', null, { reason }, null)
   }), [runCourtSwitchConfirm, courtSwitchModal, matchId, data?.match, data?.set, logEvent, syncLiveStateToSupabase])
 
-  // Handle TTO end - performs court switch if needed (at 21 points in sets 1-2)
+  // Handle TTO end - performs court switch if needed (at 21 points in sets 1-2).
+  // The one end of a TTO, tapped by the scorer or run out (the countdown
+  // effect above calls it too): a TTO that ran out switched the courts but
+  // kept its pre-switch undo snapshot, and Undo of the next event (a rally
+  // start, a time-out) put the teams back on their old sides. Once per TTO:
+  // a tap while the run-out end is pending does not switch twice.
+  const ttoEndedRef = useRef(null)
   const handleTtoEnd = useCallback(async () => {
     if (!ttoModal) return
+    const ttoKey = ttoModal.startedAt || ttoModal
+    if (ttoEndedRef.current === ttoKey) return
+    ttoEndedRef.current = ttoKey
 
     const shouldSwitchCourts = ttoModal.triggerCourtSwitchAfter
+    let switchedSetIndex = null
 
     if (shouldSwitchCourts && data?.match && data?.set) {
       const setIndex = ttoModal.set.index
@@ -7119,9 +7102,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             createdAt: new Date().toISOString()
           })
         }
-
-        // Sync live state after court switch
-        syncLiveStateToSupabase('court_switch', null, { reason: `set${setIndex}_tto_court_switch` }, null)
+        switchedSetIndex = setIndex
       }
     }
 
@@ -7140,11 +7121,18 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       }
     }
 
+    // Sync live state after court switch (after the snapshot: the live state
+    // reads the last event's snapshot)
+    if (switchedSetIndex != null) {
+      syncLiveStateToSupabase('court_switch', null, { reason: `set${switchedSetIndex}_tto_court_switch` }, null)
+    }
+
     // Close the TTO modal
     setTtoModal(null)
     syncLiveStateToSupabase('end_tto')
     sendActionToReferee('end_tto', {})
   }, [ttoModal, matchId, data?.match, data?.set, syncLiveStateToSupabase, captureFullStateSnapshot, sendActionToReferee])
+  handleTtoEndRef.current = handleTtoEnd
 
   // The change of courts (every 7 points, every 5 in set 3) is mandatory; a
   // missed one is made as soon as it is noticed, the score unchanged. So
