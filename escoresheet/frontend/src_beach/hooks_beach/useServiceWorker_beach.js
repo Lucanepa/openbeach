@@ -76,6 +76,49 @@ export async function applyServiceWorkerUpdate({ clearIndexedDB = false, timeout
 }
 
 /**
+ * The desktop app at start (main_beach.jsx calls this in its scoretable
+ * window only). Its binary IS the update, but the page that just loaded is the
+ * previous build, served by the service worker, with the new one installing
+ * next to it (about a second). Until the scorer touches anything, the new
+ * build is applied at once on whatever screen opened: a restored match reloads
+ * into itself, where no update banner is ever shown. After a touch, or after
+ * the grace time, the home screen's banner applies it instead.
+ */
+export function applyUpdateAtStart({
+  win = window,
+  sw = typeof navigator !== 'undefined' ? navigator.serviceWorker : null,
+  apply = () => applyServiceWorkerUpdate(),
+  graceMs = 20000
+} = {}) {
+  if (!sw) return
+  let open = true
+  const close = () => {
+    open = false
+    clearTimeout(timer)
+    win.removeEventListener('pointerdown', close, true)
+    win.removeEventListener('keydown', close, true)
+  }
+  const timer = setTimeout(close, graceMs)
+  win.addEventListener('pointerdown', close, true)
+  win.addEventListener('keydown', close, true)
+  // a first install (no controller yet) is no update
+  const go = () => {
+    if (!open || !sw.controller) return
+    close()
+    apply()
+  }
+  const watch = (worker) => worker?.addEventListener('statechange', () => {
+    if (worker.state === 'installed') go()
+  })
+  sw.getRegistration().then((reg) => {
+    if (!reg || !open) return
+    if (reg.waiting) return go()
+    watch(reg.installing)
+    reg.addEventListener('updatefound', () => watch(reg.installing))
+  }).catch(() => {})
+}
+
+/**
  * Hook to detect service worker updates and provide update functionality.
  * Works with vite-plugin-pwa in 'prompt' mode (vite.config.js): a new worker
  * stays waiting until the scorer taps "Refresh to update", so an update never
