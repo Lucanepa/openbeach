@@ -7675,7 +7675,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         menu: () => setPhoneMenuOpen(true),
         point: (side) => handlePoint(side),
         // The desktop button hands its click event over too
-        startRally: handleStartRally,
+        startRally: () => handleStartRally(),
         timeout: (teamKey) => handleTimeout(teamKey),
         teamBmp: (teamKey) => handleTeamBMP(teamKey),
         refereeBmp: handleRefereeBMP,

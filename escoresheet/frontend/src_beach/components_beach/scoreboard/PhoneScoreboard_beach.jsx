@@ -278,8 +278,8 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
       data-testid="phone-start"
       disabled={rally.startDisabled}
       title={rally.startTitle}
-      // The desktop button hands its click event to handleStartRally too
-      onClick={(e) => actions.startRally(e)}
+      // No argument: a tap goes through the accidental-rally-start check
+      onClick={() => actions.startRally()}
       style={{ ...bigButton, fontSize: 24, fontWeight: 800, borderRadius: 16, background: rally.startDisabled ? 'var(--ov-sunken-strong)' : 'var(--ov-selected)', color: rally.startDisabled ? 'var(--ov-text-faint)' : 'var(--ov-on-dark)', ...style }}
     >
       {rally.startLabel}
