@@ -4747,28 +4747,37 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               </div>
               <SyncStatusIndicator status={matchInfoSyncStatus} onRetry={() => retrySyncForCard('matchInfo')} />
             </div>
+            {/* Six rows, not ten: date and time, site and court, and the
+                category on one row each (the setup did not fit a 900 px
+                window) */}
             <KeyValue variant="detail" className={SUMMARY_KV} items={[
               { label: t('matchSetup.competitionName'), value: <span className={TRUNC} title={league}>{league || t('common.notSet')}</span> },
               { label: t('matchSetup.matchNumber'), value: <span className={cn(TRUNC, 'tabular-nums')}>{gameN || t('common.notSet')}</span> },
-              { label: t('matchSetup.date'), value: <span className={cn(TRUNC, 'tabular-nums')}>{formatDisplayDate(date) || t('common.notSet')}</span> },
-              { label: t('matchSetup.time'), value: <span className={cn(TRUNC, 'tabular-nums')}>{formatDisplayTime(time) || t('common.notSet')}</span> },
-              { label: t('matchSetup.site'), value: <span className={TRUNC} title={city}>{city || t('common.notSet')}</span> },
-              { label: t('matchSetup.court'), value: <span className={TRUNC}>{court || t('common.notSet')}</span> },
-              { label: t('matchSetup.gender'), value: <span className={TRUNC}>{type2 === 'men' ? t('matchSetup.men') : t('matchSetup.women')}</span> },
-              { label: t('matchSetup.coach'), value: <span className={TRUNC}>{hasCoach ? t('common.yes') : t('common.no')}</span> },
-              { label: t('matchSetup.phase'), value: <span className={TRUNC}>{phase === 'main' ? t('matchSetup.mainDraw') : t('matchSetup.qualification')}</span> },
               {
-                label: t('matchSetup.round'),
+                label: t('matchSetup.dateTime'),
+                value: <span className={cn(TRUNC, 'tabular-nums')}>{[formatDisplayDate(date), formatDisplayTime(time)].filter(Boolean).join(' ') || t('common.notSet')}</span>
+              },
+              {
+                label: t('matchSetup.location'),
+                value: <span className={TRUNC} title={city}>{[city, court ? `${t('matchSetup.court')} ${court}` : ''].filter(Boolean).join(' · ') || t('common.notSet')}</span>
+              },
+              {
+                label: t('matchSetup.category', 'Category'),
                 value: (
                   <span className={TRUNC}>
-                    {round === 'pool' ? t('matchSetup.poolPlay') :
-                      round === 'winner' ? t('matchSetup.winnerBracket') :
-                        round === 'class' ? t('matchSetup.classificationRound') :
-                          round === 'semifinals' ? t('matchSetup.semifinals') :
-                            t('matchSetup.finals')}
+                    {[
+                      type2 === 'men' ? t('matchSetup.men') : t('matchSetup.women'),
+                      phase === 'main' ? t('matchSetup.mainDraw') : t('matchSetup.qualification'),
+                      round === 'pool' ? t('matchSetup.poolPlay') :
+                        round === 'winner' ? t('matchSetup.winnerBracket') :
+                          round === 'class' ? t('matchSetup.classificationRound') :
+                            round === 'semifinals' ? t('matchSetup.semifinals') :
+                              t('matchSetup.finals')
+                    ].join(' · ')}
                   </span>
                 )
-              }
+              },
+              { label: t('matchSetup.coach'), value: <span className={TRUNC}>{hasCoach ? t('common.yes') : t('common.no')}</span> }
             ]} />
           </div>
           <div className="flex flex-wrap justify-end gap-2">
@@ -4989,8 +4998,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           <Button
             variant="primary"
             size="xl"
-            className="min-w-40 disabled:cursor-not-allowed"
+            // Disabled, still readable (white on stone-300 could not be read)
+            className="min-w-40 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-600"
+            data-testid="setup-coin-toss"
             disabled={!canProceedToCoinToss}
+            title={!canProceedToCoinToss ? t('matchSetup.setupLayout.coinTossNeeds', 'Complete the match info, the officials and both teams first.') : undefined}
             onClick={async () => {
               // Check if match has no data (no sets, no signatures)
               if (matchId && match) {

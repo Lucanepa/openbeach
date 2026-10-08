@@ -134,3 +134,17 @@ describe('MatchSetup_beach test roster (team 2)', () => {
     expect(screen.getAllByText('DEU').length).toBeGreaterThan(0)
   })
 })
+
+describe('MatchSetup_beach main view layout', () => {
+  it('match info in six rows; the disabled Coin toss button stays readable and says why', async () => {
+    const matchId = await db.matches.add({ status: 'setup', seed_key: 'match_seed_vr3', test: false, createdAt: new Date().toISOString() })
+    render(<MatchSetup matchId={matchId} onStart={() => {}} onReturn={() => {}} onOpenOptions={() => {}} onOpenCoinToss={() => {}} />)
+    const heading = await screen.findByRole('heading', { name: 'Match info' })
+    const card = heading.closest('div.flex.flex-col')
+    expect(card.querySelectorAll('dt').length).toBe(6)
+    const coinToss = screen.getByTestId('setup-coin-toss')
+    expect(coinToss).toBeDisabled()
+    expect(coinToss.className).toMatch(/disabled:text-stone-600/)
+    expect(coinToss.getAttribute('title')).toMatch(/first/)
+  })
+})

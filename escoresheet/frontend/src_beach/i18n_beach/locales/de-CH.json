@@ -434,6 +434,9 @@
     },
     "matchInfoForm": {
       "pastDate": "Dieses Datum liegt in der Vergangenheit."
+    },
+    "setupLayout": {
+      "coinTossNeeds": "Zuerst Spielinfos, Offizielle und beide Teams ausfüllen."
     }
   },
   "scoreboard": {

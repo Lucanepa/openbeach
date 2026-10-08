@@ -435,6 +435,9 @@
     },
     "matchInfoForm": {
       "pastDate": "This date is in the past."
+    },
+    "setupLayout": {
+      "coinTossNeeds": "Complete the match info, the officials and both teams first."
     }
   },
   "scoreboard": {
