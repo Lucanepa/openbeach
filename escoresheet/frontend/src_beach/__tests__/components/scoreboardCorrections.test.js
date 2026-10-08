@@ -99,8 +99,9 @@ describe('Replay rally reaches the server and the tablets', () => {
     const b = body()
     expect(b).toMatch(/await logEvent\('replay'/)
     expect(b).not.toMatch(/db\.events\.add\(/)
-    expect(b).toMatch(/syncToReferee\(\)/)
-    expect(b).toMatch(/syncLiveStateToSupabase\('replay'/)
+    // after the action's commit (runOrDefer), once
+    expect(b).toMatch(/afterRefereeSync\(\)/)
+    expect(b).toMatch(/afterLiveState\('replay'/)
   })
 
   it('closes the dialog before it writes', () => {
@@ -124,7 +125,7 @@ describe('decision change reaches the server and the tablets', () => {
   })
 
   it('the tablets get the swapped point', () => {
-    expect(body()).toMatch(/syncToReferee\(\)/)
+    expect(body()).toMatch(/afterRefereeSync\(\)/)
   })
 })
 

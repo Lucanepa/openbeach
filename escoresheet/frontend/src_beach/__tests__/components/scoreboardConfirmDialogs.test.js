@@ -33,7 +33,9 @@ describe('confirmation dialogs close before they write and refuse a double tap',
   for (const [head, end, close, runner] of DIALOGS) {
     it(head.replace('const ', '').replace(' = useCallback(', ''), () => {
       const b = between(head, end)
-      expect(b).toContain(`useCallback(${head.includes('handleBMPOutcome') ? '(result, pointToTeam = null)' : '()'} => ${runner}(async () => {`)
+      const params = head.includes('handleBMPOutcome') ? '(result, pointToTeam = null)' : '()'
+      // the decision change runs as one scorer action inside its confirm
+      expect(b).toMatch(new RegExp(`useCallback\\(${params.replace(/[()]/g, '\\$&')} => ${runner}\\((async \\(\\) => \\{|\\(\\) => runAction\\('\\w+', async \\(\\) => \\{)`))
       expect(sb).toContain(`const ${runner} = useConfirmAction(onConfirmFailed)`)
       const firstAwait = b.indexOf('await ')
       expect(b.indexOf(close)).toBeGreaterThan(-1)
@@ -60,10 +62,9 @@ describe('confirmation dialogs close before they write and refuse a double tap',
 })
 
 describe('point buttons', () => {
-  it('a double tap while the first point is written gives one point', () => {
+  it('a double tap while the first point is written (or not on screen yet) gives one point', () => {
     const b = between('const handlePoint = useCallback(', 'const handleStartRally = useCallback(')
-    expect(b).toMatch(/if \(pointInFlightRef\.current && !fromPenalty\) return/)
-    expect(b).toMatch(/pointInFlightRef\.current = true/)
-    expect(b).toMatch(/finally \{\s*pointInFlightRef\.current = false/)
+    // useScorerActions_beach drops a second call with the same key
+    expect(b).toContain("await runAction(fromPenalty ? null : 'point', () => awardPoint(side, skipConfirmation, fromPenalty))")
   })
 })

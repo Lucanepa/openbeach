@@ -149,5 +149,25 @@ describe('Scoreboard_beach: scorer actions against the real database', () => {
     await settle()
     expect((await ofType('sanction')).length).toBe(2)
     expect(await score()).toEqual([2, 1])
+
+    // Four more points for team 1: at 6:1 (7 points) the change of courts
+    // dialog opens with the score (deferUi), and confirming it logs the
+    // court_switch with its sync job
+    for (let i = 0; i < 4; i++) {
+      await waitFor(() => expect(button('Start rally')).toBeTruthy())
+      fireEvent.click(button('Start rally'))
+      await waitFor(() => expect(button('Point A')).toBeTruthy())
+      tapTwice(button('Point A'))
+      await waitFor(async () => expect((await score())[0]).toBe(3 + i))
+    }
+    await waitFor(() => expect(button('Switch courts')).toBeTruthy())
+    expect(await score()).toEqual([6, 1])
+    await settle()
+    tapTwice(button('Switch courts'))
+    await waitFor(async () => expect(await ofType('court_switch')).toHaveLength(1))
+    await settle()
+    expect(await ofType('court_switch')).toHaveLength(1)
+    const courtSwitch = (await ofType('court_switch'))[0]
+    expect((await jobs()).some(j => j.payload.external_id === `${SEED}:e:${courtSwitch.id}`)).toBe(true)
   }, 30000)
 })
