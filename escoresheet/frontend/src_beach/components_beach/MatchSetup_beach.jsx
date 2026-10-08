@@ -16,7 +16,6 @@ import { scorerPublisher, readRelayBundle, ensureGamePin } from '../utils_beach/
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { uploadBackupToCloud, uploadLogsToCloud } from '../utils_beach/logger_beach'
 import { apiFrom } from '../lib_beach/apiClient_beach'
-import { setExtId } from '../utils_beach/syncIds_beach'
 import { buildConnectionPins } from '../utils_beach/connectionPins_beach'
 import { cloudSyncWaitNow } from '../utils_beach/cloudStatus_beach'
 import { cardSyncStatus, isSignedInOnDevice } from '../utils_beach/syncDisplay_beach'
@@ -28,7 +27,7 @@ import { COMPETITIONS_ENABLED } from '../utils_beach/features_beach'
 import { generateMatchSeedKey } from '../utils_beach/serverDataSync_beach'
 import { askText } from '../utils_beach/askText_beach'
 import { TEST_TEAM_SEED_DATA, refereeConnectionDefault } from '../constants_beach/testSeeds_beach'
-import { splitLocalDateTime, parseLocalDateTimeToISO, roundToMinute } from '../utils_beach/timeUtils_beach'
+import { splitLocalDateTime, parseLocalDateTimeToISO } from '../utils_beach/timeUtils_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { useSavedTeams as useSavedTeams_beach } from '../hooks_beach/useSavedTeams_beach'
 import SavedTeamPickerModal from './SavedTeamPickerModal_beach'
@@ -2442,17 +2441,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     })
   }
 
-  function switchTeams() {
-    const temp = teamA
-    setTeamA(teamB)
-    setTeamB(temp)
-  }
-
-  function switchServe() {
-    setServeA(!serveA)
-    setServeB(!serveB)
-  }
-
   // Open scoresheet in a new window
   async function openScoresheet() {
     if (!matchId) {
@@ -2532,237 +2520,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     if (!opened.ok) {
       setNoticeModal({ message: t('matchSetup.validation.allowPopups') })
     }
-  }
-
-  async function confirmCoinToss() {
-
-    // Captain signatures are collected in the CoinToss component for beach volleyball
-
-    if (!matchId) {
-      console.error('[COIN TOSS] No match ID available')
-      setNoticeModal({ message: t('matchSetup.modals.errorNoMatchId') })
-      return
-    }
-
-    const matchData = await db.matches.get(matchId)
-    if (!matchData) {
-      return
-    }
-
-    // Determine which team serves first
-    const firstServeTeam = serveA ? teamA : teamB
-
-    // Update match with signatures (only for official matches) and coin toss result
-    await db.transaction('rw', db.matches, db.players, db.sync_queue, db.events, async () => {
-      // Build update object
-      const updateData = {
-        firstServe: firstServeTeam, // 'team1' or 'team2'
-        coinTossTeamA: teamA, // 'team1' or 'team2'
-        coinTossTeamB: teamB, // 'team1' or 'team2'
-        coinTossServeA: serveA, // true or false
-        coinTossServeB: serveB, // true or false
-        coinTossConfirmed: true  // Mark coin toss as confirmed
-      }
-      // Captain signatures are collected in CoinToss component
-
-      const updateResult = await db.matches.update(matchId, updateData)
-
-      // Check if coin toss event already exists
-      const existingCoinTossEvent = await db.events
-        .where('matchId').equals(matchId)
-        .and(e => e.type === 'coin_toss')
-        .first()
-
-      // Create coin_toss event with seq=1 if it doesn't exist
-      if (!existingCoinTossEvent) {
-        await db.events.add({
-          matchId: matchId,
-          setIndex: 1, // Coin toss is before set 1
-          type: 'coin_toss',
-          payload: {
-            teamA: teamA,
-            teamB: teamB,
-            serveA: serveA,
-            serveB: serveB,
-            firstServe: firstServeTeam
-          },
-          ts: new Date().toISOString(),
-          seq: 1 // Coin toss always gets seq=1
-        })
-      }
-
-      // Add match update to sync queue (only sync if match has seed_key)
-      const updatedMatch = await db.matches.get(matchId)
-      if (updatedMatch?.seed_key) {
-        await db.sync_queue.add({
-          resource: 'match',
-          action: 'update',
-          payload: {
-            id: updatedMatch.seed_key,
-            status: 'live', // Status will be 'live' after match setup is confirmed
-            scheduled_at: updatedMatch.scheduledAt || null,
-            // JSONB columns
-            match_info: {
-              hall: updatedMatch.hall || '',
-              city: updatedMatch.city || '',
-              league: updatedMatch.league || ''
-            },
-            coin_toss: {
-              team_a: teamA,
-              team_b: teamB,
-              confirmed: true,
-              first_serve: firstServeTeam
-            },
-            // Captain signatures synced from CoinToss component
-            team1_data: { name: team1Name?.trim() || '', short_name: team1ShortName || '', color: team1Color, country: team1Country || '' },
-            team2_data: { name: team2Name?.trim() || '', short_name: team2ShortName || '', color: team2Color, country: team2Country || '' },
-            players_team1: team1Roster.filter(p => p.firstName || p.lastName).map(p => ({
-              number: p.number || null,
-              first_name: p.firstName || '',
-              last_name: p.lastName || '',
-              dob: p.dob || null,
-              is_captain: !!p.isCaptain
-            })),
-            players_team2: team2Roster.filter(p => p.firstName || p.lastName).map(p => ({
-              number: p.number || null,
-              first_name: p.firstName || '',
-              last_name: p.lastName || '',
-              dob: p.dob || null,
-              is_captain: !!p.isCaptain
-            })),
-            officials: updatedMatch.officials || []
-          },
-          ts: new Date().toISOString(),
-          status: 'queued'
-        })
-      }
-
-      // Update players for both teams
-      if (matchData.team1Id && team1Roster.length) {
-        // Get existing players
-        const existingPlayers = await db.players.where('teamId').equals(matchData.team1Id).toArray()
-
-        // Update or add players
-        for (const p of team1Roster) {
-          const existingPlayer = existingPlayers.find(ep => ep.number === p.number)
-          if (existingPlayer) {
-            // Update existing player
-            await db.players.update(existingPlayer.id, {
-              name: `${p.lastName} ${p.firstName}`,
-              lastName: p.lastName,
-              firstName: p.firstName,
-              dob: p.dob || null,
-              isCaptain: !!p.isCaptain
-            })
-          } else {
-            // Add new player
-            await db.players.add({
-              teamId: matchData.team1Id,
-              number: p.number,
-              name: `${p.lastName} ${p.firstName}`,
-              lastName: p.lastName,
-              firstName: p.firstName,
-              dob: p.dob || null,
-              isCaptain: !!p.isCaptain,
-              role: null,
-              createdAt: new Date().toISOString()
-            })
-          }
-        }
-
-        // Delete players that are no longer in the roster
-        const rosterNumbers = new Set(team1Roster.map(p => p.number))
-        for (const ep of existingPlayers) {
-          if (!rosterNumbers.has(ep.number)) {
-            await db.players.delete(ep.id)
-          }
-        }
-      }
-
-      if (matchData.team2Id && team2Roster.length) {
-        // Get existing players
-        const existingPlayers = await db.players.where('teamId').equals(matchData.team2Id).toArray()
-
-        // Update or add players
-        for (const p of team2Roster) {
-          const existingPlayer = existingPlayers.find(ep => ep.number === p.number)
-          if (existingPlayer) {
-            // Update existing player
-            await db.players.update(existingPlayer.id, {
-              name: `${p.lastName} ${p.firstName}`,
-              lastName: p.lastName,
-              firstName: p.firstName,
-              dob: p.dob || null,
-              isCaptain: !!p.isCaptain
-            })
-          } else {
-            // Add new player
-            await db.players.add({
-              teamId: matchData.team2Id,
-              number: p.number,
-              name: `${p.lastName} ${p.firstName}`,
-              lastName: p.lastName,
-              firstName: p.firstName,
-              dob: p.dob || null,
-              isCaptain: !!p.isCaptain,
-              role: null,
-              createdAt: new Date().toISOString()
-            })
-          }
-        }
-
-        // Delete players that are no longer in the roster
-        const rosterNumbers = new Set(team2Roster.map(p => p.number))
-        for (const ep of existingPlayers) {
-          if (!rosterNumbers.has(ep.number)) {
-            await db.players.delete(ep.id)
-          }
-        }
-      }
-    })
-
-    // Create first set
-    const firstSetId = await db.sets.add({ matchId: matchId, index: 1, team1Points: 0, team2Points: 0, finished: false })
-
-    // Get match to check if it's a test match
-    const matchForSet = await db.matches.get(matchId)
-    const isTest = matchForSet?.test || false
-
-    // Only sync official matches (not test matches) with seed_key
-    if (!isTest && matchForSet?.seed_key) {
-      await db.sync_queue.add({
-        resource: 'set',
-        action: 'insert',
-        payload: {
-          external_id: setExtId(matchForSet.seed_key, firstSetId),
-          match_id: matchForSet.seed_key, // Use seed_key (external_id) for Supabase lookup
-          index: 1,
-          team1_points: 0,
-          team2_points: 0,
-          finished: false,
-          start_time: roundToMinute(new Date().toISOString())
-        },
-        ts: roundToMinute(new Date().toISOString()),
-        status: 'queued'
-      })
-    }
-
-    // Update match status to 'live' to indicate match has started
-    await db.matches.update(matchId, { status: 'live' })
-
-    // Ensure all roster updates are committed before navigating
-    // Force a small delay to ensure database updates are fully committed
-    await new Promise(resolve => setTimeout(resolve, 100))
-
-    // Sync to server immediately so referee dashboards receive data before Scoreboard mounts
-    const finalMatchData = await db.matches.get(matchId)
-    if (finalMatchData) {
-      await syncMatchToServer(finalMatchData, true) // Full sync with teams, players, sets, events
-    }
-
-    // Start the match - directly navigate to scoreboard
-    // onStart (continueMatch) will now allow test matches when status is 'live' and coin toss is confirmed
-    onStart(matchId)
   }
 
   // (The "search uploaded roster" handlers are gone: nothing called them, they
