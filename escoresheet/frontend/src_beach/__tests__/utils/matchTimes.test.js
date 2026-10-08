@@ -34,6 +34,26 @@ describe('beach set and match times: the first rally', () => {
     expect(setDurationMinutes(edited, events)).toBe(21)
   })
 
+  it('the dialog shown again (first rally replayed, or first point undone) is not a correction', () => {
+    // set 1 scheduled 14:30, the scorer typed 16:05; the first rally was
+    // replayed (no point yet), so "Start rally" opened the dialog again with
+    // the scheduled 14:30 proposed, and the scorer kept it
+    const shownAgain = [
+      { type: 'set_start', setIndex: 1, seq: 1, ts: iso(16, 5), payload: { setIndex: 1, startTime: iso(16, 5) } },
+      { type: 'rally_start', setIndex: 1, seq: 2, ts: iso(16, 5, 20) },
+      { type: 'replay', setIndex: 1, seq: 3, ts: iso(16, 5, 50) },
+      { type: 'set_start', setIndex: 1, seq: 4, ts: iso(14, 30), payload: { setIndex: 1, startTime: iso(14, 30) } },
+      { type: 'rally_start', setIndex: 1, seq: 5, ts: iso(16, 6, 30) },
+      { type: 'point', setIndex: 1, seq: 6, ts: iso(16, 6, 55) }
+    ]
+    const kept = { ...set1, startTime: iso(14, 30) }
+    expect(setStartMs(kept, shownAgain)).toBe(min(16, 5))
+    // in any array order
+    expect(setStartMs(kept, [...shownAgain].reverse())).toBe(min(16, 5))
+    // a correction after the last dialog still wins
+    expect(setStartMs({ ...set1, startTime: iso(16, 4) }, shownAgain)).toBe(min(16, 4))
+  })
+
   it('without the first rally_start (a cloud copy), the first point bounds the start', () => {
     // beach adds the first rally of a set without a sync job: a match read
     // back from the server lacks it, its second rally is not the start

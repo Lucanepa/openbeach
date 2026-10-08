@@ -57,11 +57,15 @@ const timesOf = (events: TimedEvent[] | undefined, setIndex: number, type: strin
 export function setStartMs(set: TimedSet | null | undefined, events?: TimedEvent[]): number | null {
   if (!set) return null
   const confirmed = ms(set.startTime)
-  // the time the "Set n start time" dialog confirmed, as its set_start event recorded it
+  // the time the "Set n start time" dialog LAST confirmed, as its set_start
+  // event recorded it. The dialog opens again while the set has no point (its
+  // first rally replayed, its first point undone) and set 1 then proposes the
+  // scheduled time again: that later confirmation is not a correction.
   const dialog = (Array.isArray(events) ? events : [])
     .filter(e => e && e.setIndex === set.index && e.type === 'set_start')
-    .map(e => ms(e.payload?.startTime ?? e.ts))
-    .find((n): n is number => n !== null) ?? null
+    .map((e, i) => ({ at: ms(e.payload?.startTime ?? e.ts), seq: typeof e.seq === 'number' ? e.seq : -Infinity, i }))
+    .filter((d): d is { at: number; seq: number; i: number } => d.at !== null)
+    .sort((a, b) => (b.seq - a.seq) || (b.i - a.i))[0]?.at ?? null
   if (confirmed !== null && dialog !== null && toMinute(confirmed) !== toMinute(dialog)) return toMinute(confirmed)
   const rallies = timesOf(events, set.index, 'rally_start')
   const points = timesOf(events, set.index, 'point')
