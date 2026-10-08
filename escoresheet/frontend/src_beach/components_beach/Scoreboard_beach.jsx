@@ -3387,6 +3387,120 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     [pointsBySide.left, pointsBySide.right, isCompactMode, isLaptopMode]
   )
 
+  // What a point on the score opens, whatever gave it: the Point buttons, a
+  // penalty (delay or misconduct), a referee BMP, a successful team BMP and a
+  // decision change all come here (a referee BMP's point reached 7 or 21
+  // without a change of courts or a TTO). In order: the change of courts
+  // every 7 points (every 5 in set 3), the technical time-out at 21 in sets
+  // 1-2 (its change of courts made when it ends), else the set end. Each one
+  // once for its total: a successful team BMP or a decision change moves the
+  // point to the other team without changing the total, so a change of
+  // courts already made (its court_switch event) or a TTO already logged is
+  // not made again, and one whose dialog is open shows the new score. That
+  // also opens what a set-ending point skipped when the point is moved
+  // (21:0 taken back to 20:1 is 21 points: the TTO). `newRally`: false when
+  // the total did not change (no "One point to ..." notice again).
+  // Called inside the point's action: only Dexie reads and writes.
+  const afterPointScored = useCallback(async ({ set, team1Points, team2Points, teamKey, newRally = true }) => {
+    if (!set) return
+    const totalScore = team1Points + team2Points
+    const setIndex = set.index
+    const is3rdSet = setIndex === 3
+    const courtChangeInterval = is3rdSet ? 5 : 7
+    const pointsToWin = is3rdSet ? 15 : 21
+    const ttoSet = setIndex >= 1 && setIndex <= 2
+
+    // A set-ending point opens the set end, not a change of courts or a TTO
+    const setIsEnding = (team1Points >= pointsToWin && team1Points - team2Points >= 2) ||
+                        (team2Points >= pointsToWin && team2Points - team1Points >= 2)
+
+    if (!setIsEnding) {
+      // The point was moved off a set-ending score: a set-end dialog of this
+      // set is out of date (it came back under the BMP dialog asked from it,
+      // and confirming it ended the set at 20:1)
+      if (!newRally) {
+        deferUi(() => setSetEndTimeModal(prev => (prev && prev.setIndex === setIndex ? null : prev)))
+      }
+
+      if (newRally) {
+        const pointsUntilSwitch = courtChangeInterval - (totalScore % courtChangeInterval)
+        // One point to TTO: at 20 in sets 1-2 only
+        if (totalScore === 20 && ttoSet) {
+          deferUi(() => setPreEventPopup({ message: 'One point to TTO' }))
+        }
+        // One point to switch (but not at 20 since that shows TTO message)
+        else if (pointsUntilSwitch === 1 && totalScore > 0) {
+          deferUi(() => setPreEventPopup({ message: 'One point to switch' }))
+        }
+      }
+
+      const atTto = totalScore === 21 && ttoSet
+      const atSwitch = totalScore > 0 && totalScore % courtChangeInterval === 0
+      if (atTto || atSwitch) {
+        const setEvents = (await db.events.where('matchId').equals(matchId).toArray())
+          .filter(e => (e.setIndex ?? 1) === setIndex)
+
+        // At 21 points in Sets 1-2: TTO modal that triggers court switch when dismissed
+        if (atTto) {
+          if (setEvents.some(e => e.type === 'technical_to')) {
+            // Logged already (by the point the BMP or the decision moved): an
+            // open TTO dialog shows the new score
+            deferUi(() => setTtoModal(prev => prev ? { ...prev, team1Points, team2Points, teamThatScored: teamKey } : prev))
+            return
+          }
+          // Log technical_to event for PDF scoresheet
+          // Store pre-court-switch overrides so undo can restore them
+          const match = await db.matches.get(matchId)
+          const preSwitchOverrides = match?.setLeftTeamOverrides ? { ...match.setLeftTeamOverrides } : {}
+          const ttoSeq = await getNextSeq()
+          const ttoEventId = await db.events.add({
+            matchId,
+            setIndex,
+            type: 'technical_to',
+            payload: { preSwitchOverrides },
+            ts: new Date().toISOString(),
+            seq: ttoSeq
+          })
+
+          // Capture state snapshot for undo system
+          const ttoSnapshot = await captureFullStateSnapshot()
+          if (ttoSnapshot) {
+            await db.events.update(ttoEventId, { stateSnapshot: ttoSnapshot })
+          }
+
+          // Show TTO modal directly - court switch will happen when TTO ends
+          deferUi(() => setTtoModal({
+            set,
+            team1Points,
+            team2Points,
+            countdown: TTO_SECONDS,
+            started: false,
+            triggerCourtSwitchAfter: true,  // Flag to trigger court switch when TTO ends
+            teamThatScored: teamKey  // Track which team scored to allow BMP for losing team
+          }))
+          return // Don't check for set end yet, wait for TTO + court switch
+        }
+
+        // Regular court change: every 7 pts in S1/S2, every 5 pts in S3,
+        // unless made already at this total
+        const switched = setEvents.some(e => e.type === 'court_switch' &&
+          ((e.payload?.score?.team1 || 0) + (e.payload?.score?.team2 || 0)) === totalScore)
+        if (!switched) {
+          deferUi(() => setCourtSwitchModal({
+            set,
+            team1Points,
+            team2Points,
+            teamThatScored: teamKey
+          }))
+        }
+        return // Don't check for set end yet, wait for court switch confirmation
+      }
+    }
+
+    // If the set ended, checkSetEnd shows the confirmation modal
+    await checkSetEnd(set, team1Points, team2Points)
+  }, [matchId, checkSetEnd, getNextSeq, captureFullStateSnapshot, deferUi])
+
   const awardPoint = useCallback(
     async (side, skipConfirmation = false, fromPenalty = false) => {
       const teamKey = mapSideToTeamKey(side)
@@ -3496,85 +3610,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Reset rally start time since rally ended
       rallyStartTimeRef.current = null
 
-      // Beach Volleyball: Court change and TTO logic
-      const totalScore = team1Points + team2Points
-      const currentSetIndex = data.set.index
-      const is3rdSet = currentSetIndex === 3
-      const courtChangeInterval = is3rdSet ? 5 : 7
-      const pointsToWin = is3rdSet ? 15 : 21
-
-      // Check if this point ends the set (don't show court switch/TTO if set is ending)
-      const setIsEnding = (team1Points >= pointsToWin && team1Points - team2Points >= 2) ||
-                          (team2Points >= pointsToWin && team2Points - team1Points >= 2)
-
-      // Only show court switch/TTO messages if set is NOT ending
-      if (!setIsEnding) {
-        // "One point to..." notifications
-        const pointsUntilSwitch = courtChangeInterval - (totalScore % courtChangeInterval)
-
-        // One point to TTO: at 20 in sets 1-2 only
-        if (totalScore === 20 && currentSetIndex >= 1 && currentSetIndex <= 2) {
-          deferUi(() => setPreEventPopup({ message: 'One point to TTO' }))
-        }
-        // One point to switch (but not at 20 since that shows TTO message)
-        else if (pointsUntilSwitch === 1 && totalScore > 0) {
-          deferUi(() => setPreEventPopup({ message: 'One point to switch' }))
-        }
-
-        // At 21 points in Sets 1-2: TTO modal that triggers court switch when dismissed
-        if (totalScore === 21 && currentSetIndex >= 1 && currentSetIndex <= 2) {
-          // Log technical_to event for PDF scoresheet
-          // Store pre-court-switch overrides so undo can restore them
-          const preSwitchOverrides = data.match?.setLeftTeamOverrides ? { ...data.match.setLeftTeamOverrides } : {}
-          const ttoSeq = await getNextSeq()
-          const ttoEventId = await db.events.add({
-            matchId,
-            setIndex: currentSetIndex,
-            type: 'technical_to',
-            payload: { preSwitchOverrides },
-            ts: new Date().toISOString(),
-            seq: ttoSeq
-          })
-
-          // Capture state snapshot for undo system
-          const ttoSnapshot = await captureFullStateSnapshot()
-          if (ttoSnapshot) {
-            await db.events.update(ttoEventId, { stateSnapshot: ttoSnapshot })
-          }
-
-          // Show TTO modal directly - court switch will happen when TTO ends
-          const ttoSet = data.set
-          deferUi(() => setTtoModal({
-            set: ttoSet,
-            team1Points,
-            team2Points,
-            countdown: TTO_SECONDS,
-            started: false,
-            triggerCourtSwitchAfter: true,  // Flag to trigger court switch when TTO ends
-            teamThatScored: teamKey  // Track which team scored to allow BMP for losing team
-          }))
-          return // Don't check for set end yet, wait for TTO + court switch
-        }
-
-        // Regular court change: every 7 pts in S1/S2, every 5 pts in S3
-        if (totalScore > 0 && totalScore % courtChangeInterval === 0) {
-          // Show court switch modal
-          const switchSet = data.set
-          deferUi(() => setCourtSwitchModal({
-            set: switchSet,
-            team1Points,
-            team2Points,
-            teamThatScored: teamKey
-          }))
-          return // Don't check for set end yet, wait for court switch confirmation
-        }
-      }
-
+      // The change of courts, the TTO or the set end this point reaches.
       // Awaited: inside the point's transaction (its dialog opens with the score)
-      await checkSetEnd(freshCurrentSet, team1Points, team2Points)
-      // If set didn't end, we're done. If it did, checkSetEnd will show the confirmation modal
+      await afterPointScored({ set: freshCurrentSet, team1Points, team2Points, teamKey })
     },
-    [data?.set, data?.events, logEvent, mapSideToTeamKey, checkSetEnd, getCurrentServe, matchId, deferUi]
+    [data?.set, data?.events, logEvent, mapSideToTeamKey, afterPointScored, getCurrentServe, matchId, deferUi]
   )
 
   const handlePoint = useCallback(
@@ -5376,9 +5416,22 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
   }, { reason: 'decision_change' }), [runAction, replayRallyConfirm, data?.set, matchId, discardEvents, applyPointRemovalScore, logEvent, afterRefereeSync, afterLiveState, afterScoresheetRefresh])
 
-  const cancelReplayRally = useCallback(() => {
+  // Cancelled: nothing changed. Opened from the change-of-courts or the
+  // set-end dialog (which it closed), that dialog comes back: the change of
+  // courts is mandatory, and the set end was left without its dialog.
+  const cancelReplayRally = useCallback(async () => {
+    const pending = replayRallyConfirm
     setReplayRallyConfirm(null)
-  }, [])
+    if (!pending?.fromDialog || !data?.set) return
+    const setRow = (await db.sets.get(data.set.id)) || data.set
+    await afterPointScored({
+      set: setRow,
+      team1Points: setRow.team1Points || 0,
+      team2Points: setRow.team2Points || 0,
+      teamKey: pending.event?.payload?.team,
+      newRally: false
+    })
+  }, [replayRallyConfirm, data?.set, afterPointScored])
 
   // Handle decision change - either swap point to other team or replay rally
   // The swap reaches the server and the tablets: the point is written to the
@@ -5460,6 +5513,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         }
         await queueSetScoreSync(db, { matchId, setIndex: data.set.index })
 
+        // What the swapped point reaches, as for a point from the buttons:
+        // the set end (19:20 swapped to 19:21), or the change of courts / TTO
+        // (the total is the same: one made already is not made again; one a
+        // set-ending point skipped opens, 21:0 swapped to 20:1 is the TTO; one
+        // whose dialog the decision change closed opens again)
+        await afterPointScored({ set: { ...setRow, ...newScore }, team1Points: newScore.team1Points, team2Points: newScore.team2Points, teamKey: newTeam, newRally: false })
+
         // The tablets get the swapped point (they kept the old team's point:
         // only the live state was pushed), the live state its fresh snapshot
         afterRefereeSync()
@@ -5477,7 +5537,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       await handleReplayRally()
       return // handleReplayRally already closes the modal and syncs
     }
-  }, { reason: 'decision_change' })), [runDecisionChange, runAction, replayRallyConfirm, data?.set, matchId, logEvent, discardEvents, handleReplayRally, afterRefereeSync, afterLiveState, afterScoresheetRefresh])
+  }, { reason: 'decision_change' })), [runDecisionChange, runAction, replayRallyConfirm, data?.set, matchId, logEvent, discardEvents, handleReplayRally, afterPointScored, afterRefereeSync, afterLiveState, afterScoresheetRefresh])
 
 
 
@@ -5696,10 +5756,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       console.log(`[BMP-LIVE] Logging BMP point event:`, JSON.stringify(bmpPointPayload), `parentSeq=${bmpModal.requestSeq}`)
       await logEvent('point', bmpPointPayload, { parentSeq: bmpModal.requestSeq })
 
-      // Check if this point ends the set
+      // What the point reaches, as for a point from the buttons: the change
+      // of courts, the TTO or the set end. A referee BMP decides the rally in
+      // play (one point more); a successful team BMP moves the rally's point
+      // to the requesting team (the same total: what that total opened is
+      // not made twice, an open dialog shows the new score)
       const freshSet = await db.sets.get(currentSetId)
       if (freshSet) {
-        await checkSetEnd(freshSet, team1Points, team2Points)
+        await afterPointScored({ set: freshSet, team1Points, team2Points, teamKey: scoringTeam, newRally: isRefereeBMP })
       }
     } else {
       // Unsuccessful, judgment_impossible - no score change
@@ -5720,44 +5784,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
     // Sync live state
     syncLiveStateToSupabase('bmp_outcome', requestingTeam || pointToTeam, { result })
-
-    // Check if court switch/TTO modals need to close due to score change after BMP
-    if (shouldChangeScore) {
-      const newTotal = team1Points + team2Points
-      const setIndex = data.set.index
-
-      // Court switch modal: close if new total no longer hits threshold
-      if (courtSwitchModal) {
-        const interval = setIndex === 3 ? 5 : 7
-        if (newTotal === 0 || newTotal % interval !== 0) {
-          setCourtSwitchModal(null)
-        } else {
-          // Update modal with new scores
-          setCourtSwitchModal(prev => prev ? { ...prev, team1Points, team2Points } : null)
-        }
-      }
-
-      // TTO modal: close if new total is not 21 (TTO only at 21 points in sets 1-2)
-      if (ttoModal) {
-        if (newTotal !== 21 || setIndex === 3) {
-          // Delete orphaned technical_to event since TTO was cancelled by BMP
-          const ttoEvent = data?.events?.find(e =>
-            e.type === 'technical_to' &&
-            (e.setIndex || 1) === setIndex
-          )
-          if (ttoEvent) {
-            await discardEvents([ttoEvent])
-          }
-          setTtoModal(null)
-          syncLiveStateToSupabase('end_tto')
-          sendActionToReferee('end_tto', {})
-        } else {
-          // Update modal with new scores
-          setTtoModal(prev => prev ? { ...prev, team1Points, team2Points } : null)
-        }
-      }
-    }
-  }), [runBMPOutcome, bmpOutcomeModal, data?.set, data?.events, logEvent, checkSetEnd, syncLiveStateToSupabase, courtSwitchModal, ttoModal, sendActionToReferee, discardEvents])
+  }), [runBMPOutcome, bmpOutcomeModal, data?.set, logEvent, checkSetEnd, afterPointScored, syncLiveStateToSupabase])
 
   // Count unsuccessful BMPs per team in current set (each team has 2 unsuccessful per set)
   const getUnsuccessfulBMPsUsed = useCallback((teamKey) => {
@@ -15831,7 +15858,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
               if (pointEvent) {
                 // Open decision modal (no selectedOption forces choice)
-                setReplayRallyConfirm({ event: pointEvent, description: 'Decision Change', selectedOption: null })
+                setReplayRallyConfirm({ event: pointEvent, description: 'Decision Change', selectedOption: null, fromDialog: true })
               }
             }
 
@@ -16754,7 +16781,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
                     const pointEvent = currentSetEvents.find(e => e.type === 'point')
                     if (pointEvent) {
-                      setReplayRallyConfirm({ event: pointEvent, description: 'Decision Change', selectedOption: null })
+                      setReplayRallyConfirm({ event: pointEvent, description: 'Decision Change', selectedOption: null, fromDialog: true })
                     }
                   }
                   // Close court switch modal

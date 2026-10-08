@@ -41,12 +41,16 @@ describe('a point is one action', () => {
 
   it('the dialogs a point opens come with its data (deferUi), the set end check is awaited inside', () => {
     const b = between('const awardPoint = useCallback(', 'const handlePoint = useCallback(')
-    for (const setter of ['setCourtSwitchModal', 'setTtoModal', 'setPreEventPopup', 'setAccidentalPointConfirmModal']) {
-      expect(b).toContain(`deferUi(() => ${setter}(`)
+    // what the point reaches (change of courts, TTO, set end): the shared
+    // post-point step every point path calls, awaited inside the action
+    const after = between('const afterPointScored = useCallback(', 'const awardPoint = useCallback(')
+    expect(b).toContain('await afterPointScored({ set: freshCurrentSet, team1Points, team2Points, teamKey })')
+    for (const [setter, body] of [['setCourtSwitchModal', after], ['setTtoModal', after], ['setPreEventPopup', after], ['setAccidentalPointConfirmModal', b]]) {
+      expect(body).toContain(`deferUi(() => ${setter}(`)
       // never set directly (the onConfirm closure, run later, is no part of the action)
-      expect(b.replace(/setAccidentalPointConfirmModal\(null\)/g, '').match(new RegExp(`(?<!deferUi\\(\\(\\) => )${setter}\\(`, 'g'))).toBeNull()
+      expect(body.replace(/setAccidentalPointConfirmModal\(null\)/g, '').match(new RegExp(`(?<!deferUi\\(\\(\\) => )${setter}\\(`, 'g'))).toBeNull()
     }
-    expect(b).toContain('await checkSetEnd(freshCurrentSet, team1Points, team2Points)')
+    expect(after).toContain('await checkSetEnd(set, team1Points, team2Points)')
     const check = between('const checkSetEnd = useCallback(', '// Determine who has serve')
     expect(check.match(/deferUi\(\(\) => setSetEndTimeModal\(/g)).toHaveLength(2)
   })
