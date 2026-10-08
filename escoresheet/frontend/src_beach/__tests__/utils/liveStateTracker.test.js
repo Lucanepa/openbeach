@@ -233,4 +233,30 @@ describe('tracker.hold: a newer live state waits for the bundle', () => {
     vi.advanceTimersByTime(LIVE_STATE_HOLD_MS)
     expect(third).not.toHaveBeenCalled()
   })
+
+  // The referee's footer (last action) is not in the bundle: dropped with the
+  // held score, a database-row point never reached the footer
+  it('a bundle that ends the hold runs onBundle once, not apply; the timer does not', () => {
+    const tracker = createLiveStateTracker({ now: clock })
+    tracker.bundle(bundle(10, 8))
+    tracker.liveState(live(1000, 11, 8))
+    const shown = vi.fn()
+    const withBundle = vi.fn()
+    tracker.hold(shown, { onBundle: withBundle })
+    tracker.bundle(bundle(11, 8, { liveState: live(1000, 11, 8) }))
+    expect(withBundle).toHaveBeenCalledTimes(1)
+    tracker.bundle(bundle(11, 8, { liveState: live(1000, 11, 8) }))
+    vi.advanceTimersByTime(LIVE_STATE_HOLD_MS)
+    expect(withBundle).toHaveBeenCalledTimes(1)
+    expect(shown).not.toHaveBeenCalled()
+
+    const shownAlone = vi.fn()
+    const notWithBundle = vi.fn()
+    tracker.liveState(live(2000, 12, 8))
+    tracker.hold(shownAlone, { onBundle: notWithBundle })
+    vi.advanceTimersByTime(LIVE_STATE_HOLD_MS)
+    tracker.bundle(bundle(12, 8, { liveState: live(2000, 12, 8) }))
+    expect(shownAlone).toHaveBeenCalledTimes(1)
+    expect(notWithBundle).not.toHaveBeenCalled()
+  })
 })

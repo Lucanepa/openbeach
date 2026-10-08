@@ -174,9 +174,11 @@ export function createLiveStateTracker({ now = () => Date.now() } = {}) {
   let newest = null
   let lastBundle = null
   let holdTimer = null
+  let holdOnBundle = null
   const dropHold = () => {
     clearTimeout(holdTimer)
     holdTimer = null
+    holdOnBundle = null
   }
   return {
     get newest() { return newest },
@@ -190,17 +192,24 @@ export function createLiveStateTracker({ now = () => Date.now() } = {}) {
      * Show a newer live state (`apply`) only if no bundle comes within
      * LIVE_STATE_HOLD_MS: the bundle has the serve and the court too and shows
      * them all in one update. A second hold replaces the first.
+     * `onBundle` runs instead of `apply` when a bundle ends the hold: what the
+     * bundle does not carry (the referee's "Last action" footer) is shown
+     * with it, not dropped.
      */
-    hold(apply) {
+    hold(apply, { onBundle } = {}) {
       dropHold()
+      holdOnBundle = onBundle || null
       holdTimer = setTimeout(() => {
         holdTimer = null
+        holdOnBundle = null
         apply()
       }, LIVE_STATE_HOLD_MS)
     },
     bundle(result) {
       if (!result?.success || !Array.isArray(result.sets)) return result
+      const heldOnBundle = holdOnBundle
       dropHold()
+      heldOnBundle?.()
       lastBundle = result
       if (newest && bundleSaysWhenRead(result) && !isLiveStateNewerThanBundle(newest, result)) {
         newest = null

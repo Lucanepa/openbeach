@@ -1022,12 +1022,14 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           // and its last event wait for that bundle (tracker.hold): shown
           // alone, the score changed first and the serve and the court
           // ~200 ms later. An older copy read back never rolls the score back.
+          // When the bundle ends the hold (the usual case: fetchFreshData
+          // below), the footer's last event is shown with that bundle.
           const tracker = liveTrackerRef.current
           if (tracker.liveState(state) && tracker.lastBundle) {
             tracker.hold(() => {
               showLastEvent()
               updateMatchDataState(tracker.lastBundle)
-            })
+            }, { onBundle: showLastEvent })
           } else {
             showLastEvent()
           }
