@@ -210,6 +210,28 @@ describe('restore by PIN: the live row\'s own Team A', () => {
     expect(lineup(out, 'team2')).toEqual({ I: 3, II: 21 })
   })
 
+  it('"Swap A/B" still in the sync queue: the same first server, the A / B serve flag follows the swap', async () => {
+    // the cloud coin toss from before the swap: A = team1 serving first
+    const { restored } = await restore({
+      match: { coin_toss: { team_a: 'team1', team_b: 'team2', serve_a: true, first_serve: 'team1', confirmed: true } },
+      liveState: swapped()
+    })
+    expect(restored.coinTossTeamA).toBe('team2')
+    expect(restored.firstServe).toBe('team1')
+    // team1 is B now: A (team2) does not serve first
+    expect(restored.coinTossServeA).toBe(false)
+  })
+
+  it('the same with only the serve flag in the cloud coin toss: the team it named serves first', async () => {
+    const { restored } = await restore({
+      match: { coin_toss: { team_a: 'team1', team_b: 'team2', serve_a: false, confirmed: true } },
+      liveState: swapped()
+    })
+    expect(restored.coinTossTeamA).toBe('team2')
+    expect(restored.firstServe).toBe('team2')
+    expect(restored.coinTossServeA).toBe(true)
+  })
+
   it('names that do not tell (the same on both teams, or missing): the cloud coin toss\'s Team A', async () => {
     const same = await restore({
       match: { team1_data: { name: 'X' }, team2_data: { name: 'X' } },

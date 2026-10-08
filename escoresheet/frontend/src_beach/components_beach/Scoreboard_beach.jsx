@@ -30,6 +30,7 @@ import { setExtId, eventExtId } from '../utils_beach/syncIds_beach'
 import { changesSetScore, isLiveSetInterval, queueSetScoreSync } from '../utils_beach/eventSync_beach'
 import { planPointRemoval, scoreAfterRemoval, syncJobsForEvents, syncJobsForSets, eventUpsertJob, setReopenJob, planDecisionChangeReversal, scoreDeltaOfRemoval, teamSanctionFlags, UNSENT_STATUSES } from '../utils_beach/scorerCorrections_beach'
 import { askConfirm } from '../utils_beach/askConfirm_beach'
+import { rallyStatusOf, currentSetOf } from '../utils_beach/rally_beach'
 import { toast } from '../ui/volleyui/uiStore.js'
 import { buildConnectionPins } from '../utils_beach/connectionPins_beach'
 import { isBackendAvailable, getApiUrl, isNativeApp } from '../utils_beach/backendConfig_beach'
@@ -40,6 +41,8 @@ import { useDiagCommits } from '../diagnostics_beach/commits_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot } from '../utils_beach/stateSnapshot_beach'
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
+import { swapTeamDesignation, coinTossCloud } from '../utils_beach/coinToss_beach'
+import { set3TossBefore, set3TossUndoUpdate, undoKeepsMatch } from '../utils_beach/set3Toss_beach'
 import { staleCourtSwitches, switchBackUpdate, snapshotsAfterSwitchBack, pendingTto, pendingCourtDialog } from '../utils_beach/courtSwitchState_beach'
 import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
 import { TTO_TOTAL, courtChangeEvery, hasTechnicalTimeout, nextCourtEvents } from '../utils_beach/courtRhythm_beach'
@@ -1846,46 +1849,22 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     return data?.events?.some(e => e.type === 'rit') || false
   }, [data?.events])
 
-  const rallyStatus = useMemo(() => {
-    if (!data?.events || !data?.set || data.events.length === 0) return 'idle'
+  // In play when the set's last event is a rally_start (rally_beach: the
+  // point and rally-start taps check the same rule against the database)
+  const rallyStatus = useMemo(
+    () => (data?.set ? rallyStatusOf(data.events, data.set.index) : 'idle'),
+    [data?.events, data?.set]
+  )
 
-    // Get events for current set only and sort by sequence number (most recent first)
-    const currentSetEvents = data.events
-      .filter(e => e.setIndex === data.set.index)
-      .sort((a, b) => {
-        // Sort by sequence number if available, otherwise by timestamp
-        const aSeq = a.seq || 0
-        const bSeq = b.seq || 0
-        if (aSeq !== 0 || bSeq !== 0) {
-          return bSeq - aSeq // Descending by sequence (most recent first)
-        }
-        // Fallback to timestamp for legacy events
-        const aTime = typeof a.ts === 'number' ? a.ts : new Date(a.ts).getTime()
-        const bTime = typeof b.ts === 'number' ? b.ts : new Date(b.ts).getTime()
-        return bTime - aTime
-      })
-
-    if (currentSetEvents.length === 0) return 'idle'
-
-    const lastEvent = currentSetEvents[0] // Most recent event is now first
-
-    // Check if last event is point or replay first (these end the rally)
-    if (lastEvent.type === 'point' || lastEvent.type === 'replay') {
-      return 'idle'
-    }
-
-    if (lastEvent.type === 'rally_start') {
-      return 'in_play'
-    }
-
-    // set_start means set is ready but rally hasn't started yet
-    if (lastEvent.type === 'set_start') {
-      return 'idle'
-    }
-
-    // For lineup events after points, the rally is idle (waiting for next rally_start)
-    return 'idle'
-  }, [data?.events, data?.set])
+  // The rally of the set being played, read from the database (inside an
+  // action: its transaction). A tap is checked against it, not against the
+  // screen, which on a slow tablet can be seconds behind
+  const readRallyStatus = useCallback(async () => {
+    const set = currentSetOf(await db.sets.where('matchId').equals(matchId).toArray())
+    if (!set) return 'idle'
+    const events = await db.events.where('matchId').equals(matchId).toArray()
+    return rallyStatusOf(events, set.index)
+  }, [matchId])
 
   // Check if the rally is replayed (last event is a replay)
   const isRallyReplayed = useMemo(() => {
@@ -3638,6 +3617,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
   const awardPoint = useCallback(
     async (side, skipConfirmation = false, fromPenalty = false) => {
+      // A tap (any point but a penalty's) is written only while the rally is
+      // in play in the database: the second tap of a double tap on a screen
+      // that has not caught up (the 'point' key lets go once the live query
+      // has been waited for long enough, the old buttons still showing) gave
+      // a second point for the same rally
+      if (!fromPenalty && await readRallyStatus() !== 'in_play') {
+        console.warn('[Scoreboard] Point tap without a rally in play (the screen was behind): ignored')
+        return
+      }
       const teamKey = mapSideToTeamKey(side)
 
       // Check for accidental point award (if enabled and rally just started)
@@ -3749,7 +3737,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Awaited: inside the point's transaction (its dialog opens with the score)
       await afterPointScored({ set: freshCurrentSet, team1Points, team2Points, teamKey })
     },
-    [data?.set, data?.events, logEvent, mapSideToTeamKey, afterPointScored, getCurrentServe, matchId, deferUi]
+    [data?.set, data?.events, logEvent, mapSideToTeamKey, afterPointScored, getCurrentServe, matchId, deferUi, readRallyStatus]
   )
 
   const handlePoint = useCallback(
@@ -3799,19 +3787,27 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   // Only the literal true skips the accidental rally start check (its own
   // "Yes, start rally"): a button handing its click event in must not, or a
   // tap on Start rally never asks (it did not, until 2026-10)
-  const handleStartRally = useCallback(async (skipConfirmation = false) => {
+  // ONE action (key 'rally', as OpenVolley): a second tap while it is written
+  // is dropped, and a rally already in play in the database (the screen has
+  // not caught up yet) is not started again: one rally_start per rally. Two
+  // quick taps on Start rally logged two.
+  const handleStartRally = useCallback((skipConfirmation = false) => runAction('rally', async () => {
     const skipCheck = skipConfirmation === true
     cLogger.logHandler('handleStartRally', { skipConfirmation: skipCheck })
+    if (await readRallyStatus() === 'in_play') {
+      console.warn('[Scoreboard] Start rally with a rally in play (the screen was behind): ignored')
+      return
+    }
     // Check for accidental rally start (if enabled and point was just awarded)
     if (checkAccidentalRallyStart && !skipCheck && lastPointAwardedTimeRef.current) {
       const timeSinceLastPoint = (Date.now() - lastPointAwardedTimeRef.current) / 1000
       if (timeSinceLastPoint < accidentalRallyStartDuration) {
-        setAccidentalRallyConfirmModal({
+        deferUi(() => setAccidentalRallyConfirmModal({
           onConfirm: () => {
             setAccidentalRallyConfirmModal(null)
             handleStartRally(true) // Call with skipConfirmation = true
           }
-        })
+        }))
         return
       }
     }
@@ -3826,13 +3822,19 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const scheduledAt = startScheduleOf(data?.match)
       const defaultTime = defaultSetStartTime({ setIndex, sets: allSets, scheduledAt })
 
-      setSetStartTimeModal({ setIndex: data?.set?.index, defaultTime, scheduledTime: setIndex === 1 ? scheduledClock(scheduledAt) : null })
+      deferUi(() => setSetStartTimeModal({ setIndex: data?.set?.index, defaultTime, scheduledTime: setIndex === 1 ? scheduledClock(scheduledAt) : null }))
       return
     }
 
     // A change of courts (or the TTO) owed and not made, its dialog not
-    // open (its event undone): asked instead of the rally
-    if (!courtSwitchModal && !ttoModal && askPendingCourtDialog(data?.set, data?.events, data?.match)) return
+    // open (its event undone): asked instead of the rally, once this action
+    // is done (its own action then, not one joined to this one, unawaited)
+    if (!courtSwitchModal && !ttoModal && data?.set && data?.events && data?.match &&
+      pendingCourtDialog(data.events, data.set, data.match)) {
+      const { set, events, match } = data
+      deferUi(() => askPendingCourtDialog(set, events, match))
+      return
+    }
 
     // Get current serving team and player
     const servingTeam = getCurrentServe()
@@ -3849,7 +3851,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     })
     // Track when rally started (for accidental point award check)
     rallyStartTimeRef.current = Date.now()
-  }, [logEvent, isFirstRally, data?.team1Players, data?.team2Players, data?.events, data?.set, data?.match, matchId, getNextSubSeq, syncToReferee, checkAccidentalRallyStart, accidentalRallyStartDuration, getCurrentServe, getServingPlayer, leftisTeam1, leftTeam, rightTeam, courtSwitchModal, ttoModal, askPendingCourtDialog])
+  }), [runAction, deferUi, readRallyStatus, logEvent, isFirstRally, data?.team1Players, data?.team2Players, data?.events, data?.set, data?.match, matchId, getNextSubSeq, syncToReferee, checkAccidentalRallyStart, accidentalRallyStartDuration, getCurrentServe, getServingPlayer, leftisTeam1, leftTeam, rightTeam, courtSwitchModal, ttoModal, askPendingCourtDialog])
 
   const handleReplay = useCallback(async () => {
     // During rally: ask first, confirmReplay logs the replay event (no point to undo)
@@ -4708,6 +4710,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   const handleSet3CoinToss = useCallback((winner) => runAction('set3CoinToss', async () => {
     if (!data?.match) return
 
+    // The match as it is before the toss (read in the action, not the
+    // rendered match): what undoing the toss writes back (set3Toss_beach)
+    const matchBefore = await db.matches.get(matchId)
+    if (!matchBefore || matchBefore.set3CoinTossWinner) return
+    const before = set3TossBefore(matchBefore)
+
     await db.matches.update(matchId, { set3CoinTossWinner: winner })
 
     // Log event for undo
@@ -4716,8 +4724,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       matchId,
       setIndex: 3,
       type: 'set3_coin_toss_winner',
-      // `team`: Last action's team line names the winner
-      payload: { winner, team: winner },
+      // `team`: Last action's team line names the winner. `before`: the
+      // match before the toss, for its undo
+      payload: { winner, team: winner, before },
       ts: new Date().toISOString(),
       seq: nextSeq
     })
@@ -5428,8 +5437,20 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
         const previousEvent = remainingEvents[0]
 
-        // 3. Restore state from the previous event's snapshot
-        if (previousEvent?.stateSnapshot) {
+        // 3. Restore state from the previous event's snapshot. Not one of
+        // another set: the event before the first one of a set (its start,
+        // the set 3 toss) is the previous set's end, and its snapshot
+        // reopened that set (set3Toss_beach). The set's score is as it was
+        // (nothing was scored in it yet); the team sanction flags follow the
+        // events that remain. Not for a set start either: the event before it
+        // (the set 3 toss) can be older than the sides and serve the set was
+        // started with (undoKeepsMatch).
+        if (undoKeepsMatch(previousEvent?.stateSnapshot, lastEvent)) {
+          const removedIds = new Set(eventsToDelete.map(e => e.id))
+          const remaining = allEvents.filter(e => !removedIds.has(e.id))
+          const sanctionMatch = await db.matches.get(matchId)
+          await db.matches.update(matchId, { sanctions: teamSanctionFlags(remaining, sanctionMatch?.sanctions) })
+        } else if (previousEvent?.stateSnapshot) {
           await restoreStateFromSnapshot(previousEvent.stateSnapshot)
         } else {
           // No previous event with snapshot - calculate state from remaining events
@@ -5485,6 +5506,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           if (preSwitchOverrides !== undefined) {
             await db.matches.update(matchId, { setLeftTeamOverrides: preSwitchOverrides })
           }
+        }
+
+        // The set 3 toss: the winner, the sides, the serve and the service
+        // orders as they were before it (set3Toss_beach), so the toss buttons
+        // come back with the sides and serve set 3 had before
+        if (lastEvent.type === 'set3_coin_toss_winner') {
+          await db.matches.update(matchId, set3TossUndoUpdate(lastEvent))
         }
 
         // Handle special cases for set_end undo
@@ -12233,28 +12261,22 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             <button
                               className="secondary"
                               onClick={async () => {
-                                // Swap Team A and Team B identity (coinTossTeamA)
+                                // Swap Team A and Team B identity (coinTossTeamA). Only the
+                                // labels change: the same team serves first, here and in
+                                // the cloud coin toss (coinToss_beach)
                                 const currentTeamA = data.match.coinTossTeamA || 'team1'
-                                const newTeamA = currentTeamA === 'team1' ? 'team2' : 'team1'
-                                const newTeamB = newTeamA === 'team1' ? 'team2' : 'team1'
+                                const patch = swapTeamDesignation(data.match)
+                                const newTeamA = patch.coinTossTeamA
 
-                                await db.matches.update(matchId, { coinTossTeamA: newTeamA, coinTossTeamB: newTeamB })
+                                await db.matches.update(matchId, patch)
 
                                 if (data.match?.seed_key) {
-                                  const currentServeA = data.match.coinTossServeA ?? true
-                                  const firstServeTeam = currentServeA ? newTeamA : newTeamB
                                   await db.sync_queue.add({
                                     resource: 'match',
                                     action: 'update',
                                     payload: {
                                       id: data.match.seed_key,
-                                      coin_toss: {
-                                        team_a: newTeamA,
-                                        team_b: newTeamB,
-                                        serve_a: currentServeA,
-                                        confirmed: true,
-                                        first_serve: firstServeTeam
-                                      }
+                                      coin_toss: coinTossCloud({ ...data.match, ...patch })
                                     },
                                     createdAt: new Date().toISOString()
                                   })
