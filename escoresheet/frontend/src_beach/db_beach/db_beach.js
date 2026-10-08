@@ -1,5 +1,6 @@
 import Dexie from 'dexie'
 import { rewriteQueuedSyncJobs } from '../utils_beach/syncIds_beach'
+import { installEventHistoryHooks } from './eventHistory_beach'
 
 /**
  * ============================================================================
@@ -399,3 +400,19 @@ db.version(19).stores({
   saved_teams: 'id, competitionId, nameKey, pairKey',
   saved_teams_meta: 'key'
 })
+
+// Version 20: the event history and the activity log (one migration for both).
+// - event_history: every undo, delete and edit of a logged event
+//   (db_beach/eventHistory_beach.js); `[matchId+seq]` gives the seq high-water
+//   mark, so an undone seq is never given out again.
+// - activity_log: what happened on this device (utils_beach/activity).
+// - interaction_logs gets a matchId index (the activity log's export).
+// New tables and one new index only, no upgrade function: it cannot reject.
+db.version(20).stores({
+  event_history: '++id, matchId, [matchId+seq], eventId, &revUid, ts',
+  activity_log: '++lid, &uid, ts, matchId, [matchId+ts], kind, synced',
+  interaction_logs: 'id, ts, gameNumber, matchId, category, sessionId'
+})
+
+// Undo / delete / edit history of events, from Dexie hooks (see eventHistory_beach.js)
+installEventHistoryHooks(db)

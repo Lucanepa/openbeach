@@ -178,3 +178,33 @@ describe('app backup files (native, per event)', () => {
     expect(job.payload.match.game_pin).toBe('900001')
   })
 })
+
+// A restore replaces the match's events: nothing is undone, so the event
+// history (db_beach/eventHistory_beach) records nothing and no void reaches
+// the server (it would void the very events the restore sends).
+describe('a restore and the event history', () => {
+  const settle = async () => {
+    await new Promise(r => setTimeout(r, 20))
+    const { eventHistorySettled } = await import('../../db_beach/eventHistory_beach')
+    await eventHistorySettled()
+  }
+
+  it('in place: no history row, no void job', async () => {
+    const matchId = await seedMatch()
+    const file = JSON.parse(serializeBackup(await bm.exportMatchData(matchId)).build('2026-10-08T12:00:00.000Z'))
+    await bm.restoreMatchInPlace(matchId, file)
+    await settle()
+    expect(await db.event_history.count()).toBe(0)
+    expect((await db.sync_queue.toArray()).filter(j => j.action === 'void')).toHaveLength(0)
+    expect(await db.events.where('matchId').equals(matchId).count()).toBe(1)
+  })
+
+  it('from a file over the local copy: no history row, no void job', async () => {
+    const matchId = await seedMatch()
+    const file = JSON.parse(JSON.stringify(await bm.exportMatchData(matchId)))
+    await bm.restoreMatchFromJson(file)
+    await settle()
+    expect(await db.event_history.count()).toBe(0)
+    expect((await db.sync_queue.toArray()).filter(j => j.action === 'void')).toHaveLength(0)
+  })
+})

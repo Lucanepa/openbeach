@@ -6,6 +6,7 @@
  */
 
 import { db } from '../db_beach/db_beach'
+import { wipeMatchEvents } from '../db_beach/eventHistory_beach'
 import { apiFrom, apiStorage, apiMatchRestoreByPin } from '../lib_beach/apiClient_beach'
 import { isBackendAvailable, getApiUrl } from '../utils_beach/backendConfig_beach'
 import { sanitizeSimple } from './stringUtils'
@@ -598,7 +599,8 @@ export async function restoreMatchInPlace(matchId, jsonData) {
 
     // Delete existing sets and events for this match
     await db.sets.where('matchId').equals(matchId).delete()
-    await db.events.where('matchId').equals(matchId).delete()
+    // replaced, not undone: the restored events are not voided (db_beach/eventHistory_beach)
+    await wipeMatchEvents(db, matchId)
 
     // Recreate sets
     if (sets?.length) {
