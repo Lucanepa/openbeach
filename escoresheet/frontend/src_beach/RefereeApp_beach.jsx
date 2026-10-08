@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, ChevronRight, CalendarX2, Loader2, RefreshCw } from 'lucide-react'
-import { validatePin, listAvailableMatches, validatePinSupabase, listAvailableMatchesSupabase, forgetMatchAccess } from './utils_beach/serverDataSync_beach'
+import { validatePin, listAvailableMatches, validatePinSupabase, listAvailableMatchesSupabase, forgetMatchAccess, setRelayDevice } from './utils_beach/serverDataSync_beach'
 import Referee from './components_beach/Referee_beach'
 import UpdateBanner from './components_beach/UpdateBanner_beach'
 import DashboardHeader from './components_beach/DashboardHeader_beach'
@@ -17,6 +17,10 @@ import { EntryPage, EntryCard, PinInput, ListLabel, GameRow } from './components
 import { db } from './db_beach/db_beach'
 import { getRelayWebSocketUrl, isLanBackendUrl, isRelayOriginPage } from './utils_beach/backendConfig_beach'
 import { loadRefereeMatches } from './utils_beach/refereeMatches_beach'
+
+// This page's relay sockets are a referee tablet: the scorer's Connect
+// tablets dialog shows it as connected (only referee-main_beach loads this)
+setRelayDevice('referee')
 
 // A relay on the internet (the cloud) may need longer to answer than one on the venue LAN
 const isCloudRelayUrl = (wsUrl) => !isLanBackendUrl(String(wsUrl).replace(/^ws/, 'http'))
