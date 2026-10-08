@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useTranslation } from 'react-i18next'
 import { db } from './db_beach/db_beach'
-import MatchSetup from './components_beach/MatchSetup_beach'
+import MatchSetup, { preloadMatchSetup } from './components_beach/MatchSetup_beach'
 import Scoreboard from './components_beach/Scoreboard_beach'
 import CoinToss from './components_beach/CoinToss_beach'
 import MatchEnd from './components_beach/MatchEnd_beach'
@@ -84,6 +84,10 @@ export default function App() {
   const [showCoinToss, setShowCoinToss] = useState(false)
   const [showMatchEnd, setShowMatchEnd] = useState(false)
   const [showManualAdjustments, setShowManualAdjustments] = useState(false)
+  // The home screen's matches as they were when a new test match was asked
+  // for, until its Match Setup opens: the new match's 'Continue match /
+  // Delete match' showed for a frame first (laptop run 2026-10-08, OB-2)
+  const [homeWhilePreparing, setHomeWhilePreparing] = useState(null)
   const [deleteMatchModal, setDeleteMatchModal] = useState(null)
   const [deletePinInput, setDeletePinInput] = useState('')
   const [deletePinError, setDeletePinError] = useState('')
@@ -1058,7 +1062,11 @@ export default function App() {
     setShowManualAdjustments(false)
   }
 
-  const openMatchSetupView = () => setShowMatchSetup(true)
+  // Match Setup opens filled (OB-2): the scoreboard stays until it has read the match
+  const openMatchSetupView = async () => {
+    if (matchId) await preloadMatchSetup(matchId)
+    setShowMatchSetup(true)
+  }
 
   const openCoinTossView = () => {
     setShowMatchSetup(false)
@@ -1847,6 +1855,9 @@ export default function App() {
     }
 
     if (createdMatchId) {
+      // Match Setup opens filled: the home screen stays until it has read
+      // the test match (utils_beach/preload_beach), never 'Not set' first (OB-2)
+      await preloadMatchSetup(createdMatchId)
       setMatchId(createdMatchId)
       setShowMatchSetup(true)
       setShowCoinToss(false)
@@ -1869,6 +1880,7 @@ export default function App() {
     }
 
     setTestMatchLoading(true)
+    setHomeWhilePreparing({ official: currentOfficialMatch, test: currentTestMatch })
 
     try {
       // Clear previous test match locally
@@ -1881,6 +1893,7 @@ export default function App() {
       toast.error(t('app.testMatchFailed', { error: error?.message || String(error), defaultValue: 'Could not prepare the test match: {{error}}' }))
     } finally {
       setTestMatchLoading(false)
+      setHomeWhilePreparing(null)
     }
   }
 
@@ -1907,6 +1920,10 @@ export default function App() {
       const isMatchSetupComplete = existing.team1CaptainSignature &&
         existing.team2CaptainSignature
 
+      // Match Setup opens filled (OB-2): read before the home screen goes
+      if (!['live', 'ended', 'final'].includes(existing.status) && !isMatchSetupComplete) {
+        await preloadMatchSetup(existing.id)
+      }
       setMatchId(existing.id)
 
       // Determine where to continue based on status
@@ -2061,7 +2078,8 @@ export default function App() {
           setShowMatchEnd(false)
         }
       } else {
-        // Go to match setup
+        // Go to match setup (filled at once: OB-2)
+        await preloadMatchSetup(targetMatchId)
         setMatchId(targetMatchId)
         setShowMatchSetup(true)
       }
@@ -2073,6 +2091,9 @@ export default function App() {
 
   // The scoring screen is on (not setup, coin toss, match end or manual changes)
   const onScoringScreen = !!(matchId && !showCoinToss && !showMatchSetup && !showMatchEnd && !showManualAdjustments)
+
+  const homeOfficialMatch = homeWhilePreparing ? homeWhilePreparing.official : currentOfficialMatch
+  const homeTestMatch = homeWhilePreparing ? homeWhilePreparing.test : currentTestMatch
 
   return (
     // Every screen is on the volleyui stone page (light only), match end and
@@ -2151,8 +2172,8 @@ export default function App() {
             setMatchInfoMenuOpen={setMatchInfoMenuOpen}
             matchInfoData={matchInfoData}
             matchStatus={matchStatus}
-            currentOfficialMatch={currentOfficialMatch}
-            currentTestMatch={currentTestMatch}
+            currentOfficialMatch={homeOfficialMatch}
+            currentTestMatch={homeTestMatch}
             isFullscreen={isFullscreen}
             toggleFullscreen={toggleFullscreen}
             offlineMode={offlineMode}
@@ -2257,7 +2278,8 @@ export default function App() {
                     }
                     // Otherwise match status is set to 'live' by CoinToss component
                   }}
-                  onBack={() => {
+                  onBack={async () => {
+                    await preloadMatchSetup(matchId) // filled at once (OB-2)
                     setShowCoinToss(false)
                     setShowMatchSetup(true)
                   }}
@@ -2316,8 +2338,8 @@ export default function App() {
                     createNewOfficialMatch={createNewOfficialMatch}
                     createNewTestMatch={createNewTestMatch}
                     testMatchLoading={testMatchLoading}
-                    currentOfficialMatch={currentOfficialMatch}
-                    currentTestMatch={currentTestMatch}
+                    currentOfficialMatch={homeOfficialMatch}
+                    currentTestMatch={homeTestMatch}
                     continueMatch={continueMatch}
                     continueTestMatch={continueTestMatch}
                     showDeleteMatchModal={showDeleteMatchModal}
