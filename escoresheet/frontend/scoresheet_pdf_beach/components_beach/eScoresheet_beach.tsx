@@ -4230,8 +4230,10 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
               {([1, 2].map(team => (
                 <div key={team} className={`flex items-stretch box-border border-t border-black`}>
                   {/* Team (A/B + Country), vertically centered across Player 1 & 2 */}
-                  <div className="w-24 border-r border-t border-black flex items-center justify-center text-black px-1 box-border" style={{ flexDirection: "column", justifyContent: "center", gap: '2px' }}>
-                    <div className="flex items-center justify-center h-full">
+                  <div className="w-24 border-r border-t border-black flex items-center justify-center text-black px-1 box-border" style={{ flexDirection: "column", justifyContent: "center", gap: '1px' }}>
+                    {/* no h-full: with the team name under it, a full-height
+                        row pushed the name onto the border (clipped) */}
+                    <div className="flex items-center justify-center" style={{ lineHeight: 1 }}>
                       <ABCircle value={get(`ma_side_${team}`)} onChange={v => set(`ma_side_${team}`, v)} size={14} className="mr-1" />
                       <span className="text-[15px] font-bold">{get(`ma_ctry_${team}`) || ''}</span>
                     </div>
