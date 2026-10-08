@@ -802,12 +802,10 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           }
           lastProcessedEventRef.current = { time: now, updatedAt: state.updated_at }
 
-          // A late copy of an older state than the newest seen (the relay
-          // push and the database row arrive out of order): its score,
-          // timeout and interval flags are out of date, so it changes nothing.
-          if (liveTrackerRef.current.isLate(state)) return
-
-          // Check for scorer attention trigger
+          // Check for scorer attention trigger. Before the late-copy check:
+          // the alarm only sets this column and keeps the row's updated_at
+          // (the scorer's last key event), which the relay's live state of a
+          // later rally start has already passed.
           if (state.scorer_attention_trigger && state.scorer_attention_trigger !== lastAttentionTriggerRef.current) {
             setAttentionModalOpen(true)
             lastAttentionTriggerRef.current = state.scorer_attention_trigger
@@ -818,6 +816,11 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
               }
             } catch (e) { /* ignore */ }
           }
+
+          // A late copy of an older state than the newest seen (the relay
+          // push and the database row arrive out of order): its score,
+          // timeout and interval flags are out of date, so it changes nothing.
+          if (liveTrackerRef.current.isLate(state)) return
 
           console.debug('[Referee] Live state update:', {
             event: state.last_event_type,
