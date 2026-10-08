@@ -1142,7 +1142,9 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
     // offline mode or a device without a session syncs in the background and
     // starts the match at once (it waited 9-13 s for nothing).
     const waitForCloud = !match?.test && cloudSyncWaitNow()
-    setInitModal({ status: 'syncing', message: 'Syncing match data...' })
+    // Nothing to wait for: no dialog either (it only flashed for two frames
+    // before the scoreboard; verification of OB-3, 2026-10-08)
+    if (waitForCloud) setInitModal({ status: 'syncing', message: 'Syncing match data...' })
 
     // Wait for sync queue to process (poll for completion)
     const maxAttempts = waitForCloud ? 30 : 0 // 15 seconds max
@@ -1342,7 +1344,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
     })
 
     // Success!
-    setInitModal({ status: 'success', message: 'Match initialized!' })
+    if (waitForCloud) setInitModal({ status: 'success', message: 'Match initialized!' })
 
     // Short delay to show success message (none when nothing was waited for)
     if (waitForCloud) await new Promise(resolve => setTimeout(resolve, 1000))

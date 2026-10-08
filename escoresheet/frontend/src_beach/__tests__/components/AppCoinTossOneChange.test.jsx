@@ -37,6 +37,10 @@ describe('App: confirming the coin toss', () => {
         confirm: !!button('Confirm the coin toss', { enabled: false }),
         returnToMatch: !!button('Return to match', { enabled: false }),
         loading: /Loading(\.\.\.|…)/.test(text),
+        // the start-up dialog ('Syncing match data...', 'Match initialised'):
+        // nothing to wait for on a test match, it only flashed (verification
+        // 2026-10-08: two frames)
+        progress: [...document.querySelectorAll('[role=dialog]')].some(d => /Syncing match|initiali[sz]/i.test(d.textContent)),
         scoreboard: /Last action/.test(text) && !!button('Start set', { enabled: false })
       }
     })
@@ -49,6 +53,7 @@ describe('App: confirming the coin toss', () => {
     // the coin toss keeps its button; then the scoreboard, never 'Loading...' between
     expect(states.filter(s => s.returnToMatch)).toEqual([])
     expect(states.filter(s => s.loading)).toEqual([])
+    expect(states.filter(s => s.progress)).toEqual([])
     expect(states.filter(s => !s.confirm && !s.scoreboard)).toEqual([])
   }, 30000)
 })
