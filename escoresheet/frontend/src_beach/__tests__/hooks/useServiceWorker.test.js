@@ -3,7 +3,7 @@ import { renderHook, act, waitFor } from '@testing-library/react'
 import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { useServiceWorker, applyServiceWorkerUpdate } from '../../hooks_beach/useServiceWorker_beach'
+import { useServiceWorker, applyServiceWorkerUpdate, resetServiceWorkerUpdateForTests } from '../../hooks_beach/useServiceWorker_beach'
 
 const frontendDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 
@@ -75,6 +75,8 @@ describe('useServiceWorker', () => {
     delete global.caches
     vi.clearAllMocks()
     vi.useRealTimers()
+    // every test is a fresh page (applyServiceWorkerUpdate remembers its reload)
+    resetServiceWorkerUpdateForTests()
   })
 
   describe('initialization', () => {
@@ -265,9 +267,14 @@ describe('useServiceWorker', () => {
 
       expect(waiting.postMessage).toHaveBeenCalledTimes(1)
       expect(window.location.reload).toHaveBeenCalledTimes(1)
-      // once done, a later call works again
+      // just after: the page is reloading, nothing more to do
       mockRegistration.waiting = null
       await applyServiceWorkerUpdate()
+      expect(window.location.reload).toHaveBeenCalledTimes(1)
+      // a reload that never came: after a while an update applies again
+      const later = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 11000)
+      await applyServiceWorkerUpdate()
+      later.mockRestore()
       expect(window.location.reload).toHaveBeenCalledTimes(2)
     })
 
