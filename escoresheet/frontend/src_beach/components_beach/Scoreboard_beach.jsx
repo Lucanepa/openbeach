@@ -4698,8 +4698,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
   }, [set3SideServiceModal, data?.match, matchId, getNextSeq, getStateSnapshot])
 
-  // Handle Set 3 coin toss (before Set 3 starts)
-  const handleSet3CoinToss = useCallback(async (winner) => {
+  // Handle Set 3 coin toss (before Set 3 starts). One action: the toss, its
+  // event and snapshot show together (the toss buttons went 6 frames before
+  // LAST ACTION named the winner)
+  const handleSet3CoinToss = useCallback((winner) => runAction('set3CoinToss', async () => {
     if (!data?.match) return
 
     await db.matches.update(matchId, { set3CoinTossWinner: winner })
@@ -4721,7 +4723,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     if (coinTossWinnerSnapshot) {
       await db.events.update(coinTossWinnerEventId, { stateSnapshot: coinTossWinnerSnapshot })
     }
-  }, [matchId, data?.match, getNextSeq, captureFullStateSnapshot])
+  }), [runAction, matchId, data?.match, getNextSeq, captureFullStateSnapshot])
 
   // Switch which team starts on which side for the next set: toggles the
   // side the interval shows, which is the side the set starts on
@@ -8455,8 +8457,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 }}>{pointsBySide.right}</span>
               </div>
 
-              {/* Last Action - 17% */}
-              <div style={{ flex: '0 0 17%', textAlign: 'center', padding: `0 ${4 * scaleFactor}px` }}>
+              {/* Last Action - 17%. minWidth 0: its one-line texts end in an
+                  ellipsis; without it a long team name widened the column past
+                  the window's right edge ("LAST ACTIO" cut at 1400 x 853) */}
+              <div data-testid="last-action-column" style={{ flex: '0 0 17%', minWidth: 0, textAlign: 'center', padding: `0 ${4 * scaleFactor}px` }}>
                 {data?.events && data.events.length > 0 && data?.set && (() => {
                   const currentSetIndex = data.set.index
                   const currentSetEvents = data.events.filter(e => e.setIndex === currentSetIndex)
