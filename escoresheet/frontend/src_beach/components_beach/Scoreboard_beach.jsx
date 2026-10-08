@@ -64,6 +64,9 @@ const SPORT_TYPE = 'beach'
 const TEAM_TIMEOUT_SECONDS = 45
 const TTO_SECONDS = 45
 import CountryFlag from './CountryFlag_beach'
+import SignaturePad from './SignaturePad_beach'
+import { saveMatchSignature } from '../utils_beach/signatures_beach'
+import { signatureSourceUpdate } from '../utils_beach/phoneSignature_beach'
 import { uploadBackupToCloud, uploadLogsToCloud, triggerContinuousBackup } from '../utils_beach/logger_beach'
 import { splitLocalDateTime, parseLocalDateTimeToISO, roundToMinute, formatTimeLocal } from '../utils_beach/timeUtils_beach'
 import { TimeInput24 } from './TimeInput24_beach'
@@ -17732,9 +17735,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         <SignaturePad
           open={true}
           title={`Captain Signature - ${postMatchSignature === 'team1-captain' ? (data?.team1Players?.find(p => p.isCaptain || p.captain)?.name || data?.team1Team?.name || 'team1') : (data?.team2Players?.find(p => p.isCaptain || p.captain)?.name || data?.team2Team?.name || 'team2')}`}
-          onSave={async (signatureDataUrl) => {
+          onSave={async (signatureDataUrl, meta) => {
             const fieldName = postMatchSignature === 'team1-captain' ? 'team1PostGameCaptainSignature' : 'team2PostGameCaptainSignature'
-            await db.matches.update(matchId, { [fieldName]: signatureDataUrl })
+            // saved and queued for the cloud at once, with its source, as
+            // MatchEnd saves one (OpenVolley's scoring screen does the same)
+            await saveMatchSignature(db, matchId, fieldName, signatureDataUrl, signatureSourceUpdate(fieldName, signatureDataUrl, meta))
             setPostMatchSignature(null)
           }}
           onClose={() => setPostMatchSignature(null)}
