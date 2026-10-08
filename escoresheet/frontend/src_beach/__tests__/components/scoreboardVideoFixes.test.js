@@ -158,7 +158,8 @@ describe('issue 13: interval and set-3 toss panel', () => {
     expect(sb).toContain('const set3TossPending = isBetweenSets && data?.set?.index === 3 && !data?.match?.set3CoinTossWinner')
     expect(sb).toMatch(/data\?\.set && !set3TossPending \? currentServeTeam === leftServeTeamKey/)
     expect(sb).toContain("disabled={data?.match?.status === 'complete' || set3TossPending}")
-    expect(sb).toContain('payload: { winner, team: winner },')
+    // `before`: the match before the toss, for its undo (ScoreboardSet3TossUndo)
+    expect(sb).toContain('payload: { winner, team: winner, before },')
   })
 })
 
