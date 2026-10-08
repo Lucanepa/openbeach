@@ -1,13 +1,14 @@
 /**
- * What the backup files leave out of the match row, and what the coalescing
- * key of the app backups ignores.
+ * What the app backup files (the native per-event backups) leave out of the
+ * match row, and what the coalescing key ignores.
  *
- * Backup files go to a folder or the Downloads of the scorer's device (and on
- * Android 10 and older, other apps can read them; on Android they stay after
- * an uninstall). Connection PINs, the game PIN and session ids are access
- * secrets, not scoring data: a restore keeps the PINs of the local copy it
- * replaces or makes new ones (backupManager_beach restoreMatchFromJson). The
- * cloud backup upload is unchanged.
+ * The files are written to a folder the device owner (and on Android 10 and
+ * older, other apps) can read, and on Android they stay after an uninstall.
+ * Connection PINs, the game PIN and session ids are access secrets, not
+ * scoring data: a restore keeps the PINs of the local copy it replaces or
+ * makes new ones (backupManager_beach restoreMatchFromJson). The cloud backup
+ * and the browser download / folder backup file are unchanged: they keep the
+ * PINs, which a match moved to another device needs.
  *
  * Ported from OpenVolley src/utils/nativeBackup/redact.js, with openbeach's
  * PIN names (team1Pin / team2Pin, team1UploadPin / team2UploadPin, matchPin).
@@ -40,12 +41,6 @@ export function redactMatch(match) {
     out[key] = value
   }
   return out
-}
-
-/** A backup (exportMatchData) as written to a file: no secrets in the match row. */
-export function redactBackup(data) {
-  if (!data || typeof data !== 'object') return data
-  return { ...data, match: redactMatch(data.match), [SECRETS_REMOVED]: true }
 }
 
 /** The match row without its bookkeeping fields (heartbeats, sessions, sync stamps, updatedAt). */

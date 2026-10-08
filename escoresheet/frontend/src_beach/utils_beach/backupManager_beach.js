@@ -9,7 +9,6 @@ import { db } from '../db_beach/db_beach'
 import { apiFrom, apiStorage, apiMatchRestoreByPin } from '../lib_beach/apiClient_beach'
 import { isBackendAvailable, getApiUrl } from '../utils_beach/backendConfig_beach'
 import { sanitizeSimple } from './stringUtils'
-import { redactBackup } from './nativeBackup/redact_beach'
 
 // IndexedDB key for storing file system directory handle
 const BACKUP_DB_NAME = 'escoresheet_backup'
@@ -235,20 +234,12 @@ export function generateBackupFilename(data) {
 }
 
 /**
- * A match as written to a backup file: exportMatchData without the PINs and
- * session ids of the match row (nativeBackup/redact_beach). The file sits in a
- * folder or the Downloads of the scorer's device; the restore keeps the PINs
- * of the local copy or makes new ones (secretsRemoved).
- */
-export async function exportMatchBackupFile(matchId) {
-  return redactBackup(await exportMatchData(matchId))
-}
-
-/**
- * Write match backup to file system (Chrome/Edge)
+ * Write match backup to file system (Chrome/Edge). The file is the full
+ * exportMatchData, PINs included, so it can move a match to another device;
+ * only the app's per-event backup files (nativeBackup) leave the PINs out.
  */
 export async function writeMatchBackup(matchId, directoryHandle) {
-  const data = await exportMatchBackupFile(matchId)
+  const data = await exportMatchData(matchId)
   const filename = generateBackupFilename(data)
 
   try {
@@ -264,10 +255,11 @@ export async function writeMatchBackup(matchId, directoryHandle) {
 }
 
 /**
- * Download match backup as file (Safari/Firefox fallback)
+ * Download match backup as file (Safari/Firefox fallback). The full
+ * exportMatchData, PINs included, like the folder backup.
  */
 export async function downloadMatchBackup(matchId) {
-  const data = await exportMatchBackupFile(matchId)
+  const data = await exportMatchData(matchId)
   const filename = generateBackupFilename(data)
 
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
@@ -307,10 +299,11 @@ function newPin(existing) {
 }
 
 /**
- * The PINs of a match restored from a backup file, which carries none
- * (secretsRemoved, nativeBackup/redact_beach): those of the local copy it
- * replaces, else new ones (a new game PIN only for an official match). {} for
- * other backups (cloud backups, older files), which keep exactly their own.
+ * The PINs of a match restored from an app backup file (nativeBackup), which
+ * carries none (secretsRemoved, nativeBackup/redact_beach): those of the local
+ * copy it replaces, else new ones (a new game PIN only for an official match).
+ * {} for other backups (browser download / folder files, cloud backups), which
+ * keep exactly their own.
  * @param {object} jsonData the backup
  * @param {object|null} previous the local copy being replaced
  */
@@ -357,8 +350,8 @@ export async function restoreMatchFromJson(jsonData) {
 
   // Start transaction - WIPE then RESTORE
   await db.transaction('rw', db.matches, db.teams, db.players, db.sets, db.events, db.sync_queue, async () => {
-    // A backup file has no PINs: keep those of the local copy it replaces
-    // (read before the wipe), or make new ones
+    // An app backup file has no PINs: keep those of the local copy it
+    // replaces (read before the wipe), or make new ones
     const previous = externalId ? await db.matches.filter(m => localMatchKey(m) === externalId).first() : null
     match = { ...match, ...pinsForRestore(jsonData, previous || null) }
 
@@ -633,7 +626,7 @@ export async function restoreMatchInPlace(matchId, jsonData) {
     if (externalId) {
 
       // PINs from the local match after the update above (backup fields over
-      // the current ones, so the game PIN a backup file lacks is still sent)
+      // the current ones, so the game PIN an app backup file lacks is still sent)
       const restoredLocal = await db.matches.get(matchId)
 
       // Build match payload for Supabase
