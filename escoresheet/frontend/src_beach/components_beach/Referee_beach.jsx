@@ -7,6 +7,28 @@ import { createLiveStateTracker } from '../utils_beach/liveStateTracker_beach'
 import { useRealtimeConnection, CONNECTION_TYPES, CONNECTION_STATUS } from '../hooks_beach/useRealtimeConnection_beach'
 // Beach volleyball ball image
 const ballImage = '/beachball.png'
+
+// Referee court layout contract (vmin units of useScaledLayout). The serve
+// ball is clearly smaller than a player disc and sits outside the server's
+// disc, on the back-line side; the disc's side margins keep room for it on
+// both sides and the court's halves never grow (a long name is cut with an
+// ellipsis), so it stays inside the court at any size and after a court switch.
+export const REF_DISC_VMIN = 10.5
+export const REF_BALL_RATIO = 0.58
+export const REF_BALL_VMIN = REF_DISC_VMIN * REF_BALL_RATIO
+export const REF_BALL_GAP_VMIN = 0.8
+// The SERVE block beside the big score: a slot of this width is reserved on
+// both sides (the score stays centred and nothing moves when the serve changes
+// side); the slot never takes more than this share of the row.
+export const REF_SERVE_SLOT_VMIN = 22
+export const REF_SERVE_SLOT_MAX = '24%'
+const SERVE_ROW_PAD_VMIN = 0.6
+// The block's text never wider than its slot (share of the slot's width): a
+// two-digit number; the label by its length ("AUFSCHLAG" with its
+// serve-order badge still fits), so a short one keeps its full size
+const SERVE_NUMBER_CQW = 56
+const SERVE_LABEL_CQW_PER_CHAR = 96
+const SERVE_ORDER_CQW = 8
 import { ConnectionManager } from '../utils_beach/connectionManager_beach'
 import ConnectionStatus from './ConnectionStatus_beach'
 import WsDebugOverlay from './WsDebugOverlay_beach'
@@ -210,6 +232,19 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   // Container width refs for adaptive text sizing
   const section2AContainerRef = useRef(null)
   const [section2AWidth, setSection2AWidth] = useState(150)
+  // The score row (callback ref: it mounts once the match data is in): its
+  // height sizes the SERVE block's number so the block always fits the row
+  const [scoreRowEl, setScoreRowEl] = useState(null)
+  const [scoreRowHeight, setScoreRowHeight] = useState(0)
+  useEffect(() => {
+    if (!scoreRowEl) return undefined
+    const update = () => setScoreRowHeight(scoreRowEl.clientHeight || 0)
+    update()
+    if (typeof ResizeObserver === 'undefined') return undefined
+    const observer = new ResizeObserver(update)
+    observer.observe(scoreRowEl)
+    return () => observer.disconnect()
+  }, [scoreRowEl])
 
   // Modal states (from Scoreboard actions)
   const [timeoutModal, setTimeoutModal] = useState(null) // { team, countdown, started }
@@ -1982,6 +2017,109 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
   if (!data) return null
 
+  // The serving player of a lineup and their place in the serve order
+  // (I-IV: the beach lineup's positions are the serve order)
+  const servingPlayerOf = (teamLineup) => {
+    for (const pos of ['I', 'II', 'III', 'IV', '1', '2']) {
+      const p = teamLineup?.[pos]
+      if (p && typeof p === 'object' && p.isServing) {
+        return { number: p.number, order: ['I', 'II', 'III', 'IV'].includes(pos) ? pos : null }
+      }
+    }
+    // Fallback: the set's server number (no serve order known)
+    return { number: data?.currentSet?.serverNumber || '', order: null }
+  }
+
+  // Width of each SERVE slot beside the big score (reserved on both sides).
+  // The score's column comes first (auto: two digits a side are reserved,
+  // whatever the score), the two slots share what is left, up to their
+  // width: on a large screen in the 800 px column the score keeps its size
+  // and the block narrows, never over the score.
+  const serveSlotWidth = `min(${vmin(REF_SERVE_SLOT_VMIN)}px, ${REF_SERVE_SLOT_MAX})`
+  const scoreRowColumns = `minmax(0, ${serveSlotWidth}) auto minmax(0, ${serveSlotWidth})`
+  // SERVE block sizes: the number as big as the row's height allows (it
+  // never makes the row taller), at most vmin(12)
+  const serveBorder = Math.max(2, vmin(0.3))
+  const serveLabelSize = vmin(2.6)
+  const serveNumberSize = (() => {
+    const max = vmin(12)
+    if (!scoreRowHeight) return vmin(9)
+    const inner = scoreRowHeight - 2 * vmin(SERVE_ROW_PAD_VMIN) - 2 * serveBorder - 2 * vmin(0.3)
+    const forNumber = (inner - serveLabelSize - vmin(0.2)) / 0.95
+    return Math.max(vmin(4), Math.min(max, Math.floor(forNumber * 0.98)))
+  })()
+
+  // One SERVE slot of the score row: empty unless that side serves
+  const renderServeSlot = (side) => {
+    const serving = side === 'left' ? leftServing : rightServing
+    const server = serving ? servingPlayerOf(side === 'left' ? leftLineup : rightLineup) : null
+    const label = t('scoreboard.serve', 'Serve')
+    const labelCqw = SERVE_LABEL_CQW_PER_CHAR / Math.max(5, String(label).length)
+    return (
+      <div data-serve-slot={side} aria-hidden={serving ? undefined : true} style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minWidth: 0,
+        minHeight: 0,
+        // The block's text is sized to the slot's width too (cqw)
+        containerType: 'inline-size'
+      }}>
+        {serving && (
+          <div
+            data-serve-block={side}
+            role="status"
+            aria-label={`${label} ${server.number}`}
+            style={{
+              width: '100%',
+              height: '100%',
+              boxSizing: 'border-box',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: vmin(0.2),
+              paddingTop: vmin(0.3),
+              paddingBottom: vmin(0.3),
+              paddingLeft: `min(${vmin(0.8)}px, 4cqw)`,
+              paddingRight: `min(${vmin(0.8)}px, 4cqw)`,
+              background: '#ecfdf5',
+              border: `${serveBorder}px solid #10b981`,
+              borderRadius: vmin(1.2),
+              overflow: 'hidden'
+            }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: `min(${vmin(0.6)}px, 3cqw)`, lineHeight: 1, maxWidth: '100%', minWidth: 0 }}>
+              <span data-serve-label="" data-max-px={serveLabelSize} style={{ fontSize: `min(${serveLabelSize}px, ${labelCqw.toFixed(2)}cqw)`, fontWeight: 800, color: 'var(--ov-success)', textTransform: 'uppercase', letterSpacing: '0.02em', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+              {server.order && (
+                <span data-serve-order="" style={{
+                  flexShrink: 0,
+                  background: 'rgba(15, 23, 42, 0.95)',
+                  color: '#fff',
+                  borderRadius: vmin(0.5),
+                  paddingTop: vmin(0.2),
+                  paddingBottom: vmin(0.2),
+                  paddingLeft: `min(${vmin(0.6)}px, 3cqw)`,
+                  paddingRight: `min(${vmin(0.6)}px, 3cqw)`,
+                  fontSize: `min(${vmin(1.9)}px, ${SERVE_ORDER_CQW}cqw)`,
+                  fontWeight: 700,
+                  lineHeight: 1
+                }}>{server.order}</span>
+              )}
+            </span>
+            <span data-serve-number="" data-max-px={serveNumberSize} style={{
+              fontSize: `min(${serveNumberSize}px, ${SERVE_NUMBER_CQW}cqw)`,
+              fontWeight: 800,
+              lineHeight: 0.95,
+              color: 'var(--ov-success)',
+              fontVariantNumeric: 'tabular-nums'
+            }}>{server.number}</span>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   // Player circle component - Beach volleyball simplified (2 players per team)
   // positionData: for rich format this is { number, isServing, hasSanction, sanctions, isCaptain }
   //               for legacy format this is just a number
@@ -2055,13 +2193,17 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         flexDirection: 'column',
         alignItems: 'center',
         gap: vmin(0.5),
-        flexShrink: 0
+        flexShrink: 0,
+        maxWidth: '100%',
+        minWidth: 0
       }}>
-        {/* Circle + badges wrapper */}
+        {/* Circle + badges wrapper: its side margins keep the serve ball's
+            room (the ball sits in them), so the ball stays inside the court */}
         <div data-player-disc={position} style={{
           position: 'relative',
-          width: vmin(10.5),
-          height: vmin(10.5),
+          width: vmin(REF_DISC_VMIN),
+          height: vmin(REF_DISC_VMIN),
+          margin: `0 ${vmin(REF_BALL_GAP_VMIN + REF_BALL_VMIN)}px`,
           borderRadius: '50%',
           border: `${vmin(0.2)}px solid ${paint?.ring ?? 'rgba(255, 255, 255, 0.35)'}`,
           background: paint?.background ?? teamColor,
@@ -2079,15 +2221,17 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             <img
               src={ballImage}
               alt="Ball"
+              data-serve-ball={team === leftTeam ? 'left' : 'right'}
               style={{
                 position: 'absolute',
-                left: team === rightTeam ? `calc(100% + ${vmin(0.8)}px)` : 'auto',
-                right: team === leftTeam ? `calc(100% + ${vmin(0.8)}px)` : 'auto',
+                left: team === rightTeam ? `calc(100% + ${vmin(REF_BALL_GAP_VMIN)}px)` : 'auto',
+                right: team === leftTeam ? `calc(100% + ${vmin(REF_BALL_GAP_VMIN)}px)` : 'auto',
                 top: '50%',
                 transform: 'translateY(-50%)',
-                width: vmin(6),
-                height: vmin(6),
-                filter: 'drop-shadow(0 3px 8px rgba(0, 0, 0, 0.5))'
+                width: vmin(REF_BALL_VMIN),
+                height: vmin(REF_BALL_VMIN),
+                filter: 'drop-shadow(0 2px 5px rgba(0, 0, 0, 0.45))',
+                pointerEvents: 'none'
               }}
             />
           )}
@@ -2175,6 +2319,10 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             fontWeight: 600,
             color: '#fff',
             whiteSpace: 'nowrap',
+            maxWidth: '100%',
+            boxSizing: 'border-box',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
             textAlign: 'center',
             letterSpacing: '0.3px',
             lineHeight: 1.2
@@ -2425,63 +2573,33 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         </div>
 
         {/* SECTION 2B: Score & Serve - 12% */}
-        <div data-diag="referee-score" style={{
+        <div data-diag="referee-score" data-columns={scoreRowColumns} ref={setScoreRowEl} style={{
           flex: '0 0 15%',
-          padding: `${vmin(0.4)}px 0`,
+          padding: `${vmin(SERVE_ROW_PAD_VMIN)}px ${vmin(1.2)}px`,
           background: 'var(--ov-card)',
           borderBottom: '1px solid var(--ov-hairline)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          display: 'grid',
+          gridTemplateColumns: scoreRowColumns,
+          gridTemplateRows: 'minmax(0, 1fr)',
+          alignItems: 'stretch',
+          columnGap: vmin(1),
           width: '100%',
           position: 'relative',
           overflow: 'hidden',
           minHeight: 0
         }}>
-          {/* LEFT SERVE indicator - absolute positioned so it doesn't affect score centering */}
-          {leftServing && (
-            <div style={{
-              position: 'absolute',
-              left: vmin(2),
-              top: '50%',
-              transform: 'translateY(-50%)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 2
-            }}>
-              <span style={{ fontSize: vmin(2.5), color: 'var(--ov-success)', fontWeight: 700 }}>SERVE</span>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: vmin(0.8),
-                background: '#ecfdf5',
-                border: '2px solid #10b981',
-                borderRadius: vmin(0.8),
-                aspectRatio: '1/1',
-                minWidth: vmin(5.5)
-              }}>
-                <span style={{ fontSize: vmin(6), fontWeight: 700, color: 'var(--ov-success)', lineHeight: 0.9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontVariantNumeric: 'tabular-nums' }}>
-                  {(() => {
-                    // Find serving player number from lineup (isServing flag)
-                    for (const pos of [leftLineup?.I, leftLineup?.II, leftLineup?.III, leftLineup?.IV]) {
-                      if (pos && typeof pos === 'object' && pos.isServing) return pos.number
-                    }
-                    // Fallback: use serverNumber from currentSet
-                    return data?.currentSet?.serverNumber || ''
-                  })()}
-                </span>
-              </div>
-            </div>
-          )}
+          {/* SERVE slot | score | SERVE slot: both slots are always there (the
+              score stays centred, nothing moves when the serve changes
+              side); the serving team's slot shows the SERVE block */}
+          {renderServeSlot('left')}
 
-          {/* Score section - always centered, full width */}
-          <div style={{
+          {/* Score section - centred between the two SERVE slots; two
+              digits a side are always reserved (nothing moves at 10) */}
+          <div data-score-digits="" style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: '100%',
+            minWidth: 'min-content',
             gap: 0
           }}>
             <span style={{
@@ -2491,6 +2609,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
               lineHeight: 1,
               fontVariantNumeric: 'tabular-nums',
               flex: '1 1 0',
+              boxSizing: 'border-box',
+              minWidth: `calc(2ch + ${vmin(0.5)}px)`,
               textAlign: 'right',
               paddingRight: vmin(0.5)
             }}>
@@ -2506,6 +2626,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
               lineHeight: 1,
               fontVariantNumeric: 'tabular-nums',
               flex: '1 1 0',
+              boxSizing: 'border-box',
+              minWidth: `calc(2ch + ${vmin(0.5)}px)`,
               textAlign: 'left',
               paddingLeft: vmin(0.5)
             }}>
@@ -2513,43 +2635,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             </span>
           </div>
 
-          {/* RIGHT SERVE indicator - absolute positioned so it doesn't affect score centering */}
-          {rightServing && (
-            <div style={{
-              position: 'absolute',
-              right: vmin(2),
-              top: '50%',
-              transform: 'translateY(-50%)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 2
-            }}>
-              <span style={{ fontSize: vmin(2.5), color: 'var(--ov-success)', fontWeight: 700 }}>SERVE</span>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: vmin(0.8),
-                background: '#ecfdf5',
-                border: '2px solid #10b981',
-                borderRadius: vmin(0.8),
-                aspectRatio: '1/1',
-                minWidth: vmin(5.5)
-              }}>
-                <span style={{ fontSize: vmin(6), fontWeight: 700, color: 'var(--ov-success)', lineHeight: 0.9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontVariantNumeric: 'tabular-nums' }}>
-                  {(() => {
-                    // Find serving player number from lineup (isServing flag)
-                    for (const pos of [rightLineup?.I, rightLineup?.II, rightLineup?.III, rightLineup?.IV]) {
-                      if (pos && typeof pos === 'object' && pos.isServing) return pos.number
-                    }
-                    // Fallback: use serverNumber from currentSet
-                    return data?.currentSet?.serverNumber || ''
-                  })()}
-                </span>
-              </div>
-            </div>
-          )}
+          {renderServeSlot('right')}
         </div>
 
         {/* SECTION 3: Court Area - Beach Volleyball (2 players per team) */}
@@ -2574,7 +2660,9 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
               height: '98%',
               position: 'relative',
               display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
+              // Two equal halves that never grow with a long name: the net
+              // stays between them and the ball inside the court
+              gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
               background: 'linear-gradient(90deg, #e6c288, #dcb67d)',
               border: '1px solid var(--ov-hairline-strong)',
               overflow: 'hidden'
@@ -2600,15 +2688,19 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                 alignItems: 'center',
                 justifyContent: 'center',
                 position: 'relative',
-                height: '100%'
+                height: '100%',
+                minWidth: 0
               }}>
-                <div style={{
+                <div data-player-stack="left" style={{
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'space-around',
                   alignItems: 'center',
                   height: '95%',
-                  padding: vmin(3),
+                  width: '100%',
+                  minWidth: 0,
+                  boxSizing: 'border-box',
+                  padding: `${vmin(3)}px ${vmin(1)}px`,
                   gap: vmin(2)
                 }}>
                   {(() => {
@@ -2629,15 +2721,19 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                 alignItems: 'center',
                 justifyContent: 'center',
                 position: 'relative',
-                height: '100%'
+                height: '100%',
+                minWidth: 0
               }}>
-                <div style={{
+                <div data-player-stack="right" style={{
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'space-around',
                   alignItems: 'center',
                   height: '95%',
-                  padding: vmin(3),
+                  width: '100%',
+                  minWidth: 0,
+                  boxSizing: 'border-box',
+                  padding: `${vmin(3)}px ${vmin(1)}px`,
                   gap: vmin(2)
                 }}>
                   {(() => {

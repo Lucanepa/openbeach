@@ -6,6 +6,7 @@ import { db } from '../db_beach/db_beach'
 // Beach volleyball ball image
 const ballImage = '/beachball.png'
 import { Results } from '../../scoresheet_pdf_beach/components_beach/FooterSection_beach'
+import { setDurationMinutes } from '../../scoresheet_pdf_beach/components_beach/matchTimes_beach'
 import TestModeControls from './TestModeControls_beach'
 
 export default function MatchEntry({ matchId, team, onBack, embedded = false }) {
@@ -263,21 +264,9 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
         ? (teamBPoints > teamAPoints ? 1 : 0)
         : null
 
-      let duration = ''
-      if (isSetFinished && setInfo?.endTime) {
-        let start
-        if (setNum === 1 && match?.scheduledAt) {
-          start = new Date(match.scheduledAt)
-        } else if (setInfo?.startTime) {
-          start = new Date(setInfo.startTime)
-        } else {
-          start = new Date()
-        }
-        const end = new Date(setInfo.endTime)
-        const durationMs = end.getTime() - start.getTime()
-        const minutes = Math.floor(durationMs / 60000)
-        duration = minutes > 0 ? `${minutes}'` : ''
-      }
+      // end - the set's first rally, as on the sheet (never the schedule)
+      const minutes = isSetFinished && setInfo?.endTime ? setDurationMinutes(setInfo, setEvents) : null
+      const duration = minutes !== null && minutes > 0 ? `${minutes}'` : ''
 
       results.push({
         setNumber: setNum,

@@ -107,6 +107,26 @@ describe('MatchEnd_beach: the approval PDF', () => {
     expect((await db.matches.get(matchId)).approved).toBe(true)
   })
 
+  it('an official match: the remarks as approved are queued in their own job just before the approval (backend db/017)', async () => {
+    await seed({
+      test: false, seed_key: 'match_1759740000000_obappr', remarks: 'Actual start time: 10:05',
+      team1PostGameCaptainSignature: 'data:c1', team2PostGameCaptainSignature: 'data:c2', scorerSignature: 'data:s', ref1Signature: 'data:r1'
+    })
+    renderMatchEnd()
+    await approve()
+    await waitFor(() => expect(opened).toHaveLength(1))
+    await postFromSheet({ type: 'pdfError', reason: 'failed', message: 'boom' })
+    await click(await screen.findByRole('button', { name: 'Approve without PDF' }))
+    expect(await screen.findByRole('button', { name: 'Close match' })).toBeInTheDocument()
+    const jobs = (await db.sync_queue.toArray()).filter(j => j.resource === 'match' && j.action === 'update')
+    const approval = jobs.findIndex(j => j.payload?.status === 'approved')
+    const remarks = jobs.findIndex(j => j.payload && 'remarks' in j.payload)
+    expect(approval).toBeGreaterThan(-1)
+    expect(remarks).toBe(approval - 1)
+    expect(jobs[remarks].payload).toEqual({ id: 'match_1759740000000_obappr', remarks: 'Actual start time: 10:05' })
+    expect('remarks' in jobs[approval].payload).toBe(false)
+  })
+
   it('Approve without PDF approves the match', async () => {
     await seed()
     renderMatchEnd()

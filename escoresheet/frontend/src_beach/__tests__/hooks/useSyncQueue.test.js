@@ -608,6 +608,51 @@ describe('event delete jobs (Undo, Replay, decision change, event editor)', () =
   })
 })
 
+// backend db/017: the approval queues the remarks as approved just before
+// itself. Once the approval has closed the match, the server refuses them
+// (OV_MATCH_CLOSED), so the approval must not overtake them.
+describe('closing order (the approval waits for the older remarks job of its match)', () => {
+  const close = (id, status = 'approved') => ({ id, resource: 'match', action: 'update', status: 'queued', retry_count: 0, payload: { id: 'match_100_aaa', status } })
+  const remarksJob = (id, status = 'queued') => ({ id, resource: 'match', action: 'update', status, retry_count: 0, payload: { id: 'match_100_aaa', remarks: 'Team 1 forfeits the match due to no show' } })
+
+  it('holds the approval while an older remarks job is waiting out a backoff', async () => {
+    fakeDb.sync_queue.reset([remarksJob(1), close(2)])
+    let remarksCalls = 0
+    api.respond = (call) => {
+      if (call.table === 'matches' && call.action === 'update' && 'remarks' in (call.data || {})) {
+        remarksCalls++
+        // a proxy page (4xx without a backend code): the job backs off as 'error'
+        if (remarksCalls === 1) return { data: null, error: { message: 'Bad gateway page', status: 403 } }
+      }
+      return defaultRespond(call)
+    }
+    await runQueuePass()
+    expect(fakeDb.sync_queue.map.get(1).status).toBe('error')
+    await runQueuePass()
+    expect(fakeDb.sync_queue.map.get(2).status).toBe('queued')
+
+    fakeDb.sync_queue.update(1, { status: 'queued', next_attempt_at: 0 })
+    await runQueuePass()
+    await runQueuePass()
+    expect(fakeDb.sync_queue.map.get(1).status).toBe('sent')
+    expect(fakeDb.sync_queue.map.get(2).status).toBe('sent')
+    const updates = api.calls.filter(c => c.table === 'matches' && c.action === 'update')
+    expect(updates.at(-1).data.status).toBe('approved')
+  })
+
+  it('a refused (failed) remarks job, e.g. a server without db/017, does not hold the approval', async () => {
+    fakeDb.sync_queue.reset([remarksJob(1, 'failed'), close(2)])
+    await runQueuePass()
+    expect(fakeDb.sync_queue.map.get(2).status).toBe('sent')
+  })
+
+  it('a newer remarks job does not hold it', async () => {
+    fakeDb.sync_queue.reset([close(1), remarksJob(2)])
+    await runQueuePass()
+    expect(fakeDb.sync_queue.map.get(1).status).toBe('sent')
+  })
+})
+
 // The activity upload job (utils_beach/activity/upload_beach), against the fakes
 const upload = vi.hoisted(() => ({ result: { sent: 0, more: false } }))
 vi.mock('../../utils_beach/activity/upload_beach', () => ({
@@ -928,6 +973,11 @@ describe('failure classes', () => {
       when: 123456
     })
     expect(out).toEqual({ id: 'm', match: { status: 'live', teams: [{ name: 'A' }] }, mapping: 'kept', pinned: true, when: 123456 })
+  })
+
+  it('redactForLog prints the remarks as a length, never their text', () => {
+    expect(redactForLog({ id: 'm', remarks: 'Player 2 Rossi injured' })).toEqual({ id: 'm', remarks: '[22 characters]' })
+    expect(redactForLog({ remarks: null })).toEqual({ remarks: null })
   })
 
   it('redactForLog masks PIN values inside texts and error messages', () => {

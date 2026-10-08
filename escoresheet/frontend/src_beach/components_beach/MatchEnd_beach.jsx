@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db_beach/db_beach'
+import { remarksSnapshotJob } from '../db_beach/remarksSync_beach'
 import { useAlert } from '../contexts_beach/AlertContext_beach'
 import SignaturePad from './SignaturePad_beach'
 import MenuList from './MenuList_beach'
@@ -32,6 +33,7 @@ import { openAppWindow } from '../utils_beach/openAppWindow_beach'
 import { waitForScoresheetPdf, PDF_FAIL, PDF_REQUEST_PARAM } from '../utils_beach/scoresheetPdfRequest_beach'
 import { remarksWithMedical } from '../utils_beach/medicalRemarks_beach'
 import { plausibleMinutes } from '../../scoresheet_pdf_beach/components_beach/sheetFormat_beach'
+import { isoOf, matchTimes, setEndMs, setStartMs } from '../../scoresheet_pdf_beach/components_beach/matchTimes_beach'
 import { formatTimeLocal } from '../utils_beach/timeUtils_beach'
 import { saveMatchSignature, signatureEditLocked, signaturesPayload, clearedPostMatchSignatures, POST_MATCH_SIGNATURE_KEYS } from '../utils_beach/signatures_beach'
 import { approvalSignatureSources, phoneSignContext, signatureSourceUpdate, signedOnPhone, SLOT_OF_ROLE } from '../utils_beach/phoneSignature_beach'
@@ -513,11 +515,12 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         ? (teamBPoints > teamAPoints ? 1 : 0)
         : null
 
-      // The set's own start (set 1 used the scheduled date: "827890'"),
-      // and only a plausible duration (start <= end, at most 3 h)
+      // end - the set's first rally, as on the PDF (matchTimes_beach; set 1
+      // used the scheduled date: "827890'"), and only a plausible duration
+      // (start <= end, at most 3 h)
       let duration = ''
-      if (isSetFinished) {
-        const minutes = plausibleMinutes(setInfo?.startTime, setInfo?.endTime)
+      if (isSetFinished && setInfo?.endTime) {
+        const minutes = plausibleMinutes(isoOf(setStartMs(setInfo, events)), isoOf(setEndMs(setInfo, events)))
         duration = minutes != null && minutes > 0 ? `${minutes}'` : ''
       }
 
@@ -673,19 +676,17 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
   const teamACountryCode = teamAKey === 'team1' ? match?.team1Country : match?.team2Country
   const teamBCountryCode = teamBKey === 'team1' ? match?.team1Country : match?.team2Country
 
-  // Match time info: from the first set's start (the scheduled time only
-  // when no set start is stored), duration only when plausible
-  const firstSetStart = sets.find(s => s.index === 1)?.startTime || null
-  const matchStartIso = firstSetStart || match?.scheduledAt || null
+  // Match time info, as on the PDF (matchTimes_beach): start = set 1's first
+  // rally (empty until the match has started, never the scheduled time),
+  // end = the last set's end, duration only when plausible
+  const matchStartIso = isoOf(matchTimes(sets, events).startMs) || null
   const matchEndDate = finishedSets.length > 0 && finishedSets[finishedSets.length - 1].endTime
-    ? new Date(finishedSets[finishedSets.length - 1].endTime)
+    ? isoOf(setEndMs(finishedSets[finishedSets.length - 1], events))
     : null
 
   // Display times in local timezone
   const matchStart = matchStartIso ? formatTimeLocal(matchStartIso) : ''
-  const matchEndTime = finishedSets.length > 0 && finishedSets[finishedSets.length - 1].endTime
-    ? formatTimeLocal(finishedSets[finishedSets.length - 1].endTime)
-    : ''
+  const matchEndTime = matchEndDate ? formatTimeLocal(matchEndDate) : ''
 
   // Calculate duration as matchEnd - matchStart
   const matchDuration = (() => {
@@ -1313,6 +1314,10 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
             accounts: approvalSummary(match, allSets)
           }
 
+          // The remarks as approved, in their own job just before the
+          // approval (backend db/017: a server without it refuses only that job)
+          const remarksJob = remarksSnapshotJob((await db.matches.get(matchId)) || match)
+          if (remarksJob) await db.sync_queue.add(remarksJob)
           await db.sync_queue.add({
             resource: 'match',
             action: 'update',
