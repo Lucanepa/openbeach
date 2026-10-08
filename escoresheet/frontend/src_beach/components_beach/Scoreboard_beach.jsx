@@ -1237,10 +1237,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       else if (isTimeout) matchStatus = 'timeout'
       else if (isSetInterval) matchStatus = 'interval'
 
-      // Calculate side for next set (odd sets: A on left, even sets: A on right)
-      // This follows the standard volleyball alternation pattern
+      // The side team A plays the next set on (the match's end: the last
+      // set's), by the scorer's own rule (courtSides_beach): the teams stay
+      // where they finished the set, its changes of courts and the TTO's
+      // included, unless "Switch sides" is asked (FIVB beach rule 18.1.1);
+      // set 3 starts on its toss's side. Not alternated by the set's number.
       const nextSideA = isSetInterval
-        ? (nextSetIndex % 2 === 1 ? 'left' : 'right')
+        ? (leftTeamInSet(finalSetIndex, match) === 'A' ? 'left' : 'right')
         : snapshot.sideA
 
       // For interval, points reset to 0 for the new set
