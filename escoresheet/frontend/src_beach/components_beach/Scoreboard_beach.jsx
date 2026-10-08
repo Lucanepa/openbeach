@@ -41,7 +41,8 @@ import { captureFullStateSnapshot as captureStateSnapshot } from '../utils_beach
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
 import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
 import { defaultSetStartTime, scheduledClock, withActualStartTimeRemark, actualStartTimeLine, startScheduleOf, typedStartNear } from '../utils_beach/setStartTime_beach'
-import { withoutAutoRemarks } from '../utils_beach/corrections_beach'
+import { withoutAutoRemarks, errorText as correctionErrorText } from '../utils_beach/corrections_beach'
+import { correctSetTimes } from '../utils_beach/applyCorrectionPlan_beach'
 import { cloudSyncWaitNow } from '../utils_beach/cloudStatus_beach'
 import { formatCourtScore } from '../utils_beach/scoreText_beach'
 import { medicalStartPayload, medicalEndPayload, findOpenMedical, formatMedicalDuration, medicalSecondsLeft, MEDICAL_RECOVERY_SECONDS } from '../utils_beach/medicalEvents_beach'
@@ -5114,6 +5115,30 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     syncLiveStateToSupabase(rows.some(e => e.type === 'point') ? 'manual_score_update' : 'manual_event_delete', null, null)
     refreshScoresheet()
   }, [matchId, discardEvents, applyPointRemovalScore, syncToReferee, syncLiveStateToSupabase, refreshScoresheet])
+
+  // The "Manual changes" panel's set times (Advanced): written as a correction
+  // (correctSetTimes: planSetTimes + applyCorrectionPlan), as the corrections
+  // panel's set times form, so set 1's "Actual start time: HH:MM" remark
+  // follows a changed start (replaced, or removed at the scheduled time). It
+  // wrote the set row directly before. A refused time (an end before the
+  // start) is said, and the field shows the stored time again.
+  const saveManualSetTime = useCallback(async (setRow, field, input) => {
+    const value = input.value ? new Date(input.value).toISOString() : null
+    try {
+      const res = await correctSetTimes({
+        db, matchId, setIndex: setRow.index, [field]: value, t, mode: 'live',
+        hooks: { notifyScoresheetUpdate: refreshScoresheet, syncToReferee, syncLiveState: () => syncLiveStateToSupabase('manual_score_update') }
+      })
+      if (res?.error) {
+        input.value = input.defaultValue
+        showAlert(correctionErrorText(res, t), 'error')
+      }
+    } catch (err) {
+      console.error('[saveManualSetTime] failed', err)
+      input.value = input.defaultValue
+      showAlert(t('scoreboard.confirmFailed'), 'error')
+    }
+  }, [matchId, t, refreshScoresheet, syncToReferee, syncLiveStateToSupabase, showAlert])
 
   // NEW SNAPSHOT-BASED UNDO SYSTEM
   // Instead of complex per-event-type logic, we simply:
@@ -13098,10 +13123,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     const minutes = String(d.getMinutes()).padStart(2, '0')
                                     return `${year}-${month}-${day}T${hours}:${minutes}`
                                   })()}
-                                  onBlur={async (e) => {
-                                    const newTime = e.target.value ? new Date(e.target.value).toISOString() : null
-                                    await db.sets.update(set.id, { startTime: newTime })
-                                  }}
+                                  onBlur={(e) => saveManualSetTime(set, 'startTime', e.target)}
                                   style={{
                                     padding: '4px 6px',
                                     fontSize: '11px',
@@ -13127,10 +13149,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     const minutes = String(d.getMinutes()).padStart(2, '0')
                                     return `${year}-${month}-${day}T${hours}:${minutes}`
                                   })()}
-                                  onBlur={async (e) => {
-                                    const newTime = e.target.value ? new Date(e.target.value).toISOString() : null
-                                    await db.sets.update(set.id, { endTime: newTime })
-                                  }}
+                                  onBlur={(e) => saveManualSetTime(set, 'endTime', e.target)}
                                   style={{
                                     padding: '4px 6px',
                                     fontSize: '11px',

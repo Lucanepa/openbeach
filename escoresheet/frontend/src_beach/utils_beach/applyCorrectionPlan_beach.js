@@ -34,7 +34,7 @@
  * team2Points) and the beach team sanction flags.
  */
 import { scoreFromPointEvents, syncJobsForEvents, eventUpsertJob, teamSanctionFlags, UNSENT_STATUSES } from './scorerCorrections_beach'
-import { appendRemark, removeRemarkLine } from './corrections_beach'
+import { appendRemark, removeRemarkLine, planSetTimes } from './corrections_beach'
 import { clearedPostMatchSignatures, POST_MATCH_SIGNATURE_KEYS, signaturesPayload } from './signatures_beach'
 import { setExtId } from './syncIds_beach'
 import { withActivityContext, EVENT_HISTORY_SCOPE, rememberSeedKey } from '../db_beach/eventHistory_beach'
@@ -89,6 +89,39 @@ export function remarksAfter(remarks, plan) {
 export async function applyCorrectionPlan(plan, opts = {}) {
   if (!plan || plan.error) throw new Error(plan?.error || 'No plan')
   return withActivityContext({ reason: CORRECTION_REASON, actionId: randomUuid() }, () => writePlan(plan, opts))
+}
+
+const sameInstant = (a, b) => {
+  if (!a || !b) return (a || null) === (b || null)
+  return new Date(a).getTime() === new Date(b).getTime()
+}
+
+/**
+ * Correct a set's start and / or end time from the stored match: planned by
+ * planSetTimes and written by applyCorrectionPlan, as the corrections panel's
+ * set times form does. The scoring screen's older "Manual changes" panel
+ * wrote the set row directly, so set 1's "Actual start time: HH:MM" remark
+ * did not follow a changed start (it does here: replaced, or removed at the
+ * scheduled time). A time equal to the stored one is no change.
+ *
+ * @param {{ db:object, matchId:any, setIndex:number, startTime?:string|null, endTime?:string|null, t?:Function|null, mode?:'live'|'review', hooks?:object }} args
+ * @returns {Promise<{ unchanged:true } | { error:string, params?:object } | { addedIds:Array, signaturesCleared:boolean }>}
+ */
+export async function correctSetTimes({ db, matchId, setIndex, startTime, endTime, t = null, mode = 'live', hooks = {} } = {}) {
+  const [match, events, sets] = await Promise.all([
+    db.matches.get(matchId),
+    db.events.where('matchId').equals(matchId).toArray(),
+    db.sets.where('matchId').equals(matchId).toArray()
+  ])
+  const row = sets.find(s => s.index === setIndex)
+  if (!match || !row) return { error: 'corrections.error.notFound' }
+  const changes = {}
+  if (startTime !== undefined && !sameInstant(startTime, row.startTime)) changes.startTime = startTime
+  if (endTime !== undefined && !sameInstant(endTime, row.endTime)) changes.endTime = endTime
+  if (Object.keys(changes).length === 0) return { unchanged: true }
+  const plan = planSetTimes(events, sets, { setIndex, ...changes }, { t, matchId, mode, match })
+  if (plan.error) return { error: plan.error, params: plan.params }
+  return applyCorrectionPlan(plan, { matchId, db, mode, hooks })
 }
 
 async function writePlan(plan, { matchId, db, mode = 'live', hooks = {}, now = new Date() } = {}) {
