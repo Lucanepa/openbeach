@@ -3842,7 +3842,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   })), [runSanctionConfirm, runAction, deferUi, sanctionConfirm, data?.match, data?.set, data?.events, mapSideToTeamKey, matchId, logEvent, handlePoint])
 
   // Confirm set start time
-  const confirmSetStartTime = useCallback(async (time) => {
+  // One action: the start time, the set start, the rally start and the closed
+  // dialog appear together (the dialog closed a frame before the set started)
+  const confirmSetStartTime = useCallback((time) => runAction('setStart', async () => {
     if (!setStartTimeModal || !data?.set) return
 
     // Check if the confirmed time differs from the expected time
@@ -3904,10 +3906,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       seq: nextSeq1
     }, setStartStateBefore)
 
-    setSetStartTimeModal(null)
+    deferUi(() => setSetStartTimeModal(null))
 
-    // Trigger event backup for Safari/Firefox
-    onTriggerEventBackup?.('set_start')
+    // Trigger event backup for Safari/Firefox (after the commit)
+    runOrDefer({ run: () => onTriggerEventBackup?.('set_start') })
 
     // Now actually start the rally
     // Get current serving team and player
@@ -3939,15 +3941,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       await db.events.update(rallyStartEventId, { stateSnapshot: rallyStartSnapshot })
     }
 
-    // Sync to referee immediately after set start
-    syncToReferee()
+    // Sync to referee immediately after set start (after the commit)
+    afterRefereeSync()
 
     // If the start time differs from expected, automatically open remarks
     // (set 1 of a scheduled match already has its remark line)
     if (timeDifferent && !actualStartRemarked) {
-      setShowRemarks(true)
+      deferUi(() => setShowRemarks(true))
     }
-  }, [setStartTimeModal, data?.set, matchId, onTriggerEventBackup, syncToReferee, getCurrentServe, getServingPlayer, leftisTeam1, leftTeam, rightTeam])
+  }), [runAction, deferUi, runOrDefer, afterRefereeSync, setStartTimeModal, data?.set, matchId, onTriggerEventBackup, getCurrentServe, getServingPlayer, leftisTeam1, leftTeam, rightTeam])
 
   // Confirm set end time
   const confirmSetEndTime = useCallback(async (time) => {
