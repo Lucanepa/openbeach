@@ -852,7 +852,12 @@
     "bmpRequest": "Demande de BMP",
     "set3TossFirst": "Saisissez d'abord le tirage au sort du set 3",
     "onePointToSwitch": "Encore 1 point avant changement",
-    "onePointToTto": "Encore 1 point avant le TTO"
+    "onePointToTto": "Encore 1 point avant le TTO",
+    "transitionFinishing": "Fin du set…",
+    "transitionSaving": "Enregistrement du set…",
+    "transitionSyncing": "Synchronisation avec le cloud…",
+    "transitionUploading": "Envoi de la sauvegarde…",
+    "transitionDownloading": "Enregistrement d'un fichier de sauvegarde…"
   },
   "settings": {
     "title": "Paramètres",

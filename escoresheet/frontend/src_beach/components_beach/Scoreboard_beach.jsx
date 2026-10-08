@@ -38,6 +38,7 @@ import { captureFullStateSnapshot as captureStateSnapshot } from '../utils_beach
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
 import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
 import { defaultSetStartTime } from '../utils_beach/setStartTime_beach'
+import { cloudSyncWaitNow } from '../utils_beach/cloudStatus_beach'
 import { formatCourtScore } from '../utils_beach/scoreText_beach'
 import { medicalStartPayload, medicalEndPayload, findOpenMedical, formatMedicalDuration, medicalSecondsLeft, MEDICAL_RECOVERY_SECONDS } from '../utils_beach/medicalEvents_beach'
 
@@ -3854,7 +3855,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     setSetEndTimeModal(null)
 
     // Show loading overlay
-    setSetTransitionLoading({ step: 'Finishing set...' })
+    setSetTransitionLoading({ step: t('scoreboard.transitionFinishing', 'Finishing the set…') })
 
     // Show sync progress modal
     setSyncModalOpen(true)
@@ -3940,7 +3941,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         console.warn('[SET_END_DEBUG] WARNING: data.set.id differs from the unfinished set! Using correct set id:', setIdToUpdate)
       }
 
-      setSetTransitionLoading({ step: 'Saving set data...' })
+      setSetTransitionLoading({ step: t('scoreboard.transitionSaving', 'Saving the set…') })
       const updateResult = await db.sets.update(setIdToUpdate, { finished: true, team1Points, team2Points, endTime: roundToMinute(time) })
 
       // STEP 5: Verify the update actually worked
@@ -3968,7 +3969,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // STEP 8: IMMEDIATE SYNC TO SUPABASE (if not a test match)
       // Sync happens FIRST before any UI operations to ensure data is saved
       if (matchRecord?.test !== true && matchRecord?.seed_key) {
-        setSetTransitionLoading({ step: 'Syncing to cloud...' })
+        // only say so when a sync can finish now (signed in, online, cloud on);
+        // otherwise the set is saved locally and synced in the background
+        if (cloudSyncWaitNow()) setSetTransitionLoading({ step: t('scoreboard.transitionSyncing', 'Syncing to the cloud…') })
 
         // Prepare set update payload
         const setPayload = {
@@ -4098,7 +4101,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
         // Cloud backup at set end (non-blocking)
         if (matchRecord?.test !== true) {
-          setSetTransitionLoading({ step: 'Uploading backup...' })
+          if (cloudSyncWaitNow()) setSetTransitionLoading({ step: t('scoreboard.transitionUploading', 'Uploading the backup…') })
           const gameNum = matchRecord?.gameNumber || matchRecord?.game_n || null
           exportMatchData(matchId).then(backupData => {
             uploadBackupToCloud(matchId, backupData)
@@ -4112,7 +4115,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         const shouldDownload = autoDownloadAtSetEnd && (alwaysDownloadAtSetEnd || !syncSucceeded || isOffline)
 
         if (shouldDownload) {
-          setSetTransitionLoading({ step: 'Downloading backup...' })
+          setSetTransitionLoading({ step: t('scoreboard.transitionDownloading', 'Saving a backup file…') })
           try {
             const allMatches = await db.matches.toArray()
             const allTeams = await db.teams.toArray()
@@ -7045,8 +7048,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
   }, [data, setTransitionLoading, onFinishSet])
 
-  if (!data?.set || setTransitionLoading) {
-    const loadingStep = setTransitionLoading?.step || t('common.loading', 'Loading…')
+  // Only the first load is a full-page loader. The set end's steps are a small
+  // status over the scoring screen (it was blanked for seconds, saying
+  // "Syncing to cloud…" on a device that was not even signed in).
+  if (!data?.set) {
+    const loadingStep = t('common.loading', 'Loading…')
     return (
       <div className="ov-kit fixed inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-stone-50 to-stone-100 px-4" style={{ zIndex: 9999 }}>
         <AppSpinner size={96} label={loadingStep} />
@@ -7091,6 +7097,21 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
   return (
     <div className="match-record">
+      {setTransitionLoading && (
+        // Taps wait while the set is being finished (the court still shows
+        // the old set); the screen stays visible
+        <div data-testid="set-transition-status" style={{ position: 'fixed', inset: 0, zIndex: 9000, cursor: 'progress' }}>
+          <div role="status" aria-live="polite" className="ov-kit" style={{
+            position: 'absolute', top: '12px', left: '50%', transform: 'translateX(-50%)',
+            display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 16px',
+            background: 'var(--ov-card)', border: '1px solid var(--ov-hairline-strong)', borderRadius: '999px',
+            boxShadow: 'var(--ov-shadow-card)', fontSize: '15px', fontWeight: 600, color: 'var(--ov-text)'
+          }}>
+            <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-stone-300 border-t-stone-700" aria-hidden="true" />
+            {setTransitionLoading.step}
+          </div>
+        </div>
+      )}
       {/* Portrait mode warning overlay for devices that don't support orientation lock (iOS) */}
       {!isLandscape && (
         <div className="ov-kit fixed inset-0 flex flex-col items-center justify-center overflow-y-auto bg-gradient-to-br from-stone-100 via-stone-50 to-stone-100 px-4 py-6" style={{ zIndex: 99999 }}>

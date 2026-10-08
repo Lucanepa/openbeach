@@ -207,3 +207,18 @@ describe('issue 15: "One point to switch / TTO" does not cover the players', () 
     expect(chip).toContain("t('scoreboard.onePointToSwitch', 'One point to switch')")
   })
 })
+
+describe('issue 16: no blank page at set end', () => {
+  it('only the first load is a full-page loader; the set end shows a status over the screen', () => {
+    expect(sb).not.toContain('if (!data?.set || setTransitionLoading) {')
+    expect(sb).toContain('if (!data?.set) {')
+    const overlay = between(sb, 'data-testid="set-transition-status"', '{setTransitionLoading.step}')
+    expect(overlay).toContain('role="status"')
+    expect(overlay).not.toContain('bg-gradient')
+  })
+
+  it('"Syncing to the cloud" only when a sync can finish now; the steps are translated', () => {
+    expect(sb).toContain("if (cloudSyncWaitNow()) setSetTransitionLoading({ step: t('scoreboard.transitionSyncing'")
+    expect(sb).not.toMatch(/setSetTransitionLoading\(\{ step: '[A-Z]/)
+  })
+})
