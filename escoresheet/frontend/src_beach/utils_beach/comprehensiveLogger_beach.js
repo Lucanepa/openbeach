@@ -334,16 +334,58 @@ function persistToLocalStorageSync() {
   }
 }
 
+// Entries typed into a password or PIN field before this fix carried the
+// secret (eventCapture redacted by field name only). Such an entry is dropped,
+// here and from the emergency copies, never exported.
+const SECRET_LABEL = /password|passwort|secret|token|pin|credential/i
+// A PIN on screen (Show PINs, the match popover, the connect dialog) is six
+// digits, possibly grouped ("771 234"): a click on it must not put it in the
+// log (eventCapture). Runs of 6+ digits go (a 6-digit game number too: the
+// entry carries the game number anyway).
+const DIGIT_RUN = /\d(?:[\s -]?\d){5,}/g
+
+/** Visible text of a clicked element for the log, without PIN-like digit runs. */
+export function redactScreenText(text) {
+  if (text == null) return null
+  return String(text).replace(DIGIT_RUN, '[digits]')
+}
+
+// Entries stored before the click text was redacted: scrubbed on export
+function scrubExportEntry(entry) {
+  const t = entry?.target
+  if (!t || typeof t !== 'object') return entry
+  const href = typeof t.href === 'string' ? t.href.split(/[?#]/)[0] : t.href
+  return { ...entry, target: { ...t, textContent: redactScreenText(t.textContent ?? null), ariaLabel: redactScreenText(t.ariaLabel ?? null), href } }
+}
+
+export function isSecretEntry(entry) {
+  const t = entry?.target
+  if (!t) return false
+  if (t.type === 'password') return true
+  return [t.name, t.id, t.ariaLabel].some(v => typeof v === 'string' && SECRET_LABEL.test(v))
+}
+
+async function purgeSecretEntries() {
+  try {
+    if (!db.interaction_logs) return
+    const ids = await db.interaction_logs.filter(isSecretEntry).primaryKeys()
+    if (ids.length) await db.interaction_logs.bulkDelete(ids)
+  } catch (err) {
+    console.error('[ComprehensiveLogger] Purge failed:', err)
+  }
+}
+
 /**
  * Recover logs from previous session
  */
 async function recoverFromStorage() {
+  await purgeSecretEntries()
   try {
     // Check localStorage emergency backup
     const emergencyKeys = Object.keys(localStorage).filter(k => k.startsWith('comprehensive_logs_emergency_'))
     for (const key of emergencyKeys) {
       try {
-        const logs = JSON.parse(localStorage.getItem(key))
+        const logs = (JSON.parse(localStorage.getItem(key)) || []).filter(e => !isSecretEntry(e))
         if (Array.isArray(logs) && logs.length > 0) {
           // Store in IndexedDB
           if (db.interaction_logs) {
@@ -391,11 +433,12 @@ export async function getAllLogs(gameN = null) {
     const allLogs = [...indexedDBLogs, ...bufferLogs]
     allLogs.sort((a, b) => a.ts - b.ts)
 
-    return allLogs
+    // Never hand out a typed secret or a PIN clicked on screen
+    return allLogs.filter(e => !isSecretEntry(e)).map(scrubExportEntry)
 
   } catch (err) {
     console.error('[ComprehensiveLogger] Error getting logs:', err)
-    return [...logBuffer]
+    return logBuffer.filter(e => !isSecretEntry(e)).map(scrubExportEntry)
   }
 }
 
