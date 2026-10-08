@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest'
-import { render, waitFor } from '@testing-library/react'
+import { render, waitFor, cleanup } from '@testing-library/react'
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import en from '../../i18n_beach/locales/en.json'
@@ -9,15 +9,18 @@ import en from '../../i18n_beach/locales/en.json'
 // then applies it at once instead of showing "Update available".
 
 const sw = vi.hoisted(() => ({ needRefresh: true, updateServiceWorker: vi.fn(), dismissUpdate: () => {} }))
-vi.mock('../../hooks_beach/useServiceWorker_beach', () => ({ default: () => sw }))
+vi.mock('../../hooks_beach/useServiceWorker_beach', async (importOriginal) => ({ ...(await importOriginal()), default: () => sw }))
 
 import UpdateBanner from '../../components_beach/UpdateBanner_beach'
+import { AUTO_UPDATE_KEY } from '../../hooks_beach/useServiceWorker_beach'
 
 beforeAll(async () => {
   await i18n.use(initReactI18next).init({ lng: 'en', fallbackLng: 'en', resources: { en: { translation: en } } })
 })
 
 afterEach(() => {
+  cleanup()
+  sessionStorage.clear()
   delete window.__TAURI_INTERNALS__
   vi.unstubAllGlobals()
   sw.updateServiceWorker.mockReset()
@@ -34,6 +37,16 @@ describe('UpdateBanner on the desktop app', () => {
 
   it('a browser still gets the banner', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ json: async () => ({ version: '9.9.9' }) }))
+    const { container } = render(<UpdateBanner />)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(container).not.toBeEmptyDOMElement()
+    expect(sw.updateServiceWorker).not.toHaveBeenCalled()
+  })
+
+  it('a second time right after its own try: the banner instead (no reload loop)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ json: async () => ({ version: '9.9.9' }) }))
+    window.__TAURI_INTERNALS__ = { invoke: vi.fn(), metadata: { currentWindow: { label: 'main' } } }
+    sessionStorage.setItem(AUTO_UPDATE_KEY, String(Date.now() - 4000))
     const { container } = render(<UpdateBanner />)
     await new Promise((r) => setTimeout(r, 0))
     expect(container).not.toBeEmptyDOMElement()
