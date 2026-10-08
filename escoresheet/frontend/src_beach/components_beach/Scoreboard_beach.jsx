@@ -35,6 +35,7 @@ import { scorerRelay, scorerPublisher, scorerRelayUrl, readRelayBundle, relayMat
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot } from '../utils_beach/stateSnapshot_beach'
+import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
 
 // Sport type for beach volleyball
 const SPORT_TYPE = 'beach'
@@ -1610,54 +1611,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // Before coin toss, default to team1 left, team2 right
     const isBeforeCoinToss = !data?.match?.coinTossTeamA || !data?.match?.coinTossTeamB
     if (isBeforeCoinToss || !data?.set) return true
-
-    const setIndex = data.set.index
-
-    // Between sets (set 2 or 3 interval): use bench side positioning
-    if (setIndex >= 2) {
-      const allSets = (data.sets || []).sort((a, b) => a.index - b.index)
-      const previousSet = allSets.find(s => s.index === setIndex - 1)
-      const hasSetStarted = data.events?.some(e =>
-        (e.type === 'point' || e.type === 'set_start') && e.setIndex === setIndex
-      )
-      if (previousSet?.finished && !hasSetStarted) {
-        return data.match?.team1BenchSide === 'left'
-      }
-    }
-
-    // Check for manual override first (for sets 1-3)
-    if (setIndex >= 1 && setIndex <= 3 && data.match?.setLeftTeamOverrides) {
-      const override = data.match.setLeftTeamOverrides[setIndex]
-      if (override) {
-        // Override is 'A' or 'B'
-        const leftTeamKey = override === 'A' ? teamAKey : teamBKey
-        return leftTeamKey === 'team1'
-      }
-    }
-
-    // Set 1: Team A on left
-    if (setIndex === 1) {
-      return teamAKey === 'team1'
-    }
-
-    // Set 3: Use set3LeftTeam from coin toss as default (before any court switches)
-    if (setIndex === 3) {
-      if (data.match?.set3LeftTeam) {
-        const leftTeamKey = data.match.set3LeftTeam === 'A' ? teamAKey : teamBKey
-        return leftTeamKey === 'team1'
-      }
-
-      // Fallback: Set 3 starts with teams switched (like set 2)
-      return teamAKey !== 'team1'
-    }
-
-    // Sets 2, 3, 4: Teams alternate sides (automatic if no override)
-    // Set 1: Team A left, Team B right
-    // Set 2: Team A right, Team B left (switched)
-    // Set 3: Team A left, Team B right (new coin toss determines sides)
-    // Pattern for beach volleyball: Set 1-2 alternate, Set 3 uses new coin toss
-    return setIndex % 2 === 1 ? (teamAKey === 'team1') : (teamAKey !== 'team1')
-  }, [data?.set, data?.sets, data?.events, data?.match?.set3LeftTeam, data?.match?.setLeftTeamOverrides, data?.match?.team1BenchSide, teamAKey])
+    // One rule for the court, the interval preview and the started set
+    // (courtSides_beach): the interval shows the side the next set starts on
+    return isTeam1LeftInSet(data.set.index, data.match)
+  }, [data?.set, data?.match])
 
   // Calculate sets won by each team
   const setsWon = useMemo(() => {
@@ -2866,20 +2823,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           // A/B Model: Team A = coin toss winner (constant), side_a = which side they're on
           const teamAKey = match?.coinTossTeamA || 'team1'
           const teamBKey = teamAKey === 'team1' ? 'team2' : 'team1'
-          const setLeftTeamOverrides = match?.setLeftTeamOverrides || {}
-
           // Determine which side Team A is on this set
-          // setLeftTeamOverrides stores 'A' or 'B', set3LeftTeam stores 'A' or 'B'
-          let sideA // 'left' or 'right'
-          if (setLeftTeamOverrides[setIndex] !== undefined) {
-            sideA = setLeftTeamOverrides[setIndex] === 'A' ? 'left' : 'right'
-          } else if (setIndex === 3 && match?.set3CourtSwitched && match?.set3LeftTeam) {
-            sideA = match.set3LeftTeam === 'A' ? 'left' : 'right'
-          } else {
-            // Default fallback - actual positions are set during setup phase
-            // Teams stay where they finished the previous set (switching every 7 pts in sets 1-2, every 5 pts in set 3)
-            sideA = setIndex % 2 === 1 ? 'left' : 'right'
-          }
+          // (courtSides_beach: the same rule as the scorer's court)
+          const sideA = leftTeamInSet(setIndex, match) === 'A' ? 'left' : 'right'
 
           // Derive left/right team keys from A/B model
           const leftTeamKey = sideA === 'left' ? teamAKey : teamBKey
@@ -4211,10 +4157,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             // Get team A/B assignments for set 3
             const set2TeamAKey = data?.match?.coinTossTeamA || 'team1'
 
-            // Determine current positions at end of set 2 (set 2 has teams switched from set 1)
-            const set2leftisTeam1 = set2TeamAKey !== 'team1'
-            const set2LeftTeamKey = set2leftisTeam1 ? 'team1' : 'team2'
-            const set2LeftTeamLabel = set2LeftTeamKey === set2TeamAKey ? 'A' : 'B'
+            // The side the teams finished set 2 on (its court switches included)
+            const set2LeftTeamLabel = leftTeamInSet(2, await db.matches.get(matchId))
 
             // Get current serve at end of set 2
             const currentServe = getCurrentServe()
@@ -4235,6 +4179,24 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               set3FirstServe: selectedFirstServe,
               set3CourtSwitched: false
             })
+          }
+
+          // Set 2 starts on the side set 1 finished on (rule 18.1.1: the
+          // courts change in the interval only if requested). Written now, so
+          // the interval's preview and "Switch sides" act on the same value.
+          if (newSetIndex === 2) {
+            const sidesMatch = await db.matches.get(matchId)
+            const sides = nextSetStartSides(2, sidesMatch)
+            await db.matches.update(matchId, sides)
+            if (sidesMatch?.seed_key && !sidesMatch?.test) {
+              await db.sync_queue.add({
+                resource: 'match',
+                action: 'update',
+                payload: { id: sidesMatch.seed_key, ...sides },
+                ts: new Date().toISOString(),
+                status: 'queued'
+              })
+            }
           }
 
           // Check if a set with this index already exists
@@ -4429,27 +4391,22 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
   }, [matchId, data?.match, getNextSeq, captureFullStateSnapshot])
 
-  // Switch which team starts on which side for the next set
+  // Switch which team starts on which side for the next set: toggles the
+  // side the interval shows, which is the side the set starts on
   const handleBetweenSetsSwitchSides = useCallback(async () => {
     if (!data?.match || !data?.set) return
 
-    const setIndex = data.set.index
-    const currentOverrides = data.match.setLeftTeamOverrides || {}
-
-    // Get current left team for this set
-    let currentLeftTeam
-    if (currentOverrides[setIndex]) {
-      currentLeftTeam = currentOverrides[setIndex]
-    } else {
-      // Default pattern: Set 1 = A left, Set 2 = B left
-      currentLeftTeam = setIndex % 2 === 1 ? 'A' : 'B'
+    const update = switchSidesUpdate(data.set.index, data.match, { beforeSetStart: true })
+    await db.matches.update(matchId, update)
+    if (data.match?.seed_key && !data.match?.test) {
+      await db.sync_queue.add({
+        resource: 'match',
+        action: 'update',
+        payload: { id: data.match.seed_key, ...update },
+        ts: new Date().toISOString(),
+        status: 'queued'
+      })
     }
-
-    // Toggle: if A is on left, make B on left (and vice versa)
-    const newLeftTeam = currentLeftTeam === 'A' ? 'B' : 'A'
-    const updatedOverrides = { ...currentOverrides, [setIndex]: newLeftTeam }
-
-    await db.matches.update(matchId, { setLeftTeamOverrides: updatedOverrides })
   }, [data?.match, data?.set, matchId])
 
   // Switch which team serves first for the next set (Set 2 or Set 3 interval)
@@ -5767,22 +5724,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const timeout = setTimeout(() => {
         if (ttoModal?.triggerCourtSwitchAfter && data?.match && data?.set) {
           const setIndex = ttoModal.set.index
-          if (setIndex >= 1 && setIndex <= 4) {
-            const currentOverrides = data.match.setLeftTeamOverrides || {}
-            let currentLeftTeam
-            if (currentOverrides[setIndex]) {
-              currentLeftTeam = currentOverrides[setIndex]
-            } else {
-              currentLeftTeam = setIndex % 2 === 1 ? 'A' : 'B'
-            }
-            const newLeftTeam = currentLeftTeam === 'A' ? 'B' : 'A'
-            const updatedOverrides = { ...currentOverrides, [setIndex]: newLeftTeam }
-            db.matches.update(matchId, { setLeftTeamOverrides: updatedOverrides })
+          if (setIndex >= 1 && setIndex <= 3) {
+            const update = switchSidesUpdate(setIndex, data.match)
+            db.matches.update(matchId, update)
             if (data.match?.seed_key) {
               db.sync_queue.add({
                 resource: 'match',
                 action: 'update',
-                payload: { id: data.match.seed_key, setLeftTeamOverrides: updatedOverrides },
+                payload: { id: data.match.seed_key, ...update },
                 createdAt: new Date().toISOString()
               })
             }
@@ -6890,59 +6839,16 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // Store pre-switch overrides so undo can restore them
     const preSwitchOverrides = data.match.setLeftTeamOverrides ? { ...data.match.setLeftTeamOverrides } : {}
 
-    if (setIndex === 3) {
-      // Set 3: Mark that courts have been switched at 8 points AND swap court sides
-      const currentOverrides = data.match.setLeftTeamOverrides || {}
-
-      // Determine current left team (from override or default pattern)
-      let currentLeftTeam
-      if (currentOverrides[setIndex]) {
-        currentLeftTeam = currentOverrides[setIndex] // 'A' or 'B'
-      } else {
-        // Set 3 uses set3LeftTeam from coin toss
-        currentLeftTeam = data.match.set3LeftTeam || 'A'
-      }
-
-      // Toggle: if A is on left, make B on left (and vice versa)
-      const newLeftTeam = currentLeftTeam === 'A' ? 'B' : 'A'
-      const updatedOverrides = { ...currentOverrides, [setIndex]: newLeftTeam }
-
-      await db.matches.update(matchId, { setLeftTeamOverrides: updatedOverrides })
+    if (setIndex >= 1 && setIndex <= 3) {
+      const update = switchSidesUpdate(setIndex, data.match)
+      await db.matches.update(matchId, update)
 
       // Sync to Supabase
       if (data.match?.seed_key) {
         await db.sync_queue.add({
           resource: 'match',
           action: 'update',
-          payload: { id: data.match.seed_key, setLeftTeamOverrides: updatedOverrides },
-          createdAt: new Date().toISOString()
-        })
-      }
-    } else if (setIndex >= 1 && setIndex <= 2) {
-      // Sets 1-4: Update setLeftTeamOverrides to swap teams
-      const currentOverrides = data.match.setLeftTeamOverrides || {}
-      
-      // Determine current left team (from override or default pattern)
-      let currentLeftTeam
-      if (currentOverrides[setIndex]) {
-        currentLeftTeam = currentOverrides[setIndex] // 'A' or 'B'
-      } else {
-        // Default pattern for beach volleyball: Set 1 = A left, Set 2 = B left, Set 3 = determined by coin toss
-        currentLeftTeam = setIndex % 2 === 1 ? 'A' : 'B'
-      }
-      
-      // Toggle: if A is on left, make B on left (and vice versa)
-      const newLeftTeam = currentLeftTeam === 'A' ? 'B' : 'A'
-      const updatedOverrides = { ...currentOverrides, [setIndex]: newLeftTeam }
-      
-      await db.matches.update(matchId, { setLeftTeamOverrides: updatedOverrides })
-      
-      // Sync to Supabase
-      if (data.match?.seed_key) {
-        await db.sync_queue.add({
-          resource: 'match',
-          action: 'update',
-          payload: { id: data.match.seed_key, setLeftTeamOverrides: updatedOverrides },
+          payload: { id: data.match.seed_key, ...update },
           createdAt: new Date().toISOString()
         })
       }
@@ -6984,31 +6890,16 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     if (shouldSwitchCourts && data?.match && data?.set) {
       const setIndex = ttoModal.set.index
 
-      if (setIndex >= 1 && setIndex <= 4) {
-        // Sets 1-4: Update setLeftTeamOverrides to swap teams
-        const currentOverrides = data.match.setLeftTeamOverrides || {}
-
-        // Determine current left team (from override or default pattern)
-        let currentLeftTeam
-        if (currentOverrides[setIndex]) {
-          currentLeftTeam = currentOverrides[setIndex] // 'A' or 'B'
-        } else {
-          // Default pattern for beach volleyball: Set 1 = A left, Set 2 = B left, Set 3 = coin toss
-          currentLeftTeam = setIndex % 2 === 1 ? 'A' : 'B'
-        }
-
-        // Toggle: if A is on left, make B on left (and vice versa)
-        const newLeftTeam = currentLeftTeam === 'A' ? 'B' : 'A'
-        const updatedOverrides = { ...currentOverrides, [setIndex]: newLeftTeam }
-
-        await db.matches.update(matchId, { setLeftTeamOverrides: updatedOverrides })
+      if (setIndex >= 1 && setIndex <= 3) {
+        const update = switchSidesUpdate(setIndex, data.match)
+        await db.matches.update(matchId, update)
 
         // Sync to Supabase
         if (data.match?.seed_key) {
           await db.sync_queue.add({
             resource: 'match',
             action: 'update',
-            payload: { id: data.match.seed_key, setLeftTeamOverrides: updatedOverrides },
+            payload: { id: data.match.seed_key, ...update },
             createdAt: new Date().toISOString()
           })
         }
@@ -11550,21 +11441,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   {data?.match && (() => {
                     // Calculate which team is on which side based on set index and overrides
                     const currentSetIndex = data.set?.index || 1
-                    const setLeftTeamOverrides = data.match?.setLeftTeamOverrides || {}
-                    const is3rdSet = currentSetIndex === 3
-                    const set3LeftTeam = data.match?.set3LeftTeam
-
-                    let sideA // 'left' or 'right' for Team A
-                    if (setLeftTeamOverrides[currentSetIndex] !== undefined) {
-                      // Override stores 'A' or 'B' (not 'team1'/'team2')
-                      sideA = setLeftTeamOverrides[currentSetIndex] === 'A' ? 'left' : 'right'
-                    } else if (is3rdSet && set3LeftTeam) {
-                      // set3LeftTeam stores 'A' or 'B'
-                      sideA = set3LeftTeam === 'A' ? 'left' : 'right'
-                    } else {
-                      // Default alternating pattern: odd sets = A on left, even sets = A on right
-                      sideA = currentSetIndex % 2 === 1 ? 'left' : 'right'
-                    }
+                    const sideA = leftTeamInSet(currentSetIndex, data.match) === 'A' ? 'left' : 'right'
 
                     // If Team A is on left, and Team A is team1, then team1 is on left
                     const leftisTeam1 = sideA === 'left' ? (teamAKey === 'team1') : (teamAKey !== 'team1')
@@ -11666,54 +11543,22 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
                                 const getTeamLabel = (ab) => ab === 'A' ? (teamAKey === 'team1' ? 'team1' : 'team2') : (teamAKey === 'team1' ? 'team2' : 'team1')
 
-                                if (setIdx === 3) {
-                                  const automatic5 = teamAKey === 'team1' ? 'A' : 'B'
-                                  const currentLeftTeam = data.match.set3LeftTeam || automatic5
-                                  const newLeftTeam = currentLeftTeam === 'A' ? 'B' : 'A'
-                                  const oldLeft = getTeamLabel(currentLeftTeam)
-                                  const newLeft = getTeamLabel(newLeftTeam)
-                                  await db.matches.update(matchId, { set3LeftTeam: newLeftTeam })
-                                  // Sync to Supabase
-                                  if (data.match?.seed_key) {
-                                    db.sync_queue.add({
-                                      resource: 'match',
-                                      action: 'update',
-                                      payload: { id: data.match.seed_key, set3LeftTeam: newLeftTeam },
-                                      createdAt: new Date().toISOString()
-                                    })
-                                  }
-                                  logManualChange('Teams Setup', 'Court Sides', `${oldLeft} on left`, `${newLeft} on left`, `Switched court sides (Set 3)`)
-                                  // Sync updated side to Supabase live state
-                                  syncLiveStateToSupabase('manual_side_change', null, { oldSide: oldLeft, newSide: newLeft })
-                                } else {
-                                  // Sets 1-2: Use setLeftTeamOverrides to swap sides only
-                                  const currentOverrides = data.match.setLeftTeamOverrides || {}
-                                  let currentLeftAB
-                                  if (currentOverrides[setIdx]) {
-                                    currentLeftAB = currentOverrides[setIdx]
-                                  } else {
-                                    currentLeftAB = setIdx % 2 === 1 ? 'A' : 'B'
-                                  }
-                                  const newLeftAB = currentLeftAB === 'A' ? 'B' : 'A'
-                                  const updatedOverrides = { ...currentOverrides, [setIdx]: newLeftAB }
-
-                                  const oldLeft = getTeamLabel(currentLeftAB)
-                                  const newLeft = getTeamLabel(newLeftAB)
-
-                                  await db.matches.update(matchId, { setLeftTeamOverrides: updatedOverrides })
-
-                                  if (data.match?.seed_key) {
-                                    db.sync_queue.add({
-                                      resource: 'match',
-                                      action: 'update',
-                                      payload: { id: data.match.seed_key, setLeftTeamOverrides: updatedOverrides },
-                                      createdAt: new Date().toISOString()
-                                    })
-                                  }
-
-                                  logManualChange('Teams Setup', 'Court Sides', `${oldLeft} on left`, `${newLeft} on left`, `Switched court sides (Set ${setIdx})`)
-                                  syncLiveStateToSupabase('manual_side_change', null, { oldSide: oldLeft, newSide: newLeft })
+                                const currentLeftAB = leftTeamInSet(setIdx, data.match)
+                                const newLeftAB = currentLeftAB === 'A' ? 'B' : 'A'
+                                const update = switchSidesUpdate(setIdx, data.match, { beforeSetStart: true })
+                                const oldLeft = getTeamLabel(currentLeftAB)
+                                const newLeft = getTeamLabel(newLeftAB)
+                                await db.matches.update(matchId, update)
+                                if (data.match?.seed_key) {
+                                  db.sync_queue.add({
+                                    resource: 'match',
+                                    action: 'update',
+                                    payload: { id: data.match.seed_key, ...update },
+                                    createdAt: new Date().toISOString()
+                                  })
                                 }
+                                logManualChange('Teams Setup', 'Court Sides', `${oldLeft} on left`, `${newLeft} on left`, `Switched court sides (Set ${setIdx})`)
+                                syncLiveStateToSupabase('manual_side_change', null, { oldSide: oldLeft, newSide: newLeft })
                               }}
                               style={{
                                 flex: 1,

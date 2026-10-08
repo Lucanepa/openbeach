@@ -45,3 +45,28 @@ describe('issue 1: the player / sanction / medical menu keeps one size', () => {
     expect(menu).not.toContain("scale(1.02)")
   })
 })
+
+describe('issue 2: "Switch sides" in the set interval', () => {
+  it('the interval preview uses the same rule as the started set, not team1BenchSide', () => {
+    const memo = between(sb, 'const leftisTeam1 = useMemo(() => {', '// Calculate sets won by each team')
+    expect(memo).not.toContain('team1BenchSide')
+    expect(memo).toContain('isTeam1LeftInSet(data.set.index, data.match)')
+  })
+
+  it('the button toggles the side the preview shows', () => {
+    const h = between(sb, 'const handleBetweenSetsSwitchSides = useCallback', '// Switch which team serves first')
+    expect(h).toContain('switchSidesUpdate(data.set.index, data.match, { beforeSetStart: true })')
+    expect(h).not.toMatch(/setIndex % 2 === 1 \? 'A' : 'B'/)
+  })
+
+  it('no court switch path keeps its own "default side" (set 2 = B left)', () => {
+    expect(sb).not.toMatch(/currentLeftTeam = setIndex % 2 === 1 \? 'A' : 'B'/)
+    expect(sb).not.toMatch(/currentLeftAB = setIdx % 2 === 1 \? 'A' : 'B'/)
+  })
+
+  it('set 2 is created on the side set 1 finished on; set 3 defaults to the side set 2 finished on', () => {
+    const end = between(sb, 'const newSetIndex = setIndex + 1', '// Check if a set with this index already exists')
+    expect(end).toContain('leftTeamInSet(2, await db.matches.get(matchId))')
+    expect(sb).toContain('const sides = nextSetStartSides(2, sidesMatch)')
+  })
+})
