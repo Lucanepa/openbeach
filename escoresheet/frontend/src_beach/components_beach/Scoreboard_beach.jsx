@@ -4539,8 +4539,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
   }, [set3SideServiceModal, data?.match, matchId, getNextSeq, getStateSnapshot])
 
-  // Handle Set 3 coin toss (before Set 3 starts)
-  const handleSet3CoinToss = useCallback(async (winner) => {
+  // Handle Set 3 coin toss (before Set 3 starts). One action: the toss, its
+  // event and snapshot show together (the toss buttons went 6 frames before
+  // LAST ACTION named the winner)
+  const handleSet3CoinToss = useCallback((winner) => runAction('set3CoinToss', async () => {
     if (!data?.match) return
 
     await db.matches.update(matchId, { set3CoinTossWinner: winner })
@@ -4562,7 +4564,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     if (coinTossWinnerSnapshot) {
       await db.events.update(coinTossWinnerEventId, { stateSnapshot: coinTossWinnerSnapshot })
     }
-  }, [matchId, data?.match, getNextSeq, captureFullStateSnapshot])
+  }), [runAction, matchId, data?.match, getNextSeq, captureFullStateSnapshot])
 
   // Switch which team starts on which side for the next set: toggles the
   // side the interval shows, which is the side the set starts on
