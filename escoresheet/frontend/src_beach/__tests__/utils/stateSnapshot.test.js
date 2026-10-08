@@ -92,6 +92,26 @@ describe('captureFullStateSnapshot', () => {
     expect(s.lineupA.I.number).toBe(2)
   })
 
+  it('the sides (sideA) are the scorer\'s: after a change of courts, in a set without its own override, in set 3', async () => {
+    const sideAWith = async (fields, setIndex = 1) => {
+      const matchId = await seedMatch()
+      await db.matches.update(matchId, fields)
+      if (setIndex > 1) {
+        await db.sets.where({ matchId }).modify({ finished: true })
+        await db.sets.add({ matchId, index: setIndex, team1Points: 0, team2Points: 0, finished: false })
+      }
+      return (await captureFullStateSnapshot(db, matchId)).sideA
+    }
+    // the change of courts at the TTO (or any other) wrote B on the left
+    expect(await sideAWith({ setLeftTeamOverrides: { 1: 'B' } })).toBe('right')
+    // set 2 without its own override: where set 1 ended (no change between
+    // sets unless asked), not alternated
+    expect(await sideAWith({ setLeftTeamOverrides: { 1: 'A' } }, 2)).toBe('left')
+    expect(await sideAWith({ setLeftTeamOverrides: { 1: 'B' } }, 2)).toBe('right')
+    // set 3: its toss's side until its first change
+    expect(await sideAWith({ setLeftTeamOverrides: { 1: 'A', 2: 'A' }, set3LeftTeam: 'B' }, 3)).toBe('right')
+  })
+
   it('a match without players still gives a snapshot', async () => {
     const matchId = await seedMatch({ withPlayers: false })
     const s = await captureFullStateSnapshot(db, matchId)

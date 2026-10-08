@@ -1,3 +1,5 @@
+import { leftTeamInSet } from './courtSides_beach'
+
 /**
  * The full match state at this moment, read fresh from IndexedDB: what the
  * snapshot-based undo restores, what every event stores as stateSnapshot and
@@ -41,23 +43,15 @@ export async function captureFullStateSnapshot(db, matchId) {
     const setIndex = currentSet.index
     const teamAKey = match.coinTossTeamA || 'team1'
     const teamBKey = teamAKey === 'team1' ? 'team2' : 'team1'
-    const is3rdSet = setIndex === 3
     const set3CourtSwitched = match.set3CourtSwitched
     const set3LeftTeam = match.set3LeftTeam
 
-    // Determine which side Team A is on this set
-    // setLeftTeamOverrides stores 'A' or 'B' - which team is on the LEFT
+    // Which side Team A is on this set: the scorer's own rule
+    // (courtSides_beach: setLeftTeamOverrides holds 'A' / 'B', written by
+    // every change of courts, the TTO's too; set 3 starts on its toss's
+    // side; no change between sets unless asked)
     const setLeftTeamOverrides = match.setLeftTeamOverrides || {}
-    let sideA
-    if (setLeftTeamOverrides[setIndex] !== undefined) {
-      // Override stores 'A' or 'B', not 'team1'/'team2'
-      sideA = setLeftTeamOverrides[setIndex] === 'A' ? 'left' : 'right'
-    } else if (is3rdSet && set3LeftTeam) {
-      // Use set3LeftTeam for Set 3 (from coin toss or manual switch)
-      sideA = set3LeftTeam === 'A' ? 'left' : 'right'
-    } else {
-      sideA = setIndex % 2 === 1 ? 'left' : 'right'
-    }
+    const sideA = leftTeamInSet(setIndex, match) === 'A' ? 'left' : 'right'
 
     // Team names and colors
     const teamAName = teamAKey === 'team1' ? match.team1Name : match.team2Name
