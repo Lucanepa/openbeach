@@ -15,7 +15,7 @@ import { useSyncQueue } from '../hooks_beach/useSyncQueue_beach'
 import { useConfirmAction } from '../hooks_beach/useConfirmAction_beach'
 import { useActionLiveQuery } from '../hooks_beach/useActionLiveQuery_beach'
 import { useScorerActions, pickLiveStateSnapshot, isReportedActionError } from '../hooks_beach/useScorerActions_beach'
-import { withActivityContext, currentActivityContext, maxVoidedSeq } from '../db_beach/eventHistory_beach'
+import { withActivityContext, currentActivityContext, maxVoidedSeq, rememberSeedKey } from '../db_beach/eventHistory_beach'
 import CorrectionsPanel from './corrections/CorrectionsPanel_beach'
 import { useSequentialSync } from '../hooks_beach/useSequentialSync_beach'
 
@@ -796,6 +796,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     captureFinalSnapshot: captureFullStateSnapshot,
     onError: onConfirmFailed
   })
+
+  // The event history (db_beach/eventHistory_beach) queues the void / edit job
+  // of an undone or changed event INSIDE the action's transaction only when it
+  // knows the match's seed_key (after a reload it does not): told here
+  useEffect(() => {
+    if (matchId != null && data?.match) rememberSeedKey(matchId, data.match.seed_key ?? null, data.match.test === true)
+  }, [matchId, data?.match?.seed_key, data?.match?.test]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Restore match state from a snapshot (used by undo)
   const restoreStateFromSnapshot = useCallback(async (snapshot) => {
