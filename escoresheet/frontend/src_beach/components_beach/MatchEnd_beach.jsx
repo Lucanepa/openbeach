@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db_beach/db_beach'
@@ -48,6 +48,7 @@ import { Textarea } from '../ui/volleyui/Textarea.jsx'
 import { confirmDialog, toast } from '../ui/volleyui/uiStore.js'
 import { modalCancelClass, modalSaveClass } from '../ui/volleyui/Modal.jsx'
 import { cn } from '../ui/volleyui/cn.js'
+import { preload, usePreloaded } from '../utils_beach/preload_beach'
 
 // volleyui recipes of the match end page (the official result, sanction and
 // remarks boxes inside keep the scoresheet's own black-on-white look, §7)
@@ -314,11 +315,8 @@ function MatchEndPageView({ children }) {
   )
 }
 
-export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualAdjustments }) {
-  const { t, i18n } = useTranslation()
-  const { vmin } = useScaledLayout()
-  const cLogger = useComponentLogging('MatchEnd')
-  const data = useLiveQuery(async () => {
+// Everything Match End shows of a match
+async function readMatchEnd(matchId) {
     const match = await db.matches.get(matchId)
     if (!match) return null
 
@@ -355,10 +353,46 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       sets,
       events
     }
-  }, [matchId])
+}
+
+const matchEndKey = (matchId) => `matchEnd:${matchId}`
+
+/**
+ * Read by App before it opens Match End: the page then shows filled in its
+ * first paint, never empty first (as OpenVolley's OV-14, laptop run
+ * 2026-10-08), and the scoreboard's set-end screen stays until then.
+ */
+export const preloadMatchEnd = (matchId) => preload(matchEndKey(matchId), () => readMatchEnd(matchId))
+
+export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualAdjustments }) {
+  const { t, i18n } = useTranslation()
+  const { vmin } = useScaledLayout()
+  const cLogger = useComponentLogging('MatchEnd')
+  const preloaded = usePreloaded(matchId != null ? matchEndKey(matchId) : null)
+  const data = useLiveQuery(() => readMatchEnd(matchId), [matchId], preloaded)
 
   const { showAlert } = useAlert()
   const [openSignature, setOpenSignature] = useState(null)
+  // A saved signature's pad closes in the render that shows it in its box
+  // ({ role, field, value }: the pad's slot, the match field and the saved
+  // image; only that slot's pad is closed). The pad went a
+  // frame before the signature (OpenVolley laptop run OV-16). A layout
+  // effect, so the close is in the same paint; a write that never shows
+  // closes it anyway.
+  const [closePadWhenShown, setClosePadWhenShown] = useState(null)
+  useLayoutEffect(() => {
+    if (!closePadWhenShown) return undefined
+    if ((data?.match?.[closePadWhenShown.field] ?? null) === closePadWhenShown.value) {
+      setOpenSignature(cur => (cur === closePadWhenShown.role ? null : cur))
+      setClosePadWhenShown(null)
+      return undefined
+    }
+    const timer = setTimeout(() => {
+      setOpenSignature(cur => (cur === closePadWhenShown.role ? null : cur))
+      setClosePadWhenShown(null)
+    }, 1500)
+    return () => clearTimeout(timer)
+  }, [data, closePadWhenShown])
   const [isApproved, setIsApproved] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   // showCloseConfirm modal removed - now using direct post-approval buttons
@@ -769,8 +803,18 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
   // A signature drawn here or received from a phone (the pad's onSave)
   const handleSaveSignature = async (role, signatureData, meta) => {
     cLogger.logHandler('handleSaveSignature', { role, source: meta?.source || 'device' })
-    if (signaturesLocked) return
-    await writeSignature(role, signatureData, meta)
+    if (signaturesLocked) {
+      setOpenSignature(null)
+      return
+    }
+    // The pad closes with the signature on screen (closePadWhenShown). Armed
+    // before the write: the screen can show the signature before the write
+    // returns (an official match queues its upload after it), and the pad then
+    // stayed open a change longer
+    const field = signatureFieldMap[role]
+    if (field) setClosePadWhenShown({ role, field, value: signatureData ?? null })
+    const written = await writeSignature(role, signatureData, meta)
+    if (!written) setClosePadWhenShown(null)
     // A new signature (drawn here or from a phone) completes the slot: a stale
     // account approval of it (the result changed since) is dropped from the local copy
     const slot = ROLE_TO_SLOT[role]
@@ -778,10 +822,10 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       const stale = approvalFor(match, role)
       if (stale && !isApprovalValid(stale, sets)) await removeLocalApproval(slot, stale.id)
     }
-    // Close this slot's pad only: the next box opens as soon as the signature
-    // is on the match row, before its sync job is queued, and on a slow
-    // tablet the pad tapped open in between was closed here (2026-10-08)
-    setOpenSignature(current => (current === role ? null : current))
+    // Close this slot's pad only (the saved one closes from the layout effect
+    // once the signature shows): a pad tapped open for the next box while
+    // this save was still running stays open (2026-10-08)
+    if (!written || !signatureFieldMap[role]) setOpenSignature(current => (current === role ? null : current))
   }
 
   // "Clear": the signature goes at once (saved and synced), then the pad opens
@@ -1405,8 +1449,8 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         await db.matches.delete(matchId)
       })
 
-      // Navigate home
-      if (onGoHome) onGoHome()
+      // Navigate home (the match is gone: App leaves it out at once)
+      if (onGoHome) onGoHome({ closed: true })
     } catch (error) {
       console.error('[MatchEnd] Error closing match:', error)
       showAlert(t('matchEnd.errorClosing', { error: error.message }), 'error')
@@ -1799,6 +1843,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         title={openSignature ? getSignatureLabel(openSignature) : ''}
         existingSignature={openSignature ? getSignatureData(openSignature) : null}
         onSave={(signatureData, meta) => handleSaveSignature(openSignature, signatureData, meta)}
+        closeOnSave={false}
         onClose={() => setOpenSignature(null)}
         phone={openSignature ? {
           // Approved or closed: no phone session can start

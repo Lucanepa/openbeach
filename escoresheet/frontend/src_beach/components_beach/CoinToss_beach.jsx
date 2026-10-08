@@ -215,6 +215,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
   const [deletePlayerModal, setDeletePlayerModal] = useState(null)
   const [noticeModal, setNoticeModal] = useState(null)
   const [initModal, setInitModal] = useState(null) // { status: 'syncing' | 'verifying' | 'success' | 'error', message: string }
+  const [starting, setStarting] = useState(false) // the confirmed coin toss is starting the match
   const [openSignature, setOpenSignature] = useState(null)
   const [birthdateConfirmModal, setBirthdateConfirmModal] = useState(null) // { suspiciousDates: [], onConfirm: fn }
   const [rosterModalSignature, setRosterModalSignature] = useState(null) // 'captain' | null - for signing within roster modal (beach volleyball: captain only)
@@ -1141,7 +1142,9 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
     // offline mode or a device without a session syncs in the background and
     // starts the match at once (it waited 9-13 s for nothing).
     const waitForCloud = !match?.test && cloudSyncWaitNow()
-    setInitModal({ status: 'syncing', message: 'Syncing match data...' })
+    // Nothing to wait for: no dialog either (it only flashed for two frames
+    // before the scoreboard; verification of OB-3, 2026-10-08)
+    if (waitForCloud) setInitModal({ status: 'syncing', message: 'Syncing match data...' })
 
     // Wait for sync queue to process (poll for completion)
     const maxAttempts = waitForCloud ? 30 : 0 // 15 seconds max
@@ -1341,14 +1344,16 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
     })
 
     // Success!
-    setInitModal({ status: 'success', message: 'Match initialized!' })
+    if (waitForCloud) setInitModal({ status: 'success', message: 'Match initialized!' })
 
     // Short delay to show success message (none when nothing was waited for)
     if (waitForCloud) await new Promise(resolve => setTimeout(resolve, 1000))
 
+    // Navigate to scoreboard: the dialog closes with the page (App opens the
+    // scoreboard once it has read the match), not before it
+    await onConfirm(matchId)
     setInitModal(null)
-    // Navigate to scoreboard
-    onConfirm(matchId)
+    return true
   }
 
   async function confirmCoinToss() {
@@ -1483,7 +1488,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
             onConfirm: () => {
               setBirthdateConfirmModal(null)
               // Continue with coin toss after confirmation
-              proceedWithCoinToss()
+              proceedWithStartButton()
             }
           })
           return
@@ -1502,7 +1507,21 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
     }
 
     // All validations passed, proceed
-    proceedWithCoinToss()
+    await proceedWithStartButton()
+  }
+
+  // The page keeps its 'Confirm the coin toss' button while the match
+  // starts: the match row says confirmed long before the page goes, and the
+  // button swapped to 'Return to match' (another width: the layout moved;
+  // laptop run 2026-10-08, OB-3)
+  async function proceedWithStartButton() {
+    setStarting(true)
+    let started = false
+    try {
+      started = (await proceedWithCoinToss()) === true
+    } finally {
+      if (!started) setStarting(false)
+    }
   }
 
   async function handleReturnToMatch() {
@@ -1912,12 +1931,12 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
             }
           ]}
         />
-        {isCoinTossConfirmed ? (
+        {isCoinTossConfirmed && !starting ? (
           <button type="button" onClick={handleReturnToMatch} className={cn('inline-flex min-h-14 min-w-64 items-center justify-center rounded-xl bg-slate-900 px-8 text-base font-semibold text-white transition-colors hover:bg-slate-800', FOCUS_RING)}>
             {t('coinToss.returnToMatch')}
           </button>
         ) : (
-          <button type="button" onClick={confirmCoinToss} className={cn('inline-flex min-h-14 min-w-64 items-center justify-center rounded-xl bg-red-600 px-8 text-base font-semibold text-white transition-colors hover:bg-red-700', FOCUS_RING)}>
+          <button type="button" onClick={confirmCoinToss} disabled={starting} className={cn('inline-flex min-h-14 min-w-64 items-center justify-center rounded-xl bg-red-600 px-8 text-base font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed', FOCUS_RING)}>
             {t('coinToss.confirmResult')}
           </button>
         )}

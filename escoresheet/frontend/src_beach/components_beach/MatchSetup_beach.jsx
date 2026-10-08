@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react'
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, memo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useTranslation } from 'react-i18next'
 import { openAppWindow } from '../utils_beach/openAppWindow_beach'
@@ -42,6 +42,7 @@ import { Switch } from '../ui/volleyui/Switch.jsx'
 import { KeyValue } from '../ui/volleyui/KeyValue.jsx'
 import { SectionHeader } from '../ui/volleyui/SectionHeader.jsx'
 import { Modal as KitModal, modalCancelClass, modalPrimaryClass, modalSaveClass } from '../ui/volleyui/Modal.jsx'
+import { preload, usePreloaded } from '../utils_beach/preload_beach'
 
 // ---- volleyui class strings for the setup views --------------------------
 // A section inside the setup page card (match info, officials, dashboards,
@@ -421,6 +422,31 @@ function formatDobForSync(dob) {
   return null // Unknown format, don't sync
 }
 
+// What Match Setup shows of a stored match, read in one go: the match, its
+// teams and their players
+function readSetup(matchId) {
+  return db.transaction('r', db.matches, db.teams, db.players, async () => {
+    const match = await db.matches.get(matchId)
+    if (!match) return { match: null }
+    const [team1, team2, team1Players, team2Players] = await Promise.all([
+      match.team1Id ? db.teams.get(match.team1Id) : null,
+      match.team2Id ? db.teams.get(match.team2Id) : null,
+      match.team1Id ? db.players.where('teamId').equals(match.team1Id).sortBy('number') : [],
+      match.team2Id ? db.players.where('teamId').equals(match.team2Id).sortBy('number') : []
+    ])
+    return { match, team1, team2, team1Players, team2Players }
+  })
+}
+
+const setupKey = (matchId) => `matchSetup:${matchId}`
+
+/**
+ * Read by App before it opens Match Setup on a stored match: the setup then
+ * shows filled in its first paint, never 'Not set' first (laptop run
+ * 2026-10-08, OB-2), and the screen before it stays until then.
+ */
+export const preloadMatchSetup = (matchId) => preload(setupKey(matchId), () => readSetup(matchId))
+
 export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, onOpenCoinToss, offlineMode = false, onLoadCompetitionMatch }) {
   const { t } = useTranslation()
   const { scaleFactor: baseScaleFactor } = useScaledLayout()
@@ -611,7 +637,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   // Referee selector state
   const [showRefereeSelector, setShowRefereeSelector] = useState(null) // 'ref1' | 'ref2' | null
   const [refereeSelectorPosition, setRefereeSelectorPosition] = useState({})
-  const rosterLoadedRef = useRef(false) // Track if roster has been loaded to prevent overwriting user edits
   const team1InputRef = useRef(null)
   const team2InputRef = useRef(null)
   const team1MeasureRef = useRef(null)
@@ -707,6 +732,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     players: team2Roster.length
   }
 
+  // The stored match, its teams and players, when App read them before
+  // opening the setup (preloadMatchSetup)
+  const preloaded = usePreloaded(matchId ? setupKey(matchId) : null)
+
   // Load match data if matchId is provided
   const match = useLiveQuery(async () => {
     if (!matchId) return null
@@ -716,7 +745,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       console.error('Unable to load match', error)
       return null
     }
-  }, [matchId])
+  }, [matchId], preloaded?.match)
 
   const isMatchOngoing = match?.status === 'live'
 
@@ -1008,23 +1037,25 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     if (o.team2Name !== undefined) setTeam2Name(o.team2Name)
   }
 
-  // Load match data if matchId is provided
-  // Split into two effects: one for initial load (matchId only), one for updates (match changes)
-
-  // Initial load effect - only runs when matchId changes or when match becomes available
-  useEffect(() => {
-    if (!matchId) return
+  // The form's fields from the stored match, once per match: later changes
+  // of the stored match never overwrite the scorer's edits. Preloaded, in
+  // the commit that first shows the setup (a layout effect: before the
+  // paint); else read here once the match is there.
+  const appliedMatchRef = useRef(null)
+  useLayoutEffect(() => {
+    if (!matchId || appliedMatchRef.current === matchId) return
+    if (preloaded?.match) {
+      appliedMatchRef.current = matchId
+      applyStoredMatch(preloaded)
+      return
+    }
     if (!match) return // Wait for match to be loaded from useLiveQuery
-    if (rosterLoadedRef.current) return // Already loaded for this matchId - don't reload to preserve user edits
+    appliedMatchRef.current = matchId
+    readSetup(matchId).then(applyStoredMatch, (error) => console.error('Error loading initial match data:', error))
 
-    async function loadInitialData() {
+    function applyStoredMatch({ match, team1, team2, team1Players, team2Players }) {
+      if (!match) return
       try {
-        // Load teams
-        const [team1, team2] = await Promise.all([
-          match.team1Id ? db.teams.get(match.team1Id) : null,
-          match.team2Id ? db.teams.get(match.team2Id) : null
-        ])
-
         if (team1) {
           setTeam1Name(team1.name)
           setTeam1Color(team1.color || '#ef4444')
@@ -1086,6 +1117,100 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         if (match.team1Country) setTeam1Country(match.team1Country)
         if (match.team2Country) setTeam2Country(match.team2Country)
 
+        // Load players only on initial load (when matchId changes, not when match updates)
+        // Skip if roster was already loaded from draft (to preserve user edits like number/captain changes)
+        if (match.team1Id && !rosterLoadedFromDraft.current.team1) {
+          setTeam1Roster(team1Players.map(p => ({
+            id: p.id, // Store player ID for updates
+            number: p.number,
+            firstName: p.firstName || '',
+            lastName: p.lastName || p.name || '',
+            dob: p.dob || '',
+            isCaptain: p.isCaptain || false
+          })))
+        }
+        if (match.team2Id && !rosterLoadedFromDraft.current.team2) {
+          setTeam2Roster(team2Players.map(p => ({
+            id: p.id, // Store player ID for updates
+            number: p.number,
+            firstName: p.firstName || '',
+            lastName: p.lastName || p.name || '',
+            dob: p.dob || '',
+            isCaptain: p.isCaptain || false
+          })))
+        }
+
+        // Load match officials
+        if (match.officials && match.officials.length > 0) {
+          const ref1 = match.officials.find(o => o.role === '1st referee')
+          if (ref1) {
+            setRef1First(ref1.firstName || '')
+            setRef1Last(ref1.lastName || '')
+            setRef1Country(ref1.country || 'CHE')
+            setRef1Dob(ref1.dob || '01.01.1900')
+          }
+          const ref2 = match.officials.find(o => o.role === '2nd referee')
+          if (ref2) {
+            setRef2First(ref2.firstName || '')
+            setRef2Last(ref2.lastName || '')
+            setRef2Country(ref2.country || 'CHE')
+            setRef2Dob(ref2.dob || '01.01.1900')
+          }
+          const scorer = match.officials.find(o => o.role === 'scorer')
+          if (scorer) {
+            setScorerFirst(scorer.firstName || '')
+            setScorerLast(scorer.lastName || '')
+            setScorerCountry(scorer.country || 'CHE')
+            setScorerDob(scorer.dob || '01.01.1900')
+          }
+          const asst = match.officials.find(o => o.role === 'assistant scorer')
+          if (asst) {
+            setAsstFirst(asst.firstName || '')
+            setAsstLast(asst.lastName || '')
+            setAsstCountry(asst.country || 'CHE')
+            setAsstDob(asst.dob || '01.01.1900')
+          }
+          // Load line judges
+          const lj1 = match.officials.find(o => o.role === 'line judge 1')
+          if (lj1) setLineJudge1(lj1.name || '')
+          const lj2 = match.officials.find(o => o.role === 'line judge 2')
+          if (lj2) setLineJudge2(lj2.name || '')
+          const lj3 = match.officials.find(o => o.role === 'line judge 3')
+          if (lj3) setLineJudge3(lj3.name || '')
+          const lj4 = match.officials.find(o => o.role === 'line judge 4')
+          if (lj4) setLineJudge4(lj4.name || '')
+        }
+
+        // Note: Coin toss data is loaded and managed by CoinToss.jsx component
+        // Captain signatures are collected at coin toss, not in roster setup
+
+        // If match was explicitly confirmed (user clicked "Create Match"), restore that state
+        // This flag is set in confirmMatchInfo and persisted in the database
+        // We check matchInfoConfirmedAt instead of just team IDs to prevent auto-confirm
+        // when auto-save creates teams before user explicitly confirms
+        if (match.matchInfoConfirmedAt && team1 && team2) {
+          setMatchInfoConfirmed(true)
+        }
+
+        // Auto-navigate to info view for competition matches that aren't confirmed yet
+        if (match.competitionMatchId && !match.matchInfoConfirmedAt) {
+          setCurrentView('info')
+        }
+      } catch (error) {
+        console.error('Error loading initial match data:', error)
+      }
+    }
+  }, [matchId, preloaded, match])
+
+  // After the first read, once per match: complete the stored match
+  // (connection PINs, connection flags) and queue new PINs for the server
+  const completedMatchRef = useRef(null)
+  useEffect(() => {
+    if (!matchId || !match || completedMatchRef.current === matchId) return
+    completedMatchRef.current = matchId
+
+    async function completeMatch() {
+      try {
         // Generate PINs if they don't exist (for matches created before PIN feature)
         const generatePinCode = (existingPins = []) => {
           const chars = '0123456789'
@@ -1164,31 +1289,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           }
         }
 
-        // Load players only on initial load (when matchId changes, not when match updates)
-        // Skip if roster was already loaded from draft (to preserve user edits like number/captain changes)
-        if (match.team1Id && !rosterLoadedFromDraft.current.team1) {
-          const team1Players = await db.players.where('teamId').equals(match.team1Id).sortBy('number')
-          setTeam1Roster(team1Players.map(p => ({
-            id: p.id, // Store player ID for updates
-            number: p.number,
-            firstName: p.firstName || '',
-            lastName: p.lastName || p.name || '',
-            dob: p.dob || '',
-            isCaptain: p.isCaptain || false
-          })))
-        }
-        if (match.team2Id && !rosterLoadedFromDraft.current.team2) {
-          const team2Players = await db.players.where('teamId').equals(match.team2Id).sortBy('number')
-          setTeam2Roster(team2Players.map(p => ({
-            id: p.id, // Store player ID for updates
-            number: p.number,
-            firstName: p.firstName || '',
-            lastName: p.lastName || p.name || '',
-            dob: p.dob || '',
-            isCaptain: p.isCaptain || false
-          })))
-        }
-
         // Migrate old matches: ensure connection fields are explicitly set to false if undefined
         const connectionUpdates = {}
         if (match.refereeConnectionEnabled === undefined) connectionUpdates.refereeConnectionEnabled = false
@@ -1197,78 +1297,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         if (Object.keys(connectionUpdates).length > 0) {
           await db.matches.update(matchId, connectionUpdates)
         }
-
-        // Mark roster as loaded
-        rosterLoadedRef.current = true
-
-        // Load match officials
-        if (match.officials && match.officials.length > 0) {
-          const ref1 = match.officials.find(o => o.role === '1st referee')
-          if (ref1) {
-            setRef1First(ref1.firstName || '')
-            setRef1Last(ref1.lastName || '')
-            setRef1Country(ref1.country || 'CHE')
-            setRef1Dob(ref1.dob || '01.01.1900')
-          }
-          const ref2 = match.officials.find(o => o.role === '2nd referee')
-          if (ref2) {
-            setRef2First(ref2.firstName || '')
-            setRef2Last(ref2.lastName || '')
-            setRef2Country(ref2.country || 'CHE')
-            setRef2Dob(ref2.dob || '01.01.1900')
-          }
-          const scorer = match.officials.find(o => o.role === 'scorer')
-          if (scorer) {
-            setScorerFirst(scorer.firstName || '')
-            setScorerLast(scorer.lastName || '')
-            setScorerCountry(scorer.country || 'CHE')
-            setScorerDob(scorer.dob || '01.01.1900')
-          }
-          const asst = match.officials.find(o => o.role === 'assistant scorer')
-          if (asst) {
-            setAsstFirst(asst.firstName || '')
-            setAsstLast(asst.lastName || '')
-            setAsstCountry(asst.country || 'CHE')
-            setAsstDob(asst.dob || '01.01.1900')
-          }
-          // Load line judges
-          const lj1 = match.officials.find(o => o.role === 'line judge 1')
-          if (lj1) setLineJudge1(lj1.name || '')
-          const lj2 = match.officials.find(o => o.role === 'line judge 2')
-          if (lj2) setLineJudge2(lj2.name || '')
-          const lj3 = match.officials.find(o => o.role === 'line judge 3')
-          if (lj3) setLineJudge3(lj3.name || '')
-          const lj4 = match.officials.find(o => o.role === 'line judge 4')
-          if (lj4) setLineJudge4(lj4.name || '')
-        }
-
-        // Note: Coin toss data is loaded and managed by CoinToss.jsx component
-        // Captain signatures are collected at coin toss, not in roster setup
-
-        // If match was explicitly confirmed (user clicked "Create Match"), restore that state
-        // This flag is set in confirmMatchInfo and persisted in the database
-        // We check matchInfoConfirmedAt instead of just team IDs to prevent auto-confirm
-        // when auto-save creates teams before user explicitly confirms
-        if (match.matchInfoConfirmedAt && team1 && team2) {
-          setMatchInfoConfirmed(true)
-        }
-
-        // Auto-navigate to info view for competition matches that aren't confirmed yet
-        if (match.competitionMatchId && !match.matchInfoConfirmedAt) {
-          setCurrentView('info')
-        }
       } catch (error) {
-        console.error('Error loading initial match data:', error)
+        console.error('Error completing the match:', error)
       }
     }
 
-    loadInitialData()
-  }, [matchId, match]) // Depend on both matchId and match - but only load once per matchId due to rosterLoadedRef check
-
-  // Reset roster loaded flag when matchId changes
-  useEffect(() => {
-    rosterLoadedRef.current = false
-  }, [matchId])
+    completeMatch()
+  }, [matchId, match])
 
   // Auto-fill scorer fields from logged-in user profile
   // Only applies when scorer fields are empty (new match or scorer not yet set)

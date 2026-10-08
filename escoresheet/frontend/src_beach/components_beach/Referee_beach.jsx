@@ -2448,8 +2448,9 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             { divider: true }
           ] : []),
           // Diagnostics mode on (?diag=1): the referee tablet's lines leave
-          // only through this export (no Options on this screen)
-          ...(diagnosticsState().on ? [
+          // only through this export (no Options on this screen). Not in the
+          // desktop app's pop-up window: its lines are in the scoretable's file.
+          ...(diagnosticsState().on && diagnosticsState().sink !== 'forward' ? [
             {
               icon: <Download size={14} aria-hidden="true" />,
               label: t('options.exportDiagnostics'),

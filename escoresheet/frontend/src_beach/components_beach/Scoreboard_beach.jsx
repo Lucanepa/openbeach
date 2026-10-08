@@ -75,6 +75,7 @@ import { modalCancelClass, modalPrimaryClass, ActionSheet, ActionSheetItem } fro
 import { dayLabel, timeSecondsLabel } from '../ui/volleyui/format.js'
 import { openAppWindow } from '../utils_beach/openAppWindow_beach'
 import { discPaint } from '../utils_beach/teamColours_beach'
+import { preload, usePreloaded } from '../utils_beach/preload_beach'
 
 // ── volleyui chrome for the scoring screen ───────────────────────────────────
 // Only the chrome around the court takes these: the toolbar, the side columns,
@@ -211,6 +212,102 @@ async function queueCurrentSet(seedKey, index) {
 // Live-state write failures already shown to the scorer this session (one
 // modal per kind, never one per point)
 const liveStateErrorShown = new Set()
+
+// The scoring screen's data, read in ONE read transaction (useActionLiveQuery:
+// a scorer action's dialogs change in the render that shows its data)
+function readScoreboard(matchId) {
+  return db.transaction('r', db.matches, db.teams, db.sets, db.players, db.events, async () => {
+    const match = await db.matches.get(matchId)
+    if (!match) return null
+
+    // Support both old (team1TeamId/team2TeamId) and new (team1Id/team2Id) field names
+    const team1TeamId = match?.team1Id || match?.team1TeamId
+    const team2TeamId = match?.team2Id || match?.team2TeamId
+    const [team1Team, team2Team] = await Promise.all([
+      team1TeamId ? db.teams.get(team1TeamId) : null,
+      team2TeamId ? db.teams.get(team2TeamId) : null
+    ])
+
+    const sets = await db.sets
+      .where('matchId')
+      .equals(matchId)
+      .sortBy('index')
+
+    // Find the current set: first unfinished set, preferring highest id if duplicates exist
+    // Also filter out any duplicate indices, keeping the latest one (highest id)
+    const setsByIndex = new Map()
+    for (const set of sets) {
+      const existing = setsByIndex.get(set.index)
+      if (!existing || set.id > existing.id) {
+        setsByIndex.set(set.index, set)
+      }
+    }
+    const dedupedSets = Array.from(setsByIndex.values()).sort((a, b) => a.index - b.index)
+    const currentSet = dedupedSets.find(s => !s.finished) ?? null
+
+    const [team1Players, team2Players] = await Promise.all([
+      team1TeamId
+        ? db.players.where('teamId').equals(team1TeamId).sortBy('number')
+        : [],
+      team2TeamId
+        ? db.players.where('teamId').equals(team2TeamId).sortBy('number')
+        : []
+    ])
+
+    // Get all events for the match (keep logs across sets)
+    // Sort by seq if available, otherwise by ts
+    const eventsRaw = await db.events
+      .where('matchId')
+      .equals(matchId)
+      .toArray()
+
+    const events = eventsRaw.sort((a, b) => {
+      // Sort by sequence number if available
+      const aSeq = a.seq || 0
+      const bSeq = b.seq || 0
+      if (aSeq !== 0 || bSeq !== 0) {
+        return aSeq - bSeq // Ascending
+      }
+      // Fallback to timestamp for legacy events
+      const aTime = typeof a.ts === 'number' ? a.ts : new Date(a.ts).getTime()
+      const bTime = typeof b.ts === 'number' ? b.ts : new Date(b.ts).getTime()
+      return aTime - bTime
+    })
+
+    // Log all action IDs to track sequence numbers (show only base integer IDs, not decimals)
+    const baseActionIds = events
+      .map(e => {
+        const seq = e.seq || 0
+        return Math.floor(seq) // Get integer part only
+      })
+      .filter(id => id > 0)
+      .filter((id, index, self) => self.indexOf(id) === index) // Remove duplicates
+
+    // Action IDs tracked internally
+
+    const result = {
+      set: currentSet,
+      match,
+      team1Team,
+      team2Team,
+      team1Players,
+      team2Players,
+      events,
+      sets: dedupedSets
+    }
+
+    return result
+  })
+}
+
+const scoreboardKey = (matchId) => `scoreboard:${matchId}`
+
+/**
+ * Read by App before it opens the scoreboard: its first paint shows the
+ * match, never 'Loading...' first (laptop run 2026-10-08, OB-3), and the
+ * screen before it stays until then.
+ */
+export const preloadScoreboard = (matchId) => preload(scoreboardKey(matchId), () => readScoreboard(matchId))
 
 export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onFinishSet, onOpenSetup, onOpenMatchSetup, onOpenCoinToss, onTriggerEventBackup }) {
   // diagnostics mode: React commits per user action (nothing while it is off)
@@ -368,6 +465,15 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   const [ttoModal, setTtoModal] = useState(null) // { set, team1Points, team2Points, countdown?, started? } | null - Technical Timeout
   const [preEventPopup, setPreEventPopup] = useState(null) // { message: string } | null - "One point to switch/TTO" notification
   const [timeoutModal, setTimeoutModal] = useState(null) // { team: 'team1'|'team2', countdown: number, started: boolean }
+  // Latest values for syncLiveStateToSupabase, which does not list them (as
+  // OpenVolley): listing them would remake it, and all that depends on it,
+  // at every countdown tick; reading the state froze them at its last remake.
+  const timeoutModalRef = useRef(null)
+  const ttoModalRef = useRef(null)
+  const scorerAttentionTriggerRef = useRef(scorerAttentionTrigger)
+  useEffect(() => { timeoutModalRef.current = timeoutModal }, [timeoutModal])
+  useEffect(() => { ttoModalRef.current = ttoModal }, [ttoModal])
+  useEffect(() => { scorerAttentionTriggerRef.current = scorerAttentionTrigger }, [scorerAttentionTrigger])
 const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { countdown: number, started: boolean, finished?: boolean } | null
   const countdownDismissedRef = useRef(false) // Track if countdown was manually dismissed
   const setEndModalDismissedRef = useRef(null) // Track setIndex where set end modal was dismissed via undo
@@ -762,90 +868,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     viewportHeight / DESIGN_HEIGHT
   )
 
-  // The scoring screen's data, read in ONE read transaction (useActionLiveQuery:
-  // a scorer action's dialogs change in the render that shows its data)
-  const [data, commits] = useActionLiveQuery(() => db.transaction('r', db.matches, db.teams, db.sets, db.players, db.events, async () => {
-    const match = await db.matches.get(matchId)
-    if (!match) return null
-
-    // Support both old (team1TeamId/team2TeamId) and new (team1Id/team2Id) field names
-    const team1TeamId = match?.team1Id || match?.team1TeamId
-    const team2TeamId = match?.team2Id || match?.team2TeamId
-    const [team1Team, team2Team] = await Promise.all([
-      team1TeamId ? db.teams.get(team1TeamId) : null,
-      team2TeamId ? db.teams.get(team2TeamId) : null
-    ])
-
-    const sets = await db.sets
-      .where('matchId')
-      .equals(matchId)
-      .sortBy('index')
-
-    // Find the current set: first unfinished set, preferring highest id if duplicates exist
-    // Also filter out any duplicate indices, keeping the latest one (highest id)
-    const setsByIndex = new Map()
-    for (const set of sets) {
-      const existing = setsByIndex.get(set.index)
-      if (!existing || set.id > existing.id) {
-        setsByIndex.set(set.index, set)
-      }
-    }
-    const dedupedSets = Array.from(setsByIndex.values()).sort((a, b) => a.index - b.index)
-    const currentSet = dedupedSets.find(s => !s.finished) ?? null
-
-    const [team1Players, team2Players] = await Promise.all([
-      team1TeamId
-        ? db.players.where('teamId').equals(team1TeamId).sortBy('number')
-        : [],
-      team2TeamId
-        ? db.players.where('teamId').equals(team2TeamId).sortBy('number')
-        : []
-    ])
-
-    // Get all events for the match (keep logs across sets)
-    // Sort by seq if available, otherwise by ts
-    const eventsRaw = await db.events
-      .where('matchId')
-      .equals(matchId)
-      .toArray()
-
-    const events = eventsRaw.sort((a, b) => {
-      // Sort by sequence number if available
-      const aSeq = a.seq || 0
-      const bSeq = b.seq || 0
-      if (aSeq !== 0 || bSeq !== 0) {
-        return aSeq - bSeq // Ascending
-      }
-      // Fallback to timestamp for legacy events
-      const aTime = typeof a.ts === 'number' ? a.ts : new Date(a.ts).getTime()
-      const bTime = typeof b.ts === 'number' ? b.ts : new Date(b.ts).getTime()
-      return aTime - bTime
-    })
-
-    // Log all action IDs to track sequence numbers (show only base integer IDs, not decimals)
-    const baseActionIds = events
-      .map(e => {
-        const seq = e.seq || 0
-        return Math.floor(seq) // Get integer part only
-      })
-      .filter(id => id > 0)
-      .filter((id, index, self) => self.indexOf(id) === index) // Remove duplicates
-
-    // Action IDs tracked internally
-
-    const result = {
-      set: currentSet,
-      match,
-      team1Team,
-      team2Team,
-      team1Players,
-      team2Players,
-      events,
-      sets: dedupedSets
-    }
-
-    return result
-  }), [matchId])
+  // App's read when it opened the scoreboard (preloadScoreboard): the first
+  // paint shows the match, not 'Loading...' first
+  const preloaded = usePreloaded(matchId != null ? scoreboardKey(matchId) : null)
+  const [data, commits] = useActionLiveQuery(() => readScoreboard(matchId), [matchId], preloaded)
 
   // --- Live connection health monitoring ---
   const handleDeviceDisconnected = useCallback(({ label }) => {
@@ -878,8 +904,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     return {
       matchId: data.match?.id,
       setIndex: data.set?.index,
-      team1Score: data.set?.team1Score,
-      team2Score: data.set?.team2Score,
+      team1Score: data.set?.team1Points,
+      team2Score: data.set?.team2Points,
       currentServe: data.set?.currentServe,
       team1Rotation: data.set?.team1Rotation,
       team2Rotation: data.set?.team2Rotation,
@@ -1167,6 +1193,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   // cachedSnapshot: Optional snapshot passed from logEvent to avoid re-fetching/re-computing
   const syncLiveStateToSupabase = useCallback(async (eventType, eventTeam, eventData, cachedSnapshot = null) => {
     const _tl = performance.now()
+    // The time-out, TTO and attention trigger of the call (read before any
+    // await: a TTO ending right after this call is already null by then)
+    const timeoutModal = timeoutModalRef.current
+    const ttoModal = ttoModalRef.current
+    const scorerAttentionTrigger = scorerAttentionTriggerRef.current
 
     // Always broadcast locally (works offline, no Supabase needed)
     broadcastToScoreboard(cachedSnapshot)
@@ -1228,7 +1259,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         matchStatus: match?.status,
         snapshotSetFinished: snapshotSet?.finished === true
       })
-      const isTimeout = eventType === 'timeout' || (timeoutModal !== null)
+      const isTimeout = eventType === 'timeout' || (eventType !== 'end_timeout' && timeoutModal !== null)
       const isTto = eventType !== 'end_tto' && (eventType === 'technical_to' || eventType === 'tto_start' || (ttoModal !== null && ttoModal.started))
 
       console.debug('[Scoreboard TTO DEBUG] syncLiveState called:', {
@@ -2127,6 +2158,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // Clear countdown and mark as dismissed so it doesn't restart
     setBetweenSetsCountdown(null)
     countdownDismissedRef.current = true
+    // The next interval starts its own clock, not this one's
+    betweenSetsStartTimestampRef.current = null
     // Notify referee to also close their countdown
     sendActionToReferee('end_interval', {})
     // Sync match_status back to 'in_progress' in Supabase
@@ -4327,12 +4360,24 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         }
 
         // Only call onFinishSet for match end, not between sets
-        // (Scoreboard now handles set creation internally)
-        if (onFinishSet) onFinishSet(data.set)
+        // (Scoreboard now handles set creation internally).
+        // The set-end screen stays until Match End replaces it (App opens it
+        // once it has read the match): cleared first, it showed 'Loading...'
+        // and then an empty page (as OpenVolley's OV-14, laptop run
+        // 2026-10-08). Cleared only when App could not open Match End.
+        let matchEndOpened = true
+        if (onFinishSet) {
+          try {
+            await onFinishSet(data.set)
+          } catch (err) {
+            matchEndOpened = false
+            console.error('[SET_END] Opening Match End failed:', err)
+          }
+        }
 
         // Release lock for match end path (no new set to create)
         setCreationInProgressRef.current = false
-        setSetTransitionLoading(null) // Clear loading overlay
+        if (!matchEndOpened) setSetTransitionLoading(null)
 
         return // Exit early for match end - don't fall through to new set creation
       } else {
@@ -4657,8 +4702,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
   }, [set3SideServiceModal, data?.match, matchId, getNextSeq, getStateSnapshot])
 
-  // Handle Set 3 coin toss (before Set 3 starts)
-  const handleSet3CoinToss = useCallback(async (winner) => {
+  // Handle Set 3 coin toss (before Set 3 starts). One action: the toss, its
+  // event and snapshot show together (the toss buttons went 6 frames before
+  // LAST ACTION named the winner)
+  const handleSet3CoinToss = useCallback((winner) => runAction('set3CoinToss', async () => {
     if (!data?.match) return
 
     await db.matches.update(matchId, { set3CoinTossWinner: winner })
@@ -4680,7 +4727,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     if (coinTossWinnerSnapshot) {
       await db.events.update(coinTossWinnerEventId, { stateSnapshot: coinTossWinnerSnapshot })
     }
-  }, [matchId, data?.match, getNextSeq, captureFullStateSnapshot])
+  }), [runAction, matchId, data?.match, getNextSeq, captureFullStateSnapshot])
 
   // Switch which team starts on which side for the next set: toggles the
   // side the interval shows, which is the side the set starts on
@@ -7383,7 +7430,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   // status over the scoring screen (it was blanked for seconds, saying
   // "Syncing to cloud…" on a device that was not even signed in).
   if (!data?.set) {
-    const loadingStep = t('common.loading', 'Loading…')
+    // The match end's last step stays (the finished set leaves no current
+    // set) until Match End replaces it: no 'Loading…' between (OV-14)
+    const loadingStep = setTransitionLoading?.step || t('common.loading', 'Loading…')
     return (
       <div className="ov-kit fixed inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-stone-50 to-stone-100 px-4" style={{ zIndex: 9999 }}>
         <AppSpinner size={96} label={loadingStep} />
@@ -8412,8 +8461,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 }}>{pointsBySide.right}</span>
               </div>
 
-              {/* Last Action - 17% */}
-              <div style={{ flex: '0 0 17%', textAlign: 'center', padding: `0 ${4 * scaleFactor}px` }}>
+              {/* Last Action - 17%. minWidth 0: its one-line texts end in an
+                  ellipsis; without it a long team name widened the column past
+                  the window's right edge ("LAST ACTIO" cut at 1400 x 853) */}
+              <div data-testid="last-action-column" style={{ flex: '0 0 17%', minWidth: 0, textAlign: 'center', padding: `0 ${4 * scaleFactor}px` }}>
                 {data?.events && data.events.length > 0 && data?.set && (() => {
                   const currentSetIndex = data.set.index
                   const currentSetEvents = data.events.filter(e => e.setIndex === currentSetIndex)
@@ -10261,9 +10312,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 const setupConfirmed = betweenSetsSetupConfirmed || (data?.set?.index === 3 && set3SetupConfirmed)
                                 const intervalEnded = !betweenSetsCountdown || betweenSetsCountdown.countdown <= 0
 
-                                if (betweenSetsCountdown && betweenSetsCountdown.isActive && (data?.match?.status === 'between_sets' || data?.match?.status === 'set_complete')) {
+                                // The interval runs (as OpenVolley): End set interval, Start set
+                                // once it has ended. The countdown shows here when the setup
+                                // panel (sides / serve, set 3 coin toss), which has its own, is gone.
+                                if (isBetweenSets && betweenSetsCountdown && betweenSetsCountdown.countdown > 0) {
+                                  const setupPanelShown = data?.set?.index === 3 ? !set3SetupConfirmed : !betweenSetsSetupConfirmed
                                   return (
                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                                      {!setupPanelShown && (<>
                                       {/* Countdown display */}
                                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                         <div className="font-semibold uppercase tracking-[0.12em] text-stone-500" style={{
@@ -10296,16 +10352,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                           transition: 'width 1s linear, background 0.3s'
                                         }} />
                                       </div>
-                                      {/* End Interval button - only show if setup confirmed */}
-                                      {setupConfirmed && (
-                                        <button
-                                          className={cn('rally-btn start', SB_RALLY_START)}
-                                          onClick={endSetInterval}
-                                          style={{ marginTop: '8px', padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'max(64px, calc(92px * var(--scale-factor, 1)))' }}
-                                        >
-                                          {t('scoreboard.buttons.endSetInterval', 'End set interval')}
-                                        </button>
-                                      )}
+                                      </>)}
+                                      <button
+                                        className={cn('rally-btn start', SB_RALLY_START)}
+                                        onClick={endSetInterval}
+                                        style={{ padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'max(64px, calc(92px * var(--scale-factor, 1)))' }}
+                                      >
+                                        {t('scoreboard.buttons.endSetInterval', 'End set interval')}
+                                      </button>
                                     </div>
                                   )
                                 }

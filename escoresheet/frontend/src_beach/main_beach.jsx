@@ -16,6 +16,8 @@ import AndroidExitPrompt from './components_beach/AndroidExitPrompt_beach'
 import { db } from './db_beach/db_beach'
 import { installDiagnostics } from './diagnostics_beach/index_beach'
 import { startActivityLog } from './utils_beach/activity/index_beach'
+import { applyUpdateAtStart } from './hooks_beach/useServiceWorker_beach'
+import { isDesktopScoretable, resolveDesktopWindow } from './utils_beach/appLifecycle_beach'
 
 // Diagnostics mode (off unless Options, ?diag=1 or OPENVOLLEY_DIAGNOSTICS=1
 // in the desktop app): first, so it sees this load and the database opening
@@ -24,6 +26,14 @@ installDiagnostics({ db, app: 'scorer' })
 // Remove the cache_bust a reload added (Options > Clear cache); the rest of
 // the query stays: ?match= keeps a tablet on its live match.
 stripCacheBustParam()
+
+// The desktop app: a new build waiting at start is applied before the scorer
+// touches anything (the binary is the update; see applyUpdateAtStart). In the
+// scoretable only: the app says which window this is (a Linux pop-up's own
+// metadata says "main"), asked once and kept for isDesktopScoretable
+if (isDesktopScoretable()) {
+  resolveDesktopWindow().then((scoretable) => { if (scoretable) applyUpdateAtStart() }).catch(() => {})
+}
 
 // Initialize logger to capture console output
 initLogger()

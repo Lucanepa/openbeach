@@ -10,7 +10,9 @@
  *                     events are switched with diagnostics_native. Only the
  *                     scoretable window ("main") may call them
  *                     (capabilities/diagnostics.json): another app window
- *                     (a referee opened from the scoretable) keeps a ring.
+ *                     (a referee or scoresheet opened from the scoretable)
+ *                     sends its lines to the scoretable, which writes them
+ *                     (popupForward_beach.js; index_beach.js picks that sink).
  *   browser, Android: a ring buffer in its own IndexedDB database
  *                     (openbeach-diagnostics, at most RING_MAX_ROWS lines,
  *                     RING_MAX_AGE_MS), exported from Options as a .jsonl file.
