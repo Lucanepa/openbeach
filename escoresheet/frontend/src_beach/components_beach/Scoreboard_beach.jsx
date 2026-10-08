@@ -162,6 +162,10 @@ const bmpChoiceButton = {
 /** A label that some locales break with a soft "-\n" (de: "Verzögerungs-\nwarnung"), on one line. */
 const oneLine = (text) => String(text).replace(/-\n/g, '').replace(/\n/g, ' ')
 
+// Finished sets a team won. A set row holds its points, not its winner.
+const setsWonBy = (sets, teamKey) => (sets || []).filter(s => s.finished &&
+  (teamKey === 'team1' ? s.team1Points > s.team2Points : s.team2Points > s.team1Points)).length
+
 /** Every dialog of the scoring screen is the volleyui one (Modal_beach tone="light"). */
 function Modal(props) {
   return <LegacyModal tone="light" {...props} />
@@ -833,8 +837,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     return {
       matchId: data.match?.id,
       setIndex: data.set?.index,
-      team1Score: data.set?.team1Score,
-      team2Score: data.set?.team2Score,
+      team1Score: data.set?.team1Points,
+      team2Score: data.set?.team2Points,
       currentServe: data.set?.currentServe,
       team1Rotation: data.set?.team1Rotation,
       team2Rotation: data.set?.team2Rotation,
@@ -844,8 +848,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       team1Timeouts: data.set?.team1Timeouts,
       team2Timeouts: data.set?.team2Timeouts,
       rallyInProgress: data.set?.rallyInProgress,
-      team1SetsWon: data.sets?.filter(s => s.winner === 'team1').length,
-      team2SetsWon: data.sets?.filter(s => s.winner === 'team2').length,
+      team1SetsWon: setsWonBy(data.sets, 'team1'),
+      team2SetsWon: setsWonBy(data.sets, 'team2'),
       totalEvents: data.events?.length
     }
   }, [data])
