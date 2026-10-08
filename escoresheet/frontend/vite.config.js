@@ -94,6 +94,15 @@ export default defineConfig({
         // Use NetworkFirst for API calls, but CacheFirst for assets
         runtimeCaching: [
           {
+            // The account approvals and the approval PIN status are never
+            // answered from a cache: the NetworkFirst route below falls back
+            // to the last copy after 3 s, and a stale list would bring back
+            // an approval undone or voided since and pass the re-check
+            // before "Confirm and approve" (MatchEnd_beach)
+            urlPattern: /^https:\/\/[^/]+\/api\/(?:approvals|account\/approval)/,
+            handler: 'NetworkOnly'
+          },
+          {
             urlPattern: /^https:\/\/.*\.(?:png|jpg|jpeg|svg|gif|webp|woff|woff2|ttf|eot)$/,
             handler: 'CacheFirst',
             options: {
