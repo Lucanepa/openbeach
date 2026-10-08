@@ -14,8 +14,9 @@
  * Ported from OpenVolley escoresheet/frontend/src/domain/eventRevisions.js,
  * adapted to beach: teams are 'team1' / 'team2' (Team A = snapshot.teamAKey),
  * the local-only event types are the ones the beach scoreboard never queues
- * (rally start, set start, the set 3 coin toss, the between-sets confirmation,
- * the technical time-out), and a beach decision change writes no undo record
+ * (set start, the set 3 coin toss, the between-sets confirmation, the
+ * technical time-out; a rally start is synced), and a beach decision change
+ * writes no undo record
  * into its own event (nothing to ignore there).
  */
 
@@ -31,8 +32,12 @@ export const REVISION_OPS = Object.freeze(['void', 'edit', 'restore'])
 // Events the beach scoreboard writes without a sync job (Scoreboard_beach adds
 // them with db.events.add, not logEvent). Their history stays local: a void
 // would only tell the server about a row it never had.
+// Not 'rally_start' (unlike OpenVolley): beach logs a rally start with
+// logEvent, which sends it like a point, and Undo takes it back with its
+// point. Only the first rally of a set is added without a sync job; its void
+// is kept by the server as a revision of an event it never had.
 export const LOCAL_ONLY_EVENT_TYPES = Object.freeze([
-  'rally_start', 'set_start', 'set3_coin_toss', 'set3_coin_toss_winner',
+  'set_start', 'set3_coin_toss', 'set3_coin_toss_winner',
   'between_sets_setup_confirmed', 'technical_to'
 ])
 

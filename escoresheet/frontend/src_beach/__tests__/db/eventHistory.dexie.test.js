@@ -116,7 +116,7 @@ describe('event history hooks (beach)', () => {
   it('keeps the history local for test matches and the events beach never sends', async () => {
     const testMatch = await db.matches.add({ status: 'live', seed_key: 'match_1759740000001_zz', test: true })
     const e1 = await db.events.add({ matchId: testMatch, setIndex: 1, type: 'point', seq: 1, payload: {} })
-    const e2 = await db.events.add({ matchId, setIndex: 1, type: 'rally_start', seq: 2, payload: {} })
+    const e2 = await db.events.add({ matchId, setIndex: 1, type: 'set_start', seq: 2, payload: {} })
     const e3 = await db.events.add({ matchId, setIndex: 1, type: 'technical_to', seq: 3, payload: {} })
     await db.events.bulkDelete([e1, e2, e3])
     await settle()

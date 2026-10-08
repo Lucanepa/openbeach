@@ -52,6 +52,7 @@ async function seedRally(matchId) {
   const ids = {}
   const add = async (key, row) => {
     ids[key] = await db.events.add({ matchId, setIndex: 1, payload: {}, ...row })
+    // the scoreboard's raw first rally of a set has no insert job (logEvent's rallies do)
     if (row.type !== 'rally_start') {
       await db.sync_queue.add({ resource: 'event', action: 'insert', status: 'queued', ts: 1, payload: { external_id: eventExtId(SEED, ids[key]), match_id: SEED } })
     }
@@ -108,9 +109,10 @@ describe('runAction and the event history (beach)', () => {
     expect(new Set(hist.map(h => h.actionId)).size).toBe(1)
     expect(hist[0].actionId).toBeTruthy()
 
-    // void jobs for the events the server knows of (the rally_start is local only)
+    // void jobs for every removed event: the rally_start too (beach sends rally
+    // starts; one that never reached the server is kept there as a revision)
     const voids = await jobsOf('void')
-    expect(voids.map(j => j.payload.external_id).sort()).toEqual([ids.p4, ids.switch].map(id => eventExtId(SEED, id)).sort())
+    expect(voids.map(j => j.payload.external_id).sort()).toEqual([ids.p4, ids.switch, ids.rally].map(id => eventExtId(SEED, id)).sort())
     expect(voids.every(j => j.payload.reason === 'undo')).toBe(true)
     // the removed events' unsent inserts are gone, the others stay; no delete job any more
     const inserts = await jobsOf('insert')

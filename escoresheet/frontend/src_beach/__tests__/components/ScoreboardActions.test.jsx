@@ -129,6 +129,13 @@ describe('Scoreboard_beach: scorer actions against the real database', () => {
     expect(q.filter(j => j.action === 'edit' && j.payload.external_id === `${SEED}:e:${lastPoint.id}`).at(-1).payload).toMatchObject({ reason: 'undo', after: { payload: { team: 'team1' } } })
     expect(q.filter(j => j.action === 'insert' && j.payload.external_id === `${SEED}:e:${lastPoint.id}`).at(-1).payload.payload.team).toBe('team1')
 
+    // The rally_start of that rally ("Start rally", logEvent) is synced like a
+    // point; say its insert already reached the server
+    const rally3 = (await ofType('rally_start')).filter(e => e.seq < lastPoint.seq).at(-1)
+    const rallyInsert = (await jobs()).find(j => j.action === 'insert' && j.payload.external_id === `${SEED}:e:${rally3.id}`)
+    expect(rallyInsert).toBeTruthy()
+    await db.sync_queue.update(rallyInsert.id, { status: 'sent' })
+
     // Undo the third point: the point and its rally_start leave the server too
     fireEvent.click(button('Undo'))
     await waitFor(() => expect(document.querySelector('[data-testid="undo-confirm"]')).toBeTruthy())
@@ -136,8 +143,12 @@ describe('Scoreboard_beach: scorer actions against the real database', () => {
     await waitFor(async () => expect(await score()).toEqual([2, 0]))
     await settle()
     expect((await ofType('point')).length).toBe(2)
+    expect(await db.events.get(rally3.id)).toBeUndefined()
     q = await jobs()
-    expect(q.filter(j => j.action === 'void' && j.payload.reason === 'undo').map(j => j.payload.external_id)).toContain(`${SEED}:e:${lastPoint.id}`)
+    const undoVoids = q.filter(j => j.action === 'void' && j.payload.reason === 'undo').map(j => j.payload.external_id)
+    expect(undoVoids).toContain(`${SEED}:e:${lastPoint.id}`)
+    // the sent rally_start is voided on the server too (it was deleted there before the event history)
+    expect(undoVoids).toContain(`${SEED}:e:${rally3.id}`)
     // the point's own insert, never sent, is gone from the queue
     expect(q.filter(j => j.action === 'insert' && j.payload.external_id === `${SEED}:e:${lastPoint.id}`)).toHaveLength(0)
 

@@ -45,11 +45,13 @@ describe('eventRevisions_beach', () => {
     expect(revisionSyncJob(row, { seedKey: 'match_1_x', test: true }, eventExtId)).toBeNull()
     expect(revisionSyncJob(row, { seedKey: null }, eventExtId)).toBeNull()
     // the beach scoreboard queues no insert for these: no void either
-    for (const type of ['rally_start', 'set_start', 'technical_to', 'set3_coin_toss', 'set3_coin_toss_winner', 'between_sets_setup_confirmed']) {
+    for (const type of ['set_start', 'technical_to', 'set3_coin_toss', 'set3_coin_toss_winner', 'between_sets_setup_confirmed']) {
       expect(LOCAL_ONLY_EVENT_TYPES).toContain(type)
       expect(revisionSyncJob({ ...row, type }, { seedKey: 'match_1_x' }, eventExtId)).toBeNull()
     }
-    // a replay and a court switch are synced in beach: their history goes too
+    // a rally start (logEvent), a replay and a court switch are synced in beach: their history goes too
+    expect(LOCAL_ONLY_EVENT_TYPES).not.toContain('rally_start')
+    expect(revisionSyncJob({ ...row, type: 'rally_start' }, { seedKey: 'match_1_x' }, eventExtId)).not.toBeNull()
     expect(revisionSyncJob({ ...row, type: 'replay' }, { seedKey: 'match_1_x' }, eventExtId)).not.toBeNull()
     expect(revisionSyncJob({ ...row, type: 'court_switch' }, { seedKey: 'match_1_x' }, eventExtId)).not.toBeNull()
     const edit = revisionSyncJob({ ...row, op: 'edit', serverAfter: { type: 'point' } }, { seedKey: 'match_1_x' }, eventExtId)
