@@ -8,6 +8,7 @@ import LegacyModal from './Modal_beach'
 
 import MenuList from './MenuList_beach'
 import { matchMenuSections, toMenuListItems } from './matchMenu_beach'
+import { matchTimes, setDurationMinutes } from '../../scoresheet_pdf_beach/components_beach/matchTimes_beach'
 import SyncProgressModal_beach from './SyncProgressModal_beach'
 import ScoreboardOptionsModal from './options/ScoreboardOptionsModal_beach'
 import ConnectionSetupModal from './options/ConnectionSetupModal_beach'
@@ -14048,32 +14049,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         return sum + (currentRightTeamKey === 'team1' ? set.team1Points : set.team2Points)
                       }, 0)
 
-                      // Calculate total match duration
-                      let totalDurationMin = 0
-                      finishedSets.forEach(set => {
-                        if (set.startTime && set.endTime) {
-                          const start = new Date(set.startTime)
-                          const end = new Date(set.endTime)
-                          const durationMs = end - start
-                          totalDurationMin += Math.floor(durationMs / 60000)
-                        }
-                      })
-
-                      // Find match start time (first set_start event or first set startTime)
-                      const firstSetStartEvent = (data?.events || []).find(e => e.type === 'set_start' && e.setIndex === 1)
-                      const matchStartTime = firstSetStartEvent ? new Date(firstSetStartEvent.ts) : (finishedSets[0]?.startTime ? new Date(finishedSets[0].startTime) : null)
-
-                      // Find match end time (last set endTime)
-                      const matchEndTime = finishedSets.length > 0 && finishedSets[finishedSets.length - 1]?.endTime
-                        ? new Date(finishedSets[finishedSets.length - 1].endTime)
-                        : null
-
-                      // Calculate match duration
-                      let matchDurationMin = 0
-                      if (matchStartTime && matchEndTime) {
-                        const durationMs = matchEndTime - matchStartTime
-                        matchDurationMin = Math.floor(durationMs / 60000)
-                      }
+                      // The score sheet's times (matchTimes_beach, as OpenVolley's
+                      // SanctionsResultsModal): a set starts at its first rally, not
+                      // at the confirmed (possibly scheduled) set 1 start time
+                      const timedEvents = data?.events || []
+                      const totalDurationMin = finishedSets.reduce((sum, set) => sum + (setDurationMinutes(set, timedEvents) ?? 0), 0)
+                      const times = matchTimes(allSets, timedEvents)
+                      const matchStartTime = times.startMs !== null ? new Date(times.startMs) : null
+                      const matchEndTime = times.endMs !== null ? new Date(times.endMs) : null
+                      const matchDurationMin = times.durationMinutes ?? 0
 
                       // Determine winner
                       const winnerTeamKey = leftTotalWins > rightTotalWins ? currentLeftTeamKey : currentRightTeamKey
@@ -14300,15 +14284,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             const leftWon = leftPoints > rightPoints ? 1 : 0
                             const rightWon = rightPoints > leftPoints ? 1 : 0
 
-                            // Calculate set duration
-                            let duration = ''
-                            if (set.startTime && set.endTime) {
-                              const start = new Date(set.startTime)
-                              const end = new Date(set.endTime)
-                              const durationMs = end - start
-                              const durationMin = Math.floor(durationMs / 60000)
-                              duration = `${durationMin}'`
-                            }
+                            // Set duration from its first rally (matchTimes_beach)
+                            const durationMin = setDurationMinutes(set, data?.events || [])
+                            const duration = durationMin !== null ? `${durationMin}'` : ''
 
                             return (
                               <tr key={set.id} style={{ borderBottom: '1px solid var(--ov-hairline)' }}>
