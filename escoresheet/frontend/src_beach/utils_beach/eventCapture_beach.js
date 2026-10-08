@@ -4,6 +4,7 @@
  */
 
 import { logUI, throttle, debounce, redactScreenText } from './comprehensiveLogger'
+import { reportAppError } from './activity/appError_beach'
 
 export { redactScreenText }
 
@@ -409,6 +410,7 @@ export function uninstallGlobalEventCapture() {
  * Handle global errors
  */
 function handleGlobalError(event) {
+  reportAppError(event.error?.message || event.message, event.error?.stack, 'window.error')
   logUI('error', 'global', 'error', {
     message: event.message,
     filename: event.filename,
@@ -422,6 +424,7 @@ function handleGlobalError(event) {
  * Handle unhandled promise rejections
  */
 function handleUnhandledRejection(event) {
+  reportAppError(event.reason?.message || String(event.reason), event.reason?.stack, 'unhandledrejection')
   logUI('error', 'global', 'unhandledrejection', {
     reason: event.reason?.message || String(event.reason),
     stack: event.reason?.stack

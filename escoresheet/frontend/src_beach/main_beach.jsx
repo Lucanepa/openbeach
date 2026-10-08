@@ -13,6 +13,8 @@ import { AuthProvider } from './contexts_beach/AuthContext_beach'
 import { LoggingProvider } from './contexts_beach/LoggingContext_beach'
 import { ScaleProvider } from './contexts_beach/ScaleContext_beach'
 import AndroidExitPrompt from './components_beach/AndroidExitPrompt_beach'
+import { db } from './db_beach/db_beach'
+import { startActivityLog } from './utils_beach/activity/index_beach'
 
 // Remove the cache_bust a reload added (Options > Clear cache); the rest of
 // the query stays: ?match= keeps a tablet on its live match.
@@ -20,6 +22,10 @@ stripCacheBustParam()
 
 // Initialize logger to capture console output
 initLogger()
+
+// The match activity log (scoring, corrections, sync, app start/quit, errors):
+// on this device, uploaded, and a daily file in the apps (utils_beach/activity)
+startActivityLog({ db })
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>

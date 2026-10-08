@@ -115,6 +115,13 @@ vi.mock('../../lib_beach/apiClient_beach', () => {
   }
 })
 
+// The activity log (utils_beach/activity/bus_beach): what the queue reports
+const activity = vi.hoisted(() => ({ entries: [], passes: [] }))
+vi.mock('../../utils_beach/activity/bus_beach', () => ({
+  emitActivity: (kind, data, opts) => activity.entries.push({ kind, data, opts }),
+  noteSyncPass: (o) => activity.passes.push(o)
+}))
+
 const venue = vi.hoisted(() => ({ relayOrigin: false }))
 vi.mock('../../utils_beach/backendConfig_beach', () => ({ getApiUrl: (p) => `http://backend.test${p}`, getCloudApiUrl: (p) => `http://backend.test${p}`, isCloudOffline: () => false, isRelayOriginPage: () => venue.relayOrigin }))
 
@@ -593,6 +600,34 @@ describe('event delete jobs (Undo, Replay, decision change, event editor)', () =
       : defaultRespond(call)
     await runQueuePass()
     expect(fakeDb.sync_queue.map.get(1).status).not.toBe('sent')
+  })
+})
+
+describe('the activity log of the queue', () => {
+  beforeEach(() => { activity.entries = [] })
+
+  it('a refused job is a sync.error with its status, code and request id, never its payload', async () => {
+    fakeDb.sync_queue.reset([
+      { id: 1, resource: 'event', action: 'insert', status: 'queued', payload: { external_id: 'match_100_aaa:e:1', match_id: 'match_100_aaa', game_pin: '123456' } }
+    ])
+    api.respond = (call) => (call.action === 'upsert'
+      ? { data: null, error: { message: 'closed', status: 409, code: 'OV_MATCH_CLOSED', requestId: 'req-1' } }
+      : defaultRespond(call))
+    await runQueuePass()
+    expect(activity.entries).toEqual([{
+      kind: 'sync.error',
+      data: { resource: 'event', action: 'insert', status: 409, code: 'OV_MATCH_CLOSED', requestId: 'req-1', attempt: 1 },
+      opts: { level: 'warn', matchExt: 'match_100_aaa' }
+    }])
+  })
+
+  it('a dropped job is a sync.dropped; a sent one is nothing', async () => {
+    fakeDb.sync_queue.reset([
+      { id: 1, resource: 'event', action: 'insert', status: 'queued', payload: { external_id: '99' } },
+      { id: 2, resource: 'event', action: 'insert', status: 'queued', payload: { external_id: 'match_100_aaa:e:2', match_id: 'match_100_aaa' } }
+    ])
+    await runQueuePass()
+    expect(activity.entries.map(e => e.kind)).toEqual(['sync.dropped'])
   })
 })
 

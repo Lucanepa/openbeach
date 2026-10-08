@@ -40,6 +40,7 @@
 import i18n from 'i18next'
 import { confirmDialog, hasConfirmHost } from '../ui/volleyui/uiStore.js'
 import { pdfBusyInAppWindows } from './openAppWindow_beach.js'
+import { emitActivity, flushActivityNow } from './activity/bus_beach'
 
 export const LIFECYCLE_EVENT = 'ov-app-lifecycle'
 
@@ -294,6 +295,9 @@ export async function requestDesktopQuit(win = desktopWin || window, ask = confi
     // ONE question for every app window: the quit closes the scoresheets too
     if (!(await ask(quitQuestion({ live, ...nets, windows, pdfBusy: pdfBusyNow() })))) return false
     quitting = true
+    // The activity log's last line, written before the app goes
+    emitActivity('app.quit', {})
+    await flushActivityNow(800)
     await invoke('app_quit')
     return true
   } catch (e) {
