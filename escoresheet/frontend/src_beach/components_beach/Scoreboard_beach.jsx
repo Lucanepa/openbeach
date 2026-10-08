@@ -363,6 +363,15 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   const [ttoModal, setTtoModal] = useState(null) // { set, team1Points, team2Points, countdown?, started? } | null - Technical Timeout
   const [preEventPopup, setPreEventPopup] = useState(null) // { message: string } | null - "One point to switch/TTO" notification
   const [timeoutModal, setTimeoutModal] = useState(null) // { team: 'team1'|'team2', countdown: number, started: boolean }
+  // Latest values for syncLiveStateToSupabase, which does not list them (as
+  // OpenVolley): listing them would remake it, and all that depends on it,
+  // at every countdown tick; reading the state froze them at its last remake.
+  const timeoutModalRef = useRef(null)
+  const ttoModalRef = useRef(null)
+  const scorerAttentionTriggerRef = useRef(scorerAttentionTrigger)
+  useEffect(() => { timeoutModalRef.current = timeoutModal }, [timeoutModal])
+  useEffect(() => { ttoModalRef.current = ttoModal }, [ttoModal])
+  useEffect(() => { scorerAttentionTriggerRef.current = scorerAttentionTrigger }, [scorerAttentionTrigger])
 const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { countdown: number, started: boolean, finished?: boolean } | null
   const countdownDismissedRef = useRef(false) // Track if countdown was manually dismissed
   const setEndModalDismissedRef = useRef(null) // Track setIndex where set end modal was dismissed via undo
@@ -1126,6 +1135,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   // cachedSnapshot: Optional snapshot passed from logEvent to avoid re-fetching/re-computing
   const syncLiveStateToSupabase = useCallback(async (eventType, eventTeam, eventData, cachedSnapshot = null) => {
     const _tl = performance.now()
+    // The time-out, TTO and attention trigger of the call (read before any
+    // await: a TTO ending right after this call is already null by then)
+    const timeoutModal = timeoutModalRef.current
+    const ttoModal = ttoModalRef.current
+    const scorerAttentionTrigger = scorerAttentionTriggerRef.current
 
     // Always broadcast locally (works offline, no Supabase needed)
     broadcastToScoreboard(cachedSnapshot)
@@ -1187,7 +1201,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         matchStatus: match?.status,
         snapshotSetFinished: snapshotSet?.finished === true
       })
-      const isTimeout = eventType === 'timeout' || (timeoutModal !== null)
+      const isTimeout = eventType === 'timeout' || (eventType !== 'end_timeout' && timeoutModal !== null)
       const isTto = eventType !== 'end_tto' && (eventType === 'technical_to' || eventType === 'tto_start' || (ttoModal !== null && ttoModal.started))
 
       console.debug('[Scoreboard TTO DEBUG] syncLiveState called:', {
