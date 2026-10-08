@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import Modal from './Modal_beach'
+import { Select } from '../ui/volleyui/Select.jsx'
 import { Camera, Card, ChartColumn, CircleAlert, ClipboardList, CloudUpload, Coin, FileText, Globe, House, Info, Keyboard, Lightbulb, Link, LockOpen, NotebookPen, Pause, Play, Plus, Rocket, RotateCw, Save, Settings, Shield, Signature, Smartphone, SquareNumber3, Target, Timer, TrendingUp, TriangleAlert, Trophy, Undo, Users, Volleyball, Whistle, Wrench, Zap } from './Icons_beach'
 
 // CSS Keyframe animations as inline styles
@@ -1606,24 +1607,15 @@ export default function InteractiveGuide({ open, onClose }) {
         >
           {/* Mobile Section Selector */}
           {isMobile && (
-            <select
+            <Select
+              size="lg"
+              block
+              className="mb-4"
+              aria-label={t('interactiveGuide.title')}
               value={activeSection}
               onChange={(e) => scrollToSection(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                marginBottom: 16,
-                background: 'var(--ov-sunken-strong)',
-                border: '1px solid var(--ov-hairline)',
-                borderRadius: 6,
-                color: 'var(--ov-text)',
-                fontSize: 14
-              }}
-            >
-              {sections.map(s => (
-                <option key={s.id} value={s.id}>{s.title}</option>
-              ))}
-            </select>
+              options={sections.map(s => ({ value: s.id, label: s.title }))}
+            />
           )}
 
           {/* ==================== QUICK START ==================== */}
