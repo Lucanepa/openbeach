@@ -5966,7 +5966,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       side: isRightTeam ? 'right' : 'left',
       canSubstitute: false
     })
-  }, [playerActionMenu, leftisTeam1])
+  }, [playerActionMenu, leftisTeam1, rallyStatus, isRallyReplayed])
 
  
   // Handle forfait - award all remaining points and sets to opponent
