@@ -170,20 +170,30 @@ describe('Scoreboard_beach: End set interval', () => {
     // set 2 starts, lasts longer than a set interval (the clock moves on
     // 70 s) and is won by team 2; set 3 is created and its interval begins
     let seq = (await db.events.toArray()).reduce((m, e) => Math.max(m, e.seq), 0)
-    await db.events.add({ matchId, setIndex: 2, type: 'set_start', payload: {}, seq: ++seq, ts: new Date().toISOString() })
-    await new Promise(r => setTimeout(r, 1500)) // set 2 under way (no interval)
+    const set2Id = (await db.sets.where({ matchId }).and(s => s.index === 2).first()).id
+    await db.transaction('rw', db.sets, db.events, async () => {
+      const ts = new Date().toISOString()
+      await db.events.bulkAdd([
+        { matchId, setIndex: 2, type: 'set_start', payload: {}, seq: ++seq, ts },
+        { matchId, setIndex: 2, type: 'rally_start', payload: {}, seq: ++seq, ts },
+        { matchId, setIndex: 2, type: 'point', payload: { team: 'team1' }, seq: ++seq, ts }
+      ])
+      await db.sets.update(set2Id, { team1Points: 1, startTime: ts })
+    })
+    // set 2 under way (no interval)
+    await waitFor(() => expect(button('Start rally')).toBeTruthy(), { timeout: 8000 })
     const realNow = Date.now.bind(Date)
     vi.spyOn(Date, 'now').mockImplementation(() => realNow() + 70000)
     try {
       const end2 = new Date(Date.now()).toISOString()
-      const set2 = await db.sets.where({ matchId }).and(s => s.index === 2).first()
       await db.transaction('rw', db.sets, db.events, async () => {
-        await db.sets.update(set2.id, { team1Points: 10, team2Points: 21, finished: true, endTime: end2 })
+        await db.sets.update(set2Id, { team1Points: 10, team2Points: 21, finished: true, endTime: end2 })
         await db.events.add({ matchId, setIndex: 2, type: 'set_end', payload: { team: 'team2', setIndex: 2 }, seq: ++seq, ts: end2 })
         await db.sets.add({ matchId, index: 3, team1Points: 0, team2Points: 0, finished: false })
       })
       await waitFor(() => expect(document.querySelector('[data-testid="set3-toss-A"]')).toBeTruthy(), { timeout: 8000 })
       // the 1-2 interval's start would put it at 0 at once (Start set instead)
+      await waitFor(() => expect(button('End set interval')).toBeTruthy(), { timeout: 8000 })
       await new Promise(r => setTimeout(r, 600))
       expect(button('End set interval')).toBeTruthy()
       expect(button('Start set')).toBeFalsy()
