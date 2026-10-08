@@ -21,6 +21,7 @@ import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { apiFrom } from '../lib_beach/apiClient_beach'
 import { setExtId, eventExtId } from '../utils_beach/syncIds_beach'
 import { changesSetScore, isLiveSetInterval, queueSetScoreSync } from '../utils_beach/eventSync_beach'
+import { planPointRemoval, scoreAfterRemoval, syncJobsForEvents, eventDeleteJob, eventUpsertJob, UNSENT_STATUSES } from '../utils_beach/scorerCorrections_beach'
 import { buildConnectionPins } from '../utils_beach/connectionPins_beach'
 import { isBackendAvailable, getApiUrl, isNativeApp } from '../utils_beach/backendConfig_beach'
 import { lockLandscape as lockNativeLandscape, unlockOrientation as unlockNativeOrientation } from '../utils_beach/nativeOrientation_beach'
@@ -4868,6 +4869,40 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     return false
   }, [data?.events, data?.set, getActionDescription])
 
+  // Remove events from the log AND from the cloud: their unsent sync jobs are
+  // dropped (the cloud never gets a phantom row) and, for a synced match, a
+  // delete is queued for each (the insert may already be sent, or on its way).
+  // Undo, Replay, the decision change, cancelling a change of courts and the
+  // event editor's deletes all go through here. Ported from OpenVolley
+  // discardEvents (Scoreboard.jsx).
+  const discardEvents = useCallback(async (eventsToRemove) => {
+    const rows = (eventsToRemove || []).filter(e => e && e.id != null)
+    if (rows.length === 0) return
+    const ids = rows.map(e => e.id)
+    await db.events.bulkDelete(ids)
+    const unsent = await db.sync_queue.where('status').anyOf(...UNSENT_STATUSES).toArray()
+    const staleJobs = syncJobsForEvents(unsent, ids)
+    if (staleJobs.length > 0) await db.sync_queue.bulkDelete(staleJobs.map(j => j.id))
+    const match = await db.matches.get(matchId)
+    if (match && !match.test && match.seed_key) {
+      const now = new Date()
+      await db.sync_queue.bulkAdd(ids.map(id => eventDeleteJob(match.seed_key, id, now)))
+    }
+  }, [matchId])
+
+  // The set score after taking points back: what the removed points added is
+  // subtracted (a manual score adjustment stays), the set is open again, and
+  // the cloud sets row follows through the sync queue (also offline).
+  const applyPointRemovalScore = useCallback(async (plan) => {
+    if (!plan) return null
+    const setRow = await db.sets.where({ matchId }).and(s => s.index === plan.setIndex).first()
+    if (!setRow) return null
+    const score = scoreAfterRemoval(setRow, plan.delta)
+    await db.sets.update(setRow.id, { ...score, finished: false })
+    await queueSetScoreSync(db, { matchId, setIndex: plan.setIndex })
+    return score
+  }, [matchId])
+
   // NEW SNAPSHOT-BASED UNDO SYSTEM
   // Instead of complex per-event-type logic, we simply:
   // 1. Delete all events with the same base seq
@@ -6920,43 +6955,33 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     sendActionToReferee('end_tto', {})
   }, [ttoModal, matchId, data?.match, data?.set, syncLiveStateToSupabase, captureFullStateSnapshot, sendActionToReferee])
 
+  // The change of courts (every 7 points, every 5 in set 3) is mandatory; a
+  // missed one is made as soon as it is noticed, the score unchanged. So
+  // "cancel" never means "do not switch": it can only mean the point that
+  // reached the change was recorded in error. It is taken back exactly like
+  // Undo of that point: the point (with its BMP group when a BMP decided it),
+  // the rally_start of that rally, their unsent cloud jobs (and a cloud delete
+  // for what was sent), and the set score without it; then the tablets and the
+  // livescore hear about it. Ported from OpenVolley 81dcb210.
   const cancelCourtSwitch = useCallback(async () => {
-    if (!courtSwitchModal || !data?.events) return
-
-    // Undo the last point that caused the 8-point threshold
-    // Find the last event by sequence number
-    const sortedEvents = [...data.events].sort((a, b) => {
-      const aSeq = a.seq || 0
-      const bSeq = b.seq || 0
-      if (aSeq !== 0 || bSeq !== 0) {
-        return bSeq - aSeq // Descending
-      }
-      const aTime = typeof a.ts === 'number' ? a.ts : new Date(a.ts).getTime()
-      const bTime = typeof b.ts === 'number' ? b.ts : new Date(b.ts).getTime()
-      return bTime - aTime
-    })
-
-    const lastEvent = sortedEvents[0]
-    if (lastEvent) {
-      // Delete the last event (point or sanction)
-      await db.events.delete(lastEvent.id)
-
-      // Update set points
-      const newteam1Points = courtSwitchModal.teamThatScored === 'team1'
-        ? courtSwitchModal.team1Points - 1
-        : courtSwitchModal.team1Points
-      const newteam2Points = courtSwitchModal.teamThatScored === 'team2'
-        ? courtSwitchModal.team2Points - 1
-        : courtSwitchModal.team2Points
-
-      await db.sets.update(courtSwitchModal.set.id, {
-        team1Points: newteam1Points,
-        team2Points: newteam2Points
-      })
-    }
-
+    if (!courtSwitchModal) return
+    // Close first, then take the point back
+    const modal = courtSwitchModal
     setCourtSwitchModal(null)
-  }, [courtSwitchModal, data?.events])
+
+    try {
+      const allEvents = await db.events.where('matchId').equals(matchId).toArray()
+      const plan = planPointRemoval(allEvents, null, { setIndex: modal.set.index, includeRallyStart: true })
+      if (!plan) return
+      const deleteIds = new Set(plan.deleteEventIds)
+      await discardEvents(allEvents.filter(e => deleteIds.has(e.id)))
+      await applyPointRemovalScore(plan)
+    } finally {
+      syncToReferee()
+      syncLiveStateToSupabase('undo', null, null)
+      refreshScoresheet()
+    }
+  }, [courtSwitchModal, matchId, discardEvents, applyPointRemovalScore, syncToReferee, syncLiveStateToSupabase, refreshScoresheet])
 
   // Check if match is already finished (loaded a completed match)
   // If so, trigger onFinishSet to navigate to MatchEnd screen
