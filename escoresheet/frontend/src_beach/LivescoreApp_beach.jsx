@@ -28,6 +28,28 @@ const ballImage = '/beachball.png'
  * - Shows all live games with scores, TOs, BMP, serving player
  * - Select a game to view fullscreen
  */
+/**
+ * Is Team A (the live state's A/B model) team1? matches.set_results are
+ * stored by team1 / team2 ([{ set, team1, team2 }]); the live row names
+ * neither. A finished match tells: its sets_won_a are team1's or team2's
+ * wins in the set results. Defaults to true (also while nothing tells).
+ * @param {object} game  a match_live_state row with matches.set_results
+ */
+function teamAIsTeam1(game) {
+  const results = game?.matches?.set_results
+  if (!Array.isArray(results) || results.length === 0) return true
+  let team1 = 0
+  let team2 = 0
+  for (const s of results) {
+    if (Number(s?.team1) > Number(s?.team2)) team1++
+    else if (Number(s?.team2) > Number(s?.team1)) team2++
+  }
+  if (team1 === team2) return true
+  const a = Number(game.sets_won_a)
+  if (a === team2 && a !== team1) return false
+  return true
+}
+
 export default function LivescoreApp() {
   const { t } = useTranslation()
   const [liveGames, setLiveGames] = useState([])
@@ -164,12 +186,15 @@ export default function LivescoreApp() {
     const leftPoints = isALeft ? (game.points_a || 0) : (game.points_b || 0)
     const rightPoints = isALeft ? (game.points_b || 0) : (game.points_a || 0)
 
+    // set_results are by team1 / team2, the sides by Team A: A's points
+    // are team1's only when Team A is team1
     const rawSetResults = game.matches?.set_results || []
-    const setResults = rawSetResults.map(s => ({
-      set: s.set,
-      left: isALeft ? s.team1 : s.team2,
-      right: isALeft ? s.team2 : s.team1
-    }))
+    const aIsTeam1 = teamAIsTeam1(game)
+    const setResults = rawSetResults.map(s => {
+      const a = aIsTeam1 ? s.team1 : s.team2
+      const b = aIsTeam1 ? s.team2 : s.team1
+      return { set: s.set, left: isALeft ? a : b, right: isALeft ? b : a }
+    })
 
     return {
       leftName: isALeft ? (game.team_a_name || 'Team A') : (game.team_b_name || 'Team B'),
