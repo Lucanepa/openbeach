@@ -319,7 +319,6 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
   // See architecture note at top of file. All event-creating functions acquire this lock.
   const eventInProgressRef = useRef(false)
   const eventQueueRef = useRef([]) // Queue for serializing event creation
-  const confirmingTimeoutRef = useRef(false) // Prevent double-click on timeout confirmation
   const [keybindingsEnabled, setKeybindingsEnabled] = useState(() => {
     const saved = localStorage.getItem('keybindingsEnabled')
     return saved === 'true' // default false
@@ -5579,45 +5578,42 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     [mapSideToTeamKey, timeoutsUsed]
   )
 
-  const confirmTimeout = useCallback(async () => {
-    if (!timeoutModal) return
-    // Prevent double-click: if already started, skip
-    if (timeoutModal.started) return
-    // Mutex: prevent race condition from rapid double-clicks
-    if (confirmingTimeoutRef.current) return
-    confirmingTimeoutRef.current = true
+  // One action: the time-out event and the started countdown appear together
+  // (the scoreboard showed the time-out taken under the still-open request)
+  const runTimeoutConfirm = useConfirmAction(onConfirmFailed)
+  const confirmTimeout = useCallback(() => runTimeoutConfirm(() => runAction('timeout', async () => {
+    const request = timeoutModal
+    if (!request || request.started) return
 
     debugLogger.log('TO_CONFIRM', {
-      team: timeoutModal.team,
+      team: request.team,
       staleTimestampRef: timeoutStartTimestampRef.current
     })
 
-    try {
-      // Log the timeout event
-      await logEvent('timeout', { team: timeoutModal.team })
+    // The countdown starts with the time-out count (deferUi: same render)
+    const startTimestamp = Date.now()
+    deferUi(() => setTimeoutModal({ ...request, started: true, startedAt: new Date(startTimestamp).toISOString() }))
 
-      // Debug log: timeout
-      debugLogger.log('TIMEOUT', {
-        team: timeoutModal.team
-      }, getStateSnapshot())
+    // Log the timeout event
+    await logEvent('timeout', { team: request.team })
 
-      // Start the timeout countdown
-      const startTimestamp = Date.now()
-      setTimeoutModal({ ...timeoutModal, started: true, startedAt: new Date(startTimestamp).toISOString() })
+    // Debug log: timeout
+    debugLogger.log('TIMEOUT', {
+      team: request.team
+    }, getStateSnapshot())
 
-      // Send timeout action to referee to show modal
-      sendActionToReferee('timeout', {
-        team: timeoutModal.team,
+    // Send timeout action to referee to show modal
+    runOrDefer({
+      run: () => sendActionToReferee('timeout', {
+        team: request.team,
         countdown: TEAM_TIMEOUT_SECONDS,
         startTimestamp: startTimestamp
       })
+    })
 
-      // Trigger event backup for Safari/Firefox
-      onTriggerEventBackup?.('timeout')
-    } finally {
-      confirmingTimeoutRef.current = false
-    }
-  }, [timeoutModal, logEvent, sendActionToReferee, onTriggerEventBackup])
+    // Trigger event backup for Safari/Firefox
+    runOrDefer({ run: () => onTriggerEventBackup?.('timeout') })
+  })), [runTimeoutConfirm, runAction, deferUi, runOrDefer, timeoutModal, logEvent, sendActionToReferee, onTriggerEventBackup])
 
   const cancelTimeout = useCallback(() => {
     // Only cancel if timeout hasn't started yet
