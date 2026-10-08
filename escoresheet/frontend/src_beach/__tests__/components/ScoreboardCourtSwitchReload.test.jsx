@@ -101,6 +101,9 @@ async function point(label) {
   const before = (await ofType('point')).length
   fireEvent.click(button(label))
   await waitFor(async () => expect((await ofType('point')).length).toBe(before + 1))
+  // and on screen (the rally over): an Undo tapped before the screen has the
+  // point offers the rally start (found under the full suite's load)
+  await waitFor(() => expect(button(label)).toBeFalsy(), { timeout: 5000 })
 }
 async function switchCourts() {
   await waitFor(() => expect(button('Switch courts')).toBeTruthy(), { timeout: 5000 })
@@ -138,6 +141,9 @@ async function undoLast() {
   await waitFor(() => expect(buttons('Undo').length).toBeGreaterThan(1))
   fireEvent.click(buttons('Undo').at(-1))
   await waitFor(async () => expect((await events()).length).toBeLessThan(before))
+  // the confirmation gone from the screen too, so the next Undo offers the
+  // event that is now last
+  await waitFor(() => expect(buttons('Undo').length).toBeLessThanOrEqual(1), { timeout: 5000 })
   await settle()
 }
 async function successfulBmp(open) {
