@@ -8432,6 +8432,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         return teamKey === 'team1' ? `${t1}:${t2}` : `${t2}:${t1}`
                       }
 
+                      // The team rows say when: "Delay warning · Set 2 · 3:4" (they had no set or score)
+                      const teamSanctionEvents = (type) => (data?.events || [])
+                        .filter(e => e.type === 'sanction' && e.payload?.team === leftTeamKey && e.payload?.type === type)
+                        .sort((a, b) => (a.seq || 0) - (b.seq || 0))
+                      const sanctionWhen = (ev) => ev ? ` · ${t('scoreboard.table.set', 'Set')} ${ev.setIndex} · ${getScoreFromSanction(ev, leftTeamKey)}` : ''
+                      const firstWarning = playerSanctions.filter(s => s.payload?.type === 'warning').sort((a, b) => (a.seq || 0) - (b.seq || 0))[0]
+
                       const borderStyle = `${1 * scaleFactor}px solid var(--ov-hairline)`
                       const tableFontSize = `${DESIGN_VMIN * 0.018 * scaleFactor}px`
                       const headerFontSize = `${DESIGN_VMIN * 0.016 * scaleFactor}px`
@@ -8464,7 +8471,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   background: 'var(--ov-warning-soft)',
                                   borderRadius: `${3 * scaleFactor}px`
                                 }}>
-                                  {t('scoreboard.sanctions.formalWarning', 'Formal warning')}
+                                  {t('scoreboard.sanctions.formalWarning', 'Formal warning')}{firstWarning ? ` · #${firstWarning.payload?.playerNumber}${sanctionWhen(firstWarning)}` : ''}
                                 </div>
                               )}
                               {hasIR && (
@@ -8476,7 +8483,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   background: 'var(--ov-sunken-strong)',
                                   borderRadius: `${3 * scaleFactor}px`
                                 }}>
-                                  {t('scoreboard.sanctions.improperRequest', 'Improper request')}
+                                  {t('scoreboard.sanctions.improperRequest', 'Improper request')}{sanctionWhen(teamSanctionEvents('improper_request')[0])}
                                 </div>
                               )}
                               {hasDW && (
@@ -8488,11 +8495,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   background: 'var(--ov-warning-soft)',
                                   borderRadius: `${3 * scaleFactor}px`
                                 }}>
-                                  {t('scoreboard.sanctions.delayWarning', 'Delay warning')}
+                                  {t('scoreboard.sanctions.delayWarning', 'Delay warning')}{sanctionWhen(teamSanctionEvents('delay_warning')[0])}
                                 </div>
                               )}
                               {delayPenaltyCount > 0 && (
-                                [...Array(delayPenaltyCount)].map((_, i) => (
+                                teamSanctionEvents('delay_penalty').map((ev, i) => (
                                   <div key={i} style={{
                                     fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
                                     color: 'var(--ov-danger-text)',
@@ -8501,7 +8508,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     background: 'var(--ov-danger-soft)',
                                     borderRadius: `${3 * scaleFactor}px`
                                   }}>
-                                    {t('scoreboard.sanctions.delayPenalty', 'Delay penalty')}
+                                    {t('scoreboard.sanctions.delayPenalty', 'Delay penalty')}{sanctionWhen(ev)}
                                   </div>
                                 ))
                               )}
@@ -8536,7 +8543,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                       <td style={{ padding: `${4 * scaleFactor}px`, textAlign: 'center', borderRight: borderStyle, borderBottom: isLast ? 'none' : borderStyle }}>{sanction.setIndex}</td>
                                       <td style={{ padding: `${4 * scaleFactor}px`, borderRight: borderStyle, borderBottom: isLast ? 'none' : borderStyle }}>
                                         {isPlayer1 && (
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'baseline', gap: `${6 * scaleFactor}px`, width: '100%' }}>
                                             {renderSanctionLetter(sanction.payload?.type)}
                                             <span>{score}</span>
                                           </div>
@@ -8544,7 +8551,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                       </td>
                                       <td style={{ padding: `${4 * scaleFactor}px`, borderBottom: isLast ? 'none' : borderStyle }}>
                                         {isPlayer2 && (
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'baseline', gap: `${6 * scaleFactor}px`, width: '100%' }}>
                                             {renderSanctionLetter(sanction.payload?.type)}
                                             <span>{score}</span>
                                           </div>
@@ -10317,6 +10324,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         return teamKey === 'team1' ? `${t1}:${t2}` : `${t2}:${t1}`
                       }
 
+                      // The team rows say when: "Delay warning · Set 2 · 3:4" (they had no set or score)
+                      const teamSanctionEvents = (type) => (data?.events || [])
+                        .filter(e => e.type === 'sanction' && e.payload?.team === rightTeamKey && e.payload?.type === type)
+                        .sort((a, b) => (a.seq || 0) - (b.seq || 0))
+                      const sanctionWhen = (ev) => ev ? ` · ${t('scoreboard.table.set', 'Set')} ${ev.setIndex} · ${getScoreFromSanction(ev, rightTeamKey)}` : ''
+                      const firstWarning = playerSanctions.filter(s => s.payload?.type === 'warning').sort((a, b) => (a.seq || 0) - (b.seq || 0))[0]
+
                       const borderStyle = `${1 * scaleFactor}px solid var(--ov-hairline)`
                       const tableFontSize = `${DESIGN_VMIN * 0.018 * scaleFactor}px`
                       const headerFontSize = `${DESIGN_VMIN * 0.016 * scaleFactor}px`
@@ -10349,7 +10363,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   background: 'var(--ov-warning-soft)',
                                   borderRadius: `${3 * scaleFactor}px`
                                 }}>
-                                  {t('scoreboard.sanctions.formalWarning', 'Formal warning')}
+                                  {t('scoreboard.sanctions.formalWarning', 'Formal warning')}{firstWarning ? ` · #${firstWarning.payload?.playerNumber}${sanctionWhen(firstWarning)}` : ''}
                                 </div>
                               )}
                               {hasIR && (
@@ -10361,7 +10375,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   background: 'var(--ov-sunken-strong)',
                                   borderRadius: `${3 * scaleFactor}px`
                                 }}>
-                                  {t('scoreboard.sanctions.improperRequest', 'Improper request')}
+                                  {t('scoreboard.sanctions.improperRequest', 'Improper request')}{sanctionWhen(teamSanctionEvents('improper_request')[0])}
                                 </div>
                               )}
                               {hasDW && (
@@ -10373,11 +10387,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   background: 'var(--ov-warning-soft)',
                                   borderRadius: `${3 * scaleFactor}px`
                                 }}>
-                                  {t('scoreboard.sanctions.delayWarning', 'Delay warning')}
+                                  {t('scoreboard.sanctions.delayWarning', 'Delay warning')}{sanctionWhen(teamSanctionEvents('delay_warning')[0])}
                                 </div>
                               )}
                               {delayPenaltyCount > 0 && (
-                                [...Array(delayPenaltyCount)].map((_, i) => (
+                                teamSanctionEvents('delay_penalty').map((ev, i) => (
                                   <div key={i} style={{
                                     fontSize: `${DESIGN_VMIN * 0.014 * scaleFactor}px`,
                                     color: 'var(--ov-danger-text)',
@@ -10386,7 +10400,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                     background: 'var(--ov-danger-soft)',
                                     borderRadius: `${3 * scaleFactor}px`
                                   }}>
-                                    {t('scoreboard.sanctions.delayPenalty', 'Delay penalty')}
+                                    {t('scoreboard.sanctions.delayPenalty', 'Delay penalty')}{sanctionWhen(ev)}
                                   </div>
                                 ))
                               )}
@@ -10421,7 +10435,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                       <td style={{ padding: `${4 * scaleFactor}px`, textAlign: 'center', borderRight: borderStyle, borderBottom: isLast ? 'none' : borderStyle }}>{sanction.setIndex}</td>
                                       <td style={{ padding: `${4 * scaleFactor}px`, borderRight: borderStyle, borderBottom: isLast ? 'none' : borderStyle }}>
                                         {isPlayer1 && (
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'baseline', gap: `${6 * scaleFactor}px`, width: '100%' }}>
                                             {renderSanctionLetter(sanction.payload?.type)}
                                             <span>{score}</span>
                                           </div>
@@ -10429,7 +10443,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                       </td>
                                       <td style={{ padding: `${4 * scaleFactor}px`, borderBottom: isLast ? 'none' : borderStyle }}>
                                         {isPlayer2 && (
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'baseline', gap: `${6 * scaleFactor}px`, width: '100%' }}>
                                             {renderSanctionLetter(sanction.payload?.type)}
                                             <span>{score}</span>
                                           </div>

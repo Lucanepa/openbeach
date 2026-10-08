@@ -222,3 +222,16 @@ describe('issue 16: no blank page at set end', () => {
     expect(sb).not.toMatch(/setSetTransitionLoading\(\{ step: '[A-Z]/)
   })
 })
+
+describe('issue 19: side-panel sanctions list', () => {
+  it('team rows say the set and score; the formal warning names the player', () => {
+    expect(sb.match(/const sanctionWhen = \(ev\) => ev \?/g)).toHaveLength(2)
+    expect(sb.match(/\{t\('scoreboard\.sanctions\.delayWarning', 'Delay warning'\)\}\{sanctionWhen\(teamSanctionEvents\('delay_warning'\)\[0\]\)\}/g)).toHaveLength(2)
+    expect(sb.match(/teamSanctionEvents\('delay_penalty'\)\.map\(\(ev, i\) =>/g)).toHaveLength(2)
+    expect(sb.match(/firstWarning \? ` · #\$\{firstWarning\.payload\?\.playerNumber\}/g)).toHaveLength(2)
+  })
+
+  it('the player grid centres letter and score under the player number', () => {
+    expect(sb).not.toContain("<div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>")
+  })
+})
