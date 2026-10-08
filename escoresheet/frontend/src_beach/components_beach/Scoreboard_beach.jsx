@@ -21,7 +21,7 @@ import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { apiFrom } from '../lib_beach/apiClient_beach'
 import { setExtId, eventExtId } from '../utils_beach/syncIds_beach'
 import { changesSetScore, isLiveSetInterval, queueSetScoreSync } from '../utils_beach/eventSync_beach'
-import { planPointRemoval, scoreAfterRemoval, syncJobsForEvents, eventDeleteJob, eventUpsertJob, UNSENT_STATUSES } from '../utils_beach/scorerCorrections_beach'
+import { planPointRemoval, scoreAfterRemoval, syncJobsForEvents, syncJobsForSets, eventDeleteJob, eventUpsertJob, setReopenJob, planDecisionChangeReversal, UNSENT_STATUSES } from '../utils_beach/scorerCorrections_beach'
 import { buildConnectionPins } from '../utils_beach/connectionPins_beach'
 import { isBackendAvailable, getApiUrl, isNativeApp } from '../utils_beach/backendConfig_beach'
 import { lockLandscape as lockNativeLandscape, unlockOrientation as unlockNativeOrientation } from '../utils_beach/nativeOrientation_beach'
@@ -4934,15 +4934,21 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         }
       }
 
-      for (const e of eventsToDelete) {
-        await db.events.delete(e.id)
-        // Also remove from sync_queue if pending
-        const syncItems = await db.sync_queue.where('status').equals('queued').toArray()
-        const undoMatch = await db.matches.get(matchId)
-        const undoExtIds = new Set([String(e.id), ...(undoMatch?.seed_key ? [eventExtId(undoMatch.seed_key, e.id)] : [])])
-        const matchingSyncItem = syncItems.find(s => s.resource === 'event' && undoExtIds.has(s.payload?.external_id))
-        if (matchingSyncItem) {
-          await db.sync_queue.delete(matchingSyncItem.id)
+      // Their unsent cloud jobs go, and what was already sent is deleted in
+      // the cloud too (it stayed on the server before)
+      await discardEvents(eventsToDelete)
+
+      // A decision change: the point goes back to the team it was first given
+      // to (the point's snapshot restores the score, not the point's team)
+      if (lastEvent.type === 'decision_change') {
+        const reversal = planDecisionChangeReversal(lastEvent, allEvents)
+        if (reversal) {
+          await db.events.update(reversal.pointEventId, { payload: reversal.pointPayload })
+          const pointRow = await db.events.get(reversal.pointEventId)
+          const reversalMatch = await db.matches.get(matchId)
+          if (pointRow && reversalMatch && !reversalMatch.test && reversalMatch.seed_key) {
+            await db.sync_queue.add(eventUpsertJob(reversalMatch.seed_key, pointRow))
+          }
         }
       }
 
@@ -5018,9 +5024,28 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         const allSets = await db.sets.where({ matchId }).toArray()
         const nextSet = allSets.find(s => s.index === data.set.index + 1)
         if (nextSet) {
-          await db.events.where('matchId').equals(matchId).and(e => e.setIndex === nextSet.index).delete()
+          const nextSetEvents = await db.events.where('matchId').equals(matchId).and(e => e.setIndex === nextSet.index).toArray()
+          await discardEvents(nextSetEvents)
           await db.sets.delete(nextSet.id)
+          // Its set insert (and score updates) not sent yet go too
+          const unsent = await db.sync_queue.where('status').anyOf(...UNSENT_STATUSES).toArray()
+          const staleSetJobs = syncJobsForSets(unsent, [nextSet.id])
+          if (staleSetJobs.length > 0) await db.sync_queue.bulkDelete(staleSetJobs.map(j => j.id))
         }
+        // The ended set is open again, in the cloud too
+        const undoMatch = await db.matches.get(matchId)
+        const endedSetIndex = lastEvent.payload?.setIndex ?? lastEvent.setIndex
+        const endedSet = (await db.sets.where({ matchId }).toArray()).find(s => s.index === endedSetIndex)
+        if (endedSet) {
+          await db.sets.update(endedSet.id, { finished: false, endTime: null })
+          if (undoMatch && !undoMatch.test && undoMatch.seed_key) {
+            const reopened = await db.sets.get(endedSet.id)
+            await db.sync_queue.add(setReopenJob(undoMatch.seed_key, reopened))
+          }
+        }
+      } else {
+        // The cloud set row follows the restored score (queued: also offline)
+        await queueSetScoreSync(db, { matchId, setIndex: lastEvent.setIndex ?? data.set.index })
       }
 
     } catch (error) {
@@ -5034,7 +5059,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Refresh eScoresheet if open
       refreshScoresheet()
     }
-  }, [undoConfirm, data?.set, matchId, restoreStateFromSnapshot, syncToReferee, syncLiveStateToSupabase, refreshScoresheet])
+  }, [undoConfirm, data?.set, matchId, restoreStateFromSnapshot, discardEvents, syncToReferee, syncLiveStateToSupabase, refreshScoresheet])
 
   // OLD UNDO LOGIC REMOVED - The following complex per-event-type logic has been replaced
   // by the snapshot-based undo system above. Keeping this comment for reference.
@@ -5047,6 +5072,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   }, [])
 
   // Handle replay rally - undo last point (go back to state before the point, no rally restart)
+  // A replayed rally scores no point, here or on the server: the point (with
+  // its BMP group when a BMP decided it) is taken back through
+  // planPointRemoval and discardEvents (its unsent sync job dropped, a cloud
+  // delete queued for what was sent: raw db.events.delete calls left the
+  // point's job queued and the server kept it), the set score goes to the
+  // cloud through the sync queue, the replay event is logged like every
+  // event (logEvent: sync job, snapshot, tablets), and the tablets and the
+  // livescore are synced as after an undo. Ported from OpenVolley 93359315.
   const handleReplayRally = useCallback(async () => {
     if (!replayRallyConfirm || !data?.set) {
       setReplayRallyConfirm(null)
@@ -5054,151 +5087,74 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
 
     const lastEvent = replayRallyConfirm.event
-    const lastEventSeq = lastEvent.seq || 0
-    const baseSeq = Math.floor(lastEventSeq)
-
-    // Find and delete ALL events with the same base ID (point and any related rotation events)
-    const allEvents = await db.events.where('matchId').equals(matchId).toArray()
-    const eventsToDelete = allEvents.filter(e => {
-      const eSeq = e.seq || 0
-      return Math.floor(eSeq) === baseSeq
-    })
+    // Close first, then write: the dialog's score preview is live and redrew
+    // from the replayed score otherwise
+    setReplayRallyConfirm(null)
 
     try {
-      // If it's a point, undo the score change
-      if (lastEvent.type === 'point' && lastEvent.payload?.team) {
-        const team = lastEvent.payload.team
-        const field = team === 'team1' ? 'team1Points' : 'team2Points'
-        const currentPoints = data.set[field]
+      const allEvents = await db.events.where('matchId').equals(matchId).toArray()
+      const plan = planPointRemoval(allEvents, lastEvent)
+      if (!plan) return
+      const deleteIds = new Set(plan.deleteEventIds)
+      await discardEvents(allEvents.filter(e => deleteIds.has(e.id)))
 
-        // Decrement the score
-        if (currentPoints > 0) {
-          await db.sets.update(data.set.id, {
-            [field]: currentPoints - 1,
-            finished: false
-          })
-        }
-
-        // Check if there was a rotation after this point (sideout)
-        // Find the lineup event that came right after this point (rotation)
-        const pointEvents = data.events.filter(e => e.type === 'point' && e.setIndex === data.set.index)
-        const sortedPoints = pointEvents.sort((a, b) => (b.seq || 0) - (a.seq || 0))
-
-        // Get the team that had the point before this one (to determine who had serve)
-        // Calculate first serve for current set based on alternation pattern
-        const replaySetIndex = data.set.index
-        const replaySet1FirstServe = data?.match?.firstServe || 'team1'
-        let replayCurrentSetFirstServe
-        if (replaySetIndex === 3 && data.match?.set3FirstServe) {
-          const replayTeamAKey = data.match.coinTossTeamA || 'team1'
-          const replayTeamBKey = data.match.coinTossTeamB || 'team2'
-          replayCurrentSetFirstServe = data.match.set3FirstServe === 'A' ? replayTeamAKey : replayTeamBKey
-        } else if (replaySetIndex === 3) {
-          const set2First = data.match?.set2FirstServe || (replaySet1FirstServe === 'team1' ? 'team2' : 'team1')
-          replayCurrentSetFirstServe = set2First === 'team1' ? 'team2' : 'team1'
-        } else if (replaySetIndex === 2 && data.match?.set2FirstServe) {
-          replayCurrentSetFirstServe = data.match.set2FirstServe
-        } else if (replaySetIndex === 2) {
-          replayCurrentSetFirstServe = replaySet1FirstServe === 'team1' ? 'team2' : 'team1'
-        } else {
-          replayCurrentSetFirstServe = replaySet1FirstServe
-        }
-        let previousServeTeam = replayCurrentSetFirstServe
-        if (sortedPoints.length > 1) {
-          // The second point is the one before the current one
-          previousServeTeam = sortedPoints[1].payload?.team || previousServeTeam
-        }
-
-        // If the scoring team didn't have serve (sideout), a rotation was logged after the point
-        // We need to undo that rotation too
-        if (lastEvent.payload.team !== previousServeTeam) {
-          // Find the rotation lineup that was created after this point
-          const lineupEvents = data.events.filter(e =>
-            e.type === 'lineup' &&
-            e.setIndex === data.set.index &&
-            !e.payload?.isInitial &&
-            !e.payload?.fromSubstitution &&
-            (e.seq || 0) > lastEventSeq
-          ).sort((a, b) => (a.seq || 0) - (b.seq || 0)) // Ascending by seq
-
-          // The first lineup event after the point is the rotation
-          if (lineupEvents.length > 0 && lineupEvents[0].payload?.team === lastEvent.payload.team) {
-            const rotationEvent = lineupEvents[0]
-            await db.events.delete(rotationEvent.id)
-          }
-        }
-      }
-
-      // Capture the old score (before undoing the point)
+      // The set score loses the replayed point, locally and in the cloud
       const oldteam1Points = data.set.team1Points
       const oldteam2Points = data.set.team2Points
-
-      // Delete all events with this base seq
-      for (const eventToDelete of eventsToDelete) {
-        await db.events.delete(eventToDelete.id)
-      }
-
-      // Calculate the new score (after undoing the point)
-      const undoneTeam = lastEvent.payload?.team
-      const newteam1Points = undoneTeam === 'team1' ? oldteam1Points - 1 : oldteam1Points
-      const newteam2Points = undoneTeam === 'team2' ? oldteam2Points - 1 : oldteam2Points
+      const newScore = await applyPointRemovalScore(plan)
 
       // Log the replay event (this is important for match records)
-      const nextSeq = await getNextSeq()
-      const replayStateBefore = getStateSnapshot()
-
-      const replayEventId = await db.events.add({
-        matchId,
-        setIndex: data.set.index,
-        type: 'replay',
-        payload: {
-          reason: 'point_replay',
-          undonePointTeam: undoneTeam,
-          oldteam1Points,
-          oldteam2Points,
-          newteam1Points,
-          newteam2Points
-        },
-        ts: new Date().toISOString(),
-        seq: nextSeq,
-        stateBefore: replayStateBefore
-      })
-
-      // Capture state snapshot for undo system
-      const replaySnapshot = await captureFullStateSnapshot()
-      if (replaySnapshot) {
-        await db.events.update(replayEventId, { stateSnapshot: replaySnapshot })
-      }
+      const undoneTeam = lastEvent.payload?.team
+      await logEvent('replay', {
+        reason: 'point_replay',
+        undonePointTeam: undoneTeam,
+        oldteam1Points,
+        oldteam2Points,
+        newteam1Points: newScore?.team1Points ?? oldteam1Points,
+        newteam2Points: newScore?.team2Points ?? oldteam2Points
+      }, { setIndexOverride: plan.setIndex })
 
       // Go back to idle state - user can then click "Start rally" or "Undo"
       // No automatic rally start
 
-      // Sync to Supabase with fresh snapshot (data has changed)
+      // Tablets, livescore (fresh snapshot: data has changed)
+      syncToReferee()
       syncLiveStateToSupabase('replay', null, { reason: 'point_replay', undoneTeam }, null)
 
     } catch (error) {
-      // Error during replay - silently handle
+      console.error('[handleReplayRally] Error:', error)
     } finally {
-      setReplayRallyConfirm(null)
       // Refresh eScoresheet if open
       refreshScoresheet()
     }
-  }, [replayRallyConfirm, data?.events, data?.set, data?.match, matchId, getNextSeq, syncLiveStateToSupabase, refreshScoresheet])
+  }, [replayRallyConfirm, data?.set, matchId, discardEvents, applyPointRemovalScore, logEvent, syncToReferee, syncLiveStateToSupabase, refreshScoresheet])
 
   const cancelReplayRally = useCallback(() => {
     setReplayRallyConfirm(null)
   }, [])
 
   // Handle decision change - either swap point to other team or replay rally
+  // The swap reaches the server and the tablets: the point is written to the
+  // cloud again with its new team (the event insert is an upsert), the
+  // decision_change event is logged like every event (logEvent: sync job,
+  // snapshot), the set score is queued, and the tablets get the swapped point
+  // (only the live state was pushed before). The decision_change keeps what
+  // Undo needs to give the point back (pointEventId, fromTeam). Ported from
+  // OpenVolley fd74b1e9 / 3c4a88c2.
   const handleDecisionChange = useCallback(async () => {
     if (!replayRallyConfirm || !data?.set) {
       setReplayRallyConfirm(null)
       return
     }
 
-    const { event: lastEvent, selectedOption } = replayRallyConfirm
+    const { event: lastEvent } = replayRallyConfirm
+    // The dialog pre-selects "Assign to other team"; record what it shows
+    const selectedOption = replayRallyConfirm.selectedOption || 'swap'
 
     if (selectedOption === 'swap') {
+      // Close first, then write: the dialog's live score preview never shows
+      // the swapped score
+      setReplayRallyConfirm(null)
       // Swap the point to the other team
       const oldTeam = lastEvent.payload?.team
       const newTeam = oldTeam === 'team1' ? 'team2' : 'team1'
@@ -5207,84 +5163,71 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
       try {
         // Update scores: decrement old team, increment new team
-        const oldTeamPoints = data.set[oldField]
-        const newTeamPoints = data.set[newField]
-
-        await db.sets.update(data.set.id, {
-          [oldField]: Math.max(0, oldTeamPoints - 1),
-          [newField]: newTeamPoints + 1,
-          finished: false
-        })
+        const setRow = (await db.sets.get(data.set.id)) || data.set
+        const oldScore = { team1Points: setRow.team1Points || 0, team2Points: setRow.team2Points || 0 }
+        const newScore = {
+          ...oldScore,
+          [oldField]: Math.max(0, oldScore[oldField] - 1),
+          [newField]: oldScore[newField] + 1
+        }
+        await db.sets.update(data.set.id, { ...newScore, finished: false })
 
         // Update the point event's team
-        await db.events.update(lastEvent.id, {
-          payload: {
-            ...lastEvent.payload,
-            team: newTeam,
-            swappedFrom: oldTeam // Track that this was swapped
-          }
-        })
-
-        // Log a decision_change event for the record
-        const nextSeq = await getNextSeq()
-        const decisionChangeEventId = await db.events.add({
-          matchId,
-          setIndex: data.set.index,
-          type: 'decision_change',
-          payload: {
-            reason: 'point_swap',
-            fromTeam: oldTeam,
-            toTeam: newTeam,
-            oldteam1Points: data.set.team1Points,
-            oldteam2Points: data.set.team2Points,
-            newteam1Points: oldTeam === 'team1' ? data.set.team1Points - 1 : data.set.team1Points + 1,
-            newteam2Points: oldTeam === 'team2' ? data.set.team2Points - 1 : data.set.team2Points + 1
-          },
-          ts: new Date().toISOString(),
-          seq: nextSeq
-        })
-
-        // Capture state snapshot for undo system
-        const decisionChangeSnapshot = await captureFullStateSnapshot()
-        if (decisionChangeSnapshot) {
-          await db.events.update(decisionChangeEventId, { stateSnapshot: decisionChangeSnapshot })
+        const swappedPayload = {
+          ...lastEvent.payload,
+          team: newTeam,
+          swappedFrom: oldTeam // Track that this was swapped
         }
+        await db.events.update(lastEvent.id, { payload: swappedPayload })
 
-        // Handle rotation changes if serve changed
-        // If old team was NOT serving (sideout happened), we need to undo their rotation
-        // and apply rotation to new team if new team wasn't serving
+        // Older matches logged a rotation line-up after a side-out: the old
+        // team's one goes (with its cloud row)
         const lastEventSeq = lastEvent.seq || 0
-
-        // Find rotation events that happened after the point
-        const rotationEvents = data.events.filter(e =>
+        const rotationEvents = (await db.events.where('matchId').equals(matchId).toArray()).filter(e =>
           e.type === 'lineup' &&
           e.setIndex === data.set.index &&
           !e.payload?.isInitial &&
           !e.payload?.fromSubstitution &&
-          (e.seq || 0) > lastEventSeq
-        ).sort((a, b) => (a.seq || 0) - (b.seq || 0))
+          (e.seq || 0) > lastEventSeq &&
+          e.payload?.team === oldTeam
+        )
+        await discardEvents(rotationEvents)
 
-        // Delete any rotations that were for the old team (sideout that shouldn't have happened)
-        for (const rotEvent of rotationEvents) {
-          if (rotEvent.payload?.team === oldTeam) {
-            await db.events.delete(rotEvent.id)
-          }
+        // Log a decision_change event for the record (snapshot after the swap)
+        await logEvent('decision_change', {
+          reason: 'point_swap',
+          pointEventId: lastEvent.id,
+          fromTeam: oldTeam,
+          toTeam: newTeam,
+          oldteam1Points: oldScore.team1Points,
+          oldteam2Points: oldScore.team2Points,
+          newteam1Points: newScore.team1Points,
+          newteam2Points: newScore.team2Points
+        }, { setIndexOverride: data.set.index })
+
+        // The cloud: the point with its new team, and the set score
+        const match = await db.matches.get(matchId)
+        if (match && !match.test && match.seed_key) {
+          await db.sync_queue.add(eventUpsertJob(match.seed_key, { ...lastEvent, payload: swappedPayload }))
         }
+        await queueSetScoreSync(db, { matchId, setIndex: data.set.index })
 
-        // Sync to Supabase with fresh snapshot (data has changed)
+        // The tablets get the swapped point (they kept the old team's point:
+        // only the live state was pushed), the live state its fresh snapshot
+        syncToReferee()
         syncLiveStateToSupabase('decision_change', null, { reason: 'point_swap', fromTeam: oldTeam, toTeam: newTeam }, null)
 
       } catch (error) {
         console.error('[handleDecisionChange] Error swapping point:', error)
+      } finally {
+        refreshScoresheet()
       }
     } else {
       // Replay rally - use existing logic
       await handleReplayRally()
       return // handleReplayRally already closes the modal and syncs
     }
-
-    setReplayRallyConfirm(null)
-  }, [replayRallyConfirm, data?.set, data?.events, matchId, getNextSeq, handleReplayRally, syncLiveStateToSupabase])
+  }, [replayRallyConfirm, data?.set, matchId, logEvent, discardEvents, handleReplayRally, syncToReferee, syncLiveStateToSupabase, refreshScoresheet])
 
 
 

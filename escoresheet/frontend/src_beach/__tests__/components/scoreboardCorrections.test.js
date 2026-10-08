@@ -59,3 +59,71 @@ describe('cancelling a change of courts (every 7 points, 5 in set 3)', () => {
     expect(b).toMatch(/await queueSetScoreSync\(db, \{ matchId, setIndex: plan\.setIndex \}\)/)
   })
 })
+
+describe('Undo reaches the server (sent events too)', () => {
+  const body = () => between('const handleUndo = useCallback(', 'const cancelUndo = useCallback(')
+
+  it('removes the events through discardEvents, not raw deletes that only drop a queued job', () => {
+    const b = body()
+    expect(b).toMatch(/await discardEvents\(eventsToDelete\)/)
+    expect(b).not.toMatch(/db\.events\.delete\(/)
+  })
+
+  it('a decision change undo gives the point back to its first team, in the cloud too', () => {
+    const b = body()
+    expect(b).toMatch(/planDecisionChangeReversal\(lastEvent, allEvents\)/)
+    expect(b).toMatch(/eventUpsertJob\(reversalMatch\.seed_key, pointRow\)/)
+  })
+
+  it('the set score is queued (not only when the backend answers), a set end reopens the set in the cloud', () => {
+    const b = body()
+    expect(b).toMatch(/await queueSetScoreSync\(db, \{ matchId, setIndex: lastEvent\.setIndex \?\? data\.set\.index \}\)/)
+    expect(b).toMatch(/await discardEvents\(nextSetEvents\)/)
+    expect(b).toMatch(/syncJobsForSets\(unsent, \[nextSet\.id\]\)/)
+    expect(b).toMatch(/setReopenJob\(undoMatch\.seed_key, reopened\)/)
+  })
+})
+
+describe('Replay rally reaches the server and the tablets', () => {
+  const body = () => between('const handleReplayRally = useCallback(', 'const cancelReplayRally = useCallback(')
+
+  it('takes the point back with planPointRemoval and discardEvents, no raw deletes', () => {
+    const b = body()
+    expect(b).toMatch(/planPointRemoval\(allEvents, lastEvent\)/)
+    expect(b).toMatch(/await discardEvents\(/)
+    expect(b).not.toMatch(/db\.events\.delete\(/)
+    expect(b).toMatch(/await applyPointRemovalScore\(plan\)/)
+  })
+
+  it('logs the replay through logEvent (its own sync job) and syncs the tablets', () => {
+    const b = body()
+    expect(b).toMatch(/await logEvent\('replay'/)
+    expect(b).not.toMatch(/db\.events\.add\(/)
+    expect(b).toMatch(/syncToReferee\(\)/)
+    expect(b).toMatch(/syncLiveStateToSupabase\('replay'/)
+  })
+
+  it('closes the dialog before it writes', () => {
+    const b = body()
+    const close = b.indexOf('setReplayRallyConfirm(null)\n\n    try')
+    expect(close).toBeGreaterThan(-1)
+    expect(close).toBeLessThan(b.indexOf('await db.events.where'))
+  })
+})
+
+describe('decision change reaches the server and the tablets', () => {
+  const body = () => between('const handleDecisionChange = useCallback(', 'const handleTimeout = useCallback(')
+
+  it('the swapped point is written to the cloud again, the decision is logged with its sync job', () => {
+    const b = body()
+    expect(b).toMatch(/eventUpsertJob\(match\.seed_key, \{ \.\.\.lastEvent, payload: swappedPayload \}\)/)
+    expect(b).toMatch(/await logEvent\('decision_change'/)
+    expect(b).toMatch(/pointEventId: lastEvent\.id/)
+    expect(b).toMatch(/await queueSetScoreSync\(db, /)
+    expect(b).not.toMatch(/db\.events\.delete\(/)
+  })
+
+  it('the tablets get the swapped point', () => {
+    expect(body()).toMatch(/syncToReferee\(\)/)
+  })
+})

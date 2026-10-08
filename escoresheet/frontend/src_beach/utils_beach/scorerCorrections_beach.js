@@ -11,7 +11,7 @@
  * BMP request and goes with it, exactly as Undo removes it), and a successful
  * team BMP point carries `reversedTeam` (that team loses the disputed point).
  */
-import { eventExtId, parseExtId } from './syncIds_beach'
+import { eventExtId, setExtId, parseExtId } from './syncIds_beach'
 
 /**
  * The score of one set as its point events give it.
@@ -173,4 +173,71 @@ export function eventUpsertJob(seedKey, event, now = new Date()) {
     ts: now.getTime(),
     status: 'queued'
   }
+}
+
+/**
+ * Unsent sync jobs of the given local sets (insert or update): to be dropped
+ * when the sets are deleted locally (Undo of a set end removes the next set).
+ * @param {Array} jobs sync_queue rows
+ * @param {Iterable} setIds local Dexie ids
+ * @returns {Array} the jobs to delete
+ */
+export function syncJobsForSets(jobs, setIds) {
+  const ids = new Set([...(setIds || [])].map(String))
+  return (jobs || []).filter(j => {
+    if (!j || j.resource !== 'set' || !UNSENT_STATUSES.includes(j.status)) return false
+    const localId = localIdOfExtId(j.payload?.external_id, 'set')
+    return localId != null && ids.has(localId)
+  })
+}
+
+/**
+ * The sync job that opens a set again in the cloud (Undo of its set end): not
+ * finished, no end time, its current score.
+ */
+export function setReopenJob(seedKey, set, now = new Date()) {
+  return {
+    resource: 'set',
+    action: 'update',
+    payload: {
+      external_id: setExtId(seedKey, set.id),
+      team1_points: set.team1Points || 0,
+      team2_points: set.team2Points || 0,
+      finished: false,
+      end_time: null
+    },
+    ts: now.toISOString(),
+    status: 'queued'
+  }
+}
+
+/**
+ * Plan the undo of a decision change (point swap): the point goes back to the
+ * team it was first given to. Removing the decision_change event and
+ * restoring the point's snapshot gives the old score back, but the point
+ * itself kept the new team (and so the serve). As OpenVolley's
+ * planDecisionChangeReversal (domain/corrections.js), without the rotation
+ * sub-events beach does not have.
+ * @param {object} decisionEvent the decision_change event being undone
+ * @param {Array} events all events of the match
+ * @returns {null | {pointEventId:any, pointPayload:object}}
+ */
+export function planDecisionChangeReversal(decisionEvent, events) {
+  if (!decisionEvent || decisionEvent.type !== 'decision_change') return null
+  if (decisionEvent.payload?.reason && decisionEvent.payload.reason !== 'point_swap') return null
+  const all = (events || []).filter(Boolean)
+  const byId = decisionEvent.payload?.pointEventId
+  let point = byId != null ? all.find(e => e.id === byId && e.type === 'point') : null
+  if (!point) {
+    // decision changes logged before pointEventId was recorded: the newest
+    // swapped point of that set before the decision
+    point = all
+      .filter(e => e.type === 'point' && e.setIndex === decisionEvent.setIndex &&
+        (e.seq || 0) < (decisionEvent.seq || 0) && e.payload?.swappedFrom)
+      .sort((a, b) => (b.seq || 0) - (a.seq || 0))[0]
+  }
+  if (!point?.payload?.swappedFrom) return null
+  // eslint-disable-next-line no-unused-vars
+  const { swappedFrom, ...rest } = point.payload
+  return { pointEventId: point.id, pointPayload: { ...rest, team: swappedFrom } }
 }

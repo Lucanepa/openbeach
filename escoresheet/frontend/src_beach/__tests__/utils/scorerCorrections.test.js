@@ -6,7 +6,10 @@ import {
   localIdOfExtId,
   syncJobsForEvents,
   eventDeleteJob,
-  eventUpsertJob
+  eventUpsertJob,
+  syncJobsForSets,
+  setReopenJob,
+  planDecisionChangeReversal
 } from '../../utils_beach/scorerCorrections_beach'
 
 // Ported from OpenVolley src/domain/__tests__/corrections.test.js
@@ -111,5 +114,43 @@ describe('sync jobs of removed events', () => {
     const job = eventUpsertJob('match_1_a', point(12, 12, 'team1', 1, { swappedFrom: 'team2' }), now)
     expect(job.action).toBe('insert')
     expect(job.payload).toMatchObject({ external_id: 'match_1_a:e:12', match_id: 'match_1_a', set_index: 1, type: 'point', seq: 12, payload: { team: 'team1', swappedFrom: 'team2' } })
+  })
+})
+
+describe('undo of a set end', () => {
+  it('syncJobsForSets finds the unsent jobs of the removed next set', () => {
+    const jobs = [
+      { id: 1, resource: 'set', action: 'insert', status: 'queued', payload: { external_id: 'm:s:3' } },
+      { id: 2, resource: 'set', action: 'update', status: 'sent', payload: { external_id: 'm:s:3' } },
+      { id: 3, resource: 'set', action: 'update', status: 'queued', payload: { external_id: 'm:s:2' } },
+      { id: 4, resource: 'event', action: 'insert', status: 'queued', payload: { external_id: 'm:e:3' } }
+    ]
+    expect(syncJobsForSets(jobs, [3]).map(j => j.id)).toEqual([1])
+  })
+
+  it('setReopenJob opens the ended set again in the cloud', () => {
+    const job = setReopenJob('match_1_a', { id: 2, team1Points: 20, team2Points: 21 })
+    expect(job).toMatchObject({ resource: 'set', action: 'update', status: 'queued' })
+    expect(job.payload).toEqual({ external_id: 'match_1_a:s:2', team1_points: 20, team2_points: 21, finished: false, end_time: null })
+  })
+})
+
+describe('planDecisionChangeReversal (undo of a point swap)', () => {
+  const swapped = point(12, 12, 'team1', 1, { swappedFrom: 'team2', score: { team1: 4, team2: 3 } })
+  const decision = { id: 13, seq: 13, setIndex: 1, type: 'decision_change', payload: { reason: 'point_swap', pointEventId: 12, fromTeam: 'team2', toTeam: 'team1' } }
+
+  it('gives the point back to the team it was first given to', () => {
+    const plan = planDecisionChangeReversal(decision, [point(11, 11, 'team2'), swapped, decision])
+    expect(plan).toEqual({ pointEventId: 12, pointPayload: { team: 'team2', score: { team1: 4, team2: 3 } } })
+  })
+
+  it('finds the swapped point of a decision change logged without pointEventId', () => {
+    const legacy = { ...decision, payload: { reason: 'point_swap', fromTeam: 'team2', toTeam: 'team1' } }
+    expect(planDecisionChangeReversal(legacy, [swapped, legacy]).pointEventId).toBe(12)
+  })
+
+  it('nothing to reverse for another event or a point never swapped', () => {
+    expect(planDecisionChangeReversal(point(12, 12, 'team1'), [])).toBeNull()
+    expect(planDecisionChangeReversal(decision, [point(12, 12, 'team1')])).toBeNull()
   })
 })
