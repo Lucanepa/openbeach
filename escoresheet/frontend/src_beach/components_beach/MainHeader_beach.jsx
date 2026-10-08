@@ -118,6 +118,7 @@ export default function MainHeader({
   queueStats = { pending: 0, error: 0 },
   dashboardServer = null, // { enabled, dashboardCount, refereePin, onOpenOptions }
   collapsible = false, // Only allow collapsing on Scoreboard page
+  startCollapsed = false, // Collapse when this turns true (the scoring screen's phone layout)
   onTriggerAlarm = null, // Trigger scorer attention alarm
   alarmEnabled = false, // Only show alarm when sync/dashboard is active
   onOpenGuide = null, // Open the interactive app guide
@@ -138,7 +139,8 @@ export default function MainHeader({
     const saved = localStorage.getItem('showViewportSize')
     return saved === 'true' // Default to hidden
   })
-  const [isCollapsed, setIsCollapsed] = useState(false)
+  // Folded from the first frame on the phone scoring layout (no fold animation, no jump)
+  const [isCollapsed, setIsCollapsed] = useState(() => !!startCollapsed)
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
   const touchStartY = useRef(0)
   const headerRef = useRef(null)
@@ -150,6 +152,12 @@ export default function MainHeader({
 
   // Effective collapsed state - only collapse when collapsible is true
   const effectivelyCollapsed = collapsible && isCollapsed
+
+  // The phone scoring layout fills the screen: the header starts folded
+  // away (its thin bar opens it again)
+  useEffect(() => {
+    if (startCollapsed) setIsCollapsed(true)
+  }, [startCollapsed])
 
   // Handle touch events for swipe to show/hide header (compact mode only for touch)
   useEffect(() => {

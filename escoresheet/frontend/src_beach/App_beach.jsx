@@ -44,6 +44,7 @@ import { cloudStatusFor } from './utils_beach/cloudStatus_beach'
 import { isCapacitorApp, installAppLifecycle, liveOf, setLiveMatch } from './utils_beach/appLifecycle_beach'
 import DesktopUpdateNotice from './components_beach/DesktopUpdateNotice_beach'
 import { smallScreenGate } from './utils_beach/screenGate_beach'
+import { detectDisplayMode, normaliseDisplayMode, phoneLayoutKept, readStoredDisplayMode } from './components_beach/scoreboard/phoneLayout_beach'
 import RestorePreviewModal from './components_beach/RestorePreviewModal_beach'
 import { scorerRelay, scorerPublisher, scorerRelayUrl, readRelayBundle, relayMatchKey, generateGamePin } from './utils_beach/relayPublisher_beach'
 import { checkMatchSession, lockMatchSession, unlockMatchSession, verifyGamePin } from './utils_beach/sessionManager_beach'
@@ -141,10 +142,11 @@ export default function App() {
   // Offline mode: no cloud call at all (backendConfig_beach isCloudOffline)
   const [offlineMode, setOfflineMode] = useState(() => isCloudOffline())
   const [showStartupConnectivity, setShowStartupConnectivity] = useState(() => !isCloudOffline())
-  // Display mode: 'desktop' | 'tablet' | 'smartphone' | 'auto'
+  // Display mode: 'desktop' | 'tablet' | 'phone' | 'auto' (a stored
+  // 'smartphone', the option's old name, is the Phone mode)
   const [displayMode, setDisplayMode] = useState(() => {
     const saved = localStorage.getItem('displayMode')
-    return saved || 'auto' // default to auto-detect
+    return normaliseDisplayMode(saved) // default to auto-detect
   })
   const [detectedDisplayMode, setDetectedDisplayMode] = useState('desktop') // What mode was auto-detected
   const [checkAccidentalRallyStart, setCheckAccidentalRallyStart] = useState(() => {
@@ -289,19 +291,12 @@ export default function App() {
   }, [])
 
   // Screen size detection for display mode
-  // < 768px = smartphone, 768-1024px = tablet, > 1024px = desktop
+  // portrait under 600px = phone, <= 1024px = tablet, > 1024px = desktop
   useEffect(() => {
     const checkScreenSize = () => {
       const width = window.innerWidth
       const height = window.innerHeight
-      let detected = 'desktop'
-
-      if (width < 768) {
-        detected = 'smartphone'
-      } else if (width <= 1024) {
-        detected = 'tablet'
-      }
-      // > 1024px = desktop (default)
+      const detected = detectDisplayMode({ width, height })
 
       setDetectedDisplayMode(detected)
       setViewportSize({ width, height })
@@ -2074,6 +2069,16 @@ export default function App() {
   // The scoring screen is on (not setup, coin toss, match end or manual changes)
   const onScoringScreen = !!(matchId && !showCoinToss && !showMatchSetup && !showMatchEnd && !showManualAdjustments)
 
+  // The scoring screen in its phone layout (the display mode as the
+  // Scoreboard reads it: its options write localStorage), and the match end
+  // it leads to (signatures, approval): both get past the size gate on a
+  // phone. It is kept on a phone turned sideways: the scoring screen stays
+  // mounted under its "hold the phone upright" notice, with its dialogs and
+  // countdowns.
+  const phoneLayoutOn = phoneLayoutKept(readStoredDisplayMode(), viewportSize)
+  const phoneScoringShown = phoneLayoutOn && onScoringScreen
+  const phoneMatchEndShown = phoneLayoutOn && !!matchId && showMatchEnd && !showManualAdjustments
+
   return (
     // Every screen is on the volleyui stone page (light only), match end and
     // manual adjustments included.
@@ -2101,7 +2106,9 @@ export default function App() {
           fullscreen the setup, coin toss and match end screens are let
           through, but never the scoring screen: below 600 px its score and
           Undo do not fit (phone landscape 844×390 hid the score). */}
-      {smallScreenGate(viewportSize, { isFullscreen, scoring: onScoringScreen }) ? (
+      {/* The scoring screen is let through when it shows its phone layout
+          (PhoneScoreboard_beach), and its match end */}
+      {!phoneScoringShown && !phoneMatchEndShown && smallScreenGate(viewportSize, { isFullscreen, scoring: onScoringScreen }) ? (
         <div className="ov-kit flex flex-1 flex-col items-center justify-center overflow-y-auto bg-gradient-to-br from-stone-100 via-stone-50 to-stone-100 p-4">
           <div className="relative w-full max-w-sm overflow-hidden rounded-3xl border border-stone-200/70 bg-white p-8 text-center shadow-card-lg">
             <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-red-600 to-red-500" />
@@ -2178,6 +2185,7 @@ export default function App() {
               refereeCount: dashboardServerData.refereeCount
             } : null}
             collapsible={!!(matchId && !showCoinToss && !showMatchSetup && !showMatchEnd)}
+            startCollapsed={phoneScoringShown}
             onTriggerAlarm={async () => {
               if (!matchId || !isBackendAvailable() || !currentMatch) return
 
@@ -2227,7 +2235,8 @@ export default function App() {
             display: 'flex',
             flexDirection: 'column',
             position: 'relative',
-            padding: '5px',
+            // The phone scoring layout fills the screen edge to edge
+            padding: phoneScoringShown ? 0 : '5px',
             overflow: 'hidden'
           }}>
             <div className="panel" style={{
@@ -2237,7 +2246,7 @@ export default function App() {
               overflowX: 'hidden',
               width: '100%',
               maxWidth: '100%',
-              padding: (matchId && !showCoinToss && !showMatchSetup && !showMatchEnd) ? '10px' : '10px',
+              padding: phoneScoringShown ? 0 : '10px',
               // Vertical centering for CoinToss and MatchSetup screens
               ...(showCoinToss || showMatchSetup ? {
                 display: 'flex',
