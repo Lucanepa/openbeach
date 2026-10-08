@@ -38,6 +38,7 @@ import {
 } from './constants_beach/testSeeds_beach'
 import { apiFrom } from './lib_beach/apiClient_beach'
 import { setExtId } from './utils_beach/syncIds_beach'
+import { wipeMatchEvents } from './db_beach/eventHistory_beach'
 import { isBackendAvailable, getBackendUrl, isServedFromLocalServer, getLocalServerStatusUrl, rememberRelayWsPort, isCloudOffline, setCloudOffline, isLanBackendUrl, isRelayOriginPage } from './utils_beach/backendConfig_beach'
 import { cloudStatusFor } from './utils_beach/cloudStatus_beach'
 import { isCapacitorApp, installAppLifecycle, liveOf, setLiveMatch } from './utils_beach/appLifecycle_beach'
@@ -1081,12 +1082,13 @@ export default function App() {
   }
 
   async function clearLocalTestData() {
-    await db.transaction('rw', db.events, db.sets, db.matches, db.players, db.teams, async () => {
+    await db.transaction('rw', db.events, db.event_history, db.sets, db.matches, db.players, db.teams, async () => {
       const testMatches = await db.matches
         .filter(m => m.test === true || m.externalId === TEST_MATCH_EXTERNAL_ID)
         .toArray()
       for (const match of testMatches) {
-        await db.events.where('matchId').equals(match.id).delete()
+        // a wipe, not an undo: no event history (db_beach/eventHistory_beach)
+        await wipeMatchEvents(db, match.id, { dropHistory: true })
         await db.sets.where('matchId').equals(match.id).delete()
         await db.matches.delete(match.id)
       }
@@ -1205,7 +1207,7 @@ export default function App() {
       shouldDeleteFromSupabase
     })
 
-    await db.transaction('rw', db.matches, db.sets, db.events, db.players, db.teams, db.sync_queue, db.match_setup, async () => {
+    await db.transaction('rw', db.matches, db.sets, db.events, db.event_history, db.players, db.teams, db.sync_queue, db.match_setup, async () => {
 
       // Delete sets
       const sets = await db.sets.where('matchId').equals(matchIdToDelete).toArray()
@@ -1215,7 +1217,8 @@ export default function App() {
 
       // Delete events - use direct delete instead of bulkDelete for better reliability
       const eventsCount = await db.events.where('matchId').equals(matchIdToDelete).count()
-      await db.events.where('matchId').equals(matchIdToDelete).delete()
+      // a wipe, not an undo: no event history (db_beach/eventHistory_beach)
+      await wipeMatchEvents(db, matchIdToDelete, { dropHistory: true })
 
       // Get match to find team IDs
       const match = await db.matches.get(matchIdToDelete)
@@ -1459,13 +1462,13 @@ export default function App() {
 
     // Delete current match first
     if (currentMatch) {
-      await db.transaction('rw', db.matches, db.sets, db.events, db.players, db.teams, db.sync_queue, db.match_setup, async () => {
+      await db.transaction('rw', db.matches, db.sets, db.events, db.event_history, db.players, db.teams, db.sync_queue, db.match_setup, async () => {
 
         // Delete sets
         await db.sets.where('matchId').equals(currentMatch.id).delete()
 
         // Delete events - use direct delete for reliability
-        await db.events.where('matchId').equals(currentMatch.id).delete()
+        await wipeMatchEvents(db, currentMatch.id, { dropHistory: true })
 
         // Delete players
         if (currentMatch.team1Id) {
@@ -1809,7 +1812,7 @@ export default function App() {
       }
 
       if (existingMatch) {
-        await db.events.where('matchId').equals(existingMatch.id).delete()
+        await wipeMatchEvents(db, existingMatch.id)
         await db.sets.where('matchId').equals(existingMatch.id).delete()
 
         await db.matches.update(existingMatch.id, {

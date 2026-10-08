@@ -12,7 +12,8 @@
  * matches without a seed_key never get jobs. Nothing here throws into the
  * scoring flow: a failure to queue is logged and the local write stands.
  */
-import { setExtId } from './syncIds_beach'
+import { setExtId, jobMatchKey } from './syncIds_beach'
+import { REVISION_OPS, revisionOfJob } from './eventRevisions_beach'
 
 // Set update fields that only carry the running score: a newer score of the
 // same set makes an older, still queued one pointless.
@@ -98,3 +99,46 @@ export function isLiveSetInterval({ eventType = null, matchStatus = null, snapsh
   if (eventType === 'set_end') return true
   return matchStatus === 'interval' && !snapshotSetFinished
 }
+
+// ---------------------------------------------------------------------------
+// Event revisions (undo / delete / edit / restore) for the server
+// ---------------------------------------------------------------------------
+
+/**
+ * Is this sync job an event revision (queued by db_beach/eventHistory_beach)?
+ * They keep resource 'event', so the queue's per-entity order holds a void
+ * behind its event's insert.
+ */
+export function isEventRevisionJob(job) {
+  return job?.resource === 'event' && REVISION_OPS.includes(job.action)
+}
+
+/**
+ * The POST /api/match/event-revisions request of a revision job:
+ * { matchExternalId, revisions: [one] }, or null when the job cannot be sent
+ * (no rev_uid, no match key): the queue drops it.
+ */
+export function eventRevisionRequest(job) {
+  if (!isEventRevisionJob(job)) return null
+  const revision = revisionOfJob({ ...job.payload, op: job.payload?.op || job.action })
+  const matchExternalId = jobMatchKey(job)
+  if (!revision || !matchExternalId) return null
+  return { matchExternalId, revisions: [revision] }
+}
+
+/**
+ * How the queue treats the answer to a revision:
+ * 'sent'; 'wait' (404 OV_MATCH_NOT_FOUND: the match is not in the cloud yet,
+ * retried like an event insert); 'no_route' (any other 404: a server without
+ * the route, an older backend or a LAN relay: parked as refused, retried
+ * hourly); 'error' (everything else: the queue's usual failure classes).
+ * @param {{error?: object|null, status?: number}} answer
+ */
+export function eventRevisionOutcome({ error = null, status } = {}) {
+  if (!error) return 'sent'
+  const st = error.status ?? status
+  if (st === 404 && error.code === 'OV_MATCH_NOT_FOUND') return 'wait'
+  if (st === 404) return 'no_route'
+  return 'error'
+}
+

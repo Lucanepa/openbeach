@@ -106,9 +106,26 @@ vi.mock('../../lib_beach/apiClient_beach', () => {
       const call = { table: '__claim', action: 'claim', data: { externalId, pin }, filters: [] }
       api.calls.push(call)
       return api.respond(call)
+    },
+    apiPostActivity: async (entries) => {
+      const call = { table: '__activity', action: 'post', data: { entries }, filters: [] }
+      api.calls.push(call)
+      return api.respond(call)
+    },
+    apiPostEventRevisions: async (matchExternalId, revisions) => {
+      const call = { table: '__revisions', action: 'post', data: { matchExternalId, revisions }, filters: [] }
+      api.calls.push(call)
+      return api.respond(call)
     }
   }
 })
+
+// The activity log (utils_beach/activity/bus_beach): what the queue reports
+const activity = vi.hoisted(() => ({ entries: [], passes: [] }))
+vi.mock('../../utils_beach/activity/bus_beach', () => ({
+  emitActivity: (kind, data, opts) => activity.entries.push({ kind, data, opts }),
+  noteSyncPass: (o) => activity.passes.push(o)
+}))
 
 const venue = vi.hoisted(() => ({ relayOrigin: false }))
 vi.mock('../../utils_beach/backendConfig_beach', () => ({ getApiUrl: (p) => `http://backend.test${p}`, getCloudApiUrl: (p) => `http://backend.test${p}`, isCloudOffline: () => false, isRelayOriginPage: () => venue.relayOrigin }))
@@ -588,6 +605,143 @@ describe('event delete jobs (Undo, Replay, decision change, event editor)', () =
       : defaultRespond(call)
     await runQueuePass()
     expect(fakeDb.sync_queue.map.get(1).status).not.toBe('sent')
+  })
+})
+
+// The activity upload job (utils_beach/activity/upload_beach), against the fakes
+const upload = vi.hoisted(() => ({ result: { sent: 0, more: false } }))
+vi.mock('../../utils_beach/activity/upload_beach', () => ({
+  uploadActivityBatch: async () => upload.result,
+  activityFlushJob: () => ({ resource: 'activity', action: 'flush', payload: {}, ts: Date.now(), status: 'queued' })
+}))
+
+describe('the activity upload job', () => {
+  it('runs after the match, set and event jobs; another flush when more rows wait', async () => {
+    upload.result = { sent: 500, accepted: 500, more: true }
+    fakeDb.sync_queue.reset([
+      { id: 1, resource: 'activity', action: 'flush', status: 'queued', payload: {} },
+      { id: 2, resource: 'event', action: 'insert', status: 'queued', payload: { external_id: 'match_100_aaa:e:2', match_id: 'match_100_aaa' } }
+    ])
+    await runQueuePass()
+    expect(fakeDb.sync_queue.map.get(1).status).toBe('sent')
+    expect(fakeDb.sync_queue.map.get(2).status).toBe('sent')
+    expect([...fakeDb.sync_queue.map.values()].filter(j => j.resource === 'activity' && j.status === 'queued')).toHaveLength(1)
+  })
+
+  it('a server without /api/activity (404) parks it as failed; a 503 is retried', async () => {
+    upload.result = { sent: 3, error: { status: 404, message: 'Not found' }, status: 404 }
+    fakeDb.sync_queue.reset([{ id: 1, resource: 'activity', action: 'flush', status: 'queued', payload: {} }])
+    await runQueuePass()
+    expect(fakeDb.sync_queue.map.get(1)).toMatchObject({ status: 'failed', last_error: expect.objectContaining({ code: 'OV_ROUTE_MISSING' }) })
+    upload.result = { sent: 3, error: { status: 503, message: 'busy' }, status: 503 }
+    fakeDb.sync_queue.reset([{ id: 1, resource: 'activity', action: 'flush', status: 'queued', payload: {} }])
+    await runQueuePass()
+    expect(fakeDb.sync_queue.map.get(1).status).not.toBe('sent')
+    upload.result = { sent: 0, more: false }
+  })
+
+  it('sent upload jobs are pruned after an hour, other sent jobs after a week', async () => {
+    const now = Date.now()
+    fakeDb.sync_queue.reset([
+      { id: 1, resource: 'activity', action: 'flush', status: 'sent', ts: now - 2 * 3600 * 1000 },
+      { id: 2, resource: 'event', action: 'insert', status: 'sent', ts: now - 2 * 3600 * 1000 }
+    ])
+    expect(await pruneSyncQueue({ now })).toBe(1)
+    expect([...fakeDb.sync_queue.map.keys()]).toEqual([2])
+  })
+})
+
+describe('the activity log of the queue', () => {
+  beforeEach(() => { activity.entries = [] })
+
+  it('a refused job is a sync.error with its status, code and request id, never its payload', async () => {
+    fakeDb.sync_queue.reset([
+      { id: 1, resource: 'event', action: 'insert', status: 'queued', payload: { external_id: 'match_100_aaa:e:1', match_id: 'match_100_aaa', game_pin: '123456' } }
+    ])
+    api.respond = (call) => (call.action === 'upsert'
+      ? { data: null, error: { message: 'closed', status: 409, code: 'OV_MATCH_CLOSED', requestId: 'req-1' } }
+      : defaultRespond(call))
+    await runQueuePass()
+    expect(activity.entries).toEqual([{
+      kind: 'sync.error',
+      data: { resource: 'event', action: 'insert', status: 409, code: 'OV_MATCH_CLOSED', requestId: 'req-1', attempt: 1 },
+      opts: { level: 'warn', matchExt: 'match_100_aaa' }
+    }])
+  })
+
+  it('a dropped job is a sync.dropped; a sent one is nothing', async () => {
+    fakeDb.sync_queue.reset([
+      { id: 1, resource: 'event', action: 'insert', status: 'queued', payload: { external_id: '99' } },
+      { id: 2, resource: 'event', action: 'insert', status: 'queued', payload: { external_id: 'match_100_aaa:e:2', match_id: 'match_100_aaa' } }
+    ])
+    await runQueuePass()
+    expect(activity.entries.map(e => e.kind)).toEqual(['sync.dropped'])
+  })
+})
+
+// Ported from OpenVolley dcc407f7 (useSyncQueue.test.js), beach ids
+describe('event history jobs (void / edit / restore)', () => {
+  const voidJob = (id, extra = {}) => ({
+    id, resource: 'event', action: 'void', status: 'queued',
+    payload: { external_id: 'match_100_aaa:e:1', match_id: 'match_100_aaa', rev_uid: `rev-${id}`, op: 'void', reason: 'undo', seq: 3, set_index: 1, type: 'point', client_ts: '2026-10-07T10:00:00.000Z', ...extra }
+  })
+
+  it('posts the revision to /api/match/event-revisions, after the event insert of the same event', async () => {
+    fakeDb.sync_queue.reset([
+      { id: 1, resource: 'event', action: 'insert', status: 'queued', payload: { external_id: 'match_100_aaa:e:1', match_id: 'match_100_aaa' } },
+      voidJob(2)
+    ])
+    const outcome = await runQueuePass()
+    expect(outcome.sent).toBe(2)
+    expect(api.calls.map(c => c.table)).toEqual(['matches', 'events', '__revisions'])
+    const rev = api.calls[2].data
+    expect(rev.matchExternalId).toBe('match_100_aaa')
+    expect(rev.revisions).toEqual([expect.objectContaining({ rev_uid: 'rev-2', op: 'void', event_external_id: 'match_100_aaa:e:1', reason: 'undo' })])
+    expect(fakeDb.sync_queue.map.get(2).status).toBe('sent')
+  })
+
+  it('an edit carries the columns after it', async () => {
+    fakeDb.sync_queue.reset([voidJob(1, { op: 'edit', reason: 'decision_change', after: { type: 'point', payload: { team: 'team2' }, score_a: 13, score_b: 13 } })])
+    fakeDb.sync_queue.map.get(1).action = 'edit'
+    await runQueuePass()
+    expect(api.calls.find(c => c.table === '__revisions').data.revisions[0]).toMatchObject({ op: 'edit', reason: 'decision_change', after: { payload: { team: 'team2' }, score_a: 13 } })
+    expect(fakeDb.sync_queue.map.get(1).status).toBe('sent')
+  })
+
+  it('waits behind its errored insert (per-entity order)', async () => {
+    fakeDb.sync_queue.reset([
+      { id: 1, resource: 'event', action: 'insert', status: 'error', next_attempt_at: Date.now() + 60000, payload: { external_id: 'match_100_aaa:e:1', match_id: 'match_100_aaa' } },
+      voidJob(2)
+    ])
+    await runQueuePass()
+    expect(api.calls.filter(c => c.table === '__revisions')).toHaveLength(0)
+    expect(fakeDb.sync_queue.map.get(2).status).toBe('queued')
+  })
+
+  it('a server without the route (404) parks the job as failed; a match not on the server yet is retried', async () => {
+    fakeDb.sync_queue.reset([voidJob(1)])
+    api.respond = (call) => (call.table === '__revisions' ? { data: null, error: { message: 'Not found', status: 404 }, status: 404 } : defaultRespond(call))
+    await runQueuePass()
+    expect(fakeDb.sync_queue.map.get(1)).toMatchObject({ status: 'failed', last_error: expect.objectContaining({ code: 'OV_ROUTE_MISSING' }) })
+
+    fakeDb.sync_queue.reset([voidJob(1)])
+    api.respond = (call) => (call.table === '__revisions' ? { data: null, error: { message: 'No match', status: 404, code: 'OV_MATCH_NOT_FOUND' }, status: 404 } : defaultRespond(call))
+    await runQueuePass()
+    expect(fakeDb.sync_queue.map.get(1)).toMatchObject({ status: 'queued', retry_count: 1 })
+  })
+
+  it('a closed match (409) is a refusal like any event write', async () => {
+    fakeDb.sync_queue.reset([voidJob(1)])
+    api.respond = (call) => (call.table === '__revisions' ? { data: null, error: { message: 'closed', status: 409, code: 'OV_MATCH_CLOSED' }, status: 409 } : defaultRespond(call))
+    await runQueuePass()
+    expect(fakeDb.sync_queue.map.get(1).status).toBe('failed')
+  })
+
+  it('a revision without a rev_uid is dropped, never sent', async () => {
+    fakeDb.sync_queue.reset([voidJob(1, { rev_uid: null })])
+    await runQueuePass()
+    expect(api.calls.filter(c => c.table === '__revisions')).toHaveLength(0)
+    expect(fakeDb.sync_queue.map.get(1).status).toBe('dropped')
   })
 })
 

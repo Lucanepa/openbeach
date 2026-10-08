@@ -1,7 +1,10 @@
 import { useEffect, useCallback, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db_beach/db_beach'
-import { apiFrom, apiMatchRestore, apiMatchClaim, AUTH_TOKEN_CHANGE_EVENT, AUTH_TOKEN_STORAGE_KEY } from '../lib_beach/apiClient_beach'
+import { apiFrom, apiMatchRestore, apiMatchClaim, apiPostEventRevisions, AUTH_TOKEN_CHANGE_EVENT, AUTH_TOKEN_STORAGE_KEY } from '../lib_beach/apiClient_beach'
+import { isEventRevisionJob, eventRevisionRequest, eventRevisionOutcome } from '../utils_beach/eventSync_beach'
+import { emitActivity, noteSyncPass } from '../utils_beach/activity/bus_beach'
+import { uploadActivityBatch, activityFlushJob } from '../utils_beach/activity/upload_beach'
 import { getCloudApiUrl, isCloudOffline, isRelayOriginPage } from '../utils_beach/backendConfig_beach'
 import { ACCESS_CHANGED_EVENT } from '../lib_beach/access_beach'
 import { parseExtId, resolveJobExternalId, jobMatchKey } from '../utils_beach/syncIds_beach'
@@ -116,8 +119,9 @@ function filterSetPayload(payload) {
 // Sync status types: 'offline' | 'online_no_supabase' | 'connecting' | 'syncing' | 'synced' | 'error' | 'auth_required'
 
 // Resource processing order - matches must be synced before sets/events (FK
-// dependency)
-const RESOURCE_ORDER = ['match', 'set', 'event']
+// dependency); 'activity': the activity log upload (utils_beach/activity),
+// needs no match row
+const RESOURCE_ORDER = ['match', 'set', 'event', 'activity']
 
 // Max retries for jobs waiting on dependencies (e.g., event waiting for match to sync)
 const MAX_DEPENDENCY_RETRIES = 10
@@ -153,6 +157,7 @@ const REQUEUE_INTERVAL_MS = 30000
 // Sent, superseded and dropped rows are kept this long (for debugging), then
 // pruned; the per-rally set score adds one row per point.
 const SENT_RETENTION_MS = 7 * 24 * 3600 * 1000
+const ACTIVITY_JOB_RETENTION_MS = 3600 * 1000
 const PRUNE_INTERVAL_MS = 60 * 60 * 1000
 
 // processJob result: stop this pass, leave the job queued untouched (rate limited)
@@ -253,11 +258,32 @@ export function takeJobError(jobId) {
 
 function summarizeError(error) {
   if (!error) return null
-  return {
+  const out = {
     status: error.status ?? null,
     code: typeof error.code === 'string' ? error.code : null,
     message: String(error.message || '').slice(0, 200)
   }
+  if (typeof error.requestId === 'string') out.requestId = error.requestId
+  return out
+}
+
+/**
+ * Refused, failed and dropped jobs go into the activity log (sync.error /
+ * sync.dropped, utils_beach/activity). Never the activity uploads themselves
+ * (no feedback loop), never a payload. Ported from OpenVolley 653b4f27.
+ */
+function reportJobOutcome(job, result, jobError) {
+  if (!job || job.resource === 'activity') return
+  const failed = result === PERMANENT_FAILURE || result === false || result === STOP_ERROR
+  if (!failed && result !== DROP_JOB) return
+  emitActivity(result === DROP_JOB ? 'sync.dropped' : 'sync.error', {
+    resource: job.resource,
+    action: job.action,
+    status: jobError?.status ?? null,
+    code: jobError?.code ?? null,
+    requestId: jobError?.requestId ?? null,
+    attempt: (job.attempts || 0) + 1
+  }, { level: 'warn', matchExt: jobMatchKey(job) })
 }
 
 // A PIN field: 'pin' as a word of the key (game_pin, gamePin, connection_pins,
@@ -530,9 +556,11 @@ export async function pruneSyncQueue({ retentionMs = SENT_RETENTION_MS, now = Da
     const done = await db.sync_queue.where('status').anyOf(['sent', 'superseded', 'dropped']).toArray()
     const ids = done
       .filter(j => {
-        if (j.id >= oldestPendingId) return false
         // ts is a number (Date.now()) or an ISO string, depending on the writer
         const ts = typeof j.ts === 'number' ? j.ts : Date.parse(j.ts)
+        // the activity uploads (one every 10 s in a match) carry nothing to keep
+        if (j.resource === 'activity') return Number.isFinite(ts) && now - ts > ACTIVITY_JOB_RETENTION_MS
+        if (j.id >= oldestPendingId) return false
         return Number.isFinite(ts) && now - ts > retentionMs
       })
       .map(j => j.id)
@@ -1002,6 +1030,48 @@ async function processJobInner(job, ctx) {
       return true
     }
 
+    // ============ EVENT HISTORY (undo / delete / edit / restore) ============
+    // Queued by db_beach/eventHistory_beach's hooks: the server voids or edits
+    // its copy and keeps the revision (POST /api/match/event-revisions).
+    // Resource 'event' on purpose: the per-entity order keeps a void behind
+    // its event's insert. Ported from OpenVolley dcc407f7.
+    if (isEventRevisionJob(job)) {
+      const request = eventRevisionRequest(job)
+      if (!request) return DROP_JOB
+      const answer = await apiPostEventRevisions(request.matchExternalId, request.revisions)
+      const outcome = eventRevisionOutcome(answer)
+      if (outcome === 'sent') return true
+      if (outcome === 'wait') {
+        // The match is not in the cloud yet: retry later, like an event insert
+        ctx.error = summarizeError(answer.error)
+        return null
+      }
+      if (outcome === 'no_route') {
+        ctx.error = { ...summarizeError(answer.error), status: 404, code: answer.error?.code || 'OV_ROUTE_MISSING' }
+        return PERMANENT_FAILURE
+      }
+      safeLog.warn('[SyncQueue] Event revision refused:', answer.error?.code || answer.error?.status || answer.status)
+      return failureResult(answer.error, ctx)
+    }
+
+    // ==================== ACTIVITY LOG UPLOAD ====================
+    // Ported from OpenVolley 6a0a26e0
+    if (job.resource === 'activity' && job.action === 'flush') {
+      const r = await uploadActivityBatch(db)
+      if (r.error) {
+        const st = r.error.status ?? r.status
+        if (st === 404) {
+          // A server without /api/activity: parked as refused, retried hourly
+          ctx.error = { ...summarizeError(r.error), status: 404, code: r.error.code || 'OV_ROUTE_MISSING' }
+          return PERMANENT_FAILURE
+        }
+        return failureResult(r.error, ctx)
+      }
+      // More rows than one batch: the next flush right after this one
+      if (r.more) await db.sync_queue.add(activityFlushJob())
+      return true
+    }
+
     // Unknown resource/action - mark as done to avoid infinite loop
     safeLog.warn('[SyncQueue] Unknown job type:', job.resource, job.action)
     return true
@@ -1138,6 +1208,7 @@ export async function runQueuePass() {
       // processJob takes the match over when the write is refused for ownership
       const result = await processJob(job)
       const jobError = takeJobError(job.id)
+      reportJobOutcome(job, result, jobError)
 
       if (result === true) {
         await db.sync_queue.update(job.id, { status: 'sent', retry_count: 0, network_stops: 0, last_error: null })
@@ -1285,7 +1356,14 @@ export function getSyncStatus() {
   return currentSyncStatus
 }
 const syncStatusListeners = new Set()
+// Activity log: only changes between these groups are an entry (a pass flips
+// syncing <-> synced all the time)
+const SYNC_STATE_GROUP = { synced: 'ok', syncing: 'ok', connecting: 'ok' }
+const syncGroup = (s) => SYNC_STATE_GROUP[s] || s
 function publishSyncStatus(status) {
+  if (syncGroup(status) !== syncGroup(currentSyncStatus)) {
+    emitActivity('sync.state', { from: currentSyncStatus, to: status }, { level: status === 'error' ? 'warn' : 'info' })
+  }
   currentSyncStatus = status
   for (const listener of syncStatusListeners) listener(status)
 }
@@ -1410,6 +1488,7 @@ export function useSyncQueue() {
       }
 
       const outcome = await runQueuePass()
+      noteSyncPass({ sent: outcome.sent, failed: outcome.hasFailed || outcome.hasError ? 1 : 0, pending: outcome.hasRetry ? 1 : 0 })
 
       if (outcome.authRequired) {
         authBlockedAt = Date.now()

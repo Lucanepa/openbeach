@@ -2,6 +2,7 @@ import { useState } from 'react'
 import i18n from 'i18next'
 import { ErrorBoundary, ErrorScreen } from '../ui/volleyui/ErrorScreen.jsx'
 import { reloadPage } from '../utils_beach/appReload_beach'
+import { reportAppError } from '../utils_beach/activity/appError_beach'
 
 // The texts must not depend on the app working: i18n may be what crashed.
 const tr = (key, fallback) => {
@@ -34,7 +35,10 @@ export default function AppErrorBoundary({ name, children }) {
     <ErrorBoundary
       // a new key mounts the app again, with fresh state
       key={attempt}
-      onError={(error, info) => console.error(`[ErrorBoundary${name ? `:${name}` : ''}] Render error:`, error, info?.componentStack)}
+      onError={(error, info) => {
+        console.error(`[ErrorBoundary${name ? `:${name}` : ''}] Render error:`, error, info?.componentStack)
+        reportAppError(error?.message || String(error), error?.stack, `render${name ? `:${name}` : ''}`)
+      }}
       fallback={(error) => (
         <div role="alert" className="ov-kit">
           <ErrorScreen

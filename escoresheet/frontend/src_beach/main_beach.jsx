@@ -15,6 +15,7 @@ import { ScaleProvider } from './contexts_beach/ScaleContext_beach'
 import AndroidExitPrompt from './components_beach/AndroidExitPrompt_beach'
 import { db } from './db_beach/db_beach'
 import { installDiagnostics } from './diagnostics_beach/index_beach'
+import { startActivityLog } from './utils_beach/activity/index_beach'
 
 // Diagnostics mode (off unless Options, ?diag=1 or OPENVOLLEY_DIAGNOSTICS=1
 // in the desktop app): first, so it sees this load and the database opening
@@ -26,6 +27,10 @@ stripCacheBustParam()
 
 // Initialize logger to capture console output
 initLogger()
+
+// The match activity log (scoring, corrections, sync, app start/quit, errors):
+// on this device, uploaded, and a daily file in the apps (utils_beach/activity)
+startActivityLog({ db })
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>

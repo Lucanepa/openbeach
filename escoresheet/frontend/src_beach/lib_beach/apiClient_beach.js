@@ -44,7 +44,12 @@ async function safeJsonResponse(response, fallbackError = 'Request failed') {
     try {
       body = await response.json()
     } catch { /* non-JSON error body */ }
-    return { data: null, error: normalizeError(body?.error, status, fallbackError), status }
+    const error = normalizeError(body?.error, status, fallbackError)
+    // The backend's X-Request-Id (its log line of the refusal): the activity log keeps it
+    let requestId = null
+    try { requestId = response.headers?.get?.('X-Request-Id') || null } catch { /* no headers */ }
+    if (requestId && error && typeof error === 'object') error.requestId = String(requestId).slice(0, 64)
+    return { data: null, error, status }
   }
   const result = await response.json()
   if (result && typeof result === 'object' && !Array.isArray(result)) {
@@ -354,6 +359,33 @@ export function apiMatchRestoreByPin(gameN, pin) {
  */
 export function apiMatchClaim(externalId, pin) {
   return postJson('/api/match/claim', { externalId, pin }, { fallbackError: 'Match take-over failed' })
+}
+
+/**
+ * Send event revisions (undo / delete / edit / restore of logged events, see
+ * db_beach/eventHistory_beach.js) of one match. The server voids or edits its
+ * copy of the events and keeps the revision (POST /api/match/event-revisions,
+ * backend db/015, shared with OpenVolley). Needs a session.
+ * 404 OV_MATCH_NOT_FOUND: the match is not on the server yet; a 404 without
+ * that code: a server without the route (older backend, LAN relay).
+ * @param {string} matchExternalId the match seed_key
+ * @param {object[]} revisions utils_beach/eventRevisions_beach revisionOfJob() bodies
+ * @returns {Promise<{data: {applied: number, pending: number}|null, error: object|null, status: number}>}
+ */
+export function apiPostEventRevisions(matchExternalId, revisions) {
+  return postJson('/api/match/event-revisions', { match_external_id: matchExternalId, revisions }, {
+    fallbackError: 'Event history upload failed'
+  })
+}
+
+/**
+ * Upload activity log entries (utils_beach/activity/upload_beach): at most
+ * 500 per call. Needs a session. POST /api/activity (backend db/016, shared
+ * with OpenVolley; beach rows carry app 'beach').
+ * @returns {Promise<{data: {accepted: string[], rejected: {uid: string, code: string}[]}|null, error: object|null, status: number}>}
+ */
+export function apiPostActivity(entries) {
+  return postJson('/api/activity', { entries }, { timeoutMs: 30000, fallbackError: 'Activity upload failed' })
 }
 
 // ==================== Base64 (storage uploads) ====================

@@ -69,7 +69,7 @@ describe('db_beach v18 upgrade', () => {
 
     const { db } = await import('../../db_beach/db_beach')
     await db.open()
-    expect(db.verno).toBe(19)
+    expect(db.verno).toBe(20)
     const rows = Object.fromEntries((await db.sync_queue.toArray()).map(r => [r.id, r]))
 
     expect(rows[1].status).toBe('sent')
@@ -99,7 +99,7 @@ describe('db_beach v18 upgrade', () => {
 const V18_STORES = { ...V17_STORES, sync_queue: '++id,resource,action,payload,ts,status' }
 
 describe('db_beach v19 (saved teams cache)', () => {
-  it('opens a v18 database at 19 with its rows intact and empty cache tables', async () => {
+  it('opens a v18 database at the latest version with its rows intact and empty cache tables', async () => {
     const { db } = await import('../../db_beach/db_beach')
     await db.delete()
     const old = new Dexie('escoresheet')
@@ -113,7 +113,7 @@ describe('db_beach v19 (saved teams cache)', () => {
     old.close()
 
     await db.open()
-    expect(db.verno).toBe(19)
+    expect(db.verno).toBe(20)
     expect(await db.matches.get(1)).toMatchObject({ seed_key: 'match_1', status: 'live', team1Name: 'A' })
     const jobs = await db.sync_queue.toArray()
     expect(jobs.map(j => [j.id, j.status, j.payload.external_id])).toEqual([[1, 'queued', 'match_1'], [2, 'sent', 'match_1:e:3']])
@@ -124,13 +124,50 @@ describe('db_beach v19 (saved teams cache)', () => {
     db.close()
   })
 
-  it('a fresh database opens at 19', async () => {
+  it('a fresh database opens at 20', async () => {
     const { db } = await import('../../db_beach/db_beach')
     await db.delete()
     await db.open()
-    expect(db.verno).toBe(19)
-    expect(db.tables.map(t => t.name)).toEqual(expect.arrayContaining(['matches', 'sync_queue', 'saved_teams', 'saved_teams_meta']))
+    expect(db.verno).toBe(20)
+    expect(db.tables.map(t => t.name)).toEqual(expect.arrayContaining(['matches', 'sync_queue', 'saved_teams', 'saved_teams_meta', 'event_history', 'activity_log']))
     expect(await db.saved_teams.count()).toBe(0)
+    db.close()
+  })
+})
+
+// v19 -> v20 adds the event history and the activity log (new tables, a new
+// matchId index on interaction_logs, no upgrade function): a device's events,
+// saved teams and interaction log come through intact and the new tables work.
+const V19_STORES = {
+  ...V18_STORES,
+  interaction_logs: 'id,ts,gameNumber,category,sessionId',
+  saved_teams: 'id, competitionId, nameKey, pairKey',
+  saved_teams_meta: 'key'
+}
+
+describe('db_beach v20 (event history, activity log)', () => {
+  it('opens a v19 database at 20 with its rows intact and empty history tables', async () => {
+    const { db } = await import('../../db_beach/db_beach')
+    await db.delete()
+    const old = new Dexie('escoresheet')
+    old.version(19).stores(V19_STORES)
+    await old.open()
+    await old.table('matches').add({ id: 1, seed_key: 'match_1', status: 'live' })
+    await old.table('events').add({ id: 5, matchId: 1, setIndex: 1, type: 'point', seq: 4, payload: { team: 'team1' } })
+    await old.table('saved_teams').put({ id: 't1', competitionId: 'c1', nameKey: 'a/b', pairKey: 'a/b' })
+    await old.table('interaction_logs').add({ id: 'l1', ts: 1, gameNumber: 3, category: 'click', matchId: 1 })
+    old.close()
+
+    await db.open()
+    expect(db.verno).toBe(20)
+    expect(await db.events.get(5)).toMatchObject({ type: 'point', seq: 4 })
+    expect(await db.saved_teams.count()).toBe(1)
+    expect(await db.interaction_logs.where('matchId').equals(1).count()).toBe(1)
+    expect(await db.event_history.count()).toBe(0)
+    expect(await db.activity_log.count()).toBe(0)
+    // the seq high-water index of the event history
+    await db.event_history.add({ revUid: '00000000-0000-4000-8000-000000000001', matchId: 1, eventId: 5, seq: 4, op: 'void', ts: 'x' })
+    expect(await db.event_history.where('[matchId+seq]').between([1, 0], [1, 99]).count()).toBe(1)
     db.close()
   })
 })

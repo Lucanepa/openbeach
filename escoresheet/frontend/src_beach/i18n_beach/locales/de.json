@@ -1168,7 +1168,19 @@
     "backUp": "Sichern",
     "iconCredits": "Icons",
     "iconCreditsText": "Lucide (ISC) · Phosphor (MIT)",
-    "copyUrl": "Link kopieren"
+    "copyUrl": "Link kopieren",
+    "logs": "Protokolle",
+    "activityLog": "Aktivitätsprotokoll",
+    "activityLogInfo": "Alles, was in diesem Spiel auf diesem Gerät passiert ist: Punkte, Rückgängig und Korrekturen, Uploads, Fehler. Es wird mit deinem Konto auf den Server hochgeladen. Was du klickst oder tippst, gehört nicht dazu.",
+    "activityLogAllInfo": "Alles, was auf diesem Gerät passiert ist, pro Spiel: Punkte, Rückgängig und Korrekturen, Uploads, Fehler.",
+    "openActivityLog": "Aktivitätsprotokoll anzeigen",
+    "diagnosticLog": "Diagnoseprotokoll",
+    "diagnosticLogInfo": "Jeder Klick und Tastendruck in diesem Spiel, zur Fehlersuche. Es bleibt auf diesem Gerät; Passwörter und PINs werden nie aufgezeichnet.",
+    "exportDiagnosticLog": "Diagnoseprotokoll exportieren (.ndjson)",
+    "openLogFolder": "Protokollordner öffnen",
+    "logFolderOpenFailed": "Der Protokollordner konnte nicht geöffnet werden.",
+    "diagnosticLogFailed": "Das Diagnoseprotokoll konnte nicht exportiert werden.",
+    "logFolder": "Log-Ordner"
   },
   "matchEnd": {
     "title": "Spiel beendet",
@@ -2580,5 +2592,239 @@
       "serverWhen": "Die Tablets haben mobile Daten, oder das WLAN vor Ort trennt die Geräte. Anmeldung nötig."
     },
     "wifiQrCaption": "Zuerst scannen, um diesem WLAN beizutreten"
+  },
+  "corrections": {
+    "action": {
+      "addPointFor": "Ein Punkt mehr für {{team}}",
+      "back": "Zurück",
+      "cancel": "Abbrechen",
+      "confirm": "Bestätigen",
+      "correctFinalScore": "Endstand korrigieren",
+      "edit": "Bearbeiten",
+      "editRemark": "Bemerkung bearbeiten",
+      "editWhat": "{{what}} bearbeiten",
+      "keepPoint": "Punkt behalten",
+      "remove": "Entfernen",
+      "removeBoth": "Punkt auch entfernen",
+      "removeEntry": "{{what}} entfernen",
+      "removePointFor": "Ein Punkt weniger für {{team}}",
+      "removeRemark": "Bemerkung entfernen",
+      "setTimes": "Satzzeiten",
+      "showAutomatic": "Automatische Einträge anzeigen"
+    },
+    "add": {
+      "remark": "Bemerkung hinzufügen",
+      "sanction": "Sanktion hinzufügen",
+      "timeout": "Auszeit hinzufügen"
+    },
+    "allSets": "Alle Sätze",
+    "banner": {
+      "readOnly": "Das Spiel ist genehmigt: Korrekturen sind schreibgeschützt.",
+      "signaturesCleared": "Die Unterschriften wurden gelöscht, weil sich das Matchblatt geändert hat. Hole sie am Spielende neu ein."
+    },
+    "chip": {
+      "paperCode": "So wie auf dem Matchblatt",
+      "teamsNotSetBeach": "Team A/B noch nicht festgelegt: Team 1 wird als A angezeigt"
+    },
+    "confirm": {
+      "removePoint": "Der vergebene Punkt ist noch der letzte Punkt dieses Satzes. Auch entfernen (wie Rückgängig)?",
+      "removePointTitle": "Strafpunkt auch entfernen?",
+      "removeRemarkTitle": "Diese Bemerkung entfernen?",
+      "removeTitle": "Diesen Eintrag entfernen?",
+      "removes": "Entfernt:",
+      "timeoutFree": "{{team}} kann sein Time-out in Satz {{set}} wieder nehmen."
+    },
+    "describe": {
+      "coach": "Coach",
+      "coinToss": "Seitenwahl",
+      "courtSwitch": "Seitenwechsel",
+      "decisionChange": "Entscheidung geändert",
+      "point": "Punkt",
+      "rallyStart": "Ballwechsel gestartet",
+      "replay": "Ballwechsel wiederholt",
+      "setEnd": "Satzende",
+      "setStart": "Satzbeginn",
+      "technicalTimeout": "Technisches Time-out",
+      "timeout": "Time-out"
+    },
+    "empty": {
+      "log": "Noch keine Korrekturen.",
+      "players": "Keine Spieler/innen zur Auswahl.",
+      "remarks": "Keine Bemerkungen.",
+      "sanctions": "Keine Sanktionen erfasst.",
+      "sets": "Noch kein Satz beendet.",
+      "timeouts": "Keine Auszeiten erfasst."
+    },
+    "error": {
+      "choosePlayer": "Wähle den Spieler.",
+      "chooseTarget": "Wähle, wer sanktioniert wurde.",
+      "endBeforeStart": "Satz {{set}} kann nicht vor seinem Beginn enden.",
+      "forfeitOnScoreboard": "Eine Ausweisung oder eine Disqualifikation bedeutet Forfait für den Satz oder das Spiel: gib sie auf dem Scoreboard.",
+      "invalidFinalScore": "{{score}} ist kein möglicher Endstand von Satz {{set}}.",
+      "ladder": "Nach den Regeln ist das eine {{expected}} (frühere Sanktionen der Mannschaft).",
+      "noLaterOpponentPoint": "{{team}} hat in Satz {{set}} keinen späteren Punkt, der als Strafpunkt markiert werden kann. Wurde der Punkt nie erfasst, gib die Strafe auf dem Scoreboard (während des Spiels) oder nutze «Endstand korrigieren».",
+      "noScoreChange": "Nichts zu ändern.",
+      "noSuchScore": "Satz {{set}} hatte diesen Spielstand nie.",
+      "notFound": "Dieser Eintrag existiert nicht mehr.",
+      "notLastPoint": "Den letzten Punkt von Satz {{set}} hat nicht {{team}} gewonnen.",
+      "removePointNotLast": "Der Strafpunkt kann nur entfernt werden, solange er der letzte Punkt des laufenden Satzes ist.",
+      "sameSanctionTwice": "Dieser Spieler hat diese Sanktion bereits.",
+      "setNotFinished": "Satz {{set}} ist nicht beendet.",
+      "subEvent": "Diese Zeile gehört zu einem anderen Eintrag; entferne stattdessen diesen.",
+      "teamAlreadyWarned": "Das Team wurde bereits verwarnt: eine Verwarnung für Fehlverhalten pro Team und Spiel.",
+      "thirdPenalty": "#{{n}} hat in Satz {{set}} bereits zwei Strafen: eine dritte ist eine Ausweisung und wird auf dem Scoreboard gegeben.",
+      "timeoutLimit": "Das Time-out dieses Teams in Satz {{set}} ist bereits erfasst (eines pro Team und Satz).",
+      "useUndo": "Dieser Eintrag wird mit Rückgängig oder Satz wieder öffnen korrigiert, nicht hier entfernt.",
+      "winnerWouldChange": "Das würde den Sieger von Satz {{set}} ändern. Nutze «Letzten Satz wieder öffnen» oder frage den Schiedsrichter."
+    },
+    "field": {
+      "atScore": "Beim Spielstand",
+      "currentFinal": "Jetzt",
+      "endTime": "Ende",
+      "player": "Spieler",
+      "sanction": "Sanktion",
+      "set": "Satz",
+      "startTime": "Beginn",
+      "team": "Mannschaft",
+      "text": "Text",
+      "who": "Wer"
+    },
+    "form": {
+      "addRemark": "Bemerkung hinzufügen",
+      "addSanction": "Sanktion hinzufügen",
+      "addTimeout": "Auszeit hinzufügen",
+      "editRemark": "Bemerkung bearbeiten",
+      "editSanction": "Sanktion bearbeiten",
+      "editTimeout": "Auszeit bearbeiten",
+      "finalScore": "Satz {{set}}: Endstand korrigieren",
+      "setTimes": "Satz {{set}}: Beginn und Ende"
+    },
+    "help": "Jede Korrektur wird beim Bestätigen gespeichert und im Korrekturprotokoll für den Schiedsrichter aufgeführt.",
+    "hint": {
+      "advanced": "Alle Einträge des Spielprotokolls. Beim Entfernen geht alles mit, was zum Eintrag gehört. Hinzufügen und Ändern in den Karten oben.",
+      "current": "aktueller Spielstand",
+      "finalScoreBeach": "Nur das Satzende kann korrigiert werden: ein Punkt am Ende hinzugefügt oder der letzte Punkt entfernt. Sätze werden mit 21 Punkten (der dritte mit 15) und zwei Punkten Vorsprung gewonnen.",
+      "forfeitSanctions": "Eine Ausweisung oder eine Disqualifikation wird auf dem Scoreboard gegeben: sie bedeutet Forfait für den Satz oder das Spiel.",
+      "penaltyPoint": "Der Strafpunkt ist der nächste Punkt von {{team}} nach diesem Spielstand; er muss bereits erfasst sein.",
+      "timeoutsBeach": "Ein Time-out pro Team und Satz. Das technische Time-out wird hier nicht korrigiert."
+    },
+    "log": {
+      "added": "Hinzugefügt: {{what}}",
+      "afterMatchSuffix": " (nach dem Spiel erfasst)",
+      "changed": "Geändert: {{what}} (vorher: {{from}})",
+      "remarkAdded": "Bemerkung hinzugefügt: «{{text}}»",
+      "remarkChanged": "Bemerkung geändert: «{{text}}»",
+      "remarkRemoved": "Bemerkung entfernt: «{{text}}»",
+      "removed": "Entfernt: {{what}}",
+      "setTimes": "Zeiten von Satz {{set}} korrigiert",
+      "unknown": "Korrektur"
+    },
+    "note": {
+      "afterMatch": "Nach dem Spiel erfasst.",
+      "circledPoint": "Der Punkt von {{team}} bei {{score}} wird als Strafpunkt eingekreist.",
+      "courtSwitches": "Die nach diesem Punkt erfassten Seitenwechsel werden nicht verschoben.",
+      "ladder": "Nach den Regeln wäre das eine {{expected}} gewesen; erfasst, wie der Schiedsrichter entschieden hat.",
+      "penaltyNotNext": "Den Ballwechsel nach {{score}} hat {{team}} gewonnen, nicht der Gegner: Prüfe, ob die Sanktion bei diesem Spielstand ausgesprochen wurde.",
+      "pointStays": "Der Punkt bleibt als normaler Punkt (nicht mehr eingekreist).",
+      "sameSanctionTwice": "Dieser Spieler hat diese Sanktion bereits.",
+      "teamAlreadyWarned": "Das Team war bereits verwarnt (eine Verwarnung für Fehlverhalten pro Team und Spiel).",
+      "thirdPenalty": "#{{n}} hatte in Satz {{set}} bereits zwei Strafen (eine dritte ist eine Ausweisung); so erfasst, wie der Schiedsrichter entschieden hat."
+    },
+    "preview": {
+      "finalScore": "Endstand {{before}} wird zu {{after}}.",
+      "incomplete": "Fülle die Felder oben aus.",
+      "paperSanctionBeach": "{{code}} · Team {{letter}} · Satz {{set}} · {{score}}",
+      "paperTimeout": "«T» bei {{score}} im Auszeit-Feld von {{team}}, Satz {{set}}.",
+      "title": "Was sich auf dem Matchblatt ändert"
+    },
+    "sanction": {
+      "delay_penalty": "Verzögerungsbestrafung",
+      "delay_warning": "Verzögerungsverwarnung",
+      "disqualification": "Disqualifikation",
+      "expulsion": "Hinausstellung",
+      "improper_request": "Nicht ordnungsgemässer Antrag",
+      "penalty": "Bestrafung",
+      "warning": "Verwarnung (Fehlverhalten)"
+    },
+    "saveError": "Die Korrektur konnte nicht gespeichert werden: {{message}}",
+    "saved": "Korrektur gespeichert",
+    "section": {
+      "advanced": "Erweitert: Ereignisprotokoll",
+      "log": "Korrekturprotokoll (für den Schiedsrichter)",
+      "sanctions": "Sanktionen",
+      "sets": "Satzresultate",
+      "timeouts": "Auszeiten"
+    },
+    "setFilter": "Satz anzeigen",
+    "term": {
+      "remarks": "Bemerkungen",
+      "set": "Satz {{n}}"
+    },
+    "title": "Korrekturen",
+    "who": {
+      "coach": "Trainer/in",
+      "player": "Spieler"
+    }
+  },
+  "activity": {
+    "title": "Aktivitätsprotokoll",
+    "notUploaded_one": "{{count}} Eintrag noch nicht hochgeladen",
+    "notUploaded_other": "{{count}} Einträge noch nicht hochgeladen",
+    "match": "Spiel",
+    "allMatches": "Alle Spiele",
+    "filter": "Anzeigen",
+    "empty": "Noch keine Einträge.",
+    "exportJson": "JSON exportieren",
+    "exportCsv": "CSV exportieren",
+    "set": "Satz {{n}}",
+    "game": "Spiel {{n}}",
+    "localMatch": "Spiel {{id}} (dieses Gerät)",
+    "test": "Test",
+    "filters": {
+      "all": "Alle",
+      "scoring": "Spielverlauf",
+      "corrections": "Korrekturen",
+      "sync": "Synchronisierung",
+      "errors": "Fehler"
+    },
+    "status": {
+      "uploaded": "hochgeladen",
+      "waiting": "wartet",
+      "local": "nur auf diesem Gerät"
+    },
+    "kinds": {
+      "event_add": "Ereignis erfasst",
+      "event_bulk_add": "Ereignisse geladen",
+      "event_undo": "Rückgängig gemacht",
+      "event_delete": "Ereignis entfernt",
+      "event_edit": "Ereignis korrigiert",
+      "event_restore": "Ereignis wiederhergestellt",
+      "set_start": "Satz begonnen",
+      "set_end": "Satz beendet",
+      "set_reopen": "Satz wieder geöffnet",
+      "set_delete": "Satz entfernt",
+      "match_create": "Spiel erstellt",
+      "match_status": "Spielstatus",
+      "match_close": "Spiel abgeschlossen",
+      "match_coin_toss": "Seitenwahl",
+      "match_manual_change": "Manuelle Änderung",
+      "match_signature": "Unterschrift",
+      "match_approval": "Genehmigung",
+      "match_remarks": "Bemerkungen",
+      "match_forfeit": "Forfait",
+      "match_roster": "Aufstellung geändert",
+      "sync_error": "Upload abgelehnt",
+      "sync_dropped": "Upload verworfen",
+      "sync_state": "Verbindung",
+      "sync_summary": "Upload-Übersicht",
+      "app_start": "App gestartet",
+      "app_update": "App aktualisiert",
+      "app_quit": "App beendet",
+      "app_error": "App-Fehler",
+      "backup_error": "Sicherung fehlgeschlagen",
+      "auth_sign_in": "Angemeldet",
+      "auth_sign_out": "Abgemeldet",
+      "activity_overflow": "Alte Einträge verworfen"
+    }
   }
 }

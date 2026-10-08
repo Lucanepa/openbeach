@@ -104,3 +104,26 @@ describe('ManualAdjustments_beach dates', () => {
     expect(document.querySelector('input[type="date"]')).toBeNull()
   })
 })
+
+// Scores, time-outs and sanctions are corrected in the Corrections tab (one
+// planned, previewed write each), no longer typed in: the old Scores and
+// "Timeouts & Sanctions" tabs are gone.
+describe('ManualAdjustments_beach corrections', () => {
+  it('opens on the Corrections tab; no typed scores, time-outs or sanctions', async () => {
+    render(<ManualAdjustments matchId={matchId} onClose={() => {}} onSave={() => {}} />)
+    expect(await screen.findByRole('button', { name: 'Add sanction' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add time-out' })).toBeTruthy()
+    expect(screen.queryByRole('radio', { name: 'Scores' })).toBeNull()
+    expect(screen.queryByRole('radio', { name: /Timeouts/ })).toBeNull()
+    expect(screen.queryByText('+ Add Timeout')).toBeNull()
+  })
+
+  it('players: their sanctions are shown, not added or removed there', async () => {
+    const team1Id = (await db.matches.get(matchId)).team1Id
+    await db.events.add({ matchId, setIndex: 1, type: 'sanction', seq: 3, payload: { team: 'team1', type: 'penalty', playerType: 'player', playerNumber: 1 } })
+    void team1Id
+    await openTab('Teams & players')
+    expect(await screen.findByText(/Penalty \(Set 1\)/)).toBeTruthy()
+    expect(screen.queryByText('+ Sanction')).toBeNull()
+  })
+})

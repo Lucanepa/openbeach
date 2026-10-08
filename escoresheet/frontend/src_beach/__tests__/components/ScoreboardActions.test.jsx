@@ -108,6 +108,8 @@ describe('Scoreboard_beach: scorer actions against the real database', () => {
     let q = await jobs()
     expect(q.filter(j => j.action === 'insert' && j.payload.external_id === `${SEED}:e:${lastPoint.id}`).at(-1).payload.payload.team).toBe('team2')
     expect(q.filter(j => j.resource === 'set').at(-1).payload).toMatchObject({ team1_points: 2, team2_points: 1 })
+    // the server's copy of the point is edited, labelled as the decision change
+    expect(q.filter(j => j.action === 'edit' && j.payload.external_id === `${SEED}:e:${lastPoint.id}`).at(-1).payload).toMatchObject({ reason: 'decision_change', after: { payload: { team: 'team2' } } })
 
     // Undo the decision change: the point goes back to team 1, in the cloud too
     fireEvent.click(button('Undo'))
@@ -118,8 +120,21 @@ describe('Scoreboard_beach: scorer actions against the real database', () => {
     expect(await ofType('decision_change')).toHaveLength(0)
     expect((await ofType('point')).map(p => p.payload.team)).toEqual(['team1', 'team1', 'team1'])
     q = await jobs()
-    expect(q.some(j => j.action === 'delete')).toBe(true)
+    // the decision_change event is voided on the server (event history), as an undo
+    const dcVoids = q.filter(j => j.action === 'void' && j.payload.type === 'decision_change')
+    expect(dcVoids).toHaveLength(1)
+    expect(dcVoids[0].payload.reason).toBe('undo')
+    expect(q.some(j => j.action === 'delete')).toBe(false)
+    // the point's team given back is an edit of the server's row, as an undo too
+    expect(q.filter(j => j.action === 'edit' && j.payload.external_id === `${SEED}:e:${lastPoint.id}`).at(-1).payload).toMatchObject({ reason: 'undo', after: { payload: { team: 'team1' } } })
     expect(q.filter(j => j.action === 'insert' && j.payload.external_id === `${SEED}:e:${lastPoint.id}`).at(-1).payload.payload.team).toBe('team1')
+
+    // The rally_start of that rally ("Start rally", logEvent) is synced like a
+    // point; say its insert already reached the server
+    const rally3 = (await ofType('rally_start')).filter(e => e.seq < lastPoint.seq).at(-1)
+    const rallyInsert = (await jobs()).find(j => j.action === 'insert' && j.payload.external_id === `${SEED}:e:${rally3.id}`)
+    expect(rallyInsert).toBeTruthy()
+    await db.sync_queue.update(rallyInsert.id, { status: 'sent' })
 
     // Undo the third point: the point and its rally_start leave the server too
     fireEvent.click(button('Undo'))
@@ -128,8 +143,12 @@ describe('Scoreboard_beach: scorer actions against the real database', () => {
     await waitFor(async () => expect(await score()).toEqual([2, 0]))
     await settle()
     expect((await ofType('point')).length).toBe(2)
+    expect(await db.events.get(rally3.id)).toBeUndefined()
     q = await jobs()
-    expect(q.filter(j => j.action === 'delete').map(j => j.payload.external_id)).toContain(`${SEED}:e:${lastPoint.id}`)
+    const undoVoids = q.filter(j => j.action === 'void' && j.payload.reason === 'undo').map(j => j.payload.external_id)
+    expect(undoVoids).toContain(`${SEED}:e:${lastPoint.id}`)
+    // the sent rally_start is voided on the server too (it was deleted there before the event history)
+    expect(undoVoids).toContain(`${SEED}:e:${rally3.id}`)
     // the point's own insert, never sent, is gone from the queue
     expect(q.filter(j => j.action === 'insert' && j.payload.external_id === `${SEED}:e:${lastPoint.id}`)).toHaveLength(0)
 

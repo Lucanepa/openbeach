@@ -15,6 +15,8 @@ import { useSyncQueue } from '../hooks_beach/useSyncQueue_beach'
 import { useConfirmAction } from '../hooks_beach/useConfirmAction_beach'
 import { useActionLiveQuery } from '../hooks_beach/useActionLiveQuery_beach'
 import { useScorerActions, pickLiveStateSnapshot, isReportedActionError } from '../hooks_beach/useScorerActions_beach'
+import { withActivityContext, currentActivityContext, maxVoidedSeq, rememberSeedKey } from '../db_beach/eventHistory_beach'
+import CorrectionsPanel from './corrections/CorrectionsPanel_beach'
 import { useSequentialSync } from '../hooks_beach/useSequentialSync_beach'
 
 
@@ -25,7 +27,7 @@ import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { apiFrom } from '../lib_beach/apiClient_beach'
 import { setExtId, eventExtId } from '../utils_beach/syncIds_beach'
 import { changesSetScore, isLiveSetInterval, queueSetScoreSync } from '../utils_beach/eventSync_beach'
-import { planPointRemoval, scoreAfterRemoval, syncJobsForEvents, syncJobsForSets, eventDeleteJob, eventUpsertJob, setReopenJob, planDecisionChangeReversal, scoreDeltaOfRemoval, teamSanctionFlags, UNSENT_STATUSES } from '../utils_beach/scorerCorrections_beach'
+import { planPointRemoval, scoreAfterRemoval, syncJobsForEvents, syncJobsForSets, eventUpsertJob, setReopenJob, planDecisionChangeReversal, scoreDeltaOfRemoval, teamSanctionFlags, UNSENT_STATUSES } from '../utils_beach/scorerCorrections_beach'
 import { askConfirm } from '../utils_beach/askConfirm_beach'
 import { toast } from '../ui/volleyui/uiStore.js'
 import { buildConnectionPins } from '../utils_beach/connectionPins_beach'
@@ -797,6 +799,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     captureFinalSnapshot: captureFullStateSnapshot,
     onError: onConfirmFailed
   })
+
+  // The event history (db_beach/eventHistory_beach) queues the void / edit job
+  // of an undone or changed event INSIDE the action's transaction only when it
+  // knows the match's seed_key (after a reload it does not): told here
+  useEffect(() => {
+    if (matchId != null && data?.match) rememberSeedKey(matchId, data.match.seed_key ?? null, data.match.test === true)
+  }, [matchId, data?.match?.seed_key, data?.match?.test]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Restore match state from a snapshot (used by undo)
   const restoreStateFromSnapshot = useCallback(async (snapshot) => {
@@ -2327,11 +2336,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     const coinTossEvent = allEvents.find(e => e.type === 'coin_toss')
 
     // Get the maximum base ID (integer part only, ignoring decimals)
+    // An undone event's seq is never given out again (event history high-water mark)
     const maxBaseSeq = allEvents.reduce((max, e) => {
       const seq = e.seq || 0
       const baseSeq = Math.floor(seq) // Get integer part only
       return Math.max(max, baseSeq)
-    }, 0)
+    }, Math.floor(await maxVoidedSeq(db, matchId)))
 
     // If coin toss exists and has seq=1, ensure next seq is at least 2
     // Otherwise, if no coin toss exists, the next event should be seq=1 (for coin toss)
@@ -2353,8 +2363,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       return Math.floor(eSeq) === baseSeq
     })
 
-    // Find the highest sub-sequence number for this base ID
-    const maxSubSeq = relatedEvents.reduce((max, e) => {
+    // Find the highest sub-sequence number for this base ID (an undone one included)
+    const voidedSub = await maxVoidedSeq(db, matchId, { from: baseSeq, to: baseSeq + 0.99 })
+    const maxSubSeq = [...relatedEvents, { seq: voidedSub }].reduce((max, e) => {
       const eSeq = e.seq || 0
       const eBaseSeq = Math.floor(eSeq)
       if (eBaseSeq === baseSeq && eSeq !== baseSeq) {
@@ -4970,26 +4981,24 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     return false
   }, [data?.events, data?.set, getActionDescription])
 
-  // Remove events from the log AND from the cloud: their unsent sync jobs are
-  // dropped (the cloud never gets a phantom row) and, for a synced match, a
-  // delete is queued for each (the insert may already be sent, or on its way).
+  // Remove events from the log: their unsent insert jobs are dropped (the
+  // cloud never gets a phantom row) and the event history
+  // (db_beach/eventHistory_beach) keeps each one and, for a synced match,
+  // voids the server's copy (POST /api/match/event-revisions): the server
+  // keeps the row, marked voided, with who undid it, when and why. The reason
+  // is the running action's ('undo', 'decision_change'), else `reason`.
   // Undo, Replay, the decision change, cancelling a change of courts and the
   // event editor's deletes all go through here. Ported from OpenVolley
   // discardEvents (Scoreboard.jsx).
-  const discardEvents = useCallback(async (eventsToRemove) => {
+  const discardEvents = useCallback(async (eventsToRemove, reason = 'delete') => {
     const rows = (eventsToRemove || []).filter(e => e && e.id != null)
     if (rows.length === 0) return
     const ids = rows.map(e => e.id)
-    await db.events.bulkDelete(ids)
+    await withActivityContext({ reason: currentActivityContext()?.reason || reason }, () => db.events.bulkDelete(ids))
     const unsent = await db.sync_queue.where('status').anyOf(...UNSENT_STATUSES).toArray()
     const staleJobs = syncJobsForEvents(unsent, ids)
     if (staleJobs.length > 0) await db.sync_queue.bulkDelete(staleJobs.map(j => j.id))
-    const match = await db.matches.get(matchId)
-    if (match && !match.test && match.seed_key) {
-      const now = new Date()
-      await db.sync_queue.bulkAdd(ids.map(id => eventDeleteJob(match.seed_key, id, now)))
-    }
-  }, [matchId])
+  }, [])
 
   // The set score after taking points back: what the removed points added is
   // subtracted (a manual score adjustment stays), the set is open again, and
@@ -5192,7 +5201,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         // events gone and the score not restored, is never committed)
         throw error
       }
-    })
+    }, { reason: 'undo' })
   }), [runUndoConfirm, runAction, undoConfirm, data?.set, matchId, restoreStateFromSnapshot, discardEvents, afterRefereeSync, afterLiveState, afterScoresheetRefresh])
 
   // OLD UNDO LOGIC REMOVED - The following complex per-event-type logic has been replaced
@@ -5263,7 +5272,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Rethrown: the replay rolls back as a whole
       throw error
     }
-  }), [runAction, replayRallyConfirm, data?.set, matchId, discardEvents, applyPointRemovalScore, logEvent, afterRefereeSync, afterLiveState, afterScoresheetRefresh])
+  }, { reason: 'decision_change' }), [runAction, replayRallyConfirm, data?.set, matchId, discardEvents, applyPointRemovalScore, logEvent, afterRefereeSync, afterLiveState, afterScoresheetRefresh])
 
   const cancelReplayRally = useCallback(() => {
     setReplayRallyConfirm(null)
@@ -5366,7 +5375,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       await handleReplayRally()
       return // handleReplayRally already closes the modal and syncs
     }
-  })), [runDecisionChange, runAction, replayRallyConfirm, data?.set, matchId, logEvent, discardEvents, handleReplayRally, afterRefereeSync, afterLiveState, afterScoresheetRefresh])
+  }, { reason: 'decision_change' })), [runDecisionChange, runAction, replayRallyConfirm, data?.set, matchId, logEvent, discardEvents, handleReplayRally, afterRefereeSync, afterLiveState, afterScoresheetRefresh])
 
 
 
@@ -7062,7 +7071,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const plan = planPointRemoval(allEvents, null, { setIndex: modal.set.index, includeRallyStart: true })
       if (!plan) return
       const deleteIds = new Set(plan.deleteEventIds)
-      await discardEvents(allEvents.filter(e => deleteIds.has(e.id)))
+      await discardEvents(allEvents.filter(e => deleteIds.has(e.id)), 'undo')
       await applyPointRemovalScore(plan)
     } finally {
       syncToReferee()
@@ -11518,6 +11527,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           width={650}
         >
           <div style={{ padding: '16px', maxHeight: '80vh', overflowY: 'auto' }}>
+            <div style={{ marginBottom: '16px' }}><CorrectionsPanel mode="live" matchId={matchId} events={data?.events} match={data?.match} sets={data?.sets} team1Team={data?.team1Team} team2Team={data?.team2Team} team1Players={data?.team1Players} team2Players={data?.team2Players} liveSetIndex={data?.set?.index ?? null} hooks={{ notifyScoresheetUpdate: refreshScoresheet, syncToReferee, syncLiveState: () => syncLiveStateToSupabase('manual_score_update') }} /></div>
             {/* Collapsible Section: Current Set */}
             <div style={{
               marginBottom: '12px',

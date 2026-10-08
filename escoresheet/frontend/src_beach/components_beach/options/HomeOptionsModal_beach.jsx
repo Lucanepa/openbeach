@@ -7,6 +7,7 @@ import SupportFeedbackModal from '../SupportFeedbackModal_beach'
 import NativeServerSection from './NativeServerSection_beach'
 import DesktopUpdateSection from './DesktopUpdateSection_beach'
 import KeybindingsModal from './KeybindingsModal_beach'
+import ActivityLogSection from './ActivityLogSection_beach'
 import { OptionNumber, OptionRow, OptionSection, OptionSwitch } from './optionRows_beach'
 import { copyToClipboard } from '../../utils_beach/networkInfo_beach'
 import { clearCachesAndReload } from '../../utils_beach/appReload_beach'
@@ -369,6 +370,8 @@ export default function HomeOptionsModal({
             />
           </OptionSection>
         )}
+
+        <ActivityLogSection scope="all" />
 
         <OptionSection title={t('options.appVersion')} testId="options-app-version">
           {desktopUpdate.active ? (

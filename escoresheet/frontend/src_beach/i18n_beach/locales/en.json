@@ -1169,7 +1169,19 @@
     "backUp": "Back up",
     "iconCredits": "Icons",
     "iconCreditsText": "Lucide (ISC) · Phosphor (MIT)",
-    "copyUrl": "Copy link"
+    "copyUrl": "Copy link",
+    "logs": "Logs",
+    "activityLog": "Activity log",
+    "activityLogInfo": "Everything that happened in this match on this device: points, undo and corrections, uploads, errors. It is uploaded to the server with your account. What you click or type is not part of it.",
+    "activityLogAllInfo": "Everything that happened on this device, per match: points, undo and corrections, uploads, errors.",
+    "openActivityLog": "Show activity log",
+    "diagnosticLog": "Diagnostic log",
+    "diagnosticLogInfo": "Every click and key press in this match, for troubleshooting. It stays on this device; passwords and PINs are never recorded.",
+    "exportDiagnosticLog": "Export diagnostic log (.ndjson)",
+    "openLogFolder": "Open log folder",
+    "logFolderOpenFailed": "The log folder could not be opened.",
+    "diagnosticLogFailed": "The diagnostic log could not be exported.",
+    "logFolder": "Log folder"
   },
   "matchEnd": {
     "title": "Match complete",
@@ -2581,5 +2593,239 @@
       "serverWhen": "Tablets have mobile data, or the venue Wi-Fi keeps devices apart. Sign-in needed."
     },
     "wifiQrCaption": "Scan to join this Wi-Fi first"
+  },
+  "corrections": {
+    "action": {
+      "addPointFor": "One point more for {{team}}",
+      "back": "Back",
+      "cancel": "Cancel",
+      "confirm": "Confirm",
+      "correctFinalScore": "Correct final score",
+      "edit": "Edit",
+      "editRemark": "Edit remark",
+      "editWhat": "Edit {{what}}",
+      "keepPoint": "Keep the point",
+      "remove": "Remove",
+      "removeBoth": "Remove the point too",
+      "removeEntry": "Remove {{what}}",
+      "removePointFor": "One point less for {{team}}",
+      "removeRemark": "Remove remark",
+      "setTimes": "Set times",
+      "showAutomatic": "Show automatic entries"
+    },
+    "add": {
+      "remark": "Add remark",
+      "sanction": "Add sanction",
+      "timeout": "Add time-out"
+    },
+    "allSets": "All sets",
+    "banner": {
+      "readOnly": "The match is approved: corrections are read-only.",
+      "signaturesCleared": "Signatures were cleared because the sheet changed. Collect them again at the match end."
+    },
+    "chip": {
+      "paperCode": "As written on the scoresheet",
+      "teamsNotSetBeach": "Team A/B not set yet: team 1 is shown as A"
+    },
+    "confirm": {
+      "removePoint": "The point it gave is still the last point of this set. Remove it as well (as Undo would)?",
+      "removePointTitle": "Remove the penalty point too?",
+      "removeRemarkTitle": "Remove this remark?",
+      "removeTitle": "Remove this entry?",
+      "removes": "Removes:",
+      "timeoutFree": "{{team}} can take its time-out of set {{set}} again."
+    },
+    "describe": {
+      "coach": "Coach",
+      "coinToss": "Coin toss",
+      "courtSwitch": "Change of courts",
+      "decisionChange": "Decision change",
+      "point": "Point",
+      "rallyStart": "Rally start",
+      "replay": "Replay",
+      "setEnd": "Set end",
+      "setStart": "Set start",
+      "technicalTimeout": "Technical time-out",
+      "timeout": "Time-out"
+    },
+    "empty": {
+      "log": "No corrections yet.",
+      "players": "No player to choose.",
+      "remarks": "No remarks.",
+      "sanctions": "No sanctions recorded.",
+      "sets": "No finished set yet.",
+      "timeouts": "No time-outs recorded."
+    },
+    "error": {
+      "choosePlayer": "Choose the player.",
+      "chooseTarget": "Choose who was sanctioned.",
+      "endBeforeStart": "Set {{set}} cannot end before it starts.",
+      "forfeitOnScoreboard": "An expulsion or a disqualification forfeits the set or the match: give it on the scoreboard.",
+      "invalidFinalScore": "{{score}} is not a possible final score of set {{set}}.",
+      "ladder": "By the rules this is a {{expected}} (the team's earlier sanctions).",
+      "noLaterOpponentPoint": "{{team}} has no later point in set {{set}} to mark as the penalty point. If the point was never recorded, give the penalty on the scoreboard (during the match) or use \"Correct final score\".",
+      "noScoreChange": "Nothing to change.",
+      "noSuchScore": "Set {{set}} never had this score.",
+      "notFound": "This entry no longer exists.",
+      "notLastPoint": "The last point of set {{set}} was not won by {{team}}.",
+      "removePointNotLast": "The penalty point can only be removed while it is the last point of the set being played.",
+      "sameSanctionTwice": "This player already has this sanction.",
+      "setNotFinished": "Set {{set}} is not finished.",
+      "subEvent": "This row belongs to another entry; remove that entry instead.",
+      "teamAlreadyWarned": "The team has already been warned: one misconduct warning per team per match.",
+      "thirdPenalty": "#{{n}} already has two penalties in set {{set}}: a third is an expulsion, given on the scoreboard.",
+      "timeoutLimit": "This team's time-out of set {{set}} is already recorded (one per team per set).",
+      "useUndo": "This entry is corrected with Undo or Reopen set, not removed here.",
+      "winnerWouldChange": "This would change who won set {{set}}. Use \"Reopen last set\" or ask the referee."
+    },
+    "field": {
+      "atScore": "At score",
+      "currentFinal": "Now",
+      "endTime": "End",
+      "player": "Player",
+      "sanction": "Sanction",
+      "set": "Set",
+      "startTime": "Start",
+      "team": "Team",
+      "text": "Text",
+      "who": "Who"
+    },
+    "form": {
+      "addRemark": "Add remark",
+      "addSanction": "Add sanction",
+      "addTimeout": "Add time-out",
+      "editRemark": "Edit remark",
+      "editSanction": "Edit sanction",
+      "editTimeout": "Edit time-out",
+      "finalScore": "Set {{set}}: correct final score",
+      "setTimes": "Set {{set}}: start and end time"
+    },
+    "help": "Each correction is saved when you confirm it and is listed in the correction log for the referee.",
+    "hint": {
+      "advanced": "Every entry of the match log. Removing an entry removes everything that belongs to it. Use the cards above to add or change entries.",
+      "current": "current score",
+      "finalScoreBeach": "Only the end of the set can be corrected: a point added at the end, or the last point removed. Sets are won at 21 (the third at 15) with two points ahead.",
+      "forfeitSanctions": "An expulsion or a disqualification is given on the scoreboard: it forfeits the set or the match.",
+      "penaltyPoint": "The penalty point is {{team}}'s next point after this score; it must already be recorded.",
+      "timeoutsBeach": "One time-out per team per set. The technical time-out is not corrected here."
+    },
+    "log": {
+      "added": "Added: {{what}}",
+      "afterMatchSuffix": " (entered after the match)",
+      "changed": "Changed: {{what}} (was: {{from}})",
+      "remarkAdded": "Remark added: \"{{text}}\"",
+      "remarkChanged": "Remark changed: \"{{text}}\"",
+      "remarkRemoved": "Remark removed: \"{{text}}\"",
+      "removed": "Removed: {{what}}",
+      "setTimes": "Set {{set}} times corrected",
+      "unknown": "Correction"
+    },
+    "note": {
+      "afterMatch": "Entered after the match.",
+      "circledPoint": "{{team}}'s point at {{score}} becomes the circled penalty point.",
+      "courtSwitches": "The changes of courts recorded after this point are not moved.",
+      "ladder": "By the rules this would have been a {{expected}}; recorded as the referee decided.",
+      "penaltyNotNext": "The rally after {{score}} was won by {{team}}, not by the opponent: check that the sanction was given at this score.",
+      "pointStays": "The point stays as a normal rally point (no longer circled).",
+      "sameSanctionTwice": "This player already has this sanction.",
+      "teamAlreadyWarned": "The team had already been warned (one misconduct warning per team per match).",
+      "thirdPenalty": "#{{n}} already had two penalties in set {{set}} (a third is an expulsion); recorded as the referee decided."
+    },
+    "preview": {
+      "finalScore": "Final score {{before}} becomes {{after}}.",
+      "incomplete": "Fill in the fields above.",
+      "paperSanctionBeach": "{{code}} · Team {{letter}} · Set {{set}} · {{score}}",
+      "paperTimeout": "\"T\" at {{score}} in the time-out box of {{team}}, set {{set}}.",
+      "title": "What changes on the scoresheet"
+    },
+    "sanction": {
+      "delay_penalty": "Delay penalty",
+      "delay_warning": "Delay warning",
+      "disqualification": "Disqualification",
+      "expulsion": "Expulsion",
+      "improper_request": "Improper request",
+      "penalty": "Penalty",
+      "warning": "Misconduct warning"
+    },
+    "saveError": "The correction could not be saved: {{message}}",
+    "saved": "Correction saved",
+    "section": {
+      "advanced": "Advanced: event log",
+      "log": "Correction log (shown to the referee)",
+      "sanctions": "Sanctions",
+      "sets": "Set results",
+      "timeouts": "Time-outs"
+    },
+    "setFilter": "Show set",
+    "term": {
+      "remarks": "Remarks",
+      "set": "Set {{n}}"
+    },
+    "title": "Corrections",
+    "who": {
+      "coach": "Coach",
+      "player": "Player"
+    }
+  },
+  "activity": {
+    "title": "Activity log",
+    "notUploaded_one": "{{count}} entry not uploaded yet",
+    "notUploaded_other": "{{count}} entries not uploaded yet",
+    "match": "Match",
+    "allMatches": "All matches",
+    "filter": "Show",
+    "empty": "No entries yet.",
+    "exportJson": "Export JSON",
+    "exportCsv": "Export CSV",
+    "set": "Set {{n}}",
+    "game": "Game {{n}}",
+    "localMatch": "Match {{id}} (this device)",
+    "test": "test",
+    "filters": {
+      "all": "All",
+      "scoring": "Scoring",
+      "corrections": "Corrections",
+      "sync": "Sync",
+      "errors": "Errors"
+    },
+    "status": {
+      "uploaded": "uploaded",
+      "waiting": "waiting",
+      "local": "this device only"
+    },
+    "kinds": {
+      "event_add": "Event logged",
+      "event_bulk_add": "Events loaded",
+      "event_undo": "Undone",
+      "event_delete": "Event removed",
+      "event_edit": "Event corrected",
+      "event_restore": "Event restored",
+      "set_start": "Set started",
+      "set_end": "Set ended",
+      "set_reopen": "Set reopened",
+      "set_delete": "Set removed",
+      "match_create": "Match created",
+      "match_status": "Match status",
+      "match_close": "Match closed",
+      "match_coin_toss": "Coin toss",
+      "match_manual_change": "Manual change",
+      "match_signature": "Signature",
+      "match_approval": "Approval",
+      "match_remarks": "Remarks",
+      "match_forfeit": "Forfeit",
+      "match_roster": "Roster changed",
+      "sync_error": "Upload refused",
+      "sync_dropped": "Upload dropped",
+      "sync_state": "Connection",
+      "sync_summary": "Upload summary",
+      "app_start": "App started",
+      "app_update": "App updated",
+      "app_quit": "App closed",
+      "app_error": "App error",
+      "backup_error": "Backup failed",
+      "auth_sign_in": "Signed in",
+      "auth_sign_out": "Signed out",
+      "activity_overflow": "Old entries dropped"
+    }
   }
 }

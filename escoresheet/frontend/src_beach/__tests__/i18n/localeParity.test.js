@@ -9,7 +9,7 @@ import it_ from '../../i18n_beach/locales/it.json'
 // in all 5 locales OpenBeach ships, non-empty, with the same placeholders;
 // German is written the Swiss way (ss, never ß).
 
-const NAMESPACES = ['matchEnd', 'manualAdjustmentsEditor', 'app', 'restorePreview', 'update', 'appLifecycle', 'options', 'supportFeedback', 'connection', 'scoreboard.manual', 'scoreboard.sanctionConfirm', 'scoreboard.tto', 'scoreboard.editPin', 'scoreboard.sanctions', 'account', 'alert', 'startupConnectivity', 'syncBanner']
+const NAMESPACES = ['corrections', 'activity', 'matchEnd', 'manualAdjustmentsEditor', 'app', 'restorePreview', 'update', 'appLifecycle', 'options', 'supportFeedback', 'connection', 'scoreboard.manual', 'scoreboard.sanctionConfirm', 'scoreboard.tto', 'scoreboard.editPin', 'scoreboard.sanctions', 'account', 'alert', 'startupConnectivity', 'syncBanner']
 const LOCALES = { de, 'de-CH': deCH, fr, it: it_ }
 const placeholders = (s) => (String(s).match(/\{\{\w+\}\}/g) || []).sort()
 

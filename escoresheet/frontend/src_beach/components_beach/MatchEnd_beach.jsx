@@ -10,6 +10,8 @@ import Modal from './Modal_beach'
 const ballImage = '/beachball.png'
 import JSZip from 'jszip'
 import { setExtId } from '../utils_beach/syncIds_beach'
+import { withActivityContext, wipeMatchEvents } from '../db_beach/eventHistory_beach'
+import { listActivity } from '../utils_beach/activity/index_beach'
 import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 import { uploadScoresheet, uploadScoresheetPdf } from '../utils_beach/scoresheetUploader_beach'
 import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
@@ -958,6 +960,15 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       } catch (logsError) {
         console.warn('[MatchEnd] Failed to add interaction logs to ZIP:', logsError)
       }
+      // ... and the match's activity log (oldest first, one JSON object per line)
+      try {
+        const activity = await listActivity(db, { matchId })
+        if (activity.length) {
+          zip.file(`activity_${matchDate}.ndjson`, [...activity].reverse().map(({ lid: _lid, ...r }) => JSON.stringify(r)).join('\n') + '\n')
+        }
+      } catch (activityError) {
+        console.warn('[MatchEnd] Failed to add the activity log to ZIP:', activityError)
+      }
 
       const zipBlob = await zip.generateAsync({ type: 'blob' })
       const zipFilename = `Match_${sanitizeForFilename(team1?.name || 'Team 1')}_vs_${sanitizeForFilename(team2?.name || 'Team 2')}_${matchDate}.zip`
@@ -1069,9 +1080,9 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       }
 
       // Delete all local data for this match from IndexedDB
-      await db.transaction('rw', db.events, db.sets, db.players, db.teams, db.matches, async () => {
-        // Delete events for this match
-        await db.events.where('matchId').equals(matchId).delete()
+      await db.transaction('rw', db.events, db.event_history, db.sets, db.players, db.teams, db.matches, async () => {
+        // Delete events for this match (a wipe, not an undo: db_beach/eventHistory_beach)
+        await wipeMatchEvents(db, matchId, { dropHistory: true })
 
         // Delete sets for this match
         await db.sets.where('matchId').equals(matchId).delete()
@@ -1157,20 +1168,10 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         .first()
 
       if (setEndEvent) {
-        await db.events.delete(setEndEvent.id)
-
-        // Also queue deletion for Supabase
-        if (match?.seed_key) {
-          await db.sync_queue.add({
-            resource: 'event',
-            action: 'delete',
-            payload: {
-              id: setEndEvent.id // Send ID to delete
-            },
-            ts: new Date().toISOString(),
-            status: 'queued'
-          })
-        }
+        // The event history (db_beach/eventHistory_beach) voids the server's
+        // copy; the old 'event delete' job carried no external_id and never
+        // reached the server.
+        await withActivityContext({ reason: 'reopen_set' }, () => db.events.delete(setEndEvent.id))
       }
 
       // Queue sync to Supabase for the set update
