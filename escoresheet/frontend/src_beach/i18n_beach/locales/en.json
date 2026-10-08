@@ -2254,7 +2254,11 @@
     "testMatchDeleted": "Test match deleted.",
     "deleteTestMatchFailed": "Could not delete the test match: {{error}}",
     "useContinueTestMatch": "This is a test match: continue it from the test match on the home screen.",
-    "openMatchFailed": "Could not open the match. Please try again."
+    "openMatchFailed": "Could not open the match. Please try again.",
+    "crashTitle": "Something went wrong",
+    "crashBody": "This screen hit an error. The match is saved on this device: try again, or reload the page.",
+    "crashTryAgain": "Try again",
+    "crashReload": "Reload"
   },
   "restorePreview": {
     "title": "Restore this match?",

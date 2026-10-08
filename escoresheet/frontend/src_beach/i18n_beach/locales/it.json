@@ -2253,7 +2253,11 @@
     "testMatchDeleted": "Partita di prova eliminata.",
     "deleteTestMatchFailed": "Impossibile eliminare la partita di prova: {{error}}",
     "useContinueTestMatch": "Questa è una partita di prova: continuala dalla partita di prova nella schermata iniziale.",
-    "openMatchFailed": "Impossibile aprire la partita. Riprova."
+    "openMatchFailed": "Impossibile aprire la partita. Riprova.",
+    "crashTitle": "Si è verificato un errore",
+    "crashBody": "Questa schermata ha riscontrato un errore. La partita è salvata su questo dispositivo: riprova o ricarica la pagina.",
+    "crashTryAgain": "Riprova",
+    "crashReload": "Ricarica"
   },
   "restorePreview": {
     "title": "Ripristinare questa partita?",

@@ -2253,7 +2253,11 @@
     "testMatchDeleted": "Testspiel gelöscht.",
     "deleteTestMatchFailed": "Das Testspiel konnte nicht gelöscht werden: {{error}}",
     "useContinueTestMatch": "Das ist ein Testspiel: Setze es beim Testspiel auf der Startseite fort.",
-    "openMatchFailed": "Das Spiel konnte nicht geöffnet werden. Bitte versuche es erneut."
+    "openMatchFailed": "Das Spiel konnte nicht geöffnet werden. Bitte versuche es erneut.",
+    "crashTitle": "Öppis isch schiefgloffe",
+    "crashBody": "Die Aasicht hät en Fähler. S Spiil isch uf däm Grät gspeicheret: probier's nomal oder lad d Siite neu.",
+    "crashTryAgain": "Nomal probiere",
+    "crashReload": "Neu lade"
   },
   "restorePreview": {
     "title": "Dieses Spiel wiederherstellen?",

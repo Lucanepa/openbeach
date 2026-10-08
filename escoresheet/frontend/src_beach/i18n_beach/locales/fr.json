@@ -2253,7 +2253,11 @@
     "testMatchDeleted": "Match test supprimé.",
     "deleteTestMatchFailed": "Impossible de supprimer le match test : {{error}}",
     "useContinueTestMatch": "C'est un match test : reprenez-le depuis le match test de l'écran d'accueil.",
-    "openMatchFailed": "Impossible d'ouvrir le match. Veuillez réessayer."
+    "openMatchFailed": "Impossible d'ouvrir le match. Veuillez réessayer.",
+    "crashTitle": "Une erreur s'est produite",
+    "crashBody": "Cet écran a rencontré une erreur. Le match est enregistré sur cet appareil : réessayez ou rechargez la page.",
+    "crashTryAgain": "Réessayer",
+    "crashReload": "Recharger"
   },
   "restorePreview": {
     "title": "Restaurer ce match ?",
