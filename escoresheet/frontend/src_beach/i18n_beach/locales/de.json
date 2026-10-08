@@ -893,7 +893,7 @@
       "pointButtons": "Punkt-Tasten",
       "moreActions": "Weitere Aktionen",
       "switchIn": "Seitenwechsel in {{count}}",
-      "switchNext": "Seitenwechsel beim nächsten Punkt",
+      "switchNext": "Wechsel beim nächsten Punkt",
       "ttoIn": "TTO bei {{total}} ({{count}})",
       "ttoDone": "TTO gemacht",
       "noTto": "Kein TTO im 3. Satz",

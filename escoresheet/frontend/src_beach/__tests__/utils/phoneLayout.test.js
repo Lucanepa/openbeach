@@ -148,3 +148,20 @@ describe('phone layout on a short screen (styles_beach.css)', () => {
     expect(supports).toMatch(/\.phone-court-player \{[^}]*--phone-disc-size: min\(58px, 26cqw, 40cqh\)/)
   })
 })
+
+describe('phone change-of-courts row (two pills on a 360px phone)', () => {
+  // "Switch at next point" is the warning that matters most in the row, and
+  // it was cut in four languages at 360-390px ("Seitenwechsel beim nä…",
+  // "Changement au prochain p…"). The pills take the width their text needs
+  // (flex 1 1 auto), and the two texts that can stand side by side fit the
+  // row's 326px at 12px semibold: about 46 characters together.
+  it('the switch warning and the longest TTO text fit side by side, in every locale', async () => {
+    for (const lang of ['en', 'de', 'de-CH', 'fr', 'it']) {
+      const { default: locale } = await import(`../../i18n_beach/locales/${lang}.json`)
+      const phone = locale.scoreboard.phone
+      const tto = [phone.ttoIn.replace('{{total}}', '21').replace('{{count}}', '21'), phone.ttoDone, phone.noTto]
+      const longest = Math.max(...tto.map(s => s.length))
+      expect(phone.switchNext.length + longest, `${lang}: ${phone.switchNext} + ${tto.join(' / ')}`).toBeLessThanOrEqual(46)
+    }
+  })
+})

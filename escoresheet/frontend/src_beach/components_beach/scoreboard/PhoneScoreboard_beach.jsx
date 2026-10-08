@@ -131,7 +131,9 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
   }
 
   // ---- the set's rhythm: next change of courts, TTO -----------------------
-  const pill = { flex: 1, minWidth: 0, padding: '5px 8px', borderRadius: 9, fontSize: 12, fontWeight: 600, textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
+  // Each as wide as its text needs, the rest shared ("Switch at next point"
+  // is the one that must never be cut)
+  const pill = { flex: '1 1 auto', minWidth: 0, padding: '5px 8px', borderRadius: 9, fontSize: 12, fontWeight: 600, textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
   const switchSoon = rhythm.switchIn === 1
   const ttoText = rhythm.ttoIn !== null
     ? t('scoreboard.phone.ttoIn', { total: rhythm.ttoTotal, count: rhythm.ttoIn })
