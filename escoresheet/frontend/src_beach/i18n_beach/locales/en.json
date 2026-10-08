@@ -844,7 +844,8 @@
     "undoConfirm": {
       "confirm": "Undo"
     },
-    "confirmFailed": "That was not saved. Check the scoresheet and try again."
+    "confirmFailed": "That was not saved. Check the scoresheet and try again.",
+    "bmpOnlyAfterPoint": "BMP: only after a point, before the next rally"
   },
   "settings": {
     "title": "Settings",

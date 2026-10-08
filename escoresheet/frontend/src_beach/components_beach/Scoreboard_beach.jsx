@@ -36,6 +36,7 @@ import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot } from '../utils_beach/stateSnapshot_beach'
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
+import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
 
 // Sport type for beach volleyball
 const SPORT_TYPE = 'beach'
@@ -291,7 +292,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   const betweenSetsStartTimestampRef = useRef(null) // Timestamp when between-sets interval started
   const betweenSetsInitialCountdownRef = useRef(60) // Initial between-sets duration
   const [bmpModal, setBmpModal] = useState(null) // { type: 'team'|'referee', team?: 'team1'|'team2' } | null - Ball Mark Protocol modal
-  const [bmpOutcomeModal, setBmpOutcomeModal] = useState(null) // { type: 'team'|'referee', team?: 'team1'|'team2', requestSeq: number } | null - requestSeq links outcome as sub-event
+  const [bmpOutcomeModal, setBmpOutcomeModal] = useState(null) // { type: 'team'|'referee', team?: 'team1'|'team2', requestedAt, currentScore, currentServe } | null - the request is logged with its outcome
   const [bmpSelectedOutcome, setBmpSelectedOutcome] = useState(null) // 'successful'|'unsuccessful'|'judgment_impossible'|'in'|'out' - selected outcome awaiting confirmation
 
   // Auto-dismiss preEventPopup after 3 seconds or on click
@@ -5408,23 +5409,18 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     const team2Points = data.set.team2Points || 0
     const servingTeam = getCurrentServe()
 
-    // Log the BMP request event (challenge type for team requests)
-    const requestSeq = await logEvent('challenge', {
-      team: teamKey,
-      score: { team1: team1Points, team2: team2Points },
-      servingTeam
-    })
-
-    // Show outcome modal with score/serve info for display
+    // The request (a `challenge` event) is logged with its outcome, when the
+    // scorer confirms it: Cancel leaves nothing behind (it logged a "BMP
+    // request" that nothing undid). Its time is the time it was asked for.
     setBmpSelectedOutcome(null) // Reset any previous selection
     setBmpOutcomeModal({
       type: 'team',
       team: teamKey,
-      requestSeq, // Store sequence number to link outcome as sub-event
+      requestedAt: new Date().toISOString(),
       currentScore: { team1: team1Points, team2: team2Points },
       currentServe: servingTeam
     })
-  }, [data?.set, getCurrentServe, logEvent])
+  }, [data?.set, getCurrentServe])
 
   const handleRefereeBMP = useCallback(async () => {
     if (!data?.set) return
@@ -5434,30 +5430,38 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     const team2Points = data.set.team2Points || 0
     const servingTeam = getCurrentServe()
 
-    // Log the referee BMP request event
-    const requestSeq = await logEvent('referee_bmp_request', {
-      score: { team1: team1Points, team2: team2Points },
-      servingTeam
-    })
-
-    // Show outcome modal with score/serve info for display
+    // Logged with its outcome (as the team BMP): Cancel leaves nothing behind
     setBmpSelectedOutcome(null) // Reset any previous selection
     setBmpOutcomeModal({
       type: 'referee',
-      requestSeq, // Store sequence number to link outcome as sub-event
+      requestedAt: new Date().toISOString(),
       currentScore: { team1: team1Points, team2: team2Points },
       currentServe: servingTeam
     })
-  }, [data?.set, getCurrentServe, logEvent])
+  }, [data?.set, getCurrentServe])
 
   // Close first, then write (useConfirmAction): a double tap on an outcome
   // gave the point twice
   const runBMPOutcome = useConfirmAction(onConfirmFailed)
   const handleBMPOutcome = useCallback((result, pointToTeam = null) => runBMPOutcome(async () => {
     if (!bmpOutcomeModal || !data?.set) return
-    const bmpModal = bmpOutcomeModal
+    const bmpModal = { ...bmpOutcomeModal }
     setBmpSelectedOutcome(null)
     setBmpOutcomeModal(null)
+
+    // The request first, at the score it was asked at; the outcome is its sub-event
+    if (bmpModal.requestSeq === undefined) {
+      bmpModal.requestSeq = bmpModal.type === 'team'
+        ? await logEvent('challenge', {
+          team: bmpModal.team,
+          score: { ...bmpModal.currentScore },
+          servingTeam: bmpModal.currentServe
+        }, { timestamp: bmpModal.requestedAt })
+        : await logEvent('referee_bmp_request', {
+          score: { ...bmpModal.currentScore },
+          servingTeam: bmpModal.currentServe
+        }, { timestamp: bmpModal.requestedAt })
+    }
 
     const requestingTeam = bmpModal.team
     const isTeamBMP = bmpModal.type === 'team'
@@ -8051,8 +8055,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             const bmpUsed = getUnsuccessfulBMPsUsed(leftTeamKey)
                             const bmpRemaining = 2 - bmpUsed
                             const bmpExhausted = bmpRemaining <= 0
-                            // BMP available when rally is ongoing OR just ended (idle), but not during set break etc.
-                            const bmpAvailable = !bmpExhausted && data?.set && !data?.set?.finished
+                            // only between the point and the next rally (bmpAvailability_beach)
+                            const bmpBlock = teamBmpBlockReason({ events: data?.events, setIndex: data?.set?.index, setFinished: !data?.set || data.set.finished, rallyStatus, remaining: bmpRemaining })
+                            const bmpAvailable = !bmpBlock
                             return (
                               <button
                                 onClick={() => handleTeamBMP(leftTeamKey)}
@@ -8074,7 +8079,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   justifyContent: 'center',
                                   gap: `${6 * scaleFactor}px`
                                 }}
-                                title={t('scoreboard.bmpRemaining', { count: bmpRemaining, defaultValue: 'Ball mark protocol ({{count}} left)' })}
+                                title={bmpBlock === 'rally' || bmpBlock === 'moved_on' || bmpBlock === 'no_point' ? t('scoreboard.bmpOnlyAfterPoint', 'BMP: only after a point, before the next rally') : t('scoreboard.bmpRemaining', { count: bmpRemaining, defaultValue: 'Ball mark protocol ({{count}} left)' })}
                               >
                                 <span>BMP</span>
                                 <span className="tabular-nums" style={{
@@ -9966,8 +9971,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             const bmpUsed = getUnsuccessfulBMPsUsed(rightTeamKey)
                             const bmpRemaining = 2 - bmpUsed
                             const bmpExhausted = bmpRemaining <= 0
-                            // BMP available when rally is ongoing OR just ended (idle), but not during set break etc.
-                            const bmpAvailable = !bmpExhausted && data?.set && !data?.set?.finished
+                            // only between the point and the next rally (bmpAvailability_beach)
+                            const bmpBlock = teamBmpBlockReason({ events: data?.events, setIndex: data?.set?.index, setFinished: !data?.set || data.set.finished, rallyStatus, remaining: bmpRemaining })
+                            const bmpAvailable = !bmpBlock
                             return (
                               <button
                                 onClick={() => handleTeamBMP(rightTeamKey)}
@@ -9989,7 +9995,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   justifyContent: 'center',
                                   gap: `${6 * scaleFactor}px`
                                 }}
-                                title={t('scoreboard.bmpRemaining', { count: bmpRemaining, defaultValue: 'Ball mark protocol ({{count}} left)' })}
+                                title={bmpBlock === 'rally' || bmpBlock === 'moved_on' || bmpBlock === 'no_point' ? t('scoreboard.bmpOnlyAfterPoint', 'BMP: only after a point, before the next rally') : t('scoreboard.bmpRemaining', { count: bmpRemaining, defaultValue: 'Ball mark protocol ({{count}} left)' })}
                               >
                                 <span>BMP</span>
                                 <span className="tabular-nums" style={{

@@ -843,7 +843,8 @@
     "undoConfirm": {
       "confirm": "Annuler l'action"
     },
-    "confirmFailed": "Cela n'a pas été enregistré. Vérifiez la feuille de match et réessayez."
+    "confirmFailed": "Cela n'a pas été enregistré. Vérifiez la feuille de match et réessayez.",
+    "bmpOnlyAfterPoint": "BMP : seulement après un point, avant l'échange suivant"
   },
   "settings": {
     "title": "Paramètres",

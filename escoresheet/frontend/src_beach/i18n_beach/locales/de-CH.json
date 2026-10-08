@@ -843,7 +843,8 @@
     "undoConfirm": {
       "confirm": "Rückgängig machen"
     },
-    "confirmFailed": "Das isch nöd gspeicheret worde. Bitte s Matchblatt prüefe und nomal probiere."
+    "confirmFailed": "Das isch nöd gspeicheret worde. Bitte s Matchblatt prüefe und nomal probiere.",
+    "bmpOnlyAfterPoint": "BMP: nur nach einem Punkt, vor dem nächsten Ballwechsel"
   },
   "settings": {
     "title": "Iistellige",
