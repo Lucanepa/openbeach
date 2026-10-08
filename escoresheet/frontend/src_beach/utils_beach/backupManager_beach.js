@@ -509,13 +509,7 @@ export async function restoreMatchFromJson(jsonData) {
           championship_type: match.championshipType || match.championship_type,
           ...(match.matchInfo || match.match_info || {})
         },
-        coin_toss: {
-          confirmed: match.coinTossConfirmed || match.coin_toss_confirmed,
-          team_a: match.coinTossTeamA || match.coin_toss_team_a,
-          team_b: match.coinTossTeamB || match.coin_toss_team_b,
-          first_serve: match.firstServe || match.first_serve,
-          ...(match.coinToss || match.coin_toss || {})
-        }
+        coin_toss: coinTossForRestore(match)
       }
 
       // Build sets payload (convert local to Supabase format)
@@ -579,6 +573,31 @@ export async function restoreMatchFromJson(jsonData) {
   })
 
   return restoredMatchId
+}
+
+/**
+ * The cloud coin toss a restore sends for a backup's match row: team A / B,
+ * the first server and serve_a. serve_a was left out: a later restore by
+ * game number + PIN read it undefined and the coin toss screen showed team A
+ * serving, whoever served. It follows the first server (the team the
+ * scoreboard plays first) when both it and team A are known, else the
+ * backup's own A flag; a match without a coin toss gets none. A cloud-format
+ * row's own coin_toss JSON goes over these fields, as before.
+ * @param {object} match  the backup's match row (local or cloud field names)
+ */
+export function coinTossForRestore(match = {}) {
+  const teamA = match.coinTossTeamA || match.coin_toss_team_a
+  const firstServe = match.firstServe || match.first_serve
+  const flag = match.coinTossServeA ?? match.coin_toss_serve_a
+  const serveA = teamA && firstServe ? firstServe === teamA : (typeof flag === 'boolean' ? flag : undefined)
+  return {
+    confirmed: match.coinTossConfirmed || match.coin_toss_confirmed,
+    team_a: teamA,
+    team_b: match.coinTossTeamB || match.coin_toss_team_b,
+    first_serve: firstServe,
+    ...(serveA === undefined ? {} : { serve_a: serveA }),
+    ...(match.coinToss || match.coin_toss || {})
+  }
 }
 
 /**
@@ -670,13 +689,7 @@ export async function restoreMatchInPlace(matchId, jsonData) {
           championship_type: match.championshipType || match.championship_type,
           ...(match.matchInfo || match.match_info || {})
         },
-        coin_toss: {
-          confirmed: match.coinTossConfirmed || match.coin_toss_confirmed,
-          team_a: match.coinTossTeamA || match.coin_toss_team_a,
-          team_b: match.coinTossTeamB || match.coin_toss_team_b,
-          first_serve: match.firstServe || match.first_serve,
-          ...(match.coinToss || match.coin_toss || {})
-        }
+        coin_toss: coinTossForRestore(match)
       }
 
       // Build sets payload
