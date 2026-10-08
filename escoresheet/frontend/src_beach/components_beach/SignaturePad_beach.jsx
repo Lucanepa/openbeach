@@ -3,16 +3,44 @@ import { useTranslation } from 'react-i18next'
 import { Modal as KitModal, modalCancelClass, modalPrimaryClass, modalSaveClass } from '../ui/volleyui/Modal.jsx'
 import { FOCUS_RING } from '../ui/volleyui/Button.jsx'
 import { cn } from '../ui/volleyui/cn.js'
+import { Smartphone } from 'lucide-react'
+import PhoneSignPanel, { usePhoneSignTransports } from './PhoneSignPanel_beach'
+import { REASON_KEYS } from '../utils_beach/phoneSignTransport_beach'
 
-export default function SignaturePad({ open, onClose, onSave, title, existingSignature = null, readOnly = false }) {
+/**
+ * The signature dialog of every slot: draw on this device, or (with `phone`)
+ * "Sign on phone" (OpenVolley d451686d, 84a06005): a QR code the signer opens
+ * on their own phone; the strokes come back and become the same kind of image.
+ *
+ * onSave(dataUrl, meta): meta = { source: 'device' } or
+ * { source: 'phone', transport: 'cloud' | 'lan' }.
+ *
+ * `phone` = { slot, matchKey?, context, gamePin?, onOpenConnectTablets?,
+ * locked?, lockedReason? }. `phone.locked` (MatchEnd: the match is approved or
+ * closed) keeps the button but disables it, and no phone session is started
+ * or kept open.
+ */
+export default function SignaturePad({ open, onClose, onSave, title, existingSignature = null, readOnly = false, phone = null }) {
   const { t } = useTranslation()
   const canvasRef = useRef(null)
   const isDrawingRef = useRef(false)
   const [isDrawing, setIsDrawing] = useState(false)
   const [hasSignature, setHasSignature] = useState(false)
+  const [mode, setMode] = useState('draw') // 'draw' | 'phone'
+  const [hallIp, setHallIp] = useState(null)
+  const phoneOffered = !!phone && !readOnly
+  const phoneLocked = phoneOffered && !!phone.locked
+  // Locked while on the phone view: unmounting PhoneSignPanel closes its session
+  const showPhone = mode === 'phone' && phoneOffered && !phoneLocked
+  const { transports } = usePhoneSignTransports(open && phoneOffered && !phoneLocked, { hallIp })
+
+  // Every opening starts on the pad, and a lock sends it back there
+  useEffect(() => {
+    if (!open || phoneLocked) setMode('draw')
+  }, [open, phoneLocked])
 
   useEffect(() => {
-    if (!open) {
+    if (!open || mode !== 'draw') {
       setHasSignature(false)
       return
     }
@@ -117,7 +145,7 @@ export default function SignaturePad({ open, onClose, onSave, title, existingSig
       if (timerId) clearTimeout(timerId)
       if (cleanup) cleanup()
     }
-  }, [open, existingSignature, readOnly])
+  }, [open, existingSignature, readOnly, mode])
 
   function getPoint(e) {
     const canvas = canvasRef.current
@@ -176,7 +204,12 @@ export default function SignaturePad({ open, onClose, onSave, title, existingSig
     const canvas = canvasRef.current
     if (!canvas || !hasSignature) return
     const dataURL = canvas.toDataURL('image/png')
-    onSave(dataURL)
+    onSave(dataURL, { source: 'device' })
+    onClose()
+  }
+
+  function acceptPhoneSignature(dataUrl, meta) {
+    onSave(dataUrl, meta)
     onClose()
   }
 
@@ -185,10 +218,41 @@ export default function SignaturePad({ open, onClose, onSave, title, existingSig
     onClose()
   }
 
+  const phoneReason = phoneLocked
+    ? (phone.lockedReason || t('matchEnd.signatureLocked'))
+    : phoneOffered && !transports.default ? t(REASON_KEYS[transports.reason] || REASON_KEYS.none) : null
+
   // volleyui decision dialog (above the legacy header like the modal it
   // replaces; a backdrop tap does not close it, so a stroke near the edge
   // cannot lose the signature). The pad itself stays white with black ink.
   if (!open) return null
+  const footer = readOnly ? (
+    <button type="button" onClick={onClose} className={cn(modalPrimaryClass, 'min-h-11')}>{t('signature.close')}</button>
+  ) : showPhone ? (
+    <>
+      <button type="button" onClick={() => setMode('draw')} className={cn('mr-auto inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-stone-600 underline-offset-2 hover:underline', FOCUS_RING)} data-testid="sign-here-instead">{t('phoneSign.signHereInstead')}</button>
+      <button type="button" onClick={handleCancel} className={cn(modalCancelClass, 'min-h-11')}>{t('signature.cancel')}</button>
+    </>
+  ) : (
+    <>
+      {phoneOffered && (
+        <button
+          type="button"
+          onClick={() => { if (!phoneLocked) setMode('phone') }}
+          disabled={phoneLocked || !transports.default}
+          title={phoneReason || undefined}
+          className={cn(modalCancelClass, 'inline-flex min-h-11 items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-50')}
+          data-testid="sign-on-phone"
+        >
+          <Smartphone size={16} aria-hidden="true" />
+          {t('phoneSign.signOnPhone')}
+        </button>
+      )}
+      <button type="button" onClick={clear} className={cn('mr-auto inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-stone-600 underline-offset-2 hover:underline', FOCUS_RING)}>{t('signature.clear')}</button>
+      <button type="button" onClick={handleCancel} className={cn(modalCancelClass, 'min-h-11')}>{t('signature.cancel')}</button>
+      <button type="button" onClick={save} disabled={!hasSignature} className={cn(modalSaveClass, 'min-h-11 disabled:cursor-not-allowed disabled:bg-stone-300')}>{t('signature.save')}</button>
+    </>
+  )
   return (
     <div className="ov-kit" style={{ position: 'relative', zIndex: 1000 }}>
       <KitModal
@@ -199,32 +263,44 @@ export default function SignaturePad({ open, onClose, onSave, title, existingSig
         title={title}
         onClose={onClose}
         closeLabel={t('signature.close')}
-        footer={readOnly ? (
-          <button type="button" onClick={onClose} className={cn(modalPrimaryClass, 'min-h-11')}>{t('signature.close')}</button>
+        footer={footer}
+      >
+        {/* `phone` can go away while the dialog is open (the caller's data
+            reloading): back on the pad rather than reading a null */}
+        {showPhone ? (
+          <PhoneSignPanel
+            transports={transports}
+            slot={phone.slot}
+            matchKey={phone.matchKey || null}
+            context={phone.context}
+            gamePin={phone.gamePin || null}
+            onUse={acceptPhoneSignature}
+            onHallIp={setHallIp}
+            onOpenConnectTablets={phone.onOpenConnectTablets}
+          />
         ) : (
           <>
-            <button type="button" onClick={clear} className={cn('mr-auto inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-stone-600 underline-offset-2 hover:underline', FOCUS_RING)}>{t('signature.clear')}</button>
-            <button type="button" onClick={handleCancel} className={cn(modalCancelClass, 'min-h-11')}>{t('signature.cancel')}</button>
-            <button type="button" onClick={save} disabled={!hasSignature} className={cn(modalSaveClass, 'min-h-11 disabled:cursor-not-allowed disabled:bg-stone-300')}>{t('signature.save')}</button>
+            <div className="relative overflow-hidden rounded-xl border-2 border-dashed border-stone-300 bg-white" style={{ touchAction: 'none' }}>
+              <canvas
+                ref={canvasRef}
+                style={{
+                  width: '100%',
+                  height: '200px',
+                  display: 'block',
+                  cursor: readOnly ? 'default' : 'crosshair',
+                  background: '#ffffff'
+                }}
+                onMouseDown={readOnly ? undefined : startDrawing}
+                onMouseMove={readOnly ? undefined : draw}
+                onMouseUp={readOnly ? undefined : stopDrawing}
+                onMouseLeave={readOnly ? undefined : stopDrawing}
+              />
+            </div>
+            {phoneReason && (
+              <p className="mt-2 text-xs leading-snug text-stone-500" data-testid="sign-on-phone-reason">{phoneReason}</p>
+            )}
           </>
         )}
-      >
-        <div className="relative overflow-hidden rounded-xl border-2 border-dashed border-stone-300 bg-white" style={{ touchAction: 'none' }}>
-          <canvas
-            ref={canvasRef}
-            style={{
-              width: '100%',
-              height: '200px',
-              display: 'block',
-              cursor: readOnly ? 'default' : 'crosshair',
-              background: '#ffffff'
-            }}
-            onMouseDown={readOnly ? undefined : startDrawing}
-            onMouseMove={readOnly ? undefined : draw}
-            onMouseUp={readOnly ? undefined : stopDrawing}
-            onMouseLeave={readOnly ? undefined : stopDrawing}
-          />
-        </div>
       </KitModal>
     </div>
   )

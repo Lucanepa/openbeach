@@ -9,6 +9,8 @@ import { isBackendAvailable, getBackendUrl } from '../utils_beach/backendConfig_
 import { cloudSyncWaitNow } from '../utils_beach/cloudStatus_beach'
 import SignaturePad from './SignaturePad_beach'
 import { saveMatchSignature, signatureFieldOfRole } from '../utils_beach/signatures_beach'
+import { phoneSignContext, signatureSourceUpdate, SLOT_OF_ROLE } from '../utils_beach/phoneSignature_beach'
+import { relayMatchKey } from '../utils_beach/relayPublisher_beach'
 import MenuList from './MenuList_beach'
 import CountryFlag from './CountryFlag_beach'
 import { openAppWindow } from '../utils_beach/openAppWindow_beach'
@@ -124,7 +126,7 @@ function normalizeDob(dob) {
 }
 
 export default function CoinToss({ matchId, onConfirm, onBack }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { showAlert } = useAlert()
   const { vmin } = useScaledLayout()
 
@@ -536,10 +538,41 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
     setServeB(!serveB)
   }
 
-  function handleSignatureSave(signatureImage) {
+  // A coin toss pad (captain or coach of team 1 / 2) and its image's source:
+  // drawn here, or signed on a phone (OpenVolley d451686d)
+  function saveCoinTossSignature(role, signatureImage, meta) {
+    const field = signatureFieldOfRole(role)
+    return saveMatchSignature(db, matchId, field, signatureImage, field ? signatureSourceUpdate(field, signatureImage, meta) : null)
+  }
+
+  // "Sign on phone" for a coin toss pad: the slot, the relay's key of the
+  // match, its game PIN (another device than the relay host proves it) and
+  // what the phone page shows
+  function phoneSignFor(role) {
+    if (!role || !match) return null
+    const captainOf = (roster) => roster.find(p => p.isCaptain) || null
+    return {
+      slot: SLOT_OF_ROLE[role],
+      matchKey: relayMatchKey(match),
+      gamePin: match.gamePin || null,
+      context: phoneSignContext({
+        match,
+        slot: SLOT_OF_ROLE[role],
+        team1: team1Name,
+        team2: team2Name,
+        team1Captain: captainOf(team1Roster),
+        team2Captain: captainOf(team2Roster),
+        lang: i18n?.language,
+        fallbackTeam1: t('common.team1'),
+        fallbackTeam2: t('common.team2')
+      })
+    }
+  }
+
+  function handleSignatureSave(signatureImage, meta) {
     // Saved to the match at once, not on "Confirm coin toss result": a reload
     // no longer loses it (OpenVolley 703cfa9c)
-    saveMatchSignature(db, matchId, signatureFieldOfRole(openSignature), signatureImage)
+    saveCoinTossSignature(openSignature, signatureImage, meta)
     if (openSignature === 'team1-captain') {
       setTeam1CaptainSignature(signatureImage)
     } else if (openSignature === 'team2-captain') {
@@ -2096,13 +2129,14 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                   </h3>
                   <SignaturePad
                     open
-                    onSave={(sig) => {
-                      saveMatchSignature(db, matchId, signatureFieldOfRole(`${currentTeam}-captain`), sig)
+                    onSave={(sig, meta) => {
+                      saveCoinTossSignature(`${currentTeam}-captain`, sig, meta)
                       setCaptainSig(sig)
                       setRosterModalSignature(null)
                     }}
                     onClose={() => setRosterModalSignature(null)}
                     title={t('matchSetup.captainSignature')}
+                    phone={phoneSignFor(`${currentTeam}-captain`)}
                   />
                 </div>
               )}
@@ -2272,7 +2306,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
             isCaptain: i === index
           })))
           // Clear signature when captain changes (saved at once, like a new signature)
-          if (captainSig) saveMatchSignature(db, matchId, signatureFieldOfRole(`${currentTeam}-captain`), null)
+          if (captainSig) saveCoinTossSignature(`${currentTeam}-captain`, null)
           setCaptainSig(null)
         }
 
@@ -2810,6 +2844,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           openSignature === 'team1-coach' ? team1CoachSignature :
           openSignature === 'team2-coach' ? team2CoachSignature : null
         }
+        phone={phoneSignFor(openSignature)}
         readOnly={
           (openSignature === 'team1-captain' && !!team1CaptainSignature) ||
           (openSignature === 'team2-captain' && !!team2CaptainSignature) ||
