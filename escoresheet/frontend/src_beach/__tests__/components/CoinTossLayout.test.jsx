@@ -71,13 +71,19 @@ describe('CoinToss_beach layout', () => {
   })
 
   it('records what the winner chose (serve or side) with the coin toss', async () => {
-    render(<CoinToss matchId={matchId} onConfirm={() => {}} onBack={() => {}} />)
+    const onConfirm = vi.fn()
+    render(<CoinToss matchId={matchId} onConfirm={onConfirm} onBack={() => {}} />)
     const choice = await screen.findByRole('radiogroup', { name: 'The winner chose' })
     await act(async () => { fireEvent.click(screen.getByRole('radio', { name: 'Court side' })) })
     expect(choice).toBeInTheDocument()
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Confirm the coin toss' })) })
-    await waitFor(async () => expect((await db.matches.get(matchId)).coinTossChoice).toBe('side'), { timeout: 5000 })
+    await waitFor(async () => expect((await db.matches.get(matchId)).coinTossChoice).toBe('side'))
     const ev = (await db.events.toArray()).find(e => e.type === 'coin_toss')
     expect(ev.payload.coinTossChoice).toBe('side')
-  })
+    // the coin toss runs on after its writes (signatures, the sync and
+    // scoresheet steps) until it hands over to the scoreboard: a test that
+    // ended before had its setState land after the page was torn down
+    // ("window is not defined", a failed full-suite run)
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith(matchId), { timeout: 10000 })
+  }, 30000)
 })

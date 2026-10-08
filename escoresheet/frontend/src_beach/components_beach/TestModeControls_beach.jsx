@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { db } from '../db_beach/db_beach'
+import { leftTeamInSet, switchSidesUpdate } from '../utils_beach/courtSides_beach'
 
 /**
  * TestModeControls - Debug buttons for testing match functionality
@@ -77,13 +78,18 @@ export default function TestModeControls({ matchId, onRefresh }) {
 
   const handleSwitchSide = async () => {
     try {
-      const { match } = await getMatchState()
+      const { match, currentSet } = await getMatchState()
+      if (!match || !currentSet) {
+        setLastAction('No active set')
+        return
+      }
 
-      // Toggle left/right team positions
-      const newLeftTeam = match.leftTeam === 'team1' ? 'team2' : 'team1'
-      await db.matches.update(matchId, { leftTeam: newLeftTeam })
+      // A change of courts as the scorer writes it (courtSides_beach): it
+      // wrote match.leftTeam, which no screen reads
+      const update = switchSidesUpdate(currentSet.index, match)
+      await db.matches.update(matchId, update)
 
-      setLastAction(`Side: ${newLeftTeam} now left`)
+      setLastAction(`Side: Team ${leftTeamInSet(currentSet.index, { ...match, ...update })} now left`)
       onRefresh?.()
     } catch (err) {
       setLastAction(`Error: ${err.message}`)

@@ -8,6 +8,7 @@ const ballImage = '/beachball.png'
 import { Results } from '../../scoresheet_pdf_beach/components_beach/FooterSection_beach'
 import { setDurationMinutes } from '../../scoresheet_pdf_beach/components_beach/matchTimes_beach'
 import TestModeControls from './TestModeControls_beach'
+import { isTeam1LeftInSet } from '../utils_beach/courtSides_beach'
 
 export default function MatchEntry({ matchId, team, onBack, embedded = false }) {
   const { t } = useTranslation()
@@ -89,7 +90,8 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
       allSets,
       events,
       team1Players: (result.team1Players || []).sort((a, b) => (a.number || 0) - (b.number || 0)),
-      team2Players: (result.team2Players || []).sort((a, b) => (a.number || 0) - (b.number || 0))
+      team2Players: (result.team2Players || []).sort((a, b) => (a.number || 0) - (b.number || 0)),
+      liveState: result.liveState || null
     })
   }, [])
 
@@ -128,49 +130,22 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
     fetchData()
   }, [matchId, updateFromMatchData])
 
-  // Determine which side the team is on (same logic as Scoreboard)
+  // Which side the team is on: the scorer's court's. The live state's side_a
+  // (the court as the scorer pushed it), else the scorer's own rule
+  // (courtSides_beach: setLeftTeamOverrides, written by every change of
+  // courts, the TTO's too; set 3 starts on its toss's side; no change between
+  // sets unless asked). It guessed by the set number (set 2 A right, set 3 the
+  // toss side flipped by set3CourtSwitched, which nothing writes), so the
+  // bench court was mirrored after every change of courts.
   const teamSide = useMemo(() => {
     if (!data?.set || !data?.match) return 'left'
-    
-    // Get Team A and Team B from coin toss
     const teamAKey = data.match.coinTossTeamA || 'team1'
-    const teamBKey = data.match.coinTossTeamB || 'team2'
-    
-    // Set 1: Team A on left
-    if (data.set.index === 1) {
-      return team === teamAKey ? 'left' : 'right'
-    }
-    
-    // Set 3 (tie break): Special case with court switch at 8 points
-    // Beach volleyball is best-of-3
-    if (data.set.index === 3) {
-      // Use set3LeftTeam if specified
-      if (data.match.set3LeftTeam) {
-        const leftTeamKey = data.match.set3LeftTeam === 'A' ? teamAKey : teamBKey
-        let isLeft = team === leftTeamKey
-
-        // If court switch has happened at 8 points, switch again
-        if (data.match.set3CourtSwitched) {
-          isLeft = !isLeft
-        }
-
-        return isLeft ? 'left' : 'right'
-      }
-
-      // Fallback: Set 3 starts with teams switched (like set 2)
-      let isLeft = team !== teamAKey
-
-      // If court switch has happened at 8 points, switch again
-      if (data.match.set3CourtSwitched) {
-        isLeft = !isLeft
-      }
-
-      return isLeft ? 'left' : 'right'
-    }
-
-    // Set 2: Teams switch sides (Team A goes right, Team B goes left)
-    return team === teamAKey ? 'right' : 'left'
-  }, [data?.set, data?.match, team])
+    const sideA = data.liveState?.side_a
+    const team1Left = (sideA === 'left' || sideA === 'right')
+      ? (sideA === 'left') === (teamAKey === 'team1')
+      : isTeam1LeftInSet(data.set.index, data.match)
+    return (team === 'team1') === team1Left ? 'left' : 'right'
+  }, [data?.set, data?.match, data?.liveState?.side_a, team])
 
   // Get team info
   const teamInfo = useMemo(() => {

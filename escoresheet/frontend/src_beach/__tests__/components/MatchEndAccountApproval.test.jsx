@@ -284,19 +284,22 @@ describe('MatchEnd_beach: approve with an account', () => {
     const approve = screen.getByRole('button', { name: 'Confirm and approve' })
     await waitFor(() => expect(approve).toBeEnabled())
     await click(approve)
-    // The scoresheet window cannot open here: the scorer approves without the PDF
-    await click(await screen.findByRole('button', { name: 'Approve without PDF' }))
+    // The scoresheet window cannot open here: the scorer approves without the
+    // PDF. Its prompt comes after the server re-check and the export's reads:
+    // 1.7 to 2.9 s after the tap with the machine loaded (measured
+    // 2026-10-08), past the default 1 s of findBy
+    await click(await screen.findByRole('button', { name: 'Approve without PDF' }, { timeout: 10000 }))
     let job
     await waitFor(async () => {
       job = (await db.sync_queue.toArray()).find(j => j.payload?.status === 'approved')
       expect(job).toBeTruthy()
-    }, { timeout: 5000 })
+    })
     expect(api.list.mock.calls.length).toBeGreaterThanOrEqual(2)
     expect(job.payload.approval.accounts).toEqual({
       ref1: { short_id: 'AB12CD34', name: 'Ref Anna', approved_at: '2026-07-12T10:42:00.000Z' }, ref2: null, scorer: null
     })
     expect(JSON.stringify(job.payload.approval.accounts)).not.toContain('@')
-  })
+  }, 30000)
 
   it('a voided approval stops "Confirm and approve"', async () => {
     let calls = 0

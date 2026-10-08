@@ -82,16 +82,16 @@ async function setUpMatch() {
 const mount = (matchId) => render(<ScaleProvider><AlertProvider><LoggingProvider><Scoreboard matchId={matchId} /></LoggingProvider></AlertProvider></ScaleProvider>)
 
 async function startSet() {
-  await waitFor(() => expect(button('Start set')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Start set')).toBeTruthy())
   fireEvent.click(button('Start set'))
-  await waitFor(() => expect(button('Confirm')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Confirm')).toBeTruthy())
   fireEvent.click(button('Confirm'))
-  await waitFor(() => expect(button('Point A')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Point A')).toBeTruthy())
 }
 async function startRally() {
-  await waitFor(() => expect(button('Start rally')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Start rally')).toBeTruthy())
   fireEvent.click(button('Start rally'))
-  await waitFor(() => expect(button('Point A')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Point A')).toBeTruthy())
 }
 async function point(label) {
   const before = (await ofType('point')).length
@@ -99,10 +99,10 @@ async function point(label) {
   await waitFor(async () => expect((await ofType('point')).length).toBe(before + 1))
   // and on screen (the rally over): an Undo tapped before the screen has the
   // point offers the rally start (found under the full suite's load)
-  await waitFor(() => expect(button(label)).toBeFalsy(), { timeout: 5000 })
+  await waitFor(() => expect(button(label)).toBeFalsy())
 }
 async function switchCourts() {
-  await waitFor(() => expect(button('Switch courts')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Switch courts')).toBeTruthy())
   const before = (await ofType('court_switch')).length
   fireEvent.click(button('Switch courts'))
   await waitFor(async () => expect((await ofType('court_switch')).length).toBe(before + 1))
@@ -119,7 +119,7 @@ async function rallies(labels, { first = false } = {}) {
 }
 async function undoLast() {
   const before = (await events()).length
-  await waitFor(() => expect(button('Undo')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Undo')).toBeTruthy())
   fireEvent.click(button('Undo'))
   await waitFor(() => expect(buttons('Undo').length).toBeGreaterThan(1))
   fireEvent.click(buttons('Undo').at(-1))
@@ -129,7 +129,7 @@ async function undoLast() {
 
 // The scorer taps the running countdown
 async function tapTtoEnd() {
-  await waitFor(() => expect(button('Start TTO')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Start TTO')).toBeTruthy())
   fireEvent.click(button('Start TTO'))
   await waitFor(() => expect(document.body.textContent).toContain('Click to end & switch courts'))
   const hint = [...document.querySelectorAll('div')].find(d => d.textContent.trim() === 'Click to end & switch courts')
@@ -138,7 +138,7 @@ async function tapTtoEnd() {
 // Nobody taps: the 45 seconds run out (the countdown's setInterval is fake;
 // every tick is let render before the next one)
 async function letTtoRunOut() {
-  await waitFor(() => expect(button('Start TTO')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Start TTO')).toBeTruthy())
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
   fireEvent.click(button('Start TTO'))
   for (let i = 0; i < 400 && !document.body.textContent.includes('Click to end & switch courts'); i++) await realDelay(5)
@@ -160,11 +160,11 @@ describe('Scoreboard_beach: the TTO ends the same way when tapped and when it ru
     await startSet()
     await rallies(Array.from({ length: 21 }, (_, i) => (i % 2 ? 'Point B' : 'Point A')), { first: true })
     expect(await score()).toEqual([11, 10])
-    await waitFor(() => expect(ttoOpen()).toBe(true), { timeout: 5000 })
+    await waitFor(() => expect(ttoOpen()).toBe(true))
     const sidesBefore = await sides(matchId)
 
     await endTto()
-    await waitFor(() => expect(ttoOpen()).toBe(false), { timeout: 5000 })
+    await waitFor(() => expect(ttoOpen()).toBe(false))
     await settle()
     const sidesAfter = await sides(matchId)
     expect(sidesAfter).not.toBe(sidesBefore)

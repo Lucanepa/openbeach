@@ -41,6 +41,7 @@ import { useDiagCommits } from '../diagnostics_beach/commits_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot } from '../utils_beach/stateSnapshot_beach'
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
+import { swapTeamDesignation, coinTossCloud } from '../utils_beach/coinToss_beach'
 import { staleCourtSwitches, switchBackUpdate, snapshotsAfterSwitchBack, pendingTto, pendingCourtDialog } from '../utils_beach/courtSwitchState_beach'
 import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
 import { TTO_TOTAL, courtChangeEvery, hasTechnicalTimeout, nextCourtEvents } from '../utils_beach/courtRhythm_beach'
@@ -3930,7 +3931,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     setSanctionConfirm({ side, type: 'delay_penalty' })
   }, [data?.match, data?.set, rallyStatus])
 
-  // Handle team sanction (for smartphone mode) - takes team key instead of side
+  // Handle team sanction (for smartphone mode) - takes team key instead of side.
+  // Refused while the rally is in play, so the team panel's Improper request,
+  // Delay warning and Delay penalty are disabled then, as in the other layout
+  // (OpenBeach 2026-10-08: they looked tappable during the rally, and a tap
+  // made right after a point, before a slow screen showed it, did nothing)
   const handleTeamSanction = useCallback((teamKey, sanctionType) => {
     cLogger.logHandler('handleTeamSanction', { teamKey, sanctionType })
     if (!data?.match || rallyStatus !== 'idle') return
@@ -8716,6 +8721,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     {!data?.match?.sanctions?.[leftisTeam1 ? 'improperRequestteam1' : 'improperRequestteam2'] && (
                       <button
                         onClick={() => handleTeamSanction(leftisTeam1 ? 'team1' : 'team2', 'improper_request')}
+                        disabled={rallyStatus === 'in_play'}
                         style={{
                           width: '100%',
                           height: `max(44px, ${DESIGN_VMIN * 0.028 * scaleFactor}px)`,
@@ -8725,7 +8731,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           color: 'var(--ov-text-secondary)',
                           border: `${1 * scaleFactor}px solid var(--ov-hairline-strong)`,
                           borderRadius: 'var(--ov-radius)',
-                          cursor: 'pointer',
+                          cursor: rallyStatus === 'in_play' ? 'not-allowed' : 'pointer',
                           padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
@@ -8744,6 +8750,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         return (
                           <button
                             onClick={() => handleTeamSanction(leftTeamKey, 'delay_penalty')}
+                            disabled={rallyStatus === 'in_play'}
                             style={{
                               width: '100%',
                               height: `max(44px, ${DESIGN_VMIN * 0.028 * scaleFactor}px)`,
@@ -8753,7 +8760,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               color: 'var(--ov-danger-text)',
                               border: `${1 * scaleFactor}px solid #fecaca`,
                               borderRadius: 'var(--ov-radius)',
-                              cursor: 'pointer',
+                              cursor: rallyStatus === 'in_play' ? 'not-allowed' : 'pointer',
                               padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
@@ -8768,6 +8775,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         return (
                           <button
                             onClick={() => handleTeamSanction(leftTeamKey, 'delay_warning')}
+                            disabled={rallyStatus === 'in_play'}
                             style={{
                               width: '100%',
                               height: `max(44px, ${DESIGN_VMIN * 0.028 * scaleFactor}px)`,
@@ -8777,7 +8785,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               color: 'var(--ov-warning-text)',
                               border: `${1 * scaleFactor}px solid #fcd34d`,
                               borderRadius: 'var(--ov-radius)',
-                              cursor: 'pointer',
+                              cursor: rallyStatus === 'in_play' ? 'not-allowed' : 'pointer',
                               padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
@@ -10618,6 +10626,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     {!data?.match?.sanctions?.[leftisTeam1 ? 'improperRequestteam2' : 'improperRequestteam1'] && (
                       <button
                         onClick={() => handleTeamSanction(leftisTeam1 ? 'team2' : 'team1', 'improper_request')}
+                        disabled={rallyStatus === 'in_play'}
                         style={{
                           width: '100%',
                           height: `max(44px, ${DESIGN_VMIN * 0.028 * scaleFactor}px)`,
@@ -10627,7 +10636,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           color: 'var(--ov-text-secondary)',
                           border: `${1 * scaleFactor}px solid var(--ov-hairline-strong)`,
                           borderRadius: 'var(--ov-radius)',
-                          cursor: 'pointer',
+                          cursor: rallyStatus === 'in_play' ? 'not-allowed' : 'pointer',
                           padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
@@ -10646,6 +10655,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         return (
                           <button
                             onClick={() => handleTeamSanction(rightTeamKey, 'delay_penalty')}
+                            disabled={rallyStatus === 'in_play'}
                             style={{
                               width: '100%',
                               height: `max(44px, ${DESIGN_VMIN * 0.028 * scaleFactor}px)`,
@@ -10655,7 +10665,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               color: 'var(--ov-danger-text)',
                               border: `${1 * scaleFactor}px solid #fecaca`,
                               borderRadius: 'var(--ov-radius)',
-                              cursor: 'pointer',
+                              cursor: rallyStatus === 'in_play' ? 'not-allowed' : 'pointer',
                               padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
@@ -10670,6 +10680,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         return (
                           <button
                             onClick={() => handleTeamSanction(rightTeamKey, 'delay_warning')}
+                            disabled={rallyStatus === 'in_play'}
                             style={{
                               width: '100%',
                               height: `max(44px, ${DESIGN_VMIN * 0.028 * scaleFactor}px)`,
@@ -10679,7 +10690,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               color: 'var(--ov-warning-text)',
                               border: `${1 * scaleFactor}px solid #fcd34d`,
                               borderRadius: 'var(--ov-radius)',
-                              cursor: 'pointer',
+                              cursor: rallyStatus === 'in_play' ? 'not-allowed' : 'pointer',
                               padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
@@ -12223,28 +12234,22 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             <button
                               className="secondary"
                               onClick={async () => {
-                                // Swap Team A and Team B identity (coinTossTeamA)
+                                // Swap Team A and Team B identity (coinTossTeamA). Only the
+                                // labels change: the same team serves first, here and in
+                                // the cloud coin toss (coinToss_beach)
                                 const currentTeamA = data.match.coinTossTeamA || 'team1'
-                                const newTeamA = currentTeamA === 'team1' ? 'team2' : 'team1'
-                                const newTeamB = newTeamA === 'team1' ? 'team2' : 'team1'
+                                const patch = swapTeamDesignation(data.match)
+                                const newTeamA = patch.coinTossTeamA
 
-                                await db.matches.update(matchId, { coinTossTeamA: newTeamA, coinTossTeamB: newTeamB })
+                                await db.matches.update(matchId, patch)
 
                                 if (data.match?.seed_key) {
-                                  const currentServeA = data.match.coinTossServeA ?? true
-                                  const firstServeTeam = currentServeA ? newTeamA : newTeamB
                                   await db.sync_queue.add({
                                     resource: 'match',
                                     action: 'update',
                                     payload: {
                                       id: data.match.seed_key,
-                                      coin_toss: {
-                                        team_a: newTeamA,
-                                        team_b: newTeamB,
-                                        serve_a: currentServeA,
-                                        confirmed: true,
-                                        first_serve: firstServeTeam
-                                      }
+                                      coin_toss: coinTossCloud({ ...data.match, ...patch })
                                     },
                                     createdAt: new Date().toISOString()
                                   })

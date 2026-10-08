@@ -82,24 +82,28 @@ async function setUpMatch() {
 const mount = (matchId) => render(<ScaleProvider><AlertProvider><LoggingProvider><Scoreboard matchId={matchId} /></LoggingProvider></AlertProvider></ScaleProvider>)
 
 async function startSet() {
-  await waitFor(() => expect(button('Start set')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Start set')).toBeTruthy())
   fireEvent.click(button('Start set'))
-  await waitFor(() => expect(button('Confirm')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Confirm')).toBeTruthy())
   fireEvent.click(button('Confirm'))
-  await waitFor(() => expect(button('Point A')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Point A')).toBeTruthy())
 }
 async function startRally() {
-  await waitFor(() => expect(button('Start rally')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Start rally')).toBeTruthy())
   fireEvent.click(button('Start rally'))
-  await waitFor(() => expect(button('Point A')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Point A')).toBeTruthy())
 }
 async function point(label) {
   const before = (await ofType('point')).length
   fireEvent.click(button(label))
   await waitFor(async () => expect((await ofType('point')).length).toBe(before + 1))
+  // and on screen: the rally over. The database has the point a moment
+  // before the screen; a Delay warning tapped in between was refused (the
+  // screen still had the rally in play)
+  await waitFor(() => expect(button(label)).toBeFalsy())
 }
 async function switchCourts() {
-  await waitFor(() => expect(button('Switch courts')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Switch courts')).toBeTruthy())
   const before = (await ofType('court_switch')).length
   fireEvent.click(button('Switch courts'))
   await waitFor(async () => expect((await ofType('court_switch')).length).toBe(before + 1))
@@ -129,7 +133,7 @@ async function refereeBmp(side) {
 }
 async function undoLast() {
   const before = (await events()).length
-  await waitFor(() => expect(button('Undo')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Undo')).toBeTruthy())
   fireEvent.click(button('Undo'))
   await waitFor(() => expect(buttons('Undo').length).toBeGreaterThan(1))
   fireEvent.click(buttons('Undo').at(-1))
@@ -148,7 +152,7 @@ async function successfulBmp(open) {
 // The TTO is started and ended early with a tap on its countdown (the tap
 // reaches the countdown's clickable box); its change of courts is made then
 async function endTto() {
-  await waitFor(() => expect(button('Start TTO')).toBeTruthy(), { timeout: 5000 })
+  await waitFor(() => expect(button('Start TTO')).toBeTruthy())
   fireEvent.click(button('Start TTO'))
   await waitFor(() => expect(document.body.textContent).toContain('Click to end & switch courts'))
   const hint = [...document.querySelectorAll('div')].find(d => d.textContent.trim() === 'Click to end & switch courts')
@@ -172,7 +176,7 @@ describe('Scoreboard_beach: every point path opens the change of courts, the TTO
     await startRally()
     await refereeBmp('left')
     expect(await score()).toEqual([7, 0])
-    await waitFor(() => expect(switchOpen()).toBe(true), { timeout: 5000 })
+    await waitFor(() => expect(switchOpen()).toBe(true))
     await switchCourts()
     expect(await ofType('court_switch')).toHaveLength(1)
     expect(await sides(matchId)).not.toBe(sidesBefore)
@@ -205,7 +209,7 @@ describe('Scoreboard_beach: every point path opens the change of courts, the TTO
     await startRally()
     await refereeBmp('right')
     expect((await score()).reduce((a, b) => a + b)).toBe(21)
-    await waitFor(() => expect(ttoOpen()).toBe(true), { timeout: 5000 })
+    await waitFor(() => expect(ttoOpen()).toBe(true))
     expect(await ofType('technical_to')).toHaveLength(1)
     expect(switchOpen()).toBe(false)
 
@@ -232,16 +236,16 @@ describe('Scoreboard_beach: every point path opens the change of courts, the TTO
     mount(matchId)
     await startSet()
     await rallies(Array.from({ length: 21 }, () => 'Point A'), { first: true })
-    await waitFor(() => expect(setEndOpen()).toBe(true), { timeout: 5000 })
-    await waitFor(() => expect(dialogBmp()).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(setEndOpen()).toBe(true))
+    await waitFor(() => expect(dialogBmp()).toBeTruthy())
     expect(await ofType('technical_to')).toHaveLength(0)
 
     await successfulBmp(dialogBmp())
     expect(await score()).toEqual([20, 1])
     // the set-end dialog (back under the BMP dialog, 21:0) is gone: the set
     // did not end
-    await waitFor(() => expect(setEndOpen()).toBe(false), { timeout: 5000 })
-    await waitFor(() => expect(ttoOpen()).toBe(true), { timeout: 5000 })
+    await waitFor(() => expect(setEndOpen()).toBe(false))
+    await waitFor(() => expect(ttoOpen()).toBe(true))
     expect(await ofType('technical_to')).toHaveLength(1)
     await endTto()
     expect(await ofType('technical_to')).toHaveLength(1)
@@ -252,7 +256,7 @@ describe('Scoreboard_beach: every point path opens the change of courts, the TTO
     await undoLast()
     expect(await ofType('challenge_outcome')).toHaveLength(0)
     expect(await score()).toEqual([21, 0])
-    await waitFor(() => expect(setEndOpen()).toBe(true), { timeout: 5000 })
+    await waitFor(() => expect(setEndOpen()).toBe(true))
     expect(ttoOpen()).toBe(false)
     cleanup()
   }, 90000)
@@ -262,7 +266,7 @@ describe('Scoreboard_beach: every point path opens the change of courts, the TTO
     mount(matchId)
     await startSet()
     await rallies(Array.from({ length: 21 }, () => 'Point A'), { first: true })
-    await waitFor(() => expect(setEndOpen()).toBe(true), { timeout: 5000 })
+    await waitFor(() => expect(setEndOpen()).toBe(true))
     await settle()
 
     fireEvent.click(dialogDecisionChange('Confirm'))
@@ -271,7 +275,7 @@ describe('Scoreboard_beach: every point path opens the change of courts, the TTO
     await waitFor(async () => expect(await ofType('decision_change')).toHaveLength(1))
     await settle()
     expect(await score()).toEqual([20, 1])
-    await waitFor(() => expect(ttoOpen()).toBe(true), { timeout: 5000 })
+    await waitFor(() => expect(ttoOpen()).toBe(true))
     expect(setEndOpen()).toBe(false)
     expect(await ofType('technical_to')).toHaveLength(1)
     cleanup()
@@ -285,15 +289,16 @@ describe('Scoreboard_beach: every point path opens the change of courts, the TTO
       if (i > 0) await startRally()
       await point('Point A')
     }
-    await waitFor(() => expect(switchOpen()).toBe(true), { timeout: 5000 })
+    await waitFor(() => expect(switchOpen()).toBe(true))
     await waitFor(() => expect(dialogBmp()).toBeTruthy())
     const sidesBefore = await sides(matchId)
 
     await successfulBmp(dialogBmp())
     expect(await score()).toEqual([6, 1])
-    // the dialog shows the new score (6:1 is 7 points: the change stays)
-    await waitFor(() => expect(switchOpen()).toBe(true), { timeout: 5000 })
-    expect(button('Switch courts').closest('div[style*="padding: 24px"]').textContent).toMatch(/6.*1/)
+    // the dialog shows the new score (6:1 is 7 points: the change stays). The
+    // BMP's point and the dialog's new score come after its outcome row
+    await waitFor(() => expect(switchOpen()).toBe(true))
+    await waitFor(() => expect(button('Switch courts').closest('div[style*="padding: 24px"]').textContent).toMatch(/6.*1/))
     await switchCourts()
     expect(await ofType('court_switch')).toHaveLength(1)
     expect(await sides(matchId)).not.toBe(sidesBefore)
@@ -310,7 +315,7 @@ describe('Scoreboard_beach: every point path opens the change of courts, the TTO
       if (i > 0) await startRally()
       await point('Point A')
     }
-    await waitFor(() => expect(switchOpen()).toBe(true), { timeout: 5000 })
+    await waitFor(() => expect(switchOpen()).toBe(true))
     await settle()
 
     // cancelled: the change of courts is still to be made
@@ -318,7 +323,7 @@ describe('Scoreboard_beach: every point path opens the change of courts, the TTO
     await waitFor(() => expect(button('Cancel')).toBeTruthy())
     expect(switchOpen()).toBe(false)
     fireEvent.click(button('Cancel'))
-    await waitFor(() => expect(switchOpen()).toBe(true), { timeout: 5000 })
+    await waitFor(() => expect(switchOpen()).toBe(true))
     await settle()
 
     // confirmed: the point goes to team B, 6:1 is 7 points, the change stays
@@ -327,7 +332,7 @@ describe('Scoreboard_beach: every point path opens the change of courts, the TTO
     fireEvent.click(button('Confirm'))
     await waitFor(async () => expect(await ofType('decision_change')).toHaveLength(1))
     expect(await score()).toEqual([6, 1])
-    await waitFor(() => expect(switchOpen()).toBe(true), { timeout: 5000 })
+    await waitFor(() => expect(switchOpen()).toBe(true))
     await settle()
     await switchCourts()
     expect(await ofType('court_switch')).toHaveLength(1)
@@ -387,7 +392,7 @@ describe('Scoreboard_beach: point paths at every change total', () => {
     await startRally()
     await refereeBmp('left')
     expect((await score()).reduce((a, b) => a + b)).toBe(14)
-    await waitFor(() => expect(switchOpen()).toBe(true), { timeout: 5000 })
+    await waitFor(() => expect(switchOpen()).toBe(true))
     expect(ttoOpen()).toBe(false)
     await switchCourts()
     expect(await ofType('court_switch')).toHaveLength(2)
@@ -417,7 +422,7 @@ describe('Scoreboard_beach: point paths at every change total', () => {
     await startRally()
     await refereeBmp('right')
     expect((await set3Score()).reduce((a, b) => a + b)).toBe(5)
-    await waitFor(() => expect(switchOpen()).toBe(true), { timeout: 5000 })
+    await waitFor(() => expect(switchOpen()).toBe(true))
     expect(ttoOpen()).toBe(false)
     await switchCourts()
     expect(await set3Events('court_switch')).toHaveLength(1)
@@ -454,16 +459,16 @@ describe('Scoreboard_beach: point paths at every change total', () => {
     // 11:14: 25 points, the change of courts
     await startRally()
     await point('Point A')
-    await waitFor(() => expect(switchOpen()).toBe(true), { timeout: 5000 })
+    await waitFor(() => expect(switchOpen()).toBe(true))
     await waitFor(() => expect(dialogBmp()).toBeTruthy())
 
     // B's BMP is successful: 10:15, the set is over
     await successfulBmp(dialogBmp())
     expect(await set3Score()).toEqual([10, 15])
     // (set 3 decides the match: its dialog is the match end)
-    await waitFor(() => expect(document.body.textContent).toMatch(/Set 3 end|Match end/), { timeout: 5000 })
+    await waitFor(() => expect(document.body.textContent).toMatch(/Set 3 end|Match end/))
     // no change of courts at the end of the set: its dialog is gone, none made
-    await waitFor(() => expect(switchOpen()).toBe(false), { timeout: 5000 })
+    await waitFor(() => expect(switchOpen()).toBe(false))
     expect(await set3Events('court_switch')).toHaveLength(switchesBefore)
     cleanup()
   }, 120000)
@@ -473,14 +478,14 @@ describe('Scoreboard_beach: point paths at every change total', () => {
     mount(matchId)
     await startSet()
     await rallies(Array.from({ length: 21 }, () => 'Point A'), { first: true })
-    await waitFor(() => expect(setEndOpen()).toBe(true), { timeout: 5000 })
+    await waitFor(() => expect(setEndOpen()).toBe(true))
     await settle()
 
     fireEvent.click(dialogDecisionChange('Confirm'))
     await waitFor(() => expect(button('Cancel')).toBeTruthy())
     expect(setEndOpen()).toBe(false)
     fireEvent.click(button('Cancel'))
-    await waitFor(() => expect(setEndOpen()).toBe(true), { timeout: 5000 })
+    await waitFor(() => expect(setEndOpen()).toBe(true))
     await settle()
     expect(await score()).toEqual([21, 0])
     expect(ttoOpen()).toBe(false)
@@ -494,28 +499,37 @@ describe('Scoreboard_beach: point paths at every change total', () => {
     const matchId = await setUpMatch()
     mount(matchId)
     await startSet()
+    // the rally in play: the team sanctions are refused, and so disabled (they
+    // looked tappable and a tap did nothing; one right after a point, before
+    // the screen showed it, was lost the same way)
+    const all = (text) => [...document.querySelectorAll('button')].filter(b => b.textContent.trim() === text)
+    for (const text of ['Improper request', 'Delay warning']) {
+      expect(all(text).length).toBeGreaterThanOrEqual(2)
+      expect(all(text).every(b => b.disabled)).toBe(true)
+    }
     await rallies(['Point A', 'Point A', 'Point A', 'Point A', 'Point A', 'Point A'], { first: true })
     expect(await score()).toEqual([6, 0])
+    for (const text of ['Improper request', 'Delay warning']) expect(all(text).every(b => !b.disabled)).toBe(true)
 
     const sanctionConfirm = () => [...document.querySelectorAll('[data-testid="sanction-confirm"] button')].at(-1)
     // The sixth point on screen too (the rally over): a sanction is asked
-    // only between rallies, and a tap while the screen still has the rally in
-    // play is ignored (rallies() waits for the database only)
-    await waitFor(() => expect(button('Start rally')).toBeTruthy(), { timeout: 5000 })
-    await waitFor(() => expect(button('Delay warning')).toBeTruthy(), { timeout: 5000 })
+    // only between rallies, its buttons disabled while the screen still has
+    // the rally in play (point() waits for that already; kept as a check)
+    await waitFor(() => expect(button('Start rally')).toBeTruthy())
+    await waitFor(() => expect(button('Delay warning')).toBeTruthy())
     fireEvent.click(button('Delay warning'))
-    await waitFor(() => expect(sanctionConfirm()).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(sanctionConfirm()).toBeTruthy())
     fireEvent.click(sanctionConfirm())
     await waitFor(async () => expect(await ofType('sanction')).toHaveLength(1))
     await settle()
-    await waitFor(() => expect(button('Delay penalty')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(button('Delay penalty')).toBeTruthy())
     fireEvent.click(button('Delay penalty'))
-    await waitFor(() => expect(sanctionConfirm()).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(sanctionConfirm()).toBeTruthy())
     fireEvent.click(sanctionConfirm())
     await waitFor(async () => expect(await ofType('sanction')).toHaveLength(2))
     await settle()
     expect((await score()).reduce((a, b) => a + b)).toBe(7)
-    await waitFor(() => expect(switchOpen()).toBe(true), { timeout: 5000 })
+    await waitFor(() => expect(switchOpen()).toBe(true))
     await switchCourts()
     expect(await ofType('court_switch')).toHaveLength(1)
     await settle()

@@ -64,7 +64,7 @@ const signatureJobs = async () => (await db.sync_queue.toArray()).filter(j => j.
 // saveMatchSignature writes the field, then queues the job: wait for the job
 const waitForSignatureJobs = async (n) => {
   let jobs
-  await waitFor(async () => { jobs = await signatureJobs(); expect(jobs).toHaveLength(n) }, { timeout: 5000 })
+  await waitFor(async () => { jobs = await signatureJobs(); expect(jobs).toHaveLength(n) })
   return jobs
 }
 

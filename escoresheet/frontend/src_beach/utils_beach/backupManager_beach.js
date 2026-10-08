@@ -11,6 +11,7 @@ import { apiFrom, apiStorage, apiMatchRestoreByPin } from '../lib_beach/apiClien
 import { isBackendAvailable, getApiUrl } from '../utils_beach/backendConfig_beach'
 import { sanitizeSimple } from './stringUtils'
 import { remarksForServer } from '../db_beach/remarksSync_beach'
+import { isTeam1LeftInSet, leftTeamInSet } from './courtSides_beach'
 
 // IndexedDB key for storing file system directory handle
 const BACKUP_DB_NAME = 'escoresheet_backup'
@@ -742,6 +743,125 @@ export async function restoreMatchInPlace(matchId, jsonData) {
   return matchId
 }
 
+const isAB = (v) => v === 'A' || v === 'B'
+const timeOf = (v) => {
+  const t = Date.parse(v)
+  return Number.isNaN(t) ? null : t
+}
+
+/**
+ * The live row's own Team A ('team1' / 'team2'), from its team names against
+ * the match's: "Swap A/B" queues the coin toss (sync queue) and writes the
+ * live state at once, so until the queue has run the cloud coin toss names
+ * the other team. null when the names do not tell (missing, or the same on
+ * both teams), then the coin toss's Team A is the live row's.
+ * @param {object|null} liveState
+ * @param {object} matchData  the cloud match row (team1_data / team2_data)
+ * @returns {'team1'|'team2'|null}
+ */
+export function liveRowTeamAKey(liveState, matchData) {
+  const name1 = (matchData?.team1_data || matchData?.team1_team)?.name
+  const name2 = (matchData?.team2_data || matchData?.team2_team)?.name
+  const a = liveState?.team_a_name
+  const b = liveState?.team_b_name
+  if (!name1 || !name2 || name1 === name2 || !a || !b) return null
+  if (a === name1 && b === name2) return 'team1'
+  if (a === name2 && b === name1) return 'team2'
+  return null
+}
+
+/**
+ * Is the live row older than the latest synced event (its last push failed
+ * and the queue synced events after it)? false when a time is unknown.
+ * @param {object|null} liveState
+ * @param {Array} events  server event rows (created_at / ts)
+ */
+function liveOlderThanEvents(liveState, events) {
+  const liveAt = timeOf(liveState?.last_event_ts || liveState?.updated_at)
+  if (liveAt == null) return false
+  return (events || []).some(e => {
+    const at = timeOf(e?.created_at || e?.ts)
+    return at != null && at > liveAt
+  })
+}
+
+/**
+ * The court sides the scorer last saved, for a restore by PIN: the latest
+ * synced event's state snapshot (setLeftTeamOverrides / set3LeftTeam, 'A' /
+ * 'B', as courtSides_beach reads them), else the live state's side_a for its
+ * set. {} when neither says.
+ *
+ * Over the snapshot, the live state's side only when it is a manual "Switch
+ * sides" (Manual changes: no event, only the live state it pushes knows it)
+ * not older than the snapshot's event. Not the live side otherwise: a TTO's
+ * change of courts is pushed to the live state, but its cloud event keeps
+ * courtSwitched: false (set locally only), so the restored match asks for the
+ * TTO again and its end makes the change (with the live side it was made
+ * twice); every other change of courts has its event and snapshot.
+ * @param {Array} events  server event rows (seq, state_snapshot)
+ * @param {object|null} liveState
+ * @param {{ liveAIsOtherTeam?: boolean }} [opts]  the live row's Team A is the
+ *   other team than the match's (liveRowTeamAKey): its side_a is B's
+ * @returns {{ setLeftTeamOverrides?: object, set3LeftTeam?: 'A'|'B' }}
+ */
+export function savedCourtSides(events, liveState, { liveAIsOtherTeam = false } = {}) {
+  const set = Number(liveState?.current_set)
+  const liveLeft = set >= 1 && (liveState.side_a === 'left' || liveState.side_a === 'right')
+    ? (liveState.side_a === 'left') !== liveAIsOtherTeam ? 'A' : 'B'
+    : null
+
+  const snapEvent = [...(events || [])]
+    .sort((a, b) => (b.seq || 0) - (a.seq || 0))
+    .find(e => {
+      const s = e.state_snapshot
+      return s && typeof s === 'object' && (s.setLeftTeamOverrides || isAB(s.set3LeftTeam))
+    })
+  if (snapEvent) {
+    const snap = snapEvent.state_snapshot
+    const overrides = Object.fromEntries(Object.entries(snap.setLeftTeamOverrides || {}).filter(([, v]) => isAB(v)))
+    let set3LeftTeam = isAB(snap.set3LeftTeam) ? snap.set3LeftTeam : undefined
+    const liveAt = timeOf(liveState?.last_event_ts || liveState?.updated_at)
+    const snapAt = timeOf(snapEvent.created_at || snapEvent.ts)
+    if (liveLeft && liveState.last_event_type === 'manual_side_change' &&
+        !(liveAt != null && snapAt != null && liveAt < snapAt) &&
+        leftTeamInSet(set, { setLeftTeamOverrides: overrides, set3LeftTeam }) !== liveLeft) {
+      // As the switch wrote it (switchSidesUpdate, beforeSetStart): set 3
+      // without an override as its start side, so its toss still moves it
+      if (set === 3 && !isAB(overrides[3])) set3LeftTeam = liveLeft
+      else overrides[set] = liveLeft
+    }
+    return {
+      ...(Object.keys(overrides).length ? { setLeftTeamOverrides: overrides } : {}),
+      ...(set3LeftTeam ? { set3LeftTeam } : {})
+    }
+  }
+  if (liveLeft) {
+    // Set 3 as its start side (set3LeftTeam), not an override: an override
+    // [3] outranks set3LeftTeam, so a restore in the interval before set 3
+    // would pin the court and the set 3 toss (it writes set3LeftTeam) would
+    // no longer move it. A later change of courts writes the override.
+    if (set === 3) return { set3LeftTeam: liveLeft }
+    return { setLeftTeamOverrides: { [set]: liveLeft } }
+  }
+  return {}
+}
+
+/**
+ * Which team a synced event row put on the left, from the row itself: the
+ * serving team's court-side lineup carries isServing. null when it cannot
+ * tell (no serve_team, or no lineup or both lineups marked).
+ */
+function rowLeftIsTeam1(row) {
+  const serving = row?.serve_team
+  if (serving !== 'team1' && serving !== 'team2') return null
+  const marked = (lineup) => !!lineup && typeof lineup === 'object' &&
+    Object.values(lineup).some(p => p && typeof p === 'object' && p.isServing)
+  const left = marked(row.lineup_left)
+  const right = marked(row.lineup_right)
+  if (left === right) return null
+  return left ? serving === 'team1' : serving !== 'team1'
+}
+
 /**
  * Fetch a match from the backend by Game N and Game PIN
  * (POST /api/match/restore-by-pin: exact match, attempt-limited, the PIN is
@@ -765,7 +885,7 @@ export async function fetchMatchByPin(gamePin, gameN, { restoreByPin = apiMatchR
     if (status === 404 || error.code === 'OV_NOT_FOUND') throw new Error('Match not found with this ID and PIN')
     throw new Error(error.message || 'Match lookup failed')
   }
-  const matchData = data?.match
+  let matchData = data?.match
   // The lookup does not know the sport: an indoor match with this number and
   // PIN is not one openbeach can restore
   if (!matchData || matchData.sport_type !== SPORT_TYPE) throw new Error('Match not found with this ID and PIN')
@@ -804,11 +924,44 @@ export async function fetchMatchByPin(gamePin, gameN, { restoreByPin = apiMatchR
   // Check if events already have lineup type events
   const hasLineupTypeEvents = events.some(e => e.type === 'lineup')
 
+  // Team A from the coin toss (the matches table has the coin_toss JSON, no
+  // coin_toss_team_a column: reading only that put Team A on team2 always)
+  let teamAKey = matchData.coin_toss?.team_a || matchData.coin_toss_team_a || 'team1'
+  const cloudTeamAKey = teamAKey
+  // The live row's own Team A (its team names): "Swap A/B" queues the coin
+  // toss and writes the live state at once, so with the swap still in the
+  // sync queue the cloud coin toss names the other team. A live row not
+  // older than the latest event is the scorer's latest: its Team A is the
+  // restored match's (the swap as swapTeamDesignation in coinToss_beach made
+  // it: the first server kept, the A / B serve flag follows). Its side_a and
+  // lineup_a are always read for its own Team A.
+  const liveTeamAKey = liveRowTeamAKey(liveState, matchData) || teamAKey
+  const cloudTeamA = matchData.coin_toss?.team_a
+  if ((cloudTeamA === 'team1' || cloudTeamA === 'team2') && liveTeamAKey !== cloudTeamA &&
+      !liveOlderThanEvents(liveState, events)) {
+    const toss = matchData.coin_toss
+    const firstServe = toss.first_serve === 'team1' || toss.first_serve === 'team2'
+      ? toss.first_serve
+      : (typeof toss.serve_a === 'boolean' ? (toss.serve_a ? cloudTeamA : liveTeamAKey) : null)
+    teamAKey = liveTeamAKey
+    matchData = {
+      ...matchData,
+      coin_toss: {
+        ...toss,
+        team_a: liveTeamAKey,
+        team_b: cloudTeamA,
+        ...(firstServe ? { serve_a: firstServe === liveTeamAKey, first_serve: firstServe } : {})
+      }
+    }
+  }
+  const liveAIsTeam1 = liveTeamAKey === 'team1'
+  // The match's court sides as the scorer last saved them (the restored
+  // match keeps them, and they place a row's court-side lineups below)
+  const courtSides = savedCourtSides(events, liveState, { liveAIsOtherTeam: liveTeamAKey !== teamAKey })
+
   // If no lineup type events, create them from event lineup_left/lineup_right columns
   // or from match_live_state
   if (!hasLineupTypeEvents) {
-    const teamAIsTeam1 = matchData.coin_toss_team_a === 'team1'
-
     // First try: get lineup from the latest event that has lineup_left/lineup_right
     const eventWithLineup = [...events]
       .sort((a, b) => (b.seq || 0) - (a.seq || 0))
@@ -816,19 +969,40 @@ export async function fetchMatchByPin(gamePin, gameN, { restoreByPin = apiMatchR
 
     if (eventWithLineup) {
       const setIndex = eventWithLineup.set_index || 1
-      // Determine left/right to team1/team2 mapping from the event
-      // lineup_left/lineup_right are stored by court position, need to map to team
-      // For now, use coin_toss_team_a to determine
-      const leftIsTeam1 = (setIndex % 2 === 1) ? (teamAIsTeam1) : (!teamAIsTeam1)
+      // The event's state snapshot has the lineups by team (A / B), so no
+      // side is guessed; only a snapshot of the event's own set (one taken in
+      // another set has that set's lineups). Otherwise lineup_left /
+      // lineup_right, which are by court side: the side the row itself marks
+      // (the serving team's lineup carries isServing), else the scorer's rule
+      // (courtSides_beach) with the match's saved sides. It guessed by the
+      // set number (odd sets A left), not beach's rule: the courts change
+      // every 7 points (5 in set 3) and at the TTO, not between sets.
+      const snap = eventWithLineup.state_snapshot
+      const bySnapshot = !!(snap && (snap.lineupA || snap.lineupB) &&
+        (snap.currentSetIndex == null || Number(snap.currentSetIndex) === Number(setIndex)))
+      // The row's own Team A: its snapshot's, else the cloud coin toss's (a
+      // row synced before a "Swap A/B" still in the sync queue, not the live
+      // row's Team A the restored match takes; the swap keeps the A / B sides)
+      const rowTeamAKey = snap?.teamAKey === 'team1' || snap?.teamAKey === 'team2' ? snap.teamAKey : cloudTeamAKey
+      const snapAIsTeam1 = rowTeamAKey === 'team1'
+      const markedLeft = rowLeftIsTeam1(eventWithLineup)
+      const leftIsTeam1 = markedLeft !== null
+        ? markedLeft
+        : isTeam1LeftInSet(setIndex, { coinTossTeamA: rowTeamAKey, ...courtSides })
 
-      const team1RawLineup = leftIsTeam1 ? eventWithLineup.lineup_left : eventWithLineup.lineup_right
-      const team2RawLineup = leftIsTeam1 ? eventWithLineup.lineup_right : eventWithLineup.lineup_left
+      const team1RawLineup = bySnapshot
+        ? (snapAIsTeam1 ? snap.lineupA : snap.lineupB)
+        : (leftIsTeam1 ? eventWithLineup.lineup_left : eventWithLineup.lineup_right)
+      const team2RawLineup = bySnapshot
+        ? (snapAIsTeam1 ? snap.lineupB : snap.lineupA)
+        : (leftIsTeam1 ? eventWithLineup.lineup_right : eventWithLineup.lineup_left)
       const team1Lineup = extractLineupNumbers(team1RawLineup)
       const team2Lineup = extractLineupNumbers(team2RawLineup)
 
       console.debug('[BackupManager] Extracted lineups from event:', {
         eventSeq: eventWithLineup.seq,
         setIndex,
+        bySnapshot,
         leftIsTeam1,
         team1Lineup,
         team2Lineup,
@@ -864,7 +1038,7 @@ export async function fetchMatchByPin(gamePin, gameN, { restoreByPin = apiMatchR
 
       if (lineupANumbers) {
         const payload = {
-          team: teamAIsTeam1 ? 'team1' : 'team2',
+          team: liveAIsTeam1 ? 'team1' : 'team2',
           lineup: lineupANumbers,
           isInitial: true
         }
@@ -879,7 +1053,7 @@ export async function fetchMatchByPin(gamePin, gameN, { restoreByPin = apiMatchR
 
       if (lineupBNumbers) {
         const payload = {
-          team: teamAIsTeam1 ? 'team2' : 'team1',
+          team: liveAIsTeam1 ? 'team2' : 'team1',
           lineup: lineupBNumbers,
           isInitial: true
         }
@@ -900,6 +1074,9 @@ export async function fetchMatchByPin(gamePin, gameN, { restoreByPin = apiMatchR
     sets: setsResult.data || [],
     events,
     liveState, // Include live state for additional data
+    // The court sides the scorer last saved (setLeftTeamOverrides /
+    // set3LeftTeam): the imported match keeps them
+    courtSides,
     // The backend never returns game_pin: keep the one that proved access, so
     // the imported match can still claim its cloud copy
     gamePin: String(gamePin ?? '').trim()
@@ -912,6 +1089,7 @@ export async function fetchMatchByPin(gamePin, gameN, { restoreByPin = apiMatchR
  */
 export async function importMatchFromSupabase(cloudData) {
   const { match, sets, events } = cloudData
+  const courtSides = cloudData.courtSides || {}
 
   let importedMatchId = null
 
@@ -988,6 +1166,9 @@ export async function importMatchFromSupabase(cloudData) {
       coinTossTeamB: coinToss.team_b || match.coin_toss_team_b,
       coinTossServeA: coinToss.serve_a !== undefined ? coinToss.serve_a : match.coin_toss_serve_a,
       firstServe: coinToss.first_serve || match.first_serve,
+      // Court sides (courtSides_beach): without them the court showed A on the left
+      ...(courtSides.setLeftTeamOverrides ? { setLeftTeamOverrides: { ...courtSides.setLeftTeamOverrides } } : {}),
+      ...(courtSides.set3LeftTeam ? { set3LeftTeam: courtSides.set3LeftTeam } : {}),
       // Match result: prefer JSONB, fallback to legacy
       setResults: results.set_results || match.set_results,
       winner: results.winner || match.winner,

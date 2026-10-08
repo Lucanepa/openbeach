@@ -24,12 +24,15 @@ describe('relay device label', () => {
     expect(subscribeMessage('match_1')).toEqual({ type: 'subscribe-match', matchId: 'match_1' })
   })
 
+  // A cold import of the whole referee page (vi.resetModules): about 2 s
+  // alone, past the default 5 s under the full suite's load. Nothing here
+  // waits on a timer; only the import is slow.
   it('the referee page labels its socket when it loads', async () => {
     vi.resetModules()
     const sync = await import('../../utils_beach/serverDataSync_beach')
     await import('../../RefereeApp_beach')
     expect(sync.subscribeMessage('match_1').device).toBe('referee')
-  })
+  }, 30000)
 
   it('a labelled referee shows as connected in the scorer dialog', () => {
     // The relay's answer for a subscriber that sent device 'referee'
