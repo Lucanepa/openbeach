@@ -9956,9 +9956,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 const setupConfirmed = betweenSetsSetupConfirmed || (data?.set?.index === 3 && set3SetupConfirmed)
                                 const intervalEnded = !betweenSetsCountdown || betweenSetsCountdown.countdown <= 0
 
-                                if (betweenSetsCountdown && betweenSetsCountdown.isActive && (data?.match?.status === 'between_sets' || data?.match?.status === 'set_complete')) {
+                                // The interval runs (as OpenVolley): End set interval, Start set
+                                // once it has ended. The countdown shows here when the setup
+                                // panel (sides / serve, set 3 coin toss), which has its own, is gone.
+                                if (isBetweenSets && betweenSetsCountdown && betweenSetsCountdown.countdown > 0) {
+                                  const setupPanelShown = data?.set?.index === 3 ? !set3SetupConfirmed : !betweenSetsSetupConfirmed
                                   return (
                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                                      {!setupPanelShown && (<>
                                       {/* Countdown display */}
                                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                         <div className="font-semibold uppercase tracking-[0.12em] text-stone-500" style={{
@@ -9991,16 +9996,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                           transition: 'width 1s linear, background 0.3s'
                                         }} />
                                       </div>
-                                      {/* End Interval button - only show if setup confirmed */}
-                                      {setupConfirmed && (
-                                        <button
-                                          className={cn('rally-btn start', SB_RALLY_START)}
-                                          onClick={endSetInterval}
-                                          style={{ marginTop: '8px', padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'max(64px, calc(92px * var(--scale-factor, 1)))' }}
-                                        >
-                                          {t('scoreboard.buttons.endSetInterval', 'End set interval')}
-                                        </button>
-                                      )}
+                                      </>)}
+                                      <button
+                                        className={cn('rally-btn start', SB_RALLY_START)}
+                                        onClick={endSetInterval}
+                                        style={{ padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'max(64px, calc(92px * var(--scale-factor, 1)))' }}
+                                      >
+                                        {t('scoreboard.buttons.endSetInterval', 'End set interval')}
+                                      </button>
                                     </div>
                                   )
                                 }
