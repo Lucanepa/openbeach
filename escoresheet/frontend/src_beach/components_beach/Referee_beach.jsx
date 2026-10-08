@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useAlert } from '../contexts_beach/AlertContext_beach'
 import i18n from '../i18n'
 import { getMatchData, subscribeToMatchData, listAvailableMatches, getWebSocketStatus, forceReconnect } from '../utils_beach/serverDataSync_beach'
+import { createLiveStateTracker } from '../utils_beach/liveStateTracker_beach'
 import { useRealtimeConnection, CONNECTION_TYPES, CONNECTION_STATUS } from '../hooks_beach/useRealtimeConnection_beach'
 // Beach volleyball ball image
 const ballImage = '/beachball.png'
@@ -24,6 +25,7 @@ import { Card } from '../ui/volleyui/Card.jsx'
 import { Button } from '../ui/volleyui/Button.jsx'
 import { StatusPill } from '../ui/volleyui/StatusPill.jsx'
 import { Modal as KitModal } from '../ui/volleyui/Modal.jsx'
+import { ConnectionBanner } from '../ui/volleyui/Banner.jsx'
 import { NarrowScreenOverlay } from './dashboards/EntryKit_beach.jsx'
 import { HEADER_BAR, HEADER_BTN, HEADER_BTN_ON, MENU_PANEL, MENU_SUBROW, MENU_ROW_ON } from './chromeClasses_beach'
 import { timeSecondsLabel } from '../ui/volleyui/format.js'
@@ -164,6 +166,10 @@ function useSyncedFontSize(texts, containerWidth, baseFontSize, minFontSize, isS
 
   return result
 }
+
+// The realtime link may be down this long (a quick reconnect) before the
+// referee is warned that the score may be out of date
+const LINK_DOWN_AFTER_MS = 5000
 
 export default function Referee({ matchId, onExit, isMasterMode }) {
   const { t } = useTranslation()
@@ -318,10 +324,23 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   const DATA_UPDATE_DEBOUNCE_MS = 150 // Wait 150ms before applying new data
 
   const lastLiveStateRef = useRef(null)
+  // When the last relay bundle push was applied: a refetch started before it is older
+  const lastPushAtRef = useRef(0)
+  const fetchSeqRef = useRef(0)
+  // Newest live state seen from any source (relay push, relay bundle, database
+  // row) and the last bundle as received: a newer live state wins over an
+  // older bundle's score, and an older one never replaces it (liveStateTracker_beach).
+  const liveTrackerRef = useRef(null)
+  if (liveTrackerRef.current === null) liveTrackerRef.current = createLiveStateTracker()
+  useEffect(() => {
+    liveTrackerRef.current.reset()
+    lastLiveStateRef.current = null
+  }, [matchId])
 
   // Helper function to update match data state (with debounce to reduce flickering)
-  const updateMatchDataState = useCallback((result) => {
-    if (result && result.success) {
+  const updateMatchDataState = useCallback((incoming) => {
+    if (incoming && incoming.success) {
+      const result = liveTrackerRef.current.bundle(incoming)
       const sets = (result.sets || []).sort((a, b) => a.index - b.index)
       const currentSet = sets.find(s => !s.finished) || null
 
@@ -481,8 +500,13 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     if (!matchId) {
       return
     }
+    const seq = ++fetchSeqRef.current
+    const startedAt = Date.now()
     try {
       const result = await getMatchData(matchId)
+      // A newer fetch was started, or a relay bundle push landed while this
+      // one was in flight: this answer may be older than what is shown.
+      if (seq !== fetchSeqRef.current || lastPushAtRef.current > startedAt) return
       if (result && result.success) {
         fetchFailureCountRef.current = 0 // Reset on success
         updateMatchDataState(result)
@@ -522,6 +546,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
     // Only update if data is complete (has teams and sets)
     if (result.team1 && result.team2 && result.sets?.length > 0) {
+      lastPushAtRef.current = receiveTimestamp
       updateMatchDataState(result)
     } else {
       console.debug('[Referee] Received partial data (missing teams/sets), skipping UI update')
@@ -531,10 +556,18 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   // The scorer's live state from the relay (live-state-update, every point):
   // the score, sides, serve and timeouts move without waiting for the cloud
   // (a venue relay has none). The next bundle keeps it (lastLiveStateRef).
+  // A late copy of an older state is dropped; a newer one also moves the
+  // score of the last bundle at once (liveStateTracker_beach).
   const handleRelayLiveState = useCallback((liveState) => {
-    lastLiveStateRef.current = liveState
-    setData(prev => (prev ? { ...prev, liveState } : prev))
-  }, [])
+    const tracker = liveTrackerRef.current
+    if (!tracker.liveState(liveState)) return
+    if (tracker.lastBundle) {
+      updateMatchDataState(tracker.lastBundle)
+      return
+    }
+    lastLiveStateRef.current = tracker.newest
+    setData(prev => (prev ? { ...prev, liveState: tracker.newest } : prev))
+  }, [updateMatchDataState])
 
   // Handle realtime actions (timeout, set_end)
   const handleRealtimeAction = useCallback((action, actionData) => {
@@ -619,6 +652,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   // Use realtime connection hook (handles Supabase + WebSocket with fallback)
   const {
     status: realtimeStatus,
+    activeConnection: realtimeConnection,
     error: realtimeError,
     lastUpdate: realtimeLastUpdate,
     forceReconnect: realtimeReconnect
@@ -630,6 +664,52 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     onDeleted: handleMatchDeleted,
     enabled: !isMasterMode && !!matchId
   })
+
+  // No link to the scoresheet: the device is offline, or no transport of the
+  // realtime connection has been up for a few seconds (a quick reconnect is
+  // not worth a warning). The dashboard then shows a warning: what it shows
+  // may be out of date. The connection's own state decides, not the relay
+  // socket: in AUTO mode the database fallback still brings the updates while
+  // the relay is down.
+  const [linkDown, setLinkDown] = useState(false)
+  const realtimeLinkRef = useRef({ status: realtimeStatus, connection: realtimeConnection })
+  realtimeLinkRef.current = { status: realtimeStatus, connection: realtimeConnection }
+  // This component's own match_live_state channel (below) is subscribed
+  const dbChannelUpRef = useRef(false)
+  useEffect(() => {
+    if (isMasterMode || !matchId) {
+      setLinkDown(false)
+      return undefined
+    }
+    let downSince = null
+    const transportUp = () => {
+      // The live-state channel brings the score even while the relay is down
+      if (dbChannelUpRef.current) return true
+      const { status, connection } = realtimeLinkRef.current
+      if (status !== CONNECTION_STATUS.CONNECTED && status !== CONNECTION_STATUS.FALLBACK) return false
+      // The relay as the active transport: its socket must be open right now
+      if (connection === 'websocket') return getWebSocketStatus(matchId) === 'connected'
+      return true
+    }
+    const check = () => {
+      const offline = typeof navigator !== 'undefined' && navigator.onLine === false
+      if (offline || !transportUp()) {
+        if (downSince === null) downSince = Date.now()
+      } else {
+        downSince = null
+      }
+      setLinkDown(offline || (downSince !== null && Date.now() - downSince >= LINK_DOWN_AFTER_MS))
+    }
+    check()
+    const timer = setInterval(check, 2000)
+    window.addEventListener('online', check)
+    window.addEventListener('offline', check)
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('online', check)
+      window.removeEventListener('offline', check)
+    }
+  }, [matchId, isMasterMode])
 
   // The relay room of the match (after the PIN step: subscribe-match carries
   // the PIN / match token, so the relay sends the full bundle). It pushes the
@@ -722,7 +802,10 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           }
           lastProcessedEventRef.current = { time: now, updatedAt: state.updated_at }
 
-          // Check for scorer attention trigger
+          // Check for scorer attention trigger. Before the late-copy check:
+          // the alarm only sets this column and keeps the row's updated_at
+          // (the scorer's last key event), which the relay's live state of a
+          // later rally start has already passed.
           if (state.scorer_attention_trigger && state.scorer_attention_trigger !== lastAttentionTriggerRef.current) {
             setAttentionModalOpen(true)
             lastAttentionTriggerRef.current = state.scorer_attention_trigger
@@ -733,6 +816,11 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
               }
             } catch (e) { /* ignore */ }
           }
+
+          // A late copy of an older state than the newest seen (the relay
+          // push and the database row arrive out of order): its score,
+          // timeout and interval flags are out of date, so it changes nothing.
+          if (liveTrackerRef.current.isLate(state)) return
 
           console.debug('[Referee] Live state update:', {
             event: state.last_event_type,
@@ -854,16 +942,25 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             })
           }
 
-          // ALWAYS refetch data on ANY change - handles points, lineups, sanctions, undoes, replays, etc.
+          // Show this row's score now when it is newer than the bundle shown
+          // (the scorer's sync can land after its live state), then refetch
+          // on ANY change - handles points, lineups, sanctions, undoes,
+          // replays, etc.; an older copy read back never rolls the score back.
+          const tracker = liveTrackerRef.current
+          if (tracker.liveState(state) && tracker.lastBundle) updateMatchDataState(tracker.lastBundle)
           fetchFreshData()
         }
       )
-      .subscribe()
+      // A transport of its own: the offline warning counts it (linkDown)
+      .subscribe((status) => {
+        dbChannelUpRef.current = status === 'SUBSCRIBED'
+      })
 
     return () => {
+      dbChannelUpRef.current = false
       supabase.removeChannel(channel)
     }
-  }, [supabaseMatchUuid, isMasterMode, data?.match?.coinTossTeamA, fetchFreshData])
+  }, [supabaseMatchUuid, isMasterMode, data?.match?.coinTossTeamA, fetchFreshData, updateMatchDataState])
 
   // Handle timeout countdown timer
   useEffect(() => {
@@ -2102,6 +2199,13 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     }}>
       {/* Narrow screen blocking overlay */}
       {(viewportWidth < 357 || viewportHeight < 650) && <NarrowScreenOverlay t={t} />}
+
+      {/* No link to the scoresheet: what is shown may be out of date */}
+      {linkDown && (
+        <ConnectionBanner state="offline">
+          {t('refereeDashboard.linkDown', 'Offline: no connection to the scoresheet. Score and server may be out of date.')}
+        </ConnectionBanner>
+      )}
 
       {/* Debug overlay - triple-tap to show */}
       {!isMasterMode && <WsDebugOverlay matchId={matchId} />}

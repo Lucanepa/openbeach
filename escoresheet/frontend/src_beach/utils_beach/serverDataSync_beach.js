@@ -113,15 +113,32 @@ export function matchAccessHeaders(matchId) {
   return h
 }
 
+// What this tablet is, for the scorer's Connect tablets status (relay
+// /api/server/connections lists a labelled subscriber under that role). A
+// label only: it grants nothing.
+let relayDevice = null
+
 /**
- * The subscribe-match message for a match key, with what proves access to it
- * (PIN / match token of the PIN check).
+ * Label this page's relay subscriptions (RefereeApp_beach: 'referee').
+ * Applies to subscriptions opened from now on and to the re-subscribe after
+ * every reconnect. Ported from OpenVolley setRelayDevice (570198f3); beach
+ * has no bench app, so no team.
+ * @param {'referee'|null} device
+ */
+export function setRelayDevice(device) {
+  relayDevice = device ? { device } : null
+}
+
+/**
+ * The subscribe-match message for a match key, with this page's device label
+ * and what proves access to it (PIN / match token of the PIN check).
  */
 export function subscribeMessage(matchId) {
   const access = matchAccessFor(matchId)
   return {
     type: 'subscribe-match',
     matchId: String(matchId),
+    ...(relayDevice || {}),
     ...(access?.pin ? { pin: access.pin } : {}),
     ...(access?.token ? { token: access.token } : {})
   }

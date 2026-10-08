@@ -155,14 +155,25 @@ describe('Support & feedback', () => {
 })
 
 describe('Connection setup', () => {
-  it('light, QR codes drawn offline, named switches per role', async () => {
+  it('light, QR codes drawn offline, the referee switch named by its role; three steps', async () => {
     const { container } = render(
       <ConnectionSetupModal open onClose={() => {}} matchId={1} matchSeedKey="match_1_x" match={{ refereeConnectionEnabled: true }} refereePin="123456" />
     )
-    const dialog = await screen.findByRole('dialog', { name: 'Connection setup' })
+    // Connect tablets in three steps (OpenVolley 44a2ee72)
+    const dialog = await screen.findByRole('dialog', { name: 'Connect tablets' })
     expect(dialog.closest('.legacy-dark')).toBeNull()
-    expect(screen.getByRole('switch', { name: 'Referee dashboard' })).toHaveAttribute('aria-checked', 'true')
+    expect(within(dialog).getByText('How tablets connect')).toBeInTheDocument()
+    expect(within(dialog).getByText('Which tablet')).toBeInTheDocument()
+    expect(within(dialog).getByText('Scan, then enter the PIN')).toBeInTheDocument()
+    expect(screen.getByRole('switch', { name: 'Let Referee in' })).toHaveAttribute('aria-checked', 'true')
+    // beach has no bench app: no bench row and no bench link
+    expect(within(dialog).queryByText(/bench/i)).toBeNull()
     expect(container.ownerDocument.querySelector('img[src*="qrserver"]')).toBeNull()
     expect(dialog.querySelector('svg')).not.toBeNull()
+  })
+
+  it('renders nothing while closed', () => {
+    render(<ConnectionSetupModal open={false} onClose={() => {}} matchId={1} />)
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 })

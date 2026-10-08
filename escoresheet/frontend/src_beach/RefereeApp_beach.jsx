@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, ChevronRight, CalendarX2, Loader2, RefreshCw } from 'lucide-react'
-import { validatePin, listAvailableMatches, validatePinSupabase, listAvailableMatchesSupabase, forgetMatchAccess } from './utils_beach/serverDataSync_beach'
+import { validatePin, listAvailableMatches, validatePinSupabase, listAvailableMatchesSupabase, forgetMatchAccess, setRelayDevice } from './utils_beach/serverDataSync_beach'
 import Referee from './components_beach/Referee_beach'
 import UpdateBanner from './components_beach/UpdateBanner_beach'
 import DashboardHeader from './components_beach/DashboardHeader_beach'
@@ -17,6 +17,10 @@ import { EntryPage, EntryCard, PinInput, ListLabel, GameRow } from './components
 import { db } from './db_beach/db_beach'
 import { getRelayWebSocketUrl, isLanBackendUrl, isRelayOriginPage } from './utils_beach/backendConfig_beach'
 import { loadRefereeMatches } from './utils_beach/refereeMatches_beach'
+
+// This page's relay sockets are a referee tablet: the scorer's Connect
+// tablets dialog shows it as connected (only referee-main_beach loads this)
+setRelayDevice('referee')
 
 // A relay on the internet (the cloud) may need longer to answer than one on the venue LAN
 const isCloudRelayUrl = (wsUrl) => !isLanBackendUrl(String(wsUrl).replace(/^ws/, 'http'))
@@ -71,6 +75,33 @@ export async function validateRefereePin(pin, { checkCloud = validatePinSupabase
 // Numeric LAN ids stay numbers, seed keys stay strings
 const toMatchId = (id) => (/^\d+$/.test(String(id)) ? Number(id) : id)
 
+/**
+ * The match a link names (`?match=<seed key>`: the scorer's Connect tablets
+ * code), or null. The link only preselects the match; the referee still
+ * enters the PIN (ported from OpenVolley RefereeApp, 23054276).
+ * @param {string} [search] window.location.search
+ */
+export function linkedMatchKey(search = typeof window !== 'undefined' ? window.location.search : '') {
+  try {
+    const key = new URLSearchParams(search || '').get('match')
+    return key && key.trim() ? key.trim() : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The game number of the linked match in the referee's game list (listed by
+ * its seed key), or null when it is not listed (yet).
+ * @param {string|null} key
+ * @param {object[]} matches
+ */
+export function linkedGameNumber(key, matches) {
+  if (!key || !Array.isArray(matches)) return null
+  const listed = matches.find(m => m && [m.id, m.seed_key, m.external_id].some(v => v != null && String(v) === key))
+  return listed?.gameNumber != null && listed.gameNumber !== '' ? String(listed.gameNumber) : null
+}
+
 export default function RefereeApp() {
   const { t, i18n } = useTranslation()
   const [pinInput, setPinInput] = useState('')
@@ -80,6 +111,8 @@ export default function RefereeApp() {
   const [isLoading, setIsLoading] = useState(false)
   const [availableMatches, setAvailableMatches] = useState([])
   const [selectedGameNumber, setSelectedGameNumber] = useState('')
+  // A match link (QR code) preselects its game; the PIN is still asked
+  const [linkedKey] = useState(() => linkedMatchKey())
   const [loadingMatches, setLoadingMatches] = useState(false)
   const [showGameModal, setShowGameModal] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -368,6 +401,13 @@ export default function RefereeApp() {
     }
   }, [])
   
+  // The linked match in the game list (by its seed key) gives its game number
+  useEffect(() => {
+    if (!linkedKey || selectedGameNumber) return
+    const gameNumber = linkedGameNumber(linkedKey, availableMatches)
+    if (gameNumber) setSelectedGameNumber(gameNumber)
+  }, [linkedKey, availableMatches, selectedGameNumber])
+
   const handleSelectGame = (gameNumber) => {
     setSelectedGameNumber(gameNumber)
     setShowGameModal(false)
