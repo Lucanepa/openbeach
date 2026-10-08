@@ -285,18 +285,20 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
   )
   let overlay = null
   if (centre?.kind === 'timeout') {
+    // Under 160px high (the point buttons at 360x780), so it never makes the
+    // view scroll where the point buttons are square
     overlay = (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, height: '100%', padding: 10, boxSizing: 'border-box', borderRadius: 16, background: 'var(--ov-card)', border: '1px solid var(--ov-hairline)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, flex: 1, padding: 10, boxSizing: 'border-box', borderRadius: 16, background: 'var(--ov-card)', border: '1px solid var(--ov-hairline)' }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--ov-text-secondary)', textAlign: 'center' }}>{t('scoreboard.timeoutFor', { team: centre.teamName })}</div>
-        {countdown(centre, 10)}
-        <button type="button" style={{ ...outlineButton, width: 'auto', padding: '0 24px' }} onClick={() => actions.stopTimeout()}>{t('scoreboard.buttons.stopTimeout')}</button>
+        {countdown(centre, 10, 44)}
+        <button type="button" style={{ ...outlineButton, minHeight: 44, width: 'auto', padding: '0 24px' }} onClick={() => actions.stopTimeout()}>{t('scoreboard.buttons.stopTimeout')}</button>
       </div>
     )
   } else if (between) {
     // The interval: its countdown, the next set's sides and serve (not before
     // the set 3 toss), then Start set (greyed until the toss is recorded)
     overlay = (
-      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8, height: '100%', overflowY: 'auto' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8, flex: 1 }}>
         {typeof between.countdown === 'number' && (
           // One line, as the desktop's "Set interval 0:59", and its bar
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
@@ -319,7 +321,7 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
       </div>
     )
   } else if (!inPlay) {
-    overlay = startButton({ height: '100%' })
+    overlay = startButton({ flex: 1 })
   }
   // The point buttons: squares as wide as their column (.phone-square in
   // styles_beach.css). On a screen too short for the whole layout (a
@@ -413,10 +415,14 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
           <>{pointButton(left)}{pointButton(right)}</>
         ) : (
           <>
-            {/* Two square slots keep the height of the point buttons */}
-            <div aria-hidden="true" className={squareClass} />
-            <div aria-hidden="true" className={squareClass} />
-            <div style={{ position: 'absolute', top: 0, left: 12, right: 12, bottom: 8 }}>{overlay}</div>
+            {/* Two square slots keep the height of the point buttons; the
+                centre shares their row, in the flow: on a short screen, where
+                the point buttons are low, the row grows to the centre's
+                height (the view scrolls) rather than the countdown or the
+                interval running over the actions or being cut */}
+            <div aria-hidden="true" className={squareClass} style={{ gridRow: 1, gridColumn: 1 }} />
+            <div aria-hidden="true" className={squareClass} style={{ gridRow: 1, gridColumn: 2 }} />
+            <div data-testid="phone-centre" style={{ gridRow: 1, gridColumn: '1 / -1', minWidth: 0, display: 'flex', flexDirection: 'column' }}>{overlay}</div>
           </>
         )}
       </section>
