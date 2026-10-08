@@ -253,6 +253,24 @@ describe('useServiceWorker', () => {
       expect(window.location.reload).toHaveBeenCalledTimes(1)
     })
 
+    // The desktop app at start: the home screen's banner and
+    // applyUpdateAtStart both applied the same waiting build at once (two
+    // SKIP_WAITING, two reloads). A second call joins the one under way.
+    it('a second call while one is under way joins it: one SKIP_WAITING, one reload', async () => {
+      const waiting = { postMessage: vi.fn(() => setTimeout(() => fire(swListeners, 'controllerchange'), 5)) }
+      mockRegistration.waiting = waiting
+      mockServiceWorker.getRegistration.mockResolvedValue(mockRegistration)
+
+      await Promise.all([applyServiceWorkerUpdate(), applyServiceWorkerUpdate()])
+
+      expect(waiting.postMessage).toHaveBeenCalledTimes(1)
+      expect(window.location.reload).toHaveBeenCalledTimes(1)
+      // once done, a later call works again
+      mockRegistration.waiting = null
+      await applyServiceWorkerUpdate()
+      expect(window.location.reload).toHaveBeenCalledTimes(2)
+    })
+
     it('still reloads when no worker is waiting', async () => {
       mockServiceWorker.getRegistration.mockResolvedValue(undefined)
 

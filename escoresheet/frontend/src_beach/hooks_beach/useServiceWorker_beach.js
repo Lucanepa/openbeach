@@ -37,6 +37,11 @@ function waitUntilInstalled(worker, timeoutMs) {
   })
 }
 
+// The update under way, if any: a second caller joins it (the desktop app's
+// home-screen banner and applyUpdateAtStart both applied the same waiting
+// build at once: two SKIP_WAITING, two reloads)
+let applying = null
+
 /**
  * "Refresh to update" (UpdateBanner): activate the waiting service worker and
  * reload this page with it (same URL, query and hash kept).
@@ -50,7 +55,12 @@ function waitUntilInstalled(worker, timeoutMs) {
  * next load install a fresh one, whose clients.claim() then took over every
  * open page of the app.)
  */
-export async function applyServiceWorkerUpdate({ clearIndexedDB = false, timeoutMs = 4000 } = {}) {
+export function applyServiceWorkerUpdate(opts) {
+  if (!applying) applying = runServiceWorkerUpdate(opts).finally(() => { applying = null })
+  return applying
+}
+
+async function runServiceWorkerUpdate({ clearIndexedDB = false, timeoutMs = 4000 } = {}) {
   try {
     if (clearIndexedDB) await deleteAllIndexedDB()
 
