@@ -18,6 +18,7 @@ import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 
 import { sanitizeForFilename } from '../utils_beach/stringUtils_beach'
 import { openAppWindow } from '../utils_beach/openAppWindow_beach'
+import { waitForScoresheetPdf, PDF_FAIL } from '../utils_beach/scoresheetPdfRequest_beach'
 import { formatTimeLocal } from '../utils_beach/timeUtils_beach'
 import { saveMatchSignature, signatureEditLocked, signaturesPayload, clearedPostMatchSignatures } from '../utils_beach/signatures_beach'
 import CountryFlag from './CountryFlag_beach'
@@ -338,6 +339,29 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
   const [showRemarksModal, setShowRemarksModal] = useState(false)
   const [remarksText, setRemarksText] = useState('')
   const remarksTextareaRef = useRef(null)
+  // The approval's PDF: Cancel during the wait, the scorer's choice when no
+  // PDF came (Retry / Approve without PDF / Cancel), the page n of m
+  const exportAbortRef = useRef(null)
+  const pdfChoiceRef = useRef(null)
+  const [pdfFailure, setPdfFailure] = useState(null) // { reason, message }
+  const [exportPdfProgress, setExportPdfProgress] = useState(null) // { page, pages }
+  const [isClosing, setIsClosing] = useState(false)
+  const askPdfFailure = (err) => new Promise((resolve) => {
+    pdfChoiceRef.current = resolve
+    setPdfFailure({ reason: err?.reason || PDF_FAIL.FAILED, message: err?.message || '' })
+  })
+  const choosePdfFailure = (choice) => {
+    const resolve = pdfChoiceRef.current
+    pdfChoiceRef.current = null
+    setPdfFailure(null)
+    resolve?.(choice)
+  }
+
+  // The approval is in the match row: a remount of this page (or a reload)
+  // keeps the approved view instead of falling back to "Confirm and approve"
+  useEffect(() => {
+    if (data?.match?.approved) setIsApproved(true)
+  }, [data?.match?.approved])
 
   // Auto-populate FIVB remarks for forfait matches if remarks are empty
   useEffect(() => {
@@ -899,46 +923,38 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       }
       sessionStorage.setItem('scoresheetData', JSON.stringify(scoresheetData))
 
-      // The PDF comes from the scoresheet window (postMessage 'pdfBlob', or
-      // 'pdfError' when it could not render). A PDF that does not come (popup
-      // blocked, render error, 30 s) no longer stops the approval: the final
-      // JSON, the approval and the ZIP (without the PDF) go ahead and the
-      // scorer is told to save the PDF from the scoresheet.
+      // The PDF comes from the scoresheet window (scoresheetPdfRequest_beach).
+      // The wait ends at once when that window is closed, stops answering or
+      // the scorer presses Cancel; the scorer then chooses: Retry, Approve
+      // without PDF (the JSON, the approval and the ZIP go ahead and the PDF
+      // is saved from the scoresheet later) or Cancel (nothing is approved).
+      // OpenBeach 2026-10-08: closing the window hung the approval.
       let pdfResult = null
       let pdfError = null
-      try {
-        pdfResult = await new Promise((resolve, reject) => {
-          let timeout = null
-          const handler = (event) => {
-            if (event.origin !== window.location.origin) return // our own scoresheet window only
-            if (event.data?.type === 'pdfBlob') {
-              clearTimeout(timeout)
-              window.removeEventListener('message', handler)
-              const blob = new Blob([event.data.arrayBuffer], { type: 'application/pdf' })
-              resolve({ blob, filename: event.data.filename })
-            } else if (event.data?.type === 'pdfError') {
-              clearTimeout(timeout)
-              window.removeEventListener('message', handler)
-              reject(new Error(event.data.message || 'PDF generation failed'))
-            }
-          }
-          window.addEventListener('message', handler)
-          timeout = setTimeout(() => {
-            window.removeEventListener('message', handler)
-            reject(new Error('PDF generation timed out'))
-          }, 30000)
-          // Open scoresheet window with getBlob action
-          // In the Android app an in-app view (a window.open replaced this page)
-          const opened = openAppWindow('/scoresheet_beach.html?action=getBlob', { features: 'width=1600,height=1200', title: t('matchEnd.scoresheet') })
-          if (!opened.ok) {
-            clearTimeout(timeout)
-            window.removeEventListener('message', handler)
-            reject(new Error('The scoresheet window was blocked'))
-          }
-        })
-      } catch (err) {
-        pdfError = err
-        console.warn('[MatchEnd] No PDF:', err)
+      for (;;) {
+        const abort = new AbortController()
+        exportAbortRef.current = abort
+        setExportPdfProgress(null)
+        try {
+          pdfResult = await waitForScoresheetPdf(
+            // a popup, a desktop app window or the Android in-app view
+            () => openAppWindow('/scoresheet_beach.html?action=getBlob', { features: 'width=1600,height=1200', title: t('matchEnd.scoresheet') }),
+            { signal: abort.signal, onProgress: setExportPdfProgress }
+          )
+          break
+        } catch (err) {
+          console.warn('[MatchEnd] No PDF:', err)
+          // Cancel during the wait: stop here, nothing approved
+          const choice = err?.reason === PDF_FAIL.CANCELLED ? 'cancel' : await askPdfFailure(err)
+          if (choice === 'retry') continue
+          if (choice === 'skip') { pdfError = err; break }
+          exportAbortRef.current = null
+          setDownloadProgress(null)
+          setIsSaving(false)
+          return
+        } finally {
+          exportAbortRef.current = null
+        }
       }
       setDownloadProgress(prev => ({ ...prev, pdf: true }))
 
@@ -998,40 +1014,44 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       zipLink.href = URL.createObjectURL(zipBlob)
       zipLink.click()
 
-      // Save to sync queue if official match with seed_key
-      if (!match.test && match?.seed_key) {
-        // Collect all signatures for the approval JSONB field
-        const approvalData = {
-          approvedAt: new Date().toISOString(),
-          signatures: {
-            captainA: team1Label === 'A' ? match.team1PostGameCaptainSignature : match.team2PostGameCaptainSignature,
-            captainB: team1Label === 'B' ? match.team1PostGameCaptainSignature : match.team2PostGameCaptainSignature,
-            scorer: match.scorerSignature || null,
-            asstScorer: match.asstScorerSignature || null,
-            ref1: match.ref1Signature || null,
-            ref2: match.ref2Signature || null
+      // The approval and its sync entry in one transaction: approved and
+      // queued, or neither
+      await db.transaction('rw', db.sync_queue, db.matches, async () => {
+        // Save to sync queue if official match with seed_key
+        if (!match.test && match?.seed_key) {
+          // Collect all signatures for the approval JSONB field
+          const approvalData = {
+            approvedAt: new Date().toISOString(),
+            signatures: {
+              captainA: team1Label === 'A' ? match.team1PostGameCaptainSignature : match.team2PostGameCaptainSignature,
+              captainB: team1Label === 'B' ? match.team1PostGameCaptainSignature : match.team2PostGameCaptainSignature,
+              scorer: match.scorerSignature || null,
+              asstScorer: match.asstScorerSignature || null,
+              ref1: match.ref1Signature || null,
+              ref2: match.ref2Signature || null
+            }
           }
+
+          await db.sync_queue.add({
+            resource: 'match',
+            action: 'update',
+            payload: {
+              id: match.seed_key,
+              status: 'approved',
+              current_set: null,
+              approval: approvalData
+            },
+            ts: new Date().toISOString(),
+            status: 'queued'
+          })
         }
 
-        await db.sync_queue.add({
-          resource: 'match',
-          action: 'update',
-          payload: {
-            id: match.seed_key,
-            status: 'approved',
-            current_set: null,
-            approval: approvalData
-          },
-          ts: new Date().toISOString(),
-          status: 'queued'
+        // Mark as approved in local database (status stays 'ended' until Close Match)
+        await db.matches.update(matchId, {
+          approved: true,
+          approvedAt: new Date().toISOString(),
+          current_set: null
         })
-      }
-
-      // Mark as approved in local database (status stays 'ended' until Close Match)
-      await db.matches.update(matchId, {
-        approved: true,
-        approvedAt: new Date().toISOString(),
-        current_set: null
       })
 
       // Update UI state to show post-approval buttons
@@ -1052,6 +1072,8 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
   // Handle closing match after approval - deletes local data and navigates home
   const handleCloseMatch = async () => {
     cLogger.logHandler('handleCloseMatch', { matchId })
+    if (isClosing) return
+    setIsClosing(true)
 
     try {
       // Update match to final status in Supabase first (before deleting local data)
@@ -1099,6 +1121,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     } catch (error) {
       console.error('[MatchEnd] Error closing match:', error)
       showAlert(t('matchEnd.errorClosing', { error: error.message }), 'error')
+      setIsClosing(false)
     }
   }
 
@@ -1373,10 +1396,10 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       <div className="flex flex-wrap gap-2">
         {isApproved ? (
           <>
-            <Button variant="dark" size="xl" className="min-w-[150px] flex-1" onClick={handleCloseMatch}>
+            <Button variant="dark" size="xl" className="min-w-[150px] flex-1" onClick={handleCloseMatch} disabled={isClosing} loading={isClosing}>
               {t('matchEnd.closeMatch')}
             </Button>
-            <Button variant="danger-outline" size="xl" onClick={handleReopenMatch}>
+            <Button variant="danger-outline" size="xl" onClick={handleReopenMatch} disabled={isClosing}>
               {t('matchEnd.reopenMatch')}
             </Button>
           </>
@@ -1408,23 +1431,48 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         )}
       </div>
 
-      {/* Export progress (light, labelled spinner) */}
+      {/* Export progress (light, labelled spinner). Above the header menu
+          (data-ob-export-modal): nothing behind it can be pressed. Cancel
+          while the PDF is made; when no PDF came, the scorer chooses. */}
       {downloadProgress && (
-        <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 p-4 backdrop-blur-sm">
-          <div role="status" aria-live="polite" className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl">
-            <h2 className="mb-4 text-lg font-bold text-stone-900">{t('matchEnd.preparingExport')}</h2>
-            <ul className="mb-4 space-y-2 text-sm">
-              {[[downloadProgress.json, t('matchEnd.matchDataJson', 'Match data (JSON)')], [downloadProgress.pdf, t('matchEnd.generatingPdf')]].map(([done, label]) => (
-                <li key={label} className={cn('flex items-center justify-center gap-2', done ? 'text-emerald-700' : 'text-stone-500')}>
-                  {done ? <Check size={16} aria-hidden="true" /> : <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
-                  {label}
-                </li>
-              ))}
-            </ul>
-            <p className="m-0 text-xs text-stone-500">
-              {downloadProgress.json && downloadProgress.pdf ? t('matchEnd.creatingZip') : t('matchEnd.waitCheck')}
-            </p>
-          </div>
+        <div data-ob-export-modal="" className="no-print fixed inset-0 z-[10000] flex items-center justify-center bg-stone-900/60 p-4 backdrop-blur-sm">
+          {pdfFailure ? (
+            <div role="alertdialog" aria-modal="true" aria-labelledby="ob-export-failed-title" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" data-testid="export-pdf-failed">
+              <h2 id="ob-export-failed-title" className="mb-2 text-lg font-bold text-stone-900">{t('matchEnd.export.noPdfTitle')}</h2>
+              <p className="mb-1 text-sm text-stone-700">
+                {t(`matchEnd.export.reason.${['closed', 'stalled', 'timeout', 'blocked'].includes(pdfFailure.reason) ? pdfFailure.reason : 'failed'}`, { error: pdfFailure.message })}
+              </p>
+              <p className="mb-5 text-xs text-stone-500">{t('matchEnd.export.cancelKeepsUnapproved')}</p>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button variant="secondary" size="md" onClick={() => choosePdfFailure('cancel')}>{t('matchEnd.export.cancel')}</Button>
+                <Button variant="secondary" size="md" onClick={() => choosePdfFailure('skip')}>{t('matchEnd.export.approveWithoutPdf')}</Button>
+                <Button variant="primary" size="md" onClick={() => choosePdfFailure('retry')} autoFocus>{t('matchEnd.export.retry')}</Button>
+              </div>
+            </div>
+          ) : (
+            <div role="status" aria-live="polite" className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl">
+              <h2 className="mb-4 text-lg font-bold text-stone-900">{t('matchEnd.preparingExport')}</h2>
+              <ul className="mb-4 space-y-2 text-sm">
+                {[[downloadProgress.json, t('matchEnd.matchDataJson', 'Match data (JSON)')], [downloadProgress.pdf, t('matchEnd.generatingPdf')]].map(([done, label]) => (
+                  <li key={label} className={cn('flex items-center justify-center gap-2', done ? 'text-emerald-700' : 'text-stone-500')}>
+                    {done ? <Check size={16} aria-hidden="true" /> : <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
+                    {label}
+                  </li>
+                ))}
+              </ul>
+              {!downloadProgress.pdf && exportPdfProgress?.page && exportPdfProgress?.pages ? (
+                <p className="m-0 mb-1 text-xs tabular-nums text-stone-600">{t('matchEnd.export.page', { page: exportPdfProgress.page, pages: exportPdfProgress.pages })}</p>
+              ) : null}
+              <p className="m-0 text-xs text-stone-500">
+                {downloadProgress.json && downloadProgress.pdf ? t('matchEnd.creatingZip') : t('matchEnd.export.keepWindowOpen')}
+              </p>
+              {!downloadProgress.pdf && (
+                <div className="mt-4 flex justify-center">
+                  <Button variant="secondary" size="md" onClick={() => exportAbortRef.current?.abort()} data-testid="export-cancel">{t('matchEnd.export.cancel')}</Button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

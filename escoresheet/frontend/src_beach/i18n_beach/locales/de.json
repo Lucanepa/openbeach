@@ -1241,7 +1241,23 @@
     "resign": "Neu unterschreiben",
     "clearSignature": "Löschen",
     "signatureLocked": "Spiel genehmigt oder abgeschlossen: die Unterschriften sind fix",
-    "signatureSaveFailed": "Die Unterschrift konnte nicht gespeichert werden. Versuche es noch einmal."
+    "signatureSaveFailed": "Die Unterschrift konnte nicht gespeichert werden. Versuche es noch einmal.",
+    "export": {
+      "cancel": "Abbrechen",
+      "retry": "Erneut versuchen",
+      "approveWithoutPdf": "Ohne PDF genehmigen",
+      "noPdfTitle": "Das PDF ist nicht fertig",
+      "reason": {
+        "closed": "Das Matchblatt-Fenster wurde geschlossen, bevor das PDF fertig war.",
+        "stalled": "Das Matchblatt-Fenster antwortet nicht mehr.",
+        "timeout": "Das PDF hat zu lange gedauert.",
+        "blocked": "Das Matchblatt-Fenster konnte nicht geöffnet werden.",
+        "failed": "Das Matchblatt konnte das PDF nicht erstellen ({{error}})."
+      },
+      "cancelKeepsUnapproved": "Abbrechen lässt das Spiel ungenehmigt. Ohne PDF genehmigen genehmigt es jetzt: Das PDF später aus dem Matchblatt speichern.",
+      "page": "Seite {{page}} von {{pages}}",
+      "keepWindowOpen": "Das Matchblatt-Fenster offen lassen, bis das PDF fertig ist."
+    }
   },
   "scoresheetPdf": {
     "zoomOut": "Verkleinern",
@@ -2571,5 +2587,16 @@
       "serverWhen": "Die Tablets haben mobile Daten, oder das WLAN vor Ort trennt die Geräte. Anmeldung nötig."
     },
     "wifiQrCaption": "Zuerst scannen, um diesem WLAN beizutreten"
+  },
+  "scoresheet": {
+    "generating": "PDF wird erstellt…",
+    "preparing": "Wird vorbereitet…",
+    "page": "Seite {{page}} von {{pages}}",
+    "finishing": "Wird abgeschlossen…",
+    "closeCancels": "Das Schliessen dieses Fensters bricht die Genehmigung des Spiels ab.",
+    "wait": "Bitte warten, das Matchblatt wird umgewandelt.",
+    "downloadPdf": "PDF herunterladen",
+    "pdfSaved": "PDF gespeichert",
+    "pdfFailed": "Das PDF konnte nicht erstellt werden: {{error}}"
   }
 }

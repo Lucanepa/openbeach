@@ -1241,7 +1241,23 @@
     "resign": "Firma di nuovo",
     "clearSignature": "Cancella",
     "signatureLocked": "Partita approvata o chiusa: le firme non cambiano più",
-    "signatureSaveFailed": "Non è stato possibile salvare la firma. Riprova."
+    "signatureSaveFailed": "Non è stato possibile salvare la firma. Riprova.",
+    "export": {
+      "cancel": "Annulla",
+      "retry": "Riprova",
+      "approveWithoutPdf": "Approva senza PDF",
+      "noPdfTitle": "Il PDF non è pronto",
+      "reason": {
+        "closed": "La finestra del referto è stata chiusa prima che il PDF fosse pronto.",
+        "stalled": "La finestra del referto non risponde più.",
+        "timeout": "Il PDF ha richiesto troppo tempo.",
+        "blocked": "Non è stato possibile aprire la finestra del referto.",
+        "failed": "Il referto non ha potuto creare il PDF ({{error}})."
+      },
+      "cancelKeepsUnapproved": "Annulla lascia la partita non approvata. Approva senza PDF la approva ora: salva il PDF dal referto più tardi.",
+      "page": "Pagina {{page}} di {{pages}}",
+      "keepWindowOpen": "Tieni aperta la finestra del referto finché il PDF è pronto."
+    }
   },
   "scoresheetPdf": {
     "zoomOut": "Riduci",
@@ -2571,5 +2587,16 @@
       "serverWhen": "I tablet hanno dati mobili, o il Wi-Fi della struttura separa i dispositivi. Serve l’accesso."
     },
     "wifiQrCaption": "Prima scansiona per collegarti a questo Wi-Fi"
+  },
+  "scoresheet": {
+    "generating": "Creazione del PDF…",
+    "preparing": "Preparazione…",
+    "page": "Pagina {{page}} di {{pages}}",
+    "finishing": "Completamento…",
+    "closeCancels": "Chiudere questa finestra annulla l'approvazione della partita.",
+    "wait": "Attendere, il referto viene convertito.",
+    "downloadPdf": "Scarica PDF",
+    "pdfSaved": "PDF salvato",
+    "pdfFailed": "Non è stato possibile creare il PDF: {{error}}"
   }
 }

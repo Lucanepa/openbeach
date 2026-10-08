@@ -1242,7 +1242,23 @@
     "resign": "Re-sign",
     "clearSignature": "Clear",
     "signatureLocked": "Match approved or closed: signatures can no longer change",
-    "signatureSaveFailed": "The signature could not be saved. Try again."
+    "signatureSaveFailed": "The signature could not be saved. Try again.",
+    "export": {
+      "cancel": "Cancel",
+      "retry": "Retry",
+      "approveWithoutPdf": "Approve without PDF",
+      "noPdfTitle": "The PDF is not ready",
+      "reason": {
+        "closed": "The scoresheet window was closed before the PDF was ready.",
+        "stalled": "The scoresheet window stopped answering.",
+        "timeout": "The PDF took too long.",
+        "blocked": "The scoresheet window could not be opened.",
+        "failed": "The scoresheet could not create the PDF ({{error}})."
+      },
+      "cancelKeepsUnapproved": "Cancel leaves the match not approved. Approve without PDF approves it now: save the PDF from the scoresheet later.",
+      "page": "Page {{page}} of {{pages}}",
+      "keepWindowOpen": "Keep the scoresheet window open until the PDF is ready."
+    }
   },
   "scoresheetPdf": {
     "zoomOut": "Zoom Out",
@@ -2572,5 +2588,16 @@
       "serverWhen": "Tablets have mobile data, or the venue Wi-Fi keeps devices apart. Sign-in needed."
     },
     "wifiQrCaption": "Scan to join this Wi-Fi first"
+  },
+  "scoresheet": {
+    "generating": "Generating PDF…",
+    "preparing": "Preparing…",
+    "page": "Page {{page}} of {{pages}}",
+    "finishing": "Finishing…",
+    "closeCancels": "Closing this window cancels the match approval.",
+    "wait": "Please wait while the scoresheet is converted.",
+    "downloadPdf": "Download PDF",
+    "pdfSaved": "PDF saved",
+    "pdfFailed": "The PDF could not be made: {{error}}"
   }
 }
