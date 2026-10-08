@@ -7026,13 +7026,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
   }, [matchId, newPin, editPinType])
 
-  // Close first, then switch (useConfirmAction): the switch flips the court
-  // under the dialog, and a double tap switched twice
+  // One action (useConfirmAction refuses a double tap, which switched twice):
+  // the sides, the cloud job and the court_switch event commit together and
+  // the dialog closes in the same render (deferUi). Written one by one, the
+  // serve ball jumped to the other side before the teams did.
   const runCourtSwitchConfirm = useConfirmAction(onConfirmFailed)
-  const confirmCourtSwitch = useCallback(() => runCourtSwitchConfirm(async () => {
+  const confirmCourtSwitch = useCallback(() => runCourtSwitchConfirm(() => runAction('courtSwitch', async () => {
     if (!courtSwitchModal || !data?.match || !data?.set) return
     const modal = courtSwitchModal
-    setCourtSwitchModal(null)
+    deferUi(() => setCourtSwitchModal(null))
 
     const setIndex = modal.set.index
     const teamAKey = data.match.coinTossTeamA || 'team1'
@@ -7073,15 +7075,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       started: false
     } : null
 
-    // Trigger TTO if needed (at 21 points)
+    // Trigger TTO if needed (at 21 points), shown with the switch
     if (shouldTriggerTto && ttoData) {
-      setTtoModal(ttoData)
+      deferUi(() => setTtoModal(ttoData))
     }
 
-    // Sync to Supabase with fresh snapshot to update side_a and serving_team after court switch
+    // After the commit: side_a and serving_team after the court switch
     const reason = setIndex === 3 ? 'set3_8points' : `set${setIndex}_court_switch`
-    syncLiveStateToSupabase('court_switch', null, { reason }, null)
-  }), [runCourtSwitchConfirm, courtSwitchModal, matchId, data?.match, data?.set, logEvent, syncLiveStateToSupabase])
+    afterLiveState('court_switch', null, { reason })
+  })), [runCourtSwitchConfirm, runAction, deferUi, courtSwitchModal, matchId, data?.match, data?.set, logEvent, afterLiveState])
 
   // Handle TTO end - performs court switch if needed (at 21 points in sets 1-2).
   // The one end of a TTO, tapped by the scorer or run out (the countdown
@@ -7089,12 +7091,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   // kept its pre-switch undo snapshot, and Undo of the next event (a rally
   // start, a time-out) put the teams back on their old sides. Once per TTO:
   // a tap while the run-out end is pending does not switch twice.
+  // One action: the switch (sides, cloud job, the TTO event's snapshot) and
+  // the closed dialog show together, not the sides flipping under it.
   const ttoEndedRef = useRef(null)
-  const handleTtoEnd = useCallback(async () => {
+  const handleTtoEnd = useCallback(() => runAction('ttoEnd', async () => {
     if (!ttoModal) return
     const ttoKey = ttoModal.startedAt || ttoModal
     if (ttoEndedRef.current === ttoKey) return
     ttoEndedRef.current = ttoKey
+    deferUi(() => setTtoModal(null))
 
     const shouldSwitchCourts = ttoModal.triggerCourtSwitchAfter
     let switchedSetIndex = null
@@ -7134,17 +7139,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       }
     }
 
-    // Sync live state after court switch (after the snapshot: the live state
-    // reads the last event's snapshot)
+    // Live state after the court switch (after the commit and the snapshot:
+    // the live state reads the last event's snapshot)
     if (switchedSetIndex != null) {
-      syncLiveStateToSupabase('court_switch', null, { reason: `set${switchedSetIndex}_tto_court_switch` }, null)
+      afterLiveState('court_switch', null, { reason: `set${switchedSetIndex}_tto_court_switch` })
     }
 
-    // Close the TTO modal
-    setTtoModal(null)
-    syncLiveStateToSupabase('end_tto')
-    sendActionToReferee('end_tto', {})
-  }, [ttoModal, matchId, data?.match, data?.set, syncLiveStateToSupabase, captureFullStateSnapshot, sendActionToReferee])
+    afterLiveState('end_tto')
+    runOrDefer({ run: () => sendActionToReferee('end_tto', {}) })
+  }), [runAction, deferUi, ttoModal, matchId, data?.match, data?.set, afterLiveState, runOrDefer, captureFullStateSnapshot, sendActionToReferee])
   handleTtoEndRef.current = handleTtoEnd
 
   // The change of courts (every 7 points, every 5 in set 3) is mandatory; a
