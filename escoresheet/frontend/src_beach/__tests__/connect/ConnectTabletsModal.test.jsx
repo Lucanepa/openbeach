@@ -400,6 +400,24 @@ describe('ConnectTabletsModal_beach', () => {
     expect(qrUrl()).toBeTruthy()
   })
 
+  it('the live status comes with the addresses, in one change', async () => {
+    let answer
+    const win = tauri({
+      hotspot_status: () => new Promise(resolve => { answer = resolve }),
+      bluetooth_status: () => ({ supported: false })
+    })
+    const fetchImpl = server({ clients: [{ id: 'c1', role: 'referee', matchId: SEED, ip: '192.168.1.23', connectedAt: '2026-10-07T12:32:05.000Z' }] })
+    renderModal({ match: MATCH, fetchImpl, win })
+    await waitFor(() => expect(answer).toBeTypeOf('function'))
+    await waitFor(() => expect(fetchImpl.mock.calls.some(([u]) => String(u).includes('/api/server/connections'))).toBe(true))
+    await new Promise(r => setTimeout(r, 20))
+    // the server and the relay have answered, the Wi-Fi not yet: nothing of it shows
+    expect(screen.getByTestId('role-status-referee')).not.toHaveTextContent('Connected')
+    answer({ supported: true, active: false, platform: 'linux', ssid: 'a', password: 'b', takesOverWifi: true, leavesNetwork: 'Halle-WLAN' })
+    await waitFor(() => expect(screen.getByText('Tablets join the Wi-Fi “Halle-WLAN”.')).toBeInTheDocument())
+    expect(screen.getByTestId('role-status-referee')).toHaveTextContent('Connected · since 14:32')
+  })
+
   it('Windows with the installer’s firewall rule: no manual firewall step, on either Wi-Fi', async () => {
     const win = tauri({
       firewall_status: () => ({ platform: 'windows', supported: true, ready: true, reason: null }),

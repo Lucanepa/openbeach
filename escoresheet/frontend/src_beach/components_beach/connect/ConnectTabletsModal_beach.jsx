@@ -97,16 +97,19 @@ function useSyncStatus(active) {
  * connections when it cannot be read: the dialog then never claims "waiting".
  */
 function useRelayConnections(matchKey, { enabled, fetchImpl, intervalMs = 5000 }) {
-  const [connections, setConnections] = useState(null)
+  // undefined until the first answer for this match (checked: false), then
+  // the relay's list or null (not reachable)
+  const [connections, setConnections] = useState(undefined)
   useEffect(() => {
-    if (!enabled || !matchKey) {
-      setConnections(null)
-      return undefined
-    }
+    setConnections(undefined)
+    if (!enabled || !matchKey) return undefined
     let cancelled = false
     const url = getApiUrl(`/api/server/connections?matchId=${encodeURIComponent(matchKey)}`)
     const load = async () => {
-      if (!url) return
+      if (!url) {
+        if (!cancelled) setConnections(null)
+        return
+      }
       let body = null
       try {
         const response = await fetchImpl(url, { headers: { Accept: 'application/json' } })
@@ -119,11 +122,33 @@ function useRelayConnections(matchKey, { enabled, fetchImpl, intervalMs = 5000 }
     const timer = setInterval(load, intervalMs)
     return () => { cancelled = true; clearInterval(timer) }
   }, [matchKey, enabled, fetchImpl, intervalMs])
-  return { connections, reachable: !!connections }
+  return { connections: connections ?? null, checked: connections !== undefined, reachable: !!connections }
 }
 
-// The local server's state while the desktop app still reads its Wi-Fi
+// The local server's state until the dialog has settled (useSettled)
 const LAN_PENDING = Object.freeze({ loading: true, status: null })
+
+// At most this long, a reader that never answers holds the dialog's placeholders
+const SETTLE_MAX_MS = 1000
+
+/**
+ * False from opening until `answered` (or SETTLE_MAX_MS), then true until the
+ * dialog closes: what it read on opening is shown in one change.
+ */
+function useSettled(open, answered, maxMs = SETTLE_MAX_MS) {
+  const [settled, setSettled] = useState(false)
+  useEffect(() => { if (!open) setSettled(false) }, [open])
+  useEffect(() => {
+    if (!open || settled) return undefined
+    if (answered) {
+      setSettled(true)
+      return undefined
+    }
+    const timer = setTimeout(() => setSettled(true), maxMs)
+    return () => clearTimeout(timer)
+  }, [open, answered, settled, maxMs])
+  return open && settled
+}
 
 /**
  * "Connect tablets", in three steps (ported from OpenVolley
@@ -317,11 +342,16 @@ export default function ConnectTabletsModal({ open, onClose, match = null, fetch
   }
 
   // -- links for the chosen connection --
-  // The desktop app reads the Wi-Fi this computer is on (hotspot status) next
-  // to the server's addresses: until both have answered the dialog shows
-  // neither, so it fills in one change (it changed three times within 83 ms:
-  // "Reading the local server...", the addresses and codes, the Wi-Fi name)
-  const lan = desktop && hs.loading ? LAN_PENDING : relay
+  // What the dialog reads on opening answers at its own time, 15-110 ms
+  // apart: the server's addresses, the Wi-Fi this computer is on (desktop
+  // app), the tablets the relay sees. It keeps its placeholders until all
+  // have answered, so it fills in one change (it changed three times:
+  // "Reading the local server...", the live status, the addresses and codes
+  // with the Wi-Fi name).
+  const answered = !relay.loading && !(desktop && hs.loading) && (!seedKey || relayTablets.checked)
+  const settled = useSettled(open, answered)
+  const lan = settled ? relay : LAN_PENDING
+  const tabletsReachable = settled && !!relayTablets.reachable
   const port = lan.status?.port || (typeof window !== 'undefined' ? window.location.port : '') || null
   const halls = hallInterfaces(lan.status)
   const hallAddress = halls.find(i => i.ip === view.hallIp)?.ip || halls[0]?.ip || null
@@ -395,7 +425,7 @@ export default function ConnectTabletsModal({ open, onClose, match = null, fetch
       clients,
       matchKey: seedKey,
       transport,
-      reachable: relayTablets.reachable
+      reachable: tabletsReachable
     })
   }
   const cards = PICKABLE_ROLES.map(role => ({
@@ -421,7 +451,7 @@ export default function ConnectTabletsModal({ open, onClose, match = null, fetch
               total: summary.on
             })
             : t('connectTablets.footer.connectedOnly', 'Connected: {{roles}}', { roles: summary.connected.map(r => labels[r]).join(', ') })
-          : transport !== 'server' && !relayTablets.reachable
+          : transport !== 'server' && !tabletsReachable
             ? t('connectTablets.card.unknown', 'Live status not available')
             : t('connectTablets.footer.none', 'No tablet connected yet'))}
         {seedKey && transport === 'server' && (
