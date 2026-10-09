@@ -3367,6 +3367,37 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     team1: `${teamAKey === 'team1' ? 'A' : 'B'} · ${data?.team1Team?.name || data?.team1Team?.shortName || 'Team 1'}`,
     team2: `${teamAKey === 'team2' ? 'A' : 'B'} · ${data?.team2Team?.name || data?.team2Team?.shortName || 'Team 2'}`
   }
+  // The break panel (set 3 toss, the choice, the serve orders, the clock)
+  // stands in the court's place. While it shows, the scoring body is as tall
+  // as the window and the panel scrolls inside it, so "End set interval",
+  // "Start set" and Undo under it always stay on screen (laptop windows of
+  // 657-738 px pushed them up to 180 px below a box nobody could scroll).
+  const breakPanelShown = isBetweenSets && (data?.set?.index === 3 ? !set3SetupConfirmed : !betweenSetsSetupConfirmed)
+  // Its column scrolls only when the panel is really taller than the room
+  // left (a large system font, a long translation): the zoomed panel's
+  // rounding overflows it by 1-2 px at most sizes, which drew a scrollbar
+  const breakColumnRef = useRef(null)
+  const [breakPanelScrolls, setBreakPanelScrolls] = useState(false)
+  useEffect(() => {
+    const column = breakColumnRef.current
+    if (!breakPanelShown || !column || typeof ResizeObserver === 'undefined') {
+      setBreakPanelScrolls(false)
+      return undefined
+    }
+    const check = () => setBreakPanelScrolls(column.scrollHeight - column.clientHeight > 2)
+    let observer
+    try {
+      observer = new ResizeObserver(check)
+      observer.observe(column)
+      for (const child of column.children) observer.observe(child)
+    } catch {
+      // no working ResizeObserver: the column may always scroll (reachable first)
+      setBreakPanelScrolls(true)
+      return undefined
+    }
+    check()
+    return () => observer.disconnect()
+  }, [breakPanelShown])
 
   // Before coin toss or before set starts, show serve on left (team1) as placeholder
   const isBeforeCoinToss = !data?.match?.coinTossTeamA || !data?.match?.coinTossTeamB
@@ -8164,7 +8195,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             boxSizing: 'border-box',
             flex: 1,
             display: 'flex',
-            flexDirection: 'column'
+            flexDirection: 'column',
+            // the break: as tall as the window (breakPanelShown); a rally keeps its layout
+            ...(breakPanelShown ? { alignSelf: 'stretch', minHeight: 0 } : null)
           }}
         >
           <div style={{ display: 'none' }}>
@@ -8364,7 +8397,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             </div>
           </div>
 
-          <div style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column', gap: `${8 * scaleFactor}px` }}>
+          <div style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column', gap: `${8 * scaleFactor}px`, ...(breakPanelShown ? { minHeight: 0 } : null) }}>
 
             {/* ===== SECTION 1: Status Row (17% Rally Status | 66% Score | 17% Last Action) ===== */}
             <div style={{
@@ -9068,8 +9101,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
                   {/* CENTER COLUMN - 70% (Court Row + Rally Controls) */}
                   <div style={{ flex: '0 0 70%', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                    {/* Row 1: Serve Indicators + Court */}
-                    <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                    {/* Row 1: Serve Indicators + Court (the break: it gives way
+                        to the rally controls under it, its panel scrolls) */}
+                    <div style={{ display: 'flex', alignItems: 'center', width: '100%', ...(breakPanelShown ? { flex: '0 1 auto', minHeight: 0 } : null) }}>
                       {/* LEFT SERVE INDICATOR - 10/70 = ~14.3% of center */}
                       <div style={{ flex: '0 0 14.28%', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0, overflow: 'hidden' }}>
                     {leftServing && (() => {
@@ -9126,7 +9160,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   </div>
 
                       {/* COURT - 50/70 = ~71.4% of center */}
-                      <div style={{ flex: '0 0 71.43%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <div ref={breakColumnRef} data-testid="court-column" style={{ flex: '0 0 71.43%', display: 'flex', flexDirection: 'column', alignItems: 'center', ...(breakPanelShown ? { alignSelf: 'stretch', minHeight: 0, overflowX: 'hidden', overflowY: breakPanelScrolls ? 'auto' : 'hidden', overscrollBehavior: 'contain' } : null) }}>
                     {/* 1R above court */}
                     {!isCompactMode && !isBetweenSets && (() => {
                       const ref1 = data?.match?.officials?.find(o => o.role === '1st referee' || o.role === '1st Referee')
@@ -9148,18 +9182,24 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     })()}
 
                     {/* Court or Between-Sets Setup UI */}
-                    {isBetweenSets && (data?.set?.index === 3 ? !set3SetupConfirmed : !betweenSetsSetupConfirmed) ? (
-                      /* Between-Sets Setup UI - replaces court */
-                      <div style={{
+                    {breakPanelShown ? (
+                      /* Between-Sets Setup UI - replaces court. Scaled with
+                         zoom, not transform: a transform left the panel's box
+                         at its unscaled height, which pushed "End set interval"
+                         out of the window; zoom's box is the size drawn */
+                      <div data-testid="break-panel" style={{
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
                         justifyContent: 'flex-start',
-                        transform: `scale(${scaleFactor * 1.2})`,
-                        transformOrigin: 'top center',
-                        marginTop: '24px',
-                        marginBottom: `${60 * scaleFactor}px`,
-                        gap: '20px'
+                        flexShrink: 0,
+                        // no wider than the court's column (long team names):
+                        // the boxes narrow (their names cut with …) rather than
+                        // the column cutting them off
+                        maxWidth: '100%',
+                        zoom: scaleFactor * 1.2,
+                        marginTop: '8px',
+                        gap: '12px'
                       }}>
                         {/* Set 3 needs coin toss first */}
                         {data?.set?.index === 3 && !data?.match?.set3CoinTossWinner ? (
@@ -9234,29 +9274,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           </>
                         ) : (
                           <>
-                            {/* Arrow indicator - points towards the team that chooses (set 2: the loser of the first toss; set 3: the winner of its toss) */}
-                            {intervalChooserInfo && (
-                              <div style={{
-                                display: 'flex',
-                                justifyContent: 'center',
-                                marginBottom: '4px'
-                              }}>
-                                <svg
-                                  className={intervalChooserInfo.teamKey === (leftisTeam1 ? 'team1' : 'team2') ? 'between-sets-arrow-left' : 'between-sets-arrow-right'}
-                                  width="56" height="40" viewBox="0 0 56 40"
-                                  style={{ filter: 'drop-shadow(0 2px 4px rgba(4, 120, 87, 0.25))' }}
-                                >
-                                  {intervalChooserInfo.teamKey === (leftisTeam1 ? 'team1' : 'team2') ? (
-                                    <path d="M48 20H12M12 20L24 8M12 20L24 32" stroke="#059669" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                                  ) : (
-                                    <path d="M8 20H44M44 20L32 8M44 20L32 32" stroke="#059669" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                                  )}
-                                </svg>
-                              </div>
-                            )}
-
                             {/* Main row: left team's box (its serve order) | the choice | right team's box */}
-                            <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', justifyContent: 'center', alignItems: 'stretch', paddingTop: '50px', overflow: 'visible' }}>
+                            <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', alignItems: 'stretch', paddingTop: '50px', overflow: 'visible', maxWidth: '100%' }}>
                               {['left', 'right'].map((side) => {
                                 const teamKey = (side === 'left') === leftisTeam1 ? 'team1' : 'team2'
                                 const serves = getCurrentServe() === teamKey
@@ -9264,7 +9283,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 const textColor = isBrightColor(color) ? '#000' : '#fff'
                                 const name = intervalTeamNames[teamKey]
                                 const box = (
-                                  <div key={side} data-testid={`interval-team-${side}`} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                  <div key={side} data-testid={`interval-team-${side}`} style={{ position: 'relative', display: 'flex', alignItems: 'center', flex: '0 1 auto', minWidth: 0 }}>
                                     {serves && (
                                       <img src={ballImage} onError={(e) => e.target.src = ballImage} alt="" style={{ position: 'absolute', top: '-46px', left: '50%', transform: 'translateX(-50%)', width: 43, height: 43, objectFit: 'contain' }} />
                                     )}
@@ -9278,8 +9297,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                       background: color,
                                       borderRadius: 'var(--ov-radius-lg)',
                                       border: serves ? '3px solid #059669' : `2px solid ${color}`,
-                                      minWidth: '150px',
+                                      minWidth: '120px',
                                       maxWidth: '220px',
+                                      boxSizing: 'border-box',
                                       height: '100%',
                                       color: textColor
                                     }}>
@@ -9296,7 +9316,22 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 )
                                 if (side === 'left') return box
                                 return [
-                                  <div key="choice" style={{ display: 'flex', alignItems: 'center', width: '320px' }}>
+                                  <div key="choice" style={{ position: 'relative', display: 'flex', alignItems: 'center', flex: '0 1 320px', minWidth: '260px' }}>
+                                    {/* Arrow - points towards the team that chooses (set 2: the loser of the first toss; set 3: the winner of its toss); in the ball's band over the boxes, not a row of its own */}
+                                    {intervalChooserInfo && (
+                                      <svg
+                                        className={intervalChooserInfo.teamKey === (leftisTeam1 ? 'team1' : 'team2') ? 'between-sets-arrow-left' : 'between-sets-arrow-right'}
+                                        width="56" height="40" viewBox="0 0 56 40"
+                                        aria-hidden="true"
+                                        style={{ position: 'absolute', top: '-46px', left: '50%', marginLeft: '-28px', filter: 'drop-shadow(0 2px 4px rgba(4, 120, 87, 0.25))' }}
+                                      >
+                                        {intervalChooserInfo.teamKey === (leftisTeam1 ? 'team1' : 'team2') ? (
+                                          <path d="M48 20H12M12 20L24 8M12 20L24 32" stroke="#059669" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                                        ) : (
+                                          <path d="M8 20H44M44 20L32 8M44 20L32 32" stroke="#059669" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                                        )}
+                                      </svg>
+                                    )}
                                     <IntervalChoice
                                       chooser={intervalChooserInfo}
                                       choice={intervalChoice}
@@ -9315,16 +9350,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               })}
                             </div>
 
-                            {/* Countdown and Progress bar */}
+                            {/* Countdown: the bar and the seconds on one line */}
                             {betweenSetsCountdown && (
-                              <div style={{ marginTop: '12px', marginBottom: '16px', textAlign: 'center' }}>
+                              <div data-testid="break-clock" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
                                 <div style={{
                                   width: 'min(300px, 80vw)',
                                   height: '14px',
                                   background: 'var(--ov-hairline)',
                                   borderRadius: '7px',
-                                  overflow: 'hidden',
-                                  margin: '0 auto 8px auto'
+                                  overflow: 'hidden'
                                 }}>
                                   <div style={{
                                     width: `${(betweenSetsCountdown.countdown / setIntervalDuration) * 100}%`,
@@ -9338,6 +9372,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 <div className="tabular-nums" style={{
                                   fontSize: '36px',
                                   fontWeight: 700,
+                                  lineHeight: 1.1,
+                                  minWidth: '2ch',
                                   color: betweenSetsCountdown.countdown <= 30 ? 'var(--ov-danger-text)' : 'var(--ov-success)',
                                   fontFamily: getScoreFont()
                                 }}>
