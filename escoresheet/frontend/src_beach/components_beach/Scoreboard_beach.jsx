@@ -4952,7 +4952,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   const courtScoreChips = (team1Points, team2Points) => {
     const chip = (key) => {
       const color = (key === 'team1' ? data?.team1Team?.color : data?.team2Team?.color) || (key === 'team1' ? '#ef4444' : '#3b82f6')
-      return <span style={{ background: color, color: isLightColour(color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>{key === teamAKey ? 'A' : 'B'}</span>
+      return <span style={{ ...teamBoxStyle(color), padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>{key === teamAKey ? 'A' : 'B'}</span>
     }
     const leftKey = leftisTeam1 ? 'team1' : 'team2'
     const rightKey = leftisTeam1 ? 'team2' : 'team1'
@@ -7920,8 +7920,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               borderRadius: '4px',
               fontSize: isCompactMode ? '10px' : '11px',
               fontWeight: 700,
-              background: leftTeam.color || '#ef4444',
-              color: isLightColour(leftTeam.color || '#ef4444') ? '#000' : '#fff',
+              ...teamBoxStyle(leftTeam.color || '#ef4444'),
               flexShrink: 0
             }}>
               {teamALabel}
@@ -7941,8 +7940,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             borderRadius: '4px',
             fontSize: isCompactMode ? '12px' : '16px',
             fontWeight: 700,
-            background: leftTeam?.color || '#ef4444',
-            color: isLightColour(leftTeam?.color || '#ef4444') ? '#000' : '#fff'
+            ...teamBoxStyle(leftTeam?.color || '#ef4444')
           }}>
             {setsWon?.left || 0}
           </span>
@@ -7955,8 +7953,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             borderRadius: '4px',
             fontSize: isCompactMode ? '12px' : '16px',
             fontWeight: 700,
-            background: rightTeam?.color || '#3b82f6',
-            color: isLightColour(rightTeam?.color || '#3b82f6') ? '#000' : '#fff'
+            ...teamBoxStyle(rightTeam?.color || '#3b82f6')
           }}>
             {setsWon?.right || 0}
           </span>
@@ -7976,8 +7973,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               borderRadius: '4px',
               fontSize: isCompactMode ? '10px' : '11px',
               fontWeight: 700,
-              background: rightTeam.color || '#3b82f6',
-              color: isLightColour(rightTeam.color || '#3b82f6') ? '#000' : '#fff',
+              ...teamBoxStyle(rightTeam.color || '#3b82f6'),
               flexShrink: 0
             }}>
               {teamBLabel}
@@ -8236,8 +8232,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   alignItems: 'center',
                   gap: '6px',
                   padding: isCompactMode ? '4px 8px' : '6px 12px',
-                  background: leftTeam.color || '#ef4444',
-                  color: isLightColour(leftTeam.color || '#ef4444') ? '#000' : '#fff',
+                  ...teamBoxStyle(leftTeam.color || '#ef4444'),
                   borderRadius: '6px',
                   fontWeight: 600,
                   fontSize: isCompactMode ? '11px' : '14px',
@@ -8660,11 +8655,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       return (
                         <div style={{
                           width: '100%',
-                          background: leftTeamColor,
+                          ...teamBoxStyle(leftTeamColor),
                           borderRadius: 'var(--ov-radius-lg)',
                           padding: `${8 * scaleFactor}px ${4 * scaleFactor}px`,
-                          textAlign: 'center',
-                          color: isLightColour(leftTeamColor) ? '#000' : '#fff'
+                          textAlign: 'center'
                         }}>
                           <div style={{ fontSize: `${DESIGN_VMIN * 0.04 * scaleFactor}px`, fontWeight: 700, lineHeight: 1.2 }}>{leftTeamLabel}</div>
                           {playerNames && (
@@ -9255,8 +9249,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                       padding: '16px 24px',
                                       fontSize: '16px',
                                       fontWeight: 700,
-                                      background: color,
-                                      color: isLightColour(color) ? '#000' : '#fff',
+                                      ...teamBoxStyle(color),
                                       border: 'none',
                                       borderRadius: 'var(--ov-radius-lg)',
                                       minHeight: '56px',
@@ -9322,7 +9315,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                       justifyContent: 'center',
                                       gap: '6px',
                                       padding: '10px 16px',
-                                      background: color,
+                                      ...teamBoxStyle(color),
                                       borderRadius: 'var(--ov-radius-lg)',
                                       border: serves ? '3px solid #059669' : `2px solid ${color}`,
                                       minWidth: '120px',
@@ -10455,11 +10448,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       return (
                         <div style={{
                           width: '100%',
-                          background: rightTeamColor,
+                          ...teamBoxStyle(rightTeamColor),
                           borderRadius: 'var(--ov-radius-lg)',
                           padding: `${8 * scaleFactor}px ${4 * scaleFactor}px`,
-                          textAlign: 'center',
-                          color: isLightColour(rightTeamColor) ? '#000' : '#fff'
+                          textAlign: 'center'
                         }}>
                           <div style={{ fontSize: `${DESIGN_VMIN * 0.04 * scaleFactor}px`, fontWeight: 700, lineHeight: 1.2 }}>{rightTeamLabel}</div>
                           {playerNames && (
@@ -10936,8 +10928,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   alignItems: 'center',
                   gap: '6px',
                   padding: isCompactMode ? '4px 8px' : '6px 12px',
-                  background: rightTeam.color || '#3b82f6',
-                  color: isLightColour(rightTeam.color || '#3b82f6') ? '#000' : '#fff',
+                  ...teamBoxStyle(rightTeam.color || '#3b82f6'),
                   borderRadius: '6px',
                   fontWeight: 600,
                   fontSize: isCompactMode ? '11px' : '14px',
@@ -12095,9 +12086,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               justifyContent: 'center',
                               gap: '8px',
                               padding: '12px',
-                              background: leftTeamColor,
-                              borderRadius: '8px',
-                              color: isLightColour(leftTeamColor) ? '#000' : '#fff'
+                              ...teamBoxStyle(leftTeamColor),
+                              borderRadius: '8px'
                             }}>
                               {leftIsServing && <span style={{ fontSize: '20px' }}><Volleyball /></span>}
                               <div style={{ textAlign: 'center' }}>
@@ -12122,9 +12112,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               justifyContent: 'center',
                               gap: '8px',
                               padding: '12px',
-                              background: rightTeamColor,
-                              borderRadius: '8px',
-                              color: isLightColour(rightTeamColor) ? '#000' : '#fff'
+                              ...teamBoxStyle(rightTeamColor),
+                              borderRadius: '8px'
                             }}>
                               <div style={{ textAlign: 'center' }}>
                                 <div style={{ fontWeight: 700, fontSize: '14px' }}>{rightTeamName}</div>
@@ -14399,8 +14388,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                       borderRadius: '3px',
                                       fontSize: '9px',
                                       fontWeight: 700,
-                                      background: leftTeamColor,
-                                      color: isLightColour(leftTeamColor) ? '#000' : '#fff'
+                                      ...teamBoxStyle(leftTeamColor)
                                     }}>{leftTeamLabel}</span>
                                   </div>
                                 </th>
@@ -14413,8 +14401,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                       borderRadius: '3px',
                                       fontSize: '9px',
                                       fontWeight: 700,
-                                      background: rightTeamColor,
-                                      color: isLightColour(rightTeamColor) ? '#000' : '#fff'
+                                      ...teamBoxStyle(rightTeamColor)
                                     }}>{rightTeamLabel}</span>
                                   </div>
                                 </th>
@@ -14550,8 +14537,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   borderRadius: '3px',
                                   fontSize: '9px',
                                   fontWeight: 700,
-                                  background: leftTeamColor,
-                                  color: isLightColour(leftTeamColor) ? '#000' : '#fff'
+                                  ...teamBoxStyle(leftTeamColor)
                                 }}>{leftTeamLabel}</span>
                               </div>
                             </th>
@@ -14564,8 +14550,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   borderRadius: '3px',
                                   fontSize: '9px',
                                   fontWeight: 700,
-                                  background: rightTeamColor,
-                                  color: isLightColour(rightTeamColor) ? '#000' : '#fff'
+                                  ...teamBoxStyle(rightTeamColor)
                                 }}>{rightTeamLabel}</span>
                               </div>
                             </th>
@@ -14665,8 +14650,6 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               const otherTeamLabel = timeoutModal.team === teamAKey ? 'B' : 'A'
               const requestingTeamColor = requestingTeamData?.color || (timeoutModal.team === 'team1' ? '#ef4444' : '#3b82f6')
               const otherTeamColor = otherTeamData?.color || (timeoutModal.team === 'team1' ? '#3b82f6' : '#ef4444')
-              const isRequestingBright = isLightColour(requestingTeamColor)
-              const isOtherBright = isLightColour(otherTeamColor)
               return (
                 <div style={{ marginBottom: '16px', fontSize: '24px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
                   <span style={{
@@ -14674,8 +14657,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     fontWeight: 700,
                     padding: '4px 10px',
                     borderRadius: '6px',
-                    background: requestingTeamColor,
-                    color: isRequestingBright ? '#000' : '#fff'
+                    ...teamBoxStyle(requestingTeamColor)
                   }}>{requestingTeamLabel}</span>
                   <span>{requestingTeamScore}</span>
                   <span>:</span>
@@ -14685,8 +14667,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     fontWeight: 700,
                     padding: '4px 10px',
                     borderRadius: '6px',
-                    background: otherTeamColor,
-                    color: isOtherBright ? '#000' : '#fff'
+                    ...teamBoxStyle(otherTeamColor)
                   }}>{otherTeamLabel}</span>
                 </div>
               )
@@ -15831,7 +15812,6 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         // Get team name without country (remove parentheses and content)
         const fullTeamName = teamData?.name || (sanctionConfirmModal.team === 'team1' ? 'Team 1' : 'Team 2')
         const teamName = fullTeamName.replace(/\s*\([^)]*\)\s*$/, '')
-        const isBright = isLightColour(teamColor)
         // Find player name
         const player = sanctionConfirmModal.type === 'player' && sanctionConfirmModal.playerNumber
           ? teamPlayers?.find(p => p.number === sanctionConfirmModal.playerNumber || String(p.number) === String(sanctionConfirmModal.playerNumber))
@@ -15848,8 +15828,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   borderRadius: '6px',
                   fontSize: '16px',
                   fontWeight: 700,
-                  background: teamColor,
-                  color: isBright ? '#000' : '#fff'
+                  ...teamBoxStyle(teamColor)
                 }}>{teamLabel}</span>
               </div>
             }
@@ -15929,7 +15908,6 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         const teamLabel = expulsionConfirmModal.team === teamAKey ? 'A' : 'B'
         const fullTeamName = teamData?.name || (expulsionConfirmModal.team === 'team1' ? 'Team 1' : 'Team 2')
         const teamName = fullTeamName.replace(/\s*\([^)]*\)\s*$/, '')
-        const isBright = isLightColour(teamColor)
         const player = expulsionConfirmModal.type === 'player' && expulsionConfirmModal.playerNumber
           ? teamPlayers?.find(p => p.number === expulsionConfirmModal.playerNumber || String(p.number) === String(expulsionConfirmModal.playerNumber))
           : null
@@ -15956,8 +15934,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   borderRadius: '4px',
                   fontSize: '14px',
                   fontWeight: 600,
-                  background: teamColor,
-                  color: isBright ? '#000' : '#fff'
+                  ...teamBoxStyle(teamColor)
                 }}>{teamLabel}</span>
                 <span style={{ fontSize: '16px', color: 'var(--text)' }}>{teamName}</span>
                 {expulsionConfirmModal.type === 'player' && (
@@ -16355,8 +16332,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         }}
                       >
                         <span style={{
-                          background: losingTeamColor,
-                          color: isLightColour(losingTeamColor) ? '#000' : '#fff',
+                          ...teamBoxStyle(losingTeamColor),
                           padding: '2px 6px',
                           borderRadius: '4px',
                           fontSize: '10px',
@@ -16428,7 +16404,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 {isReferee ? (
                   'Referee ball mark check'
                 ) : (
-                  <span>BMP requested by <strong><span style={{ background: requestingTeam === 'team1' ? team1Color : team2Color, color: isLightColour(requestingTeam === 'team1' ? team1Color : team2Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '14px', fontWeight: 700, marginRight: '4px' }}>{requestingTeam === 'team1' ? team1Label : team2Label}</span>{requestingTeam === 'team1' ? team1Name : team2Name}</strong></span>
+                  <span>BMP requested by <strong><span style={{ ...teamBoxStyle(requestingTeam === 'team1' ? team1Color : team2Color), padding: '2px 6px', borderRadius: '4px', fontSize: '14px', fontWeight: 700, marginRight: '4px' }}>{requestingTeam === 'team1' ? team1Label : team2Label}</span>{requestingTeam === 'team1' ? team1Name : team2Name}</strong></span>
                 )}
               </p>
 
@@ -16850,8 +16826,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     }}
                   >
                     <span style={{
-                      background: losingTeamColor,
-                      color: isLightColour(losingTeamColor) ? '#000' : '#fff',
+                      ...teamBoxStyle(losingTeamColor),
                       padding: '2px 6px',
                       borderRadius: '4px',
                       fontSize: '10px',
@@ -17160,7 +17135,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           >
             <div style={{ padding: '24px' }}>
               <p style={{ marginBottom: '16px', fontSize: '14px', color: 'var(--muted)', textAlign: 'center' }}>
-                Last point was assigned to <strong><span style={{ background: oldTeamColor, color: isLightColour(oldTeamColor) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 700, marginRight: '4px' }}>{oldTeamLabel}</span>{oldTeamName}</strong>
+                Last point was assigned to <strong><span style={{ ...teamBoxStyle(oldTeamColor), padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 700, marginRight: '4px' }}>{oldTeamLabel}</span>{oldTeamName}</strong>
               </p>
 
               {/* Horizontal radio buttons */}
@@ -17234,25 +17209,25 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ width: '55px', textAlign: 'right' }}>Current:</span>
                     <div style={{ background: 'var(--ov-sunken-strong)', padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--ov-hairline-strong)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ background: team1Color, color: isLightColour(team1Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{team1Label}</span>
+                      <span style={{ ...teamBoxStyle(team1Color), padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{team1Label}</span>
                       <strong>{team1TeamName} {currentteam1Points} : {currentteam2Points} {team2TeamName}</strong>
-                      <span style={{ background: team2Color, color: isLightColour(team2Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{team2Label}</span>
+                      <span style={{ ...teamBoxStyle(team2Color), padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{team2Label}</span>
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ width: '55px', textAlign: 'right' }}>New:</span>
                     <div style={{ background: 'rgba(34, 197, 94, 0.15)', padding: '6px 12px', borderRadius: '6px', border: '1px solid rgba(34, 197, 94, 0.4)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ background: team1Color, color: isLightColour(team1Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{team1Label}</span>
+                      <span style={{ ...teamBoxStyle(team1Color), padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{team1Label}</span>
                       <strong style={{ color: 'var(--ov-success)' }}>
                         {team1TeamName} {selectedOption === 'swap' ? swapteam1Points : replayteam1Points} : {selectedOption === 'swap' ? swapteam2Points : replayteam2Points} {team2TeamName}
                       </strong>
-                      <span style={{ background: team2Color, color: isLightColour(team2Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{team2Label}</span>
+                      <span style={{ ...teamBoxStyle(team2Color), padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{team2Label}</span>
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ width: '55px', textAlign: 'right' }}>Serve:</span>
                     <span style={{ fontSize: '16px' }}><Volleyball /></span>
-                    <span style={{ background: (selectedOption === 'swap' ? swapServeTeam : replayServeTeam) === 'team1' ? team1Color : team2Color, color: isLightColour((selectedOption === 'swap' ? swapServeTeam : replayServeTeam) === 'team1' ? team1Color : team2Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>
+                    <span style={{ ...teamBoxStyle((selectedOption === 'swap' ? swapServeTeam : replayServeTeam) === 'team1' ? team1Color : team2Color), padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>
                       {(selectedOption === 'swap' ? swapServeTeam : replayServeTeam) === 'team1' ? team1Label : team2Label}
                     </span>
                     <strong>{(selectedOption === 'swap' ? swapServeTeam : replayServeTeam) === 'team1' ? team1TeamName : team2TeamName}</strong>
@@ -17518,8 +17493,7 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
             borderRadius: '6px',
             fontSize: '18px',
             fontWeight: 700,
-            background: leftisTeam1 ? team1TeamColor : team2TeamColor,
-            color: isLightColour(leftisTeam1 ? team1TeamColor : team2TeamColor) ? '#000' : '#fff'
+            ...teamBoxStyle(leftisTeam1 ? team1TeamColor : team2TeamColor)
           }}>
             {leftisTeam1 ? (teamAKey === 'team1' ? 'A' : 'B') : (teamAKey === 'team2' ? 'A' : 'B')}
           </span>
@@ -17529,8 +17503,7 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
             borderRadius: '6px',
             fontSize: '18px',
             fontWeight: 700,
-            background: leftisTeam1 ? team2TeamColor : team1TeamColor,
-            color: isLightColour(leftisTeam1 ? team2TeamColor : team1TeamColor) ? '#000' : '#fff'
+            ...teamBoxStyle(leftisTeam1 ? team2TeamColor : team1TeamColor)
           }}>
             {leftisTeam1 ? (teamAKey === 'team2' ? 'A' : 'B') : (teamAKey === 'team1' ? 'A' : 'B')}
           </span>
@@ -17614,8 +17587,7 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
               }}
             >
               <span style={{
-                background: loserTeamColor,
-                color: isLightColour(loserTeamColor) ? '#000' : '#fff',
+                ...teamBoxStyle(loserTeamColor),
                 padding: '2px 6px',
                 borderRadius: '4px',
                 fontSize: '10px',
