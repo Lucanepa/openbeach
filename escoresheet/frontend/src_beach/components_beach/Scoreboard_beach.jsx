@@ -14783,7 +14783,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               onClick={() => { setPlayerActionMenu(null); setCourtSanctionExpanded(false) }}
             />
             {/* Action Menu */}
-            <div style={menuStyle} className="modal-wrapper-roll-down">
+            <div role="dialog" aria-label={t('scoreboard.a11y.playerActions', 'Player actions')} style={menuStyle} className="modal-wrapper-roll-down">
               <div
                 data-player-action-menu
                 className="sb-popover"
@@ -15008,7 +15008,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               onClick={cancelSanction}
             />
             {/* Dropdown */}
-            <div style={dropdownStyle} className="modal-wrapper-roll-up">
+            <div role="dialog" aria-label={t('scoreboard.a11y.sanction', 'Sanction')} style={dropdownStyle} className="modal-wrapper-roll-up">
               <div
                 data-sanction-dropdown
                 className="sb-popover"
@@ -15259,7 +15259,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               onClick={cancelMedical}
             />
             {/* Dropdown */}
-            <div style={dropdownStyle} className="modal-wrapper-roll-up">
+            <div role="dialog" aria-label={t('scoreboard.a11y.injury', 'Injury')} style={dropdownStyle} className="modal-wrapper-roll-up">
               <div
                 data-medical-dropdown
                 className="sb-popover"
