@@ -1,0 +1,9 @@
+OpenBeach 2.0.2
+- Between sets nothing moves by itself; set 2 and set 3 choices follow the FIVB beach rules.
+- Change of courts and TTO after every point, undo and reload.
+- Phone layout for the scorer.
+- Team colours: own colour picker, readable text, outlined shirts.
+- Last action in your language.
+- Fixes crashes in the guide and at the final signatures.
+- Remarks sync to the server.
+- Many smaller fixes.
