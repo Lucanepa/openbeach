@@ -53,6 +53,9 @@ async function openSetup(team1Color, team2Color = '#3b82f6') {
   const matchId = await db.matches.add({ status: 'scheduled', test: true, gameNumber: '1', court: '1', team1Id, team2Id, createdAt: new Date().toISOString() })
   render(<MatchSetup matchId={matchId} onStart={() => {}} onReturn={() => {}} onOpenOptions={() => {}} onOpenCoinToss={() => {}} />)
   await screen.findAllByRole('button', { name: 'Edit roster' })
+  // the stored teams are loaded (their name with their colour): a shirt in
+  // the default colour (team 1 red) shows before that
+  await screen.findAllByText('Muster / Meier')
   await waitFor(() => expect(shirtsOf(team1Color.toLowerCase()).length).toBeGreaterThan(0))
   return { matchId, team1Id }
 }
@@ -86,6 +89,24 @@ describe('MatchSetup_beach custom team colour', () => {
     expect(custom.getAttribute('aria-label')).toBe('Custom colour #7b1e2b')
     expect(custom.querySelector('.shirt').dataset.color).toBe('#7b1e2b')
     expect(dialog.querySelectorAll('[aria-pressed="true"]')).toHaveLength(1)
+  })
+
+  it('a new match opens the picker on the red / light blue presets, not on Custom', async () => {
+    const { DEFAULT_TEAM1_COLOUR, DEFAULT_TEAM2_COLOUR, presetColour } = await import('../../utils_beach/teamColours_beach')
+    expect(presetColour(DEFAULT_TEAM1_COLOUR)).toBeTruthy()
+    expect(presetColour(DEFAULT_TEAM2_COLOUR)).toBeTruthy()
+    const matchId = await db.matches.add({ status: 'scheduled', test: true, gameNumber: '1', court: '1', createdAt: new Date().toISOString() })
+    render(<MatchSetup matchId={matchId} onStart={() => {}} onReturn={() => {}} onOpenOptions={() => {}} onOpenCoinToss={() => {}} />)
+    for (const colour of ['#dc2626', '#3b82f6']) {
+      await waitFor(() => expect(shirtsOf(colour).length).toBeGreaterThan(0))
+      await act(async () => { fireEvent.click(shirtsOf(colour)[0]) })
+      const dialog = await screen.findByRole('dialog')
+      expect(dialog.querySelector('[data-custom-tile]').getAttribute('aria-pressed'), colour).toBe('false')
+      expect(dialog.querySelector(`[aria-label="${colour}"]`).getAttribute('aria-pressed'), colour).toBe('true')
+      await act(async () => { fireEvent.click(dialog.querySelector(`[aria-label="${colour}"]`)) })
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    }
+    expect(shirtsOf('#ef4444')).toHaveLength(0)
   })
 
   it('two close team colours get the gentle note on the setup cards', async () => {

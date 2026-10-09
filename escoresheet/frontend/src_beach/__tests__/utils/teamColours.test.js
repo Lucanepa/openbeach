@@ -173,7 +173,7 @@ describe('custom team colours (any hex, not only the twelve presets)', () => {
       expect(isCustomColour(p)).toBe(false)
     }
     expect(presetColour('#fff')).toBe('#FFFFFF')
-    expect(isCustomColour('#ef4444')).toBe(true) // the default team 1 red is no preset
+    expect(isCustomColour('#ef4444')).toBe(true) // the old default team 1 red is no preset
     expect(isCustomColour('#7b1e2b')).toBe(true)
     expect(isCustomColour('')).toBe(false)
     expect(isCustomColour('image.png')).toBe(false)

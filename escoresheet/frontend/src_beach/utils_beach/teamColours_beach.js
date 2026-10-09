@@ -229,6 +229,11 @@ export const TEAM_COLOUR_PRESETS = [
   '#ec4899' // Pink
 ]
 
+// A new match's team colours, both presets so the picker opens on a shirt
+// tile, not on Custom: team 1 the red shirt, team 2 the light blue one
+export const DEFAULT_TEAM1_COLOUR = '#dc2626'
+export const DEFAULT_TEAM2_COLOUR = '#3b82f6'
+
 /** The preset the colour is (case and #rgb shorthand ignored), or null */
 export function presetColour(colour) {
   const c = normaliseColour(colour)

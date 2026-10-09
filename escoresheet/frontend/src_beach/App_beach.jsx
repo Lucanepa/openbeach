@@ -61,6 +61,7 @@ import { Modal as KitModal, modalCancelClass, modalDangerClass } from './ui/voll
 import { Button } from './ui/volleyui/Button.jsx'
 import { cn } from './ui/volleyui/cn.js'
 import { confirmDialog, toast } from './ui/volleyui/uiStore.js'
+import { DEFAULT_TEAM1_COLOUR, DEFAULT_TEAM2_COLOUR } from './utils_beach/teamColours_beach'
 
 function parseDateTime(dateTime) {
   const [datePart, timePart] = dateTime.split(' ')
@@ -1367,12 +1368,12 @@ export default function App() {
     // Create teams in Dexie
     const team1Id = await db.teams.add({
       name: compMatch.team1_data?.name || '',
-      color: compMatch.team1_data?.color || '#ef4444',
+      color: compMatch.team1_data?.color || DEFAULT_TEAM1_COLOUR,
       createdAt: new Date().toISOString()
     })
     const team2Id = await db.teams.add({
       name: compMatch.team2_data?.name || '',
-      color: compMatch.team2_data?.color || '#3b82f6',
+      color: compMatch.team2_data?.color || DEFAULT_TEAM2_COLOUR,
       createdAt: new Date().toISOString()
     })
 
@@ -1430,8 +1431,8 @@ export default function App() {
       team2Name: compMatch.team2_data?.name || '',
       team1ShortName: compMatch.team1_data?.short_name || '',
       team2ShortName: compMatch.team2_data?.short_name || '',
-      team1Color: compMatch.team1_data?.color || '#ef4444',
-      team2Color: compMatch.team2_data?.color || '#3b82f6',
+      team1Color: compMatch.team1_data?.color || DEFAULT_TEAM1_COLOUR,
+      team2Color: compMatch.team2_data?.color || DEFAULT_TEAM2_COLOUR,
       team1Country: compMatch.team1_data?.country || '',
       team2Country: compMatch.team2_data?.country || '',
       game_n: compMatch.game_n || null,

@@ -44,7 +44,7 @@ import { Modal as KitModal, modalCancelClass, modalPrimaryClass, modalSaveClass 
 import { preload, usePreloaded } from '../utils_beach/preload_beach'
 import TeamShirt from './TeamShirt_beach'
 import TeamColourPicker, { CloseColourNote, recallCustomColour, rememberCustomColour } from './TeamColourPicker_beach'
-import { coloursTooClose, isCustomColour, readableTextOn } from '../utils_beach/teamColours_beach'
+import { coloursTooClose, DEFAULT_TEAM1_COLOUR, DEFAULT_TEAM2_COLOUR, isCustomColour, readableTextOn } from '../utils_beach/teamColours_beach'
 
 // ---- volleyui class strings for the setup views --------------------------
 // A section inside the setup page card (match info, officials, dashboards,
@@ -489,8 +489,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   const manageDob = localStorage.getItem('manageDob') === 'true'
   const [phase, setPhase] = useState('main') // Phase: main (Main Draw) | qualification
   const [round, setRound] = useState('pool') // Round: pool | winner | class | semifinals | finals
-  const [team1Color, setTeam1Color] = useState('#ef4444')
-  const [team2Color, setTeam2Color] = useState('#3b82f6')
+  const [team1Color, setTeam1Color] = useState(DEFAULT_TEAM1_COLOUR)
+  const [team2Color, setTeam2Color] = useState(DEFAULT_TEAM2_COLOUR)
   const [team1Country, setTeam1Country] = useState('') // 3-letter country code
   const [team2Country, setTeam2Country] = useState('') // 3-letter country code
   const [team1ShortName, setTeam1ShortName] = useState('')
@@ -1054,11 +1054,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       try {
         if (team1) {
           setTeam1Name(team1.name)
-          setTeam1Color(team1.color || '#ef4444')
+          setTeam1Color(team1.color || DEFAULT_TEAM1_COLOUR)
         }
         if (team2) {
           setTeam2Name(team2.name)
-          setTeam2Color(team2.color || '#3b82f6')
+          setTeam2Color(team2.color || DEFAULT_TEAM2_COLOUR)
         }
 
         // Update input widths when teams are loaded - use the actual loaded team names
@@ -2274,8 +2274,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         team2Name: team2Name.trim(),
         team1ShortName: team1ShortName || team1Name.trim().toUpperCase(),
         team2ShortName: team2ShortName || team2Name.trim().toUpperCase(),
-        team1Color: team1Color || '#ef4444',
-        team2Color: team2Color || '#3b82f6',
+        team1Color: team1Color || DEFAULT_TEAM1_COLOUR,
+        team2Color: team2Color || DEFAULT_TEAM2_COLOUR,
         team1Country: team1Country || '',
         team2Country: team2Country || '',
         game_n: gameN ? Number(gameN) : null,
@@ -2322,8 +2322,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             round: round || 'pool',
             has_coach: hasCoach
           },
-          team1_data: { name: team1Name.trim(), short_name: team1ShortName || generateShortName(team1Name.trim()), color: team1Color || '#ef4444', country: team1Country || '' },
-          team2_data: { name: team2Name.trim(), short_name: team2ShortName || generateShortName(team2Name.trim()), color: team2Color || '#3b82f6', country: team2Country || '' },
+          team1_data: { name: team1Name.trim(), short_name: team1ShortName || generateShortName(team1Name.trim()), color: team1Color || DEFAULT_TEAM1_COLOUR, country: team1Country || '' },
+          team2_data: { name: team2Name.trim(), short_name: team2ShortName || generateShortName(team2Name.trim()), color: team2Color || DEFAULT_TEAM2_COLOUR, country: team2Country || '' },
           players_team1: team1Roster.map(p => ({
             number: p.number,
             first_name: p.firstName,
@@ -2541,13 +2541,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       setTeam1Roster(r.roster)
       if (!team1Name.trim()) setTeam1Name(r.meta.name)
       if (!team1ShortName && r.meta.shortName) setTeam1ShortName(r.meta.shortName)
-      if (r.meta.color && team1Color === '#ef4444') setTeam1Color(r.meta.color)
+      if (r.meta.color && team1Color === DEFAULT_TEAM1_COLOUR) setTeam1Color(r.meta.color)
       if (r.country) setTeam1Country(r.country)
     } else {
       setTeam2Roster(r.roster)
       if (!team2Name.trim()) setTeam2Name(r.meta.name)
       if (!team2ShortName && r.meta.shortName) setTeam2ShortName(r.meta.shortName)
-      if (r.meta.color && team2Color === '#3b82f6') setTeam2Color(r.meta.color)
+      if (r.meta.color && team2Color === DEFAULT_TEAM2_COLOUR) setTeam2Color(r.meta.color)
       if (r.country) setTeam2Country(r.country)
     }
     // hasCoach is match-wide and stays as it is; captains stay unset (the
