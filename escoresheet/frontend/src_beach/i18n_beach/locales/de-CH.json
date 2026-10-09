@@ -910,6 +910,11 @@
       "sidewaysTitle": "Heb s Handy uufrächt",
       "sidewaysBody": "D Erfassig ufem Handy isch fürs Hochformat gmacht. Drääj s Handy zrugg: Spiil, Dialög und Countdowns blibed erhalte.",
       "replay": "Wieder­hole"
+    },
+    "a11y": {
+      "playerActions": "Spieleraktionen",
+      "sanction": "Sanktion",
+      "injury": "Verletzung"
     }
   },
   "settings": {

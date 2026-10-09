@@ -910,6 +910,11 @@
       "sidewaysTitle": "Halte das Handy aufrecht",
       "sidewaysBody": "Die Erfassung auf dem Handy ist für das Hochformat gemacht. Dreh das Handy zurück: Spiel, Dialoge und Countdowns bleiben erhalten.",
       "replay": "Wieder­holen"
+    },
+    "a11y": {
+      "playerActions": "Spieleraktionen",
+      "sanction": "Sanktion",
+      "injury": "Verletzung"
     }
   },
   "settings": {

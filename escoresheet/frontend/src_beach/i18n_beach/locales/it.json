@@ -910,6 +910,11 @@
       "sidewaysTitle": "Tieni il telefono in verticale",
       "sidewaysBody": "La schermata di punteggio sul telefono è pensata per il formato verticale. Ruota di nuovo il telefono: la partita, i dialoghi e i conti alla rovescia restano.",
       "replay": "Ripeti"
+    },
+    "a11y": {
+      "playerActions": "Azioni giocatore",
+      "sanction": "Sanzione",
+      "injury": "Infortunio"
     }
   },
   "settings": {

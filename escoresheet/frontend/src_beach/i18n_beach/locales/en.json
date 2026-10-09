@@ -911,6 +911,11 @@
       "sidewaysTitle": "Hold the phone upright",
       "sidewaysBody": "The scoring screen on a phone is made for portrait. Turn the phone back: the match, its dialogs and countdowns are kept.",
       "replay": "Replay"
+    },
+    "a11y": {
+      "playerActions": "Player actions",
+      "sanction": "Sanction",
+      "injury": "Injury"
     }
   },
   "settings": {

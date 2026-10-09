@@ -910,6 +910,11 @@
       "sidewaysTitle": "Tenez le téléphone à la verticale",
       "sidewaysBody": "L’écran de saisie sur téléphone est conçu pour le format portrait. Retournez le téléphone : le match, ses dialogues et ses comptes à rebours sont conservés.",
       "replay": "Rejouer"
+    },
+    "a11y": {
+      "playerActions": "Actions du joueur",
+      "sanction": "Sanction",
+      "injury": "Blessure"
     }
   },
   "settings": {
