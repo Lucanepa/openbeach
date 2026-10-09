@@ -10,6 +10,7 @@ import { withActivityContext } from '../db_beach/eventHistory_beach'
 import { randomUuid } from '../utils_beach/deviceId_beach'
 import { sanctionLabel } from '../utils_beach/corrections_beach'
 import CorrectionsPanel from './corrections/CorrectionsPanel_beach'
+import { isCustomColour } from '../utils_beach/teamColours_beach'
 
 // Standard volleyball team colors - keys for translation
 const TEAM_COLORS = [
@@ -32,6 +33,12 @@ const TEAM_COLORS = [
 // instead of showing the first colour of the list
 const isOtherColour = (colour) =>
   typeof colour === 'string' && colour.trim() !== '' && !TEAM_COLORS.some(c => c.value.toLowerCase() === colour.trim().toLowerCase())
+
+// That option's text: "Custom colour #…" for a colour picked as a custom one,
+// the bare code for one of Match setup's twelve shirts this list lacks
+// (white #FFFFFF, black #000000, red #dc2626...), which is no custom colour
+const otherColourLabel = (t, colour) =>
+  isCustomColour(colour) ? `${t('matchSetup.customColour', 'Custom colour')} ${colour}` : colour
 
 /**
  * A stored instant as the local date ('YYYY-MM-DD') and time ('HH:MM') the
@@ -817,7 +824,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                       >
                         {isOtherColour(editedTeam1?.color) && (
                           <option value={editedTeam1.color} style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>
-                            {t('matchSetup.customColour', 'Custom colour')} {editedTeam1.color} ■
+                            {otherColourLabel(t, editedTeam1.color)} ■
                           </option>
                         )}
                         {TEAM_COLORS.map(c => (
@@ -944,7 +951,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                       >
                         {isOtherColour(editedTeam2?.color) && (
                           <option value={editedTeam2.color} style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>
-                            {t('matchSetup.customColour', 'Custom colour')} {editedTeam2.color} ■
+                            {otherColourLabel(t, editedTeam2.color)} ■
                           </option>
                         )}
                         {TEAM_COLORS.map(c => (
