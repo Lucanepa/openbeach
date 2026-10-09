@@ -34,8 +34,11 @@ import { PHONE_COURT_MIN_PX, PHONE_RECENT_HEIGHT_PX, PHONE_SQUARE_MIN_PX, PHONE_
  * @param {'left'|'right'|null} props.serving
  * @param {{ switchIn: number, ttoIn: number|null, ttoTotal: number, setIndex: number }} props.rhythm
  * @param {{ status: 'idle'|'in_play', startLabel: string, startTitle?: string, startDisabled: boolean,
- *   canReplayRally: boolean, isRallyReplayed: boolean }} props.rally
- * @param {null|{ kind: 'timeout', teamName: string, countdown: number, countdownText: string, total: number }} props.centre
+ *   intervalRunning?: boolean, canReplayRally: boolean, isRallyReplayed: boolean }} props.rally
+ *   intervalRunning: the set interval runs (End set interval in place of Start set)
+ * @param {null|{ kind: 'timeout', teamName: string, countdown: number, countdownText: string, total: number }
+ *   |{ kind: 'interval', countdown: number, countdownText: string, total: number }} props.centre
+ *   the interval: while it runs with the setup closed (the set 3 toss recorded)
  * @param {null|{ kind: 'toss'|'setup', chooses?: string|null, countdown?: number, countdownText?: string, total?: number }} props.between
  *   the interval before a set, while its setup is open (the desktop replaces the court with it)
  * @param {Array<{ id: any, text: string }>} props.recent newest first
@@ -285,6 +288,15 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
       {rally.startLabel}
     </button>
   )
+  const endIntervalButton = (style = {}) => (
+    <button
+      type="button"
+      onClick={() => actions.endInterval()}
+      style={{ ...bigButton, fontSize: 24, fontWeight: 800, borderRadius: 16, background: 'var(--ov-selected)', color: 'var(--ov-on-dark)', ...style }}
+    >
+      {t('scoreboard.buttons.endSetInterval')}
+    </button>
+  )
   let overlay = null
   if (centre?.kind === 'timeout') {
     // Under 160px high (the point buttons at 360x780), so it never makes the
@@ -296,9 +308,19 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
         <button type="button" style={{ ...outlineButton, minHeight: 44, width: 'auto', padding: '0 24px' }} onClick={() => actions.stopTimeout()}>{t('scoreboard.buttons.stopTimeout')}</button>
       </div>
     )
+  } else if (centre?.kind === 'interval') {
+    // The interval still running once its setup is closed, as the time-out
+    overlay = (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, flex: 1, padding: 10, boxSizing: 'border-box', borderRadius: 16, background: 'var(--ov-card)', border: '1px solid var(--ov-hairline)' }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--ov-text-secondary)', textAlign: 'center' }}>{t('scoreboard.setInterval')}</div>
+        {countdown(centre, 30, 44)}
+        <button type="button" style={{ ...outlineButton, minHeight: 44, width: 'auto', padding: '0 24px' }} onClick={() => actions.endInterval()}>{t('scoreboard.buttons.endSetInterval')}</button>
+      </div>
+    )
   } else if (between) {
     // The interval: its countdown, the next set's sides and serve (not before
-    // the set 3 toss), then Start set (greyed until the toss is recorded)
+    // the set 3 toss), then End set interval while it runs, Start set once it
+    // has ended (greyed until the toss is recorded)
     overlay = (
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8, flex: 1 }}>
         {typeof between.countdown === 'number' && (
@@ -319,7 +341,7 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
             <button type="button" style={{ ...darkButton, minHeight: 44, fontSize: 14 }} onClick={() => actions.switchServe()}>{t('scoreboard.buttons.switchServe')}</button>
           </div>
         )}
-        {startButton({ fontSize: 20, minHeight: 52, flex: 'none' })}
+        {rally.intervalRunning ? endIntervalButton({ fontSize: 20, minHeight: 52, flex: 'none' }) : startButton({ fontSize: 20, minHeight: 52, flex: 'none' })}
       </div>
     )
   } else if (!inPlay) {

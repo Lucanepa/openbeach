@@ -62,6 +62,20 @@ describe('PhoneScoreboard_beach: the centre between rallies', () => {
     expect(centreOf().textContent).toContain('Start set 2')
   })
 
+  it('the set interval still running (setup closed): its countdown and End set interval sit in that row', () => {
+    render(<PhoneScoreboard {...props({ rally: { status: 'idle', startLabel: 'Start set 3', startDisabled: false, intervalRunning: true }, centre: { kind: 'interval', countdown: 41, countdownText: '0:41', total: 60 } })} />)
+    inRow(centreOf())
+    expect(centreOf().textContent).toContain('0:41')
+    expect(centreOf().textContent).toContain('End set interval')
+    expect(centreOf().textContent).not.toContain('Start set')
+  })
+
+  it('the set interval running with its setup open: End set interval in place of Start set', () => {
+    render(<PhoneScoreboard {...props({ rally: { status: 'idle', startLabel: 'Start set 2', startDisabled: false, intervalRunning: true }, between: { kind: 'setup', countdown: 58, countdownText: '58', total: 60 } })} />)
+    expect(centreOf().textContent).toContain('End set interval')
+    expect(centreOf().textContent).not.toContain('Start set')
+  })
+
   it('a rally in play shows the two point buttons, no centre', () => {
     render(<PhoneScoreboard {...props({ rally: { status: 'in_play', startLabel: '', startDisabled: false } })} />)
     expect(screen.queryByTestId('phone-centre')).toBeNull()

@@ -7636,12 +7636,18 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       ...intervalCountdown
     } : null
 
+    // As the desktop: while the interval runs, End set interval in place of
+    // Start set; its countdown in the centre once the setup is closed
+    const intervalRunning = isBetweenSets && !!betweenSetsCountdown && betweenSetsCountdown.countdown > 0
     const centre = timeoutModal && timeoutModal.started ? {
       kind: 'timeout',
       teamName: timeoutModal.team === 'team1' ? (data?.team1Team?.name || 'team1') : (data?.team2Team?.name || 'team2'),
       countdown: timeoutModal.countdown,
       countdownText: formatTimeout(timeoutModal.countdown),
       total: TEAM_TIMEOUT_SECONDS
+    } : intervalRunning && !betweenOpen ? {
+      kind: 'interval',
+      ...intervalCountdown
     } : null
 
     const total = (data?.set?.team1Points || 0) + (data?.set?.team2Points || 0)
@@ -7656,6 +7662,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         startLabel,
         startDisabled,
         startTitle: set3TossPending ? t('scoreboard.set3TossFirst', 'Record the set 3 coin toss first') : undefined,
+        intervalRunning,
         canReplayRally,
         isRallyReplayed
       },
@@ -7691,6 +7698,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         scoresheet: () => openScoresheet(),
         remarks: () => setShowRemarks(true),
         stopTimeout,
+        endInterval: endSetInterval,
         set3CoinToss: handleSet3CoinToss,
         switchServiceOrder: handleBetweenSetsSwitchServiceOrder,
         switchSides: handleBetweenSetsSwitchSides,

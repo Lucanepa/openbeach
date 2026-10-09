@@ -6,8 +6,8 @@
 // "End set interval" (Start set once it has ended); it ends the interval here
 // and tells the referee (end_interval) and the live state.
 import '../helpers/fakeIndexedDb'
-import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest'
-import { render, fireEvent, waitFor, cleanup } from '@testing-library/react'
+import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll, vi } from 'vitest'
+import { render, fireEvent, waitFor, cleanup, screen, within } from '@testing-library/react'
 
 const upserts = []
 vi.mock('../../lib_beach/apiClient_beach', async (importOriginal) => {
@@ -47,8 +47,12 @@ class OfflineSocket {
 
 let saved
 const relaySent = []
+const setViewport = (width, height) => {
+  window.innerWidth = width
+  window.innerHeight = height
+}
 beforeAll(() => {
-  saved = { WebSocket: globalThis.WebSocket, fetch: globalThis.fetch, act: globalThis.IS_REACT_ACT_ENVIRONMENT }
+  saved = { WebSocket: globalThis.WebSocket, fetch: globalThis.fetch, act: globalThis.IS_REACT_ACT_ENVIRONMENT, width: window.innerWidth, height: window.innerHeight }
   globalThis.WebSocket = OfflineSocket
   globalThis.fetch = vi.fn(() => Promise.reject(new TypeError('offline (test)')))
   globalThis.IS_REACT_ACT_ENVIRONMENT = false
@@ -65,6 +69,7 @@ beforeEach(async () => {
   relaySent.length = 0
   await Promise.all(db.tables.map(t => t.clear()))
 })
+afterEach(() => setViewport(saved.width, saved.height))
 afterAll(() => {
   cleanup()
   globalThis.WebSocket = saved.WebSocket
@@ -200,5 +205,50 @@ describe('Scoreboard_beach: End set interval', () => {
     } finally {
       vi.mocked(Date.now).mockRestore()
     }
+  }, 30000)
+})
+
+// The phone layout (PhoneScoreboard_beach) offered Start set all through the
+// interval (the desktop: End set interval until it has ended), and once the
+// set 3 setup was recorded it showed no countdown at all. As the desktop and
+// the OpenVolley phone: End set interval while the interval runs.
+describe('Scoreboard_beach on a phone: End set interval', () => {
+  const phone = async (matchId) => {
+    setViewport(390, 844)
+    mount(matchId)
+    await waitFor(() => expect(screen.queryByTestId('phone-scoreboard')).toBeTruthy(), { timeout: 10000 })
+    return within(screen.getByTestId('phone-scoreboard'))
+  }
+  const centre = () => screen.getByTestId('phone-centre')
+  const centreButton = (name) => within(centre()).queryByRole('button', { name })
+
+  it('set 1-2 interval: End set interval (no Start set), then Start set', async () => {
+    await phone(await setUpInterval([[21, 15]]))
+    await waitFor(() => expect(centreButton('End set interval')).toBeTruthy(), { timeout: 8000 })
+    expect(centreButton(/Start set/)).toBeNull()
+    // the sides and serve stay to set while it runs
+    expect(within(centre()).getByRole('button', { name: /Switch sides/ })).toBeTruthy()
+    await relayJoined()
+
+    fireEvent.click(centreButton('End set interval'))
+    await waitFor(() => expect(centreButton(/Start set/)).toBeTruthy(), { timeout: 5000 })
+    expect(centreButton('End set interval')).toBeNull()
+    expect(refereeActions()).toContain('end_interval')
+  }, 30000)
+
+  it('set 2-3 interval with the set 3 setup recorded: the countdown shows with End set interval', async () => {
+    const matchId = await setUpInterval([[21, 15], [17, 21]])
+    const last = (await db.events.toArray()).reduce((m, e) => Math.max(m, e.seq), 0)
+    await db.matches.update(matchId, { set3CoinTossWinner: 'team1' })
+    await db.events.add({ matchId, setIndex: 3, type: 'set3_coin_toss', payload: { leftTeam: 'A', firstServe: 'A', leftTeamKey: 'team1', firstServeTeamKey: 'team1' }, seq: last + 1, ts: new Date().toISOString() })
+    await phone(matchId)
+    await waitFor(() => expect(centreButton('End set interval')).toBeTruthy(), { timeout: 8000 })
+    expect(centre().textContent).toMatch(/Set interval/i)
+    expect(within(centre()).getByTestId('phone-countdown').textContent).toMatch(/^0:[1-5]\d$|^[1-5]\d$/)
+    expect(centreButton(/Start set/)).toBeNull()
+
+    fireEvent.click(centreButton('End set interval'))
+    await waitFor(() => expect(centreButton(/Start set/)).toBeTruthy(), { timeout: 5000 })
+    expect(centre().textContent).not.toMatch(/Set interval/i)
   }, 30000)
 })
