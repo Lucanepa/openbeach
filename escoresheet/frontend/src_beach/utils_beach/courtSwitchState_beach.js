@@ -31,7 +31,6 @@ export function hasTto(setIndex) {
 const seqOf = (e) => Number(e?.seq) || 0
 const inSet = (events, setIndex) => (events || []).filter(e => e && (e.setIndex ?? 1) === setIndex)
 const switchTotal = (e) => (Number(e?.payload?.score?.team1) || 0) + (Number(e?.payload?.score?.team2) || 0)
-const sideOf = (overrides, setIndex) => (overrides && typeof overrides === 'object' ? overrides[setIndex] : undefined) ?? null
 const teamAOf = (match) => match?.coinTossTeamA || 'team1'
 
 /**
@@ -58,7 +57,10 @@ export function ttoCourtSwitchMade(tto, events, match) {
   const setIndex = tto?.setIndex ?? 1
   if (inSet(events, setIndex).some(e => e.type === 'court_switch' && seqOf(e) > seqOf(tto))) return true
   if (p.preSwitchOverrides === undefined) return true
-  return sideOf(match?.setLeftTeamOverrides, setIndex) !== sideOf(savedSidesNow(tto, match), setIndex)
+  // The side the set is played on, by the court rule (a side not written is
+  // set 1's A on the left, or the set before's): a swap writes set 1's side,
+  // so { 1: 'A' } after two swaps is the same side as none
+  return leftTeamInSet(setIndex, match) !== leftTeamInSet(setIndex, { ...match, setLeftTeamOverrides: savedSidesNow(tto, match) || {} })
 }
 
 /**

@@ -2145,6 +2145,8 @@
     "finished": "Finished",
     "teamATeam1": "Team A (Team 1)",
     "teamBTeam2": "Team B (Team 2)",
+    "teamBTeam1": "Team B (Team 1)",
+    "teamATeam2": "Team A (Team 2)",
     "name": "Name",
     "shortNameMax8": "Short name (max 8)",
     "color": "Color",

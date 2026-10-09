@@ -130,6 +130,19 @@ describe('courtSwitchState_beach after a swap of team A / B', () => {
     expect(ttoCourtSwitchMade(legacy, [legacy], { coinTossTeamA: 'team2', setLeftTeamOverrides: { 1: 'B' } })).toBe(true)
   })
 
+  it('a TTO logged before courtSwitched with no side saved for set 1: two swaps since are not its change of courts', () => {
+    // A (team1) on the left by default when it was logged; a swap writes set
+    // 1's side, a second one gives { 1: 'A' }: the same side, nothing made
+    const legacy = tto({ preSwitchOverrides: {} }, { stateSnapshot: { teamAKey: 'team1' } })
+    const twice = { coinTossTeamA: 'team1' }
+    Object.assign(twice, swapTeamDesignation(twice))
+    Object.assign(twice, swapTeamDesignation(twice))
+    expect(twice).toMatchObject({ coinTossTeamA: 'team1', setLeftTeamOverrides: { 1: 'A' } })
+    expect(ttoCourtSwitchMade(legacy, [legacy], twice)).toBe(false)
+    // its change made since: B on the left
+    expect(ttoCourtSwitchMade(legacy, [legacy], { ...twice, ...switchSidesUpdate(1, twice) })).toBe(true)
+  })
+
   it('snapshots rewritten after a change back keep their own designation', () => {
     const change = cs(4, 3, {}, { stateSnapshot: { teamAKey: 'team1' } })
     const later = ev('point', { team: 'team1' }, { stateSnapshot: { teamAKey: 'team1', sideA: 'right', setLeftTeamOverrides: { 1: 'B' } } })

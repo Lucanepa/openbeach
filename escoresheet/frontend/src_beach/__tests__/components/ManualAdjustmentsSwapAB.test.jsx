@@ -5,6 +5,7 @@
 // (the first server flag, the set 3 toss and the court sides kept their A/B
 // labels, so the server and the sides changed team), and the cloud got each
 // team's name, players and points under the other team.
+import { StrictMode } from 'react'
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import Dexie from 'dexie'
@@ -59,11 +60,16 @@ beforeEach(async () => {
 describe('ManualAdjustments_beach "Swap A/B"', () => {
   it('re-labels the teams only: same sides, same servers, each team its data, here and in the cloud', async () => {
     const before = await db.matches.get(matchId)
-    render(<ManualAdjustments matchId={matchId} onClose={() => {}} onSave={() => {}} />)
+    // in StrictMode, as the app (main_beach): it calls a state updater twice
+    render(<StrictMode><ManualAdjustments matchId={matchId} onClose={() => {}} onSave={() => {}} /></StrictMode>)
     const tab = await screen.findByRole('radio', { name: 'Teams & players' }).catch(() => screen.findByRole('button', { name: 'Teams & players' }))
     await act(async () => { fireEvent.click(tab) })
     const swap = await screen.findByRole('button', { name: 'Swap A/B' })
+    expect(screen.getByRole('heading', { name: 'Team A (Team 1)' })).toBeTruthy()
     await act(async () => { fireEvent.click(swap) })
+    // the cards stay team 1 / team 2, their headings name the new A and B
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Team B (Team 1)' })).toBeTruthy())
+    expect(screen.getByRole('heading', { name: 'Team A (Team 2)' })).toBeTruthy()
     const save = await waitFor(() => {
       const b = screen.getAllByRole('button').find(x => /^Save/.test(x.textContent.trim()) && !x.disabled)
       expect(b).toBeTruthy()
@@ -74,6 +80,8 @@ describe('ManualAdjustments_beach "Swap A/B"', () => {
 
     const after = await db.matches.get(matchId)
     expect(after.coinTossTeamB).toBe('team1')
+    // one swap, logged once
+    expect(after.manualChanges.filter(c => c.field === 'teamDesignation')).toHaveLength(1)
     expect(after.team1Id).toBe(team1Id)
     expect(after.team2Id).toBe(team2Id)
     for (const set of [1, 2, 3]) {

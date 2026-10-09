@@ -252,14 +252,14 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
   // stay the same (coinToss_beach swapTeamDesignation). It swapped the team
   // 1 / team 2 data instead: the cloud got each team's name, players and
   // points under the other team.
+  // (recordChange outside the state updater: React calls an updater twice in
+  // StrictMode, which logged the swap twice)
   const swapTeamDesignation = useCallback(() => {
-    setEditedMatch(prev => {
-      if (!prev) return prev
-      const patch = swapTeamDesignationPatch(prev)
-      recordChange('match', 'teamDesignation', `A=${prev.coinTossTeamA || 'team1'}`, `A=${patch.coinTossTeamA}`, 'Swapped team A/B designation')
-      return { ...prev, ...patch, _designationSwapped: !prev._designationSwapped }
-    })
-  }, [recordChange])
+    if (!editedMatch) return
+    const patch = swapTeamDesignationPatch(editedMatch)
+    recordChange('match', 'teamDesignation', `A=${editedMatch.coinTossTeamA || 'team1'}`, `A=${patch.coinTossTeamA}`, 'Swapped team A/B designation')
+    setEditedMatch({ ...editedMatch, ...patch, _designationSwapped: !editedMatch._designationSwapped })
+  }, [editedMatch, recordChange])
 
   // ==================== PLAYER FUNCTIONS ====================
   const updatePlayer = useCallback((playerId, field, value, isTeam1) => {
@@ -637,6 +637,9 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
     )
   }
 
+  // Team A as edited (the team cards are team 1 / team 2)
+  const teamAIsTeam1 = (editedMatch?.coinTossTeamA || 'team1') === 'team1'
+
   const tabs = [
     { id: 'corrections', label: t('corrections.title', 'Corrections') },
     { id: 'teams', label: t('manualAdjustmentsEditor.tabTeams', 'Teams & Players') },
@@ -775,7 +778,10 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                 <div style={cardStyle}>
                   <h2 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '16px', color: 'var(--ov-text)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: editedTeam1?.color || '#888', display: 'inline-block' }} />
-                    {t('manualAdjustmentsEditor.teamATeam1', 'Team A (Team 1)')}
+                    {/* the designation as edited: "Swap A/B" changes it, the cards stay team 1 / team 2 */}
+                    {teamAIsTeam1
+                      ? t('manualAdjustmentsEditor.teamATeam1', 'Team A (Team 1)')
+                      : t('manualAdjustmentsEditor.teamBTeam1', 'Team B (Team 1)')}
                   </h2>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     <div>
@@ -897,7 +903,9 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                 <div style={cardStyle}>
                   <h2 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '16px', color: 'var(--ov-text)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: editedTeam2?.color || '#888', display: 'inline-block' }} />
-                    {t('manualAdjustmentsEditor.teamBTeam2', 'Team B (Team 2)')}
+                    {teamAIsTeam1
+                      ? t('manualAdjustmentsEditor.teamBTeam2', 'Team B (Team 2)')
+                      : t('manualAdjustmentsEditor.teamATeam2', 'Team A (Team 2)')}
                   </h2>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     <div>
