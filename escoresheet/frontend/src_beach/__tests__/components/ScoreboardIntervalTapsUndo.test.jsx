@@ -7,6 +7,7 @@
 // the interval's events, so an undo keeps them.
 // On the real scoring screen over the app's Dexie database (fake IndexedDB).
 import '../helpers/fakeIndexedDb'
+import { intervalChoiceShown, tapInterval, serveOrderChange } from '../helpers/intervalChoice'
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest'
 import { render, fireEvent, waitFor, cleanup } from '@testing-library/react'
 import '../../i18n_beach'
@@ -52,9 +53,6 @@ const buttons = () => [...document.querySelectorAll('button')]
 const button = (text) => buttons().find(b => b.textContent.trim() === text && !b.disabled)
 const bAll = (text) => buttons().filter(b => b.textContent.trim() === text && !b.disabled)
 const toss = (label) => document.querySelector(`[data-testid="set3-toss-${label}"]`)
-// the interval's service order box of a team (its name and "I: <first server>")
-const orderBox = (name) => [...document.querySelectorAll('div')]
-  .find(d => d.children.length > 0 && d.textContent.includes(name) && d.textContent.includes('I:') && d.style.cursor === 'pointer')
 
 const mount = (matchId) => render(<ScaleProvider><AlertProvider><LoggingProvider><Scoreboard matchId={matchId} /></LoggingProvider></AlertProvider></ScaleProvider>)
 
@@ -125,20 +123,20 @@ describe('Scoreboard_beach: the interval taps survive an undo', () => {
 
     // the toss (B won), then a sanction in the break
     fireEvent.click(toss('B'))
-    await waitFor(() => expect(button('Switch sides')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(intervalChoiceShown()).toBeTruthy(), { timeout: 5000 })
     await settle()
     await sanctionInBreak(matchId, 3)
-    await waitFor(() => expect(document.body.textContent).toContain('I: 1'))
+    await waitFor(() => expect(serveOrderChange('Gamma / Delta')).toBeTruthy())
     await settle()
 
     // the winner's choices after the sanction
-    fireEvent.click(button('Switch sides'))
+    await tapInterval('side')
     await waitFor(async () => expect((await db.matches.get(matchId)).set3LeftTeam).toBe('B'))
     await settle()
-    fireEvent.click(button('Switch serve'))
+    await tapInterval('serve')
     await waitFor(async () => expect((await db.matches.get(matchId)).set3FirstServe).toBe('A'))
     await settle()
-    fireEvent.click(orderBox('Gamma / Delta'))
+    fireEvent.click(serveOrderChange('Gamma / Delta'))
     await waitFor(async () => expect((await db.matches.get(matchId)).team2FirstServe).toBe(2))
     await settle()
     const chosen = choices(await db.matches.get(matchId))
@@ -173,15 +171,15 @@ describe('Scoreboard_beach: the interval taps survive an undo', () => {
       { matchId, setIndex: 1, type: 'set_end', payload: {}, seq: 3, ts: end1 }
     ])
     mount(matchId)
-    await waitFor(() => expect(button('Switch sides')).toBeTruthy(), { timeout: 8000 })
+    await waitFor(() => expect(intervalChoiceShown()).toBeTruthy(), { timeout: 8000 })
     await settle()
 
     await sanctionInBreak(matchId, 2)
     await settle()
-    fireEvent.click(button('Switch sides'))
+    await tapInterval('side')
     await waitFor(async () => expect((await db.matches.get(matchId)).setLeftTeamOverrides?.[2]).toBe('B'))
     await settle()
-    fireEvent.click(button('Switch serve'))
+    await tapInterval('serve')
     await waitFor(async () => expect((await db.matches.get(matchId)).set2FirstServe).toBe('team1'))
     await settle()
     await sanctionInBreak(matchId, 2)

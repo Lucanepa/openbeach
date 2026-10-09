@@ -56,6 +56,7 @@ import { useDiagCommits } from '../diagnostics_beach/commits_beach'
 import { diagnosticsState, exportDiagnostics } from '../diagnostics_beach/index_beach'
 import { discPaint } from '../utils_beach/teamColours_beach'
 import { isTeam1LeftInSet } from '../utils_beach/courtSides_beach'
+import { setFirstServer } from '../utils_beach/coinToss_beach'
 import { medicalFromAction, medicalRemaining, reconcileMedical, medicalEndInEvents, medicalTypeLabel, medicalPlayerLabel, formatDuration } from '../utils_beach/refereeMedical_beach'
 import { refereeEventLabel, REFEREE_DISPLAYABLE_EVENTS, BMP_PER_SET } from '../utils_beach/refereeEventLabel_beach'
 
@@ -1362,21 +1363,14 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     }
 
     const setIndex = data.currentSet.index
-    const set1FirstServe = data.match.firstServe || 'team1'
-    const teamAKey = data.match.coinTossTeamA || 'team1'
-    const teamBKey = data.match.coinTossTeamB || 'team2'
 
-    // Calculate first serve for current set based on alternation pattern
-    // Beach volleyball is best-of-3: Set 3 is the tie break
-    let currentSetFirstServe
-    if (setIndex === 3 && data.match?.set3FirstServe) {
-      currentSetFirstServe = data.match.set3FirstServe === 'A' ? teamAKey : teamBKey
-    } else if (setIndex === 3) {
-      currentSetFirstServe = set1FirstServe
-    } else {
-      // Sets 1-2: odd sets (1) same as Set 1, even sets (2) opposite
-      currentSetFirstServe = setIndex % 2 === 1 ? set1FirstServe : (set1FirstServe === 'team1' ? 'team2' : 'team1')
-    }
+    // The set's first server by the scorer's own rule (coinToss_beach): set
+    // 2 the serve recorded in the interval (set2FirstServe), else the other
+    // team than set 1's; set 3 its toss (set3FirstServe), else the other
+    // team than set 2's. It ignored set2FirstServe and gave set 3 to set 1's
+    // first server, so the venue relay's referee showed another server than
+    // the scorer before the set's first point.
+    const currentSetFirstServe = setFirstServer(data.match, setIndex)
 
     if (!data?.events || data.events.length === 0) {
       return currentSetFirstServe

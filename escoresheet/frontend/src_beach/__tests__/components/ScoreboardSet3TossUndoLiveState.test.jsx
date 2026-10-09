@@ -5,6 +5,7 @@
 // in the cloud. On the real scoring screen over the app's Dexie database
 // (fake IndexedDB), the backend on, its live-state writes recorded.
 import '../helpers/fakeIndexedDb'
+import { intervalChoiceShown, tapInterval, serveOrderChange } from '../helpers/intervalChoice'
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest'
 import { render, fireEvent, waitFor, cleanup } from '@testing-library/react'
 
@@ -115,9 +116,9 @@ describe('Scoreboard_beach: undoing the set 3 coin toss, the live state and the 
 
     // the toss (B), sides swapped by the winner
     fireEvent.click(toss('B'))
-    await waitFor(() => expect(button('Switch sides')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(intervalChoiceShown()).toBeTruthy(), { timeout: 5000 })
     await settle()
-    fireEvent.click(button('Switch sides'))
+    await tapInterval('side')
     await waitFor(async () => expect((await db.matches.get(matchId)).set3LeftTeam).toBe('B'))
     await settle()
 

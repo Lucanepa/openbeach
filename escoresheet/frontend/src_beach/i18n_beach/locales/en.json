@@ -787,7 +787,6 @@
     "secondRefereeShort": "2R",
     "set3CoinToss": "Set 3 coin toss",
     "wonToss": "Won the toss",
-    "betweenSetsChooses": "{{team}} chooses (lost the coin toss)",
     "timeoutFor": "Time-out – {{team}}",
     "pinsEmptyTest": "No PINs: a test match has no referee or team connection.",
     "pinsEmpty": "No PINs yet: switch on the referee or a team connection in the connection setup.",
@@ -899,7 +898,6 @@
       "ttoIn": "TTO at {{total}} ({{count}})",
       "ttoDone": "TTO taken",
       "noTto": "No TTO in set 3",
-      "serviceOrderHint": "Tap to swap the first and second server",
       "medical": "MTO · RIT",
       "medicalTitle": "Medical time-out · RIT",
       "medicalHint": "Tap the injured player.",
@@ -911,6 +909,25 @@
       "sidewaysTitle": "Hold the phone upright",
       "sidewaysBody": "The scoring screen on a phone is made for portrait. Turn the phone back: the match, its dialogs and countdowns are kept.",
       "replay": "Replay"
+    },
+    "intervalChoice": {
+      "chooses": "{{team}} chooses",
+      "reasonLostToss": "lost the coin toss",
+      "reasonWonSet3Toss": "won the set 3 coin toss",
+      "side": "Side",
+      "serve": "Serve or receive",
+      "pickHint": "Tap what they choose. Until then the teams stay on their sides.",
+      "sideRow": "{{team}}: side",
+      "serveRow": "{{team}}: serve or receive",
+      "left": "Left",
+      "right": "Right",
+      "serves": "Serve",
+      "receives": "Receive"
+    },
+    "serveOrder": {
+      "title": "Serve order",
+      "change": "Change",
+      "changeAria": "Change the serve order of {{team}}: {{second}} serves first, then {{first}}"
     }
   },
   "settings": {

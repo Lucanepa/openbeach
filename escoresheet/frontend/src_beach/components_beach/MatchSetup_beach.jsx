@@ -42,6 +42,7 @@ import { KeyValue } from '../ui/volleyui/KeyValue.jsx'
 import { SectionHeader } from '../ui/volleyui/SectionHeader.jsx'
 import { Modal as KitModal, modalCancelClass, modalPrimaryClass, modalSaveClass } from '../ui/volleyui/Modal.jsx'
 import { preload, usePreloaded } from '../utils_beach/preload_beach'
+import TeamShirt from './TeamShirt_beach'
 
 // ---- volleyui class strings for the setup views --------------------------
 // A section inside the setup page card (match info, officials, dashboards,
@@ -3103,10 +3104,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                         FOCUS_RING
                       )}
                     >
-                      <div className="shirt" style={{ background: color, transform: 'scale(0.8)' }}>
-                        <div className="collar" style={{ background: color }} />
-                        <div className="number" style={{ color: getContrastColor(color) }}>1</div>
-                      </div>
+                      <TeamShirt color={color} numberColor={getContrastColor(color)} style={{ transform: 'scale(0.8)' }} />
                     </button>
                   )
                 })}
@@ -4707,9 +4705,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             {/* Row 2: Color selector + Shirt + Roster */}
             <div className="flex items-center gap-3">
               <span className="text-xs text-stone-500">{t('matchSetup.selectColour')}</span>
-              <div
-                className="shirt"
-                style={{ background: team.color, cursor: 'pointer', transform: 'scale(0.85)' }}
+              <TeamShirt
+                color={team.color}
+                numberColor={getContrastColor(team.color)}
+                style={{ cursor: 'pointer', transform: 'scale(0.85)' }}
                 onClick={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect()
                   const centerX = rect.left + rect.width / 2
@@ -4718,10 +4717,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     position: { x: centerX, y: rect.bottom + 8 }
                   })
                 }}
-              >
-                <div className="collar" style={{ background: team.color }} />
-                <div className="number" style={{ color: getContrastColor(team.color) }}>1</div>
-              </div>
+              />
               <div className="flex-1" />
               <Button variant="secondary" size="xl" icon={Users} onClick={() => {
                 if (team.roster.length === 0) {
@@ -5135,10 +5131,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                       FOCUS_RING
                     )}
                   >
-                    <div className="shirt" style={{ background: color, transform: 'scale(0.8)' }}>
-                      <div className="collar" style={{ background: color }} />
-                      <div className="number" style={{ color: getContrastColor(color) }}>1</div>
-                    </div>
+                    <TeamShirt color={color} numberColor={getContrastColor(color)} style={{ transform: 'scale(0.8)' }} />
                   </button>
                 )
               })}

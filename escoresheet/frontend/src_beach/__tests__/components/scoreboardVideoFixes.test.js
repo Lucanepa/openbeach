@@ -144,8 +144,10 @@ describe('issues 11 and 12: scores in court order, the set-end BMP chip', () => 
 
 describe('issue 13: interval and set-3 toss panel', () => {
   it('the team cards carry the coin toss letter, without nested parentheses', () => {
-    expect(sb).toContain("const leftLabel = (leftisTeam1 ? 'team1' : 'team2') === teamAKey ? 'A' : 'B'")
-    expect(sb).toContain("const rightLabel = (leftisTeam1 ? 'team2' : 'team1') === teamAKey ? 'A' : 'B'")
+    // one name per team for the cards and the choice rows: "A · Alpha / Beta"
+    expect(sb).toContain("team1: `${teamAKey === 'team1' ? 'A' : 'B'} · ${data?.team1Team?.name")
+    expect(sb).toContain("team2: `${teamAKey === 'team2' ? 'A' : 'B'} · ${data?.team2Team?.name")
+    expect(sb).toContain('const name = intervalTeamNames[teamKey]')
     expect(sb).not.toContain('{leftLabel} ({leftName})')
     expect(sb).not.toContain('{rightLabel} ({rightName})')
   })

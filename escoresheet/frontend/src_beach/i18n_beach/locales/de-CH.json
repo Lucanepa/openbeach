@@ -786,7 +786,6 @@
     "secondRefereeShort": "2SR",
     "set3CoinToss": "Usloosig 3. Satz",
     "wonToss": "Usloosig gwunne",
-    "betweenSetsChooses": "{{team}} wählt (Usloosig verlore)",
     "timeoutFor": "Timeout – {{team}}",
     "pinsEmptyTest": "Keine PINs: Ein Testspiel hat keine Verbindung für Schiedsrichter oder Teams.",
     "pinsEmpty": "Noch keine PINs: Schalte in der Verbindungseinrichtung die Verbindung für Schiedsrichter oder ein Team ein.",
@@ -898,7 +897,6 @@
       "ttoIn": "TTO bi {{total}} ({{count}})",
       "ttoDone": "TTO gmacht",
       "noTto": "Kei TTO im 3. Satz",
-      "serviceOrderHint": "Aatippe, zum de erscht und de zweit Ufschläger tuusche",
       "medical": "MTO · RIT",
       "medicalTitle": "Medizinischs Timeout · RIT",
       "medicalHint": "Verletzte Spieler aatippe.",
@@ -910,6 +908,25 @@
       "sidewaysTitle": "Heb s Handy uufrächt",
       "sidewaysBody": "D Erfassig ufem Handy isch fürs Hochformat gmacht. Drääj s Handy zrugg: Spiil, Dialög und Countdowns blibed erhalte.",
       "replay": "Wieder­hole"
+    },
+    "intervalChoice": {
+      "chooses": "{{team}} wählt",
+      "reasonLostToss": "Usloosig verlore",
+      "reasonWonSet3Toss": "Usloosig für de Satz 3 gwunne",
+      "side": "Siite",
+      "serve": "Ufschlag oder Annahm",
+      "pickHint": "Tippe, was s Team wählt. Bis dänn bliibed d Teams uf ihrere Siite.",
+      "sideRow": "{{team}}: Siite",
+      "serveRow": "{{team}}: Ufschlag oder Annahm",
+      "left": "Links",
+      "right": "Rächts",
+      "serves": "Ufschlag",
+      "receives": "Annahm"
+    },
+    "serveOrder": {
+      "title": "Ufschlagreihefolg",
+      "change": "Ändere",
+      "changeAria": "Ufschlagreihefolg vo {{team}} ändere: zerscht {{second}}, dänn {{first}}"
     }
   },
   "settings": {

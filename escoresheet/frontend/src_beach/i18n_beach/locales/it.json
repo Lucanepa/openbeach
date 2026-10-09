@@ -786,7 +786,6 @@
     "secondRefereeShort": "2A",
     "set3CoinToss": "Sorteggio del 3° set",
     "wonToss": "Ha vinto il sorteggio",
-    "betweenSetsChooses": "{{team}} sceglie (ha perso il sorteggio)",
     "timeoutFor": "Timeout – {{team}}",
     "pinsEmptyTest": "Nessun PIN: una partita di prova non ha connessioni per arbitro o squadre.",
     "pinsEmpty": "Ancora nessun PIN: attiva la connessione dell'arbitro o di una squadra nella configurazione della connessione.",
@@ -898,7 +897,6 @@
       "ttoIn": "TTO a {{total}} ({{count}})",
       "ttoDone": "TTO fatto",
       "noTto": "Nessun TTO nel 3° set",
-      "serviceOrderHint": "Tocca per scambiare primo e secondo battitore",
       "medical": "MTO · RIT",
       "medicalTitle": "Timeout medico · RIT",
       "medicalHint": "Tocca il giocatore infortunato.",
@@ -910,6 +908,25 @@
       "sidewaysTitle": "Tieni il telefono in verticale",
       "sidewaysBody": "La schermata di punteggio sul telefono è pensata per il formato verticale. Ruota di nuovo il telefono: la partita, i dialoghi e i conti alla rovescia restano.",
       "replay": "Ripeti"
+    },
+    "intervalChoice": {
+      "chooses": "{{team}} sceglie",
+      "reasonLostToss": "ha perso il sorteggio",
+      "reasonWonSet3Toss": "ha vinto il sorteggio del 3° set",
+      "side": "Campo",
+      "serve": "Servizio o ricezione",
+      "pickHint": "Tocca ciò che sceglie la squadra. Fino ad allora le squadre restano nel loro campo.",
+      "sideRow": "{{team}}: campo",
+      "serveRow": "{{team}}: servizio o ricezione",
+      "left": "Sinistra",
+      "right": "Destra",
+      "serves": "Servizio",
+      "receives": "Ricezione"
+    },
+    "serveOrder": {
+      "title": "Ordine di servizio",
+      "change": "Cambia",
+      "changeAria": "Cambia l'ordine di servizio di {{team}}: serve prima {{second}}, poi {{first}}"
     }
   },
   "settings": {

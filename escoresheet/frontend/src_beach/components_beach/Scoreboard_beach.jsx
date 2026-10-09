@@ -46,6 +46,8 @@ import { staleCourtSwitches, switchBackUpdate, snapshotsAfterSwitchBack, pending
 import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
 import { TTO_TOTAL, courtChangeEvery, hasTechnicalTimeout, nextCourtEvents } from '../utils_beach/courtRhythm_beach'
 import PhoneScoreboard from './scoreboard/PhoneScoreboard_beach.jsx'
+import IntervalChoice, { ServeOrder } from './scoreboard/IntervalChoice_beach.jsx'
+import { intervalChooser } from '../utils_beach/intervalChoice_beach'
 import { detectDisplayMode, isPhoneScreen, normaliseDisplayMode, phoneHeldSideways, phoneLayoutActive, readStoredDisplayMode, recentActions } from './scoreboard/phoneLayout_beach'
 import { defaultSetStartTime, scheduledClock, withActualStartTimeRemark, actualStartTimeLine, startScheduleOf, typedStartNear } from '../utils_beach/setStartTime_beach'
 import { withoutAutoRemarks, errorText as correctionErrorText, pointsToWin as setPointsToWin } from '../utils_beach/corrections_beach'
@@ -512,6 +514,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   const [setTransitionLoading, setSetTransitionLoading] = useState(null) // { step: string } | null - Loading overlay during set transition
   const [set3SetupConfirmed, setSet3SetupConfirmed] = useState(false) // Track if Set 3 coin toss setup is confirmed (inline UI)
   const [betweenSetsSetupConfirmed, setBetweenSetsSetupConfirmed] = useState(false) // Track if between-sets setup (Set 1→2) is confirmed
+  // What the team that chooses in the interval took (side, or serve or
+  // receive), per set and chooser: { '2:team2': 'side' }. Only which buttons
+  // the interval shows; the sides and the serve themselves are on the match
+  const [intervalChoices, setIntervalChoices] = useState({})
   const [postMatchSignature, setPostMatchSignature] = useState(null) // 'team1-captain' | 'team2-captain' | null
   const [sanctionConfirm, setSanctionConfirm] = useState(null) // { side: 'left'|'right', type: 'improper_request'|'delay_warning'|'delay_penalty' } | null
   const [sanctionDropdown, setSanctionDropdown] = useState(null) // { team: 'team1'|'team2', type: 'player'|'official', playerNumber?: number, position?: string, role?: string, element: HTMLElement, x?: number, y?: number } | null
@@ -3346,34 +3352,21 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   const leftServeTeamKey = leftisTeam1 ? 'team1' : 'team2'
   const rightServeTeamKey = leftisTeam1 ? 'team2' : 'team1'
 
-  // Compute which team makes decisions in between-sets setup
-  // Set 2: Coin toss LOSER gets to choose
-  // Set 3: New coin toss WINNER gets to choose
-  const betweenSetsDecisionTeam = useMemo(() => {
-    if (!isBetweenSets || !data?.set) return null
-    const nextSetIndex = data.set.index
 
-    if (nextSetIndex === 2) {
-      // Set 2: Coin toss LOSER decides
-      const winner = data?.match?.coinTossWinner
-      if (!winner) return null
-      return winner === 'team1' ? 'team2' : 'team1'
-    } else if (nextSetIndex === 3) {
-      // Set 3: New coin toss winner decides (stored in set3CoinTossWinner on match)
-      return data?.match?.set3CoinTossWinner || null
-    }
-    return null
-  }, [isBetweenSets, data?.set, data?.match?.coinTossWinner, data?.match?.set3CoinTossWinner])
-
-  // Get the name of the decision team for display
-  const betweenSetsDecisionTeamName = useMemo(() => {
-    if (!betweenSetsDecisionTeam) return null
-    if (betweenSetsDecisionTeam === 'team1') {
-      return data?.team1Team?.name || data?.team1Team?.shortName || 'Team 1'
-    } else {
-      return data?.team2Team?.name || data?.team2Team?.shortName || 'Team 2'
-    }
-  }, [betweenSetsDecisionTeam, data?.team1Team, data?.team2Team])
+  // The interval's choice (IntervalChoice_beach): who chooses before set 2
+  // (the loser of the first toss) or set 3 (the winner of its toss), what
+  // they took, and the names its rows give the teams
+  const intervalChooserInfo = isBetweenSets ? intervalChooser(data?.set?.index, data?.match) : null
+  const intervalChoiceKey = intervalChooserInfo ? `${data?.set?.index}:${intervalChooserInfo.teamKey}` : null
+  const intervalChoice = intervalChoiceKey ? (intervalChoices[intervalChoiceKey] || null) : null
+  const chooseInInterval = useCallback((choice) => {
+    if (!intervalChoiceKey) return
+    setIntervalChoices(prev => ({ ...prev, [intervalChoiceKey]: choice }))
+  }, [intervalChoiceKey])
+  const intervalTeamNames = {
+    team1: `${teamAKey === 'team1' ? 'A' : 'B'} · ${data?.team1Team?.name || data?.team1Team?.shortName || 'Team 1'}`,
+    team2: `${teamAKey === 'team2' ? 'A' : 'B'} · ${data?.team2Team?.name || data?.team2Team?.shortName || 'Team 2'}`
+  }
 
   // Before coin toss or before set starts, show serve on left (team1) as placeholder
   const isBeforeCoinToss = !data?.match?.coinTossTeamA || !data?.match?.coinTossTeamB
@@ -4783,8 +4776,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     const set1FirstServe = data.match.firstServe || 'team1'
 
     if (setIndex === 3) {
-      // Set 3: toggle set3FirstServe between 'A' and 'B'
-      const currentFirstServe = data.match.set3FirstServe || 'A'
+      // Set 3: toggle set3FirstServe between 'A' and 'B', from the server
+      // shown (none stored: the other team than set 2's, not always A)
+      const currentFirstServe = setFirstServer(data.match, 3) === teamAKey ? 'A' : 'B'
       const newFirstServe = currentFirstServe === 'A' ? 'B' : 'A'
       console.log('[BetweenSets] Switch serve (Set 3):', { currentFirstServe, newFirstServe })
       await intervalTap(setIndex, () => db.matches.update(matchId, { set3FirstServe: newFirstServe }))
@@ -4798,6 +4792,51 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       await intervalTap(setIndex, () => db.matches.update(matchId, { set2FirstServe: newFirstServe }))
     }
   }, [data?.match, data?.set, matchId, intervalTap])
+
+  // The interval's choice rows (IntervalChoice_beach): put a team on a side,
+  // or make it serve or receive. A pick of what is already so writes nothing
+  // (a double tap on "Right" leaves the team on the right, where a toggle
+  // would put it back). Read in the tap's transaction, as the switches.
+  const handleIntervalPickSide = useCallback(async (teamKey, side) => {
+    if (!data?.set) return
+    const setIndex = data.set.index
+    await intervalTap(setIndex, async () => {
+      const match = await db.matches.get(matchId)
+      if (!match) return false
+      const leftKey = isTeam1LeftInSet(setIndex, match) ? 'team1' : 'team2'
+      const otherKey = teamKey === 'team1' ? 'team2' : 'team1'
+      if (leftKey === (side === 'left' ? teamKey : otherKey)) return false
+      const update = switchSidesUpdate(setIndex, match, { beforeSetStart: true })
+      await db.matches.update(matchId, update)
+      if (match.seed_key && !match.test) {
+        await db.sync_queue.add({
+          resource: 'match',
+          action: 'update',
+          payload: { id: match.seed_key, ...update },
+          ts: new Date().toISOString(),
+          status: 'queued'
+        })
+      }
+    })
+  }, [data?.set, matchId, intervalTap])
+
+  const handleIntervalPickServe = useCallback(async (teamKey, serves) => {
+    if (!data?.set) return
+    const setIndex = data.set.index
+    if (setIndex !== 2 && setIndex !== 3) return
+    await intervalTap(setIndex, async () => {
+      const match = await db.matches.get(matchId)
+      if (!match) return false
+      const teamA = match.coinTossTeamA || 'team1'
+      const want = serves ? teamKey : (teamKey === 'team1' ? 'team2' : 'team1')
+      // the server the screen shows: with no set3FirstServe stored (as set
+      // 2's end leaves it) set 3's is the other team than set 2's, not A
+      if (setFirstServer(match, setIndex) === want) return false
+      await db.matches.update(matchId, setIndex === 3
+        ? { set3FirstServe: want === teamA ? 'A' : 'B' }
+        : { set2FirstServe: want })
+    })
+  }, [data?.set, matchId, intervalTap])
 
   // Swap first/second server for a team
   const handleBetweenSetsSwitchServiceOrder = useCallback(async (teamKey) => {
@@ -7577,7 +7616,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const raw = teamKey === 'team1' ? data?.match?.team1FirstServe : data?.match?.team2FirstServe
       const first = raw ?? numbers[0]
       const second = numbers.find(n => String(n) !== String(first)) ?? numbers[1]
-      return { firstServer: first ?? null, secondServer: second ?? null }
+      return { firstServer: first ?? null, secondServer: second ?? null, serveOrderPlayers: players, firstServe: raw ?? null }
     }
     const phoneTeam = (side) => {
       const isLeft = side === 'left'
@@ -7638,7 +7677,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     const betweenOpen = isBetweenSets && (setIndex === 3 ? !set3SetupConfirmed : !betweenSetsSetupConfirmed)
     const between = betweenOpen ? {
       kind: setIndex === 3 && !data?.match?.set3CoinTossWinner ? 'toss' : 'setup',
-      chooses: setIndex !== 3 && betweenSetsDecisionTeamName ? t('scoreboard.betweenSetsChooses', { team: betweenSetsDecisionTeamName, defaultValue: '{{team}} chooses (lost the coin toss)' }) : null,
+      // the choice (IntervalChoice_beach): who chooses, what they took, the rows
+      choice: {
+        chooser: intervalChooserInfo,
+        choice: intervalChoice,
+        names: intervalTeamNames,
+        leftTeamKey: leftisTeam1 ? 'team1' : 'team2',
+        servingTeamKey: getCurrentServe()
+      },
       ...intervalCountdown
     } : null
 
@@ -7700,7 +7746,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         set3CoinToss: handleSet3CoinToss,
         switchServiceOrder: handleBetweenSetsSwitchServiceOrder,
         switchSides: handleBetweenSetsSwitchSides,
-        switchServe: handleBetweenSetsSwitchServe
+        switchServe: handleBetweenSetsSwitchServe,
+        chooseInInterval,
+        pickSide: handleIntervalPickSide,
+        pickServe: handleIntervalPickServe
       }
     }
   }
@@ -9191,19 +9240,19 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           </>
                         ) : (
                           <>
-                            {/* Arrow indicator - points towards decision team (coin toss loser for Set 2) */}
-                            {data?.set?.index !== 3 && (
+                            {/* Arrow indicator - points towards the team that chooses (set 2: the loser of the first toss; set 3: the winner of its toss) */}
+                            {intervalChooserInfo && (
                               <div style={{
                                 display: 'flex',
                                 justifyContent: 'center',
                                 marginBottom: '4px'
                               }}>
                                 <svg
-                                  className={betweenSetsDecisionTeam === (leftisTeam1 ? 'team1' : 'team2') ? 'between-sets-arrow-left' : 'between-sets-arrow-right'}
+                                  className={intervalChooserInfo.teamKey === (leftisTeam1 ? 'team1' : 'team2') ? 'between-sets-arrow-left' : 'between-sets-arrow-right'}
                                   width="56" height="40" viewBox="0 0 56 40"
                                   style={{ filter: 'drop-shadow(0 2px 4px rgba(4, 120, 87, 0.25))' }}
                                 >
-                                  {betweenSetsDecisionTeam === (leftisTeam1 ? 'team1' : 'team2') ? (
+                                  {intervalChooserInfo.teamKey === (leftisTeam1 ? 'team1' : 'team2') ? (
                                     <path d="M48 20H12M12 20L24 8M12 20L24 32" stroke="#059669" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
                                   ) : (
                                     <path d="M8 20H44M44 20L32 8M44 20L32 32" stroke="#059669" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
@@ -9211,183 +9260,70 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 </svg>
                               </div>
                             )}
-                            {data?.set?.index !== 3 && (
-                              <div style={{
-                                fontSize: '18px',
-                                fontWeight: 600,
-                                color: 'var(--ov-text-secondary)',
-                                marginBottom: '16px',
-                                textAlign: 'center'
-                              }}>
-                                {t('scoreboard.betweenSetsChooses', { team: betweenSetsDecisionTeamName, defaultValue: '{{team}} chooses (lost the coin toss)' })}
-                              </div>
-                            )}
 
-                            {/* Main row: Left serve order box | Switch buttons stacked | Right serve order box */}
+                            {/* Main row: left team's box (its serve order) | the choice | right team's box */}
                             <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', justifyContent: 'center', alignItems: 'stretch', paddingTop: '50px', overflow: 'visible' }}>
-                              {/* Left team serve order box with ball */}
-                              {(() => {
-                                const leftTeamKey = leftisTeam1 ? 'team1' : 'team2'
-                                const leftServes = getCurrentServe() === leftTeamKey
-                                const leftPlayers = leftisTeam1 ? (data?.team1Players || []) : (data?.team2Players || [])
-                                const leftPlayerNumbers = leftPlayers.map(p => p.number).sort((a, b) => a - b)
-                                const leftFirstServeRaw = leftisTeam1 ? data?.match?.team1FirstServe : data?.match?.team2FirstServe
-                                const leftFirstServe = leftFirstServeRaw ?? leftPlayerNumbers[0]
-                                const leftOther = leftPlayerNumbers.find(n => String(n) !== String(leftFirstServe)) ?? leftPlayerNumbers[1]
-                                const leftLabel = (leftisTeam1 ? 'team1' : 'team2') === teamAKey ? 'A' : 'B'
-                                const leftName = leftisTeam1
-                                  ? (data?.team1Team?.name || data?.team1Team?.shortName || 'T1')
-                                  : (data?.team2Team?.name || data?.team2Team?.shortName || 'T2')
-                                const leftColor = leftisTeam1
-                                  ? (data?.team1Team?.color || '#ef4444')
-                                  : (data?.team2Team?.color || '#3b82f6')
-                                const leftTextColor = isBrightColor(leftColor) ? '#000' : '#fff'
-                                const leftSubTextColor = isBrightColor(leftColor) ? '#222' : '#eee'
-                                return (
-                                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                                    {leftServes && (
+                              {['left', 'right'].map((side) => {
+                                const teamKey = (side === 'left') === leftisTeam1 ? 'team1' : 'team2'
+                                const serves = getCurrentServe() === teamKey
+                                const color = teamKey === 'team1' ? (data?.team1Team?.color || '#ef4444') : (data?.team2Team?.color || '#3b82f6')
+                                const textColor = isBrightColor(color) ? '#000' : '#fff'
+                                const name = intervalTeamNames[teamKey]
+                                const box = (
+                                  <div key={side} data-testid={`interval-team-${side}`} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                    {serves && (
                                       <img src={ballImage} onError={(e) => e.target.src = ballImage} alt="" style={{ position: 'absolute', top: '-46px', left: '50%', transform: 'translateX(-50%)', width: 43, height: 43, objectFit: 'contain' }} />
                                     )}
-                                    <div
-                                      onClick={() => handleBetweenSetsSwitchServiceOrder(leftisTeam1 ? 'team1' : 'team2')}
-                                      onMouseEnter={(e) => e.currentTarget.style.background = leftColor}
-                                      onMouseLeave={(e) => e.currentTarget.style.background = `${leftColor}dd`}
-                                      style={{
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        padding: '10px 16px',
-                                        background: `${leftColor}dd`,
-                                        borderRadius: 'var(--ov-radius-lg)',
-                                        border: leftServes ? '3px solid #059669' : `2px solid ${leftColor}`,
-                                        minWidth: '80px',
-                                        cursor: 'pointer',
-                                        height: '100%',
-                                        transition: 'background 0.15s'
-                                      }}>
-                                      <div style={{ fontWeight: 700, fontSize: '15px', color: leftTextColor }}>
-                                        {leftLabel} · {leftName}
-                                      </div>
-                                      <div style={{ fontSize: '13px', fontWeight: 700, color: leftSubTextColor, marginTop: '6px' }}>
-                                        I: {leftFirstServe || '?'}
-                                      </div>
-                                      <div style={{ color: leftSubTextColor, fontSize: '10px', fontWeight: 700, lineHeight: 1 }}>⇅</div>
-                                      <div style={{ fontSize: '13px', fontWeight: 700, color: leftSubTextColor }}>
-                                        II: {leftOther || '?'}
-                                      </div>
+                                    <div style={{
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      gap: '6px',
+                                      padding: '10px 16px',
+                                      background: color,
+                                      borderRadius: 'var(--ov-radius-lg)',
+                                      border: serves ? '3px solid #059669' : `2px solid ${color}`,
+                                      minWidth: '150px',
+                                      maxWidth: '220px',
+                                      height: '100%',
+                                      color: textColor
+                                    }}>
+                                      <div style={{ fontWeight: 700, fontSize: '15px', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
+                                      <ServeOrder
+                                        teamName={name}
+                                        players={teamKey === 'team1' ? data?.team1Players : data?.team2Players}
+                                        firstServe={teamKey === 'team1' ? data?.match?.team1FirstServe : data?.match?.team2FirstServe}
+                                        onChange={() => handleBetweenSetsSwitchServiceOrder(teamKey)}
+                                        textColor={textColor}
+                                      />
                                     </div>
                                   </div>
                                 )
-                              })()}
-
-                              {/* Center: Switch buttons stacked */}
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', justifyContent: 'center' }}>
-                                <button
-                                  onClick={handleBetweenSetsSwitchSides}
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '8px',
-                                    padding: '12px 20px',
-                                    minHeight: '48px',
-                                    fontSize: '16px',
-                                    fontWeight: 700,
-                                    background: 'var(--ov-selected)',
-                                    color: '#fff',
-                                    border: 'none',
-                                    borderRadius: 'var(--ov-radius-lg)',
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  <ArrowLeftRight size={20} />
-                                  {t('scoreboard.buttons.switchSides', 'Switch sides')}
-                                </button>
-
-                                <button
-                                  onClick={handleBetweenSetsSwitchServe}
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '8px',
-                                    padding: '12px 20px',
-                                    minHeight: '48px',
-                                    fontSize: '16px',
-                                    fontWeight: 700,
-                                    background: 'var(--ov-selected)',
-                                    color: '#fff',
-                                    border: 'none',
-                                    borderRadius: 'var(--ov-radius-lg)',
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  <img src={ballImage} onError={(e) => e.target.src = ballImage} alt="" style={{ width: 24, height: 24, objectFit: 'contain' }} />
-                                  {t('scoreboard.buttons.switchServe', 'Switch serve')}
-                                </button>
-                              </div>
-
-                              {/* Right team serve order box with ball */}
-                              {(() => {
-                                const rightTeamKey = leftisTeam1 ? 'team2' : 'team1'
-                                const rightServes = getCurrentServe() === rightTeamKey
-                                const rightPlayers = leftisTeam1 ? (data?.team2Players || []) : (data?.team1Players || [])
-                                const rightPlayerNumbers = rightPlayers.map(p => p.number).sort((a, b) => a - b)
-                                const rightFirstServeRaw = leftisTeam1 ? data?.match?.team2FirstServe : data?.match?.team1FirstServe
-                                const rightFirstServe = rightFirstServeRaw ?? rightPlayerNumbers[0]
-                                const rightOther = rightPlayerNumbers.find(n => String(n) !== String(rightFirstServe)) ?? rightPlayerNumbers[1]
-                                const rightLabel = (leftisTeam1 ? 'team2' : 'team1') === teamAKey ? 'A' : 'B'
-                                const rightName = leftisTeam1
-                                  ? (data?.team2Team?.name || data?.team2Team?.shortName || 'T2')
-                                  : (data?.team1Team?.name || data?.team1Team?.shortName || 'T1')
-                                const rightColor = leftisTeam1
-                                  ? (data?.team2Team?.color || '#3b82f6')
-                                  : (data?.team1Team?.color || '#ef4444')
-                                const rightTextColor = isBrightColor(rightColor) ? '#000' : '#fff'
-                                const rightSubTextColor = isBrightColor(rightColor) ? '#222' : '#eee'
-                                return (
-                                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                                    {rightServes && (
-                                      <img src={ballImage} onError={(e) => e.target.src = ballImage} alt="" style={{ position: 'absolute', top: '-46px', left: '50%', transform: 'translateX(-50%)', width: 43, height: 43, objectFit: 'contain' }} />
-                                    )}
-                                    <div
-                                      onClick={() => handleBetweenSetsSwitchServiceOrder(leftisTeam1 ? 'team2' : 'team1')}
-                                      onMouseEnter={(e) => e.currentTarget.style.background = rightColor}
-                                      onMouseLeave={(e) => e.currentTarget.style.background = `${rightColor}dd`}
-                                      style={{
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        padding: '10px 16px',
-                                        background: `${rightColor}dd`,
-                                        borderRadius: 'var(--ov-radius-lg)',
-                                        border: rightServes ? '3px solid #059669' : `2px solid ${rightColor}`,
-                                        minWidth: '80px',
-                                        cursor: 'pointer',
-                                        height: '100%',
-                                        transition: 'background 0.15s'
-                                      }}>
-                                      <div style={{ fontWeight: 700, fontSize: '15px', color: rightTextColor }}>
-                                        {rightLabel} · {rightName}
-                                      </div>
-                                      <div style={{ fontSize: '13px', fontWeight: 700, color: rightSubTextColor, marginTop: '6px' }}>
-                                        I: {rightFirstServe || '?'}
-                                      </div>
-                                      <div style={{ color: rightSubTextColor, fontSize: '10px', fontWeight: 700, lineHeight: 1 }}>⇅</div>
-                                      <div style={{ fontSize: '13px', fontWeight: 700, color: rightSubTextColor }}>
-                                        II: {rightOther || '?'}
-                                      </div>
-                                    </div>
-                                  </div>
-                                )
-                              })()}
+                                if (side === 'left') return box
+                                return [
+                                  <div key="choice" style={{ display: 'flex', alignItems: 'center', width: '320px' }}>
+                                    <IntervalChoice
+                                      chooser={intervalChooserInfo}
+                                      choice={intervalChoice}
+                                      onChoose={chooseInInterval}
+                                      names={intervalTeamNames}
+                                      leftTeamKey={leftisTeam1 ? 'team1' : 'team2'}
+                                      servingTeamKey={getCurrentServe()}
+                                      onSwitchSides={handleBetweenSetsSwitchSides}
+                                      onSwitchServe={handleBetweenSetsSwitchServe}
+                                      onPickSide={handleIntervalPickSide}
+                                      onPickServe={handleIntervalPickServe}
+                                    />
+                                  </div>,
+                                  box
+                                ]
+                              })}
                             </div>
 
                             {/* Countdown and Progress bar */}
                             {betweenSetsCountdown && (
-                              <div style={{ marginTop: '12px', marginBottom: '48px', textAlign: 'center' }}>
+                              <div style={{ marginTop: '12px', marginBottom: '16px', textAlign: 'center' }}>
                                 <div style={{
                                   width: 'min(300px, 80vw)',
                                   height: '14px',
