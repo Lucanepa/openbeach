@@ -4775,8 +4775,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     const set1FirstServe = data.match.firstServe || 'team1'
 
     if (setIndex === 3) {
-      // Set 3: toggle set3FirstServe between 'A' and 'B'
-      const currentFirstServe = data.match.set3FirstServe || 'A'
+      // Set 3: toggle set3FirstServe between 'A' and 'B', from the server
+      // shown (none stored: the other team than set 2's, not always A)
+      const currentFirstServe = setFirstServer(data.match, 3) === teamAKey ? 'A' : 'B'
       const newFirstServe = currentFirstServe === 'A' ? 'B' : 'A'
       console.log('[BetweenSets] Switch serve (Set 3):', { currentFirstServe, newFirstServe })
       await intervalTap(setIndex, () => db.matches.update(matchId, { set3FirstServe: newFirstServe }))
@@ -4826,18 +4827,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const match = await db.matches.get(matchId)
       if (!match) return false
       const teamA = match.coinTossTeamA || 'team1'
-      const teamB = teamA === 'team1' ? 'team2' : 'team1'
       const want = serves ? teamKey : (teamKey === 'team1' ? 'team2' : 'team1')
-      if (setIndex === 3) {
-        const now = (match.set3FirstServe || 'A') === 'A' ? teamA : teamB
-        if (now === want) return false
-        await db.matches.update(matchId, { set3FirstServe: want === teamA ? 'A' : 'B' })
-      } else {
-        const set1 = match.firstServe || 'team1'
-        const now = match.set2FirstServe || (set1 === 'team1' ? 'team2' : 'team1')
-        if (now === want) return false
-        await db.matches.update(matchId, { set2FirstServe: want })
-      }
+      // the server the screen shows: with no set3FirstServe stored (as set
+      // 2's end leaves it) set 3's is the other team than set 2's, not A
+      if (setFirstServer(match, setIndex) === want) return false
+      await db.matches.update(matchId, setIndex === 3
+        ? { set3FirstServe: want === teamA ? 'A' : 'B' }
+        : { set2FirstServe: want })
     })
   }, [data?.set, matchId, intervalTap])
 

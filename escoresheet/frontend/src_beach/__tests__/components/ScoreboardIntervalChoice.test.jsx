@@ -233,6 +233,50 @@ describe('Scoreboard_beach: the interval before set 3 (rule 7.1.2.3: a new toss)
     expect((await match(matchId)).set3LeftTeam).toBe('B')
     cleanup()
   }, 60000)
+
+  // As set 2's end leaves it: no set3FirstServe yet. Set 3's serve is then
+  // the other team than set 2's first server (A served first in set 2, so B
+  // serves): "Serve" for A has to make A serve (it read the missing serve as
+  // A, so the tap wrote nothing and B kept the serve)
+  it('with no set 3 serve stored yet, the toss winner can take the serve away from the default', async () => {
+    const { t1, t2 } = await addTeams()
+    const start = new Date(Date.now() - 2400000).toISOString()
+    const end2 = new Date(Date.now() - 5000).toISOString()
+    const matchId = await db.matches.add({
+      team1Id: t1, team2Id: t2, status: 'live', test: true,
+      coinTossWinner: 'team1', firstServe: 'team2', coinTossTeamA: 'team1', coinTossTeamB: 'team2', team1FirstServe: 1, team2FirstServe: 1,
+      setLeftTeamOverrides: { 1: 'A', 2: 'B' }, set3LeftTeam: 'B'
+    })
+    await db.sets.add({ matchId, index: 1, team1Points: 21, team2Points: 15, finished: true, startTime: start, endTime: start })
+    await db.sets.add({ matchId, index: 2, team1Points: 18, team2Points: 21, finished: true, startTime: start, endTime: end2 })
+    await db.sets.add({ matchId, index: 3, team1Points: 0, team2Points: 0, finished: false })
+    await db.events.bulkAdd([
+      { matchId, setIndex: 1, type: 'coin_toss', payload: {}, seq: 1, ts: start },
+      { matchId, setIndex: 1, type: 'set_start', payload: {}, seq: 2, ts: start },
+      { matchId, setIndex: 1, type: 'set_end', payload: {}, seq: 3, ts: start },
+      { matchId, setIndex: 2, type: 'set_start', payload: {}, seq: 4, ts: start },
+      { matchId, setIndex: 2, type: 'set_end', payload: {}, seq: 5, ts: end2 }
+    ])
+    mount(matchId)
+    await waitFor(() => expect(byId('set3-toss-A')).toBeTruthy(), { timeout: 8000 })
+    await settle()
+    fireEvent.click(byId('set3-toss-A'))
+    await waitFor(() => expect(byId('interval-chooser')).toBeTruthy(), { timeout: 5000 })
+    await settle()
+
+    fireEvent.click(byId('interval-choice-serve'))
+    await waitFor(() => expect(rowLabel('serve')).toBe('A · Alpha / Beta: serve or receive'))
+    // as now: set 1 B served first, set 2 A, so set 3 B: A receives
+    expect(pressed('interval-serve-receive')).toBe(true)
+    fireEvent.click(byId('interval-serve-serve'))
+    await waitFor(async () => expect((await match(matchId)).set3FirstServe).toBe('A'), { timeout: 5000 })
+    await waitFor(() => expect(pressed('interval-serve-serve')).toBe(true))
+    await settle()
+    // and back: A receives, B serves
+    fireEvent.click(byId('interval-serve-receive'))
+    await waitFor(async () => expect((await match(matchId)).set3FirstServe).toBe('B'), { timeout: 5000 })
+    cleanup()
+  }, 60000)
 })
 
 describe('Scoreboard_beach: the interval on the phone layout', () => {
