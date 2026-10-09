@@ -81,7 +81,7 @@ import { AppSpinner } from '../ui/volleyui/AppSpinner.jsx'
 import { modalCancelClass, modalPrimaryClass, ActionSheet, ActionSheetItem } from '../ui/volleyui/Modal.jsx'
 import { dayLabel, timeSecondsLabel } from '../ui/volleyui/format.js'
 import { openAppWindow } from '../utils_beach/openAppWindow_beach'
-import { discPaint, effectiveTeamColour, isLightColour } from '../utils_beach/teamColours_beach'
+import { discPaint, effectiveTeamColour, isLightColour, teamBoxStyle } from '../utils_beach/teamColours_beach'
 import { preload, usePreloaded } from '../utils_beach/preload_beach'
 
 // ── volleyui chrome for the scoring screen ───────────────────────────────────
@@ -13951,8 +13951,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               style={{
                 padding: '16px',
                 fontSize: '16px',
-                background: data?.team1Team?.color || '#3b82f6',
-                color: '#fff',
+                ...teamBoxStyle(effectiveTeamColour('team1', data?.team1Team, data?.match)),
                 border: 'none',
                 borderRadius: '8px',
                 cursor: 'pointer'
@@ -13968,8 +13967,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               style={{
                 padding: '16px',
                 fontSize: '16px',
-                background: data?.team2Team?.color || '#ef4444',
-                color: '#fff',
+                ...teamBoxStyle(effectiveTeamColour('team2', data?.team2Team, data?.match)),
                 border: 'none',
                 borderRadius: '8px',
                 cursor: 'pointer'
