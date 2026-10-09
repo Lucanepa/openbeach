@@ -44,7 +44,7 @@ import { Modal as KitModal, modalCancelClass, modalPrimaryClass, modalSaveClass 
 import { preload, usePreloaded } from '../utils_beach/preload_beach'
 import TeamShirt from './TeamShirt_beach'
 import TeamColourPicker, { CloseColourNote, recallCustomColour, rememberCustomColour } from './TeamColourPicker_beach'
-import { coloursTooClose, DEFAULT_TEAM1_COLOUR, DEFAULT_TEAM2_COLOUR, isCustomColour, readableTextOn, teamBoxStyle } from '../utils_beach/teamColours_beach'
+import { coloursTooClose, DEFAULT_TEAM1_COLOUR, DEFAULT_TEAM2_COLOUR, isCustomColour, isDefaultTeamColour, readableTextOn, teamBoxStyle } from '../utils_beach/teamColours_beach'
 
 // ---- volleyui class strings for the setup views --------------------------
 // A section inside the setup page card (match info, officials, dashboards,
@@ -2541,13 +2541,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       setTeam1Roster(r.roster)
       if (!team1Name.trim()) setTeam1Name(r.meta.name)
       if (!team1ShortName && r.meta.shortName) setTeam1ShortName(r.meta.shortName)
-      if (r.meta.color && team1Color === DEFAULT_TEAM1_COLOUR) setTeam1Color(r.meta.color)
+      if (r.meta.color && isDefaultTeamColour('team1', team1Color)) setTeam1Color(r.meta.color)
       if (r.country) setTeam1Country(r.country)
     } else {
       setTeam2Roster(r.roster)
       if (!team2Name.trim()) setTeam2Name(r.meta.name)
       if (!team2ShortName && r.meta.shortName) setTeam2ShortName(r.meta.shortName)
-      if (r.meta.color && team2Color === DEFAULT_TEAM2_COLOUR) setTeam2Color(r.meta.color)
+      if (r.meta.color && isDefaultTeamColour('team2', team2Color)) setTeam2Color(r.meta.color)
       if (r.country) setTeam2Country(r.country)
     }
     // hasCoach is match-wide and stays as it is; captains stay unset (the

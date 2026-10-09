@@ -219,3 +219,23 @@ describe('custom team colours (any hex, not only the twelve presets)', () => {
     expect(isLightColour('image.png')).toBe(false)
   })
 })
+
+describe('isDefaultTeamColour (a saved team\'s colour may replace it)', () => {
+  it('today\'s defaults, and the old team 1 red of a match set up before they were presets', async () => {
+    const { isDefaultTeamColour, DEFAULT_TEAM1_COLOUR, DEFAULT_TEAM2_COLOUR } = await import('../../utils_beach/teamColours_beach')
+    expect(isDefaultTeamColour('team1', DEFAULT_TEAM1_COLOUR)).toBe(true)
+    expect(isDefaultTeamColour('team1', '#EF4444')).toBe(true)
+    expect(isDefaultTeamColour('team2', DEFAULT_TEAM2_COLOUR)).toBe(true)
+    expect(isDefaultTeamColour('team2', '#ef4444')).toBe(false)
+    expect(isDefaultTeamColour('team1', '#22c55e')).toBe(false)
+    expect(isDefaultTeamColour('team1', null)).toBe(false)
+  })
+
+  it('MatchSetup_beach takes a saved team\'s colour over either default', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+    const src = readFileSync(resolve(__dirname, '../../components_beach/MatchSetup_beach.jsx'), 'utf8')
+    expect(src).toContain("if (r.meta.color && isDefaultTeamColour('team1', team1Color)) setTeam1Color(r.meta.color)")
+    expect(src).toContain("if (r.meta.color && isDefaultTeamColour('team2', team2Color)) setTeam2Color(r.meta.color)")
+  })
+})

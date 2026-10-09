@@ -263,6 +263,21 @@ export const TEAM_COLOUR_PRESETS = [
 // tile, not on Custom: team 1 the red shirt, team 2 the light blue one
 export const DEFAULT_TEAM1_COLOUR = '#dc2626'
 export const DEFAULT_TEAM2_COLOUR = '#3b82f6'
+// The team 1 default before it was a preset: matches set up then still carry it
+const LEGACY_DEFAULT_TEAM1_COLOUR = '#ef4444'
+
+/**
+ * Whether `colour` is still the side's untouched default (today's, or the
+ * old team 1 red of a match set up before), so a saved team's colour may
+ * replace it.
+ * @param {'team1'|'team2'} side
+ * @param {string|null} colour
+ */
+export function isDefaultTeamColour(side, colour) {
+  const c = normaliseColour(colour)
+  if (!c) return false
+  return side === 'team1' ? c === DEFAULT_TEAM1_COLOUR || c === LEGACY_DEFAULT_TEAM1_COLOUR : c === DEFAULT_TEAM2_COLOUR
+}
 
 /**
  * The colour a team wears on the scorer's screen, and so on the referee and
