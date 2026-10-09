@@ -9,6 +9,7 @@ import { useAlert } from '../contexts_beach/AlertContext_beach'
 import { withActivityContext } from '../db_beach/eventHistory_beach'
 import { randomUuid } from '../utils_beach/deviceId_beach'
 import { sanctionLabel } from '../utils_beach/corrections_beach'
+import { swapTeamDesignation as swapTeamDesignationPatch, coinTossCloud } from '../utils_beach/coinToss_beach'
 import CorrectionsPanel from './corrections/CorrectionsPanel_beach'
 
 // Standard volleyball team colors - keys for translation
@@ -243,39 +244,22 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
     })
   }, [recordChange])
 
+  // Swap which team is A and which is B: only the designation changes (the
+  // labels), as the scoring screen's "Swap team A ↔ B" and OpenVolley's. Team
+  // IDs, players, set scores and events are keyed by team1 / team2 and stay as
+  // they are; the A/B-labelled fields (serve flags, the set 3 toss, the court
+  // sides) move with the designation so the first server and each team's side
+  // stay the same (coinToss_beach swapTeamDesignation). It swapped the team
+  // 1 / team 2 data instead: the cloud got each team's name, players and
+  // points under the other team.
   const swapTeamDesignation = useCallback(() => {
-    // Swap Team 1 and Team 2 teams entirely
-    recordChange('match', 'teamDesignation', 'original', 'swapped', 'Swapped team A/B designation')
-
-    // Swap teams
-    const tempTeam = editedTeam1
-    setEditedTeam1(editedTeam2)
-    setEditedTeam2(tempTeam)
-
-    // Swap players
-    const tempPlayers = editedTeam1Players
-    setEditedTeam1Players(editedTeam2Players)
-    setEditedTeam2Players(tempPlayers)
-
-    // Swap team IDs in match
     setEditedMatch(prev => {
       if (!prev) return prev
-      return {
-        ...prev,
-        team1Id: prev.team2Id,
-        team2Id: prev.team1Id,
-        coinTossTeamA: prev.coinTossTeamB,
-        coinTossTeamB: prev.coinTossTeamA
-      }
+      const patch = swapTeamDesignationPatch(prev)
+      recordChange('match', 'teamDesignation', `A=${prev.coinTossTeamA || 'team1'}`, `A=${patch.coinTossTeamA}`, 'Swapped team A/B designation')
+      return { ...prev, ...patch, _designationSwapped: !prev._designationSwapped }
     })
-
-    // Swap scores in sets
-    setEditedSets(prev => prev.map(set => ({
-      ...set,
-      team1Points: set.team2Points,
-      team2Points: set.team1Points
-    })))
-  }, [recordChange, editedTeam1, editedTeam2, editedTeam1Players, editedTeam2Players])
+  }, [recordChange])
 
   // ==================== PLAYER FUNCTIONS ====================
   const updatePlayer = useCallback((playerId, field, value, isTeam1) => {
@@ -469,6 +453,15 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
           match_type_2: editedMatch.match_type_2,
           coinTossTeamA: editedMatch.coinTossTeamA,
           coinTossTeamB: editedMatch.coinTossTeamB,
+          // A/B-labelled fields move together with the designation (Swap A/B)
+          ...(editedMatch._designationSwapped ? {
+            firstServe: editedMatch.firstServe,
+            coinTossServeA: editedMatch.coinTossServeA,
+            coinTossServeB: editedMatch.coinTossServeB,
+            set3FirstServe: editedMatch.set3FirstServe ?? null,
+            set3LeftTeam: editedMatch.set3LeftTeam ?? null,
+            setLeftTeamOverrides: editedMatch.setLeftTeamOverrides
+          } : {}),
           officials: editedOfficials,
           manualChanges: [...existingChanges, ...changes]
         })
@@ -609,6 +602,8 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
           team1_data: team1Data,
           team2_data: team2Data,
           officials: editedOfficials,
+          // the first server the swap kept, in the cloud coin toss
+          ...(editedMatch._designationSwapped ? { coin_toss: coinTossCloud(editedMatch) } : {}),
           manual_changes: [...(editedMatch.manualChanges || []), ...changes]
         },
         ts: new Date().toISOString(),

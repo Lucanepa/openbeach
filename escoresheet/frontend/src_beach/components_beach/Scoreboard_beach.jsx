@@ -40,7 +40,7 @@ import { useDiagCommits } from '../diagnostics_beach/commits_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot, refreshIntervalSnapshots } from '../utils_beach/stateSnapshot_beach'
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
-import { swapTeamDesignation, coinTossCloud, setFirstServer, switchFirstServeUpdate, labelsInDesignation } from '../utils_beach/coinToss_beach'
+import { swapTeamDesignation, coinTossCloud, setFirstServer, switchFirstServeUpdate, labelsInDesignation, eventTeamA } from '../utils_beach/coinToss_beach'
 import { set3TossBefore, set3TossUndoUpdate, undoKeepsMatch } from '../utils_beach/set3Toss_beach'
 import { staleCourtSwitches, switchBackUpdate, snapshotsAfterSwitchBack, pendingTto, pendingCourtDialog } from '../utils_beach/courtSwitchState_beach'
 import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
@@ -3568,8 +3568,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             matchId,
             setIndex,
             type: 'technical_to',
-            // courtSwitched: its change of courts, made when it ends
-            payload: { preSwitchOverrides, courtSwitched: false },
+            // courtSwitched: its change of courts, made when it ends;
+            // teamA: the designation of its A/B sides (eventTeamA)
+            payload: { preSwitchOverrides, courtSwitched: false, teamA: match?.coinTossTeamA || 'team1' },
             ts: new Date().toISOString(),
             seq: ttoSeq
           })
@@ -5518,7 +5519,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         if (lastEvent.type === 'technical_to' || lastEvent.type === 'court_switch') {
           const preSwitchOverrides = lastEvent.payload?.preSwitchOverrides
           if (preSwitchOverrides !== undefined) {
-            await db.matches.update(matchId, { setLeftTeamOverrides: preSwitchOverrides })
+            // A/B sides as the teams are named now: a "Swap team A ↔ B"
+            // since the change keeps each team on its side
+            const now = await db.matches.get(matchId)
+            await db.matches.update(matchId, labelsInDesignation({ setLeftTeamOverrides: preSwitchOverrides }, eventTeamA(lastEvent), now?.coinTossTeamA || 'team1'))
           }
         }
 
@@ -7207,7 +7211,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // undo, its sync job, the tablets)
     await logEvent('court_switch', {
       score: { team1: modal.team1Points, team2: modal.team2Points },
-      preSwitchOverrides
+      preSwitchOverrides,
+      // the designation of its A/B sides (coinToss_beach eventTeamA)
+      teamA: teamAKey
     }, { setIndexOverride: setIndex })
 
     // Check if TTO should be triggered after court switch (at 21 points in sets 1-2)
@@ -12176,8 +12182,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               className="secondary"
                               onClick={async () => {
                                 // Swap Team A and Team B identity (coinTossTeamA). Only the
-                                // labels change: the same team serves first, here and in
-                                // the cloud coin toss (coinToss_beach)
+                                // labels change: nothing moves on the court, the same team
+                                // serves first, here and in the cloud coin toss; the A/B
+                                // sides follow the labels (coinToss_beach)
                                 const currentTeamA = data.match.coinTossTeamA || 'team1'
                                 const patch = swapTeamDesignation(data.match)
                                 const newTeamA = patch.coinTossTeamA
@@ -12201,6 +12208,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 const newA = newTeamA === 'team1' ? (data.team1Team?.shortName || 'Team 1') : (data.team2Team?.shortName || 'Team 2')
                                 logManualChange('Teams Setup', 'Team A/B', `A=${oldA}`, `A=${newA}`, `Swapped Team A and Team B`)
                                 syncLiveStateToSupabase('manual_team_swap', null, { oldTeamA: currentTeamA, newTeamA })
+                                // the tablets read side_a for the match's Team A: the
+                                // match goes out with its new Team A and sides too
+                                syncToReferee()
                               }}
                               style={{
                                 flex: 1,

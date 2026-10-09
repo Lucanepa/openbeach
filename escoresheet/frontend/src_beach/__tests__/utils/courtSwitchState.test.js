@@ -7,6 +7,8 @@ import {
   courtChangeInterval, hasTto, ttoCourtSwitchMade, staleCourtSwitches,
   switchBackUpdate, snapshotsAfterSwitchBack, pendingTto, pendingCourtDialog
 } from '../../utils_beach/courtSwitchState_beach'
+import { isTeam1LeftInSet, switchSidesUpdate } from '../../utils_beach/courtSides_beach'
+import { swapTeamDesignation } from '../../utils_beach/coinToss_beach'
 
 let seq = 0
 const ev = (type, payload = {}, extra = {}) => ({ id: ++seq, seq, setIndex: 1, type, payload, ...extra })
@@ -91,5 +93,52 @@ describe('courtSwitchState_beach', () => {
     expect(pendingCourtDialog([], { index: 3, team1Points: 15, team2Points: 10, finished: false }, {})).toBe(null)
     // set 3 changes every 5
     expect(pendingCourtDialog([], { index: 3, team1Points: 3, team2Points: 2, finished: false }, {})).toBe('point')
+  })
+})
+
+// "Swap team A ↔ B" after a change of courts: the swap re-labels the teams
+// and flips the match's A/B sides (each team stays where it is). A change's
+// saved sides (preSwitchOverrides) and the snapshots are of the designation
+// they were logged with: read in today's, the change back puts each team
+// where it was before the change, not on the other side.
+describe('courtSwitchState_beach after a swap of team A / B', () => {
+  const isTeam1Left = (m) => isTeam1LeftInSet(1, m)
+
+  it('the change back restores the sides from before the change, in the match\'s designation now', () => {
+    // A = team1 on the left (no side yet), change at 4:3 (B left); swap: A = team2
+    const change = cs(4, 3, {}, { stateSnapshot: { teamAKey: 'team1' } })
+    const before = { coinTossTeamA: 'team1' }
+    const afterChange = { ...before, ...switchSidesUpdate(1, before) }
+    const swapped = { ...afterChange, ...swapTeamDesignation(afterChange) }
+    expect(isTeam1Left(swapped)).toBe(isTeam1Left(afterChange))
+    const update = switchBackUpdate([change], 1, swapped)
+    expect(isTeam1Left({ ...swapped, ...update })).toBe(isTeam1Left(before))
+  })
+
+  it('the designation from the event\'s payload (teamA) first', () => {
+    const change = cs(4, 3, { 1: 'B' }, {})
+    change.payload.teamA = 'team2'
+    // logged with A = team2: B (team1) on the left before it; now A = team1
+    const update = switchBackUpdate([change], 1, { coinTossTeamA: 'team1', setLeftTeamOverrides: { 1: 'B' } })
+    expect(isTeam1Left({ coinTossTeamA: 'team1', ...update })).toBe(true)
+  })
+
+  it('a TTO logged before courtSwitched: its saved sides compared in the designation now', () => {
+    const legacy = tto({}, { stateSnapshot: { teamAKey: 'team1' } })
+    // its sides before: B (team2) left. Swapped since (A = team2): no change made = A left
+    expect(ttoCourtSwitchMade(legacy, [legacy], { coinTossTeamA: 'team2', setLeftTeamOverrides: { 1: 'A' } })).toBe(false)
+    expect(ttoCourtSwitchMade(legacy, [legacy], { coinTossTeamA: 'team2', setLeftTeamOverrides: { 1: 'B' } })).toBe(true)
+  })
+
+  it('snapshots rewritten after a change back keep their own designation', () => {
+    const change = cs(4, 3, {}, { stateSnapshot: { teamAKey: 'team1' } })
+    const later = ev('point', { team: 'team1' }, { stateSnapshot: { teamAKey: 'team1', sideA: 'right', setLeftTeamOverrides: { 1: 'B' } } })
+    // the match now: A = team2, team1 back on the left (B left)
+    const sidesMatch = { coinTossTeamA: 'team2', setLeftTeamOverrides: { 1: 'B' } }
+    const [row] = snapshotsAfterSwitchBack([change, later], [change], 1, sidesMatch)
+    // in the snapshot's designation (A = team1): A (team1) on the left
+    expect(row.stateSnapshot.setLeftTeamOverrides).toEqual({ 1: 'A' })
+    expect(row.stateSnapshot.sideA).toBe('left')
+    expect(isTeam1LeftInSet(1, { coinTossTeamA: 'team1', ...row.stateSnapshot })).toBe(isTeam1LeftInSet(1, sidesMatch))
   })
 })
