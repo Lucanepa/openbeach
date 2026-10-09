@@ -54,7 +54,7 @@ import { timeSecondsLabel } from '../ui/volleyui/format.js'
 import { BRAND } from '../brand_beach'
 import { useDiagCommits } from '../diagnostics_beach/commits_beach'
 import { diagnosticsState, exportDiagnostics } from '../diagnostics_beach/index_beach'
-import { discPaint } from '../utils_beach/teamColours_beach'
+import { discPaint, isLightColour } from '../utils_beach/teamColours_beach'
 import { isTeam1LeftInSet } from '../utils_beach/courtSides_beach'
 import { setFirstServer } from '../utils_beach/coinToss_beach'
 import { medicalFromAction, medicalRemaining, reconcileMedical, medicalEndInEvents, medicalTypeLabel, medicalPlayerLabel, formatDuration } from '../utils_beach/refereeMedical_beach'
@@ -1547,17 +1547,6 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     )
   }, [data?.events])
 
-  // Helper to determine if a color is bright
-  const isBrightColor = (color) => {
-    if (!color) return false
-    const hex = color.replace('#', '')
-    const r = parseInt(hex.substr(0, 2), 16)
-    const g = parseInt(hex.substr(2, 2), 16)
-    const b = parseInt(hex.substr(4, 2), 16)
-    const brightness = (r * 299 + g * 587 + b * 114) / 1000
-    return brightness > 155
-  }
-
 
   // Re-enable wake lock (call this when entering fullscreen or on user interaction)
   const reEnableWakeLock = useCallback(async () => {
@@ -2185,7 +2174,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       ? (data?.team1?.color || data?.match?.team1Color || '#ef4444')
       : (data?.team2?.color || data?.match?.team2Color || '#3b82f6')
     const paint = discPaint(teamColor)
-    const textColor = paint?.color ?? (isBrightColor(teamColor) ? '#000' : '#fff')
+    const textColor = paint?.color ?? (isLightColour(teamColor) ? '#000' : '#fff')
 
     // Player name — "Fname LNAME" format (matching Scoreboard)
     const firstName = player?.firstName || player?.first_name || ''
@@ -2510,7 +2499,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                 fontSize: `${section2AFontSize.fontSize}px`,
                 fontWeight: 700,
                 background: leftColor,
-                color: isBrightColor(leftColor) ? '#000' : '#fff',
+                color: isLightColour(leftColor) ? '#000' : '#fff',
                 boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)',
                 padding: `${vmin(0.6)}px ${vmin(1.5)}px`,
                 borderRadius: vmin(0.6),
@@ -2522,7 +2511,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                 {leftShortName}
               </div>
             </div>
-            <div style={{ padding: `${vmin(0.6)}px ${vmin(1.5)}px`, background: leftColor, color: isBrightColor(leftColor) ? '#000' : '#fff', boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)', borderRadius: vmin(0.6), fontSize: vmin(3.5), fontWeight: 800, flexShrink: 0 }}>{leftLabel}</div>
+            <div style={{ padding: `${vmin(0.6)}px ${vmin(1.5)}px`, background: leftColor, color: isLightColour(leftColor) ? '#000' : '#fff', boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)', borderRadius: vmin(0.6), fontSize: vmin(3.5), fontWeight: 800, flexShrink: 0 }}>{leftLabel}</div>
           </div>
 
           {/* Center: Set scores + SET n */}
@@ -2544,14 +2533,14 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
           {/* Right: A/B + Team Name (centered in its space) */}
           <div style={{ flex: '1 1 0', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: vmin(1.2), minWidth: 0 }}>
-            <div style={{ padding: `${vmin(0.6)}px ${vmin(1.5)}px`, background: rightColor, color: isBrightColor(rightColor) ? '#000' : '#fff', boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)', borderRadius: vmin(0.6), fontSize: vmin(3.5), fontWeight: 800, flexShrink: 0 }}>{rightLabel}</div>
+            <div style={{ padding: `${vmin(0.6)}px ${vmin(1.5)}px`, background: rightColor, color: isLightColour(rightColor) ? '#000' : '#fff', boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)', borderRadius: vmin(0.6), fontSize: vmin(3.5), fontWeight: 800, flexShrink: 0 }}>{rightLabel}</div>
             <div style={{ flex: '1 1 0', display: 'flex', justifyContent: 'center', minWidth: 0, overflow: 'hidden' }}>
               <div
                 style={{
                   fontSize: `${section2AFontSize.fontSize}px`,
                   fontWeight: 700,
                   background: rightColor,
-                  color: isBrightColor(rightColor) ? '#000' : '#fff',
+                  color: isLightColour(rightColor) ? '#000' : '#fff',
                   boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)',
                   padding: `${vmin(0.6)}px ${vmin(1.5)}px`,
                   borderRadius: vmin(0.6),
@@ -2995,9 +2984,9 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                     at 21 points
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginBottom: '6px' }}>
-                    <span style={{ background: leftColor, color: isBrightColor(leftColor) ? '#000' : '#fff', boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)', padding: '1px 5px', borderRadius: '3px', fontSize: '11px', fontWeight: 700 }}>{leftLabel}</span>
+                    <span style={{ background: leftColor, color: isLightColour(leftColor) ? '#000' : '#fff', boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)', padding: '1px 5px', borderRadius: '3px', fontSize: '11px', fontWeight: 700 }}>{leftLabel}</span>
                     <strong style={{ fontSize: '16px', color: 'var(--ov-text)', fontVariantNumeric: 'tabular-nums' }}>{leftPoints} - {rightPoints}</strong>
-                    <span style={{ background: rightColor, color: isBrightColor(rightColor) ? '#000' : '#fff', boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)', padding: '1px 5px', borderRadius: '3px', fontSize: '11px', fontWeight: 700 }}>{rightLabel}</span>
+                    <span style={{ background: rightColor, color: isLightColour(rightColor) ? '#000' : '#fff', boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)', padding: '1px 5px', borderRadius: '3px', fontSize: '11px', fontWeight: 700 }}>{rightLabel}</span>
                   </div>
                   <DonutCountdown current={ttoModal.countdown} total={45} size={130} strokeWidth={6}>
                     <div style={{ fontSize: vmin(5), fontFamily: getScoreFont(), fontWeight: 600, color: ttoModal.countdown <= 10 ? 'var(--ov-danger-text)' : 'var(--ov-success)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
