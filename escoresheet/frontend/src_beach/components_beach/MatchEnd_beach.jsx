@@ -49,22 +49,13 @@ import { confirmDialog, toast } from '../ui/volleyui/uiStore.js'
 import { modalCancelClass, modalSaveClass } from '../ui/volleyui/Modal.jsx'
 import { cn } from '../ui/volleyui/cn.js'
 import { preload, usePreloaded } from '../utils_beach/preload_beach'
+import { isLightColour } from '../utils_beach/teamColours_beach'
 
 // volleyui recipes of the match end page (the official result, sanction and
 // remarks boxes inside keep the scoresheet's own black-on-white look, §7)
 const CARD = 'mb-4 rounded-2xl border border-stone-200/70 bg-white p-4 shadow-card sm:p-5'
 const CARD_TITLE = 'm-0 text-sm font-semibold text-stone-700'
 const SHEET_BOX = 'flex-1 overflow-hidden rounded-lg border-2 border-stone-800 bg-white'
-
-// Helper to determine if a color is bright (for text contrast)
-function isBrightColor(color) {
-  if (!color) return false
-  const hex = color.replace('#', '')
-  const r = parseInt(hex.substring(0, 2), 16)
-  const g = parseInt(hex.substring(2, 4), 16)
-  const b = parseInt(hex.substring(4, 6), 16)
-  return (r * 299 + g * 587 + b * 114) / 1000 > 150
-}
 
 // Helper to format duration as hh:mm
 const formatDurationHHMM = (durationStr) => {
@@ -1615,7 +1606,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         <div className="mb-4 flex justify-center">
           <div
             className="inline-flex max-w-full items-center gap-2.5 rounded-xl px-5 py-2.5 text-2xl font-bold"
-            style={{ background: winnerColor, color: isBrightColor(winnerColor) ? '#000' : '#fff' }}
+            style={{ background: winnerColor, color: isLightColour(winnerColor) ? '#000' : '#fff' }}
           >
             {winnerCountry && <CountryFlag countryCode={winnerCountry} size="lg" />}
             <span className="min-w-0 truncate">{winner}</span>
@@ -1642,7 +1633,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
                 <tr key={label}>
                   <td className="px-1 py-1">{country && <CountryFlag countryCode={country} size="sm" />}</td>
                   <td className="px-1.5 py-1">
-                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-md text-sm font-bold" style={{ background: color, color: isBrightColor(color) ? '#000' : '#fff' }}>
+                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-md text-sm font-bold" style={{ background: color, color: isLightColour(color) ? '#000' : '#fff' }}>
                       {label}
                     </span>
                   </td>

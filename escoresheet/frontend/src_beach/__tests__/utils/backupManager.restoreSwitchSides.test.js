@@ -17,7 +17,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // the coin toss (sync queue) and writes the live state at once. The live
 // row's team names tell its Team A; its side_a and lineup_a are read for
 // that team, and a live row not older than the latest event gives the
-// restored match its Team A (the swap as the scorer's match has it).
+// restored match its Team A (the swap as the scorer's match has it). The
+// swap only re-labels the teams (owner's decision 2026-10-09, as
+// OpenVolley): a snapshot's A/B sides are read in its own Team A, so each
+// team is restored on the side it had.
 
 vi.mock('../../utils_beach/backendConfig_beach', () => ({
   getApiUrl: (p) => `http://backend.test${p}`,
@@ -45,7 +48,7 @@ vi.mock('../../db_beach/db_beach', () => {
 })
 
 import { fetchMatchByPin, importMatchFromSupabase } from '../../utils_beach/backupManager_beach'
-import { leftTeamInSet, switchSidesUpdate } from '../../utils_beach/courtSides_beach'
+import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate } from '../../utils_beach/courtSides_beach'
 import { pendingCourtDialog } from '../../utils_beach/courtSwitchState_beach'
 
 const rich = (a, b) => ({ I: { number: a }, II: { number: b } })
@@ -177,13 +180,32 @@ describe('restore by PIN: the live row\'s own Team A', () => {
   })
 
   it('the same with a snapshot from before the swap: the sides as the scorer\'s match has them', async () => {
-    // beach's swap keeps the A / B sides: A on the left is team2 now
+    // the swap only re-labels (owner's decision 2026-10-09, as OpenVolley):
+    // team1 (A in the snapshot) stays on the left, now named B; the live row
+    // the swap pushed has A (team2) on the right
     const { restored } = await restore({
       events: [point(20, 2, { sideA: 'left', setLeftTeamOverrides: { 1: 'B', 2: 'A' } }, '2026-10-08T10:00:00.000Z')],
-      liveState: swapped()
+      liveState: swapped({ side_a: 'right' })
     })
     expect(restored.coinTossTeamA).toBe('team2')
-    expect(leftTeamInSet(2, restored)).toBe('A')
+    expect(leftTeamInSet(2, restored)).toBe('B')
+    expect(isTeam1LeftInSet(2, restored)).toBe(true)
+    // set 1 as it was played: team1 (B now) on the right
+    expect(isTeam1LeftInSet(1, restored)).toBe(false)
+  })
+
+  it('a swap already in the cloud, the latest snapshot from before it: each team on the side it had', async () => {
+    // the cloud coin toss has the swap (A = team2), the snapshot was taken
+    // with A = team1 on the left in set 2; the live row's last push is a point
+    const { restored } = await restore({
+      match: { coin_toss: { team_a: 'team2', team_b: 'team1', serve_a: false, first_serve: 'team1', confirmed: true } },
+      events: [point(20, 2, { sideA: 'left', setLeftTeamOverrides: { 1: 'B', 2: 'A' } }, '2026-10-08T10:00:00.000Z')],
+      liveState: swapped({ side_a: 'right', last_event_type: 'point', last_event_ts: '2026-10-08T10:00:00.000Z' })
+    })
+    expect(restored.coinTossTeamA).toBe('team2')
+    expect(isTeam1LeftInSet(2, restored)).toBe(true)
+    expect(isTeam1LeftInSet(1, restored)).toBe(false)
+    expect(restored.firstServe).toBe('team1')
   })
 
   it('a live row older than the latest synced event: the cloud coin toss, the live side still read for its own Team A', async () => {
@@ -204,8 +226,10 @@ describe('restore by PIN: the live row\'s own Team A', () => {
       seq: 5, set_index: 1, type: 'point', payload: { team: 'team1' }, created_at: '2026-10-08T10:00:00.000Z',
       lineup_left: T1(), lineup_right: T2()
     }
-    const { out, restored } = await restore({ events: [row], liveState: swapped({ current_set: 1 }) })
+    // the swap kept team1 on the left: A (team2) on the right
+    const { out, restored } = await restore({ events: [row], liveState: swapped({ current_set: 1, side_a: 'right' }) })
     expect(restored.coinTossTeamA).toBe('team2')
+    expect(isTeam1LeftInSet(1, restored)).toBe(true)
     expect(lineup(out, 'team1')).toEqual({ I: 7, II: 12 })
     expect(lineup(out, 'team2')).toEqual({ I: 3, II: 21 })
   })

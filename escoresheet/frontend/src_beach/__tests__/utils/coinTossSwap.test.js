@@ -2,12 +2,14 @@
  * "Swap team A ↔ B" (Scoreboard manual changes) only re-labels the teams:
  * the team that serves first is the same team before and after, both on this
  * device and in the cloud coin toss a restore, the referee, the livescore and
- * the PDF read back.
+ * the PDF read back; each team stays on its side (owner's decision,
+ * 2026-10-09, as OpenVolley: the A/B sides follow the labels).
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { swapTeamDesignation, coinTossCloud, setFirstServer, switchFirstServeUpdate, labelsInDesignation } from '../../utils_beach/coinToss_beach'
+import { swapTeamDesignation, coinTossCloud, setFirstServer, switchFirstServeUpdate, labelsInDesignation, eventTeamA } from '../../utils_beach/coinToss_beach'
+import { isTeam1LeftInSet } from '../../utils_beach/courtSides_beach'
 
 // what a restore makes of the cloud coin toss (backupManager_beach importMatch)
 const restored = (coinToss) => ({
@@ -97,10 +99,40 @@ describe('swapTeamDesignation (beach)', () => {
     expect(swapTeamDesignation({ coinTossTeamA: 'team1', firstServe: 'team1' })).not.toHaveProperty('set3FirstServe')
   })
 
-  it('leaves the court sides alone (only the first server is pinned)', () => {
-    const patch = swapTeamDesignation({ coinTossTeamA: 'team1', firstServe: 'team1', setLeftTeamOverrides: { 1: 'B' }, set3LeftTeam: 'A' })
-    expect(patch).not.toHaveProperty('setLeftTeamOverrides')
-    expect(patch).not.toHaveProperty('set3LeftTeam')
+  it('flips the court sides of every set, so each team stays where it is', () => {
+    const patch = swapTeamDesignation({ coinTossTeamA: 'team1', firstServe: 'team1', setLeftTeamOverrides: { 1: 'B', 2: 'A' }, set3LeftTeam: 'A' })
+    expect(patch.setLeftTeamOverrides).toEqual({ 1: 'A', 2: 'B' })
+    expect(patch.set3LeftTeam).toBe('B')
+  })
+
+  it('set 1 without a side (A on the left by default) is written: the team on the left stays', () => {
+    const match = { coinTossTeamA: 'team1', coinTossTeamB: 'team2', firstServe: 'team1' }
+    const after = { ...match, ...swapTeamDesignation(match) }
+    for (const set of [1, 2, 3]) expect(isTeam1LeftInSet(set, after)).toBe(isTeam1LeftInSet(set, match))
+    expect(after.setLeftTeamOverrides).toEqual({ 1: 'B' })
+  })
+
+  it('every set\'s side, the set 3 toss\'s side and its first server name the same team after a swap (and a swap back)', () => {
+    const cases = [
+      {},
+      { setLeftTeamOverrides: { 2: 'B' } },
+      { setLeftTeamOverrides: { 1: 'B', 2: 'A' }, set3LeftTeam: 'B', set3FirstServe: 'A' },
+      { setLeftTeamOverrides: { 1: 'A', 2: 'B', 3: 'A' }, set3LeftTeam: 'B', set3FirstServe: 'B' }
+    ]
+    for (const teamA of ['team1', 'team2']) {
+      for (const c of cases) {
+        const match = { coinTossTeamA: teamA, coinTossTeamB: teamA === 'team1' ? 'team2' : 'team1', firstServe: 'team2', ...c }
+        const once = { ...match, ...swapTeamDesignation(match) }
+        const twice = { ...once, ...swapTeamDesignation(once) }
+        for (const m of [once, twice]) {
+          for (const set of [1, 2, 3]) {
+            expect(isTeam1LeftInSet(set, m)).toBe(isTeam1LeftInSet(set, match))
+            expect(setFirstServer(m, set)).toBe(setFirstServer(match, set))
+          }
+        }
+        expect(twice.coinTossTeamA).toBe(teamA)
+      }
+    }
   })
 })
 
@@ -154,8 +186,14 @@ describe('setFirstServer / switchFirstServeUpdate', () => {
 
 describe('labelsInDesignation', () => {
   it('flips the labels a swap flips when team A changed since they were written', () => {
-    expect(labelsInDesignation({ set3FirstServe: 'A', set3LeftTeam: 'A', setLeftTeamOverrides: { 1: 'B' }, firstServe: 'team1' }, 'team1', 'team2'))
-      .toEqual({ set3FirstServe: 'B', set3LeftTeam: 'A', setLeftTeamOverrides: { 1: 'B' }, firstServe: 'team1' })
+    expect(labelsInDesignation({ set3FirstServe: 'A', set3LeftTeam: 'A', setLeftTeamOverrides: { 1: 'B', 2: 'A' }, firstServe: 'team1' }, 'team1', 'team2'))
+      .toEqual({ set3FirstServe: 'B', set3LeftTeam: 'B', setLeftTeamOverrides: { 1: 'A', 2: 'B' }, firstServe: 'team1' })
+  })
+  it('sides with none for set 1 (A on the left): written, so the same team stays on the left', () => {
+    expect(labelsInDesignation({ setLeftTeamOverrides: {} }, 'team1', 'team2')).toEqual({ setLeftTeamOverrides: { 1: 'B' } })
+    expect(labelsInDesignation({ setLeftTeamOverrides: null }, 'team1', 'team2')).toEqual({ setLeftTeamOverrides: { 1: 'B' } })
+    // a field not given stays not given
+    expect(labelsInDesignation({ set3FirstServe: 'A' }, 'team1', 'team2')).toEqual({ set3FirstServe: 'B' })
   })
   it('keeps them with the same team A, or without a label', () => {
     const fields = { set3FirstServe: 'A' }
@@ -163,9 +201,19 @@ describe('labelsInDesignation', () => {
     expect(labelsInDesignation({ set3FirstServe: null }, 'team1', 'team2')).toEqual({ set3FirstServe: null })
   })
   it('is what the swap itself does to the match', () => {
-    const match = { coinTossTeamA: 'team1', set3FirstServe: 'B', set3LeftTeam: 'B' }
+    const match = { coinTossTeamA: 'team1', set3FirstServe: 'B', set3LeftTeam: 'B', setLeftTeamOverrides: { 2: 'A' } }
     const patch = swapTeamDesignation(match)
-    expect(labelsInDesignation({ set3FirstServe: 'B', set3LeftTeam: 'B' }, 'team1', patch.coinTossTeamA))
-      .toEqual({ set3FirstServe: patch.set3FirstServe, set3LeftTeam: 'B' })
+    expect(labelsInDesignation({ set3FirstServe: 'B', set3LeftTeam: 'B', setLeftTeamOverrides: { 2: 'A' } }, 'team1', patch.coinTossTeamA))
+      .toEqual({ set3FirstServe: patch.set3FirstServe, set3LeftTeam: patch.set3LeftTeam, setLeftTeamOverrides: patch.setLeftTeamOverrides })
+  })
+})
+
+describe('eventTeamA', () => {
+  it('the payload\'s teamA, else the snapshot\'s (local or cloud row), else null', () => {
+    expect(eventTeamA({ payload: { teamA: 'team2' }, stateSnapshot: { teamAKey: 'team1' } })).toBe('team2')
+    expect(eventTeamA({ payload: {}, stateSnapshot: { teamAKey: 'team1' } })).toBe('team1')
+    expect(eventTeamA({ payload: {}, state_snapshot: { teamAKey: 'team2' } })).toBe('team2')
+    expect(eventTeamA({ payload: {} })).toBe(null)
+    expect(eventTeamA(null)).toBe(null)
   })
 })

@@ -29,6 +29,7 @@ import { SegmentedControl } from '../ui/volleyui/SegmentedControl.jsx'
 import { DateField } from '../ui/volleyui/DateField.jsx'
 import { Modal as KitModal, modalCancelClass, modalPrimaryClass, modalSaveClass, modalDangerClass } from '../ui/volleyui/Modal.jsx'
 import { NOTICE } from '../ui/volleyui/tones.js'
+import { isLightColour } from '../utils_beach/teamColours_beach'
 
 // The coin toss page: one kit page card on the stone page (App_beach paints
 // it), full width, in the `.ov-kit` scope.
@@ -81,17 +82,6 @@ function useCompactMode() {
   }, [])
 
   return isCompact
-}
-
-// Helper function to determine if a color is bright/light
-function isBrightColor(color) {
-  if (!color || color === 'image.png') return false
-  const hex = color.replace('#', '')
-  const r = parseInt(hex.substr(0, 2), 16)
-  const g = parseInt(hex.substr(2, 2), 16)
-  const b = parseInt(hex.substr(4, 2), 16)
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-  return luminance > 0.5
 }
 
 // Date formatting helpers
@@ -1643,7 +1633,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           <div
             style={{
               background: info.color,
-              color: isBrightColor(info.color) ? '#000' : '#fff',
+              color: isLightColour(info.color) ? '#000' : '#fff',
               flex: 1, padding: sizes.teamButtonPadding, fontSize: sizes.teamButtonFont, width: '100%', minWidth: 0,
               fontWeight: 600, border: 'none', borderRadius: '8px',
               overflow: 'hidden',
@@ -2387,7 +2377,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                 <div style={{
                   padding: '12px',
                   background: teamInfo.color,
-                  color: isBrightColor(teamInfo.color) ? '#000' : '#fff',
+                  color: isLightColour(teamInfo.color) ? '#000' : '#fff',
                   borderRadius: '8px',
                   textAlign: 'center',
                   fontWeight: 700,
@@ -2745,7 +2735,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                 type="button"
                 onClick={() => { setForfaitModal(false); setForfaitTypeModal('team1') }}
                 className={cn('min-h-14 rounded-xl px-6 text-base font-semibold', FOCUS_RING)}
-                style={{ background: team1Color, color: isBrightColor(team1Color) ? '#000' : '#fff' }}
+                style={{ background: team1Color, color: isLightColour(team1Color) ? '#000' : '#fff' }}
               >
                 {team1Name}
               </button>
@@ -2753,7 +2743,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                 type="button"
                 onClick={() => { setForfaitModal(false); setForfaitTypeModal('team2') }}
                 className={cn('min-h-14 rounded-xl px-6 text-base font-semibold', FOCUS_RING)}
-                style={{ background: team2Color, color: isBrightColor(team2Color) ? '#000' : '#fff' }}
+                style={{ background: team2Color, color: isLightColour(team2Color) ? '#000' : '#fff' }}
               >
                 {team2Name}
               </button>

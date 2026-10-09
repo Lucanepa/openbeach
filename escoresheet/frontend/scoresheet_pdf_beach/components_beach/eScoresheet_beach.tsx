@@ -3446,12 +3446,15 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
     const setHasStarted = hasSetStarted(setNum);
     const teamColor = get(`${setPrefix}_${teamSuffix}_team_color`) || '#FFFFFF';
     // Convert hex to rgba with transparency (0.3 opacity)
+    // Any team colour, #rrggbb or #rgb (a custom colour from the picker); an
+    // unreadable one tints nothing
     const hexToRgba = (hex: string, alpha: number): string => {
-      if (!hex || hex === 'image.png') return `rgba(255, 255, 255, ${alpha})`;
-      const hexClean = hex.replace('#', '');
-      const r = parseInt(hexClean.substring(0, 2), 16);
-      const g = parseInt(hexClean.substring(2, 4), 16);
-      const b = parseInt(hexClean.substring(4, 6), 16);
+      const m = typeof hex === 'string' ? hex.trim().match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i) : null;
+      if (!m) return `rgba(255, 255, 255, ${alpha})`;
+      const h = m[1].length === 3 ? m[1].split('').map(c => c + c).join('') : m[1];
+      const r = parseInt(h.substring(0, 2), 16);
+      const g = parseInt(h.substring(2, 4), 16);
+      const b = parseInt(h.substring(4, 6), 16);
       return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     };
     // Only apply background color if set has started

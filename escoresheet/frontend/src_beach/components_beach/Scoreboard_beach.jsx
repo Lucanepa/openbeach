@@ -40,7 +40,7 @@ import { useDiagCommits } from '../diagnostics_beach/commits_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot, refreshIntervalSnapshots } from '../utils_beach/stateSnapshot_beach'
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
-import { swapTeamDesignation, coinTossCloud, setFirstServer, switchFirstServeUpdate, labelsInDesignation } from '../utils_beach/coinToss_beach'
+import { swapTeamDesignation, coinTossCloud, setFirstServer, switchFirstServeUpdate, labelsInDesignation, eventTeamA } from '../utils_beach/coinToss_beach'
 import { set3TossBefore, set3TossUndoUpdate, undoKeepsMatch } from '../utils_beach/set3Toss_beach'
 import { staleCourtSwitches, switchBackUpdate, snapshotsAfterSwitchBack, pendingTto, pendingCourtDialog } from '../utils_beach/courtSwitchState_beach'
 import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
@@ -81,7 +81,7 @@ import { AppSpinner } from '../ui/volleyui/AppSpinner.jsx'
 import { modalCancelClass, modalPrimaryClass, ActionSheet, ActionSheetItem } from '../ui/volleyui/Modal.jsx'
 import { dayLabel, timeSecondsLabel } from '../ui/volleyui/format.js'
 import { openAppWindow } from '../utils_beach/openAppWindow_beach'
-import { discPaint } from '../utils_beach/teamColours_beach'
+import { discPaint, isLightColour } from '../utils_beach/teamColours_beach'
 import { preload, usePreloaded } from '../utils_beach/preload_beach'
 
 // ── volleyui chrome for the scoring screen ───────────────────────────────────
@@ -2463,16 +2463,6 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   // The Zürich clock, 24-hour, day first: the same on every device on a court
   const formatTimestamp = useCallback(date => `${dayLabel(date, { year: true })} ${timeSecondsLabel(date)}`, [])
 
-  const isBrightColor = useCallback(color => {
-    if (!color || color === 'image.png') return false
-    const hex = color.replace('#', '')
-    const r = parseInt(hex.substr(0, 2), 16)
-    const g = parseInt(hex.substr(2, 2), 16)
-    const b = parseInt(hex.substr(4, 2), 16)
-    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-    return luminance > 0.5
-  }, [])
-
   // Helper function to get next sequence number for events (returns integer only)
   const getNextSeq = useCallback(async () => {
     const allEvents = await db.events.where('matchId').equals(matchId).toArray()
@@ -3617,8 +3607,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             matchId,
             setIndex,
             type: 'technical_to',
-            // courtSwitched: its change of courts, made when it ends
-            payload: { preSwitchOverrides, courtSwitched: false },
+            // courtSwitched: its change of courts, made when it ends;
+            // teamA: the designation of its A/B sides (eventTeamA)
+            payload: { preSwitchOverrides, courtSwitched: false, teamA: match?.coinTossTeamA || 'team1' },
             ts: new Date().toISOString(),
             seq: ttoSeq
           })
@@ -4950,7 +4941,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   const courtScoreChips = (team1Points, team2Points) => {
     const chip = (key) => {
       const color = (key === 'team1' ? data?.team1Team?.color : data?.team2Team?.color) || (key === 'team1' ? '#ef4444' : '#3b82f6')
-      return <span style={{ background: color, color: isBrightColor(color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>{key === teamAKey ? 'A' : 'B'}</span>
+      return <span style={{ background: color, color: isLightColour(color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>{key === teamAKey ? 'A' : 'B'}</span>
     }
     const leftKey = leftisTeam1 ? 'team1' : 'team2'
     const rightKey = leftisTeam1 ? 'team2' : 'team1'
@@ -5613,7 +5604,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         if (lastEvent.type === 'technical_to' || lastEvent.type === 'court_switch') {
           const preSwitchOverrides = lastEvent.payload?.preSwitchOverrides
           if (preSwitchOverrides !== undefined) {
-            await db.matches.update(matchId, { setLeftTeamOverrides: preSwitchOverrides })
+            // A/B sides as the teams are named now: a "Swap team A ↔ B"
+            // since the change keeps each team on its side
+            const now = await db.matches.get(matchId)
+            await db.matches.update(matchId, labelsInDesignation({ setLeftTeamOverrides: preSwitchOverrides }, eventTeamA(lastEvent), now?.coinTossTeamA || 'team1'))
           }
         }
 
@@ -7302,7 +7296,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // undo, its sync job, the tablets)
     await logEvent('court_switch', {
       score: { team1: modal.team1Points, team2: modal.team2Points },
-      preSwitchOverrides
+      preSwitchOverrides,
+      // the designation of its A/B sides (coinToss_beach eventTeamA)
+      teamA: teamAKey
     }, { setIndexOverride: setIndex })
 
     // Check if TTO should be triggered after court switch (at 21 points in sets 1-2)
@@ -7918,7 +7914,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               fontSize: isCompactMode ? '10px' : '11px',
               fontWeight: 700,
               background: leftTeam.color || '#ef4444',
-              color: isBrightColor(leftTeam.color || '#ef4444') ? '#000' : '#fff',
+              color: isLightColour(leftTeam.color || '#ef4444') ? '#000' : '#fff',
               flexShrink: 0
             }}>
               {teamALabel}
@@ -7939,7 +7935,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             fontSize: isCompactMode ? '12px' : '16px',
             fontWeight: 700,
             background: leftTeam?.color || '#ef4444',
-            color: isBrightColor(leftTeam?.color || '#ef4444') ? '#000' : '#fff'
+            color: isLightColour(leftTeam?.color || '#ef4444') ? '#000' : '#fff'
           }}>
             {setsWon?.left || 0}
           </span>
@@ -7953,7 +7949,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             fontSize: isCompactMode ? '12px' : '16px',
             fontWeight: 700,
             background: rightTeam?.color || '#3b82f6',
-            color: isBrightColor(rightTeam?.color || '#3b82f6') ? '#000' : '#fff'
+            color: isLightColour(rightTeam?.color || '#3b82f6') ? '#000' : '#fff'
           }}>
             {setsWon?.right || 0}
           </span>
@@ -7974,7 +7970,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               fontSize: isCompactMode ? '10px' : '11px',
               fontWeight: 700,
               background: rightTeam.color || '#3b82f6',
-              color: isBrightColor(rightTeam.color || '#3b82f6') ? '#000' : '#fff',
+              color: isLightColour(rightTeam.color || '#3b82f6') ? '#000' : '#fff',
               flexShrink: 0
             }}>
               {teamBLabel}
@@ -8234,7 +8230,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   gap: '6px',
                   padding: isCompactMode ? '4px 8px' : '6px 12px',
                   background: leftTeam.color || '#ef4444',
-                  color: isBrightColor(leftTeam.color || '#ef4444') ? '#000' : '#fff',
+                  color: isLightColour(leftTeam.color || '#ef4444') ? '#000' : '#fff',
                   borderRadius: '6px',
                   fontWeight: 600,
                   fontSize: isCompactMode ? '11px' : '14px',
@@ -8661,7 +8657,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           borderRadius: 'var(--ov-radius-lg)',
                           padding: `${8 * scaleFactor}px ${4 * scaleFactor}px`,
                           textAlign: 'center',
-                          color: isBrightColor(leftTeamColor) ? '#000' : '#fff'
+                          color: isLightColour(leftTeamColor) ? '#000' : '#fff'
                         }}>
                           <div style={{ fontSize: `${DESIGN_VMIN * 0.04 * scaleFactor}px`, fontWeight: 700, lineHeight: 1.2 }}>{leftTeamLabel}</div>
                           {playerNames && (
@@ -9253,7 +9249,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                       fontSize: '16px',
                                       fontWeight: 700,
                                       background: color,
-                                      color: isBrightColor(color) ? '#000' : '#fff',
+                                      color: isLightColour(color) ? '#000' : '#fff',
                                       border: 'none',
                                       borderRadius: 'var(--ov-radius-lg)',
                                       minHeight: '56px',
@@ -9305,7 +9301,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 const teamKey = (side === 'left') === leftisTeam1 ? 'team1' : 'team2'
                                 const serves = getCurrentServe() === teamKey
                                 const color = teamKey === 'team1' ? (data?.team1Team?.color || '#ef4444') : (data?.team2Team?.color || '#3b82f6')
-                                const textColor = isBrightColor(color) ? '#000' : '#fff'
+                                const textColor = isLightColour(color) ? '#000' : '#fff'
                                 const name = intervalTeamNames[teamKey]
                                 const box = (
                                   <div key={side} data-testid={`interval-team-${side}`} style={{ position: 'relative', display: 'flex', alignItems: 'center', flex: '0 1 auto', minWidth: 0 }}>
@@ -10456,7 +10452,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           borderRadius: 'var(--ov-radius-lg)',
                           padding: `${8 * scaleFactor}px ${4 * scaleFactor}px`,
                           textAlign: 'center',
-                          color: isBrightColor(rightTeamColor) ? '#000' : '#fff'
+                          color: isLightColour(rightTeamColor) ? '#000' : '#fff'
                         }}>
                           <div style={{ fontSize: `${DESIGN_VMIN * 0.04 * scaleFactor}px`, fontWeight: 700, lineHeight: 1.2 }}>{rightTeamLabel}</div>
                           {playerNames && (
@@ -10934,7 +10930,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   gap: '6px',
                   padding: isCompactMode ? '4px 8px' : '6px 12px',
                   background: rightTeam.color || '#3b82f6',
-                  color: isBrightColor(rightTeam.color || '#3b82f6') ? '#000' : '#fff',
+                  color: isLightColour(rightTeam.color || '#3b82f6') ? '#000' : '#fff',
                   borderRadius: '6px',
                   fontWeight: 600,
                   fontSize: isCompactMode ? '11px' : '14px',
@@ -12094,7 +12090,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               padding: '12px',
                               background: leftTeamColor,
                               borderRadius: '8px',
-                              color: isBrightColor(leftTeamColor) ? '#000' : '#fff'
+                              color: isLightColour(leftTeamColor) ? '#000' : '#fff'
                             }}>
                               {leftIsServing && <span style={{ fontSize: '20px' }}><Volleyball /></span>}
                               <div style={{ textAlign: 'center' }}>
@@ -12121,7 +12117,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               padding: '12px',
                               background: rightTeamColor,
                               borderRadius: '8px',
-                              color: isBrightColor(rightTeamColor) ? '#000' : '#fff'
+                              color: isLightColour(rightTeamColor) ? '#000' : '#fff'
                             }}>
                               <div style={{ textAlign: 'center' }}>
                                 <div style={{ fontWeight: 700, fontSize: '14px' }}>{rightTeamName}</div>
@@ -12173,8 +12169,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               className="secondary"
                               onClick={async () => {
                                 // Swap Team A and Team B identity (coinTossTeamA). Only the
-                                // labels change: the same team serves first, here and in
-                                // the cloud coin toss (coinToss_beach)
+                                // labels change: nothing moves on the court, the same team
+                                // serves first, here and in the cloud coin toss; the A/B
+                                // sides follow the labels (coinToss_beach)
                                 const currentTeamA = data.match.coinTossTeamA || 'team1'
                                 const patch = swapTeamDesignation(data.match)
                                 const newTeamA = patch.coinTossTeamA
@@ -12198,6 +12195,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 const newA = newTeamA === 'team1' ? (data.team1Team?.shortName || 'Team 1') : (data.team2Team?.shortName || 'Team 2')
                                 logManualChange('Teams Setup', 'Team A/B', `A=${oldA}`, `A=${newA}`, `Swapped Team A and Team B`)
                                 syncLiveStateToSupabase('manual_team_swap', null, { oldTeamA: currentTeamA, newTeamA })
+                                // the tablets read side_a for the match's Team A: the
+                                // match goes out with its new Team A and sides too
+                                syncToReferee()
                               }}
                               style={{
                                 flex: 1,
@@ -14395,7 +14395,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                       fontSize: '9px',
                                       fontWeight: 700,
                                       background: leftTeamColor,
-                                      color: isBrightColor(leftTeamColor) ? '#000' : '#fff'
+                                      color: isLightColour(leftTeamColor) ? '#000' : '#fff'
                                     }}>{leftTeamLabel}</span>
                                   </div>
                                 </th>
@@ -14409,7 +14409,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                       fontSize: '9px',
                                       fontWeight: 700,
                                       background: rightTeamColor,
-                                      color: isBrightColor(rightTeamColor) ? '#000' : '#fff'
+                                      color: isLightColour(rightTeamColor) ? '#000' : '#fff'
                                     }}>{rightTeamLabel}</span>
                                   </div>
                                 </th>
@@ -14546,7 +14546,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   fontSize: '9px',
                                   fontWeight: 700,
                                   background: leftTeamColor,
-                                  color: isBrightColor(leftTeamColor) ? '#000' : '#fff'
+                                  color: isLightColour(leftTeamColor) ? '#000' : '#fff'
                                 }}>{leftTeamLabel}</span>
                               </div>
                             </th>
@@ -14560,7 +14560,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   fontSize: '9px',
                                   fontWeight: 700,
                                   background: rightTeamColor,
-                                  color: isBrightColor(rightTeamColor) ? '#000' : '#fff'
+                                  color: isLightColour(rightTeamColor) ? '#000' : '#fff'
                                 }}>{rightTeamLabel}</span>
                               </div>
                             </th>
@@ -14660,8 +14660,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               const otherTeamLabel = timeoutModal.team === teamAKey ? 'B' : 'A'
               const requestingTeamColor = requestingTeamData?.color || (timeoutModal.team === 'team1' ? '#ef4444' : '#3b82f6')
               const otherTeamColor = otherTeamData?.color || (timeoutModal.team === 'team1' ? '#3b82f6' : '#ef4444')
-              const isRequestingBright = isBrightColor(requestingTeamColor)
-              const isOtherBright = isBrightColor(otherTeamColor)
+              const isRequestingBright = isLightColour(requestingTeamColor)
+              const isOtherBright = isLightColour(otherTeamColor)
               return (
                 <div style={{ marginBottom: '16px', fontSize: '24px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
                   <span style={{
@@ -15826,7 +15826,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         // Get team name without country (remove parentheses and content)
         const fullTeamName = teamData?.name || (sanctionConfirmModal.team === 'team1' ? 'Team 1' : 'Team 2')
         const teamName = fullTeamName.replace(/\s*\([^)]*\)\s*$/, '')
-        const isBright = isBrightColor(teamColor)
+        const isBright = isLightColour(teamColor)
         // Find player name
         const player = sanctionConfirmModal.type === 'player' && sanctionConfirmModal.playerNumber
           ? teamPlayers?.find(p => p.number === sanctionConfirmModal.playerNumber || String(p.number) === String(sanctionConfirmModal.playerNumber))
@@ -15924,7 +15924,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         const teamLabel = expulsionConfirmModal.team === teamAKey ? 'A' : 'B'
         const fullTeamName = teamData?.name || (expulsionConfirmModal.team === 'team1' ? 'Team 1' : 'Team 2')
         const teamName = fullTeamName.replace(/\s*\([^)]*\)\s*$/, '')
-        const isBright = isBrightColor(teamColor)
+        const isBright = isLightColour(teamColor)
         const player = expulsionConfirmModal.type === 'player' && expulsionConfirmModal.playerNumber
           ? teamPlayers?.find(p => p.number === expulsionConfirmModal.playerNumber || String(p.number) === String(expulsionConfirmModal.playerNumber))
           : null
@@ -16351,7 +16351,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       >
                         <span style={{
                           background: losingTeamColor,
-                          color: isBrightColor(losingTeamColor) ? '#000' : '#fff',
+                          color: isLightColour(losingTeamColor) ? '#000' : '#fff',
                           padding: '2px 6px',
                           borderRadius: '4px',
                           fontSize: '10px',
@@ -16423,7 +16423,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                 {isReferee ? (
                   'Referee ball mark check'
                 ) : (
-                  <span>BMP requested by <strong><span style={{ background: requestingTeam === 'team1' ? team1Color : team2Color, color: isBrightColor(requestingTeam === 'team1' ? team1Color : team2Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '14px', fontWeight: 700, marginRight: '4px' }}>{requestingTeam === 'team1' ? team1Label : team2Label}</span>{requestingTeam === 'team1' ? team1Name : team2Name}</strong></span>
+                  <span>BMP requested by <strong><span style={{ background: requestingTeam === 'team1' ? team1Color : team2Color, color: isLightColour(requestingTeam === 'team1' ? team1Color : team2Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '14px', fontWeight: 700, marginRight: '4px' }}>{requestingTeam === 'team1' ? team1Label : team2Label}</span>{requestingTeam === 'team1' ? team1Name : team2Name}</strong></span>
                 )}
               </p>
 
@@ -16487,7 +16487,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               style={{
                                 ...bmpChoiceButton,
                                 background: leftTeamColor,
-                                color: isBrightColor(leftTeamColor) ? '#000' : '#fff',
+                                color: isLightColour(leftTeamColor) ? '#000' : '#fff',
                                 border: `2px solid ${leftTeamColor}`,
                                 boxShadow: selectedTeam === 'left' ? '0 0 0 3px var(--ov-card), 0 0 0 6px #eab308' : 'none'
                               }}
@@ -16516,7 +16516,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               style={{
                                 ...bmpChoiceButton,
                                 background: rightTeamColor,
-                                color: isBrightColor(rightTeamColor) ? '#000' : '#fff',
+                                color: isLightColour(rightTeamColor) ? '#000' : '#fff',
                                 border: `2px solid ${rightTeamColor}`,
                                 boxShadow: selectedTeam === 'right' ? '0 0 0 3px var(--ov-card), 0 0 0 6px #eab308' : 'none'
                               }}
@@ -16846,7 +16846,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   >
                     <span style={{
                       background: losingTeamColor,
-                      color: isBrightColor(losingTeamColor) ? '#000' : '#fff',
+                      color: isLightColour(losingTeamColor) ? '#000' : '#fff',
                       padding: '2px 6px',
                       borderRadius: '4px',
                       fontSize: '10px',
@@ -17155,7 +17155,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           >
             <div style={{ padding: '24px' }}>
               <p style={{ marginBottom: '16px', fontSize: '14px', color: 'var(--muted)', textAlign: 'center' }}>
-                Last point was assigned to <strong><span style={{ background: oldTeamColor, color: isBrightColor(oldTeamColor) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 700, marginRight: '4px' }}>{oldTeamLabel}</span>{oldTeamName}</strong>
+                Last point was assigned to <strong><span style={{ background: oldTeamColor, color: isLightColour(oldTeamColor) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 700, marginRight: '4px' }}>{oldTeamLabel}</span>{oldTeamName}</strong>
               </p>
 
               {/* Horizontal radio buttons */}
@@ -17229,25 +17229,25 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ width: '55px', textAlign: 'right' }}>Current:</span>
                     <div style={{ background: 'var(--ov-sunken-strong)', padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--ov-hairline-strong)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ background: team1Color, color: isBrightColor(team1Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{team1Label}</span>
+                      <span style={{ background: team1Color, color: isLightColour(team1Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{team1Label}</span>
                       <strong>{team1TeamName} {currentteam1Points} : {currentteam2Points} {team2TeamName}</strong>
-                      <span style={{ background: team2Color, color: isBrightColor(team2Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{team2Label}</span>
+                      <span style={{ background: team2Color, color: isLightColour(team2Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{team2Label}</span>
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ width: '55px', textAlign: 'right' }}>New:</span>
                     <div style={{ background: 'rgba(34, 197, 94, 0.15)', padding: '6px 12px', borderRadius: '6px', border: '1px solid rgba(34, 197, 94, 0.4)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ background: team1Color, color: isBrightColor(team1Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{team1Label}</span>
+                      <span style={{ background: team1Color, color: isLightColour(team1Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{team1Label}</span>
                       <strong style={{ color: 'var(--ov-success)' }}>
                         {team1TeamName} {selectedOption === 'swap' ? swapteam1Points : replayteam1Points} : {selectedOption === 'swap' ? swapteam2Points : replayteam2Points} {team2TeamName}
                       </strong>
-                      <span style={{ background: team2Color, color: isBrightColor(team2Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{team2Label}</span>
+                      <span style={{ background: team2Color, color: isLightColour(team2Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{team2Label}</span>
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ width: '55px', textAlign: 'right' }}>Serve:</span>
                     <span style={{ fontSize: '16px' }}><Volleyball /></span>
-                    <span style={{ background: (selectedOption === 'swap' ? swapServeTeam : replayServeTeam) === 'team1' ? team1Color : team2Color, color: isBrightColor((selectedOption === 'swap' ? swapServeTeam : replayServeTeam) === 'team1' ? team1Color : team2Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>
+                    <span style={{ background: (selectedOption === 'swap' ? swapServeTeam : replayServeTeam) === 'team1' ? team1Color : team2Color, color: isLightColour((selectedOption === 'swap' ? swapServeTeam : replayServeTeam) === 'team1' ? team1Color : team2Color) ? '#000' : '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>
                       {(selectedOption === 'swap' ? swapServeTeam : replayServeTeam) === 'team1' ? team1Label : team2Label}
                     </span>
                     <strong>{(selectedOption === 'swap' ? swapServeTeam : replayServeTeam) === 'team1' ? team1TeamName : team2TeamName}</strong>
@@ -17481,17 +17481,6 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
   const leftScore = leftisTeam1 ? team1Points : team2Points
   const rightScore = leftisTeam1 ? team2Points : team1Points
 
-  // Helper to check if color is bright
-  const isBrightColor = (color) => {
-    if (!color) return false
-    const hex = color.replace('#', '')
-    const r = parseInt(hex.substr(0, 2), 16)
-    const g = parseInt(hex.substr(2, 2), 16)
-    const b = parseInt(hex.substr(4, 2), 16)
-    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-    return luminance > 0.5
-  }
-
   const handleConfirm = () => {
     if (isConfirming) return // Prevent double-clicks
     // Validate time format (HH:MM, 24-hour)
@@ -17525,7 +17514,7 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
             fontSize: '18px',
             fontWeight: 700,
             background: leftisTeam1 ? team1TeamColor : team2TeamColor,
-            color: isBrightColor(leftisTeam1 ? team1TeamColor : team2TeamColor) ? '#000' : '#fff'
+            color: isLightColour(leftisTeam1 ? team1TeamColor : team2TeamColor) ? '#000' : '#fff'
           }}>
             {leftisTeam1 ? (teamAKey === 'team1' ? 'A' : 'B') : (teamAKey === 'team2' ? 'A' : 'B')}
           </span>
@@ -17536,7 +17525,7 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
             fontSize: '18px',
             fontWeight: 700,
             background: leftisTeam1 ? team2TeamColor : team1TeamColor,
-            color: isBrightColor(leftisTeam1 ? team2TeamColor : team1TeamColor) ? '#000' : '#fff'
+            color: isLightColour(leftisTeam1 ? team2TeamColor : team1TeamColor) ? '#000' : '#fff'
           }}>
             {leftisTeam1 ? (teamAKey === 'team2' ? 'A' : 'B') : (teamAKey === 'team1' ? 'A' : 'B')}
           </span>
@@ -17621,7 +17610,7 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
             >
               <span style={{
                 background: loserTeamColor,
-                color: isBrightColor(loserTeamColor) ? '#000' : '#fff',
+                color: isLightColour(loserTeamColor) ? '#000' : '#fff',
                 padding: '2px 6px',
                 borderRadius: '4px',
                 fontSize: '10px',

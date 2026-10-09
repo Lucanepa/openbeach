@@ -49,8 +49,12 @@ describe('set3TossUndoUpdate after a swap of team A / B', () => {
   const event = {
     payload: { winner: 'team1', teamA: 'team1', before: { set3CoinTossWinner: null, set3LeftTeam: 'A', set3FirstServe: 'A', setLeftTeamOverrides: { 1: 'A' } } }
   }
-  it('the first server label follows the swap; the sides stay', () => {
-    expect(set3TossUndoUpdate(event, { coinTossTeamA: 'team2' })).toMatchObject({ set3FirstServe: 'B', set3LeftTeam: 'A', setLeftTeamOverrides: { 1: 'A' } })
+  it('the first server and side labels follow the swap: the same team serves, each team on its side', () => {
+    expect(set3TossUndoUpdate(event, { coinTossTeamA: 'team2' })).toMatchObject({ set3FirstServe: 'B', set3LeftTeam: 'B', setLeftTeamOverrides: { 1: 'B' } })
+  })
+  it('sides saved as none (set 1 with A on the left): written as B on the left after a swap', () => {
+    const none = { payload: { teamA: 'team1', before: { set3CoinTossWinner: null, set3LeftTeam: null, setLeftTeamOverrides: null } } }
+    expect(set3TossUndoUpdate(none, { coinTossTeamA: 'team2' })).toMatchObject({ set3LeftTeam: null, setLeftTeamOverrides: { 1: 'B' } })
   })
   it('no swap since: as before the toss', () => {
     expect(set3TossUndoUpdate(event, { coinTossTeamA: 'team1' })).toMatchObject({ set3FirstServe: 'A' })

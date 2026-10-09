@@ -9,6 +9,7 @@ import { Results } from '../../scoresheet_pdf_beach/components_beach/FooterSecti
 import { setDurationMinutes } from '../../scoresheet_pdf_beach/components_beach/matchTimes_beach'
 import TestModeControls from './TestModeControls_beach'
 import { isTeam1LeftInSet } from '../utils_beach/courtSides_beach'
+import { discPaint } from '../utils_beach/teamColours_beach'
 
 export default function MatchEntry({ matchId, team, onBack, embedded = false }) {
   const { t } = useTranslation()
@@ -157,6 +158,8 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
       players: isTeam1 ? data.team1Players : data.team2Players,
     }
   }, [data, team])
+  // The discs' paint for the team colour (null: unreadable, plain look)
+  const teamPaint = useMemo(() => discPaint(teamInfo?.color), [teamInfo?.color])
 
   // Get opponent team info
   const opponentInfo = useMemo(() => {
@@ -805,7 +808,10 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
                           position: 'relative',
                           aspectRatio: '1 / 1',
                           fontSize: 'clamp(25px, 10vw, 40px)',
-                          background: teamInfo?.color
+                          background: teamPaint?.background ?? teamInfo?.color,
+                          // the number near-black or white on any team colour, a ring on the sand
+                          ...(teamPaint ? { color: teamPaint.color, textShadow: teamPaint.textShadow ?? 'none' } : {}),
+                          ...(teamPaint?.ring ? { borderColor: teamPaint.ring } : {})
                         }}
                       >
                         {shouldShowBall && (
@@ -865,7 +871,10 @@ export default function MatchEntry({ matchId, team, onBack, embedded = false }) 
                           width: 'clamp(44px, 10vw, 72px)',
                           height: 'clamp(44px, 10vw, 72px)',
                           fontSize: 'clamp(18px, 4vw, 28px)',
-                          background: teamInfo?.color
+                          background: teamPaint?.background ?? teamInfo?.color,
+                          // the number near-black or white on any team colour, a ring on the sand
+                          ...(teamPaint ? { color: teamPaint.color, textShadow: teamPaint.textShadow ?? 'none' } : {}),
+                          ...(teamPaint?.ring ? { borderColor: teamPaint.ring } : {})
                         }}
                       >
                         {shouldShowBall && (

@@ -119,3 +119,82 @@ describe('discPaint', () => {
     expect(discPaint('#000080')).toMatchObject({ color: TEXT_LIGHT, ring: null })
   })
 })
+
+describe('custom team colours (any hex, not only the twelve presets)', () => {
+  const ANY = (() => {
+    const out = []
+    const steps = [0, 32, 64, 96, 128, 160, 192, 224, 255]
+    for (const r of steps) for (const g of steps) for (const b of steps) out.push(normaliseColour({ r, g, b }))
+    let seed = 7
+    for (let i = 0; i < 400; i++) {
+      seed = (seed * 1103515245 + 12345) % 2147483648
+      out.push('#' + (seed % 0x1000000).toString(16).padStart(6, '0'))
+    }
+    return out
+  })()
+
+  it('parseHexColour takes #rrggbb, rrggbb, #rgb and rgb in any case, nothing else', async () => {
+    const { parseHexColour } = await import('../../utils_beach/teamColours_beach')
+    expect(parseHexColour('#1A7F5A')).toBe('#1a7f5a')
+    expect(parseHexColour('1a7f5a')).toBe('#1a7f5a')
+    expect(parseHexColour('#0aF')).toBe('#00aaff')
+    expect(parseHexColour(' fff ')).toBe('#ffffff')
+    for (const bad of ['', '#', '#12', '#1234', '#12345', '#1234567', 'blue', 'rgb(1,2,3)', '#ggg', null, undefined, 123]) {
+      expect(parseHexColour(bad), String(bad)).toBeNull()
+    }
+  })
+
+  it('presetColour / isCustomColour tell the twelve presets from any other colour', async () => {
+    const { presetColour, isCustomColour, TEAM_COLOUR_PRESETS } = await import('../../utils_beach/teamColours_beach')
+    expect(TEAM_COLOUR_PRESETS).toHaveLength(12)
+    for (const p of TEAM_COLOUR_PRESETS) {
+      expect(presetColour(p.toLowerCase())).toBe(p)
+      expect(isCustomColour(p)).toBe(false)
+    }
+    expect(presetColour('#fff')).toBe('#FFFFFF')
+    expect(isCustomColour('#ef4444')).toBe(true) // the default team 1 red is no preset
+    expect(isCustomColour('#7b1e2b')).toBe(true)
+    expect(isCustomColour('')).toBe(false)
+    expect(isCustomColour('image.png')).toBe(false)
+  })
+
+  it('coloursTooClose flags near shades and the same colour, never two different presets', async () => {
+    const { coloursTooClose, colourDistance, TEAM_COLOUR_PRESETS, CLOSE_COLOUR_DISTANCE } = await import('../../utils_beach/teamColours_beach')
+    expect(colourDistance('#000000', '#ffffff')).toBeCloseTo(100, 0)
+    expect(coloursTooClose('#dc2626', '#dc2626')).toBe(true)
+    expect(coloursTooClose('#dc2626', '#ef4444')).toBe(true)
+    expect(coloursTooClose('#1e3a8a', '#1e3a5f')).toBe(true)
+    expect(coloursTooClose('#ffffff', '#f8fafc')).toBe(true)
+    expect(coloursTooClose('#dc2626', '#3b82f6')).toBe(false)
+    expect(coloursTooClose('#22c55e', '#16a34a')).toBe(true) // two greens
+    expect(coloursTooClose('#ef4444', '#f97316')).toBe(false) // red next to the orange preset
+    expect(coloursTooClose('#ef4444', '#ec4899')).toBe(false) // and the pink one
+    for (const a of TEAM_COLOUR_PRESETS) {
+      for (const b of TEAM_COLOUR_PRESETS) {
+        if (a !== b) expect(coloursTooClose(a, b), `${a} ${b}`).toBe(false)
+      }
+    }
+    expect(coloursTooClose('#dc2626', null)).toBe(false)
+    expect(coloursTooClose('image.png', '#dc2626')).toBe(false)
+    expect(colourDistance('#dc2626', '#ef4444')).toBeLessThan(CLOSE_COLOUR_DISTANCE)
+  })
+
+  it('readableTextOn / isLightColour pick dark or light text by luminance for any colour', async () => {
+    const { isLightColour } = await import('../../utils_beach/teamColours_beach')
+    for (const c of ANY) {
+      const ink = readableTextOn(c)
+      expect(contrastRatio(c, ink), c).toBeGreaterThanOrEqual(MIN_LARGE_TEXT_CONTRAST)
+      expect(isLightColour(c), c).toBe(ink === TEXT_DARK)
+      // the '#000' / '#fff' the bands write reads at least as well
+      const written = isLightColour(c) ? '#000000' : '#ffffff'
+      expect(contrastRatio(c, written), c).toBeGreaterThanOrEqual(MIN_LARGE_TEXT_CONTRAST)
+      const disc = discPaint(c)
+      expect(contrastRatio(disc.background, disc.color), c).toBeGreaterThanOrEqual(MIN_LARGE_TEXT_CONTRAST)
+    }
+    expect(isLightColour('#fef9c3')).toBe(true)
+    expect(isLightColour('#0b1d3a')).toBe(false)
+    expect(isLightColour('#ff0')).toBe(true) // #rgb read as #rrggbb (the old helpers misread it)
+    expect(isLightColour(null)).toBe(false)
+    expect(isLightColour('image.png')).toBe(false)
+  })
+})
