@@ -109,6 +109,18 @@ describe('MatchSetup_beach custom team colour', () => {
     expect(shirtsOf('#ef4444')).toHaveLength(0)
   })
 
+  it('a white team\'s band on the setup card gets a grey edge (it melted into the card), a red one none', async () => {
+    const { contrastRatio } = await import('../../utils_beach/teamColours_beach')
+    await openSetup('#ffffff', '#dc2626')
+    const white = document.querySelector('[data-team-band="team1"]')
+    expect(white.style.backgroundColor).toBe('rgb(255, 255, 255)')
+    const ring = white.style.boxShadow.match(/^inset 0 0 0 2px (#[0-9a-f]{6})$/)
+    expect(ring).toBeTruthy()
+    expect(contrastRatio(ring[1], '#ffffff')).toBeGreaterThanOrEqual(3)
+    expect(white.style.color).toBe(rgb('#1c1917'))
+    expect(document.querySelector('[data-team-band="team2"]').style.boxShadow).toBe('')
+  })
+
   it('two close team colours get the gentle note on the setup cards', async () => {
     await openSetup('#dc2626', '#e2001a')
     expect((await screen.findAllByText("Close to the other team's colour")).length).toBeGreaterThan(0)

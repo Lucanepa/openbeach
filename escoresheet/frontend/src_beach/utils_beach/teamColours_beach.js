@@ -186,6 +186,36 @@ export function isLightColour(bg) {
   return normaliseColour(bg) != null && readableTextOn(bg) !== TEXT_LIGHT
 }
 
+// The white cards and dialogs the team bands sit on
+export const HEADER_SURFACE = '#ffffff'
+
+/**
+ * Inline style for a band, box or button filled with a team colour that
+ * shows a team name or label (setup card, coin toss): the fill, the readable
+ * text colour (readableTextOn) and, when the fill would melt into the white
+ * card (white, cream, light yellow...: under 3:1 against it, the shirt
+ * outline's rule), an inset ring of the same colour darkened to 3:1
+ * (discRing). An inset box-shadow, so the band keeps its size. Port of
+ * OpenVolley's teamBoxStyle.
+ * @param {string|null} colour the team colour
+ * @param {object} [opts]
+ * @param {string} [opts.fallback] colour used when `colour` is missing or unusable
+ * @param {string} [opts.surface] what the band sits on
+ * @param {number} [opts.ringWidth] px
+ * @returns {{ background?: string, color?: string, boxShadow?: string }} (an unreadable colour such as a CSS variable is passed through with white text)
+ */
+export function teamBoxStyle(colour, { fallback = null, surface = HEADER_SURFACE, ringWidth = 2 } = {}) {
+  const background = normaliseColour(colour) ?? normaliseColour(fallback)
+  if (!background) {
+    const raw = typeof colour === 'string' && colour.trim() ? colour : (typeof fallback === 'string' && fallback.trim() ? fallback : null)
+    return raw ? { background: raw, color: TEXT_LIGHT } : {}
+  }
+  const ring = discRing(background, surface)
+  return ring
+    ? { background, color: readableTextOn(background), boxShadow: `inset 0 0 0 ${ringWidth}px ${ring}` }
+    : { background, color: readableTextOn(background) }
+}
+
 /** OKLab { L, a, b } (Björn Ottosson) */
 export function toOklab(input) {
   const c = solid(input)

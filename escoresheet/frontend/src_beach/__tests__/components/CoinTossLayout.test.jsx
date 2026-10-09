@@ -87,3 +87,21 @@ describe('CoinToss_beach layout', () => {
     await waitFor(() => expect(onConfirm).toHaveBeenCalledWith(matchId), { timeout: 10000 })
   }, 30000)
 })
+
+// A white team's band had no visible edge on the white card: a band whose
+// colour is under 3:1 against the card (the shirt outline's rule) gets an
+// inset ring of the same colour darkened to 3:1; a dark one none.
+describe('CoinToss_beach team bands', () => {
+  it('a white team\'s band gets a grey edge, a black team\'s none', async () => {
+    const { contrastRatio } = await import('../../utils_beach/teamColours_beach')
+    await db.teams.update((await db.matches.get(matchId)).team2Id, { color: '#ffffff' })
+    render(<CoinToss matchId={matchId} onConfirm={() => {}} onBack={() => {}} />)
+    await screen.findByRole('button', { name: /Switch serve/ })
+    const band = (name) => [...document.querySelectorAll('[data-team-band]')].find(el => el.title === name)
+    await waitFor(() => expect(band('Schmidt / Fischer')?.style.backgroundColor).toBe('rgb(255, 255, 255)'))
+    const ring = band('Schmidt / Fischer').style.boxShadow.match(/^inset 0 0 0 2px (#[0-9a-f]{6})$/)
+    expect(ring).toBeTruthy()
+    expect(contrastRatio(ring[1], '#ffffff')).toBeGreaterThanOrEqual(3)
+    expect(band('Müller / Weber').style.boxShadow).toBe('')
+  })
+})

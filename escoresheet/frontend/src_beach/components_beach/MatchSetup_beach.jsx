@@ -44,7 +44,7 @@ import { Modal as KitModal, modalCancelClass, modalPrimaryClass, modalSaveClass 
 import { preload, usePreloaded } from '../utils_beach/preload_beach'
 import TeamShirt from './TeamShirt_beach'
 import TeamColourPicker, { CloseColourNote, recallCustomColour, rememberCustomColour } from './TeamColourPicker_beach'
-import { coloursTooClose, DEFAULT_TEAM1_COLOUR, DEFAULT_TEAM2_COLOUR, isCustomColour, readableTextOn } from '../utils_beach/teamColours_beach'
+import { coloursTooClose, DEFAULT_TEAM1_COLOUR, DEFAULT_TEAM2_COLOUR, isCustomColour, readableTextOn, teamBoxStyle } from '../utils_beach/teamColours_beach'
 
 // ---- volleyui class strings for the setup views --------------------------
 // A section inside the setup page card (match info, officials, dashboards,
@@ -4642,9 +4642,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               <SyncStatusIndicator status={team.syncStatus} onRetry={() => retrySyncForCard(team.side)} />
             </div>
             {/* Row 1: the team-colour band (frozen: team colour, contrast text, names on one line, country below) */}
-            <div style={{
-              background: team.color,
-              color: getContrastColor(team.color),
+            <div data-team-band={team.side} style={{
+              ...teamBoxStyle(team.color),
               padding: '12px 16px',
               borderRadius: '8px',
               textAlign: 'center'

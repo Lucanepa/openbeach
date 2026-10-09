@@ -29,7 +29,7 @@ import { SegmentedControl } from '../ui/volleyui/SegmentedControl.jsx'
 import { DateField } from '../ui/volleyui/DateField.jsx'
 import { Modal as KitModal, modalCancelClass, modalPrimaryClass, modalSaveClass, modalDangerClass } from '../ui/volleyui/Modal.jsx'
 import { NOTICE } from '../ui/volleyui/tones.js'
-import { isLightColour } from '../utils_beach/teamColours_beach'
+import { teamBoxStyle } from '../utils_beach/teamColours_beach'
 
 // The coin toss page: one kit page card on the stone page (App_beach paints
 // it), full width, in the `.ov-kit` scope.
@@ -1631,9 +1631,9 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         <div className={cn('flex w-full items-center justify-center gap-2', isCompact ? 'mb-3 mt-2 min-h-10' : 'mb-4 mt-3 min-h-20')}>
           {/* Team-colour band: frozen (team colour, contrast text, flag) */}
           <div
+            data-team-band={side}
             style={{
-              background: info.color,
-              color: isLightColour(info.color) ? '#000' : '#fff',
+              ...teamBoxStyle(info.color),
               flex: 1, padding: sizes.teamButtonPadding, fontSize: sizes.teamButtonFont, width: '100%', minWidth: 0,
               fontWeight: 600, border: 'none', borderRadius: '8px',
               overflow: 'hidden',
@@ -2376,8 +2376,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                 {/* Team-colour band: frozen */}
                 <div style={{
                   padding: '12px',
-                  background: teamInfo.color,
-                  color: isLightColour(teamInfo.color) ? '#000' : '#fff',
+                  ...teamBoxStyle(teamInfo.color),
                   borderRadius: '8px',
                   textAlign: 'center',
                   fontWeight: 700,
@@ -2735,7 +2734,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                 type="button"
                 onClick={() => { setForfaitModal(false); setForfaitTypeModal('team1') }}
                 className={cn('min-h-14 rounded-xl px-6 text-base font-semibold', FOCUS_RING)}
-                style={{ background: team1Color, color: isLightColour(team1Color) ? '#000' : '#fff' }}
+                style={teamBoxStyle(team1Color)}
               >
                 {team1Name}
               </button>
@@ -2743,7 +2742,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                 type="button"
                 onClick={() => { setForfaitModal(false); setForfaitTypeModal('team2') }}
                 className={cn('min-h-14 rounded-xl px-6 text-base font-semibold', FOCUS_RING)}
-                style={{ background: team2Color, color: isLightColour(team2Color) ? '#000' : '#fff' }}
+                style={teamBoxStyle(team2Color)}
               >
                 {team2Name}
               </button>
