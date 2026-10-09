@@ -996,8 +996,9 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
               last_event_data: state.last_event_data
             })
 
-            // Check if match is finished (one team won 3 sets) - don't show interval
-            const isMatchFinishedNow = state.sets_won_a >= 3 || state.sets_won_b >= 3
+            // Check if match is finished (best of 3: one team won 2 sets, as
+            // the relay's set_end above) - don't show interval
+            const isMatchFinishedNow = state.sets_won_a >= 2 || state.sets_won_b >= 2
             if (isMatchFinishedNow) {
               // Clear any existing interval state - full-screen match ended view will show
               setBetweenSetsCountdown(null)
