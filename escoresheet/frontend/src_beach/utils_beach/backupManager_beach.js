@@ -12,7 +12,7 @@ import { isBackendAvailable, getApiUrl } from '../utils_beach/backendConfig_beac
 import { sanitizeSimple } from './stringUtils'
 import { remarksForServer } from '../db_beach/remarksSync_beach'
 import { isTeam1LeftInSet, leftTeamInSet } from './courtSides_beach'
-import { labelsInDesignation } from './coinToss_beach'
+import { labelsInDesignation, eventTeamA } from './coinToss_beach'
 import { refereeConnectionDefault } from '../constants_beach/testSeeds_beach'
 
 // IndexedDB key for storing file system directory handle
@@ -826,13 +826,19 @@ function liveOlderThanEvents(liveState, events) {
  * courtSwitched: false (set locally only), so the restored match asks for the
  * TTO again and its end makes the change (with the live side it was made
  * twice); every other change of courts has its event and snapshot.
+ *
+ * The snapshot's sides are A/B labels of the Team A it was taken with (its
+ * teamAKey): written in the restored match's (`teamAKey`), so a "Swap team
+ * A ↔ B" after it keeps each team on its side (coinToss_beach
+ * labelsInDesignation), as on the scorer's court.
  * @param {Array} events  server event rows (seq, state_snapshot)
  * @param {object|null} liveState
- * @param {{ liveAIsOtherTeam?: boolean }} [opts]  the live row's Team A is the
- *   other team than the match's (liveRowTeamAKey): its side_a is B's
+ * @param {{ liveAIsOtherTeam?: boolean, teamAKey?: 'team1'|'team2'|null }} [opts]
+ *   the live row's Team A is the other team than the match's
+ *   (liveRowTeamAKey): its side_a is B's; the restored match's Team A
  * @returns {{ setLeftTeamOverrides?: object, set3LeftTeam?: 'A'|'B' }}
  */
-export function savedCourtSides(events, liveState, { liveAIsOtherTeam = false } = {}) {
+export function savedCourtSides(events, liveState, { liveAIsOtherTeam = false, teamAKey = null } = {}) {
   const set = Number(liveState?.current_set)
   const liveLeft = set >= 1 && (liveState.side_a === 'left' || liveState.side_a === 'right')
     ? (liveState.side_a === 'left') !== liveAIsOtherTeam ? 'A' : 'B'
@@ -846,8 +852,14 @@ export function savedCourtSides(events, liveState, { liveAIsOtherTeam = false } 
     })
   if (snapEvent) {
     const snap = snapEvent.state_snapshot
-    const overrides = Object.fromEntries(Object.entries(snap.setLeftTeamOverrides || {}).filter(([, v]) => isAB(v)))
-    let set3LeftTeam = isAB(snap.set3LeftTeam) ? snap.set3LeftTeam : undefined
+    const saved = {
+      setLeftTeamOverrides: Object.fromEntries(Object.entries(snap.setLeftTeamOverrides || {}).filter(([, v]) => isAB(v))),
+      set3LeftTeam: isAB(snap.set3LeftTeam) ? snap.set3LeftTeam : undefined
+    }
+    const isTeam = (v) => v === 'team1' || v === 'team2'
+    const now = labelsInDesignation(saved, eventTeamA(snapEvent), isTeam(teamAKey) ? teamAKey : null)
+    const overrides = now.setLeftTeamOverrides
+    let set3LeftTeam = now.set3LeftTeam
     const liveAt = timeOf(liveState?.last_event_ts || liveState?.updated_at)
     const snapAt = timeOf(snapEvent.created_at || snapEvent.ts)
     if (liveLeft && liveState.last_event_type === 'manual_side_change' &&
@@ -1082,7 +1094,7 @@ export async function fetchMatchByPin(gamePin, gameN, { restoreByPin = apiMatchR
   const liveAIsTeam1 = liveTeamAKey === 'team1'
   // The match's court sides as the scorer last saved them (the restored
   // match keeps them, and they place a row's court-side lineups below)
-  const courtSides = savedCourtSides(events, liveState, { liveAIsOtherTeam: liveTeamAKey !== teamAKey })
+  const courtSides = savedCourtSides(events, liveState, { liveAIsOtherTeam: liveTeamAKey !== teamAKey, teamAKey })
   // Set 3's toss (its winner, side and first server): restored, its event
   // hides the toss buttons
   const set3Toss = savedSet3Toss(events, liveState, { teamAKey, liveAIsOtherTeam: liveTeamAKey !== teamAKey })
@@ -1116,13 +1128,15 @@ export async function fetchMatchByPin(gamePin, gameN, { restoreByPin = apiMatchR
         (snap.currentSetIndex == null || Number(snap.currentSetIndex) === Number(setIndex)))
       // The row's own Team A: its snapshot's, else the cloud coin toss's (a
       // row synced before a "Swap A/B" still in the sync queue, not the live
-      // row's Team A the restored match takes; the swap keeps the A / B sides)
+      // row's Team A the restored match takes): its lineupA / lineupB. The
+      // court sides are the restored match's, in its Team A (the swap keeps
+      // each team on its side: savedCourtSides)
       const rowTeamAKey = snap?.teamAKey === 'team1' || snap?.teamAKey === 'team2' ? snap.teamAKey : cloudTeamAKey
       const snapAIsTeam1 = rowTeamAKey === 'team1'
       const markedLeft = rowLeftIsTeam1(eventWithLineup)
       const leftIsTeam1 = markedLeft !== null
         ? markedLeft
-        : isTeam1LeftInSet(setIndex, { coinTossTeamA: rowTeamAKey, ...courtSides })
+        : isTeam1LeftInSet(setIndex, { coinTossTeamA: teamAKey, ...courtSides })
 
       const team1RawLineup = bySnapshot
         ? (snapAIsTeam1 ? snap.lineupA : snap.lineupB)

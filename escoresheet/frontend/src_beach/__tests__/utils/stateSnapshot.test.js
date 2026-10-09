@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import Dexie from 'dexie'
 import { IDBFactory, IDBKeyRange } from 'fake-indexeddb'
-import { captureFullStateSnapshot } from '../../utils_beach/stateSnapshot_beach'
+import { captureFullStateSnapshot, refreshIntervalSnapshots } from '../../utils_beach/stateSnapshot_beach'
+import { swapTeamDesignation } from '../../utils_beach/coinToss_beach'
+import { isTeam1LeftInSet } from '../../utils_beach/courtSides_beach'
 
 // captureFullStateSnapshot feeds every event's stateSnapshot and the live
 // state (match_live_state, referee, scoreboard display). It catches its own
@@ -124,5 +126,44 @@ describe('captureFullStateSnapshot', () => {
     expect(await captureFullStateSnapshot(db, null)).toBeNull()
     const matchId = await db.matches.add({ status: 'setup' })
     expect(await captureFullStateSnapshot(db, matchId)).toBeNull()
+  })
+})
+
+// An interval tap refreshes the snapshots of the events logged in the
+// interval with the sides and serve of now. After a "Swap team A ↔ B" those
+// snapshots keep their own Team A: the refreshed fields are written in it
+// (the swap moves nothing; an undo reads them in the snapshot's designation).
+describe('refreshIntervalSnapshots after a swap of team A / B', () => {
+  it('the sides, the set 3 labels and the line-ups in the snapshot\'s own designation', async () => {
+    const matchId = await seedMatch()
+    await db.sets.where({ matchId }).modify({ finished: true, team1Points: 21, team2Points: 10 })
+    await db.sets.add({ matchId, index: 2, team1Points: 10, team2Points: 21, finished: true })
+    await db.sets.add({ matchId, index: 3, team1Points: 0, team2Points: 0, finished: false })
+    // set 3's toss with A = team1: team2 (B) on the left, A serves
+    await db.matches.update(matchId, { set3CoinTossWinner: 'team1', set3LeftTeam: 'B', set3FirstServe: 'A', setLeftTeamOverrides: { 2: 'A' } })
+    const toss = await db.events.add({ matchId, setIndex: 3, seq: 3, type: 'set3_coin_toss_winner', payload: { winner: 'team1' } })
+    await db.events.update(toss, { stateSnapshot: await captureFullStateSnapshot(db, matchId) })
+    const tossSnap = (await db.events.get(toss)).stateSnapshot
+    expect(tossSnap).toMatchObject({ teamAKey: 'team1', sideA: 'right', set3LeftTeam: 'B', set3FirstServe: 'A' })
+
+    // the swap: A = team2 (labels flipped, nobody moves)
+    const match = await db.matches.get(matchId)
+    await db.matches.update(matchId, swapTeamDesignation(match))
+    const written = {}
+    await refreshIntervalSnapshots(db, matchId, 3, async (id, snap) => { written[id] = snap })
+    const snap = written[toss]
+    expect(snap.teamAKey).toBe('team1')
+    // in its own designation, as before the swap: team2 (B) on the left, A serves
+    expect(snap.sideA).toBe('right')
+    expect(snap.set3LeftTeam).toBe('B')
+    expect(snap.set3FirstServe).toBe('A')
+    expect(isTeam1LeftInSet(3, { coinTossTeamA: 'team1', ...snap })).toBe(false)
+    // lineupA is team1's still
+    // (team1's captain is its no. 1, team2's its no. 2)
+    const captain = (lineup) => Object.values(lineup || {}).find(p => p?.isCaptain)?.number
+    expect(captain(tossSnap.lineupA)).toBe(1)
+    expect(captain(snap.lineupA)).toBe(1)
+    expect(snap.lineupA).toEqual(tossSnap.lineupA)
+    expect(snap.lineupB).toEqual(tossSnap.lineupB)
   })
 })

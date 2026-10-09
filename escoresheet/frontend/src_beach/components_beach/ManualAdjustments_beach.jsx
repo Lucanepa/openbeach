@@ -9,6 +9,7 @@ import { useAlert } from '../contexts_beach/AlertContext_beach'
 import { withActivityContext } from '../db_beach/eventHistory_beach'
 import { randomUuid } from '../utils_beach/deviceId_beach'
 import { sanctionLabel } from '../utils_beach/corrections_beach'
+import { swapTeamDesignation as swapTeamDesignationPatch, coinTossCloud } from '../utils_beach/coinToss_beach'
 import CorrectionsPanel from './corrections/CorrectionsPanel_beach'
 import { isCustomColour } from '../utils_beach/teamColours_beach'
 
@@ -256,39 +257,22 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
     })
   }, [recordChange])
 
+  // Swap which team is A and which is B: only the designation changes (the
+  // labels), as the scoring screen's "Swap team A ↔ B" and OpenVolley's. Team
+  // IDs, players, set scores and events are keyed by team1 / team2 and stay as
+  // they are; the A/B-labelled fields (serve flags, the set 3 toss, the court
+  // sides) move with the designation so the first server and each team's side
+  // stay the same (coinToss_beach swapTeamDesignation). It swapped the team
+  // 1 / team 2 data instead: the cloud got each team's name, players and
+  // points under the other team.
+  // (recordChange outside the state updater: React calls an updater twice in
+  // StrictMode, which logged the swap twice)
   const swapTeamDesignation = useCallback(() => {
-    // Swap Team 1 and Team 2 teams entirely
-    recordChange('match', 'teamDesignation', 'original', 'swapped', 'Swapped team A/B designation')
-
-    // Swap teams
-    const tempTeam = editedTeam1
-    setEditedTeam1(editedTeam2)
-    setEditedTeam2(tempTeam)
-
-    // Swap players
-    const tempPlayers = editedTeam1Players
-    setEditedTeam1Players(editedTeam2Players)
-    setEditedTeam2Players(tempPlayers)
-
-    // Swap team IDs in match
-    setEditedMatch(prev => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        team1Id: prev.team2Id,
-        team2Id: prev.team1Id,
-        coinTossTeamA: prev.coinTossTeamB,
-        coinTossTeamB: prev.coinTossTeamA
-      }
-    })
-
-    // Swap scores in sets
-    setEditedSets(prev => prev.map(set => ({
-      ...set,
-      team1Points: set.team2Points,
-      team2Points: set.team1Points
-    })))
-  }, [recordChange, editedTeam1, editedTeam2, editedTeam1Players, editedTeam2Players])
+    if (!editedMatch) return
+    const patch = swapTeamDesignationPatch(editedMatch)
+    recordChange('match', 'teamDesignation', `A=${editedMatch.coinTossTeamA || 'team1'}`, `A=${patch.coinTossTeamA}`, 'Swapped team A/B designation')
+    setEditedMatch({ ...editedMatch, ...patch, _designationSwapped: !editedMatch._designationSwapped })
+  }, [editedMatch, recordChange])
 
   // ==================== PLAYER FUNCTIONS ====================
   const updatePlayer = useCallback((playerId, field, value, isTeam1) => {
@@ -482,6 +466,15 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
           match_type_2: editedMatch.match_type_2,
           coinTossTeamA: editedMatch.coinTossTeamA,
           coinTossTeamB: editedMatch.coinTossTeamB,
+          // A/B-labelled fields move together with the designation (Swap A/B)
+          ...(editedMatch._designationSwapped ? {
+            firstServe: editedMatch.firstServe,
+            coinTossServeA: editedMatch.coinTossServeA,
+            coinTossServeB: editedMatch.coinTossServeB,
+            set3FirstServe: editedMatch.set3FirstServe ?? null,
+            set3LeftTeam: editedMatch.set3LeftTeam ?? null,
+            setLeftTeamOverrides: editedMatch.setLeftTeamOverrides
+          } : {}),
           officials: editedOfficials,
           manualChanges: [...existingChanges, ...changes]
         })
@@ -622,6 +615,8 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
           team1_data: team1Data,
           team2_data: team2Data,
           officials: editedOfficials,
+          // the first server the swap kept, in the cloud coin toss
+          ...(editedMatch._designationSwapped ? { coin_toss: coinTossCloud(editedMatch) } : {}),
           manual_changes: [...(editedMatch.manualChanges || []), ...changes]
         },
         ts: new Date().toISOString(),
@@ -654,6 +649,9 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
       </div>
     )
   }
+
+  // Team A as edited (the team cards are team 1 / team 2)
+  const teamAIsTeam1 = (editedMatch?.coinTossTeamA || 'team1') === 'team1'
 
   const tabs = [
     { id: 'corrections', label: t('corrections.title', 'Corrections') },
@@ -793,7 +791,10 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                 <div style={cardStyle}>
                   <h2 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '16px', color: 'var(--ov-text)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: editedTeam1?.color || '#888', display: 'inline-block' }} />
-                    {t('manualAdjustmentsEditor.teamATeam1', 'Team A (Team 1)')}
+                    {/* the designation as edited: "Swap A/B" changes it, the cards stay team 1 / team 2 */}
+                    {teamAIsTeam1
+                      ? t('manualAdjustmentsEditor.teamATeam1', 'Team A (Team 1)')
+                      : t('manualAdjustmentsEditor.teamBTeam1', 'Team B (Team 1)')}
                   </h2>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     <div>
@@ -920,7 +921,9 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                 <div style={cardStyle}>
                   <h2 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '16px', color: 'var(--ov-text)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: editedTeam2?.color || '#888', display: 'inline-block' }} />
-                    {t('manualAdjustmentsEditor.teamBTeam2', 'Team B (Team 2)')}
+                    {teamAIsTeam1
+                      ? t('manualAdjustmentsEditor.teamBTeam2', 'Team B (Team 2)')
+                      : t('manualAdjustmentsEditor.teamATeam2', 'Team A (Team 2)')}
                   </h2>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     <div>

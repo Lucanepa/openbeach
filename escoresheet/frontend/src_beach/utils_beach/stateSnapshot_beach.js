@@ -1,4 +1,5 @@
 import { leftTeamInSet } from './courtSides_beach'
+import { labelsInDesignation } from './coinToss_beach'
 
 /**
  * The full match state at this moment, read fresh from IndexedDB: what the
@@ -424,6 +425,22 @@ export const INTERVAL_CHOICE_FIELDS = Object.freeze([
 ])
 
 /**
+ * The INTERVAL_CHOICE_FIELDS of `fresh` (a snapshot taken now) for a snapshot
+ * of Team A `teamAKey`: a "Swap team A ↔ B" since that event names the teams
+ * the other way round (its A/B labels, the side of A, the line-ups of A and
+ * B); the teams, their sides and the serve are the same.
+ */
+function choicesInDesignation(fresh, teamAKey) {
+  const from = fresh.teamAKey
+  if (!teamAKey || !from || teamAKey === from) return fresh
+  const out = { ...fresh, ...labelsInDesignation({ set3LeftTeam: fresh.set3LeftTeam, set3FirstServe: fresh.set3FirstServe, setLeftTeamOverrides: fresh.setLeftTeamOverrides }, from, teamAKey) }
+  out.sideA = fresh.sideA === 'left' ? 'right' : fresh.sideA === 'right' ? 'left' : fresh.sideA
+  out.lineupA = fresh.lineupB
+  out.lineupB = fresh.lineupA
+  return out
+}
+
+/**
  * After an interval tap: the snapshots of the events logged in this interval
  * (the set 3 toss, a sanction, ...) get the tap's sides, serve and service
  * order. The taps log no event; an undo restores the snapshot of the event
@@ -451,7 +468,8 @@ export async function refreshIntervalSnapshots(db, matchId, setIndex, write) {
     const fresh = await captureFullStateSnapshot(db, matchId, { uptoSeq: e.seq || 0 })
     if (!fresh || Number(fresh.currentSetIndex) !== Number(setIndex)) continue
     const next = { ...e.stateSnapshot }
-    for (const field of INTERVAL_CHOICE_FIELDS) next[field] = fresh[field]
+    const choices = choicesInDesignation(fresh, e.stateSnapshot.teamAKey)
+    for (const field of INTERVAL_CHOICE_FIELDS) next[field] = choices[field]
     await write(e.id, next)
     refreshed++
   }

@@ -13,6 +13,7 @@
  */
 
 import { leftTeamInSet, switchSidesUpdate } from './courtSides_beach'
+import { labelsInDesignation, eventTeamA } from './coinToss_beach'
 
 const TTO_TOTAL = 21
 
@@ -30,7 +31,19 @@ export function hasTto(setIndex) {
 const seqOf = (e) => Number(e?.seq) || 0
 const inSet = (events, setIndex) => (events || []).filter(e => e && (e.setIndex ?? 1) === setIndex)
 const switchTotal = (e) => (Number(e?.payload?.score?.team1) || 0) + (Number(e?.payload?.score?.team2) || 0)
-const sideOf = (overrides, setIndex) => (overrides && typeof overrides === 'object' ? overrides[setIndex] : undefined) ?? null
+const teamAOf = (match) => match?.coinTossTeamA || 'team1'
+
+/**
+ * The sides a change of courts saved before it (payload.preSwitchOverrides,
+ * A/B labels of the designation it was logged with) as the match names the
+ * teams now: a "Swap team A ↔ B" since flipped the match's labels
+ * (coinToss_beach labelsInDesignation), so each team keeps its side.
+ */
+function savedSidesNow(event, match) {
+  const saved = event?.payload?.preSwitchOverrides
+  if (saved === undefined) return undefined
+  return labelsInDesignation({ setLeftTeamOverrides: saved }, eventTeamA(event), teamAOf(match)).setLeftTeamOverrides
+}
 
 /**
  * Whether the change of courts of this technical time-out was made. Written on
@@ -44,7 +57,10 @@ export function ttoCourtSwitchMade(tto, events, match) {
   const setIndex = tto?.setIndex ?? 1
   if (inSet(events, setIndex).some(e => e.type === 'court_switch' && seqOf(e) > seqOf(tto))) return true
   if (p.preSwitchOverrides === undefined) return true
-  return sideOf(match?.setLeftTeamOverrides, setIndex) !== sideOf(p.preSwitchOverrides, setIndex)
+  // The side the set is played on, by the court rule (a side not written is
+  // set 1's A on the left, or the set before's): a swap writes set 1's side,
+  // so { 1: 'A' } after two swaps is the same side as none
+  return leftTeamInSet(setIndex, match) !== leftTeamInSet(setIndex, { ...match, setLeftTeamOverrides: savedSidesNow(tto, match) || {} })
 }
 
 /**
@@ -67,7 +83,7 @@ export function staleCourtSwitches(events, setIndex, total, match) {
  */
 export function switchBackUpdate(stale, setIndex, match) {
   if (!stale?.length) return null
-  const saved = stale[0].payload?.preSwitchOverrides
+  const saved = savedSidesNow(stale[0], match)
   if (saved !== undefined) return { setLeftTeamOverrides: { ...(saved || {}) } }
   return stale.length % 2 === 1 ? switchSidesUpdate(setIndex, match) : null
 }
@@ -76,7 +92,9 @@ export function switchBackUpdate(stale, setIndex, match) {
  * The undo snapshots to rewrite after the change back: every event of the
  * set logged after the oldest stale change kept the courts it made, and Undo
  * of the event after it restores them (the teams changed courts again). They
- * get the sides of `sidesMatch` (the match with the change back applied).
+ * get the sides of `sidesMatch` (the match with the change back applied),
+ * in the snapshot's own designation (its teamAKey: a "Swap team A ↔ B" made
+ * since names the teams the other way round, the sides are the same).
  * @returns {{ id: *, stateSnapshot: object }[]}
  */
 export function snapshotsAfterSwitchBack(events, stale, setIndex, sidesMatch) {
@@ -87,7 +105,14 @@ export function snapshotsAfterSwitchBack(events, stale, setIndex, sidesMatch) {
   const sideA = leftTeamInSet(setIndex, sidesMatch) === 'A' ? 'left' : 'right'
   return inSet(events, setIndex)
     .filter(e => !staleIds.has(e.id) && seqOf(e) > from && e.stateSnapshot && typeof e.stateSnapshot === 'object')
-    .map(e => ({ id: e.id, stateSnapshot: { ...e.stateSnapshot, setLeftTeamOverrides: overrides, sideA } }))
+    .map(e => {
+      const snapA = e.stateSnapshot.teamAKey
+      if (!snapA || snapA === teamAOf(sidesMatch)) {
+        return { id: e.id, stateSnapshot: { ...e.stateSnapshot, setLeftTeamOverrides: overrides, sideA } }
+      }
+      const sides = labelsInDesignation({ setLeftTeamOverrides: overrides }, teamAOf(sidesMatch), snapA).setLeftTeamOverrides
+      return { id: e.id, stateSnapshot: { ...e.stateSnapshot, setLeftTeamOverrides: sides, sideA: sideA === 'left' ? 'right' : 'left' } }
+    })
 }
 
 /**

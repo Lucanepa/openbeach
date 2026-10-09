@@ -2166,6 +2166,8 @@
     "finished": "Terminato",
     "teamATeam1": "Team A (Team 1)",
     "teamBTeam2": "Team B (Team 2)",
+    "teamBTeam1": "Team B (Team 1)",
+    "teamATeam2": "Team A (Team 2)",
     "name": "Nome",
     "shortNameMax8": "Nome breve (max 8)",
     "color": "Colore",
