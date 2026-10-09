@@ -234,6 +234,20 @@ export const TEAM_COLOUR_PRESETS = [
 export const DEFAULT_TEAM1_COLOUR = '#dc2626'
 export const DEFAULT_TEAM2_COLOUR = '#3b82f6'
 
+/**
+ * The colour a team wears on the scorer's screen, and so on the referee and
+ * livescore screens it feeds: the team's own colour (Manual Adjustments
+ * edits only the team), else the match's copy, else the scoreboard's team 1
+ * red / team 2 blue.
+ * @param {'team1'|'team2'} teamKey
+ * @param {object|null} team the team record
+ * @param {object|null} match the match record (team1Color / team2Color)
+ * @returns {string}
+ */
+export function effectiveTeamColour(teamKey, team, match) {
+  return team?.color || match?.[teamKey === 'team1' ? 'team1Color' : 'team2Color'] || (teamKey === 'team1' ? '#ef4444' : '#3b82f6')
+}
+
 /** The preset the colour is (case and #rgb shorthand ignored), or null */
 export function presetColour(colour) {
   const c = normaliseColour(colour)

@@ -1,5 +1,7 @@
+import Dexie from 'dexie'
 import { leftTeamInSet } from './courtSides_beach'
 import { labelsInDesignation } from './coinToss_beach'
+import { effectiveTeamColour } from './teamColours_beach'
 
 /**
  * The full match state at this moment, read fresh from IndexedDB: what the
@@ -31,11 +33,18 @@ export async function captureFullStateSnapshot(db, matchId, { uptoSeq = null } =
       .filter(e => uptoSeq == null || (e.seq || 0) <= uptoSeq)
 
     // Get players from database (support both old and new field names)
+    // The team records (their colours), unless the snapshot is taken inside a
+    // transaction without the teams table: reading them there would throw
+    // and lose the whole snapshot (then the match's colours stand in)
+    const tx = Dexie.currentTransaction
+    const teamsReadable = !!db.teams && (!tx || tx.storeNames.includes('teams'))
     const team1TeamIdSnapshot = match.team1Id || match.team1TeamId
     const team2TeamIdSnapshot = match.team2Id || match.team2TeamId
-    const [team1PlayersDb, team2PlayersDb] = await Promise.all([
+    const [team1PlayersDb, team2PlayersDb, team1TeamDb, team2TeamDb] = await Promise.all([
       team1TeamIdSnapshot ? db.players.where('teamId').equals(team1TeamIdSnapshot).toArray() : [],
-      team2TeamIdSnapshot ? db.players.where('teamId').equals(team2TeamIdSnapshot).toArray() : []
+      team2TeamIdSnapshot ? db.players.where('teamId').equals(team2TeamIdSnapshot).toArray() : [],
+      teamsReadable && team1TeamIdSnapshot ? db.teams.get(team1TeamIdSnapshot) : null,
+      teamsReadable && team2TeamIdSnapshot ? db.teams.get(team2TeamIdSnapshot) : null
     ])
 
     // Compute current state
@@ -62,8 +71,12 @@ export async function captureFullStateSnapshot(db, matchId, { uptoSeq = null } =
     const teamBName = teamAKey === 'team1' ? match.team2Name : match.team1Name
     const teamAShort = teamAKey === 'team1' ? match.team1ShortName : match.team2ShortName
     const teamBShort = teamAKey === 'team1' ? match.team2ShortName : match.team1ShortName
-    const teamAColor = teamAKey === 'team1' ? match.team1Color : match.team2Color
-    const teamBColor = teamAKey === 'team1' ? match.team2Color : match.team1Color
+    // The colours the scorer's court shows (the team's own first, Manual
+    // Adjustments edits only the team)
+    const team1Colour = effectiveTeamColour('team1', team1TeamDb, match)
+    const team2Colour = effectiveTeamColour('team2', team2TeamDb, match)
+    const teamAColor = teamAKey === 'team1' ? team1Colour : team2Colour
+    const teamBColor = teamAKey === 'team1' ? team2Colour : team1Colour
 
     // Points and set scores
     const pointsA = teamAKey === 'team1' ? currentSet.team1Points : currentSet.team2Points
@@ -350,10 +363,10 @@ export async function captureFullStateSnapshot(db, matchId, { uptoSeq = null } =
       teamAKey,
       teamAName,
       teamAShort: teamAShort || teamAName?.substring(0, 3).toUpperCase(),
-      teamAColor: teamAColor || '#ef4444',
+      teamAColor,
       teamBName,
       teamBShort: teamBShort || teamBName?.substring(0, 3).toUpperCase(),
-      teamBColor: teamBColor || '#3b82f6',
+      teamBColor,
 
       // Current set
       currentSetIndex: setIndex,

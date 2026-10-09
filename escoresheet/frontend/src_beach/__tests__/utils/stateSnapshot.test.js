@@ -20,6 +20,7 @@ beforeAll(async () => {
   db = new Dexie('snapshot-test')
   db.version(1).stores({
     players: '++id,teamId,number',
+    teams: '++id',
     matches: '++id',
     sets: '++id,matchId,index',
     events: '++id,matchId,setIndex,seq,[matchId+seq]'
@@ -32,13 +33,17 @@ afterAll(() => {
 })
 
 let teamSeq = 10
-async function seedMatch({ coinTossTeamA = 'team1', firstServe = 'team1', withPlayers = true } = {}) {
+async function seedMatch({ coinTossTeamA = 'team1', firstServe = 'team1', withPlayers = true, matchColours = { team1Color: '#ef4444', team2Color: '#3b82f6' }, teamColours = null } = {}) {
   const t1 = ++teamSeq
   const t2 = ++teamSeq
+  if (teamColours) {
+    await db.teams.put({ id: t1, name: 'Muster / Beispiel', color: teamColours.team1 })
+    await db.teams.put({ id: t2, name: 'Rossi / Bianchi', color: teamColours.team2 })
+  }
   const matchId = await db.matches.add({
     team1Id: t1, team2Id: t2, status: 'live',
     team1Name: 'Muster / Beispiel', team2Name: 'Rossi / Bianchi',
-    team1Color: '#ef4444', team2Color: '#3b82f6',
+    ...matchColours,
     coinTossTeamA, firstServe, team1FirstServe: 1, team2FirstServe: 2
   })
   if (withPlayers) {
@@ -133,6 +138,41 @@ describe('captureFullStateSnapshot', () => {
 // interval with the sides and serve of now. After a "Swap team A ↔ B" those
 // snapshots keep their own Team A: the refreshed fields are written in it
 // (the swap moves nothing; an undo reads them in the snapshot's designation).
+// The live state (referee, livescore) had the colours of the match record
+// only: Manual Adjustments edits only the team, so those screens kept the
+// old colour, and without any colour team A got red even as team 2 (blue
+// on the scorer's court). It now carries what the scorer's court shows.
+describe('captureFullStateSnapshot: the team colours the scorer\'s court shows', () => {
+  it('the team\'s own colour wins over the match\'s copy', async () => {
+    const matchId = await seedMatch({ coinTossTeamA: 'team2', teamColours: { team1: '#22c55e', team2: '#a855f7' } })
+    const snapshot = await captureFullStateSnapshot(db, matchId)
+    expect(snapshot.teamAColor).toBe('#a855f7')
+    expect(snapshot.teamBColor).toBe('#22c55e')
+  })
+
+  it('colours only on the teams: sent all the same', async () => {
+    const matchId = await seedMatch({ matchColours: {}, teamColours: { team1: '#eab308', team2: '#065f46' } })
+    const snapshot = await captureFullStateSnapshot(db, matchId)
+    expect(snapshot.teamAColor).toBe('#eab308')
+    expect(snapshot.teamBColor).toBe('#065f46')
+  })
+
+  it('inside a transaction without the teams table: still a snapshot, with the match\'s colours', async () => {
+    const matchId = await seedMatch({ teamColours: { team1: '#22c55e', team2: '#a855f7' } })
+    const snapshot = await db.transaction('r', [db.matches, db.sets, db.events, db.players], () => captureFullStateSnapshot(db, matchId))
+    expect(snapshot).toBeTruthy()
+    expect(snapshot.teamAColor).toBe('#ef4444')
+    expect(snapshot.teamBColor).toBe('#3b82f6')
+  })
+
+  it('no colour anywhere: team 2 as team A sends the team 2 blue the court shows, not red', async () => {
+    const matchId = await seedMatch({ coinTossTeamA: 'team2', matchColours: {} })
+    const snapshot = await captureFullStateSnapshot(db, matchId)
+    expect(snapshot.teamAColor).toBe('#3b82f6')
+    expect(snapshot.teamBColor).toBe('#ef4444')
+  })
+})
+
 describe('refreshIntervalSnapshots after a swap of team A / B', () => {
   it('the sides, the set 3 labels and the line-ups in the snapshot\'s own designation', async () => {
     const matchId = await seedMatch()

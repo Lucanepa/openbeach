@@ -81,7 +81,7 @@ import { AppSpinner } from '../ui/volleyui/AppSpinner.jsx'
 import { modalCancelClass, modalPrimaryClass, ActionSheet, ActionSheetItem } from '../ui/volleyui/Modal.jsx'
 import { dayLabel, timeSecondsLabel } from '../ui/volleyui/format.js'
 import { openAppWindow } from '../utils_beach/openAppWindow_beach'
-import { discPaint, isLightColour } from '../utils_beach/teamColours_beach'
+import { discPaint, effectiveTeamColour, isLightColour } from '../utils_beach/teamColours_beach'
 import { preload, usePreloaded } from '../utils_beach/preload_beach'
 
 // ── volleyui chrome for the scoring screen ───────────────────────────────────
@@ -2423,7 +2423,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     const beachName = buildBeachTeamName(players, team?.name, country)
     return {
       name: matchTeamName || teamTableName || beachName || (leftisTeam1 ? 'team1' : 'team2'),
-      color: team?.color || (leftisTeam1 ? '#ef4444' : '#3b82f6'),
+      color: effectiveTeamColour(teamKey, team, data.match),
       playersOnCourt: buildOnCourt(players, true, teamKey),
       isTeamA
     }
@@ -2442,7 +2442,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     const beachName = buildBeachTeamName(players, team?.name, country)
     return {
       name: matchTeamName || teamTableName || beachName || (leftisTeam1 ? 'team2' : 'team1'),
-      color: team?.color || (leftisTeam1 ? '#3b82f6' : '#ef4444'),
+      color: effectiveTeamColour(teamKey, team, data.match),
       playersOnCourt: buildOnCourt(players, false, teamKey),
       isTeamA
     }
@@ -4721,7 +4721,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   // they learnt of it only with the next action.
   const intervalTap = useCallback(async (setIndex, write) => {
     await db.transaction(
-      'rw', [db.matches, db.sync_queue, db.events, db.sets, db.players],
+      'rw', [db.matches, db.sync_queue, db.events, db.sets, db.players, db.teams],
       async () => {
         if (await write() === false) return
         await withoutEventHistory(matchId, () => refreshIntervalSnapshots(
