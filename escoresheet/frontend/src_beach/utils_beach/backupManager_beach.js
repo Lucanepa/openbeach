@@ -923,6 +923,55 @@ export function savedSet3Toss(events, liveState, { teamAKey = null, liveAIsOther
 }
 
 /**
+ * Set 2's serve and the service orders for a restore by PIN, and the choices
+ * of the interval before set 2 (FIVB beach 7.1.2.3: the team that lost the
+ * first toss chooses serve / receive or the side; 7.6.1: each team gives its
+ * service order again):
+ * - `set2FirstServe` (a team) and `team1FirstServe` / `team2FirstServe` (a
+ *   player number) from the latest snapshot that has them;
+ * - in the break before set 2, the interval's choices ("Side", "Serve or
+ *   receive", "Change" of a serve order) log no event, only the live row they
+ *   push has them: a live row of that break not older than the latest event
+ *   gives set 2's side (`setLeftTeamOverrides[2]`), its first server and the
+ *   serving team's first server (server_number). The receiving team's order
+ *   is not on the live row: as last saved.
+ * Without them the restored match put set 2 back where set 1 finished,
+ * served it by the default and lost every service order.
+ * @param {Array} events  server event rows (seq, state_snapshot)
+ * @param {object|null} liveState
+ * @param {{ teamAKey?: 'team1'|'team2', liveAIsOtherTeam?: boolean }} [opts]
+ * @returns {{ set2FirstServe?: string, team1FirstServe?: number, team2FirstServe?: number, setLeftTeamOverrides?: { 2: 'A'|'B' } }}
+ */
+export function savedSet2Choice(events, liveState, { teamAKey = null, liveAIsOtherTeam = false } = {}) {
+  const isTeam = (v) => v === 'team1' || v === 'team2'
+  const isNumber = (v) => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v))
+  const out = {}
+  const latestFirst = [...(events || [])].sort((a, b) => (b.seq || 0) - (a.seq || 0))
+  const snapOf = (e) => (e?.state_snapshot && typeof e.state_snapshot === 'object' ? e.state_snapshot : null)
+  const latest = (has) => latestFirst.map(snapOf).find(s => s && has(s))
+  const set2 = latest(s => isTeam(s.set2FirstServe))
+  if (set2) out.set2FirstServe = set2.set2FirstServe
+  for (const field of ['team1FirstServe', 'team2FirstServe']) {
+    const snap = latest(s => isNumber(s[field]))
+    if (snap) out[field] = Number(snap[field])
+  }
+
+  const side = (v) => v === 'left' || v === 'right'
+  if (liveState?.set_interval_active === true && Number(liveState.current_set) === 2 &&
+      side(liveState.side_a) && side(liveState.serving_team) && !liveOlderThanEvents(liveState, events)) {
+    // the live row's side_a / serving_team are for its own Team A
+    const aLeft = (liveState.side_a === 'left') !== liveAIsOtherTeam
+    const aServes = (liveState.serving_team === liveState.side_a) !== liveAIsOtherTeam
+    const teamA = isTeam(teamAKey) ? teamAKey : 'team1'
+    const serving = aServes ? teamA : (teamA === 'team1' ? 'team2' : 'team1')
+    out.setLeftTeamOverrides = { 2: aLeft ? 'A' : 'B' }
+    out.set2FirstServe = serving
+    if (isNumber(liveState.server_number)) out[`${serving}FirstServe`] = Number(liveState.server_number)
+  }
+  return out
+}
+
+/**
  * Which team a synced event row put on the left, from the row itself: the
  * serving team's court-side lineup carries isServing. null when it cannot
  * tell (no serve_team, or no lineup or both lineups marked).
@@ -1037,6 +1086,12 @@ export async function fetchMatchByPin(gamePin, gameN, { restoreByPin = apiMatchR
   // Set 3's toss (its winner, side and first server): restored, its event
   // hides the toss buttons
   const set3Toss = savedSet3Toss(events, liveState, { teamAKey, liveAIsOtherTeam: liveTeamAKey !== teamAKey })
+  // Set 2's serve, the service orders and the choices of the break before
+  // set 2 (savedSet2Choice): its side joins the court sides
+  const set2Choice = savedSet2Choice(events, liveState, { teamAKey, liveAIsOtherTeam: liveTeamAKey !== teamAKey })
+  if (set2Choice.setLeftTeamOverrides) {
+    courtSides.setLeftTeamOverrides = { ...(courtSides.setLeftTeamOverrides || {}), ...set2Choice.setLeftTeamOverrides }
+  }
 
   // If no lineup type events, create them from event lineup_left/lineup_right columns
   // or from match_live_state
@@ -1158,6 +1213,8 @@ export async function fetchMatchByPin(gamePin, gameN, { restoreByPin = apiMatchR
     courtSides,
     // Set 3's toss (savedSet3Toss): the imported match keeps it
     set3Toss,
+    // Set 2's serve and the service orders (savedSet2Choice)
+    set2Choice,
     // The backend never returns game_pin: keep the one that proved access, so
     // the imported match can still claim its cloud copy
     gamePin: String(gamePin ?? '').trim()
@@ -1172,6 +1229,7 @@ export async function importMatchFromSupabase(cloudData) {
   const { match, sets, events } = cloudData
   const courtSides = cloudData.courtSides || {}
   const set3Toss = cloudData.set3Toss || {}
+  const set2Choice = cloudData.set2Choice || {}
 
   let importedMatchId = null
 
@@ -1256,6 +1314,12 @@ export async function importMatchFromSupabase(cloudData) {
       ...(set3Toss.set3CoinTossWinner ? { set3CoinTossWinner: set3Toss.set3CoinTossWinner } : {}),
       ...(isAB(set3Toss.set3FirstServe) ? { set3FirstServe: set3Toss.set3FirstServe } : {}),
       ...(isAB(set3Toss.set3LeftTeam) ? { set3LeftTeam: set3Toss.set3LeftTeam } : {}),
+      // Set 2's first server and each team's service order (savedSet2Choice):
+      // without them set 2 was served by the default and each team's first
+      // server was its lower number
+      ...(set2Choice.set2FirstServe ? { set2FirstServe: set2Choice.set2FirstServe } : {}),
+      ...(set2Choice.team1FirstServe != null ? { team1FirstServe: set2Choice.team1FirstServe } : {}),
+      ...(set2Choice.team2FirstServe != null ? { team2FirstServe: set2Choice.team2FirstServe } : {}),
       // Match result: prefer JSONB, fallback to legacy
       setResults: results.set_results || match.set_results,
       winner: results.winner || match.winner,
