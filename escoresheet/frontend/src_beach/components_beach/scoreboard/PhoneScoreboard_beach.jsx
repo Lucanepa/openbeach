@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Undo2, Menu, ArrowLeftRight } from 'lucide-react'
+import { Undo2, Menu } from 'lucide-react'
 import { ActionSheet } from '../../ui/volleyui/Modal.jsx'
 import { SAND_SURFACE, discPaint, discRing, normaliseColour, readableText } from '../../utils_beach/teamColours_beach'
+import IntervalChoice, { ServeOrder } from './IntervalChoice_beach.jsx'
 import { PHONE_COURT_MIN_PX, PHONE_RECENT_HEIGHT_PX, PHONE_SQUARE_MIN_PX, PHONE_SQUARE_RESERVE_PX, tintOf } from './phoneLayout_beach'
 
 /**
@@ -36,8 +37,9 @@ import { PHONE_COURT_MIN_PX, PHONE_RECENT_HEIGHT_PX, PHONE_SQUARE_MIN_PX, PHONE_
  * @param {{ status: 'idle'|'in_play', startLabel: string, startTitle?: string, startDisabled: boolean,
  *   canReplayRally: boolean, isRallyReplayed: boolean }} props.rally
  * @param {null|{ kind: 'timeout', teamName: string, countdown: number, countdownText: string, total: number }} props.centre
- * @param {null|{ kind: 'toss'|'setup', chooses?: string|null, countdown?: number, countdownText?: string, total?: number }} props.between
- *   the interval before a set, while its setup is open (the desktop replaces the court with it)
+ * @param {null|{ kind: 'toss'|'setup', choice?: { chooser, choice, names, leftTeamKey, servingTeamKey }, countdown?: number, countdownText?: string, total?: number }} props.between
+ *   the interval before a set, while its setup is open (the desktop replaces the court with it);
+ *   `choice`: the props of IntervalChoice_beach (who chooses, what they took)
  * @param {Array<{ id: any, text: string }>} props.recent newest first
  * @param {boolean} props.canUndo
  * @param {string} [props.scoreFont] CSS font family of scores and countdowns
@@ -45,7 +47,8 @@ import { PHONE_COURT_MIN_PX, PHONE_RECENT_HEIGHT_PX, PHONE_SQUARE_MIN_PX, PHONE_
  *
  * TeamVM: { side, teamKey, label ('A'|'B'), name, color, setsWon, points,
  *   timeouts, bmp: { remaining, available, title }, players: [{ number,
- *   position, serves }], firstServer, secondServer, improperRequestDone,
+ *   position, serves }], firstServer, secondServer, serveOrderPlayers,
+ *   firstServe, improperRequestDone,
  *   delayWarned, hasCoach }
  */
 const BALL = { flex: 'none', width: 14, height: 14, borderRadius: '50%', background: '#facc15', border: '2px solid #1c1917' }
@@ -182,8 +185,8 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
   }
 
   // Between sets, as the desktop shows it in place of the court: the set 3
-  // coin toss (who won it), or the next set's service order (tap a team to
-  // swap its first and second server; the ball on the team that serves)
+  // coin toss (who won it), or the next set's service order (its "Change"
+  // button swaps the first and second server; the ball on the team that serves)
   const betweenHalf = (team) => {
     const p = paint[team.side]
     const isLeft = team.side === 'left'
@@ -208,18 +211,19 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
         {servesHere && (
           <span data-testid="phone-serve-ball" aria-label={t('scoreboard.labels.serveLabel')} style={{ ...BALL, position: 'absolute', top: '50%', transform: 'translateY(-50%)', ...(isLeft ? { left: 6 } : { right: 6 }) }} />
         )}
-        <button
-          type="button"
+        <div
           data-testid={`phone-service-order-${team.side}`}
-          title={t('scoreboard.phone.serviceOrderHint')}
-          onClick={() => actions.switchServiceOrder(team.teamKey)}
-          style={{ flex: 1, minWidth: 0, borderRadius: 12, border: `2px solid ${servesHere ? 'var(--ov-success)' : p.edge}`, ...p.fill, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, padding: 4, fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}
+          style={{ flex: 1, minWidth: 0, borderRadius: 12, border: `2px solid ${servesHere ? 'var(--ov-success)' : p.edge}`, ...p.fill, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, padding: 4, fontSize: 13, fontWeight: 700 }}
         >
           <span style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 800 }}>{teamTitle(team)}</span>
-          <span>I: {team.firstServer ?? '?'}</span>
-          <span aria-hidden="true" style={{ fontSize: 11, lineHeight: 1 }}>⇅</span>
-          <span>II: {team.secondServer ?? '?'}</span>
-        </button>
+          <ServeOrder
+            compact
+            teamName={teamTitle(team)}
+            players={team.serveOrderPlayers}
+            firstServe={team.firstServe}
+            onChange={() => actions.switchServiceOrder(team.teamKey)}
+          />
+        </div>
       </div>
     )
   }
@@ -262,7 +266,6 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
 
   // ---- centre: point buttons, start rally, countdowns, interval ------------
   const bigButton = { width: '100%', minHeight: 48, borderRadius: 14, fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }
-  const darkButton = { ...bigButton, background: 'var(--ov-selected)', color: 'var(--ov-on-dark)' }
   const outlineButton = { ...bigButton, background: 'var(--ov-card)', color: 'var(--ov-text)', border: '1px solid var(--ov-hairline-strong)' }
   const countdown = ({ countdown: value, countdownText, total }, warnAt, size = 48) => (
     <>
@@ -314,10 +317,19 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
           </div>
         )}
         {between.kind === 'setup' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
-            <button type="button" style={{ ...darkButton, minHeight: 44, fontSize: 14 }} onClick={() => actions.switchSides()}><ArrowLeftRight size={16} aria-hidden="true" />{t('scoreboard.buttons.switchSides')}</button>
-            <button type="button" style={{ ...darkButton, minHeight: 44, fontSize: 14 }} onClick={() => actions.switchServe()}>{t('scoreboard.buttons.switchServe')}</button>
-          </div>
+          <IntervalChoice
+            compact
+            chooser={between.choice?.chooser || null}
+            choice={between.choice?.choice || null}
+            onChoose={(c) => actions.chooseInInterval(c)}
+            names={between.choice?.names || { team1: '', team2: '' }}
+            leftTeamKey={between.choice?.leftTeamKey}
+            servingTeamKey={between.choice?.servingTeamKey}
+            onSwitchSides={() => actions.switchSides()}
+            onSwitchServe={() => actions.switchServe()}
+            onPickSide={(teamKey, side) => actions.pickSide(teamKey, side)}
+            onPickServe={(teamKey, serves) => actions.pickServe(teamKey, serves)}
+          />
         )}
         {startButton({ fontSize: 20, minHeight: 52, flex: 'none' })}
       </div>
@@ -390,11 +402,6 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
         {/* 2:1, lower on a short screen (.phone-court in styles_beach.css) */}
         <div className="phone-court" style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', borderRadius: 16, background: SAND_SURFACE, border: '2px solid #c9a46a', overflow: 'hidden' }}>
           {between ? <>{betweenHalf(left)}{betweenHalf(right)}</> : <>{courtHalf(left)}{courtHalf(right)}</>}
-          {between?.chooses && (
-            <span style={{ position: 'absolute', left: 8, right: 8, bottom: 4, textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#1c1917', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', pointerEvents: 'none' }}>
-              {between.chooses}
-            </span>
-          )}
         </div>
       </section>
 

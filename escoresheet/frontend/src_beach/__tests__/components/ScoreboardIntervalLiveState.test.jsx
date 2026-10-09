@@ -8,6 +8,7 @@
 // On the real scoring screen over the app's Dexie database (fake IndexedDB),
 // the backend on, its live-state writes recorded.
 import '../helpers/fakeIndexedDb'
+import { intervalChoiceShown, tapInterval, serveOrderChange } from '../helpers/intervalChoice'
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest'
 import { render, fireEvent, waitFor, cleanup } from '@testing-library/react'
 
@@ -123,7 +124,7 @@ describe('Scoreboard_beach: the live state keeps the break between sets', () => 
 
     // the toss, then its undo: both in the break
     fireEvent.click(toss('B'))
-    await waitFor(() => expect(button('Switch sides')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(intervalChoiceShown()).toBeTruthy(), { timeout: 5000 })
     await settle()
     upserts.length = 0
     fireEvent.click(button('Undo'))

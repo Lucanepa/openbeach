@@ -786,7 +786,6 @@
     "secondRefereeShort": "2SR",
     "set3CoinToss": "Auslosung 3. Satz",
     "wonToss": "Auslosung gewonnen",
-    "betweenSetsChooses": "{{team}} wählt (Auslosung verloren)",
     "timeoutFor": "Timeout – {{team}}",
     "pinsEmptyTest": "Keine PINs: Ein Testspiel hat keine Verbindung für Schiedsrichter oder Teams.",
     "pinsEmpty": "Noch keine PINs: Schalte in der Verbindungseinrichtung die Verbindung für Schiedsrichter oder ein Team ein.",
@@ -898,7 +897,6 @@
       "ttoIn": "TTO bei {{total}} ({{count}})",
       "ttoDone": "TTO gemacht",
       "noTto": "Kein TTO im 3. Satz",
-      "serviceOrderHint": "Antippen, um ersten und zweiten Aufschläger zu tauschen",
       "medical": "MTO · RIT",
       "medicalTitle": "Medizinisches Timeout · RIT",
       "medicalHint": "Verletzten Spieler antippen.",
@@ -910,6 +908,25 @@
       "sidewaysTitle": "Halte das Handy aufrecht",
       "sidewaysBody": "Die Erfassung auf dem Handy ist für das Hochformat gemacht. Dreh das Handy zurück: Spiel, Dialoge und Countdowns bleiben erhalten.",
       "replay": "Wieder­holen"
+    },
+    "intervalChoice": {
+      "chooses": "{{team}} wählt",
+      "reasonLostToss": "Auslosung verloren",
+      "reasonWonSet3Toss": "Auslosung für Satz 3 gewonnen",
+      "side": "Seite",
+      "serve": "Aufschlag oder Annahme",
+      "pickHint": "Tippen Sie, was das Team wählt. Bis dahin bleiben die Teams auf ihrer Seite.",
+      "sideRow": "{{team}}: Seite",
+      "serveRow": "{{team}}: Aufschlag oder Annahme",
+      "left": "Links",
+      "right": "Rechts",
+      "serves": "Aufschlag",
+      "receives": "Annahme"
+    },
+    "serveOrder": {
+      "title": "Aufschlagreihenfolge",
+      "change": "Ändern",
+      "changeAria": "Aufschlagreihenfolge von {{team}} ändern: zuerst {{second}}, dann {{first}}"
     }
   },
   "settings": {

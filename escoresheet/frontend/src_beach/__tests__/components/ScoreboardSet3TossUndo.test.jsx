@@ -8,6 +8,7 @@
 // set 1 the same way.
 // On the real scoring screen over the app's Dexie database (fake IndexedDB).
 import '../helpers/fakeIndexedDb'
+import { intervalChoiceShown, tapInterval, serveOrderChange } from '../helpers/intervalChoice'
 import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll, vi } from 'vitest'
 import { render, fireEvent, waitFor, cleanup, screen, within } from '@testing-library/react'
 import '../../i18n_beach'
@@ -150,13 +151,13 @@ describe('Scoreboard_beach: undoing the set 3 coin toss', () => {
 
     // the toss (B won), then the winner's choices: sides and serve swapped
     fireEvent.click(toss('B'))
-    await waitFor(() => expect(button('Switch sides')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(intervalChoiceShown()).toBeTruthy(), { timeout: 5000 })
     expect(toss('A')).toBeFalsy()
     await settle()
-    fireEvent.click(button('Switch sides'))
+    await tapInterval('side')
     await waitFor(async () => expect((await db.matches.get(matchId)).set3LeftTeam).toBe('B'))
     await settle()
-    fireEvent.click(button('Switch serve'))
+    await tapInterval('serve')
     await waitFor(async () => expect((await db.matches.get(matchId)).set3FirstServe).toBe('A'))
     await settle()
 
@@ -248,8 +249,7 @@ describe('Scoreboard_beach: undoing the set 3 coin toss', () => {
       await waitFor(() => expect(view.queryByTestId('phone-toss-B')).toBeNull())
       await settle()
       // the winner's service order swapped (team B's first server)
-      const order = view.getAllByTestId(/phone-service-order-/).find(b => b.textContent.includes('Gamma'))
-      fireEvent.click(order)
+      fireEvent.click(serveOrderChange('Gamma', phone()))
       await waitFor(async () => expect((await db.matches.get(matchId)).team2FirstServe).toBe(2))
       await settle()
 
@@ -306,7 +306,7 @@ describe('Scoreboard_beach: an undo never reopens the set before', () => {
       .toEqual([[1, 21, 15, true], [2, 0, 0, false]])
     // the screen is back in set 2's interval, not in set 1
     await waitFor(() => expect(button('End set interval')).toBeTruthy(), { timeout: 5000 })
-    expect(button('Switch sides')).toBeTruthy()
+    expect(intervalChoiceShown()).toBeTruthy()
     expect(button('Point A')).toBeFalsy()
     cleanup()
   }, 60000)
@@ -322,12 +322,12 @@ describe('Scoreboard_beach: an undo never reopens the set before', () => {
     await waitFor(() => expect(toss('A')).toBeTruthy(), { timeout: 8000 })
     await settle()
     fireEvent.click(toss('B'))
-    await waitFor(() => expect(button('Switch sides')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(intervalChoiceShown()).toBeTruthy(), { timeout: 5000 })
     await settle()
-    fireEvent.click(button('Switch sides'))
+    await tapInterval('side')
     await waitFor(async () => expect((await db.matches.get(matchId)).set3LeftTeam).toBe('B'))
     await settle()
-    fireEvent.click(button('Switch serve'))
+    await tapInterval('serve')
     await waitFor(async () => expect((await db.matches.get(matchId)).set3FirstServe).toBe('A'))
     await settle()
     const atStart = set3Fields(await db.matches.get(matchId))

@@ -8,6 +8,7 @@
 // On the real scoring screen over the app's Dexie database (fake IndexedDB),
 // the backend on, its live-state writes recorded.
 import '../helpers/fakeIndexedDb'
+import { intervalChoiceShown, tapInterval, serveOrderChange } from '../helpers/intervalChoice'
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest'
 import { render, fireEvent, waitFor, cleanup } from '@testing-library/react'
 
@@ -121,7 +122,7 @@ describe('Scoreboard_beach: the set 3 toss and its choices reach the tablets and
     // the toss (B won)
     upserts.length = 0
     fireEvent.click(toss('B'))
-    await waitFor(() => expect(button('Switch sides')).toBeTruthy(), { timeout: 5000 })
+    await waitFor(() => expect(intervalChoiceShown()).toBeTruthy(), { timeout: 5000 })
     await waitFor(async () => expect((await db.sync_queue.toArray())
       .filter(j => j.resource === 'event' && j.payload?.type === 'set3_coin_toss_winner' && j.status === 'queued')).toHaveLength(1), { timeout: 5000 })
     await waitFor(() => expect(liveRows('set3_coin_toss_winner').length).toBeGreaterThan(0), { timeout: 5000 })
@@ -132,7 +133,7 @@ describe('Scoreboard_beach: the set 3 toss and its choices reach the tablets and
 
     // the winner switches sides: the referee and the livescore get it now
     upserts.length = 0
-    fireEvent.click(button('Switch sides'))
+    await tapInterval('side')
     await waitFor(() => expect(liveStates().length).toBeGreaterThan(0), { timeout: 5000 })
     const sidesState = liveStates().at(-1)
     expect(sidesState.side_a).toBe(sideBefore === 'left' ? 'right' : 'left')
