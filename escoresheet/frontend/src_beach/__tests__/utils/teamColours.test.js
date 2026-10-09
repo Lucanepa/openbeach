@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
-  parseColour, normaliseColour, relativeLuminance, contrastRatio, apcaContrast,
+  parseColour, normaliseColour, relativeLuminance, contrastRatio,
   readableTextOn, readableText, discRing, discPaint,
-  SAND_SURFACE, TEXT_DARK, TEXT_LIGHT, MIN_TEXT_CONTRAST, MIN_EDGE_CONTRAST, MIN_LARGE_TEXT_CONTRAST
+  SAND_SURFACE, TEXT_DARK, TEXT_LIGHT, TEXT_BLACK, MIN_TEXT_CONTRAST, MIN_EDGE_CONTRAST, MIN_LARGE_TEXT_CONTRAST
 } from '../../utils_beach/teamColours_beach'
 
 // Row 27 of the OpenBeach port (OpenVolley 57d0be0e, 822a3cb3, 92e87df4): the
@@ -47,12 +47,6 @@ describe('WCAG luminance and contrast', () => {
     expect(contrastRatio('#0000ff', '#ffffff')).toBeCloseTo(8.59, 2)
   })
 
-  it('APCA contrast has the expected sign and size', () => {
-    expect(apcaContrast('#000000', '#ffffff')).toBeCloseTo(106, 0)
-    expect(apcaContrast('#ffffff', '#000000')).toBeCloseTo(-108, 0)
-    expect(apcaContrast('#777777', '#777777')).toBe(0)
-    expect(apcaContrast('nope', '#fff')).toBeNull()
-  })
 })
 
 describe('the shirt number', () => {
@@ -65,12 +59,39 @@ describe('the shirt number', () => {
     expect(readableTextOn('#e2001a')).toBe(TEXT_LIGHT)
   })
 
-  it('the default red and blue keep white numbers (APCA), with an outline under 4.5:1', () => {
-    for (const bg of ['#ef4444', '#3b82f6', '#16a34a']) {
+  it('takes the higher WCAG ratio on mid tones too, with no lean towards white', () => {
+    // white on these is 3.4-4.0:1, too little for the 9-11px chips; dark reads better
+    for (const bg of ['#8a8a8a', '#ef4444', '#3b82f6', '#16a34a', '#ec4899']) {
       expect(contrastRatio(bg, TEXT_DARK), bg).toBeGreaterThan(contrastRatio(bg, TEXT_LIGHT))
-      expect(readableTextOn(bg), bg).toBe(TEXT_LIGHT)
-      expect(readableText(bg).textShadow, bg).toMatch(/1px/)
+      expect(readableTextOn(bg), bg).toBe(TEXT_DARK)
     }
+    for (const bg of ['#dc2626', '#e2001a', '#065f46', '#1e3a8a', '#7b1e2b']) expect(readableTextOn(bg), bg).toBe(TEXT_LIGHT)
+  })
+
+  it('deepens near-black to pure black on the mid tones where neither reaches 4.5:1', () => {
+    for (const bg of ['#808080', '#a855f7']) {
+      expect(Math.max(contrastRatio(bg, TEXT_DARK), contrastRatio(bg, TEXT_LIGHT)), bg).toBeLessThan(MIN_TEXT_CONTRAST)
+      expect(readableTextOn(bg), bg).toBe(TEXT_BLACK)
+      expect(contrastRatio(bg, TEXT_BLACK), bg).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST)
+    }
+  })
+
+  it('every #rrggbb (step 17) gets at least 4.5:1, on the discs and on the bands', async () => {
+    const { isLightColour } = await import('../../utils_beach/teamColours_beach')
+    const steps = Array.from({ length: 16 }, (_, i) => i * 17)
+    let min = Infinity
+    for (const r of steps) for (const g of steps) for (const b of steps) {
+      const bg = normaliseColour({ r, g, b })
+      const ink = readableTextOn(bg)
+      const c = contrastRatio(bg, ink)
+      min = Math.min(min, c)
+      expect(c, bg).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST)
+      if (ink !== TEXT_BLACK) expect(c, bg).toBeCloseTo(Math.max(contrastRatio(bg, TEXT_DARK), contrastRatio(bg, TEXT_LIGHT)), 9)
+      // the '#000' / '#fff' the bands write
+      expect(contrastRatio(bg, isLightColour(bg) ? '#000000' : '#ffffff'), bg).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST)
+      expect(readableText(bg).textShadow, bg).toBeUndefined()
+    }
+    expect(min).toBeLessThan(4.6) // the true minimum sits right at 4.5:1
   })
 
   it('every common shirt reaches 3:1, and 4.5:1 or an outline', () => {
@@ -112,10 +133,10 @@ describe('discRing on the sand', () => {
 describe('discPaint', () => {
   it('gives fill, number colour, outline and ring together', () => {
     expect(discPaint('#FFFFFF')).toEqual({ background: '#ffffff', color: TEXT_DARK, textShadow: undefined, ring: discRing('#ffffff') })
-    const red = discPaint('#ef4444')
-    expect(red.background).toBe('#ef4444')
+    const red = discPaint('#dc2626')
+    expect(red.background).toBe('#dc2626')
     expect(red.color).toBe(TEXT_LIGHT)
-    expect(red.textShadow).toMatch(/rgba\(28, 25, 23, 0.85\)/)
+    expect(red.textShadow).toBeUndefined()
     expect(discPaint('#000080')).toMatchObject({ color: TEXT_LIGHT, ring: null })
   })
 })
@@ -179,12 +200,12 @@ describe('custom team colours (any hex, not only the twelve presets)', () => {
     expect(colourDistance('#dc2626', '#ef4444')).toBeLessThan(CLOSE_COLOUR_DISTANCE)
   })
 
-  it('readableTextOn / isLightColour pick dark or light text by luminance for any colour', async () => {
+  it('readableTextOn / isLightColour pick dark or light text for any colour', async () => {
     const { isLightColour } = await import('../../utils_beach/teamColours_beach')
     for (const c of ANY) {
       const ink = readableTextOn(c)
       expect(contrastRatio(c, ink), c).toBeGreaterThanOrEqual(MIN_LARGE_TEXT_CONTRAST)
-      expect(isLightColour(c), c).toBe(ink === TEXT_DARK)
+      expect(isLightColour(c), c).toBe(ink !== TEXT_LIGHT)
       // the '#000' / '#fff' the bands write reads at least as well
       const written = isLightColour(c) ? '#000000' : '#ffffff'
       expect(contrastRatio(c, written), c).toBeGreaterThanOrEqual(MIN_LARGE_TEXT_CONTRAST)

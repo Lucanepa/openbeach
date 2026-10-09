@@ -92,15 +92,15 @@ describe('referee tablet: team-colour discs', () => {
     }
   })
 
-  it('the default red keeps a white number, outlined on the number only', async () => {
+  it('red #ef4444 takes a near-black number (the higher contrast), no outline', async () => {
     await mount('#ffffff', '#ef4444')
     const red = discPaint('#ef4444')
     for (const n of [7, 8]) {
       const el = discOf(n)
       expect(el.style.background).toBe(rgb('#ef4444'))
-      expect(el.style.color).toBe(rgb(TEXT_LIGHT))
+      expect(el.style.color).toBe(rgb(TEXT_DARK))
       expect(el.style.textShadow).toBe('')
-      expect(el.querySelector('[data-disc-number]').style.textShadow).toContain('rgba(28, 25, 23, 0.85)')
+      expect(el.querySelector('[data-disc-number]').style.textShadow).toBe('')
       expect(el.style.borderColor).toBe(rgb(red.ring))
     }
   })

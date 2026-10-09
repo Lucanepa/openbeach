@@ -11,7 +11,7 @@ import { ScaleProvider } from '../../contexts_beach/ScaleContext_beach'
 import { LoggingProvider } from '../../contexts_beach/LoggingContext_beach'
 import { db } from '../../db_beach/db_beach'
 import Scoreboard from '../../components_beach/Scoreboard_beach'
-import { discPaint, TEXT_DARK, TEXT_LIGHT } from '../../utils_beach/teamColours_beach'
+import { discPaint, TEXT_DARK } from '../../utils_beach/teamColours_beach'
 
 const rgb = (hex) => {
   const h = hex.replace('#', '')
@@ -60,7 +60,7 @@ async function setUpMatch(team1Color, team2Color) {
 const disc = (number) => document.querySelector(`.court-player[data-player-number="${number}"]`)
 
 describe('Scoreboard_beach: team-colour discs on the sand', () => {
-  it('white team: near-black numbers and a ring; default red: white numbers outlined on the number only', async () => {
+  it('white team: near-black numbers and a ring; red #ef4444: near-black numbers (the higher contrast), no outline', async () => {
     const matchId = await setUpMatch('#ffffff', '#ef4444')
     render(<ScaleProvider><AlertProvider><LoggingProvider><Scoreboard matchId={matchId} /></LoggingProvider></AlertProvider></ScaleProvider>)
     await waitFor(() => expect(document.querySelectorAll('.court-player[data-player-number]').length).toBe(4), { timeout: 8000 })
@@ -81,9 +81,8 @@ describe('Scoreboard_beach: team-colour discs on the sand', () => {
       expect(el.style.background).toBe(rgb('#ef4444'))
       expect(el.style.borderColor).toBe(rgb(red.ring))
       const num = el.querySelector('.court-player-number')
-      expect(num.style.color).toBe(rgb(TEXT_LIGHT))
-      expect(num.style.textShadow).toContain('rgba(28, 25, 23, 0.85)')
-      // the badges (position, captain) are not outlined
+      expect(num.style.color).toBe(rgb(TEXT_DARK))
+      expect(num.style.textShadow).toBe('')
       expect(el.style.textShadow).toBe('')
     }
   }, 20000)
