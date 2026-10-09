@@ -194,3 +194,96 @@ export function discPaint(fill, surface = SAND_SURFACE) {
   const { color, textShadow } = readableText(background)
   return { background, color, textShadow, ring: discRing(background, surface) }
 }
+
+/**
+ * Whether dark text reads better than white on `bg` (readableTextOn), for any
+ * colour: the team bands, A/B chips and score boxes that paint a team colour
+ * and write '#000' or '#fff' on it. false for a missing or unreadable colour
+ * (those keep white text, as before).
+ */
+export function isLightColour(bg) {
+  return normaliseColour(bg) != null && readableTextOn(bg) === TEXT_DARK
+}
+
+/** OKLab { L, a, b } (Björn Ottosson) */
+export function toOklab(input) {
+  const c = solid(input)
+  if (!c) return null
+  const r = toLinear(c.r), g = toLinear(c.g), b = toLinear(c.b)
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+  return {
+    L: 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+    a: 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+    b: 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
+  }
+}
+
+/**
+ * Perceptual distance (OKLab ΔE × 100): 0 identical, ~2 just noticeable,
+ * 100 black vs white. null if either colour is unparseable.
+ */
+export function colourDistance(a, b) {
+  const x = toOklab(a)
+  const y = toOklab(b)
+  if (!x || !y) return null
+  return 100 * Math.hypot(x.L - y.L, x.a - y.a, x.b - y.b)
+}
+
+// The team colour picker's twelve shirts (MatchSetup), grouped by colour
+// family. Any other '#rrggbb' is a custom colour.
+export const TEAM_COLOUR_PRESETS = [
+  '#FFFFFF', // White
+  '#000000', // Black
+  '#808080', // Gray
+  '#dc2626', // Red
+  '#f97316', // Orange
+  '#eab308', // Yellow
+  '#22c55e', // Light Green
+  '#065f46', // Dark Green
+  '#3b82f6', // Light Blue
+  '#1e3a8a', // Dark Blue
+  '#a855f7', // Purple
+  '#ec4899' // Pink
+]
+
+/** The preset the colour is (case and #rgb shorthand ignored), or null */
+export function presetColour(colour) {
+  const c = normaliseColour(colour)
+  if (!c) return null
+  return TEAM_COLOUR_PRESETS.find(p => normaliseColour(p) === c) ?? null
+}
+
+/** A readable colour that is none of the twelve presets */
+export function isCustomColour(colour) {
+  return normaliseColour(colour) != null && presetColour(colour) == null
+}
+
+/**
+ * A hex code typed by hand: '#rrggbb', 'rrggbb', '#rgb' or 'rgb' (any case,
+ * spaces around it ignored) as '#rrggbb' in lower case; null otherwise.
+ */
+export function parseHexColour(input) {
+  if (typeof input !== 'string') return null
+  const m = input.trim().match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i)
+  if (!m) return null
+  const h = m[1].length === 3 ? [...m[1]].map(c => c + c).join('') : m[1]
+  return `#${h.toLowerCase()}`
+}
+
+// Two team colours closer than this (OKLab ΔE × 100) are hard to tell apart
+// on the court: red #dc2626 next to #ef4444 is 6, navy next to the dark blue
+// preset 6, two greens #22c55e / #16a34a 9.8. Red #ef4444 next to the orange
+// preset (10.4) or the pink one (11.4) still reads as two shirts, and the
+// closest two presets (red / pink, orange / yellow) are 14.5.
+export const CLOSE_COLOUR_DISTANCE = 10
+
+/**
+ * Whether two team colours look alike (colourDistance under
+ * CLOSE_COLOUR_DISTANCE); false when either is missing or unreadable.
+ */
+export function coloursTooClose(a, b) {
+  const d = colourDistance(a, b)
+  return d != null && d < CLOSE_COLOUR_DISTANCE
+}

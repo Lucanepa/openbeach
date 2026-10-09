@@ -27,6 +27,12 @@ const TEAM_COLORS = [
   { key: 'pink', value: '#ec4899' }
 ]
 
+// A team colour that is none of the list above (picked as a custom colour in
+// Match setup, or from a saved team): the select keeps it as its own option
+// instead of showing the first colour of the list
+const isOtherColour = (colour) =>
+  typeof colour === 'string' && colour.trim() !== '' && !TEAM_COLORS.some(c => c.value.toLowerCase() === colour.trim().toLowerCase())
+
 /**
  * A stored instant as the local date ('YYYY-MM-DD') and time ('HH:MM') the
  * fields show. Local, because an edit goes back through new Date('…T…') (local
@@ -809,6 +815,11 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                         onChange={(e) => updateTeam('color', e.target.value, true)}
                         style={{ ...inputStyle, width: '100%', background: 'var(--ov-card)' }}
                       >
+                        {isOtherColour(editedTeam1?.color) && (
+                          <option value={editedTeam1.color} style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>
+                            {t('matchSetup.customColour', 'Custom colour')} {editedTeam1.color} ■
+                          </option>
+                        )}
                         {TEAM_COLORS.map(c => (
                           <option key={c.value} value={c.value} style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>
                             {t(`manualAdjustmentsEditor.colors.${c.key}`, c.key)} ■
@@ -931,6 +942,11 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                         onChange={(e) => updateTeam('color', e.target.value, false)}
                         style={{ ...inputStyle, width: '100%', background: 'var(--ov-card)' }}
                       >
+                        {isOtherColour(editedTeam2?.color) && (
+                          <option value={editedTeam2.color} style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>
+                            {t('matchSetup.customColour', 'Custom colour')} {editedTeam2.color} ■
+                          </option>
+                        )}
                         {TEAM_COLORS.map(c => (
                           <option key={c.value} value={c.value} style={{ background: 'var(--ov-card)', color: 'var(--ov-text)' }}>
                             {t(`manualAdjustmentsEditor.colors.${c.key}`, c.key)} ■

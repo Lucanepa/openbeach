@@ -43,6 +43,8 @@ import { SectionHeader } from '../ui/volleyui/SectionHeader.jsx'
 import { Modal as KitModal, modalCancelClass, modalPrimaryClass, modalSaveClass } from '../ui/volleyui/Modal.jsx'
 import { preload, usePreloaded } from '../utils_beach/preload_beach'
 import TeamShirt from './TeamShirt_beach'
+import TeamColourPicker, { CloseColourNote, recallCustomColour, rememberCustomColour } from './TeamColourPicker_beach'
+import { coloursTooClose, isCustomColour, readableTextOn } from '../utils_beach/teamColours_beach'
 
 // ---- volleyui class strings for the setup views --------------------------
 // A section inside the setup page card (match info, officials, dashboards,
@@ -708,22 +710,6 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     // Bezirk Zürich
     'Zürich'
   ].sort()
-
-  // Grouped by color families: whites/grays, reds, oranges, yellows, greens, blues, purples, pinks, teals
-  const teamColors = [
-    '#FFFFFF', // White
-    '#000000', // Black
-    '#808080', // Gray
-    '#dc2626', // Red
-    '#f97316', // Orange
-    '#eab308', // Yellow
-    '#22c55e', // Light Green
-    '#065f46', // Dark Green
-    '#3b82f6', // Light Blue
-    '#1e3a8a', // Dark Blue
-    '#a855f7', // Purple
-    '#ec4899'  // Pink
-  ]
 
   const team1Counts = {
     players: team1Roster.length
@@ -1767,22 +1753,17 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     }
   }, [team1Name, team2Name, currentView])
 
-  // Helper function to determine if a color is bright/light
-  function isBrightColor(color) {
-    if (!color || color === 'image.png') return false
-    // Convert hex to RGB
-    const hex = color.replace('#', '')
-    const r = parseInt(hex.substr(0, 2), 16)
-    const g = parseInt(hex.substr(2, 2), 16)
-    const b = parseInt(hex.substr(4, 2), 16)
-    // Calculate luminance
-    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-    return luminance > 0.5
+  // Near-black or white, whichever reads better on the team colour (any
+  // colour, utils_beach/teamColours_beach.js, as on the court)
+  function getContrastColor(color) {
+    return readableTextOn(color)
   }
 
-  // Helper function to get contrasting color (white or black)
-  function getContrastColor(color) {
-    return isBrightColor(color) ? '#000000' : '#ffffff'
+  // Where the picker keeps a team's last custom colour: the team name, or
+  // the side while the team has none
+  function customColourKey(isTeam1) {
+    const name = (isTeam1 ? team1Name : team2Name)?.trim().toLowerCase()
+    return name ? `team:${name}` : (isTeam1 ? 'team1' : 'team2')
   }
 
   // Validate and set date with immediate feedback (dd.mm.yyyy format)
@@ -3080,35 +3061,21 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               closeLabel={t('common.close')}
               title={t('matchSetup.chooseTeamColour', { team: colorPickerModal.team === 'team1' ? t('common.team1') : t('common.team2') })}
             >
-              <div className="grid grid-cols-4 gap-2">
-                {teamColors.map((color) => {
-                  const isSelected = (colorPickerModal.team === 'team1' ? team1Color : team2Color) === color
-                  return (
-                    <button
-                      key={color}
-                      type="button"
-                      onClick={() => {
-                        if (colorPickerModal.team === 'team1') {
-                          setTeam1Color(color)
-                        } else {
-                          setTeam2Color(color)
-                        }
-                        setColorPickerModal(null)
-                      }}
-                      aria-pressed={isSelected}
-                      aria-label={color}
-                      title={color}
-                      className={cn(
-                        'flex min-h-16 min-w-[60px] items-center justify-center rounded-lg border px-2 py-3 transition-colors',
-                        isSelected ? 'border-slate-900 ring-2 ring-slate-900' : 'border-stone-200 bg-white hover:bg-stone-50',
-                        FOCUS_RING
-                      )}
-                    >
-                      <TeamShirt color={color} numberColor={getContrastColor(color)} style={{ transform: 'scale(0.8)' }} />
-                    </button>
-                  )
-                })}
-              </div>
+              <TeamColourPicker
+                value={colorPickerModal.team === 'team1' ? team1Color : team2Color}
+                otherColour={colorPickerModal.team === 'team1' ? team2Color : team1Color}
+                lastCustom={recallCustomColour(customColourKey(colorPickerModal.team === 'team1'))}
+                onPick={(color) => {
+                  const isTeam1 = colorPickerModal.team === 'team1'
+                  if (isCustomColour(color)) rememberCustomColour(customColourKey(isTeam1), color)
+                  if (isTeam1) {
+                    setTeam1Color(color)
+                  } else {
+                    setTeam2Color(color)
+                  }
+                  setColorPickerModal(null)
+                }}
+              />
             </KitModal>
           </div>
         )}
@@ -4729,6 +4696,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 setCurrentView(team.side)
               }}>{t('matchSetup.editRoster')}</Button>
             </div>
+            {coloursTooClose(team1Color, team2Color) && <CloseColourNote />}
           </div>
         ))}
         {typeof window !== 'undefined' && window.electronAPI?.server && (
@@ -5052,90 +5020,75 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             closeLabel={t('common.close')}
             title={t('matchSetup.chooseTeamColor', { team: colorPickerModal.team === 'team1' ? t('common.team1') : t('common.team2') })}
           >
-            <div className="grid grid-cols-4 gap-2">
-              {teamColors.map((color) => {
-                const isSelected = (colorPickerModal.team === 'team1' ? team1Color : team2Color) === color
-                return (
-                  <button
-                    key={color}
-                    type="button"
-                    onClick={async () => {
-                      const isTeam1 = colorPickerModal.team === 'team1'
-                      if (isTeam1) {
-                        setTeam1Color(color)
-                      } else {
-                        setTeam2Color(color)
-                      }
-                      setColorPickerModal(null)
+            <TeamColourPicker
+              value={colorPickerModal.team === 'team1' ? team1Color : team2Color}
+              otherColour={colorPickerModal.team === 'team1' ? team2Color : team1Color}
+              lastCustom={recallCustomColour(customColourKey(colorPickerModal.team === 'team1'))}
+              onPick={async (color) => {
+                const isTeam1 = colorPickerModal.team === 'team1'
+                if (isCustomColour(color)) rememberCustomColour(customColourKey(isTeam1), color)
+                if (isTeam1) {
+                  setTeam1Color(color)
+                } else {
+                  setTeam2Color(color)
+                }
+                setColorPickerModal(null)
 
-                      // Sync color to local DB and Supabase
-                      try {
-                        // Update local team in IndexedDB
-                        const teamId = isTeam1 ? match?.team1Id : match?.team2Id
-                        if (teamId) {
-                          await db.teams.update(teamId, { color })
+                // Sync color to local DB and Supabase
+                try {
+                  // Update local team in IndexedDB
+                  const teamId = isTeam1 ? match?.team1Id : match?.team2Id
+                  if (teamId) {
+                    await db.teams.update(teamId, { color })
+                  }
+
+                  // Update local match record in IndexedDB
+                  if (match?.id) {
+                    const colorField = isTeam1 ? 'team1Color' : 'team2Color'
+                    await db.matches.update(match.id, { [colorField]: color })
+                  }
+
+                  // Sync to Supabase if match exists
+                  if (isBackendAvailable() && match?.seed_key) {
+                    const teamKey = isTeam1 ? 'team1_data' : 'team2_data'
+                    const teamName = isTeam1 ? team1Name : team2Name
+                    const shortName = isTeam1 ? team1ShortName : team2ShortName
+
+                    // Update matches table
+                    const { data: supabaseMatch } = await apiFrom('matches')
+                      .update({
+                        [teamKey]: {
+                          name: teamName?.trim() || '',
+                          short_name: shortName || generateShortName(teamName),
+                          color: color
                         }
+                      })
+                      .eq('external_id', match.seed_key)
+                      .select('id')
+                      .maybeSingle()
 
-                        // Update local match record in IndexedDB
-                        if (match?.id) {
-                          const colorField = isTeam1 ? 'team1Color' : 'team2Color'
-                          await db.matches.update(match.id, { [colorField]: color })
-                        }
+                    if (supabaseMatch) {
+                    }
 
-                        // Sync to Supabase if match exists
-                        if (isBackendAvailable() && match?.seed_key) {
-                          const teamKey = isTeam1 ? 'team1_data' : 'team2_data'
-                          const teamName = isTeam1 ? team1Name : team2Name
-                          const shortName = isTeam1 ? team1ShortName : team2ShortName
+                    // Also update match_live_state if it exists (for Referee app)
+                    if (supabaseMatch?.id) {
+                      // Team A = coin toss winner, determine if Team 1 is Team A
+                      const coinTossTeamA = match.coinTossTeamA || 'team1'
+                      const team1IsTeamA = coinTossTeamA === 'team1'
+                      // If changing Team 1 color and Team 1 is Team A -> update team_a_color
+                      // If changing Team 1 color and Team 1 is Team B -> update team_b_color
+                      const liveStateColorKey = (isTeam1 === team1IsTeamA) ? 'team_a_color' : 'team_b_color'
 
-                          // Update matches table
-                          const { data: supabaseMatch } = await apiFrom('matches')
-                            .update({
-                              [teamKey]: {
-                                name: teamName?.trim() || '',
-                                short_name: shortName || generateShortName(teamName),
-                                color: color
-                              }
-                            })
-                            .eq('external_id', match.seed_key)
-                            .select('id')
-                            .maybeSingle()
-
-                          if (supabaseMatch) {
-                          }
-
-                          // Also update match_live_state if it exists (for Referee app)
-                          if (supabaseMatch?.id) {
-                            // Team A = coin toss winner, determine if Team 1 is Team A
-                            const coinTossTeamA = match.coinTossTeamA || 'team1'
-                            const team1IsTeamA = coinTossTeamA === 'team1'
-                            // If changing Team 1 color and Team 1 is Team A -> update team_a_color
-                            // If changing Team 1 color and Team 1 is Team B -> update team_b_color
-                            const liveStateColorKey = (isTeam1 === team1IsTeamA) ? 'team_a_color' : 'team_b_color'
-
-                            await apiFrom('match_live_state')
-                              .update({ [liveStateColorKey]: color, updated_at: new Date().toISOString() })
-                              .eq('match_id', supabaseMatch.id)
-                          }
-                        }
-                      } catch (err) {
-                        console.warn('[MatchSetup] Failed to sync team color:', err)
-                      }
-                    }}
-                    aria-pressed={isSelected}
-                    aria-label={color}
-                    title={color}
-                    className={cn(
-                      'flex min-h-16 min-w-[60px] items-center justify-center rounded-lg border px-2 py-3 transition-colors',
-                      isSelected ? 'border-slate-900 ring-2 ring-slate-900' : 'border-stone-200 bg-white hover:bg-stone-50',
-                      FOCUS_RING
-                    )}
-                  >
-                    <TeamShirt color={color} numberColor={getContrastColor(color)} style={{ transform: 'scale(0.8)' }} />
-                  </button>
-                )
-              })}
-            </div>
+                      await apiFrom('match_live_state')
+                        .update({ [liveStateColorKey]: color, updated_at: new Date().toISOString() })
+                        .eq('match_id', supabaseMatch.id)
+                    }
+                  }
+                } catch (err) {
+                  console.warn('[MatchSetup] Failed to sync team color:', err)
+                }
+              }}
+            />
           </KitModal>
         </div>
       )}

@@ -412,6 +412,11 @@
     "coinToss": "Sorteggio",
     "chooseTeamColor": "Scegli il colore di {{team}}",
     "chooseTeamColour": "Scegli il colore di {{team}}",
+    "customColour": "Colore personalizzato",
+    "customColourHex": "Codice esadecimale",
+    "customColourInvalid": "Inserisci un codice esadecimale come #1a7f5a",
+    "applyColour": "Applica",
+    "closeToOtherTeamColour": "Simile al colore dell'altra squadra",
     "syncStatus": {
       "notSynced": "Non sincronizzato",
       "offline": "Non in linea",

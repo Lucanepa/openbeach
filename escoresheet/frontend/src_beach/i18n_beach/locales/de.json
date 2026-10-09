@@ -412,6 +412,11 @@
     "coinToss": "Auslosung",
     "chooseTeamColor": "Farbe für {{team}} wählen",
     "chooseTeamColour": "Farbe für {{team}} wählen",
+    "customColour": "Eigene Farbe",
+    "customColourHex": "Hex-Code",
+    "customColourInvalid": "Hex-Code wie #1a7f5a eingeben",
+    "applyColour": "Übernehmen",
+    "closeToOtherTeamColour": "Ähnlich wie die Farbe des anderen Teams",
     "syncStatus": {
       "notSynced": "Nicht synchronisiert",
       "offline": "Offline",

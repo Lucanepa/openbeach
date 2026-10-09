@@ -412,6 +412,11 @@
     "coinToss": "Usloosig",
     "chooseTeamColor": "Farb für {{team}} wähle",
     "chooseTeamColour": "Farb für {{team}} wähle",
+    "customColour": "Eigeti Farb",
+    "customColourHex": "Hex-Code",
+    "customColourInvalid": "Hex-Code wie #1a7f5a iigäh",
+    "applyColour": "Übernäh",
+    "closeToOtherTeamColour": "Ähnlich wie d Farb vom andere Team",
     "syncStatus": {
       "notSynced": "Nöd synchronisiert",
       "offline": "Offline",
