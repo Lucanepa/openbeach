@@ -660,6 +660,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         setBetweenSetsCountdown(null)
         setShowIntervalModal(false)
       } else {
+        // The scorer's break runs: no longer dismissed
+        intervalDismissedRef.current = false
         setBetweenSetsCountdown({
           countdown: actionData.countdown || 60,
           startTimestamp: actionData.startTimestamp || Date.now(), // Fallback for backward compat
@@ -965,6 +967,19 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             setTtoModal(null)
           }
 
+          // The scorer's "End set interval" from the row as over the relay
+          // (end_interval): a referee on the database alone kept counting
+          // down after the scorer ended the break (OpenVolley f5cb8e36). A
+          // row in the break clears the dismissal. (A late older row never
+          // gets here: isLate above.)
+          if (state.set_interval_active === false && state.last_event_type === 'end_interval') {
+            intervalDismissedRef.current = true
+            setBetweenSetsCountdown(null)
+            setShowIntervalModal(false)
+          } else if (state.set_interval_active === true) {
+            intervalDismissedRef.current = false
+          }
+
           // Handle set end (1-minute interval)
           if (state.last_event_type === 'set_end' || state.set_interval_active) {
             console.debug('[Referee] Set end detected from live state:', {
@@ -990,8 +1005,10 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             } else {
               const serverStartTs = state.set_interval_started_at ? new Date(state.set_interval_started_at).getTime() : Date.now()
 
-              // Only update if not already tracking this interval
-              if (!betweenSetsCountdown || Math.abs(betweenSetsCountdown.startTimestamp - serverStartTs) > 2000) {
+              // Only update if not already tracking this interval, and never
+              // revive one the scorer already ended (end_interval)
+              if (!intervalDismissedRef.current &&
+                  (!betweenSetsCountdown || Math.abs(betweenSetsCountdown.startTimestamp - serverStartTs) > 2000)) {
                 setBetweenSetsCountdown({
                   countdown: 60,
                   startTimestamp: serverStartTs,
