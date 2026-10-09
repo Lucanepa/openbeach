@@ -184,6 +184,17 @@ function Modal(props) {
 }
 
 /** Micro-label over a value (SET, rally status, last action). */
+// The sanctions' names in the last action and the undo dialog (English
+// fallbacks; corrections.sanction.* in the locales)
+const SANCTION_LABELS = {
+  improper_request: 'Improper request',
+  delay_warning: 'Delay warning',
+  delay_penalty: 'Delay penalty',
+  warning: 'Misconduct warning',
+  penalty: 'Penalty',
+  expulsion: 'Expulsion',
+  disqualification: 'Disqualification'
+}
 const SB_EYEBROW = 'text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-500'
 
 /**
@@ -4991,6 +5002,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // "A 20 : 16 B": the left team first, as on the court
     const scoreText = (t1, t2) => formatCourtScore({ team1: t1, team2: t2 }, { leftisTeam1, teamAKey: data?.match?.coinTossTeamA || 'team1' })
 
+    const teamBmpLabel = (result) => result === 'successful' ? t('scoreboard.actions.bmpSuccessful', 'Successful BMP') :
+      result === 'unsuccessful' ? t('scoreboard.actions.bmpUnsuccessful', 'Unsuccessful BMP') :
+        result === 'judgment_impossible' ? t('scoreboard.actions.bmpUnavailable', 'BMP unavailable') : 'BMP'
+    const refereeBmpLabel = (result) => result === 'in' ? t('scoreboard.actions.refereeBmpIn', 'Referee BMP: in') :
+      result === 'out' ? t('scoreboard.actions.refereeBmpOut', 'Referee BMP: out') :
+        result === 'judgment_impossible' ? t('scoreboard.actions.refereeBmpUnavailable', 'Referee BMP: unavailable') : t('scoreboard.actions.refereeBmp', 'Referee BMP')
+
     let eventDescription = ''
     if (event.type === 'coin_toss') {
       // the team names (the short name is the country code, "CHE" for both)
@@ -5002,17 +5020,19 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         : (data?.match?.team2Name || data?.team2Team?.name || data?.team2Team?.shortName || 'team2')
       // Determine if first serve is Team A or Team B
       const firstServeLabel = event.payload?.firstServe === event.payload?.teamA ? 'A' : 'B'
-      eventDescription = `Coin toss - A: ${teamAName}, B: ${teamBName}, First serve: ${firstServeLabel}`
+      eventDescription = `${t('corrections.describe.coinToss', 'Coin toss')} - ${t('scoreboard.actions.coinTossDetail', 'A: {{a}}, B: {{b}}, first serve: {{serve}}', { a: teamAName, b: teamBName, serve: firstServeLabel })}`
     } else if (event.type === 'point') {
-      eventDescription = `Point — ${teamName} (${scoreText(team1Score, team2Score)})`
+      eventDescription = `${t('corrections.describe.point', 'Point')} — ${teamName} (${scoreText(team1Score, team2Score)})`
     } else if (event.type === 'timeout') {
-      eventDescription = `Timeout — ${teamName}`
+      eventDescription = `${t('corrections.describe.timeout', 'Time-out')} — ${teamName}`
     } else if (event.type === 'substitution') {
       const playerOut = event.payload?.playerOut || '?'
       const playerIn = event.payload?.playerIn || '?'
       const isExceptional = event.payload?.isExceptional === true
-      const substitutionType = isExceptional ? 'Exceptional substitution' : 'Substitution'
-      eventDescription = `${substitutionType} — ${teamName} (OUT: ${playerOut} IN: ${playerIn}) (${scoreText(team1Score, team2Score)})`
+      const substitutionType = isExceptional
+        ? t('scoreboard.actions.exceptionalSubstitution', 'Exceptional substitution')
+        : t('scoreboard.actions.substitution', 'Substitution')
+      eventDescription = `${substitutionType} — ${teamName} (${t('scoreboard.actions.substitutionDetail', 'OUT: {{out}} IN: {{in}}', { out: playerOut, in: playerIn })}) (${scoreText(team1Score, team2Score)})`
     } else if (event.type === 'set_start') {
       // Format the relative time as MM:SS
       const relativeTime = typeof event.ts === 'number' ? event.ts : 0
@@ -5021,21 +5041,21 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const seconds = totalSeconds % 60
       const minutesStr = String(minutes).padStart(2, '0')
       const secondsStr = String(seconds).padStart(2, '0')
-      eventDescription = `Set start — ${minutesStr}:${secondsStr}`
+      eventDescription = `${t('corrections.describe.setStart', 'Set start')} — ${minutesStr}:${secondsStr}`
     } else if (event.type === 'rally_start') {
-      eventDescription = 'Rally started'
+      eventDescription = t('corrections.describe.rallyStart', 'Rally started')
     } else if (event.type === 'replay') {
       // Show detailed replay info with scores
       const { oldteam1Points, oldteam2Points, newteam1Points, newteam2Points } = event.payload || {}
       if (oldteam1Points !== undefined && newteam1Points !== undefined) {
-        eventDescription = `${scoreText(oldteam1Points, oldteam2Points)} Rally Replayed, new score ${scoreText(newteam1Points, newteam2Points)}`
+        eventDescription = t('scoreboard.actions.replayDetail', '{{old}} rally replayed, new score {{new}}', { old: scoreText(oldteam1Points, oldteam2Points), new: scoreText(newteam1Points, newteam2Points) })
       } else {
-        eventDescription = 'Rally replayed'
+        eventDescription = t('corrections.describe.replay', 'Rally replayed')
       }
     } else if (event.type === 'decision_change') {
       const fromTeam = event.payload?.fromTeam === 'team1' ? (data?.team1Team?.name || 'team1') : (data?.team2Team?.name || 'team2')
       const toTeam = event.payload?.toTeam === 'team1' ? (data?.team1Team?.name || 'team1') : (data?.team2Team?.name || 'team2')
-      eventDescription = `Decision change — Point swapped from ${fromTeam} to ${toTeam}`
+      eventDescription = `${t('corrections.describe.decisionChange', 'Decision change')} — ${t('scoreboard.actions.decisionChangeDetail', 'point moved from {{from}} to {{to}}', { from: fromTeam, to: toTeam })}`
     } else if (event.type === 'lineup') {
       // Only show initial lineups, not rotation lineups
       const isInitial = event.payload?.isInitial === true
@@ -5048,7 +5068,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
       // Only show initial lineups as "Line-up setup"
       if (isInitial) {
-        eventDescription = `${t('scoreboard.lineupSetup', 'Line-up setup')} — ${teamName}`
+        eventDescription = `${t('scoreboard.actions.lineupSetup', 'Line-up setup')} — ${teamName}`
       } else {
         return null // Skip rotation lineups (they're part of the point)
       }
@@ -5070,11 +5090,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         timeInfo = ` (${startTimeStr} - ${endTimeStr}, ${durationMin} min)`
       }
 
-      eventDescription = `Team ${winnerLabel} won Set ${setIndex}${timeInfo}`
+      eventDescription = `${t('scoreboard.actions.teamWonSet', 'Team {{team}} won set {{set}}', { team: winnerLabel, set: setIndex })}${timeInfo}`
     } else if (event.type === 'set3_coin_toss') {
       const leftTeam = event.payload?.leftTeam || '?'
       const firstServe = event.payload?.firstServe || '?'
-      eventDescription = `Set 3 coin toss — Left: Team ${leftTeam}, First serve: Team ${firstServe}`
+      eventDescription = `${t('scoreboard.actions.set3CoinToss', 'Set 3 coin toss')} — ${t('scoreboard.actions.set3CoinTossDetail', 'left: Team {{left}}, first serve: Team {{serve}}', { left: leftTeam, serve: firstServe })}`
     } else if (event.type === 'set3_coin_toss_winner') {
       const winner = event.payload?.winner
       const winnerTeamName = winner === 'team1'
@@ -5082,17 +5102,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         : winner === 'team2'
           ? (data?.team2Team?.name || data?.team2Team?.shortName || 'Team 2')
           : '?'
-      eventDescription = `Set 3 coin toss winner — ${winnerTeamName}`
+      eventDescription = `${t('scoreboard.actions.set3CoinTossWinner', 'Set 3 coin toss winner')} — ${winnerTeamName}`
     } else if (event.type === 'sanction') {
       const sanctionType = event.payload?.type || 'unknown'
-      const sanctionLabel = sanctionType === 'improper_request' ? 'Improper Request' :
-        sanctionType === 'delay_warning' ? 'Delay Warning' :
-          sanctionType === 'delay_penalty' ? 'Delay Penalty' :
-            sanctionType === 'warning' ? 'Warning' :
-              sanctionType === 'penalty' ? 'Penalty' :
-                sanctionType === 'expulsion' ? 'Expulsion' :
-                  sanctionType === 'disqualification' ? 'Disqualification' :
-                    sanctionType
+      const sanctionLabel = SANCTION_LABELS[sanctionType]
+        ? t(`corrections.sanction.${sanctionType}`, SANCTION_LABELS[sanctionType])
+        : sanctionType
 
       // Add player/official info if available
       let target = ''
@@ -5101,15 +5116,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       } else if (event.payload?.role) {
         target = ` ${event.payload.role}`
       } else {
-        target = ' Team'
+        target = ` ${t('scoreboard.actions.team', 'Team')}`
       }
 
-      eventDescription = `Sanction — ${teamName}${target} (${sanctionLabel}) (${scoreText(team1Score, team2Score)})`
+      eventDescription = `${t('scoreboard.actions.sanction', 'Sanction')} — ${teamName}${target} (${sanctionLabel}) (${scoreText(team1Score, team2Score)})`
     } else if (event.type === 'remark') {
       const remarkText = event.payload?.text || ''
       // Show first line or first 50 characters
       const preview = remarkText.split('\n')[0].substring(0, 50)
-      eventDescription = `Remark added — ${preview}${remarkText.length > 50 ? '...' : ''}`
+      eventDescription = `${t('scoreboard.actions.remarkAdded', 'Remark added')} — ${preview}${remarkText.length > 50 ? '...' : ''}`
     } else if (event.type === 'court_captain_designation') {
       const playerNumber = event.payload?.playerNumber || '?'
       eventDescription = `${t('scoreboard.courtCaptainDesignation', 'Court captain designation')} — ${teamName} (#${playerNumber})`
@@ -5123,19 +5138,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       )
       if (outcomeEvent) {
         const result = outcomeEvent.payload?.result
-        const resultLabel = result === 'successful' ? 'Successful BMP' :
-          result === 'unsuccessful' ? 'Unsuccessful BMP' :
-            result === 'judgment_impossible' ? 'BMP Unavailable' : 'BMP'
+        const resultLabel = teamBmpLabel(result)
         eventDescription = `${resultLabel} — ${teamName}`
       } else {
-        eventDescription = `BMP request — ${teamName}`
+        eventDescription = `${t('scoreboard.actions.bmpRequest', 'BMP request')} — ${teamName}`
       }
     } else if (event.type === 'challenge_outcome') {
       // Team BMP outcome (shown when accessed directly)
       const result = event.payload?.result
-      const resultLabel = result === 'successful' ? 'Successful BMP' :
-        result === 'unsuccessful' ? 'Unsuccessful BMP' :
-          result === 'judgment_impossible' ? 'BMP Unavailable' : 'BMP'
+      const resultLabel = teamBmpLabel(result)
       eventDescription = `${resultLabel} — ${teamName}`
     } else if (event.type === 'referee_bmp_request') {
       // Referee BMP request - look for outcome sub-event to show result
@@ -5147,9 +5158,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       )
       if (outcomeEvent) {
         const result = outcomeEvent.payload?.result
-        const resultLabel = result === 'in' ? 'Referee BMP: IN' :
-          result === 'out' ? 'Referee BMP: OUT' :
-            result === 'judgment_impossible' ? 'Referee BMP: Unavailable' : 'Referee BMP'
+        const resultLabel = refereeBmpLabel(result)
         const pointToTeam = outcomeEvent.payload?.pointToTeam
         const pointTeamName = pointToTeam === 'team1'
           ? (data?.team1Team?.name || 'team1')
@@ -5158,17 +5167,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             : null
         eventDescription = `${resultLabel}${pointTeamName ? ` — ${pointTeamName}` : ''}`
       } else {
-        eventDescription = `Referee BMP request`
+        eventDescription = t('scoreboard.actions.refereeBmpRequest', 'Referee BMP request')
       }
     } else if (event.type === 'referee_bmp_outcome') {
       // Referee BMP outcome (shown when accessed directly)
       const result = event.payload?.result
-      const resultLabel = result === 'in' ? 'Referee BMP: IN' :
-        result === 'out' ? 'Referee BMP: OUT' :
-          result === 'judgment_impossible' ? 'Referee BMP: Unavailable' : 'Referee BMP'
+      const resultLabel = refereeBmpLabel(result)
       eventDescription = `${resultLabel}`
     } else if (event.type === 'court_switch') {
-      eventDescription = t('scoreboard.courtSwitch', 'Court switch')
+      eventDescription = t('corrections.describe.courtSwitch', 'Court switch')
     } else if (event.type === 'mto' || event.type === 'rit' || event.type === 'medical_end') {
       // "MTO – B #2 Weber", "RIT (Toilet) – B #2 Weber",
       // "MTO end – B #2 Weber (3:12, recovered)"
@@ -5176,14 +5183,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const kind = event.type === 'medical_end' ? mp.kind : event.type
       const medTeamLabel = mp.team === (data?.match?.coinTossTeamA || 'team1') ? 'A' : 'B'
       const medWho = `${medTeamLabel} #${mp.playerNumber ?? '?'}${mp.playerName ? ` ${mp.playerName}` : ''}`
-      const ritTypeLabel = mp.ritType === 'no_blood' ? t('scoreboard.ritNoBlood', 'No blood') :
-        mp.ritType === 'toilet' ? t('scoreboard.ritToilet', 'Toilet') :
-          mp.ritType === 'weather' ? t('scoreboard.ritWeather', 'Weather') : ''
+      const ritTypeLabel = mp.ritType === 'no_blood' ? t('scoreboard.actions.ritNoBlood', 'No blood') :
+        mp.ritType === 'toilet' ? t('scoreboard.actions.ritToilet', 'Toilet') :
+          mp.ritType === 'weather' ? t('scoreboard.actions.ritWeather', 'Weather') : ''
       const kindLabel = kind === 'rit' ? `RIT${ritTypeLabel ? ` (${ritTypeLabel})` : ''}` : 'MTO'
       if (event.type === 'medical_end' || mp.outcome) {
-        const outcomeLabel = mp.outcome === 'forfeit' ? t('scoreboard.forfeit', 'Forfeit') : t('scoreboard.recovered', 'Recovered')
+        const outcomeLabel = mp.outcome === 'forfeit' ? t('scoreboard.actions.forfeit', 'Forfeit') : t('scoreboard.actions.recovered', 'recovered')
         const dur = mp.duration !== undefined ? `${formatMedicalDuration(mp.duration)}, ` : ''
-        eventDescription = `${kindLabel} ${t('scoreboard.medicalEnd', 'end')} – ${medWho} (${dur}${outcomeLabel.toLowerCase()})`
+        eventDescription = `${kindLabel} ${t('scoreboard.actions.end', 'end')} – ${medWho} (${dur}${outcomeLabel.toLowerCase()})`
       } else {
         eventDescription = `${kindLabel} – ${medWho}`
       }
@@ -5191,16 +5198,16 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Legacy medical_timeout support
       const mtoTeamLabel = event.payload?.team === data?.match?.coinTossTeamA ? 'A' : 'B'
       const mtoPlayerNumber = event.payload?.playerNumber || '?'
-      eventDescription = `MTO — ${t('scoreboard.team', 'Team')} ${mtoTeamLabel} #${mtoPlayerNumber}`
+      eventDescription = `MTO — ${t('scoreboard.actions.team', 'Team')} ${mtoTeamLabel} #${mtoPlayerNumber}`
     } else if (event.type === 'technical_to') {
-      eventDescription = t('scoreboard.technicalTimeout', 'Technical timeout')
+      eventDescription = t('corrections.describe.technicalTimeout', 'Technical time-out')
     } else if (event.type === 'forfait') {
       const winnerTeam = event.payload?.winner === 'team1'
         ? (data?.team1Team?.name || 'Team 1')
         : (data?.team2Team?.name || 'Team 2')
-      eventDescription = `${t('scoreboard.forfeit', 'Forfeit')} — ${winnerTeam} ${t('scoreboard.wins', 'wins')}`
+      eventDescription = `${t('scoreboard.actions.forfeit', 'Forfeit')} — ${t('scoreboard.actions.wins', '{{team}} wins', { team: winnerTeam })}`
     } else if (event.type === 'match_stopped') {
-      eventDescription = t('scoreboard.matchStopped', 'Match stopped')
+      eventDescription = t('scoreboard.actions.matchStopped', 'Match stopped')
     } else if (event.type === 'between_sets_setup_confirmed') {
       // Show which team serves and which player (position I or II)
       const setIndex = event.payload?.setIndex || event.setIndex || 1
@@ -5224,7 +5231,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Get first server number from lineup (position I)
       const servingLineup = servingTeamKey === 'team1' ? data?.lineupA : data?.lineupB
       const serverNumber = servingLineup?.['I']?.number || servingLineup?.['I'] || '?'
-      eventDescription = `${t('scoreboard.team', 'Team')} ${servingTeamLabel} ${t('scoreboard.serves', 'serves')} #${serverNumber}`
+      eventDescription = t('scoreboard.actions.serves', 'Team {{team}} serves #{{number}}', { team: servingTeamLabel, number: serverNumber })
     } else {
       // Never show an internal type name: "some_event" reads "Some event"
       const readable = String(event.type || '').replace(/_/g, ' ')
@@ -5235,7 +5242,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
 
     return eventDescription
-  }, [data, leftisTeam1])
+  }, [data, leftisTeam1, t])
 
   // Show undo confirmation
   const showUndoConfirm = useCallback(() => {

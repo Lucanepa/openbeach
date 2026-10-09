@@ -117,7 +117,7 @@ describe('issue 5: "Referee BMP" button and dialog', () => {
 
 describe('issues 11 and 12: scores in court order, the set-end BMP chip', () => {
   it('Last action and the action descriptions print the left team first, with letters', () => {
-    const desc = between(sb, 'const getActionDescription = useCallback((event) => {', '}, [data, leftisTeam1])')
+    const desc = between(sb, 'const getActionDescription = useCallback((event) => {', '}, [data, leftisTeam1, t])')
     expect(desc).toContain('const scoreText = (t1, t2) => formatCourtScore(')
     expect(desc).not.toContain('(${team1Label} ${team1Score}:${team2Score} ${team2Label})')
     expect(sb).toContain('const scoreStr = formatCourtScore({ team1: team1Score, team2: team2Score }, { leftisTeam1, teamAKey })')
