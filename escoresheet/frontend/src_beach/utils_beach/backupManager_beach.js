@@ -13,6 +13,7 @@ import { sanitizeSimple } from './stringUtils'
 import { remarksForServer } from '../db_beach/remarksSync_beach'
 import { isTeam1LeftInSet, leftTeamInSet } from './courtSides_beach'
 import { labelsInDesignation } from './coinToss_beach'
+import { cleanIntervalChoices } from './intervalChoice_beach'
 import { refereeConnectionDefault } from '../constants_beach/testSeeds_beach'
 
 // IndexedDB key for storing file system directory handle
@@ -604,13 +605,35 @@ export function coinTossForRestore(match = {}) {
   const firstServe = match.firstServe || match.first_serve
   const flag = match.coinTossServeA ?? match.coin_toss_serve_a
   const serveA = teamA && firstServe ? firstServe === teamA : (typeof flag === 'boolean' ? flag : undefined)
+  const winner = match.coinTossWinner
+  const choices = cleanIntervalChoices(match.intervalChoices)
   return {
     confirmed: match.coinTossConfirmed || match.coin_toss_confirmed,
     team_a: teamA,
     team_b: match.coinTossTeamB || match.coin_toss_team_b,
     first_serve: firstServe,
     ...(serveA === undefined ? {} : { serve_a: serveA }),
+    // the toss winner names the interval's chooser; the chooser's picks
+    // (intervalChoice_beach) are kept with the coin toss
+    ...(winner === 'team1' || winner === 'team2' ? { winner } : {}),
+    ...(Object.keys(choices).length ? { interval_choices: choices } : {}),
     ...(match.coinToss || match.coin_toss || {})
+  }
+}
+
+/**
+ * The coin toss's winner and the interval's chooser picks for a restored
+ * match: `coinTossWinner` from the cloud coin toss (`winner`), else the
+ * coin_toss event's payload; `intervalChoices` from `interval_choices`.
+ */
+export function restoredTossChoices(coinToss = {}, events = []) {
+  const isTeam = (v) => v === 'team1' || v === 'team2'
+  const tossEvent = (events || []).find(e => e?.type === 'coin_toss' && isTeam(e.payload?.coinTossWinner))
+  const winner = isTeam(coinToss?.winner) ? coinToss.winner : tossEvent?.payload?.coinTossWinner
+  const choices = cleanIntervalChoices(coinToss?.interval_choices)
+  return {
+    ...(isTeam(winner) ? { coinTossWinner: winner } : {}),
+    ...(Object.keys(choices).length ? { intervalChoices: choices } : {})
   }
 }
 
@@ -1306,6 +1329,10 @@ export async function importMatchFromSupabase(cloudData) {
       coinTossTeamB: coinToss.team_b || match.coin_toss_team_b,
       coinTossServeA: coinToss.serve_a !== undefined ? coinToss.serve_a : match.coin_toss_serve_a,
       firstServe: coinToss.first_serve || match.first_serve,
+      // The toss winner (it names the chooser of the interval before set 2)
+      // and the chooser's picks (intervalChoice_beach): without them a
+      // restore in the break showed the plain switches, or no pick
+      ...restoredTossChoices(coinToss, events),
       // Court sides (courtSides_beach): without them the court showed A on the left
       ...(courtSides.setLeftTeamOverrides ? { setLeftTeamOverrides: { ...courtSides.setLeftTeamOverrides } } : {}),
       ...(courtSides.set3LeftTeam ? { set3LeftTeam: courtSides.set3LeftTeam } : {}),

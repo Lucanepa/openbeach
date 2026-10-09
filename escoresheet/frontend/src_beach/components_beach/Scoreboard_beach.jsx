@@ -47,7 +47,7 @@ import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
 import { TTO_TOTAL, courtChangeEvery, hasTechnicalTimeout, nextCourtEvents } from '../utils_beach/courtRhythm_beach'
 import PhoneScoreboard from './scoreboard/PhoneScoreboard_beach.jsx'
 import IntervalChoice, { ServeOrder } from './scoreboard/IntervalChoice_beach.jsx'
-import { intervalChooser } from '../utils_beach/intervalChoice_beach'
+import { intervalChooser, intervalChoiceKey as intervalChoiceKeyOf, cleanIntervalChoices } from '../utils_beach/intervalChoice_beach'
 import { detectDisplayMode, isPhoneScreen, normaliseDisplayMode, phoneHeldSideways, phoneLayoutActive, readStoredDisplayMode, recentActions } from './scoreboard/phoneLayout_beach'
 import { defaultSetStartTime, scheduledClock, withActualStartTimeRemark, actualStartTimeLine, startScheduleOf, typedStartNear } from '../utils_beach/setStartTime_beach'
 import { withoutAutoRemarks, errorText as correctionErrorText, pointsToWin as setPointsToWin } from '../utils_beach/corrections_beach'
@@ -3357,12 +3357,37 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   // (the loser of the first toss) or set 3 (the winner of its toss), what
   // they took, and the names its rows give the teams
   const intervalChooserInfo = isBetweenSets ? intervalChooser(data?.set?.index, data?.match) : null
-  const intervalChoiceKey = intervalChooserInfo ? `${data?.set?.index}:${intervalChooserInfo.teamKey}` : null
-  const intervalChoice = intervalChoiceKey ? (intervalChoices[intervalChoiceKey] || null) : null
+  // The pick is kept with the match (intervalChoices; the cloud's coin_toss
+  // interval_choices): a reload or a restore by PIN in the break shows it and
+  // its rows again. The screen's own copy answers the tap at once.
+  const intervalChoiceKey = intervalChooserInfo ? intervalChoiceKeyOf(data?.set?.index, intervalChooserInfo.teamKey) : null
+  const intervalChoice = intervalChoiceKey
+    ? (intervalChoices[intervalChoiceKey] || cleanIntervalChoices(data?.match?.intervalChoices)[intervalChoiceKey] || null)
+    : null
   const chooseInInterval = useCallback((choice) => {
-    if (!intervalChoiceKey) return
-    setIntervalChoices(prev => ({ ...prev, [intervalChoiceKey]: choice }))
-  }, [intervalChoiceKey])
+    if (!intervalChoiceKey || (choice !== 'side' && choice !== 'serve')) return
+    const key = intervalChoiceKey
+    setIntervalChoices(prev => ({ ...prev, [key]: choice }))
+    db.transaction('rw', [db.matches, db.sync_queue], async () => {
+      const match = await db.matches.get(matchId)
+      if (!match) return
+      const stored = cleanIntervalChoices(match.intervalChoices)
+      if (stored[key] === choice) return
+      const choices = { ...stored, [key]: choice }
+      await db.matches.update(matchId, { intervalChoices: choices })
+      if (match.seed_key && !match.test) {
+        // a JSONB merge on the server: the rest of the coin toss stays
+        const winner = match.coinTossWinner === 'team1' || match.coinTossWinner === 'team2' ? { winner: match.coinTossWinner } : {}
+        await db.sync_queue.add({
+          resource: 'match',
+          action: 'update',
+          payload: { id: match.seed_key, coin_toss: { ...winner, interval_choices: choices } },
+          ts: new Date().toISOString(),
+          status: 'queued'
+        })
+      }
+    }).catch(err => console.error('[Interval] the pick was not saved', err))
+  }, [intervalChoiceKey, matchId])
   const intervalTeamNames = {
     team1: `${teamAKey === 'team1' ? 'A' : 'B'} · ${data?.team1Team?.name || data?.team1Team?.shortName || 'Team 1'}`,
     team2: `${teamAKey === 'team2' ? 'A' : 'B'} · ${data?.team2Team?.name || data?.team2Team?.shortName || 'Team 2'}`

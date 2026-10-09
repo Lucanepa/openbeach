@@ -35,6 +35,21 @@ export function intervalChooser(setIndex, match) {
   return null
 }
 
+/**
+ * The chooser's pick is kept with the match (`intervalChoices`, and in the
+ * cloud the coin toss's `interval_choices`), keyed by the set and the team
+ * that chose: { '2:team2': 'side', '3:team1': 'serve' }. A reload or a
+ * restore by PIN in the break shows it again.
+ */
+export const intervalChoiceKey = (setIndex, teamKey) => `${Number(setIndex)}:${teamKey}`
+
+/** The well-formed picks of a stored map (set 2 or 3, team1 / team2, side / serve); {} for anything else. */
+export function cleanIntervalChoices(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  return Object.fromEntries(Object.entries(raw).filter(([key, value]) =>
+    /^[23]:team[12]$/.test(key) && (value === 'side' || value === 'serve')))
+}
+
 /** The choice the other team is left with: 'side' <-> 'serve'. */
 export const remainingChoice = (choice) => (choice === 'side' ? 'serve' : choice === 'serve' ? 'side' : null)
 
