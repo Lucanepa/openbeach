@@ -180,6 +180,10 @@ export function getBackendUrl() {
     return import.meta.env.VITE_BACKEND_URL
   }
 
+  // No page (a test's teardown: a late live-state push after the window
+  // went away): no backend, not a ReferenceError
+  if (typeof window === 'undefined' || !window.location) return null
+
   // Static deployments and the native app have no backend: the cloud
   if (isStaticDeployment()) {
     return CLOUD_RELAY_URL
