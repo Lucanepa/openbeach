@@ -60,7 +60,7 @@
     "concurrently": "^10.0.6",
     "fake-indexeddb": "^6.2.5",
     "happy-dom": "^20.3.4",
-    "jsdom": "^28.1.0",
+    "jsdom": "^30.1.2",
     "ngrok": "^5.0.0-beta.2",
     "playwright": "^1.58.2",
     "postcss": "^8.5.29",
@@ -68,7 +68,7 @@
     "tailwindcss3": "npm:tailwindcss@^3.4.19",
     "vite": "^7.3.1",
     "vite-plugin-pwa": "^1.2.0",
-    "vitest": "^4.0.17"
+    "vitest": "^5.0.3"
   },
   "overrides": {
     "minimatch": ">=10.2.1",

@@ -185,7 +185,8 @@ describe('Modal', () => {
       )
 
       const modalBox = container.firstChild.firstChild
-      expect(modalBox).toHaveStyle({ width: 'min(95vw,800px)' })
+      // the width the modal sets (jsdom 30, like a browser, computes it to px)
+      expect(modalBox.style.width).toBe('min(95vw, 800px)')
     })
 
     it('should respect custom width', () => {
@@ -196,7 +197,7 @@ describe('Modal', () => {
       )
 
       const modalBox = container.firstChild.firstChild
-      expect(modalBox).toHaveStyle({ width: 'min(95vw,500px)' })
+      expect(modalBox.style.width).toBe('min(95vw, 500px)')
     })
 
     it('should handle width="auto"', () => {
@@ -218,7 +219,7 @@ describe('Modal', () => {
       )
 
       const modalBox = container.firstChild.firstChild
-      expect(modalBox).toHaveStyle({ width: '100vw' })
+      expect(modalBox.style.width).toBe('100vw')
     })
   })
 
