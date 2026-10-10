@@ -1,4 +1,4 @@
-import readXlsxFile from 'read-excel-file/browser'
+import { readSheet } from 'read-excel-file/browser'
 
 /**
  * Parse a CSV string into an array of arrays (rows of cells).
@@ -41,7 +41,9 @@ export async function parseExcel(file) {
     const text = await file.text()
     rawRows = parseCsvText(text)
   } else {
-    rawRows = await readXlsxFile(file)
+    // the first sheet's rows (read-excel-file 8+: the default export reads
+    // every sheet)
+    rawRows = await readSheet(file)
   }
 
   if (rawRows.length < 2) return []
