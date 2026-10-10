@@ -79,6 +79,11 @@ async function buildSubdomain(subdomain, basePath = '/') {
             // The page is built as _build_<app>.html and renamed to index.html
             // below: precache it under that name, or the worker's install 404s
             manifestTransforms: [precacheUnderFinalName(tempIndexName)],
+            // The app's entry is one chunk here (2.4 MB in 2.0.2), over
+            // workbox's 2 MiB default: the build failed ("won't be
+            // precached") and Cloudflare Pages kept serving the last good
+            // build (2.0.1). It must be precached: scorers work offline.
+            maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
             skipWaiting: false,
             clientsClaim: true,
             navigateFallback: null,

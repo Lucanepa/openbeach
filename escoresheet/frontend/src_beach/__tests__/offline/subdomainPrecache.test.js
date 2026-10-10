@@ -30,4 +30,14 @@ describe('subdomain precache', () => {
     const script = readFileSync(resolve(frontendDir, 'scripts/build-subdomains.js'), 'utf8')
     expect(script).toMatch(/manifestTransforms: \[precacheUnderFinalName\(tempIndexName\)\]/)
   })
+
+  // The Cloudflare Pages build of beach.openvolley.app failed from the day
+  // the entry chunk passed workbox's 2 MiB default (2.4 MB in 2.0.2), and
+  // the site kept serving 2.0.1. The limit is raised, the entry precached.
+  it('precaches an entry chunk over 2 MiB', () => {
+    const script = readFileSync(resolve(frontendDir, 'scripts/build-subdomains.js'), 'utf8')
+    const m = script.match(/maximumFileSizeToCacheInBytes: (\d+) \* 1024 \* 1024/)
+    expect(m).toBeTruthy()
+    expect(Number(m[1])).toBeGreaterThanOrEqual(4)
+  })
 })
