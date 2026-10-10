@@ -132,17 +132,15 @@ async function buildSubdomain(subdomain, basePath = '/') {
       build: {
         outDir,
         emptyOutDir: true,
-        rollupOptions: {
+        rolldownOptions: {
           input: tempIndexPath,
           output: {
             format: 'es',
-            manualChunks: (id) => {
-              if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) {
-                return 'react-vendor'
-              }
-              if (id.includes('node_modules/dexie')) {
-                return 'dexie-vendor'
-              }
+            codeSplitting: {
+              groups: [
+                { name: 'react-vendor', test: /node_modules[\\/]react(-dom)?[\\/]/ },
+                { name: 'dexie-vendor', test: /node_modules[\\/]dexie/ }
+              ]
             }
           }
         }

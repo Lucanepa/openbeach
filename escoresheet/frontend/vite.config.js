@@ -164,10 +164,15 @@ export default defineConfig({
   },
   build: {
     ...(isCapacitor ? { outDir: 'dist-capacitor' } : {}),
-    // Use safer build options to avoid eval in production
-    minify: 'esbuild',
+    // Use safer build options to avoid eval in production (Vite 8 minifies
+    // with Oxc; 'esbuild' is deprecated there)
     target: 'es2015',
-    rollupOptions: {
+    // CSS: the browsers Tailwind 4 itself needs. Vite 8 minifies CSS with
+    // Lightning CSS, which for 'es2015' flattened Tailwind's cascade layers
+    // (utilities then beat rules they lose to in a browser: the referee
+    // card's heading got a margin, the header buttons padding).
+    cssTarget: ['chrome111', 'edge111', 'firefox128', 'safari16.4'],
+    rolldownOptions: {
       input: {
         main: './index.html',
         referee: './referee_beach.html',
@@ -180,10 +185,19 @@ export default defineConfig({
       output: {
         // Avoid eval in production builds
         format: 'es',
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom'],
-          'dexie-vendor': ['dexie', 'dexie-react-hooks'],
-          'pdf-vendor': ['jspdf', 'pdfjs-dist', 'pdf-lib']
+        // (Vite 8 has no manualChunks object form: the same groups by path).
+        // The syntax helpers (es2015 output), Vite's preload helper and fflate
+        // (also read-excel-file's) get their own small chunks: inside
+        // pdf-vendor, as jsPDF's dependencies, they made every page load the
+        // PDF libraries.
+        codeSplitting: {
+          groups: [
+            { name: 'helpers', test: /vite[\\/]preload-helper|@oxc-project[+\\/]runtime[@\\/]|@babel[\\/]runtime[\\/]/, priority: 10 },
+            { name: 'fflate', test: /node_modules[\\/]fflate[\\/]/, priority: 10 },
+            { name: 'react-vendor', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
+            { name: 'dexie-vendor', test: /node_modules[\\/]dexie/ },
+            { name: 'pdf-vendor', test: /node_modules[\\/](jspdf|pdfjs-dist|pdf-lib|@pdf-lib)[\\/]/ }
+          ]
         }
       }
     }
