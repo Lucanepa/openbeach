@@ -40,4 +40,11 @@ describe('subdomain precache', () => {
     expect(m).toBeTruthy()
     expect(Number(m[1])).toBeGreaterThanOrEqual(4)
   })
+
+  it('the main build (desktop, Android, dev) has the same limit', () => {
+    const config = readFileSync(resolve(frontendDir, 'vite.config.js'), 'utf8')
+    const m = config.match(/maximumFileSizeToCacheInBytes: (\d+) \* 1024 \* 1024/)
+    expect(m).toBeTruthy()
+    expect(Number(m[1])).toBeGreaterThanOrEqual(4)
+  })
 })

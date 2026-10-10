@@ -85,6 +85,10 @@ export default defineConfig({
         // precached. (vite-plugin-pwa's own defaults are kept: setting
         // globIgnores replaces them.)
         globIgnores: ['**/node_modules/**/*', 'sw.js', 'workbox-*.js', 'sign/**'],
+        // Workbox's 2 MiB default fails a build whose entry chunk outgrows it
+        // (the subdomain build did at 2.4 MB, 2.0.2): the entry must be
+        // precached, scorers work offline (scripts/build-subdomains.js too)
+        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         // A multi-page app: no SPA fallback. With workbox's default every
         // navigation the service worker controls got index.html, so on the
         // desktop / venue relay a tablet's /referee or /livescore (the QR
