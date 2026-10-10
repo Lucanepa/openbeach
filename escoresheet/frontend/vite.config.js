@@ -34,9 +34,6 @@ export default defineConfig({
   // one byte for byte, so a value from someone's local .env (e.g. a VITE_*
   // backend URL) must not end up in the bundle.
   envDir: isCapacitor ? false : undefined,
-  optimizeDeps: {
-    include: ['pdfjs-dist']
-  },
   define: {
     __APP_VERSION__: JSON.stringify(appVersion)
   },
@@ -196,7 +193,7 @@ export default defineConfig({
             { name: 'fflate', test: /node_modules[\\/]fflate[\\/]/, priority: 10 },
             { name: 'react-vendor', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
             { name: 'dexie-vendor', test: /node_modules[\\/]dexie/ },
-            { name: 'pdf-vendor', test: /node_modules[\\/](jspdf|pdfjs-dist|pdf-lib|@pdf-lib)[\\/]/ }
+            { name: 'pdf-vendor', test: /node_modules[\\/](jspdf|pdf-lib|@pdf-lib)[\\/]/ }
           ]
         }
       }
