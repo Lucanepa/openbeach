@@ -1,0 +1,4 @@
+OpenBeach 2.0.3
+- Security update of the PDF library (jsPDF 4.2.1).
+- Pages load faster: the PDF code only loads when a PDF is made.
+- Updated libraries and build tools.
