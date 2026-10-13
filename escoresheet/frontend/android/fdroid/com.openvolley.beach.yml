@@ -25,9 +25,9 @@ Binaries:
   https://github.com/Lucanepa/openbeach/releases/download/android-v%v/com.openvolley.beach_%c.apk
 
 Builds:
-  - versionName: 2.0.4
-    versionCode: 20000040
-    commit: 809aec6244066eef1e5aabae55df87e54cc4c86a
+  - versionName: 2.0.5
+    versionCode: 20000050
+    commit: 6178155c55fd6a7f067cc43da5a8322b1cccbf43
     subdir: escoresheet/frontend/android/app
     sudo:
       - echo "deb https://deb.debian.org/debian forky main" > /etc/apt/sources.list.d/forky.list
@@ -50,5 +50,5 @@ AllowedAPKSigningKeys: 9faf8e1947e491a769a6da717afaa553c44de6fa9576dbceee19f099d
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^android-v[\d.]+$
-CurrentVersion: 2.0.4
-CurrentVersionCode: 20000040
+CurrentVersion: 2.0.5
+CurrentVersionCode: 20000050
