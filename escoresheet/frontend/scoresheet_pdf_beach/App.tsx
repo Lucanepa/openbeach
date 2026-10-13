@@ -7,6 +7,7 @@ import { closeAppWindow, deliverPdfToOpener, getOpenerWindow, savePdfThroughApp,
 import i18n from '../src_beach/i18n.js';
 // The desktop app's quit question says a PDF is still being saved here
 import { setPdfBusy } from '../src_beach/utils_beach/openAppWindow_beach.js';
+import { beachScoresheetFilename } from '../src_beach/utils_beach/scoresheetFilename_beach.js';
 
 // Count actual pages in the DOM
 const countPages = (): number => {
@@ -226,32 +227,8 @@ export default function App({ matchData }: { matchData?: any }) {
     if (currentPage < totalPages) scrollToPage(currentPage + 1);
   };
 
-  // Generate PDF filename
-  const generateFilename = () => {
-    const match = matchData?.match;
-    const team1Team = matchData?.team1Team || matchData?.team_1Team || matchData?.team1;
-    const team2Team = matchData?.team2Team || matchData?.team_2Team || matchData?.team2;
-
-    let dateStr = '';
-    let timeStr = '';
-    if (match?.scheduledAt) {
-      const d = new Date(match.scheduledAt);
-      dateStr = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
-      timeStr = `${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
-    } else {
-      const now = new Date();
-      dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-      timeStr = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
-    }
-
-    const site = (match?.site || match?.city || '').replace(/[^a-zA-Z0-9]/g, '');
-    const matchNo = match?.game_n || match?.matchNumber || match?.externalId || '';
-    const country1 = (team1Team?.country || match?.team1Country || '').toUpperCase();
-    const country2 = (team2Team?.country || match?.team2Country || '').toUpperCase();
-
-    const parts = [dateStr, timeStr, site, matchNo ? `Match${matchNo}` : '', country1, country2].filter(Boolean);
-    return `${parts.join('_')}.pdf`;
-  };
+  // The PDF's file name: game<n>_<league>_<YYYY-MM-DD>.pdf (utils_beach/scoresheetFilename_beach)
+  const generateFilename = () => beachScoresheetFilename(matchData);
 
   // Shared: prepare DOM for capture (reset zoom, make overflow visible, strip debug decorations)
   const prepareForCapture = async () => {
