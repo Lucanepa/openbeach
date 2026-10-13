@@ -1742,21 +1742,23 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
             <Button variant="secondary" size="xl" onClick={onManualAdjustments}>
               {t('matchEnd.manualAdjustments')}
             </Button>
-            <MenuList
-              tone="light"
-              buttonLabel={<span className="inline-flex items-center gap-1.5"><FileText /> {t('matchEnd.scoresheet')}</span>}
-              buttonClassName="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 transition-colors hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60 focus-visible:ring-offset-1"
-              showArrow={true}
-              position="right"
-              vertical="top"
-              items={[
-                { key: 'preview', icon: <Search />, label: t('matchEnd.preview'), onClick: () => handleShowScoresheet('preview') },
-                { key: 'save', icon: <Save />, label: t('matchEnd.savePdf'), onClick: () => handleShowScoresheet('save') },
-                { key: 'logs', icon: <ChartColumn />, label: t('matchEnd.downloadLogs'), onClick: handleDownloadLogs }
-              ]}
-            />
           </>
         )}
+        {/* The scoresheet, before and after approval (the server closes the
+            match at approval; Close match then removes it from this device) */}
+        <MenuList
+          tone="light"
+          buttonLabel={<span className="inline-flex items-center gap-1.5"><FileText /> {t('matchEnd.scoresheet')}</span>}
+          buttonClassName="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 transition-colors hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60 focus-visible:ring-offset-1"
+          showArrow={true}
+          position="right"
+          vertical="top"
+          items={[
+            { key: 'preview', icon: <Search />, label: t('matchEnd.preview'), onClick: () => handleShowScoresheet('preview') },
+            { key: 'save', icon: <Save />, label: t('matchEnd.savePdf'), onClick: () => handleShowScoresheet('save') },
+            { key: 'logs', icon: <ChartColumn />, label: t('matchEnd.downloadLogs'), onClick: handleDownloadLogs }
+          ]}
+        />
       </div>
 
       {/* Export progress (light, labelled spinner). Above the header menu

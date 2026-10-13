@@ -184,6 +184,15 @@ describe('MatchEnd_beach: the approval PDF', () => {
     expect(screen.queryByRole('button', { name: 'Confirm and approve' })).toBeNull()
   })
 
+  it('the scoresheet stays at hand once the match is approved (closed), as before it', async () => {
+    await seed({ approved: true })
+    renderMatchEnd()
+    await screen.findByRole('button', { name: 'Close match' })
+    await click(screen.getByRole('button', { name: /Scoresheet/ }))
+    await click(await screen.findByRole('menuitem', { name: /Preview/ }))
+    expect(opened.at(-1).url).toContain('/scoresheet_beach.html')
+  })
+
   it('Results: no nonsense durations (set 1 started at the scheduled date, video 07:04)', async () => {
     const team1Id = await db.teams.add({ name: 'Müller / Weber' })
     const team2Id = await db.teams.add({ name: 'Schmidt / Fischer' })
