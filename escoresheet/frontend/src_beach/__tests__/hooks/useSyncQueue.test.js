@@ -608,10 +608,13 @@ describe('event delete jobs (Undo, Replay, decision change, event editor)', () =
   })
 })
 
-// backend db/017: the approval queues the remarks as approved just before
-// itself. Once the approval has closed the match, the server refuses them
-// (OV_MATCH_CLOSED), so the approval must not overtake them.
-describe('closing order (the approval waits for the older remarks job of its match)', () => {
+// The approval closes the match on the server, which from then on refuses its
+// sets, events and remarks (OV_MATCH_CLOSED), so the approval must not overtake
+// them. backend db/017: the approval queues the remarks as approved just before
+// itself. 2026-10-13: a match scored signed out went up in one pass, the
+// approval first (match jobs go first), and the server kept none of its sets
+// and events.
+describe('closing order (the approval waits for the older sets, events and remarks of its match)', () => {
   const close = (id, status = 'approved') => ({ id, resource: 'match', action: 'update', status: 'queued', retry_count: 0, payload: { id: 'match_100_aaa', status } })
   const remarksJob = (id, status = 'queued') => ({ id, resource: 'match', action: 'update', status, retry_count: 0, payload: { id: 'match_100_aaa', remarks: 'Team 1 forfeits the match due to no show' } })
 
@@ -648,6 +651,33 @@ describe('closing order (the approval waits for the older remarks job of its mat
 
   it('a newer remarks job does not hold it', async () => {
     fakeDb.sync_queue.reset([close(1), remarksJob(2)])
+    await runQueuePass()
+    expect(fakeDb.sync_queue.map.get(1).status).toBe('sent')
+  })
+
+  const child = (id, resource, n) => ({ id, resource, action: 'insert', status: 'queued', retry_count: 0, payload: { external_id: `match_100_aaa:${resource === 'set' ? 's' : 'e'}:${n}`, match_id: 'match_100_aaa' } })
+
+  it('a match sent in one go (scored signed out): its sets and events go up before the approval closes it', async () => {
+    fakeDb.sync_queue.reset([child(1, 'set', 1), child(2, 'event', 1), child(3, 'event', 2), close(4, 'final')])
+    let closed = false
+    const refused = []
+    api.respond = (call) => {
+      if (call.table === 'matches' && call.action === 'update' && call.data?.status === 'final') closed = true
+      else if (closed && (call.table === 'sets' || call.table === 'events') && call.action !== 'select') {
+        refused.push(call.table)
+        return { data: null, error: { message: 'closed', status: 409, code: 'OV_MATCH_CLOSED' }, status: 409 }
+      }
+      return defaultRespond(call)
+    }
+    await runQueuePass()
+    expect(fakeDb.sync_queue.map.get(4).status).toBe('queued') // waited for its sets and events
+    await runQueuePass()
+    expect([1, 2, 3, 4].map(id => fakeDb.sync_queue.map.get(id).status)).toEqual(['sent', 'sent', 'sent', 'sent'])
+    expect(refused).toEqual([])
+  })
+
+  it('a newer event (after the approval) does not hold it', async () => {
+    fakeDb.sync_queue.reset([close(1), child(2, 'event', 9)])
     await runQueuePass()
     expect(fakeDb.sync_queue.map.get(1).status).toBe('sent')
   })
@@ -1147,6 +1177,34 @@ describe('useSyncQueue flush loop', () => {
       await vi.advanceTimersByTimeAsync(1000)
     })
     expect(fakeDb.sync_queue.map.get(1).status).toBe('sent')
+    expect(result.current.syncStatus).toBe('synced')
+    unmount()
+  })
+
+  // 2026-10-13: signed in, the banner still said "Session expired" for the
+  // whole first pass (a minute of queued jobs): the status changed only at its end
+  it('after the sign-in the status leaves auth_required as the pass starts, not when it ends', async () => {
+    fakeDb.sync_queue.reset([
+      { id: 1, resource: 'match', action: 'insert', status: 'queued', payload: { external_id: 'match_100_aaa' } }
+    ])
+    let signedIn = false
+    api.respond = (call) => {
+      if (call.action !== 'upsert') return defaultRespond(call)
+      if (!signedIn) return { data: null, error: { message: 'Authentication required', code: 'missing_token', status: 401 } }
+      return new Promise(resolve => setTimeout(() => resolve(defaultRespond(call)), 5000)) // a slow write
+    }
+    const { result, unmount } = renderHook(() => useSyncQueue())
+    await act(async () => { await vi.advanceTimersByTimeAsync(30000) })
+    expect(result.current.syncStatus).toBe('auth_required')
+
+    signedIn = true
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('api-auth-token-change', { detail: { access_token: 't' } }))
+      await vi.advanceTimersByTimeAsync(1000)
+    })
+    expect(fakeDb.sync_queue.map.get(1).status).toBe('queued') // still on its way
+    expect(result.current.syncStatus).toBe('syncing')
+    await act(async () => { await vi.advanceTimersByTimeAsync(6000) })
     expect(result.current.syncStatus).toBe('synced')
     unmount()
   })

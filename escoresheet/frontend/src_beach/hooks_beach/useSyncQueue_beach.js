@@ -702,12 +702,14 @@ async function requeueParkedJobsOf(matchKey, exceptId) {
 }
 
 // The approval (a closing update: approved / final) closes the match on the
-// server, which from then on refuses a change of its remarks (409
-// OV_MATCH_CLOSED). MatchEnd queues the remarks as approved just before the
-// approval (backend db/017), so the approval must not overtake an older
+// server, which from then on refuses every change of its sets, events and
+// remarks (409 OV_MATCH_CLOSED). So it must not overtake an older set, event or
 // remarks job of its match that is still on its way (queued, in flight or
-// waiting out a backoff). A refused one ('failed', e.g. a server without
-// db/017) does not hold it.
+// waiting out a backoff), as in OpenVolley. A pass sends the match jobs first:
+// a match scored offline or signed out, sent in one go, was closed before its
+// sets and events and kept none of them (2026-10-13). MatchEnd queues the
+// remarks as approved just before the approval (backend db/017). A refused job
+// ('failed', e.g. a server without db/017) does not hold it.
 const CLOSING_STATUSES = ['approved', 'final']
 export function isClosingJob(job) {
   return job?.resource === 'match' && job.action === 'update' && CLOSING_STATUSES.includes(job.payload?.status)
@@ -718,7 +720,7 @@ export async function closingMustWait(job) {
   if (!matchKey || job?.id == null) return false
   try {
     const pending = await db.sync_queue.where('status').anyOf('queued', 'sending', 'error').toArray()
-    return pending.some(j => j.id < job.id && isRemarksUpdate(j) && jobMatchKey(j) === matchKey)
+    return pending.some(j => j.id < job.id && (j.resource === 'set' || j.resource === 'event' || isRemarksUpdate(j)) && jobMatchKey(j) === matchKey)
   } catch {
     return false
   }
@@ -740,9 +742,9 @@ async function processJobInner(job, ctx) {
       }
     }
 
-    // Closing order: the approval waits for the older remarks job of its match
+    // Closing order: the approval waits for the match's older sets, events and remarks
     if (isClosingJob(job) && await closingMustWait(job)) {
-      safeLog.log('[SyncQueue] Closing update waits for the older remarks job of its match')
+      safeLog.log('[SyncQueue] Closing update waits for older set/event/remarks jobs of its match')
       return null
     }
 
@@ -1535,6 +1537,9 @@ export function useSyncQueue() {
         await pruneSyncQueue({ now })
       }
 
+      // A session is there (the checks above): the "sign in again" banner must
+      // not stay up through this pass (a long queue takes a minute)
+      if (currentSyncStatus === 'auth_required') setSyncStatus('syncing')
       const outcome = await runQueuePass()
       noteSyncPass({ sent: outcome.sent, failed: outcome.hasFailed || outcome.hasError ? 1 : 0, pending: outcome.hasRetry ? 1 : 0 })
 
