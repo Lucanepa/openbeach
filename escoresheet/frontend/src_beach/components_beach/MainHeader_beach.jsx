@@ -9,7 +9,6 @@ import { Bell, BookOpen, ChevronDown, ChevronUp, ClipboardList, House, Maximize,
 import { isDesktopScoretable, requestDesktopQuit } from '../utils_beach/appLifecycle_beach'
 import { getCloudApiUrl, isRelayOriginPage, isVenueMode } from '../utils_beach/backendConfig_beach'
 import UserButton from './auth/UserButton_beach'
-import { PHONE_MAX_WIDTH } from './scoreboard/phoneLayout_beach'
 import { cn } from '../ui/volleyui/cn.js'
 import { SwitchTrack } from '../ui/volleyui/Switch.jsx'
 import {
@@ -17,6 +16,10 @@ import {
   MENU_ROW, MENU_SUBROW, MENU_ROW_ON, MENU_NEST, MENU_SEP, MENU_ICON, MENU_COUNT, STATUS_PILL, STATUS_TONES
 } from './chromeClasses_beach'
 
+// Below this width the bar's controls lose their words (isCompactBar): with
+// the alarm bell, the tablet status and Sign in the full bar needs about
+// 704 px (Chromium, 2026-10-14)
+const COMPACT_BAR_BELOW = 720
 
 const FlagBox = ({ children }) => (
   <span
@@ -166,11 +169,12 @@ export default function MainHeader({
 
   // Check if compact mode (viewport width <= 960px)
   const isCompactMode = viewportSize.width > 0 && viewportSize.width <= 960
-  // A phone's width (either way up): the bar's controls lose their words and
-  // the match chip joins the row instead of floating over it (emulator audit
-  // 2026-10-14: at 384 px Sign in and Exit ran off the screen; OpenVolley's
-  // header the same, PR openvolley#13)
-  const isPhoneWidth = viewportSize.width > 0 && viewportSize.width < PHONE_MAX_WIDTH
+  // A phone's width (either way up) or an upright 7" tablet (600 px): the
+  // bar's controls lose their words and the match chip gives up its arrow
+  // and shrinks (emulator audit 2026-10-14: at 384 px Sign in and Exit ran
+  // off the screen; OpenVolley's header the same, PR openvolley#13; at
+  // 640 px the chip covered the alarm bell)
+  const isCompactBar = viewportSize.width > 0 && viewportSize.width < COMPACT_BAR_BELOW
 
   // Effective collapsed state - only collapse when collapsible is true
   const effectivelyCollapsed = collapsible && isCollapsed
@@ -426,21 +430,21 @@ export default function MainHeader({
     const isTest = match?.test
     const matchNumber = match?.gameNumber || match?.game_n || 'N/A'
     const fullText = isTest ? t('header.testMatch') : t('header.matchNumber', { number: matchNumber })
-    const buttonText = isPhoneWidth ? (isTest ? t('header.test') : `#${matchNumber}`) : fullText
+    const buttonText = isCompactBar ? (isTest ? t('header.test') : `#${matchNumber}`) : fullText
 
     // On a phone the chip gets the room the header leaves it (the alarm bell
     // and the tablet status take some): no arrow, and a label that ends in
     // "…" instead of spilling over its border (emulator 2026-10-14, 360 px
     // with the referee tablet on)
     return (
-      <div className={cn('relative flex h-8 w-auto items-center justify-center', isPhoneWidth ? 'min-w-0 gap-1' : 'gap-1.5')}>
+      <div className={cn('relative flex h-8 w-auto items-center justify-center', isCompactBar ? 'min-w-0 gap-1' : 'gap-1.5')}>
         <span className={KIT_SCOPE}>
           <button
             type="button"
             data-match-info-menu
             aria-expanded={matchInfoMenuOpen}
-            aria-label={isPhoneWidth ? fullText : undefined}
-            title={isPhoneWidth ? fullText : undefined}
+            aria-label={isCompactBar ? fullText : undefined}
+            title={isCompactBar ? fullText : undefined}
             onClick={(e) => {
               e.stopPropagation()
               // One header popup at a time: on a phone they overlap
@@ -449,15 +453,15 @@ export default function MainHeader({
             }}
             className={cn(
               'inline-flex h-7 items-center justify-center gap-1 rounded-full border text-xs font-semibold tabular-nums transition-colors cursor-pointer',
-              isPhoneWidth ? 'min-w-0 px-2' : 'min-w-[100px] px-3',
+              isCompactBar ? 'min-w-0 px-2' : 'min-w-[100px] px-3',
               FOCUS_RING,
               isTest
                 ? 'border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200/70'
                 : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-100'
             )}
           >
-            <span className={isPhoneWidth ? 'truncate' : undefined}>{buttonText}</span>
-            {!isPhoneWidth && (
+            <span className={isCompactBar ? 'truncate' : undefined}>{buttonText}</span>
+            {!isCompactBar && (
               <ChevronDown size={13} aria-hidden="true" className={cn('transition-transform', matchInfoMenuOpen && 'rotate-180')} />
             )}
           </button>
@@ -675,15 +679,19 @@ export default function MainHeader({
           maxHeight: effectivelyCollapsed ? '0px' : `${40 * scaleFactor}px`,
           justifyContent: 'space-between',
           alignItems: 'center',
-          padding: effectivelyCollapsed ? '0' : `0 ${Math.round((isPhoneWidth ? 8 : 12) * scaleFactor)}px`,
+          padding: effectivelyCollapsed ? '0' : `0 ${Math.round((isCompactBar ? 8 : 12) * scaleFactor)}px`,
           flexShrink: 0,
-          gap: `${Math.round((isPhoneWidth ? 6 : 10) * scaleFactor)}px`,
+          gap: `${Math.round((isCompactBar ? 6 : 10) * scaleFactor)}px`,
           overflow: effectivelyCollapsed ? 'hidden' : 'visible',
           transition: headerTransition,
           fontSize: `${Math.round(14 * scaleFactor)}px`
         }}>
-        {/* Left: Online/Offline Toggle + Connection Status */}
-        <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: isPhoneWidth ? '4px' : '8px' }}>
+        {/* Left: Online/Offline Toggle + Connection Status. Wider than a
+            phone, it and the right group share the room left and right of
+            the match chip equally, so the chip sits in the middle of the bar
+            and moves aside when a group needs more: centred over the bar, it
+            covered the alarm bell at 800 px (2026-10-14) */}
+        <div style={{ flex: isCompactBar ? '0 0 auto' : '1 1 0', display: 'flex', alignItems: 'center', gap: isCompactBar ? '4px' : '8px' }}>
           {/* Online/Offline Toggle */}
           <span className={KIT_SCOPE}>
             <button
@@ -692,9 +700,9 @@ export default function MainHeader({
               aria-checked={!offlineMode}
               onClick={() => setOfflineMode(!offlineMode)}
               title={offlineMode ? t('header.switchToOnline') : t('header.switchToOffline')}
-              className={cn(HEADER_SWITCH, isPhoneWidth && 'pl-1.5')}
+              className={cn(HEADER_SWITCH, isCompactBar && 'pl-1.5')}
             >
-              <span className={isPhoneWidth ? 'sr-only' : undefined}>{offlineMode ? t('header.offline') : t('header.online')}</span>
+              <span className={isCompactBar ? 'sr-only' : undefined}>{offlineMode ? t('header.offline') : t('header.online')}</span>
               {/* Switch track: emerald when online (no brand red on a state) */}
               <SwitchTrack checked={!offlineMode} className={!offlineMode ? 'bg-emerald-500' : undefined} />
             </button>
@@ -710,13 +718,13 @@ export default function MainHeader({
               onRetryErrors={onRetryErrors}
               position="left"
               size="normal"
-              compact={isPhoneWidth}
+              compact={isCompactBar}
             />
           )}
 
           {/* Tablet Status - show per-role connection health when a match is active */}
           {currentMatch && (
-            <TabletStatusIndicator match={currentMatch} compact={isPhoneWidth} />
+            <TabletStatusIndicator match={currentMatch} compact={isCompactBar} />
           )}
 
           {/* Alarm Bell Button - visible if alarm is enabled and match is active */}
@@ -856,21 +864,16 @@ export default function MainHeader({
           )}
         </div>
 
-        {/* Center: Collapsible Match Info Menu - Absolutely positioned for true centering */}
+        {/* Center: Collapsible Match Info Menu, between the two equal groups */}
         {/* Only show when match has a gamePin set OR is a test match */}
         {!effectivelyCollapsed && (((showMatchSetup || matchId) && currentMatch && (currentMatch.gamePin || currentMatch.test)) || (!matchId && matchStatus && (currentOfficialMatch || currentTestMatch) && ((currentOfficialMatch || currentTestMatch)?.gamePin || (currentOfficialMatch || currentTestMatch)?.test))) ? (
-          <div style={isPhoneWidth ? {
+          <div style={{
             // In the row, between the two groups: centred over the bar it
-            // covered the connection status on a phone
+            // covered the connection status on a phone and the alarm bell at
+            // 800 px. On a phone its label shrinks to fit.
             position: 'relative',
-            flex: '0 1 auto',
+            flex: isCompactBar ? '0 1 auto' : '0 0 auto',
             minWidth: 0,
-            zIndex: 101
-          } : {
-            position: 'absolute',
-            left: '50%',
-            top: '50%',
-            transform: 'translate(-50%, -50%)',
             zIndex: 101
           }}>
             {(showMatchSetup || matchId) && currentMatch ? (
@@ -885,8 +888,9 @@ export default function MainHeader({
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: isPhoneWidth ? '6px' : 'clamp(8px, 1.5vw, 12px)',
-          flex: '0 0 auto',
+          justifyContent: 'flex-end',
+          gap: isCompactBar ? '6px' : 'clamp(8px, 1.5vw, 12px)',
+          flex: isCompactBar ? '0 0 auto' : '1 1 0',
           alignSelf: 'stretch',
           position: 'relative'
         }}>
@@ -894,7 +898,7 @@ export default function MainHeader({
               the cloud is there (not offline, not a venue relay's page) */}
           {!offlineMode && !isRelayOriginPage() && getCloudApiUrl('/api/auth/sign-in') && (
             <span className={KIT_SCOPE}>
-              <UserButton buttonClass={cn(HEADER_BTN, 'min-w-9')} compact={isPhoneWidth} />
+              <UserButton buttonClass={cn(HEADER_BTN, 'min-w-9')} compact={isCompactBar} />
             </span>
           )}
 
@@ -910,11 +914,11 @@ export default function MainHeader({
                     if (!actionsMenuOpen) setMatchInfoMenuOpen?.(false)
                     setActionsMenuOpen(!actionsMenuOpen)
                   }}
-                  className={cn(HEADER_BTN, isPhoneWidth && 'w-9 px-0', actionsMenuOpen && HEADER_BTN_ON)}
-                  aria-label={isPhoneWidth ? t('header.menu', 'Menu') : undefined}
-                  title={isPhoneWidth ? t('header.menu', 'Menu') : undefined}
+                  className={cn(HEADER_BTN, isCompactBar && 'w-9 px-0', actionsMenuOpen && HEADER_BTN_ON)}
+                  aria-label={isCompactBar ? t('header.menu', 'Menu') : undefined}
+                  title={isCompactBar ? t('header.menu', 'Menu') : undefined}
                 >
-                  {isPhoneWidth ? (
+                  {isCompactBar ? (
                     actionsMenuOpen ? <X size={16} aria-hidden="true" /> : <Menu size={16} aria-hidden="true" />
                   ) : (
                     <>
