@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { smallScreenGate } from '../../utils_beach/screenGate_beach'
 
-// The gate's "Enter fullscreen" let a phone through to the scoring screen,
-// where at 844×390 the score was hidden and Undo clipped. Fullscreen still
-// lets the other screens through, never the scoring one below 800×600.
+// Only the scoring screen needs 800×600 (at 844×390 its score was hidden and
+// Undo clipped; a phone gets its phone layout instead). Every other screen
+// fits a phone and is never gated, fullscreen or not (emulator audit
+// 2026-10-14: the gate had made the app unusable in a phone browser).
 
 describe('small-screen gate', () => {
   it('lets tablets and laptops through, in either orientation', () => {
@@ -12,11 +13,10 @@ describe('small-screen gate', () => {
     expect(smallScreenGate({ width: 1024, height: 600 }, { scoring: true })).toBe(false)
   })
 
-  it('stops a phone, and fullscreen lets it through except on the scoring screen', () => {
-    const phoneLandscape = { width: 844, height: 390 }
-    expect(smallScreenGate(phoneLandscape)).toBe(true)
-    expect(smallScreenGate(phoneLandscape, { isFullscreen: true })).toBe(false)
-    expect(smallScreenGate(phoneLandscape, { isFullscreen: true, scoring: true })).toBe(true)
-    expect(smallScreenGate({ width: 390, height: 844 }, { isFullscreen: true, scoring: true })).toBe(true)
+  it('on a phone it stops only the scoring screen', () => {
+    for (const phone of [{ width: 844, height: 390 }, { width: 390, height: 844 }, { width: 360, height: 780 }]) {
+      expect(smallScreenGate(phone)).toBe(false)
+      expect(smallScreenGate(phone, { scoring: true })).toBe(true)
+    }
   })
 })

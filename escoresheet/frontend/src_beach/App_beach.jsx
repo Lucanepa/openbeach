@@ -45,7 +45,7 @@ import { cloudStatusFor } from './utils_beach/cloudStatus_beach'
 import { isCapacitorApp, installAppLifecycle, liveOf, setLiveMatch } from './utils_beach/appLifecycle_beach'
 import DesktopUpdateNotice from './components_beach/DesktopUpdateNotice_beach'
 import { smallScreenGate } from './utils_beach/screenGate_beach'
-import { detectDisplayMode, normaliseDisplayMode, phoneLayoutKept, readStoredDisplayMode } from './components_beach/scoreboard/phoneLayout_beach'
+import { detectDisplayMode, isPhoneScreen, normaliseDisplayMode, phoneLayoutKept, readStoredDisplayMode } from './components_beach/scoreboard/phoneLayout_beach'
 import RestorePreviewModal from './components_beach/RestorePreviewModal_beach'
 import { scorerRelay, scorerPublisher, scorerRelayUrl, readRelayBundle, relayMatchKey, generateGamePin } from './utils_beach/relayPublisher_beach'
 import { checkMatchSession, lockMatchSession, unlockMatchSession, verifyGamePin } from './utils_beach/sessionManager_beach'
@@ -56,7 +56,7 @@ import { fetchMatchByPin, importMatchFromSupabase, restoreMatchFromJson, selectB
 import UpdateBanner from './components_beach/UpdateBanner_beach'
 import CompetitionMatchPicker from './components_beach/CompetitionMatchPicker_beach'
 import { COMPETITIONS_ENABLED } from './utils_beach/features_beach'
-import { FileUp, House, Maximize, Search, Smartphone } from 'lucide-react'
+import { FileUp, House, Search, Smartphone } from 'lucide-react'
 import { Modal as KitModal, modalCancelClass, modalDangerClass } from './ui/volleyui/Modal.jsx'
 import { Button } from './ui/volleyui/Button.jsx'
 import { cn } from './ui/volleyui/cn.js'
@@ -2113,6 +2113,9 @@ export default function App() {
   const phoneLayoutOn = phoneLayoutKept(readStoredDisplayMode(), viewportSize)
   const phoneScoringShown = phoneLayoutOn && onScoringScreen
   const phoneMatchEndShown = phoneLayoutOn && !!matchId && showMatchEnd && !showManualAdjustments
+  // A phone with Screen mode Tablet or Desktop: the gate offers the phone layout
+  const storedDisplayMode = readStoredDisplayMode()
+  const gateOffersPhoneLayout = isPhoneScreen() && storedDisplayMode !== 'auto' && storedDisplayMode !== 'phone'
 
   const notClosed = (m) => (m && closedMatchId != null && m.id === closedMatchId ? null : m)
   const shownCurrentMatch = notClosed(currentMatch)
@@ -2148,13 +2151,12 @@ export default function App() {
           compact={!!(matchId && !showCoinToss && !showMatchSetup && !showMatchEnd && !showManualAdjustments)}
         />
       )}
-      {/* Minimum screen size (800×600, a tablet in either orientation). In
-          fullscreen the setup, coin toss and match end screens are let
-          through, but never the scoring screen: below 600 px its score and
-          Undo do not fit (phone landscape 844×390 hid the score). */}
-      {/* The scoring screen is let through when it shows its phone layout
-          (PhoneScoreboard_beach), and its match end */}
-      {!phoneScoringShown && !phoneMatchEndShown && smallScreenGate(viewportSize, { isFullscreen, scoring: onScoringScreen }) ? (
+      {/* Minimum screen size (800×600, a tablet in either orientation) for
+          the scoring screen only: below 600 px its score and Undo do not fit
+          (phone landscape 844×390 hid the score). It is let through when it
+          shows its phone layout (PhoneScoreboard_beach), and so is its match
+          end; every other screen fits a phone (screenGate_beach). */}
+      {!phoneScoringShown && !phoneMatchEndShown && smallScreenGate(viewportSize, { scoring: onScoringScreen }) ? (
         <div className="ov-kit flex flex-1 flex-col items-center justify-center overflow-y-auto bg-gradient-to-br from-stone-100 via-stone-50 to-stone-100 p-4">
           <div className="relative w-full max-w-sm overflow-hidden rounded-3xl border border-stone-200/70 bg-white p-8 text-center shadow-card-lg">
             <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-red-600 to-red-500" />
@@ -2162,33 +2164,28 @@ export default function App() {
               <Smartphone size={28} aria-hidden="true" />
             </div>
             <p className="text-lg font-bold leading-snug text-stone-900">
-              {t('screenTooSmall.title', 'To use this application, please use a tablet or larger screen (minimum 800×600).')}
+              {gateOffersPhoneLayout
+                ? t('screenTooSmall.phoneTitle', 'The tablet layout needs a larger screen (minimum 800×600).')
+                : t('screenTooSmall.title', 'To use this application, please use a tablet or larger screen (minimum 800×600).')}
             </p>
             <p className="mt-2 text-sm tabular-nums text-stone-500">
               {t('screenTooSmall.current', { defaultValue: 'Current: {{width}} × {{height}} px', width: viewportSize.width, height: viewportSize.height })}
             </p>
-            {isFullscreen ? (
-              <>
-                <p className="mt-3 text-sm text-stone-600">
-                  {t('screenTooSmall.scoringHint', 'The scoring screen needs at least 800×600: score on a tablet or a laptop. The match is saved on this device.')}
-                </p>
-                <Button variant="dark" size="xl" block icon={House} onClick={openMatchSetup} className="mt-6">
-                  {t('screenTooSmall.home', 'Back to the home screen')}
-                </Button>
-              </>
-            ) : (
-              <>
-                <p className="mt-3 text-sm text-stone-600">
-                  {t('screenTooSmall.hint', 'Try rotating your device or entering fullscreen mode.')}
-                </p>
-                <Button variant="dark" size="xl" block icon={Maximize} onClick={toggleFullscreen} className="mt-6">
-                  {t('screenTooSmall.enterFullscreen', 'Enter fullscreen')}
-                </Button>
-                <p className="mt-3 text-xs text-stone-500">
-                  {t('screenTooSmall.fullscreenNote', 'Fullscreen removes the browser bars to make the most of the screen.')}
-                </p>
-              </>
+            <p className="mt-3 text-sm text-stone-600">
+              {gateOffersPhoneLayout
+                ? t('screenTooSmall.phoneHint', 'On a phone, the scoring screen has a layout of its own.')
+                : t('screenTooSmall.scoringHint', 'The scoring screen needs at least 800×600: score on a tablet or a laptop. The match is saved on this device.')}
+            </p>
+            {/* Screen mode Tablet or Desktop on a phone: the phone layout fixes it
+                (Options, where the mode is set, is not reachable from here) */}
+            {gateOffersPhoneLayout && (
+              <Button variant="dark" size="xl" block icon={Smartphone} onClick={() => { setDisplayMode('auto'); try { localStorage.setItem('displayMode', 'auto') } catch { /* private mode: the state still switches */ } }} className="mt-6">
+                {t('screenTooSmall.usePhone', 'Use the phone layout')}
+              </Button>
             )}
+            <Button variant={gateOffersPhoneLayout ? 'secondary' : 'dark'} size="xl" block icon={House} onClick={openMatchSetup} className={gateOffersPhoneLayout ? 'mt-3' : 'mt-6'}>
+              {t('screenTooSmall.home', 'Back to the home screen')}
+            </Button>
           </div>
         </div>
       ) : (

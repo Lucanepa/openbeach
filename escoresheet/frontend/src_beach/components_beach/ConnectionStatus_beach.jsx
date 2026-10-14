@@ -32,7 +32,9 @@ export default function ConnectionStatus({
   onRetryErrors,
   queueStats = { pending: 0, error: 0 },
   position = 'right', // 'left' | 'right' | 'center'
-  size = 'normal' // 'normal' | 'small' | 'large'
+  size = 'normal', // 'normal' | 'small' | 'large'
+  // A phone's header: the dot (and the error count) without the word
+  compact = false
 }) {
   const { t } = useTranslation()
 
@@ -232,6 +234,14 @@ export default function ConnectionStatus({
 
   const currentSize = sizeClasses[size] || sizeClasses.normal
   const overallTone = STATUS_TONES[statusInfo.tone]
+  const pillWord = venue ? statusInfo.text :
+    overallStatus === 'connected' ? (pendingWord || 'Connected') :
+      overallStatus === 'awaiting_match' ? 'Ready' :
+        'Error'
+  // compact: the pill's name says the word and the error count it does not show
+  const pillLabel = queueStats.error > 0
+    ? t('connectionStatus.withErrors', { status: pillWord, count: queueStats.error, defaultValue: '{{status}}, {{count}} sync errors' })
+    : pillWord
 
   return (
     <div className="ov-kit relative" data-connection-menu>
@@ -246,20 +256,21 @@ export default function ConnectionStatus({
           }
           setShowConnectionMenu(!showConnectionMenu)
         }}
-        className={cn(STATUS_PILL, FOCUS_RING, overallTone.pill, currentSize.trigger)}
+        aria-label={compact ? pillLabel : undefined}
+        title={compact ? pillLabel : undefined}
+        className={cn(STATUS_PILL, FOCUS_RING, overallTone.pill, currentSize.trigger, compact && 'px-2')}
       >
         <span className={cn('inline-block shrink-0 rounded-full', currentSize.dot, overallTone.dot)}></span>
-        <span className="inline-flex items-center">
-          {venue ? statusInfo.text :
-            overallStatus === 'connected' ? (pendingWord || 'Connected') :
-              overallStatus === 'awaiting_match' ? 'Ready' :
-                'Error'}
-          {queueStats.error > 0 && (
-            <span className="ml-1 inline-flex min-w-[1.125rem] h-[1.125rem] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold tabular-nums text-white">
-              {queueStats.error}
-            </span>
-          )}
-        </span>
+        {(!compact || queueStats.error > 0) && (
+          <span className="inline-flex items-center">
+            {!compact && pillWord}
+            {queueStats.error > 0 && (
+              <span className={cn('inline-flex min-w-[1.125rem] h-[1.125rem] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold tabular-nums text-white', !compact && 'ml-1')}>
+                {queueStats.error}
+              </span>
+            )}
+          </span>
+        )}
         <ChevronDown size={12} aria-hidden="true" className={cn('opacity-70 transition-transform', showConnectionMenu && 'rotate-180')} />
       </button>
 

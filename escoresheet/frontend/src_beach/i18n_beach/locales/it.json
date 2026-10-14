@@ -1777,6 +1777,8 @@
     }
   },
   "connectionStatus": {
+    "withErrors_one": "{{status}}, {{count}} errore di sincronizzazione",
+    "withErrors_other": "{{status}}, {{count}} errori di sincronizzazione",
     "syncing": "Sincronizzazione",
     "connected": "Connesso",
     "error": "Errore",
@@ -2360,12 +2362,15 @@
   },
   "screenTooSmall": {
     "title": "Per usare questa applicazione serve un tablet o uno schermo più grande (almeno 800×600).",
+    "phoneTitle": "La visualizzazione tablet richiede uno schermo più grande (almeno 800×600).",
     "current": "Attuale: {{width}} × {{height}} px",
     "hint": "Ruota il dispositivo o passa a schermo intero.",
     "enterFullscreen": "Schermo intero",
     "fullscreenNote": "Lo schermo intero nasconde le barre del browser per sfruttare tutto lo spazio.",
     "scoringHint": "La schermata di refertazione richiede almeno 800×600: usa un tablet o un portatile. La partita è salvata su questo dispositivo.",
-    "home": "Torna alla schermata iniziale"
+    "home": "Torna alla schermata iniziale",
+    "phoneHint": "Sul telefono la schermata di punteggio ha una visualizzazione propria.",
+    "usePhone": "Usa la visualizzazione telefono"
   },
   "Home": "Home",
   "tabletStatus": {

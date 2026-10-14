@@ -60,6 +60,8 @@ export function SegmentedControl({ options, value, onChange, ariaLabel: ariaLabe
       onChange(options[next].value);
       refs.current[next]?.focus();
     };
+    // A narrow strip (the coin toss column on a phone) wraps its labels:
+    // nowrap made "Serve or receive" and "Court side" overlap
     return (
       <div role="radiogroup" aria-label={ariaLabel} className={cn('grid gap-1 rounded-xl bg-stone-100 p-1', COLS[options.length] ?? 'grid-flow-col auto-cols-fr', className)}>
         {options.map((o, i) => {
@@ -75,7 +77,7 @@ export function SegmentedControl({ options, value, onChange, ariaLabel: ariaLabe
               title={o.title}
               onClick={() => onChange(o.value)}
               onKeyDown={(e) => onKeyDown(e, i)}
-              className={cn('h-9 rounded-lg px-3 text-xs font-medium whitespace-nowrap transition-colors', FOCUS_RING, on ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-600 hover:bg-stone-200/60', o.icon && 'inline-flex items-center justify-center gap-1.5')}
+              className={cn('min-h-9 min-w-0 rounded-lg px-3 py-1 text-xs font-medium leading-tight transition-colors', FOCUS_RING, on ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-600 hover:bg-stone-200/60', o.icon && 'inline-flex items-center justify-center gap-1.5')}
             >
               {renderIcon(o.icon, 14)}
               {o.label}

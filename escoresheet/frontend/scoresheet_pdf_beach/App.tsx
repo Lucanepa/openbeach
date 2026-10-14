@@ -38,6 +38,8 @@ export default function App({ matchData }: { matchData?: any }) {
   // preview for 2 s that closes under the scorer), without Download / zoom.
   const approvalMode = pageAction() === 'getBlob';
   const [zoom, setZoom] = useState(1);
+  // The sheet's own size (layout px, unscaled): the box around it takes it times the zoom
+  const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
   // The pages stay hidden until the first fit-to-window: no 100 % -> 125 % jump
   const [fitted, setFitted] = useState(false);
   const [savedNotice, setSavedNotice] = useState(false);
@@ -124,6 +126,27 @@ export default function App({ matchData }: { matchData?: any }) {
     setZoom(calculateAutoFitZoom());
     setFitted(true);
   }, [fitted, calculateAutoFitZoom]);
+
+  // The sheet's own size, for its box (none until laid out: then the sheet
+  // is centred as before)
+  useLayoutEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const measure = () => {
+      const w = el.offsetWidth, h = el.offsetHeight;
+      if (w && h) setNatural(n => (n && n.w === w && n.h === h ? n : { w, h }));
+    };
+    measure();
+    // the pages keep growing after the fonts and the data load, with no
+    // window resize: watch the sheet itself
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', measure);
+      return () => window.removeEventListener('resize', measure);
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [fitted, matchData]);
 
   // Auto-fit on mount and resize
   useEffect(() => {
@@ -216,7 +239,8 @@ export default function App({ matchData }: { matchData?: any }) {
 
   const handleZoomOut = () => {
     setIsAutoFit(false);
-    setZoom(prev => Math.max(prev - 0.1, 0.3));
+    // the floor fits a 360 px phone (about 0.28 there)
+    setZoom(prev => Math.max(prev - 0.1, 0.2));
   };
 
   const handlePrevPage = () => {
@@ -399,13 +423,15 @@ export default function App({ matchData }: { matchData?: any }) {
   return (
     <div ref={containerRef} className="scoresheet-app h-screen flex flex-col bg-gray-200 overflow-hidden">
       {/* Toolbar */}
-      <div className="scoresheet-toolbar flex items-center justify-between px-4 py-2 bg-gray-800 text-white">
-        <div className="flex items-center gap-2">
+      {/* The toolbar wraps on a phone, without its title (it ran off the
+          screen at 384 px, emulator audit 2026-10-14) */}
+      <div className="scoresheet-toolbar flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-4 py-2 bg-gray-800 text-white">
+        <div className="hidden items-center gap-2 sm:flex">
           <span className="text-sm font-medium mr-2">Beach Volleyball eScoresheet</span>
         </div>
 
         {!approvalMode && (
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           <button onClick={handlePrevPage} disabled={currentPage <= 1}
             className="px-2 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Previous page">
             ◀
@@ -423,7 +449,7 @@ export default function App({ matchData }: { matchData?: any }) {
             title="Fit to page">
             Fit
           </button>
-          <button onClick={handleZoomOut} disabled={zoom <= 0.3}
+          <button onClick={handleZoomOut} disabled={zoom <= 0.2}
             className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors" title="Zoom out">
             −
           </button>
@@ -449,12 +475,19 @@ export default function App({ matchData }: { matchData?: any }) {
         className="flex-1 overflow-auto p-4"
         style={{ scrollSnapType: 'y mandatory', scrollBehavior: 'smooth' }}
       >
+        {/* A box of the scaled sheet's size, the sheet scaled from its top
+            left inside it: centred when it fits, scrollable from its left
+            edge when not. Scaled about its top centre in a box of its full
+            size, a sheet narrower than that box hung off the right of a
+            phone (emulator audit 2026-10-14). */}
+        <div style={natural ? { width: natural.w * zoom, height: natural.h * zoom, margin: '0 auto' } : undefined}>
         <div
           ref={contentRef}
-          className="scoresheet-content mx-auto"
+          className={natural ? 'scoresheet-content' : 'scoresheet-content mx-auto'}
           style={{
+            width: 'max-content',
             transform: `scale(${zoom})`,
-            transformOrigin: 'top center',
+            transformOrigin: natural ? 'top left' : 'top center',
             transition: fitted ? 'transform 0.2s ease-out' : 'none',
             visibility: fitted ? 'visible' : 'hidden',
             pointerEvents: 'none',
@@ -462,6 +495,7 @@ export default function App({ matchData }: { matchData?: any }) {
           }}
         >
           <OpenbeachScoresheet matchData={matchData} />
+        </div>
         </div>
 
       </div>

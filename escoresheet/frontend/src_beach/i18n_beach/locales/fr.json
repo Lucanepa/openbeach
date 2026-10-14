@@ -1777,6 +1777,8 @@
     }
   },
   "connectionStatus": {
+    "withErrors_one": "{{status}}, {{count}} erreur de synchronisation",
+    "withErrors_other": "{{status}}, {{count}} erreurs de synchronisation",
     "syncing": "Synchronisation",
     "connected": "Connecté",
     "error": "Erreur",
@@ -2360,12 +2362,15 @@
   },
   "screenTooSmall": {
     "title": "Pour utiliser cette application, utilisez une tablette ou un écran plus grand (au moins 800×600).",
+    "phoneTitle": "L'affichage tablette demande un écran plus grand (au moins 800×600).",
     "current": "Actuel : {{width}} × {{height}} px",
     "hint": "Tournez l’appareil ou passez en plein écran.",
     "enterFullscreen": "Plein écran",
     "fullscreenNote": "Le plein écran masque les barres du navigateur pour gagner de la place.",
     "scoringHint": "L'écran de marque demande au moins 800×600 : marquez sur une tablette ou un ordinateur portable. Le match est enregistré sur cet appareil.",
-    "home": "Retour à l'accueil"
+    "home": "Retour à l'accueil",
+    "phoneHint": "Sur un téléphone, l'écran de marque a sa propre présentation.",
+    "usePhone": "Utiliser l'affichage téléphone"
   },
   "Home": "Accueil",
   "tabletStatus": {

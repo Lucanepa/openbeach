@@ -1777,6 +1777,8 @@
     }
   },
   "connectionStatus": {
+    "withErrors_one": "{{status}}, {{count}} Synchronisierungsfehler",
+    "withErrors_other": "{{status}}, {{count}} Synchronisierungsfehler",
     "syncing": "Synchronisiere",
     "connected": "Verbunden",
     "error": "Fehler",
@@ -2360,12 +2362,15 @@
   },
   "screenTooSmall": {
     "title": "Bitte verwenden Sie für diese App ein Tablet oder einen grösseren Bildschirm (mindestens 800×600).",
+    "phoneTitle": "Die Tablet-Ansicht braucht einen grösseren Bildschirm (mindestens 800×600).",
     "current": "Aktuell: {{width}} × {{height}} px",
     "hint": "Drehen Sie das Gerät oder wechseln Sie in den Vollbildmodus.",
     "enterFullscreen": "Vollbild",
     "fullscreenNote": "Im Vollbild verschwinden die Leisten des Browsers, so bleibt mehr Platz.",
     "scoringHint": "Das Schreiben braucht mindestens 800×600: Schreibe auf einem Tablet oder Laptop. Das Spiel ist auf diesem Gerät gespeichert.",
-    "home": "Zurück zur Startseite"
+    "home": "Zurück zur Startseite",
+    "phoneHint": "Auf einem Handy hat der Spielbildschirm eine eigene Ansicht.",
+    "usePhone": "Handy-Ansicht verwenden"
   },
   "Home": "Startseite",
   "tabletStatus": {

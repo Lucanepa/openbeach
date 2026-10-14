@@ -9,6 +9,7 @@ import { Bell, BookOpen, ChevronDown, ChevronUp, ClipboardList, House, Maximize,
 import { isDesktopScoretable, requestDesktopQuit } from '../utils_beach/appLifecycle_beach'
 import { getCloudApiUrl, isRelayOriginPage, isVenueMode } from '../utils_beach/backendConfig_beach'
 import UserButton from './auth/UserButton_beach'
+import { PHONE_MAX_WIDTH } from './scoreboard/phoneLayout_beach'
 import { cn } from '../ui/volleyui/cn.js'
 import { SwitchTrack } from '../ui/volleyui/Switch.jsx'
 import {
@@ -98,6 +99,21 @@ const languages = [
   { code: 'fr', Flag: FlagFR, label: 'FR' }
 ]
 
+// The match info popover is centred on its button. On a phone the button sits
+// between the header's two groups, not in the middle of the screen, so the
+// popover is moved back inside the screen (8 px margin)
+function keepPopoverOnScreen(el) {
+  if (!el) return
+  el.style.left = ''
+  const r = el.getBoundingClientRect()
+  const vw = document.documentElement.clientWidth || window.innerWidth
+  const margin = 8
+  let shift = 0
+  if (r.right > vw - margin) shift = vw - margin - r.right
+  if (r.left + shift < margin) shift = margin - r.left
+  if (shift) el.style.left = `calc(50% + ${Math.round(shift)}px)`
+}
+
 export default function MainHeader({
   connectionStatuses,
   connectionDebugInfo,
@@ -150,6 +166,11 @@ export default function MainHeader({
 
   // Check if compact mode (viewport width <= 960px)
   const isCompactMode = viewportSize.width > 0 && viewportSize.width <= 960
+  // A phone's width (either way up): the bar's controls lose their words and
+  // the match chip joins the row instead of floating over it (emulator audit
+  // 2026-10-14: at 384 px Sign in and Exit ran off the screen; OpenVolley's
+  // header the same, PR openvolley#13)
+  const isPhoneWidth = viewportSize.width > 0 && viewportSize.width < PHONE_MAX_WIDTH
 
   // Effective collapsed state - only collapse when collapsible is true
   const effectivelyCollapsed = collapsible && isCollapsed
@@ -339,6 +360,7 @@ export default function MainHeader({
     return (
       <div
         data-match-info-menu
+        ref={keepPopoverOnScreen}
         onClick={(e) => e.stopPropagation()}
         className={cn('ov-kit absolute left-1/2 top-full mt-1.5 flex min-w-[280px] -translate-x-1/2 flex-col gap-2 text-center', POPOVER_PANEL)}
         style={{ zIndex: 1000 }}
@@ -403,7 +425,8 @@ export default function MainHeader({
 
     const isTest = match?.test
     const matchNumber = match?.gameNumber || match?.game_n || 'N/A'
-    const buttonText = isTest ? t('header.testMatch') : t('header.matchNumber', { number: matchNumber })
+    const fullText = isTest ? t('header.testMatch') : t('header.matchNumber', { number: matchNumber })
+    const buttonText = isPhoneWidth ? (isTest ? t('header.test') : `#${matchNumber}`) : fullText
 
     return (
       <div className="relative flex h-8 w-auto items-center justify-center gap-1.5">
@@ -412,12 +435,16 @@ export default function MainHeader({
             type="button"
             data-match-info-menu
             aria-expanded={matchInfoMenuOpen}
+            aria-label={isPhoneWidth ? fullText : undefined}
             onClick={(e) => {
               e.stopPropagation()
+              // One header popup at a time: on a phone they overlap
+              if (!matchInfoMenuOpen) setActionsMenuOpen(false)
               setMatchInfoMenuOpen(!matchInfoMenuOpen)
             }}
             className={cn(
-              'inline-flex h-7 min-w-[100px] items-center justify-center gap-1 rounded-full border px-3 text-xs font-semibold tabular-nums transition-colors cursor-pointer',
+              'inline-flex h-7 items-center justify-center gap-1 rounded-full border px-3 text-xs font-semibold tabular-nums transition-colors cursor-pointer',
+              !isPhoneWidth && 'min-w-[100px]',
               FOCUS_RING,
               isTest
                 ? 'border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200/70'
@@ -641,9 +668,9 @@ export default function MainHeader({
           maxHeight: effectivelyCollapsed ? '0px' : `${40 * scaleFactor}px`,
           justifyContent: 'space-between',
           alignItems: 'center',
-          padding: effectivelyCollapsed ? '0' : `0 ${Math.round(12 * scaleFactor)}px`,
+          padding: effectivelyCollapsed ? '0' : `0 ${Math.round((isPhoneWidth ? 8 : 12) * scaleFactor)}px`,
           flexShrink: 0,
-          gap: `${Math.round(10 * scaleFactor)}px`,
+          gap: `${Math.round((isPhoneWidth ? 6 : 10) * scaleFactor)}px`,
           overflow: effectivelyCollapsed ? 'hidden' : 'visible',
           transition: headerTransition,
           fontSize: `${Math.round(14 * scaleFactor)}px`
@@ -658,9 +685,9 @@ export default function MainHeader({
               aria-checked={!offlineMode}
               onClick={() => setOfflineMode(!offlineMode)}
               title={offlineMode ? t('header.switchToOnline') : t('header.switchToOffline')}
-              className={HEADER_SWITCH}
+              className={cn(HEADER_SWITCH, isPhoneWidth && 'pl-1.5')}
             >
-              <span>{offlineMode ? t('header.offline') : t('header.online')}</span>
+              <span className={isPhoneWidth ? 'sr-only' : undefined}>{offlineMode ? t('header.offline') : t('header.online')}</span>
               {/* Switch track: emerald when online (no brand red on a state) */}
               <SwitchTrack checked={!offlineMode} className={!offlineMode ? 'bg-emerald-500' : undefined} />
             </button>
@@ -676,6 +703,7 @@ export default function MainHeader({
               onRetryErrors={onRetryErrors}
               position="left"
               size="normal"
+              compact={isPhoneWidth}
             />
           )}
 
@@ -824,7 +852,14 @@ export default function MainHeader({
         {/* Center: Collapsible Match Info Menu - Absolutely positioned for true centering */}
         {/* Only show when match has a gamePin set OR is a test match */}
         {!effectivelyCollapsed && (((showMatchSetup || matchId) && currentMatch && (currentMatch.gamePin || currentMatch.test)) || (!matchId && matchStatus && (currentOfficialMatch || currentTestMatch) && ((currentOfficialMatch || currentTestMatch)?.gamePin || (currentOfficialMatch || currentTestMatch)?.test))) ? (
-          <div style={{
+          <div style={isPhoneWidth ? {
+            // In the row, between the two groups: centred over the bar it
+            // covered the connection status on a phone
+            position: 'relative',
+            flex: '0 1 auto',
+            minWidth: 0,
+            zIndex: 101
+          } : {
             position: 'absolute',
             left: '50%',
             top: '50%',
@@ -843,7 +878,7 @@ export default function MainHeader({
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 'clamp(8px, 1.5vw, 12px)',
+          gap: isPhoneWidth ? '6px' : 'clamp(8px, 1.5vw, 12px)',
           flex: '0 0 auto',
           alignSelf: 'stretch',
           position: 'relative'
@@ -852,7 +887,7 @@ export default function MainHeader({
               the cloud is there (not offline, not a venue relay's page) */}
           {!offlineMode && !isRelayOriginPage() && getCloudApiUrl('/api/auth/sign-in') && (
             <span className={KIT_SCOPE}>
-              <UserButton buttonClass={cn(HEADER_BTN, 'min-w-9')} />
+              <UserButton buttonClass={cn(HEADER_BTN, 'min-w-9')} compact={isPhoneWidth} />
             </span>
           )}
 
@@ -865,12 +900,21 @@ export default function MainHeader({
                   aria-expanded={actionsMenuOpen}
                   onClick={(e) => {
                     e.stopPropagation()
+                    if (!actionsMenuOpen) setMatchInfoMenuOpen?.(false)
                     setActionsMenuOpen(!actionsMenuOpen)
                   }}
-                  className={cn(HEADER_BTN, actionsMenuOpen && HEADER_BTN_ON)}
+                  className={cn(HEADER_BTN, isPhoneWidth && 'w-9 px-0', actionsMenuOpen && HEADER_BTN_ON)}
+                  aria-label={isPhoneWidth ? t('header.menu', 'Menu') : undefined}
+                  title={isPhoneWidth ? t('header.menu', 'Menu') : undefined}
                 >
-                  <span>{isFullscreen ? t('header.exit') : t('header.fullscreen')}</span>
-                  <ChevronDown size={13} aria-hidden="true" className={cn('transition-transform', actionsMenuOpen && 'rotate-180')} />
+                  {isPhoneWidth ? (
+                    actionsMenuOpen ? <X size={16} aria-hidden="true" /> : <Menu size={16} aria-hidden="true" />
+                  ) : (
+                    <>
+                      <span>{isFullscreen ? t('header.exit') : t('header.fullscreen')}</span>
+                      <ChevronDown size={13} aria-hidden="true" className={cn('transition-transform', actionsMenuOpen && 'rotate-180')} />
+                    </>
+                  )}
                 </button>
               </span>
 

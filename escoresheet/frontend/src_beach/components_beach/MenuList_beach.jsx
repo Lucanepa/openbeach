@@ -3,6 +3,10 @@ import { ChevronDown } from 'lucide-react'
 import { MENU_PANEL, MENU_ROW, MENU_SEP, MENU_ICON, MENU_TITLE, MENU_SECTION } from './chromeClasses_beach'
 import { cn } from '../ui/volleyui/cn.js'
 
+// 200 px wide at least, but never wider than the screen minus its 8 px
+// margins (a narrow phone or a zoomed page): the labels wrap instead
+const MENU_WIDTH = { minWidth: 'min(200px, calc(100vw - 16px))', maxWidth: 'calc(100vw - 16px)' }
+
 /**
  * A toolbar dropdown. `items`: rows ({ key, icon, label, onClick, className,
  * style }), { separator: true }, or { header: 'Title' } (a group label, not a
@@ -66,6 +70,21 @@ export default function MenuList({
             menu.style.transform = 'translateX(-50%)'
           }
 
+          // Kept on the screen: on a phone the match end's Scoresheet button
+          // sits at the left edge and its right-aligned menu ran off the left
+          // (emulator audit 2026-10-14)
+          const margin = 8
+          const r = menu.getBoundingClientRect()
+          if (r.left < margin) {
+            menu.style.left = `${margin}px`
+            menu.style.right = 'auto'
+            menu.style.transform = 'none'
+          } else if (r.right > window.innerWidth - margin) {
+            menu.style.right = `${margin}px`
+            menu.style.left = 'auto'
+            menu.style.transform = 'none'
+          }
+
           // Vertical positioning
           if (vertical === 'top') {
             menu.style.bottom = `${window.innerHeight - buttonRect.top + 4}px`
@@ -121,7 +140,8 @@ export default function MenuList({
             ref={menuRef}
             role="menu"
             onClick={(e) => e.stopPropagation()}
-            className={cn(MENU_PANEL, 'fixed z-[1000] min-w-[200px]')}
+            className={cn(MENU_PANEL, 'fixed z-[1000]')}
+            style={MENU_WIDTH}
           >
             {menuTitle && <div className={cn(MENU_TITLE, 'px-3 pb-2 pt-1')}>{menuTitle}</div>}
             {items.map((item, index) => {
@@ -199,7 +219,7 @@ export default function MenuList({
             borderRadius: '6px',
             padding: '8px',
             width: 'auto',
-            minWidth: '200px',
+            ...MENU_WIDTH,
             zIndex: 1000,
             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
           }}

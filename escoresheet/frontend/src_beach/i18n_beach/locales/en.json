@@ -1778,6 +1778,8 @@
     }
   },
   "connectionStatus": {
+    "withErrors_one": "{{status}}, {{count}} sync error",
+    "withErrors_other": "{{status}}, {{count}} sync errors",
     "syncing": "Syncing",
     "connected": "Connected",
     "error": "Error",
@@ -2361,12 +2363,15 @@
   },
   "screenTooSmall": {
     "title": "To use this application, please use a tablet or larger screen (minimum 800×600).",
+    "phoneTitle": "The tablet layout needs a larger screen (minimum 800×600).",
     "current": "Current: {{width}} × {{height}} px",
     "hint": "Try rotating your device or entering fullscreen mode.",
     "enterFullscreen": "Enter fullscreen",
     "fullscreenNote": "Fullscreen removes the browser bars to make the most of the screen.",
     "scoringHint": "The scoring screen needs at least 800×600: score on a tablet or a laptop. The match is saved on this device.",
-    "home": "Back to the home screen"
+    "home": "Back to the home screen",
+    "phoneHint": "On a phone, the scoring screen has a layout of its own.",
+    "usePhone": "Use the phone layout"
   },
   "Home": "Home",
   "tabletStatus": {
