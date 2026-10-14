@@ -1,0 +1,4 @@
+OpenBeach 2.0.7
+- Phone: OpenBeach works on a phone without fullscreen; only the scoring screen asks for the phone layout.
+- Phone: the header, the coin toss choices, the Scoresheet menu and the scoresheet preview fit the screen.
+- The keyboard no longer hides Save and Cancel.
