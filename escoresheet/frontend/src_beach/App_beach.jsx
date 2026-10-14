@@ -45,7 +45,7 @@ import { useSystemBarsHidden } from './utils_beach/nativeSystemBars_beach'
 import { cloudStatusFor } from './utils_beach/cloudStatus_beach'
 import { isCapacitorApp, installAppLifecycle, liveOf, setLiveMatch } from './utils_beach/appLifecycle_beach'
 import DesktopUpdateNotice from './components_beach/DesktopUpdateNotice_beach'
-import { smallScreenGate } from './utils_beach/screenGate_beach'
+import { smallScreenGate, turningSidewaysHelps } from './utils_beach/screenGate_beach'
 import { detectDisplayMode, isPhoneScreen, normaliseDisplayMode, phoneLayoutKept, readStoredDisplayMode } from './components_beach/scoreboard/phoneLayout_beach'
 import RestorePreviewModal from './components_beach/RestorePreviewModal_beach'
 import { scorerRelay, scorerPublisher, scorerRelayUrl, readRelayBundle, relayMatchKey, generateGamePin } from './utils_beach/relayPublisher_beach'
@@ -2184,8 +2184,8 @@ export default function App() {
             <p className="mt-3 text-sm text-stone-600">
               {gateOffersPhoneLayout
                 ? t('screenTooSmall.phoneHint', 'On a phone, the scoring screen has a layout of its own.')
-                // upright (an open foldable, 691×756): it fits sideways
-                : viewportSize.height > viewportSize.width
+                // upright where it fits sideways (an open foldable, 691×756)
+                : turningSidewaysHelps(viewportSize)
                   ? t('screenTooSmall.rotateHint', 'Turn the device sideways: the scoring screen needs at least 800×600. The match is saved on this device.')
                   : t('screenTooSmall.scoringHint', 'The scoring screen needs at least 800×600: score on a tablet or a laptop. The match is saved on this device.')}
             </p>
