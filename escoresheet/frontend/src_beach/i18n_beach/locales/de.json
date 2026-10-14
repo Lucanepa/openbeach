@@ -2362,6 +2362,7 @@
   },
   "screenTooSmall": {
     "title": "Bitte verwenden Sie für diese App ein Tablet oder einen grösseren Bildschirm (mindestens 800×600).",
+    "phoneTitle": "Die Tablet-Ansicht braucht einen grösseren Bildschirm (mindestens 800×600).",
     "current": "Aktuell: {{width}} × {{height}} px",
     "hint": "Drehen Sie das Gerät oder wechseln Sie in den Vollbildmodus.",
     "enterFullscreen": "Vollbild",

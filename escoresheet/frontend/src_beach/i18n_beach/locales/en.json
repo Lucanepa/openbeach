@@ -2363,6 +2363,7 @@
   },
   "screenTooSmall": {
     "title": "To use this application, please use a tablet or larger screen (minimum 800×600).",
+    "phoneTitle": "The tablet layout needs a larger screen (minimum 800×600).",
     "current": "Current: {{width}} × {{height}} px",
     "hint": "Try rotating your device or entering fullscreen mode.",
     "enterFullscreen": "Enter fullscreen",

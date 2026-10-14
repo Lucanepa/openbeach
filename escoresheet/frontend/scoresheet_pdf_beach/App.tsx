@@ -137,8 +137,15 @@ export default function App({ matchData }: { matchData?: any }) {
       if (w && h) setNatural(n => (n && n.w === w && n.h === h ? n : { w, h }));
     };
     measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    // the pages keep growing after the fonts and the data load, with no
+    // window resize: watch the sheet itself
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', measure);
+      return () => window.removeEventListener('resize', measure);
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [fitted, matchData]);
 
   // Auto-fit on mount and resize

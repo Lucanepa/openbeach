@@ -34,19 +34,17 @@ Object.defineProperty(window, 'matchMedia', {
   })),
 })
 
-// Mock ResizeObserver
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}))
-
-// Mock IntersectionObserver
-global.IntersectionObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}))
+// Mock ResizeObserver and IntersectionObserver: classes, so `new` works
+// (a vi.fn with an arrow implementation is not a constructor in Vitest 4+)
+class ObserverMock {
+  constructor() {
+    this.observe = vi.fn()
+    this.unobserve = vi.fn()
+    this.disconnect = vi.fn()
+  }
+}
+global.ResizeObserver = class ResizeObserver extends ObserverMock {}
+global.IntersectionObserver = class IntersectionObserver extends ObserverMock {}
 
 // Mock scrollTo
 window.scrollTo = vi.fn()

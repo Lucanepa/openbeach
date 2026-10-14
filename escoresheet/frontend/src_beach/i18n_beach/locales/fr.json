@@ -2362,6 +2362,7 @@
   },
   "screenTooSmall": {
     "title": "Pour utiliser cette application, utilisez une tablette ou un écran plus grand (au moins 800×600).",
+    "phoneTitle": "L'affichage tablette demande un écran plus grand (au moins 800×600).",
     "current": "Actuel : {{width}} × {{height}} px",
     "hint": "Tournez l’appareil ou passez en plein écran.",
     "enterFullscreen": "Plein écran",
