@@ -117,6 +117,14 @@ The same as OpenVolley's app:
 - **Keyboard.** The WebView is never resized by the keyboard (the app's
   "use a larger screen" notice would replace the form); it slides up just
   enough to show the focused field (`MainActivity.java`).
+- **No bars while scoring on a tablet.** The scoring screen hides the status
+  and navigation bars on a tablet (not on a phone; plugin `OpenBeachBars`,
+  `ScoringBarsPlugin.java`, `nativeSystemBars_beach.js`). An 8" tablet held
+  sideways (1280×800 at 213 dpi: Lenovo Tab M8, Galaxy Tab A9) leaves the page
+  962×539 between them, under the scoring screen's 600 px minimum height;
+  without them it is 962×601. A swipe from the screen's edge shows the bars
+  over the page for a few seconds; the page keeps its size. Leaving the
+  scoring screen shows them again.
 
 ## Known limits (2.0.0)
 
