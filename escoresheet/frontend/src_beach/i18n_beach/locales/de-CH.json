@@ -1777,6 +1777,8 @@
     }
   },
   "connectionStatus": {
+    "withErrors_one": "{{status}}, {{count}} Synchronisierigs-Fähler",
+    "withErrors_other": "{{status}}, {{count}} Synchronisierigs-Fähler",
     "syncing": "Synchronisiere",
     "connected": "Verbunde",
     "error": "Fähler",
@@ -2365,7 +2367,9 @@
     "enterFullscreen": "Vollbild",
     "fullscreenNote": "Im Vollbild verschwinded d Leischte vom Browser, so bliibt meh Platz.",
     "scoringHint": "Das Schreiben braucht mindestens 800×600: Schreibe auf einem Tablet oder Laptop. Das Spiel ist auf diesem Gerät gespeichert.",
-    "home": "Zurück zur Startseite"
+    "home": "Zurück zur Startseite",
+    "phoneHint": "Uf em Handy hät de Spielbildschirm en eigeni Aasicht.",
+    "usePhone": "Handy-Aasicht bruuche"
   },
   "Home": "Startsiite",
   "tabletStatus": {

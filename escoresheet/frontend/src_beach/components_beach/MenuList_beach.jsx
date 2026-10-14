@@ -66,6 +66,21 @@ export default function MenuList({
             menu.style.transform = 'translateX(-50%)'
           }
 
+          // Kept on the screen: on a phone the match end's Scoresheet button
+          // sits at the left edge and its right-aligned menu ran off the left
+          // (emulator audit 2026-10-14)
+          const margin = 8
+          const r = menu.getBoundingClientRect()
+          if (r.left < margin) {
+            menu.style.left = `${margin}px`
+            menu.style.right = 'auto'
+            menu.style.transform = 'none'
+          } else if (r.right > window.innerWidth - margin) {
+            menu.style.right = `${margin}px`
+            menu.style.left = 'auto'
+            menu.style.transform = 'none'
+          }
+
           // Vertical positioning
           if (vertical === 'top') {
             menu.style.bottom = `${window.innerHeight - buttonRect.top + 4}px`

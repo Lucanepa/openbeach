@@ -21,9 +21,10 @@ export function accountInitials(profile, email) {
  * which opens the account dialog (sign out, invite code, delete). Rendered
  * only where the cloud is reachable at all (not in offline mode, not on a
  * venue relay's page): MainHeader_beach decides.
- * @param {{ buttonClass: string }} props  the header's button face
+ * @param {{ buttonClass: string, compact?: boolean }} props  the header's
+ *   button face; compact (a phone's header): the sign-in icon without its word
  */
-export default function UserButton({ buttonClass }) {
+export default function UserButton({ buttonClass, compact = false }) {
   const { t } = useTranslation()
   // Outside an AuthProvider (isolated renders) there is no account: no button
   // (useAuth throws without a provider; it is still called on every render)
@@ -41,11 +42,13 @@ export default function UserButton({ buttonClass }) {
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); setShowLogin(true) }}
-          className={buttonClass}
+          className={cn(buttonClass, compact && 'w-9 px-0')}
+          aria-label={compact ? t('account.signIn', 'Sign in') : undefined}
+          title={compact ? t('account.signIn', 'Sign in') : undefined}
           data-testid="header-sign-in"
         >
           <LogIn size={14} aria-hidden="true" />
-          <span>{t('account.signIn', 'Sign in')}</span>
+          {!compact && <span>{t('account.signIn', 'Sign in')}</span>}
         </button>
         <LoginModal open={showLogin} onClose={() => setShowLogin(false)} />
       </>
