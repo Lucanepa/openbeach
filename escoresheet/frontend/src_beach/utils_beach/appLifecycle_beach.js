@@ -5,8 +5,10 @@
  * Desktop app (Tauri, OpenVolley's shell built as the beach flavour): the
  * window's close button hides the app to the tray, so it keeps serving the
  * tablets (src-tauri/src/lifecycle.rs). The app sends `ov-app-lifecycle`
- * events: `close-requested` (the first close of a run: say "OpenBeach keeps
- * running in the tray", then hide) and `quit-requested` (the tray's
+ * events: `close-requested` (every close: take it, `app_close_ack`, and ask
+ * "Keep OpenBeach running in the tray?" with Hide window, Quit completely
+ * and Keep open; Quit completely quits without a second question unless
+ * there is something to warn about) and `quit-requested` (the tray's
  * "Quit OpenBeach…": take it with `app_quit_ack`, ask, then quit). The page
  * reports its handler, the tray texts, the texts of the app's own native quit
  * question and whether a match is live (`app_page_state`), and says when its
@@ -147,20 +149,24 @@ export function quitQuestion({ live: liveNow = 'none', wifi = false, bluetooth =
   }
 }
 
-/** The first close of the desktop window: it keeps running (tray, or minimised). */
+/** Closing the desktop window: keep it running (tray, or minimised), or quit
+ *  completely (the dialog answers true: hide, 'alt': quit). */
 export function closeNotice({ tray = true } = {}) {
+  const quit = { altLabel: t('appLifecycle.closeNoticeQuit', 'Quit completely'), altTone: 'danger' }
   return tray
     ? {
-        title: t('appLifecycle.closeNoticeTitle', 'OpenBeach keeps running in the tray'),
-        message: t('appLifecycle.closeNoticeBody', 'So tablets stay connected. Open it again from the OpenBeach icon in the tray. To quit, choose "Quit OpenBeach…" in its menu.'),
+        title: t('appLifecycle.closeNoticeTitle', 'Keep OpenBeach running in the tray?'),
+        message: t('appLifecycle.closeNoticeBody', 'Tablets stay connected while it runs. Open it again from the OpenBeach icon in the tray.'),
         confirmLabel: t('appLifecycle.closeNoticeHide', 'Hide window'),
-        cancelLabel: t('appLifecycle.closeNoticeKeep', 'Keep open')
+        cancelLabel: t('appLifecycle.closeNoticeKeep', 'Keep open'),
+        ...quit
       }
     : {
-        title: t('appLifecycle.closeNoticeTitleNoTray', 'OpenBeach keeps running'),
-        message: t('appLifecycle.closeNoticeBodyNoTray', 'So tablets stay connected, the window is minimised. To quit, choose "Quit OpenBeach…" in the menu at the top right.'),
+        title: t('appLifecycle.closeNoticeTitleNoTray', 'Keep OpenBeach running?'),
+        message: t('appLifecycle.closeNoticeBodyNoTray', 'Tablets stay connected while it runs: the window is minimised.'),
         confirmLabel: t('appLifecycle.closeNoticeMinimise', 'Minimise window'),
-        cancelLabel: t('appLifecycle.closeNoticeKeep', 'Keep open')
+        cancelLabel: t('appLifecycle.closeNoticeKeep', 'Keep open'),
+        ...quit
       }
 }
 
@@ -313,10 +319,14 @@ const defaultCanAsk = (ask) => (ask === confirmDialog ? hasConfirmHost() : true)
 
 /**
  * Ask "Quit OpenBeach?" and quit on confirm. The header menu's
- * "Quit OpenBeach…" and the tray's (through `quit-requested`) both end here.
+ * "Quit OpenBeach…", the tray's (through `quit-requested`) and the close
+ * question's Quit completely (`fromClose`) all end here. `fromClose`: the
+ * scorer chose to quit already, so the question comes only when it has more
+ * to say than the close question did (a live match, the laptop's network for
+ * the tablets, other app windows, a PDF still saving).
  * @returns {Promise<boolean>} true when the app is quitting
  */
-export async function requestDesktopQuit(win = desktopWin || window, ask = confirmDialog, { canAsk = defaultCanAsk } = {}) {
+export async function requestDesktopQuit(win = desktopWin || window, ask = confirmDialog, { canAsk = defaultCanAsk, fromClose = false } = {}) {
   const invoke = tauriInvoke(win)
   if (!invoke) return false
   // No dialog host (the page crashed into its error screen): do not take the
@@ -331,8 +341,10 @@ export async function requestDesktopQuit(win = desktopWin || window, ask = confi
   let quitting = false
   try {
     const [nets, windows] = await Promise.all([laptopNetworks(invoke), appWindows(invoke)])
+    const pdfBusy = pdfBusyNow()
+    const nothingMore = fromClose && live === 'none' && !nets.wifi && !nets.bluetooth && windows.length === 0 && !pdfBusy
     // ONE question for every app window: the quit closes the scoresheets too
-    if (!(await ask(quitQuestion({ live, ...nets, windows, pdfBusy: pdfBusyNow() })))) return false
+    if (!nothingMore && (await ask(quitQuestion({ live, ...nets, windows, pdfBusy }))) !== true) return false
     quitting = true
     // The activity log's last line, written before the app goes
     emitActivity('app.quit', {})
@@ -353,16 +365,29 @@ export async function requestDesktopQuit(win = desktopWin || window, ask = confi
 
 async function showCloseNotice(win, ask) {
   const invoke = tauriInvoke(win)
-  if (!invoke || quitAsking || noticeAbort) return
+  if (!invoke) return
+  // Taken (a question is on screen): without it the app hides on the next
+  // close without asking, so a stuck page never keeps the window
+  Promise.resolve(invoke('app_close_ack')).catch((e) => console.warn('[app] app_close_ack failed', e))
+  if (quitAsking || noticeAbort) return
   const controller = new AbortController()
   noticeAbort = controller
+  let answer = false
   try {
-    const hide = await ask({ ...closeNotice({ tray }), signal: controller.signal })
-    if (hide && !controller.signal.aborted) await invoke('app_hide')
+    // true: Hide window, 'alt': Quit completely, false: Keep open
+    answer = await ask({ ...closeNotice({ tray }), signal: controller.signal })
   } catch (e) {
-    console.error('[app] hide failed', e)
+    console.error('[app] close question failed', e)
   } finally {
     if (noticeAbort === controller) noticeAbort = null
+  }
+  // taken away for the quit question (the tray's Quit meanwhile)
+  if (controller.signal.aborted) return
+  try {
+    if (answer === true) await invoke('app_hide')
+    else if (answer === 'alt') await requestDesktopQuit(win, ask, { fromClose: true })
+  } catch (e) {
+    console.error('[app] hide failed', e)
   }
 }
 

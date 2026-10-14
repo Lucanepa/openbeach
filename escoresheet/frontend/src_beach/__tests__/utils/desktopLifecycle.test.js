@@ -133,9 +133,9 @@ describe('questions, in OpenBeach\'s name', () => {
     })
   })
 
-  it('close notice: tray or minimised', () => {
-    expect(closeNotice({ tray: true })).toMatchObject({ title: 'OpenBeach keeps running in the tray', confirmLabel: 'Hide window' })
-    expect(closeNotice({ tray: false })).toMatchObject({ title: 'OpenBeach keeps running', confirmLabel: 'Minimise window' })
+  it('close question: tray or minimised, or quit completely', () => {
+    expect(closeNotice({ tray: true })).toMatchObject({ title: 'Keep OpenBeach running in the tray?', confirmLabel: 'Hide window', altLabel: 'Quit completely', cancelLabel: 'Keep open' })
+    expect(closeNotice({ tray: false })).toMatchObject({ title: 'Keep OpenBeach running?', confirmLabel: 'Minimise window', altLabel: 'Quit completely' })
   })
 })
 
@@ -203,15 +203,54 @@ describe('desktop app', () => {
     expect(invoke).toHaveBeenLastCalledWith('app_page_state', expect.objectContaining({ labels: expect.objectContaining({ show: 'OpenBeach anzeigen' }) }))
   })
 
-  it('the first close shows the notice, then hides to the tray', async () => {
+  it('every close is taken and asks; Hide window hides to the tray', async () => {
     const { win, invoke } = desktopWin()
     const ask = vi.fn().mockResolvedValue(true)
     uninstall = installAppLifecycle({ win, ask })
     await flush()
+    for (let i = 0; i < 2; i++) {
+      fire(win, 'close-requested')
+      await flush()
+    }
+    expect(ask).toHaveBeenCalledTimes(2)
+    expect(ask).toHaveBeenCalledWith(expect.objectContaining({ title: 'Keep OpenBeach running in the tray?' }))
+    expect(invoke.mock.calls.filter(([cmd]) => cmd === 'app_close_ack')).toHaveLength(2)
+    expect(invoke.mock.calls.filter(([cmd]) => cmd === 'app_hide')).toHaveLength(2)
+  })
+
+  it('Keep open neither hides nor quits', async () => {
+    const { win, invoke } = desktopWin()
+    const ask = vi.fn().mockResolvedValue(false)
+    uninstall = installAppLifecycle({ win, ask })
+    await flush()
     fire(win, 'close-requested')
     await flush()
-    expect(ask).toHaveBeenCalledWith(expect.objectContaining({ title: 'OpenBeach keeps running in the tray' }))
-    expect(invoke).toHaveBeenCalledWith('app_hide')
+    expect(invoke).not.toHaveBeenCalledWith('app_hide')
+    expect(invoke).not.toHaveBeenCalledWith('app_quit')
+  })
+
+  it('Quit completely quits at once when there is nothing more to say', async () => {
+    const { win, invoke } = desktopWin()
+    const ask = vi.fn().mockResolvedValueOnce('alt').mockResolvedValue(false)
+    uninstall = installAppLifecycle({ win, ask })
+    await flush()
+    fire(win, 'close-requested')
+    await flush(); await flush(); await flush()
+    expect(ask).toHaveBeenCalledTimes(1)
+    expect(invoke).toHaveBeenCalledWith('app_quit')
+    expect(invoke).not.toHaveBeenCalledWith('app_hide')
+  })
+
+  it('Quit completely during a match still asks the quit question', async () => {
+    const { win, invoke } = desktopWin()
+    const ask = vi.fn().mockResolvedValueOnce('alt').mockResolvedValue(false)
+    uninstall = installAppLifecycle({ win, ask })
+    setLiveMatch('official')
+    await flush()
+    fire(win, 'close-requested')
+    await flush(); await flush(); await flush()
+    expect(ask).toHaveBeenLastCalledWith(expect.objectContaining({ title: 'Quit OpenBeach during the match?' }))
+    expect(invoke).not.toHaveBeenCalledWith('app_quit')
   })
 
   it('quit from the tray is taken (app_quit_ack), asks; cancel keeps running, confirm quits', async () => {
@@ -301,7 +340,7 @@ describe('desktop app', () => {
     uninstall = installAppLifecycle({ win, ask: confirmDialog })
     fire(win, 'close-requested')
     await flush()
-    expect(getConfirmSnapshot()).toMatchObject({ title: 'OpenBeach keeps running in the tray' })
+    expect(getConfirmSnapshot()).toMatchObject({ title: 'Keep OpenBeach running in the tray?', altLabel: 'Quit completely' })
     const quitting = requestDesktopQuit(win, confirmDialog, { canAsk: () => true })
     await flush(); await flush()
     expect(getConfirmSnapshot()).toMatchObject({ title: 'Quit OpenBeach?' })
