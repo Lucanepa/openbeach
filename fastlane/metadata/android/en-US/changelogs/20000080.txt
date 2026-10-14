@@ -1,0 +1,4 @@
+OpenBeach 2.0.8
+- 8" tablets held sideways can score: the scoring screen hides Android's status and navigation bars (swipe from the edge to show them).
+- The size notice offers fullscreen in a browser and tells an open foldable to turn sideways.
+- The header's match chip no longer covers the alarm bell.
