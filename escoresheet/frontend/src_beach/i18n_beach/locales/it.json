@@ -2368,6 +2368,7 @@
     "enterFullscreen": "Schermo intero",
     "fullscreenNote": "Lo schermo intero nasconde le barre del browser per sfruttare tutto lo spazio.",
     "scoringHint": "La schermata di refertazione richiede almeno 800×600: usa un tablet o un portatile. La partita è salvata su questo dispositivo.",
+    "rotateHint": "Ruota il dispositivo in orizzontale: la schermata di refertazione richiede almeno 800×600. La partita è salvata su questo dispositivo.",
     "home": "Torna alla schermata iniziale",
     "phoneHint": "Sul telefono la schermata di punteggio ha una visualizzazione propria.",
     "usePhone": "Usa la visualizzazione telefono"

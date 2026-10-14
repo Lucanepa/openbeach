@@ -8,7 +8,9 @@ import android.webkit.WebView;
 import androidx.activity.OnBackPressedCallback;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -30,10 +32,18 @@ public class MainActivity extends BridgeActivity {
         "(function(){try{return !!(window.__obAndroidBack&&window.__obAndroidBack());}" +
         "catch(e){return false;}})()";
 
+    // The scoring screen on a tablet asked for the status and navigation bars
+    // to be hidden (setSystemBarsHidden)
+    private boolean systemBarsHidden = false;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         // window.Capacitor plugin "OpenBeachApp": exitApp() after the page asked
         registerPlugin(AppExitPlugin.class);
+        // window.Capacitor plugin "OpenBeachBars": no status and navigation
+        // bars on the scoring screen of a tablet
+        // (src_beach/utils_beach/nativeSystemBars_beach.js)
+        registerPlugin(ScoringBarsPlugin.class);
         super.onCreate(savedInstanceState);
         keepWebViewInsideSystemBars();
         handleBackButton();
@@ -87,8 +97,12 @@ public class MainActivity extends BridgeActivity {
     private void keepWebViewInsideSystemBars() {
         View container = (View) getBridge().getWebView().getParent();
         ViewCompat.setOnApplyWindowInsetsListener(container, (v, windowInsets) -> {
+            // Bars hidden for the scoring screen: the page keeps the full
+            // screen even when Android shows one anyway (a swipe shows them
+            // over the page; a shorter page would bring the size notice back)
             Insets bars = windowInsets.getInsets(
-                WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout()
+                (systemBarsHidden ? 0 : WindowInsetsCompat.Type.systemBars())
+                    | WindowInsetsCompat.Type.displayCutout()
             );
             ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) v.getLayoutParams();
             if (lp.leftMargin != bars.left || lp.topMargin != bars.top
@@ -102,6 +116,41 @@ public class MainActivity extends BridgeActivity {
             return WindowInsetsCompat.CONSUMED;
         });
         ViewCompat.requestApplyInsets(container);
+    }
+
+    /**
+     * The scoring screen on a tablet hides the status and navigation bars
+     * (ScoringBarsPlugin; src_beach/utils_beach/nativeSystemBars_beach.js).
+     * An 8" tablet held sideways (1280x800 at 213 dpi: Lenovo Tab M8, Galaxy
+     * Tab A9) leaves the page 962x539 between them, under the scoring
+     * screen's 600 px minimum height, so the web app showed its "use a larger
+     * screen" notice. Without the bars the page is 962x601. A swipe from the
+     * screen's edge shows them over the page for a few seconds; the page
+     * keeps its size.
+     */
+    void setSystemBarsHidden(boolean hidden) {
+        systemBarsHidden = hidden;
+        WindowInsetsControllerCompat controller =
+            WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        if (hidden) {
+            controller.setSystemBarsBehavior(
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            controller.hide(WindowInsetsCompat.Type.systemBars());
+        } else {
+            controller.show(WindowInsetsCompat.Type.systemBars());
+        }
+        ViewCompat.requestApplyInsets((View) getBridge().getWebView().getParent());
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        // Back from the notification shade, a system dialog or another app:
+        // Android may have shown the bars again
+        if (hasFocus && systemBarsHidden) {
+            WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView())
+                .hide(WindowInsetsCompat.Type.systemBars());
+        }
     }
 
     private void panFocusedFieldAboveKeyboard(View container, int imeBottom) {

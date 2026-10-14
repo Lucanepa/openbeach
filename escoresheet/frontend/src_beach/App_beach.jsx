@@ -40,7 +40,8 @@ import {
 import { apiFrom } from './lib_beach/apiClient_beach'
 import { setExtId } from './utils_beach/syncIds_beach'
 import { wipeMatchEvents } from './db_beach/eventHistory_beach'
-import { isBackendAvailable, getBackendUrl, isServedFromLocalServer, getLocalServerStatusUrl, rememberRelayWsPort, isCloudOffline, setCloudOffline, isLanBackendUrl, isRelayOriginPage } from './utils_beach/backendConfig_beach'
+import { isBackendAvailable, getBackendUrl, isServedFromLocalServer, getLocalServerStatusUrl, rememberRelayWsPort, isCloudOffline, setCloudOffline, isLanBackendUrl, isRelayOriginPage, isNativeApp } from './utils_beach/backendConfig_beach'
+import { useSystemBarsHidden } from './utils_beach/nativeSystemBars_beach'
 import { cloudStatusFor } from './utils_beach/cloudStatus_beach'
 import { isCapacitorApp, installAppLifecycle, liveOf, setLiveMatch } from './utils_beach/appLifecycle_beach'
 import DesktopUpdateNotice from './components_beach/DesktopUpdateNotice_beach'
@@ -56,7 +57,7 @@ import { fetchMatchByPin, importMatchFromSupabase, restoreMatchFromJson, selectB
 import UpdateBanner from './components_beach/UpdateBanner_beach'
 import CompetitionMatchPicker from './components_beach/CompetitionMatchPicker_beach'
 import { COMPETITIONS_ENABLED } from './utils_beach/features_beach'
-import { FileUp, House, Search, Smartphone } from 'lucide-react'
+import { FileUp, House, Maximize, Search, Smartphone } from 'lucide-react'
 import { Modal as KitModal, modalCancelClass, modalDangerClass } from './ui/volleyui/Modal.jsx'
 import { Button } from './ui/volleyui/Button.jsx'
 import { cn } from './ui/volleyui/cn.js'
@@ -2116,6 +2117,15 @@ export default function App() {
   // A phone with Screen mode Tablet or Desktop: the gate offers the phone layout
   const storedDisplayMode = readStoredDisplayMode()
   const gateOffersPhoneLayout = isPhoneScreen() && storedDisplayMode !== 'auto' && storedDisplayMode !== 'phone'
+  // The Android app on a tablet hides the status and navigation bars on the
+  // scoring screen: an 8" tablet held sideways only gets past the gate
+  // without them (nativeSystemBars_beach; a no-op in a browser). The gate
+  // waits while they go.
+  const systemBarsGoing = useSystemBarsHidden(onScoringScreen && !phoneScoringShown && !isPhoneScreen())
+  // In a browser, fullscreen gives the page the room of the browser's bars
+  // (the app hides its bars itself; a phone gets the phone layout instead)
+  const gateOffersFullscreen = !gateOffersPhoneLayout && !isFullscreen && !isNativeApp() &&
+    !!(document.fullscreenEnabled || document.webkitFullscreenEnabled)
 
   const notClosed = (m) => (m && closedMatchId != null && m.id === closedMatchId ? null : m)
   const shownCurrentMatch = notClosed(currentMatch)
@@ -2156,7 +2166,7 @@ export default function App() {
           (phone landscape 844×390 hid the score). It is let through when it
           shows its phone layout (PhoneScoreboard_beach), and so is its match
           end; every other screen fits a phone (screenGate_beach). */}
-      {!phoneScoringShown && !phoneMatchEndShown && smallScreenGate(viewportSize, { scoring: onScoringScreen }) ? (
+      {!phoneScoringShown && !phoneMatchEndShown && !systemBarsGoing && smallScreenGate(viewportSize, { scoring: onScoringScreen }) ? (
         <div className="ov-kit flex flex-1 flex-col items-center justify-center overflow-y-auto bg-gradient-to-br from-stone-100 via-stone-50 to-stone-100 p-4">
           <div className="relative w-full max-w-sm overflow-hidden rounded-3xl border border-stone-200/70 bg-white p-8 text-center shadow-card-lg">
             <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-red-600 to-red-500" />
@@ -2174,7 +2184,10 @@ export default function App() {
             <p className="mt-3 text-sm text-stone-600">
               {gateOffersPhoneLayout
                 ? t('screenTooSmall.phoneHint', 'On a phone, the scoring screen has a layout of its own.')
-                : t('screenTooSmall.scoringHint', 'The scoring screen needs at least 800×600: score on a tablet or a laptop. The match is saved on this device.')}
+                // upright (an open foldable, 691×756): it fits sideways
+                : viewportSize.height > viewportSize.width
+                  ? t('screenTooSmall.rotateHint', 'Turn the device sideways: the scoring screen needs at least 800×600. The match is saved on this device.')
+                  : t('screenTooSmall.scoringHint', 'The scoring screen needs at least 800×600: score on a tablet or a laptop. The match is saved on this device.')}
             </p>
             {/* Screen mode Tablet or Desktop on a phone: the phone layout fixes it
                 (Options, where the mode is set, is not reachable from here) */}
@@ -2183,7 +2196,17 @@ export default function App() {
                 {t('screenTooSmall.usePhone', 'Use the phone layout')}
               </Button>
             )}
-            <Button variant={gateOffersPhoneLayout ? 'secondary' : 'dark'} size="xl" block icon={House} onClick={openMatchSetup} className={gateOffersPhoneLayout ? 'mt-3' : 'mt-6'}>
+            {gateOffersFullscreen && (
+              <>
+                <Button variant="dark" size="xl" block icon={Maximize} onClick={toggleFullscreen} className="mt-6">
+                  {t('screenTooSmall.enterFullscreen', 'Enter fullscreen')}
+                </Button>
+                <p className="mt-2 text-xs text-stone-500">
+                  {t('screenTooSmall.fullscreenNote', 'Fullscreen removes the browser bars to make the most of the screen.')}
+                </p>
+              </>
+            )}
+            <Button variant={gateOffersPhoneLayout || gateOffersFullscreen ? 'secondary' : 'dark'} size="xl" block icon={House} onClick={openMatchSetup} className={gateOffersPhoneLayout || gateOffersFullscreen ? 'mt-3' : 'mt-6'}>
               {t('screenTooSmall.home', 'Back to the home screen')}
             </Button>
           </div>
