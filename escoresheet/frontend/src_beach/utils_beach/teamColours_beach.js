@@ -190,6 +190,16 @@ export function isLightColour(bg) {
 export const HEADER_SURFACE = '#ffffff'
 
 /**
+ * Spread into the inline style of anything filled with a team colour (bands,
+ * chips, discs; teamBoxStyle adds it itself). The colour themes in
+ * tailwind_beach.css find it by this property: dark inverts it back, so a
+ * white shirt stays white rather than turning black, and e-ink shows it in
+ * plain greyscale, where the steep e-ink curve would sink the text written
+ * on a mid-tone shirt.
+ */
+export const TEAM_COLOUR_MARK = { '--ov-team': '1' }
+
+/**
  * Inline style for a band, box or button filled with a team colour that
  * shows a team name or label (setup card, coin toss): the fill, the readable
  * text colour (readableTextOn) and, when the fill would melt into the white
@@ -202,18 +212,18 @@ export const HEADER_SURFACE = '#ffffff'
  * @param {string} [opts.fallback] colour used when `colour` is missing or unusable
  * @param {string} [opts.surface] what the band sits on
  * @param {number} [opts.ringWidth] px
- * @returns {{ background?: string, color?: string, boxShadow?: string }} (an unreadable colour such as a CSS variable is passed through with white text)
+ * @returns {{ background?: string, color?: string, boxShadow?: string, '--ov-team'?: string }} (an unreadable colour such as a CSS variable is passed through with white text)
  */
 export function teamBoxStyle(colour, { fallback = null, surface = HEADER_SURFACE, ringWidth = 2 } = {}) {
   const background = normaliseColour(colour) ?? normaliseColour(fallback)
   if (!background) {
     const raw = typeof colour === 'string' && colour.trim() ? colour : (typeof fallback === 'string' && fallback.trim() ? fallback : null)
-    return raw ? { background: raw, color: TEXT_LIGHT } : {}
+    return raw ? { background: raw, color: TEXT_LIGHT, ...TEAM_COLOUR_MARK } : {}
   }
   const ring = discRing(background, surface)
   return ring
-    ? { background, color: readableTextOn(background), boxShadow: `inset 0 0 0 ${ringWidth}px ${ring}` }
-    : { background, color: readableTextOn(background) }
+    ? { background, color: readableTextOn(background), boxShadow: `inset 0 0 0 ${ringWidth}px ${ring}`, ...TEAM_COLOUR_MARK }
+    : { background, color: readableTextOn(background), ...TEAM_COLOUR_MARK }
 }
 
 /** OKLab { L, a, b } (Björn Ottosson) */

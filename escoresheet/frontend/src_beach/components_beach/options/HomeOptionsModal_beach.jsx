@@ -8,6 +8,7 @@ import NativeServerSection from './NativeServerSection_beach'
 import DesktopUpdateSection from './DesktopUpdateSection_beach'
 import KeybindingsModal from './KeybindingsModal_beach'
 import ActivityLogSection from './ActivityLogSection_beach'
+import ThemeOption from './ThemeOption_beach'
 import { OptionNumber, OptionRow, OptionSection, OptionSwitch } from './optionRows_beach'
 import LegalLinks from '../LegalLinks_beach'
 import { copyToClipboard } from '../../utils_beach/networkInfo_beach'
@@ -224,6 +225,7 @@ export default function HomeOptionsModal({
               </>
             )}
           />
+          <ThemeOption />
           <OptionSwitch
             label={t('options.screenAlwaysOn')}
             info={t('options.screenAlwaysOnInfo')}

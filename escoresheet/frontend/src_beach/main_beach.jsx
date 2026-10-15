@@ -2,6 +2,7 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App_beach'
 import './tailwind_beach.css' // also brings in styles_beach.css (legacy layer) and the volleyui tokens
+import { initTheme } from './utils_beach/theme_beach'
 import { UiHost } from './ui/volleyui/UiHost.jsx'
 import { stripCacheBustParam } from './utils_beach/appReload_beach'
 import AppErrorBoundary from './components_beach/AppErrorBoundary_beach'
@@ -42,6 +43,7 @@ initLogger()
 // on this device, uploaded, and a daily file in the apps (utils_beach/activity)
 startActivityLog({ db })
 
+initTheme()
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <AppErrorBoundary name="scorer">

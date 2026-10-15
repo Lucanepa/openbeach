@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import RefereeApp from './RefereeApp_beach'
 import './tailwind_beach.css' // also brings in styles_beach.css (legacy layer) and the volleyui tokens
+import { initTheme } from './utils_beach/theme_beach'
 import { UiHost } from './ui/volleyui/UiHost.jsx'
 import { stripCacheBustParam } from './utils_beach/appReload_beach'
 import AppErrorBoundary from './components_beach/AppErrorBoundary_beach'
@@ -20,6 +21,7 @@ installDiagnostics({ db, app: 'referee' })
 // the query stays: ?match= keeps a tablet on its live match.
 stripCacheBustParam()
 
+initTheme()
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <AppErrorBoundary name="referee">

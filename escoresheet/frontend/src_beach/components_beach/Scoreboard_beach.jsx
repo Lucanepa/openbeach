@@ -81,7 +81,7 @@ import { AppSpinner } from '../ui/volleyui/AppSpinner.jsx'
 import { modalCancelClass, modalPrimaryClass, ActionSheet, ActionSheetItem } from '../ui/volleyui/Modal.jsx'
 import { dayLabel, timeSecondsLabel } from '../ui/volleyui/format.js'
 import { openAppWindow } from '../utils_beach/openAppWindow_beach'
-import { discPaint, effectiveTeamColour, isLightColour, teamBoxStyle } from '../utils_beach/teamColours_beach'
+import { TEAM_COLOUR_MARK, discPaint, effectiveTeamColour, isLightColour, teamBoxStyle } from '../utils_beach/teamColours_beach'
 import { preload, usePreloaded } from '../utils_beach/preload_beach'
 
 // ── volleyui chrome for the scoring screen ───────────────────────────────────
@@ -9450,7 +9450,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 height: `${playerSize}px`,
                                 fontSize: `${DESIGN_VMIN * 0.06 * scaleFactor}px`,
                                 background: discPaintBySide.left?.background ?? leftTeam.color,
-                                borderColor: discPaintBySide.left?.ring ?? undefined
+                                borderColor: discPaintBySide.left?.ring ?? undefined,
+                                ...TEAM_COLOUR_MARK
                               }}
                             >
                               {shouldShowBall && (
@@ -9785,7 +9786,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 height: `${playerSize}px`,
                                 fontSize: `${DESIGN_VMIN * 0.06 * scaleFactor}px`,
                                 background: discPaintBySide.right?.background ?? rightTeam.color,
-                                borderColor: discPaintBySide.right?.ring ?? undefined
+                                borderColor: discPaintBySide.right?.ring ?? undefined,
+                                ...TEAM_COLOUR_MARK
                               }}
                             >
                               {shouldShowBall && (
@@ -14463,7 +14465,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               </div>
                               {team1CaptainSignature ? (
                                 <div style={{ border: '1px solid var(--ov-hairline-strong)', borderRadius: '4px', padding: '4px', minHeight: '40px', background: 'var(--ov-sunken)' }}>
-                                  <img src={team1CaptainSignature} alt="Signature" style={{ maxWidth: '100%', maxHeight: '40px', objectFit: 'contain' }} />
+                                  <img src={team1CaptainSignature} alt="Signature" className="ov-ink" style={{ maxWidth: '100%', maxHeight: '40px', objectFit: 'contain' }} />
                                 </div>
                               ) : (
                                 <button
@@ -14489,7 +14491,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               </div>
                               {team2CaptainSignature ? (
                                 <div style={{ border: '1px solid var(--ov-hairline-strong)', borderRadius: '4px', padding: '4px', minHeight: '40px', background: 'var(--ov-sunken)' }}>
-                                  <img src={team2CaptainSignature} alt="Signature" style={{ maxWidth: '100%', maxHeight: '40px', objectFit: 'contain' }} />
+                                  <img src={team2CaptainSignature} alt="Signature" className="ov-ink" style={{ maxWidth: '100%', maxHeight: '40px', objectFit: 'contain' }} />
                                 </div>
                               ) : (
                                 <button
