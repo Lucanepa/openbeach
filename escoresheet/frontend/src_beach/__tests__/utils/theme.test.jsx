@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import { render, screen, act } from '@testing-library/react'
-import { THEME_KEY, applyTheme, getTheme, setTheme, useTheme } from '../../utils_beach/theme_beach'
+import { THEME_KEY, applyTheme, getTheme, initTheme, setTheme, useTheme } from '../../utils_beach/theme_beach'
 import { TEAM_COLOUR_MARK, teamBoxStyle } from '../../utils_beach/teamColours_beach'
 
 // Light / dark / e-ink: one value in localStorage, shown as <html data-theme>.
@@ -55,6 +55,22 @@ describe('colour theme', () => {
       window.dispatchEvent(new StorageEvent('storage', { key: THEME_KEY }))
     })
     expect(screen.getByTestId('theme').textContent).toBe('eink')
+  })
+
+  it('initTheme applies the stored theme without the boot script', () => {
+    localStorage.setItem(THEME_KEY, 'eink')
+    initTheme()
+    expect(document.documentElement.getAttribute('data-theme')).toBe('eink')
+    localStorage.setItem(THEME_KEY, 'dark')
+    window.dispatchEvent(new StorageEvent('storage', { key: THEME_KEY }))
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+  })
+
+  it('every page entry calls initTheme', () => {
+    for (const entry of ['main', 'referee-main', 'livescore-main', 'scoreboard-main', 'scoresheet-main', 'admin-main']) {
+      const src = readFileSync(resolve(__dirname, `../../${entry}_beach.jsx`), 'utf-8')
+      expect(src, entry).toMatch(/^initTheme\(\)$/m)
+    }
   })
 
   it('the boot script reads the same key and values', () => {
