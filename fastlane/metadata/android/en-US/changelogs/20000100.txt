@@ -1,0 +1,3 @@
+OpenBeach 2.0.10
+- Theme: Options → Display mode → Theme chooses Light, Dark or E-ink. E-ink is black and white at full contrast, for reading the screen in full sun. The referee view has it in its menu.
+- Dark keeps team and shirt colours, flags and photos as they are.
