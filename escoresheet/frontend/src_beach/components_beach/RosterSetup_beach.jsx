@@ -603,7 +603,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
                 }}
               >
                 {captainSignature ? (
-                  <img src={captainSignature} alt="Captain signature" style={{ maxWidth: '100%', maxHeight: '100%' }} />
+                  <img src={captainSignature} alt="Captain signature" className="ov-ink" style={{ maxWidth: '100%', maxHeight: '100%' }} />
                 ) : (
                   <span style={{ color: 'var(--muted)', fontSize: '13px' }}>
                     {t('rosterSetup.tapToSign', 'Tap to sign')}

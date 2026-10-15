@@ -901,7 +901,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         >
           {signatureData ? (
             <>
-              <img src={signatureData} alt="" className="max-h-14 max-w-full object-contain" />
+              <img src={signatureData} alt="" className="ov-ink max-h-14 max-w-full object-contain" />
               <Check size={16} aria-hidden="true" className="absolute right-2 top-2 text-emerald-600" />
               {viaPhone && (
                 <span

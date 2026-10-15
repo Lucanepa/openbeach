@@ -262,7 +262,8 @@
    - dark: lightness inverted, hue turned back. Photos, the ball, flags, shirts
      and whatever wears a team colour (TEAM_COLOUR_MARK, the --ov-team inline
      property) are inverted again, so they keep their real colours: a white
-     shirt stays white.
+     shirt stays white. Signatures (.ov-ink: black ink on a clear ground) are
+     not: they turn light with the page, or they would vanish into it.
    - eink: greyscale on a steep curve (paper white, ink black) for screens in
      full sun. Team colours get a gentle curve instead: on the steep one a
      mid-tone shirt sinks to the dark grey of its own text. No shadows (they
@@ -273,7 +274,7 @@
   html[data-theme='dark'] {
     filter: invert(1) hue-rotate(180deg) contrast(0.92);
   }
-  html[data-theme='dark'] :is(img, video, canvas, .fi, .shirt, [style*='--ov-team']):not(:is(.shirt, [style*='--ov-team']) *) {
+  html[data-theme='dark'] :is(img:not(.ov-ink), video, canvas, .fi, .shirt, [style*='--ov-team']):not(:is(.shirt, [style*='--ov-team']) *) {
     filter: invert(1) hue-rotate(180deg);
   }
   html[data-theme='dark'] *,

@@ -14465,7 +14465,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               </div>
                               {team1CaptainSignature ? (
                                 <div style={{ border: '1px solid var(--ov-hairline-strong)', borderRadius: '4px', padding: '4px', minHeight: '40px', background: 'var(--ov-sunken)' }}>
-                                  <img src={team1CaptainSignature} alt="Signature" style={{ maxWidth: '100%', maxHeight: '40px', objectFit: 'contain' }} />
+                                  <img src={team1CaptainSignature} alt="Signature" className="ov-ink" style={{ maxWidth: '100%', maxHeight: '40px', objectFit: 'contain' }} />
                                 </div>
                               ) : (
                                 <button
@@ -14491,7 +14491,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               </div>
                               {team2CaptainSignature ? (
                                 <div style={{ border: '1px solid var(--ov-hairline-strong)', borderRadius: '4px', padding: '4px', minHeight: '40px', background: 'var(--ov-sunken)' }}>
-                                  <img src={team2CaptainSignature} alt="Signature" style={{ maxWidth: '100%', maxHeight: '40px', objectFit: 'contain' }} />
+                                  <img src={team2CaptainSignature} alt="Signature" className="ov-ink" style={{ maxWidth: '100%', maxHeight: '40px', objectFit: 'contain' }} />
                                 </div>
                               ) : (
                                 <button
