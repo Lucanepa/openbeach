@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Undo2, Menu } from 'lucide-react'
 import { ActionSheet } from '../../ui/volleyui/Modal.jsx'
-import { SAND_SURFACE, discPaint, discRing, normaliseColour, readableText } from '../../utils_beach/teamColours_beach'
+import { SAND_SURFACE, TEAM_COLOUR_MARK, discPaint, discRing, normaliseColour, readableText } from '../../utils_beach/teamColours_beach'
 import IntervalChoice, { ServeOrder } from './IntervalChoice_beach.jsx'
 import { PHONE_COURT_MIN_PX, PHONE_RECENT_HEIGHT_PX, PHONE_SQUARE_MIN_PX, PHONE_SQUARE_RESERVE_PX, tintOf } from './phoneLayout_beach'
 
@@ -72,7 +72,7 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
       edge: discRing(colour, '#ffffff') || colour,
       tint: tintOf(colour, 0.14) || 'var(--ov-card)',
       soft: tintOf(colour, 0.1) || 'var(--ov-sunken)',
-      fill: { background: colour, color: text.color, textShadow: text.textShadow },
+      fill: { background: colour, color: text.color, textShadow: text.textShadow, ...TEAM_COLOUR_MARK },
       disc: discPaint(colour, SAND_SURFACE)
     }
   }
@@ -171,7 +171,7 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
             onClick={(e) => actions.playerClick(team.teamKey, pl.position, pl.number, e)}
             // .phone-court-player (styles_beach.css): smaller with a lower court
             className="phone-court-player"
-            style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 'var(--phone-disc-size, min(58px, 26cqw))', aspectRatio: '1 / 1', borderRadius: '50%', padding: 0, background: p.disc?.background ?? p.colour, color: p.disc?.color ?? '#ffffff', textShadow: p.disc?.textShadow, border: `2px solid ${p.disc?.ring ?? p.edge}`, fontSize: 26, fontWeight: 800, fontVariantNumeric: 'tabular-nums', cursor: playersOpen ? 'pointer' : 'default', opacity: 1 }}
+            style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 'var(--phone-disc-size, min(58px, 26cqw))', aspectRatio: '1 / 1', borderRadius: '50%', padding: 0, background: p.disc?.background ?? p.colour, ...TEAM_COLOUR_MARK, color: p.disc?.color ?? '#ffffff', textShadow: p.disc?.textShadow, border: `2px solid ${p.disc?.ring ?? p.edge}`, fontSize: 26, fontWeight: 800, fontVariantNumeric: 'tabular-nums', cursor: playersOpen ? 'pointer' : 'default', opacity: 1 }}
           >
             {pl.number}
             {pl.serves && (

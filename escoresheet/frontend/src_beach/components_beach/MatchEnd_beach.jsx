@@ -49,7 +49,7 @@ import { confirmDialog, toast } from '../ui/volleyui/uiStore.js'
 import { modalCancelClass, modalSaveClass } from '../ui/volleyui/Modal.jsx'
 import { cn } from '../ui/volleyui/cn.js'
 import { preload, usePreloaded } from '../utils_beach/preload_beach'
-import { isLightColour } from '../utils_beach/teamColours_beach'
+import { TEAM_COLOUR_MARK, isLightColour } from '../utils_beach/teamColours_beach'
 
 // volleyui recipes of the match end page (the official result, sanction and
 // remarks boxes inside keep the scoresheet's own black-on-white look, §7)
@@ -1606,7 +1606,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         <div className="mb-4 flex justify-center">
           <div
             className="inline-flex max-w-full items-center gap-2.5 rounded-xl px-5 py-2.5 text-2xl font-bold"
-            style={{ background: winnerColor, color: isLightColour(winnerColor) ? '#000' : '#fff' }}
+            style={{ background: winnerColor, ...TEAM_COLOUR_MARK, color: isLightColour(winnerColor) ? '#000' : '#fff' }}
           >
             {winnerCountry && <CountryFlag countryCode={winnerCountry} size="lg" />}
             <span className="min-w-0 truncate">{winner}</span>
@@ -1633,7 +1633,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
                 <tr key={label}>
                   <td className="px-1 py-1">{country && <CountryFlag countryCode={country} size="sm" />}</td>
                   <td className="px-1.5 py-1">
-                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-md text-sm font-bold" style={{ background: color, color: isLightColour(color) ? '#000' : '#fff' }}>
+                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-md text-sm font-bold" style={{ background: color, ...TEAM_COLOUR_MARK, color: isLightColour(color) ? '#000' : '#fff' }}>
                       {label}
                     </span>
                   </td>

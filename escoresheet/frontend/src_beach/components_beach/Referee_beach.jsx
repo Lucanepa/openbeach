@@ -41,7 +41,7 @@ import { apiFrom } from '../lib_beach/apiClient_beach'
 import { isBackendAvailable, isVenueMode } from '../utils_beach/backendConfig_beach'
 import { useSyncQueue } from '../hooks_beach/useSyncQueue_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
-import { Bell, ChevronDown, Download, Loader2, Maximize, Moon, RefreshCw, Sun, TriangleAlert, X } from 'lucide-react'
+import { Bell, BookOpenText, ChevronDown, Download, Loader2, Maximize, Moon, RefreshCw, Sun, TriangleAlert, X } from 'lucide-react'
 import { cn } from '../ui/volleyui/cn.js'
 import { Card } from '../ui/volleyui/Card.jsx'
 import { Button } from '../ui/volleyui/Button.jsx'
@@ -54,7 +54,8 @@ import { timeSecondsLabel } from '../ui/volleyui/format.js'
 import { BRAND } from '../brand_beach'
 import { useDiagCommits } from '../diagnostics_beach/commits_beach'
 import { diagnosticsState, exportDiagnostics } from '../diagnostics_beach/index_beach'
-import { discPaint, isLightColour } from '../utils_beach/teamColours_beach'
+import { TEAM_COLOUR_MARK, discPaint, isLightColour } from '../utils_beach/teamColours_beach'
+import { setTheme, useTheme } from '../utils_beach/theme_beach'
 import { isTeam1LeftInSet } from '../utils_beach/courtSides_beach'
 import { setFirstServer } from '../utils_beach/coinToss_beach'
 import { medicalFromAction, medicalRemaining, reconcileMedical, medicalEndInEvents, medicalTypeLabel, medicalPlayerLabel, formatDuration } from '../utils_beach/refereeMedical_beach'
@@ -212,6 +213,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   const lastAttentionTriggerRef = useRef(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [languageMenuOpen, setLanguageMenuOpen] = useState(false)
+  const theme = useTheme()
   // Score/countdown font from settings
   const [scoreFont, setScoreFont] = useState(() => {
     const saved = localStorage.getItem('scoreFont')
@@ -2204,6 +2206,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           borderRadius: '50%',
           border: `${vmin(0.2)}px solid ${paint?.ring ?? 'rgba(255, 255, 255, 0.35)'}`,
           background: paint?.background ?? teamColor,
+          ...TEAM_COLOUR_MARK,
           color: textColor,
           display: 'flex',
           alignItems: 'center',
@@ -2434,6 +2437,11 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             toggle: wakeLockActive,
             keepOpen: true
           },
+          // Colour theme: one row per choice, the chosen one inverted
+          { header: t('options.theme') },
+          { icon: <Sun size={14} aria-hidden="true" />, label: t('options.themeLight'), onClick: () => setTheme('light'), active: theme === 'light', keepOpen: true },
+          { icon: <Moon size={14} aria-hidden="true" />, label: t('options.themeDark'), onClick: () => setTheme('dark'), active: theme === 'dark', keepOpen: true },
+          { icon: <BookOpenText size={14} aria-hidden="true" />, label: t('options.themeEink'), onClick: () => setTheme('eink'), active: theme === 'eink', keepOpen: true },
           { divider: true },
           // No connection choice: OpenBeach's referee always picks its
           // connection itself (CONNECTION_TYPES are all 'auto'), so the three
@@ -2499,6 +2507,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                 fontSize: `${section2AFontSize.fontSize}px`,
                 fontWeight: 700,
                 background: leftColor,
+                ...TEAM_COLOUR_MARK,
                 color: isLightColour(leftColor) ? '#000' : '#fff',
                 boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)',
                 padding: `${vmin(0.6)}px ${vmin(1.5)}px`,
@@ -2511,7 +2520,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                 {leftShortName}
               </div>
             </div>
-            <div style={{ padding: `${vmin(0.6)}px ${vmin(1.5)}px`, background: leftColor, color: isLightColour(leftColor) ? '#000' : '#fff', boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)', borderRadius: vmin(0.6), fontSize: vmin(3.5), fontWeight: 800, flexShrink: 0 }}>{leftLabel}</div>
+            <div style={{ padding: `${vmin(0.6)}px ${vmin(1.5)}px`, background: leftColor, ...TEAM_COLOUR_MARK, color: isLightColour(leftColor) ? '#000' : '#fff', boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)', borderRadius: vmin(0.6), fontSize: vmin(3.5), fontWeight: 800, flexShrink: 0 }}>{leftLabel}</div>
           </div>
 
           {/* Center: Set scores + SET n */}
@@ -2533,13 +2542,14 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
           {/* Right: A/B + Team Name (centered in its space) */}
           <div style={{ flex: '1 1 0', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: vmin(1.2), minWidth: 0 }}>
-            <div style={{ padding: `${vmin(0.6)}px ${vmin(1.5)}px`, background: rightColor, color: isLightColour(rightColor) ? '#000' : '#fff', boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)', borderRadius: vmin(0.6), fontSize: vmin(3.5), fontWeight: 800, flexShrink: 0 }}>{rightLabel}</div>
+            <div style={{ padding: `${vmin(0.6)}px ${vmin(1.5)}px`, background: rightColor, ...TEAM_COLOUR_MARK, color: isLightColour(rightColor) ? '#000' : '#fff', boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)', borderRadius: vmin(0.6), fontSize: vmin(3.5), fontWeight: 800, flexShrink: 0 }}>{rightLabel}</div>
             <div style={{ flex: '1 1 0', display: 'flex', justifyContent: 'center', minWidth: 0, overflow: 'hidden' }}>
               <div
                 style={{
                   fontSize: `${section2AFontSize.fontSize}px`,
                   fontWeight: 700,
                   background: rightColor,
+                  ...TEAM_COLOUR_MARK,
                   color: isLightColour(rightColor) ? '#000' : '#fff',
                   boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)',
                   padding: `${vmin(0.6)}px ${vmin(1.5)}px`,
@@ -2984,9 +2994,9 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                     at 21 points
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginBottom: '6px' }}>
-                    <span style={{ background: leftColor, color: isLightColour(leftColor) ? '#000' : '#fff', boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)', padding: '1px 5px', borderRadius: '3px', fontSize: '11px', fontWeight: 700 }}>{leftLabel}</span>
+                    <span style={{ background: leftColor, ...TEAM_COLOUR_MARK, color: isLightColour(leftColor) ? '#000' : '#fff', boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)', padding: '1px 5px', borderRadius: '3px', fontSize: '11px', fontWeight: 700 }}>{leftLabel}</span>
                     <strong style={{ fontSize: '16px', color: 'var(--ov-text)', fontVariantNumeric: 'tabular-nums' }}>{leftPoints} - {rightPoints}</strong>
-                    <span style={{ background: rightColor, color: isLightColour(rightColor) ? '#000' : '#fff', boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)', padding: '1px 5px', borderRadius: '3px', fontSize: '11px', fontWeight: 700 }}>{rightLabel}</span>
+                    <span style={{ background: rightColor, ...TEAM_COLOUR_MARK, color: isLightColour(rightColor) ? '#000' : '#fff', boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)', padding: '1px 5px', borderRadius: '3px', fontSize: '11px', fontWeight: 700 }}>{rightLabel}</span>
                   </div>
                   <DonutCountdown current={ttoModal.countdown} total={45} size={130} strokeWidth={6}>
                     <div style={{ fontSize: vmin(5), fontFamily: getScoreFont(), fontWeight: 600, color: ttoModal.countdown <= 10 ? 'var(--ov-danger-text)' : 'var(--ov-success)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>

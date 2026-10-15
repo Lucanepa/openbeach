@@ -12,6 +12,7 @@ import { OptionInfo } from './optionRows_beach'
 import { reloadWithReason } from '../../diagnostics_beach/reload_beach'
 import DiagnosticsSection from '../../diagnostics_beach/DiagnosticsSection_beach'
 import ActivityLogSection from './ActivityLogSection_beach'
+import ThemeOption from './ThemeOption_beach'
 
 // The kit InfoHint (a real button, opens on tap) and Switch (role="switch",
 // aria-checked, named, focus ring): the hand-made dot and toggle had no role,
@@ -684,6 +685,11 @@ export default function ScoreboardOptionsModal({
                   </button>
                 </div>
               )}
+            </div>
+          </Row>
+          <Row style={{ display: 'block', padding: '0 16px' }}>
+            <div className="ov-kit">
+              <ThemeOption />
             </div>
           </Row>
         </Section>

@@ -39,6 +39,21 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    // Colour theme (utils_beach/theme_beach.js): set <html data-theme> before
+    // the first paint, so a dark or e-ink page does not flash light while the
+    // bundle loads, and follow a change made in another tab. Not on the PDF
+    // scoresheet page: it is the paper form.
+    {
+      name: 'theme-boot',
+      transformIndexHtml(html, ctx) {
+        if (ctx.path.endsWith('/scoresheet_beach.html')) return html
+        return [{
+          tag: 'script',
+          injectTo: 'head-prepend',
+          children: "(function(){var r=document.documentElement;function a(){var t;try{t=localStorage.getItem('theme')}catch(e){}if(t==='dark'||t==='eink')r.setAttribute('data-theme',t);else r.removeAttribute('data-theme')}a();addEventListener('storage',function(e){if(e.key==='theme'||e.key===null)a()})})()",
+        }]
+      },
+    },
     // Vite injects the stylesheets of the CSS chunks that several pages share
     // (tailwind_beach, flag-icons) in a racy order, so two builds of the same
     // commit could differ in admin_beach.html / index.html. F-Droid rebuilds
