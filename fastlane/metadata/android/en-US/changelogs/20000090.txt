@@ -1,0 +1,2 @@
+OpenBeach 2.0.9
+- A long connection status or translation no longer pushes the header under the match chip or off the screen: it switches to the compact form when the full one does not fit, and back when it fits again.
