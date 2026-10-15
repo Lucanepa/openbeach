@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import i18n from '../i18n'
 import ConnectionStatus from './ConnectionStatus_beach'
@@ -18,8 +18,18 @@ import {
 
 // Below this width the bar's controls lose their words (isCompactBar): with
 // the alarm bell, the tablet status and Sign in the full bar needs about
-// 704 px (Chromium, 2026-10-14)
+// 704 px (Chromium, 2026-10-14). A longer connection status ("Sign in to
+// sync", or in French) needs more: the bar measures itself for that
+// (fullBarFrom)
 const COMPACT_BAR_BELOW = 720
+
+// The two groups of the bar never get narrower than their controls. By
+// default a group may shrink to its min-content width, where "Sign in" or the
+// status pill would wrap; their buttons don't wrap, so they spilled out of the
+// group over the match chip, with the group itself still inside the bar and
+// the fit check (fullBarFrom) blind to it (2026-10-15, 760 px, long status).
+// Now a bar that is too full runs past its right edge, and the check sees it
+const GROUP_MIN_WIDTH = 'max-content'
 
 const FlagBox = ({ children }) => (
   <span
@@ -164,6 +174,7 @@ export default function MainHeader({
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
   const touchStartY = useRef(0)
   const headerRef = useRef(null)
+  const rightGroupRef = useRef(null)
   // Use version from package.json (injected by Vite at build time)
   const currentVersion = __APP_VERSION__
 
@@ -173,13 +184,41 @@ export default function MainHeader({
   // bar's controls lose their words and the match chip gives up its arrow
   // and shrinks (emulator audit 2026-10-14: at 384 px Sign in and Exit ran
   // off the screen; OpenVolley's header the same, PR openvolley#13; at
-  // 640 px the chip covered the alarm bell)
-  const isCompactBar = viewportSize.width > 0 && viewportSize.width < COMPACT_BAR_BELOW
+  // 640 px the chip covered the alarm bell). Also wider, where the full bar
+  // was measured not to fit (fullBarFrom)
+  const [fullBarFrom, setFullBarFrom] = useState(COMPACT_BAR_BELOW)
+  const isCompactBar = viewportSize.width > 0 && viewportSize.width < fullBarFrom
 
   // Effective collapsed state - only collapse when collapsible is true
   const effectivelyCollapsed = collapsible && isCollapsed
   // Animated only while it collapses or expands, not on an app scale change
   const headerTransition = useCollapseTransition(effectivelyCollapsed)
+
+  // The full bar does not fit (a long connection status, a translation:
+  // "Se connecter pour synchroniser" with the referee tablet on put Sign in
+  // under the match chip at 720-760 px and ran the bar past the right edge,
+  // and covered Hide header at 800 px, 2026-10-15): the compact one from this
+  // width down, until the window is wider. Checked before paint, and again
+  // when a group grows later (Connecting -> Sign in to sync, a tablet turned
+  // on). OpenVolley the same (openvolley#20)
+  useLayoutEffect(() => {
+    const bar = headerRef.current
+    const right = rightGroupRef.current
+    if (isCompactBar || effectivelyCollapsed || !bar || !right || !viewportSize.width) return
+    const check = () => {
+      const barBox = bar.getBoundingClientRect()
+      if (!barBox.width) return
+      const padRight = parseFloat(getComputedStyle(bar).paddingRight) || 0
+      if (right.getBoundingClientRect().right > barBox.right - padRight + 1) {
+        setFullBarFrom(viewportSize.width + 1)
+      }
+    }
+    check()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(check)
+    for (const group of bar.children) observer.observe(group)
+    return () => observer.disconnect()
+  }, [isCompactBar, effectivelyCollapsed, viewportSize.width])
 
   // The phone scoring layout fills the screen: the header starts folded
   // away (its thin bar opens it again)
@@ -690,8 +729,9 @@ export default function MainHeader({
             phone, it and the right group share the room left and right of
             the match chip equally, so the chip sits in the middle of the bar
             and moves aside when a group needs more: centred over the bar, it
-            covered the alarm bell at 800 px (2026-10-14) */}
-        <div style={{ flex: isCompactBar ? '0 0 auto' : '1 1 0', display: 'flex', alignItems: 'center', gap: isCompactBar ? '4px' : '8px' }}>
+            covered the alarm bell at 800 px (2026-10-14). Never narrower
+            than its controls (GROUP_MIN_WIDTH) */}
+        <div style={{ flex: isCompactBar ? '0 0 auto' : '1 1 0', minWidth: GROUP_MIN_WIDTH, display: 'flex', alignItems: 'center', gap: isCompactBar ? '4px' : '8px' }}>
           {/* Online/Offline Toggle */}
           <span className={KIT_SCOPE}>
             <button
@@ -885,12 +925,13 @@ export default function MainHeader({
         ) : null}
 
         {/* Right: the app menu */}
-        <div style={{
+        <div ref={rightGroupRef} style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'flex-end',
           gap: isCompactBar ? '6px' : 'clamp(8px, 1.5vw, 12px)',
           flex: isCompactBar ? '0 0 auto' : '1 1 0',
+          minWidth: GROUP_MIN_WIDTH,
           alignSelf: 'stretch',
           position: 'relative'
         }}>
