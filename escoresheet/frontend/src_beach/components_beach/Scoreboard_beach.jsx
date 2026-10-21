@@ -1224,7 +1224,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     const _tl = performance.now()
     // The time-out, TTO and attention trigger of the call (read before any
     // await: a TTO ending right after this call is already null by then)
-    const timeoutModal = timeoutModalRef.current
+    // (a time-out request made while one runs keeps that one: running)
+    const timeoutModal = timeoutModalRef.current?.running || timeoutModalRef.current
     const ttoModal = ttoModalRef.current
     const scorerAttentionTrigger = scorerAttentionTriggerRef.current
     // The break between sets goes on after the set end's own push (as
@@ -5678,6 +5679,28 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           await queueSetScoreSync(db, { matchId, setIndex: lastEvent.setIndex ?? data.set.index })
         }
 
+        // The time-out undone while it runs: its countdown stops, and the
+        // referee's with it (the closing countdown sends end_timeout)
+        if (lastEvent.type === 'timeout') {
+          const team = lastEvent.payload?.team
+          const runs = timeoutModal?.started ? timeoutModal : timeoutModal?.running
+          if (runs?.team === team) {
+            timeoutStartTimestampRef.current = null
+            timeoutInitialCountdownRef.current = TEAM_TIMEOUT_SECONDS
+            // under a request the dialog stays open: end_timeout is sent here
+            // (after the commit: runOrDefer)
+            if (!timeoutModal.started) {
+              runOrDefer({ run: () => { sendActionToReferee('end_timeout', {}); syncLiveStateToSupabase('end_timeout', null, null) } })
+            }
+            deferUi(() => setTimeoutModal(prev => {
+              if (prev?.started) return prev.team === team ? null : prev
+              if (prev?.running?.team !== team) return prev
+              const { running: _undone, ...request } = prev
+              return request
+            }))
+          }
+        }
+
         // Sync to Referee and Supabase after undo (after the commit, once)
         afterRefereeSync()
         afterLiveState('undo')
@@ -5690,7 +5713,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         throw error
       }
     }, { reason: 'undo' })
-  }), [runUndoConfirm, runAction, undoConfirm, data?.set, matchId, restoreStateFromSnapshot, discardEvents, afterRefereeSync, afterLiveState, afterScoresheetRefresh])
+  }), [runUndoConfirm, runAction, undoConfirm, data?.set, matchId, restoreStateFromSnapshot, discardEvents, afterRefereeSync, afterLiveState, afterScoresheetRefresh, timeoutModal, runOrDefer, deferUi, sendActionToReferee, syncLiveStateToSupabase])
 
   // OLD UNDO LOGIC REMOVED - The following complex per-event-type logic has been replaced
   // by the snapshot-based undo system above. Keeping this comment for reference.
@@ -5901,7 +5924,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const used = (timeoutsUsed && timeoutsUsed[teamKey]) || 0
       if (used >= 1) return
 
-      setTimeoutModal({ team: teamKey, countdown: TEAM_TIMEOUT_SECONDS, started: false })
+      // A request made while a time-out runs keeps that one (running): Cancel
+      // puts it back, it is not lost with the request
+      setTimeoutModal(prev => ({
+        team: teamKey,
+        countdown: TEAM_TIMEOUT_SECONDS,
+        started: false,
+        ...(prev?.started ? { running: prev } : prev?.running ? { running: prev.running } : {})
+      }))
     },
     [mapSideToTeamKey, timeoutsUsed]
   )
@@ -5910,8 +5940,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   // (the scoreboard showed the time-out taken under the still-open request)
   const runTimeoutConfirm = useConfirmAction(onConfirmFailed)
   const confirmTimeout = useCallback(() => runTimeoutConfirm(() => runAction('timeout', async () => {
-    const request = timeoutModal
-    if (!request || request.started) return
+    const { running: _replaced, ...request } = timeoutModal || {}
+    if (!timeoutModal || request.started) return
 
     debugLogger.log('TO_CONFIRM', {
       team: request.team,
@@ -5947,6 +5977,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // Only cancel if timeout hasn't started yet
     if (!timeoutModal || timeoutModal.started) return
     debugLogger.log('TO_CANCEL', { team: timeoutModal?.team })
+    // A time-out that ran when the request was made runs on (its countdown
+    // goes on from its own start)
+    if (timeoutModal.running) {
+      setTimeoutModal(timeoutModal.running)
+      return
+    }
     // Reset refs in case they were set (safety measure)
     timeoutStartTimestampRef.current = null
     timeoutInitialCountdownRef.current = TEAM_TIMEOUT_SECONDS
@@ -7180,7 +7216,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         }
         if (timeoutModal) {
           e.preventDefault()
-          setTimeoutModal(null)
+          // a request over a running time-out: that one runs on
+          setTimeoutModal(timeoutModal.started ? null : (timeoutModal.running || null))
           return
         }
         // Don't close decision modals with Escape
