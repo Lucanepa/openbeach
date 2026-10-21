@@ -28,6 +28,7 @@ import { debugLogger, createStateSnapshot } from '../utils_beach/debugLogger_bea
 import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { apiFrom } from '../lib_beach/apiClient_beach'
 import { setExtId, eventExtId } from '../utils_beach/syncIds_beach'
+import { missingForfeitSets } from '../utils_beach/forfeitSets_beach'
 import { changesSetScore, isLiveSetInterval, queueSetScoreSync } from '../utils_beach/eventSync_beach'
 import { planPointRemoval, scoreAfterRemoval, syncJobsForEvents, syncJobsForSets, eventUpsertJob, setReopenJob, planDecisionChangeReversal, scoreDeltaOfRemoval, teamSanctionFlags, UNSENT_STATUSES } from '../utils_beach/scorerCorrections_beach'
 import { askConfirm } from '../utils_beach/askConfirm_beach'
@@ -6412,6 +6413,39 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           team2Points: opponentKey === 'team2' ? setPointsToWin : 0,
           reason: reason || 'forfait'
         })
+      }
+
+      // Then the sets the match has not reached: the opponent gets the sets
+      // it needs to win the match (FIVB Beach 6.4). A forfeit in set 1 left
+      // 1:0 and the match went on to set 2 at 0:0. The sheet leaves their
+      // grids blank, the results show them won 21:0 (15:0).
+      const missing = missingForfeitSets(await db.sets.where({ matchId }).toArray(), opponentKey)
+      const forfeitMatch = missing.length ? await db.matches.get(matchId) : null
+      for (const ms of missing) {
+        const newSetId = await db.sets.add({ matchId, index: ms.index, finished: true, team1Points: ms.team1Points, team2Points: ms.team2Points, reason: reason || 'forfait' })
+        await logEvent('set_end', {
+          team: opponentKey,
+          setIndex: ms.index,
+          team1Points: ms.team1Points,
+          team2Points: ms.team2Points,
+          reason: reason || 'forfait'
+        })
+        if (forfeitMatch?.seed_key && forfeitMatch.test !== true) {
+          await db.sync_queue.add({
+            resource: 'set',
+            action: 'insert',
+            payload: {
+              external_id: setExtId(forfeitMatch.seed_key, newSetId),
+              match_id: forfeitMatch.seed_key,
+              index: ms.index,
+              team1_points: ms.team1Points,
+              team2_points: ms.team2Points,
+              finished: true
+            },
+            ts: new Date().toISOString(),
+            status: 'queued'
+          })
+        }
       }
     }
 
