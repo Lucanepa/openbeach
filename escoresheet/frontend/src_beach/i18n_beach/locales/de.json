@@ -153,15 +153,15 @@
     "autoName": "Automatisch"
   },
   "validation": {
-    "team1NotSet": "Team 1 name is not set",
-    "team2NotSet": "Team 2 name is not set",
+    "team1NotSet": "Name von Team 1 nicht festgelegt",
+    "team2NotSet": "Name von Team 2 nicht festgelegt",
     "refereeNotSet": "Name des 1. Schiedsrichters nicht festgelegt",
     "scorerNotSet": "Name des Schreibers nicht festgelegt",
     "hallNotSet": "Halle nicht festgelegt",
     "cityNotSet": "Stadt nicht festgelegt",
     "leagueNotSet": "Liga nicht festgelegt",
     "dateNotSet": "Spieldatum/-zeit nicht festgelegt",
-    "needMorePlayers": "{{team}} team needs 2 players. Currently: {{count}}",
+    "needMorePlayers": "Team {{team}} braucht 2 Spieler. Aktuell: {{count}}",
     "captainNotSet": "Kapitän von Team {{team}} nicht festgelegt",
     "duplicateNumbers": "Team {{team}} hat doppelte Trikotnummern: {{numbers}}",
     "duplicatePlayers": "Team {{team}} hat doppelte Spieler: {{names}}",

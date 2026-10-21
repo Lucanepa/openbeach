@@ -32,6 +32,7 @@ import { Modal as KitModal, modalCancelClass, modalPrimaryClass, modalSaveClass,
 import { NOTICE } from '../ui/volleyui/tones.js'
 import { teamBoxStyle } from '../utils_beach/teamColours_beach'
 import { focusLeaves, steadyOrder } from '../utils_beach/rosterOrder_beach'
+import { coinTossConfirmIssues } from '../utils_beach/coinTossChecks_beach'
 
 // The coin toss page: one kit page card on the stone page (App_beach paints
 // it), full width, in the `.ov-kit` scope.
@@ -1361,112 +1362,12 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
 
     // Validation checks (skip for test matches)
     if (!match?.test) {
-      const validationErrors = []
-
-      // 1. Check team names are set (not default "Team 1"/"Team 2" or empty)
-      if (!team1Name || team1Name === 'Team 1' || team1Name.trim() === '') {
-        validationErrors.push(t('validation.team1NotSet'))
-      }
-      if (!team2Name || team2Name === 'Team 2' || team2Name.trim() === '') {
-        validationErrors.push(t('validation.team2NotSet'))
-      }
-
-      // 2. Check at least 1 referee and 1 scorer with names
-      const ref1 = match?.officials?.find(o => o.role === '1st referee')
-      const scorer = match?.officials?.find(o => o.role === 'scorer')
-      if (!ref1?.lastName || !ref1?.firstName) {
-        validationErrors.push(t('validation.refereeNotSet'))
-      }
-      if (!scorer?.lastName || !scorer?.firstName) {
-        validationErrors.push(t('validation.scorerNotSet'))
-      }
-
-      // 3. Check match info (hall, city, league, date)
-      if (!match?.hall || match.hall.trim() === '') {
-        validationErrors.push(t('validation.hallNotSet'))
-      }
-      if (!match?.city || match.city.trim() === '') {
-        validationErrors.push(t('validation.cityNotSet'))
-      }
-      if (!match?.league || match.league.trim() === '') {
-        validationErrors.push(t('validation.leagueNotSet'))
-      }
-      if (!match?.scheduledAt) {
-        validationErrors.push(t('validation.dateNotSet'))
-      }
-
-      // 4. Check exactly 2 players per team with numbers (beach volleyball)
-      const team1PlayersWithNumbers = team1Roster.filter(p => p.number != null && p.number !== '')
-      const team2PlayersWithNumbers = team2Roster.filter(p => p.number != null && p.number !== '')
-      if (team1PlayersWithNumbers.length !== 2) {
-        validationErrors.push(t('validation.needMorePlayers', { team: t('common.team1'), count: team1PlayersWithNumbers.length }))
-      }
-      if (team2PlayersWithNumbers.length !== 2) {
-        validationErrors.push(t('validation.needMorePlayers', { team: t('common.team2'), count: team2PlayersWithNumbers.length }))
-      }
-
-      // 5. Check captain is set for each team
-      const team1CaptainPlayer = team1Roster.find(p => p.isCaptain)
-      const team2CaptainPlayer = team2Roster.find(p => p.isCaptain)
-      if (!team1CaptainPlayer) {
-        validationErrors.push(t('validation.captainNotSet', { team: t('common.team1') }))
-      }
-      if (!team2CaptainPlayer) {
-        validationErrors.push(t('validation.captainNotSet', { team: t('common.team2') }))
-      }
-
-      // 7. Check for duplicate jersey numbers
-      const team1Numbers = team1Roster.filter(p => p.number != null && p.number !== '').map(p => p.number)
-      const team1DuplicateNumbers = team1Numbers.filter((num, idx) => team1Numbers.indexOf(num) !== idx)
-      if (team1DuplicateNumbers.length > 0) {
-        validationErrors.push(`Team 1 has duplicate jersey numbers: ${[...new Set(team1DuplicateNumbers)].join(', ')}`)
-      }
-      const team2Numbers = team2Roster.filter(p => p.number != null && p.number !== '').map(p => p.number)
-      const team2DuplicateNumbers = team2Numbers.filter((num, idx) => team2Numbers.indexOf(num) !== idx)
-      if (team2DuplicateNumbers.length > 0) {
-        validationErrors.push(`Team 2 has duplicate jersey numbers: ${[...new Set(team2DuplicateNumbers)].join(', ')}`)
-      }
-
-      // 8. Check for duplicate players (same last name and first name)
-      const team1PlayerNames = team1Roster.map(p => `${(p.lastName || '').toLowerCase()} ${(p.firstName || '').toLowerCase()}`.trim())
-      const team1DuplicatePlayers = team1PlayerNames.filter((name, idx) => name && team1PlayerNames.indexOf(name) !== idx)
-      if (team1DuplicatePlayers.length > 0) {
-        validationErrors.push(`Team 1 has duplicate players: ${[...new Set(team1DuplicatePlayers)].join(', ')}`)
-      }
-      const team2PlayerNames = team2Roster.map(p => `${(p.lastName || '').toLowerCase()} ${(p.firstName || '').toLowerCase()}`.trim())
-      const team2DuplicatePlayers = team2PlayerNames.filter((name, idx) => name && team2PlayerNames.indexOf(name) !== idx)
-      if (team2DuplicatePlayers.length > 0) {
-        validationErrors.push(`Team 2 has duplicate players: ${[...new Set(team2DuplicatePlayers)].join(', ')}`)
-      }
-
-      // 8. Check no birthdate is exactly 01.01.1900 (placeholder/error date)
+      // The checks (utils_beach/coinTossChecks_beach), in the scorer's
+      // language, with the team's name put in
+      const teamWord = { team1: team1Name || t('common.team1'), team2: team2Name || t('common.team2') }
+      const validationErrors = coinTossConfirmIssues({ match, team1Name, team2Name, team1Roster, team2Roster, manageDob })
+        .map(({ key, params }) => t(key, params?.team ? { ...params, team: teamWord[params.team] } : params))
       const allRosterPlayers = [...team1Roster, ...team2Roster]
-      if (manageDob) {
-        const playersWithBadDate = allRosterPlayers.filter(p => p.dob === '01.01.1900' || p.dob === '01/01/1900')
-        if (playersWithBadDate.length > 0) {
-          validationErrors.push('Some players have invalid birthdate (01.01.1900). Please correct these dates.')
-        }
-      }
-
-      // 9. Check for invalid player numbers (must be 1-99)
-      const team1InvalidNumbers = team1Roster.filter(p => p.number != null && (p.number < 1 || p.number > 99))
-      const team2InvalidNumbers = team2Roster.filter(p => p.number != null && (p.number < 1 || p.number > 99))
-      if (team1InvalidNumbers.length > 0) {
-        validationErrors.push(`Team 1 has invalid jersey numbers (must be 1-99): ${team1InvalidNumbers.map(p => p.number).join(', ')}`)
-      }
-      if (team2InvalidNumbers.length > 0) {
-        validationErrors.push(`Team 2 has invalid jersey numbers (must be 1-99): ${team2InvalidNumbers.map(p => p.number).join(', ')}`)
-      }
-
-      // 10. Check for players without numbers
-      const team1NoNumbers = team1Roster.filter(p => p.number == null || p.number === '')
-      const team2NoNumbers = team2Roster.filter(p => p.number == null || p.number === '')
-      if (team1NoNumbers.length > 0) {
-        validationErrors.push(`Team 1 has ${team1NoNumbers.length} player(s) without jersey numbers`)
-      }
-      if (team2NoNumbers.length > 0) {
-        validationErrors.push(`Team 2 has ${team2NoNumbers.length} player(s) without jersey numbers`)
-      }
 
       // Show validation errors if any
       if (validationErrors.length > 0) {
