@@ -3195,7 +3195,8 @@
     "pdfSaved": "PDF gespeichert",
     "pdfFailed": "Das PDF konnte nicht erstellt werden: {{error}}",
     "sentTitle": "PDF bereit",
-    "sent": "Es ist bei der Spielende-Seite angekommen. Sie können dieses Fenster schliessen."
+    "sent": "Es ist bei der Spielende-Seite angekommen. Sie können dieses Fenster schliessen.",
+    "remarksClipped": "BEMERKUNGEN: Der Text passt nicht ins Feld; das PDF druckt ihn vollständig auf Seite {{page}}."
   },
   "scorerMoved": {
     "title": "Auf einem anderen Gerät geführt",

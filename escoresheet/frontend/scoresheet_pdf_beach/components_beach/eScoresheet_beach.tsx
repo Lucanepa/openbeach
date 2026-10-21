@@ -205,7 +205,21 @@ const formatPlayerName = (firstName: string, lastName: string) => {
   return `${capitalizeWords(ln)} ${capitalizeWords(fn)}`;
 };
 
-export default function OpenbeachScoresheet({ matchData: initialMatchData, onDataReady }: { matchData?: any; onDataReady?: (fields: Record<string, any>) => void }) {
+// REMARKS: 10 px, smaller down to 6 px to fit its box (OpenVolley 4d4277be,
+// field-spec 8: never truncate). The text scrolled out of sight in its box
+// and the PDF printed only what fitted, without a word.
+const REMARKS_MAX_PX = 10;
+const REMARKS_MIN_PX = 6;
+
+/** The first line of a REMARKS box too small for its text: the PDF prints all of it on that page. */
+export const remarksContinued = (page: number) => `Remarks continue on page ${page}.`;
+
+export default function OpenbeachScoresheet({ matchData: initialMatchData, onDataReady, onRemarksClipped }: {
+  matchData?: any;
+  onDataReady?: (fields: Record<string, any>) => void;
+  /** The REMARKS text and the page the PDF prints it on when it does not fit its box even at 6 px, else null. */
+  onRemarksClipped?: (clipped: { text: string; page: number } | null) => void;
+}) {
   const [data, setData] = useState<Record<string, any>>({});
   const dataRef = useRef<Record<string, any>>({});
   const [currentMatchData, setCurrentMatchData] = useState<any>(initialMatchData);
@@ -3645,6 +3659,32 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
     );
   }
 
+  // REMARKS fitted to its box: the largest size that shows all of it, down
+  // to 6 px. Still too long, the box starts with "Remarks continue on page
+  // n." (the page after the sheet and its BMP pages), App warns above the
+  // sheet and the PDF prints the whole text on that page.
+  const remarksRef = useRef<HTMLTextAreaElement>(null);
+  const remarksValue: string = get('remarks') || '';
+  const [remarksPx, setRemarksPx] = useState(REMARKS_MAX_PX);
+  const [remarksClipped, setRemarksClipped] = useState(false);
+  const remarksPage = 3 + Math.ceil((Number(get('bmp_total_count')) || 0) / 16);
+  useLayoutEffect(() => {
+    const el = remarksRef.current;
+    if (!el) return;
+    const overflows = () => el.scrollHeight > el.clientHeight + 1;
+    let px = REMARKS_MAX_PX;
+    el.style.fontSize = `${px}px`;
+    while (px > REMARKS_MIN_PX && overflows()) {
+      px -= 0.5;
+      el.style.fontSize = `${px}px`;
+    }
+    setRemarksPx(px);
+    setRemarksClipped(!!remarksValue.trim() && overflows());
+  }, [remarksValue]);
+  useEffect(() => {
+    onRemarksClipped?.(remarksClipped ? { text: remarksValue, page: remarksPage } : null);
+  }, [remarksClipped, remarksValue, remarksPage, onRemarksClipped]);
+
   // Auto-refresh every 3 seconds by requesting fresh data from parent window
   useEffect(() => {
     const interval = setInterval(() => {
@@ -4289,11 +4329,16 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                 </div>
               </div>
 
+              {remarksClipped && (
+                <div data-testid="remarks-continued" className="px-1 pt-0.5 text-[8px] font-bold text-black">{remarksContinued(remarksPage)}</div>
+              )}
               <textarea
-                value={get('remarks') || ''}
+                ref={remarksRef}
+                data-testid="remarks-text"
+                value={remarksValue}
                 onChange={e => set('remarks', e.target.value)}
                 className="flex-1 w-full p-1 text-[10px] resize-none outline-none text-black bg-white"
-                style={{ maxHeight: '100%' }}
+                style={{ maxHeight: '100%', fontSize: `${remarksPx}px` }}
               />
 
               {/* Footer Inside Remarks */}

@@ -3195,7 +3195,8 @@
     "pdfSaved": "PDF salvato",
     "pdfFailed": "Non è stato possibile creare il PDF: {{error}}",
     "sentTitle": "PDF pronto",
-    "sent": "È stato inviato alla pagina di fine partita. Puoi chiudere questa finestra."
+    "sent": "È stato inviato alla pagina di fine partita. Puoi chiudere questa finestra.",
+    "remarksClipped": "OSSERVAZIONI: il testo non entra nel riquadro; il PDF lo stampa per intero a pagina {{page}}."
   },
   "scorerMoved": {
     "title": "Tenuta su un altro dispositivo",

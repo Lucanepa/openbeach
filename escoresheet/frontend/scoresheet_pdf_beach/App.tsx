@@ -18,6 +18,33 @@ const countPages = (): number => {
 
 const t = (key: string, opts?: Record<string, unknown>) => String(i18n.t(key, opts));
 
+/**
+ * REMARKS too long for their box on the sheet (OpenVolley 4d4277be): the
+ * whole text on pages of their own after the sheet (A4 landscape, as the
+ * sheet). `page` is the first of them, as the sheet's "Remarks continue on
+ * page n." says.
+ */
+export function addRemarksPages(pdf: any, text: string, title: string) {
+  const left = 15;
+  const top = 38;
+  const bottom = 210 - 12;
+  const fontPt = 11;
+  // jsPDF's line height: the font size times 1.15, in mm
+  const lineMm = fontPt * 1.15 * 25.4 / 72;
+  const perPage = Math.max(1, Math.floor((bottom - top) / lineMm));
+  pdf.setFontSize(fontPt);
+  const lines: string[] = pdf.splitTextToSize(text, 297 - 2 * left);
+  for (let i = 0; i === 0 || i < lines.length; i += perPage) {
+    pdf.addPage();
+    pdf.setFontSize(14);
+    pdf.text(i === 0 ? 'REMARKS (continued from the scoresheet)' : 'REMARKS (continued)', left, 20);
+    pdf.setFontSize(10);
+    pdf.text(title, left, 27);
+    pdf.setFontSize(fontPt);
+    pdf.text(lines.slice(i, i + perPage), left, top);
+  }
+}
+
 /** The page's URL action: 'getBlob' (the match-end approval), 'save', 'print' or none (preview). */
 export const pageAction = (search = typeof window !== 'undefined' ? window.location.search : '') =>
   new URLSearchParams(search).get('action');
@@ -43,6 +70,15 @@ export default function App({ matchData }: { matchData?: any }) {
   // The pages stay hidden until the first fit-to-window: no 100 % -> 125 % jump
   const [fitted, setFitted] = useState(false);
   const [savedNotice, setSavedNotice] = useState(false);
+  // REMARKS too long for their box even at the smallest size: warned above
+  // the sheet, and the PDF prints the whole text on a page of its own
+  const [remarksClipped, setRemarksClipped] = useState<{ text: string; page: number } | null>(null);
+  // (read by the PDF: the URL action's save runs the first render's handleSavePDF)
+  const remarksClippedRef = useRef<{ text: string; page: number } | null>(null);
+  const onRemarksClipped = useCallback((clipped: { text: string; page: number } | null) => {
+    remarksClippedRef.current = clipped;
+    setRemarksClipped(clipped);
+  }, []);
   const [isAutoFit, setIsAutoFit] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(2);
@@ -379,6 +415,8 @@ export default function App({ matchData }: { matchData?: any }) {
         const imgData = canvas.toDataURL('image/jpeg', 0.85);
         pdf.addImage(imgData, 'JPEG', 0, 0, 297, 210, undefined, 'FAST');
       }
+      const clippedRemarks = remarksClippedRef.current;
+      if (clippedRemarks) addRemarksPages(pdf, clippedRemarks.text, generateFilename().replace(/\.pdf$/i, ''));
 
       restoreAfterCapture(state);
       setPdfProgress({ step: 'finishing' });
@@ -469,6 +507,12 @@ export default function App({ matchData }: { matchData?: any }) {
         )}
       </div>
 
+      {remarksClipped && (
+        <div data-testid="remarks-clipped-warning" className="px-4 py-1.5 border-b border-amber-300 bg-amber-50 text-xs text-amber-900">
+          {t('scoresheet.remarksClipped', { page: remarksClipped.page })}
+        </div>
+      )}
+
       {/* Scrollable content area */}
       <div
         ref={scrollRef}
@@ -494,7 +538,7 @@ export default function App({ matchData }: { matchData?: any }) {
             userSelect: 'none',
           }}
         >
-          <OpenbeachScoresheet matchData={matchData} />
+          <OpenbeachScoresheet matchData={matchData} onRemarksClipped={onRemarksClipped} />
         </div>
         </div>
 

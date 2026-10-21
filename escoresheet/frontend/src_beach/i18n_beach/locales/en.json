@@ -3195,7 +3195,8 @@
     "pdfSaved": "PDF saved",
     "pdfFailed": "The PDF could not be made: {{error}}",
     "sentTitle": "PDF ready",
-    "sent": "It went to the match end page. You can close this window."
+    "sent": "It went to the match end page. You can close this window.",
+    "remarksClipped": "REMARKS: the text does not fit the box; the PDF prints all of it on page {{page}}."
   },
   "scorerMoved": {
     "title": "Scored on another device",

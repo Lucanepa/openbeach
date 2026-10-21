@@ -3195,7 +3195,8 @@
     "pdfSaved": "PDF enregistré",
     "pdfFailed": "Le PDF n'a pas pu être créé : {{error}}",
     "sentTitle": "PDF prêt",
-    "sent": "Il a été transmis à la page de fin de match. Vous pouvez fermer cette fenêtre."
+    "sent": "Il a été transmis à la page de fin de match. Vous pouvez fermer cette fenêtre.",
+    "remarksClipped": "REMARQUES : le texte ne tient pas dans la case ; le PDF l’imprime en entier en page {{page}}."
   },
   "scorerMoved": {
     "title": "Tenu sur un autre appareil",
