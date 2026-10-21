@@ -76,6 +76,10 @@ const CAPTAIN_OFF = 'border-stone-300 bg-white text-stone-400 hover:bg-stone-50'
 // The captain column fits its header word ("Captain", not a bare "C")
 const ROSTER_GRID = 'grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:grid-cols-[96px_minmax(0,1fr)_minmax(0,1fr)_84px_auto]'
 const ROSTER_GRID_DOB = 'sm:grid-cols-[96px_minmax(0,1fr)_minmax(0,1fr)_170px_84px_auto]'
+// A player's row: on a phone the numbers, C and Clear in a row that wraps
+// (at 130 % text the three ran past the card, Clear and the name fields with
+// them, OpenVolley 7ef94cdb), the name fields a line each; the grid from sm up
+const ROSTER_ROW = 'flex flex-wrap items-center gap-2 sm:grid sm:grid-cols-[96px_minmax(0,1fr)_minmax(0,1fr)_84px_auto]'
 
 // Date formatting helpers (outside component to avoid recreation)
 function formatDateToDDMMYYYY(dateStr) {
@@ -3406,7 +3410,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             const isCaptain = p.isCaptain || false
 
             return (
-              <div key={`h-${i}`} className={cn(ROSTER_GRID, manageDob && ROSTER_GRID_DOB, 'px-3 py-2.5', isCaptain && 'bg-emerald-50/60 ring-2 ring-inset ring-emerald-600', i === team1Roster.length - 1 && 'rounded-b-[7px]')}>
+              <div key={`h-${i}`} className={cn(ROSTER_ROW, manageDob && ROSTER_GRID_DOB, 'px-3 py-2.5', isCaptain && 'bg-emerald-50/60 ring-2 ring-inset ring-emerald-600', i === team1Roster.length - 1 && 'rounded-b-[7px]')}>
                 {/* Shirt number: 1 or 2 (the other player takes the other number) */}
                 <div className="order-1 flex gap-1 sm:order-none" role="group" aria-label={t('roster.numberLabel')}>
                   {[1, 2].map(num => {
@@ -3482,7 +3486,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     setTeam1Roster(updated)
                   }}
                 />}
-                <div className="order-2 flex justify-end sm:order-none sm:justify-center">
+                <div className="order-2 flex flex-1 justify-end sm:order-none sm:justify-center">
                   <button
                     type="button"
                     data-captain-toggle
@@ -3499,7 +3503,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     className={cn('inline-flex h-11 w-11 select-none items-center justify-center rounded-lg border-2 text-base font-bold transition-colors', isCaptain ? CAPTAIN_ON : CAPTAIN_OFF, FOCUS_RING)}
                   >C</button>
                 </div>
-                <div className="order-3 sm:order-none">
+                <div className="order-3 ml-auto sm:order-none">
                   <Button
                     variant="ghost"
                     size="xl"
@@ -3858,7 +3862,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             const isCaptain = p.isCaptain || false
 
             return (
-              <div key={`a-${i}`} className={cn(ROSTER_GRID, manageDob && ROSTER_GRID_DOB, 'px-3 py-2.5', isCaptain && 'bg-emerald-50/60 ring-2 ring-inset ring-emerald-600', i === team2Roster.length - 1 && 'rounded-b-[7px]')}>
+              <div key={`a-${i}`} className={cn(ROSTER_ROW, manageDob && ROSTER_GRID_DOB, 'px-3 py-2.5', isCaptain && 'bg-emerald-50/60 ring-2 ring-inset ring-emerald-600', i === team2Roster.length - 1 && 'rounded-b-[7px]')}>
                 {/* Shirt number: 1 or 2 (the other player takes the other number) */}
                 <div className="order-1 flex gap-1 sm:order-none" role="group" aria-label={t('roster.numberLabel')}>
                   {[1, 2].map(num => {
@@ -3934,7 +3938,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     setTeam2Roster(updated)
                   }}
                 />}
-                <div className="order-2 flex justify-end sm:order-none sm:justify-center">
+                <div className="order-2 flex flex-1 justify-end sm:order-none sm:justify-center">
                   <button
                     type="button"
                     data-captain-toggle
@@ -3951,7 +3955,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     className={cn('inline-flex h-11 w-11 select-none items-center justify-center rounded-lg border-2 text-base font-bold transition-colors', isCaptain ? CAPTAIN_ON : CAPTAIN_OFF, FOCUS_RING)}
                   >C</button>
                 </div>
-                <div className="order-3 sm:order-none">
+                <div className="order-3 ml-auto sm:order-none">
                   <Button
                     variant="ghost"
                     size="xl"
@@ -4511,23 +4515,29 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           )}
         </div>
       </div>
+      {/* min-w-0 cards and a heading row that wraps: at 130 % text on a
+          phone the title, the sync badge and Edit widened the Match info and
+          Match officials cards past the column (their right border and Edit
+          cut off, OpenVolley 7ef94cdb) */}
       <div className="grid gap-4 sm:grid-cols-2">
         {/* Match Info Card */}
         <div
           className={cn(
-            'flex flex-col justify-between gap-4 rounded-xl bg-stone-50/60 p-4 sm:p-5',
+            'flex min-w-0 flex-col justify-between gap-4 rounded-xl bg-stone-50/60 p-4 sm:p-5',
             matchInfoConfirmed ? 'border border-stone-200/70' : canConfirmMatchInfo ? 'border-2 border-sky-300' : 'border-2 border-amber-300'
           )}
         >
           <div>
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-1 basis-0 items-center gap-2">
                 <StatusBadge ready={matchInfoConfirmed} pending={!matchInfoConfirmed && canConfirmMatchInfo} />
                 <h3 className={BLOCK_TITLE}>{t('matchSetup.matchInfo')}</h3>
               </div>
               {/* Edit in the heading row, not a row of its own: the setup
-                  page did not fit a 900 px window */}
-              <div className="flex items-center gap-2">
+                  page did not fit a 900 px window. It goes under the title
+                  only when the title cannot wrap any further (the title's
+                  basis is 0: the row breaks on its longest word) */}
+              <div className="ml-auto flex items-center gap-2">
                 <SyncStatusIndicator status={matchInfoSyncStatus} onRetry={() => retrySyncForCard('matchInfo')} />
                 {matchInfoConfirmed && (
                   <Button variant="secondary" size="xl" onClick={() => setCurrentView('info')}>{t('common.edit')}</Button>
@@ -4586,14 +4596,14 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         </div>
 
         {/* Match Officials Card */}
-        <div className={cn('flex flex-col justify-between gap-4 p-4 sm:p-5', SETUP_BLOCK, !matchInfoConfirmed && 'pointer-events-none opacity-50')}>
+        <div className={cn('flex min-w-0 flex-col justify-between gap-4 p-4 sm:p-5', SETUP_BLOCK, !matchInfoConfirmed && 'pointer-events-none opacity-50')}>
           <div>
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-1 basis-0 items-center gap-2">
                 <StatusBadge ready={officialsConfigured} />
                 <h3 className={BLOCK_TITLE}>{t('matchSetup.matchOfficials')}</h3>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="ml-auto flex items-center gap-2">
                 <SyncStatusIndicator status={officialsSyncStatus} onRetry={() => retrySyncForCard('officials')} />
                 <Button variant="secondary" size="xl" onClick={() => setCurrentView('officials')} disabled={!matchInfoConfirmed}>{t('common.edit')}</Button>
               </div>
