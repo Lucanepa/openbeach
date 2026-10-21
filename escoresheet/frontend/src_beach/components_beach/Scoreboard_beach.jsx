@@ -5060,14 +5060,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         : t('scoreboard.actions.substitution', 'Substitution')
       eventDescription = `${substitutionType} — ${teamName} (${t('scoreboard.actions.substitutionDetail', 'OUT: {{out}} IN: {{in}}', { out: playerOut, in: playerIn })}) (${scoreText(team1Score, team2Score)})`
     } else if (event.type === 'set_start') {
-      // Format the relative time as MM:SS
-      const relativeTime = typeof event.ts === 'number' ? event.ts : 0
-      const totalSeconds = Math.floor(relativeTime / 1000)
-      const minutes = Math.floor(totalSeconds / 60)
-      const seconds = totalSeconds % 60
-      const minutesStr = String(minutes).padStart(2, '0')
-      const secondsStr = String(seconds).padStart(2, '0')
-      eventDescription = `${t('corrections.describe.setStart', 'Set start')} — ${minutesStr}:${secondsStr}`
+      // No time (as OpenVolley): it was an MM:SS of a numeric ts, and the
+      // set start's ts is an ISO string, so every set read 'Set start — 00:00'
+      eventDescription = t('corrections.describe.setStart', 'Set start')
     } else if (event.type === 'rally_start') {
       eventDescription = t('corrections.describe.rallyStart', 'Rally started')
     } else if (event.type === 'replay') {
@@ -5228,7 +5223,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     } else if (event.type === 'technical_to') {
       eventDescription = t('corrections.describe.technicalTimeout', 'Technical time-out')
     } else if (event.type === 'forfait') {
-      const winnerTeam = event.payload?.winner === 'team1'
+      // the event names the forfeiting team: the winner is its opponent
+      const winner = event.payload?.winner ?? (event.payload?.team === 'team1' ? 'team2' : 'team1')
+      const winnerTeam = winner === 'team1'
         ? (data?.team1Team?.name || 'Team 1')
         : (data?.team2Team?.name || 'Team 2')
       eventDescription = `${t('scoreboard.actions.forfeit', 'Forfeit')} — ${t('scoreboard.actions.wins', '{{team}} wins', { team: winnerTeam })}`
