@@ -36,7 +36,8 @@
     "tryFullscreen": "Essayez le plein écran",
     "fullscreenHint": "Le plein écran permet de gagner de l'espace en masquant l'interface utilisateur du navigateur.",
     "later": "Plus tard",
-    "saving": "Enregistrement…"
+    "saving": "Enregistrement…",
+    "timeLabel": "Heure"
   },
   "alert": {
     "error": "Erreur",
@@ -447,7 +448,11 @@
     },
     "setupLayout": {
       "coinTossNeeds": "Complétez d'abord les infos du match, les officiels et les deux équipes."
-    }
+    },
+    "placeholders": {
+      "hhMm": "HH:MM"
+    },
+    "enterTeamName": "Saisir le nom de l'équipe"
   },
   "scoreboard": {
     "set": "Set",
@@ -967,7 +972,20 @@
       "title": "Ordre de service",
       "change": "Changer",
       "changeAria": "Changer l'ordre de service de {{team}} : {{second}} sert en premier, puis {{first}}"
-    }
+    },
+    "medical": "Médical",
+    "team": "Équipe",
+    "mtoTitle": "Temps mort médical (MTO)",
+    "mtoDescription": "5 min de récupération – illimité",
+    "ritTitle": "Interruption de récupération (RIT)",
+    "ritNoBlood": "Sans saignement",
+    "ritToilet": "Passage aux toilettes",
+    "ritWeather": "Intempéries",
+    "ritOnlyOne": "Une seule RIT par match",
+    "ritUsed": "Déjà utilisée",
+    "ritAlreadyUsed": "RIT déjà utilisée dans ce match",
+    "playerRecovered": "Joueur rétabli",
+    "deviceDisconnected": "{{device}} déconnecté"
   },
   "settings": {
     "title": "Paramètres",

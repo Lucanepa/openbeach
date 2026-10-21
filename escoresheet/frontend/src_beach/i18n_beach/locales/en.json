@@ -36,7 +36,8 @@
     "tryFullscreen": "Try Fullscreen",
     "fullscreenHint": "Fullscreen may provide more space by hiding browser UI.",
     "later": "Later",
-    "saving": "Saving…"
+    "saving": "Saving…",
+    "timeLabel": "Time"
   },
   "alert": {
     "error": "Error",
@@ -448,6 +449,9 @@
     },
     "setupLayout": {
       "coinTossNeeds": "Complete the match info, the officials and both teams first."
+    },
+    "placeholders": {
+      "hhMm": "HH:MM"
     }
   },
   "scoreboard": {
@@ -968,7 +972,20 @@
       "title": "Serve order",
       "change": "Change",
       "changeAria": "Change the serve order of {{team}}: {{second}} serves first, then {{first}}"
-    }
+    },
+    "medical": "Medical",
+    "team": "Team",
+    "mtoTitle": "Medical time-out (MTO)",
+    "mtoDescription": "5 min recovery – unlimited",
+    "ritTitle": "Recovery interruption time (RIT)",
+    "ritNoBlood": "No blood",
+    "ritToilet": "Use of toilet",
+    "ritWeather": "Severe weather",
+    "ritOnlyOne": "Only one RIT per match",
+    "ritUsed": "Already used",
+    "ritAlreadyUsed": "RIT already used in this match",
+    "playerRecovered": "Player recovered",
+    "deviceDisconnected": "{{device}} disconnected"
   },
   "settings": {
     "title": "Settings",

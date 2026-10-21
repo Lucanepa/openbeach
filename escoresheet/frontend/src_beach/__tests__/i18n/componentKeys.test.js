@@ -23,7 +23,10 @@ const SCREENS = [
   'components_beach/auth/UserButton_beach.jsx',
   'components_beach/auth/InviteCodeForm_beach.jsx',
   'diagnostics_beach/DiagnosticsSection_beach.jsx',
-  'components_beach/scoreboard/PhoneScoreboard_beach.jsx'
+  'components_beach/scoreboard/PhoneScoreboard_beach.jsx',
+  // the MTO / RIT dialog was English in every language (its keys were in no locale)
+  'components_beach/Scoreboard_beach.jsx',
+  'components_beach/TimeInput24_beach.jsx'
 ]
 
 function keysOf(file) {

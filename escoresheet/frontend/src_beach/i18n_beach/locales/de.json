@@ -36,7 +36,8 @@
     "tryFullscreen": "Versuchen Sie den Vollbildmodus",
     "fullscreenHint": "Der Vollbildmodus kann mehr Platz bieten, indem er die Benutzeroberfläche des Browsers ausblendet.",
     "later": "Später",
-    "saving": "Speichern…"
+    "saving": "Speichern…",
+    "timeLabel": "Zeit"
   },
   "alert": {
     "error": "Fehler",
@@ -447,7 +448,11 @@
     },
     "setupLayout": {
       "coinTossNeeds": "Zuerst Spielinfos, Offizielle und beide Teams ausfüllen."
-    }
+    },
+    "placeholders": {
+      "hhMm": "HH:MM"
+    },
+    "enterTeamName": "Teamname eingeben"
   },
   "scoreboard": {
     "set": "Satz",
@@ -967,7 +972,20 @@
       "title": "Aufschlagreihenfolge",
       "change": "Ändern",
       "changeAria": "Aufschlagreihenfolge von {{team}} ändern: zuerst {{second}}, dann {{first}}"
-    }
+    },
+    "medical": "Medizinisch",
+    "team": "Team",
+    "mtoTitle": "Medizinisches Timeout (MTO)",
+    "mtoDescription": "5 Min. Erholung – unbegrenzt",
+    "ritTitle": "Erholungsunterbrechung (RIT)",
+    "ritNoBlood": "Ohne Blut",
+    "ritToilet": "Toilettengang",
+    "ritWeather": "Unwetter",
+    "ritOnlyOne": "Nur eine RIT pro Spiel",
+    "ritUsed": "Bereits genutzt",
+    "ritAlreadyUsed": "RIT in diesem Spiel bereits genutzt",
+    "playerRecovered": "Spieler erholt",
+    "deviceDisconnected": "{{device}} getrennt"
   },
   "settings": {
     "title": "Einstellungen",

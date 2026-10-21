@@ -36,7 +36,8 @@
     "tryFullscreen": "Versuchen Sie den Vollbildmodus",
     "fullscreenHint": "Der Vollbildmodus kann mehr Platz bieten, indem er die Benutzeroberfläche des Browsers ausblendet.",
     "later": "Spöter",
-    "saving": "Speichern…"
+    "saving": "Speichern…",
+    "timeLabel": "Ziit"
   },
   "alert": {
     "error": "Fähler",
@@ -447,7 +448,11 @@
     },
     "setupLayout": {
       "coinTossNeeds": "Zersch Spiilinfo, Offizielli und beidi Teams uusfülle."
-    }
+    },
+    "placeholders": {
+      "hhMm": "HH:MM"
+    },
+    "enterTeamName": "Teamname iigäh"
   },
   "scoreboard": {
     "set": "Satz",
@@ -967,7 +972,20 @@
       "title": "Ufschlagreihefolg",
       "change": "Ändere",
       "changeAria": "Ufschlagreihefolg vo {{team}} ändere: zerscht {{second}}, dänn {{first}}"
-    }
+    },
+    "medical": "Medizinisch",
+    "team": "Team",
+    "mtoTitle": "Medizinischs Timeout (MTO)",
+    "mtoDescription": "5 Min. Erholig – unbegränzt",
+    "ritTitle": "Erholigsunterbruch (RIT)",
+    "ritNoBlood": "Ohni Bluet",
+    "ritToilet": "WC-Bsuech",
+    "ritWeather": "Unwätter",
+    "ritOnlyOne": "Nume ei RIT pro Spiil",
+    "ritUsed": "Scho brucht",
+    "ritAlreadyUsed": "RIT i dem Spiil scho brucht",
+    "playerRecovered": "Spieler isch erholt",
+    "deviceDisconnected": "{{device}} trännt"
   },
   "settings": {
     "title": "Iistellige",
