@@ -1407,7 +1407,8 @@
       "cancelKeepsUnapproved": "Abbrechen lässt das Spiel ungenehmigt. Ohne PDF genehmigen genehmigt es jetzt: Das PDF später aus dem Matchblatt speichern.",
       "page": "Seite {{page}} von {{pages}}",
       "keepWindowOpen": "Das Matchblatt-Fenster offen lassen, bis das PDF fertig ist."
-    }
+    },
+    "closedOnServer": "Dieses Spiel ist auf dem Server abgeschlossen und kann hier nicht mehr geändert werden. Nur ein Admin kann es wieder öffnen («Spiel wieder öffnen»)."
   },
   "scoresheetPdf": {
     "zoomOut": "Verchliinere",

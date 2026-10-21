@@ -1407,7 +1407,8 @@
       "cancelKeepsUnapproved": "Annuler laisse le match non approuvé. Approuver sans PDF l'approuve maintenant : enregistrez le PDF depuis la feuille de match plus tard.",
       "page": "Page {{page}} sur {{pages}}",
       "keepWindowOpen": "Laissez la fenêtre de la feuille de match ouverte jusqu'à ce que le PDF soit prêt."
-    }
+    },
+    "closedOnServer": "Ce match est clôturé sur le serveur : il ne peut plus être modifié ici. Seul un admin peut le rouvrir (Rouvrir le match)."
   },
   "scoresheetPdf": {
     "zoomOut": "Réduire",

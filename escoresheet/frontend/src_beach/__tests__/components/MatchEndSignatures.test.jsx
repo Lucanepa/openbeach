@@ -151,6 +151,18 @@ describe('MatchEnd_beach: Re-sign and Clear', () => {
     expect(screen.getByTestId('signature-clear-captain-a')).toHaveAttribute('title', 'Match approved or closed: signatures can no longer change')
   })
 
+  // OpenVolley 6dd1c1a8: a match the server has closed only offers the
+  // closed actions (2026-10-20: Reopen last set on a restored closed match
+  // cleared its signatures while the server refused every change)
+  it('a match closed on the server: the closed actions with the reason, no Reopen last set or Approve', async () => {
+    await seed({ status: 'final' })
+    renderMatchEnd()
+    expect(await screen.findByTestId('matchend-closed-on-server')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reopen last set' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Confirm and approve/ })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Close match' })).toBeInTheDocument()
+  })
+
   it('a test match: saved, never queued', async () => {
     await seed({ test: true })
     renderMatchEnd()

@@ -1408,7 +1408,8 @@
       "cancelKeepsUnapproved": "Cancel leaves the match not approved. Approve without PDF approves it now: save the PDF from the scoresheet later.",
       "page": "Page {{page}} of {{pages}}",
       "keepWindowOpen": "Keep the scoresheet window open until the PDF is ready."
-    }
+    },
+    "closedOnServer": "This match is closed on the server: it can no longer be changed here. Only an admin can reopen it (Reopen match)."
   },
   "scoresheetPdf": {
     "zoomOut": "Zoom Out",

@@ -35,6 +35,7 @@ import { remarksWithMedical } from '../utils_beach/medicalRemarks_beach'
 import { plausibleMinutes } from '../../scoresheet_pdf_beach/components_beach/sheetFormat_beach'
 import { isoOf, matchTimes, setEndMs, setStartMs } from '../../scoresheet_pdf_beach/components_beach/matchTimes_beach'
 import { formatTimeLocal } from '../utils_beach/timeUtils_beach'
+import { isKnownClosedOnServer } from '../utils_beach/matchHandover_beach'
 import { saveMatchSignature, signatureEditLocked, signaturesPayload, clearedPostMatchSignatures, POST_MATCH_SIGNATURE_KEYS } from '../utils_beach/signatures_beach'
 import { approvalSignatureSources, phoneSignContext, signatureSourceUpdate, signedOnPhone, SLOT_OF_ROLE } from '../utils_beach/phoneSignature_beach'
 import { relayMatchKey } from '../utils_beach/relayPublisher_beach'
@@ -385,6 +386,16 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     return () => clearTimeout(timer)
   }, [data, closePadWhenShown])
   const [isApproved, setIsApproved] = useState(false)
+  // The server has closed the match (a closed match restored here, approved
+  // on another device: the server refuses every change). Its actions are the
+  // approved ones (Close match, Reopen match) with the reason; no Reopen last
+  // set, Corrections, Approve or remarks edit, the signatures stay locked. As
+  // OpenVolley 6dd1c1a8 (2026-10-20 23:32: Reopen last set on a restored
+  // closed match reopened it here and cleared its signatures while the server
+  // refused every change).
+  const [serverClosed, setServerClosed] = useState(false)
+  const closedOnServer = serverClosed || isKnownClosedOnServer(data?.match)
+  const finalActions = isApproved || closedOnServer
   const [isSaving, setIsSaving] = useState(false)
   // showCloseConfirm modal removed - now using direct post-approval buttons
   const [downloadProgress, setDownloadProgress] = useState(null) // { json: boolean, pdf: boolean }
@@ -441,6 +452,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       return null
     }
     setApprovalFeature(f => (f === 'unsupported' ? f : 'available'))
+    if (res.data?.match?.closed_at) setServerClosed(true)
     const bySlot = approvalsBySlot(res.data?.approvals)
     try {
       await db.matches.update(matchId, { accountApprovals: Object.keys(bySlot).length ? bySlot : null })
@@ -492,7 +504,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
   // Prevent accidental navigation team2 before approval
   // Skip warning during save process (isSaving) to avoid dialog during PDF generation
   useEffect(() => {
-    if (isApproved || isSaving) return // Allow navigation after approval or during save
+    if (finalActions || isSaving) return // Allow navigation after approval (or closed on the server) or during save
 
     const handleBeforeUnload = (e) => {
       e.preventDefault()
@@ -502,7 +514,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
 
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [isApproved, isSaving])
+  }, [finalActions, isSaving])
 
   // Calculate set results for Results component - must be before early return to maintain hook order
   const calculateSetResults = useMemo(() => {
@@ -761,7 +773,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
   const allSignaturesDone = currentStep === 'complete'
 
   // Re-sign and Clear close once the match is approved or closed
-  const signaturesLocked = signatureEditLocked(match, { isApproved })
+  const signaturesLocked = signatureEditLocked(match, { isApproved: finalActions })
   // The PIN-approval line of an official's box: approved, offered, or why not.
   // Only a beach scorer or referee account (or an admin) may send approvals
   // of a beach match (the server checks the same)
@@ -1463,6 +1475,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
 
       // Update local state
       setIsApproved(false)
+      setServerClosed(false)
     } catch (error) {
       console.error('[MatchEnd] Error reopening match:', error)
       showAlert(t('matchEnd.errorReopeningMatch', { error: error.message }), 'error')
@@ -1472,6 +1485,11 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
   // Handle reopening the last set for corrections
   const handleReopenLastSet = async () => {
     cLogger.logHandler('handleReopenLastSet', { matchId })
+    // Closed on the server: it would refuse every change (the button is not shown)
+    if (closedOnServer) {
+      showAlert(t('matchEnd.closedOnServer'), 'error')
+      return
+    }
 
     try {
       // Find the last (highest index) set
@@ -1653,7 +1671,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         </div>
       </section>
 
-      {/* Captain signatures, right after the winner */}
+      {/* Captain signatures, right after the winner (locked once closed) */}
       {!isApproved && (
         <section className={CARD}>
           <h2 className={cn(CARD_TITLE, 'mb-3')}>{t('matchEnd.teamCaptains')}</h2>
@@ -1681,7 +1699,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       <section className={CARD}>
         <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className={CARD_TITLE}>{t('matchEnd.remarks')}</h2>
-          {!isApproved && (
+          {!finalActions && (
             <Button
               variant="secondary"
               size="md"
@@ -1720,9 +1738,14 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         </section>
       )}
 
+      {closedOnServer && !isApproved && (
+        <p role="status" className="mb-3 rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-sm text-sky-900" data-testid="matchend-closed-on-server">
+          {t('matchEnd.closedOnServer')}
+        </p>
+      )}
       {/* Actions: the one red primary, the rest outline */}
       <div className="flex flex-wrap gap-2">
-        {isApproved ? (
+        {finalActions ? (
           <>
             <Button variant="dark" size="xl" className="min-w-[150px] flex-1" onClick={handleCloseMatch} disabled={isClosing} loading={isClosing}>
               {t('matchEnd.closeMatch')}
@@ -1733,10 +1756,12 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
           </>
         ) : (
           <>
-            <Button variant="primary" size="xl" className="min-w-[150px] flex-1" onClick={handleApprove} disabled={approveBlocked} loading={isSaving}>
+            {/* at least h-11, taller when Android's larger text wraps it; Reopen
+                last set the same size beside it (the owner, 2026-10-21) */}
+            <Button variant="primary" size="xl" className="h-auto min-h-11 min-w-[150px] flex-1 py-2 text-center leading-tight" onClick={handleApprove} disabled={approveBlocked} loading={isSaving}>
               {isSaving ? t('matchEnd.downloading') : t('matchEnd.approveParams')}
             </Button>
-            <Button variant="danger-outline" size="xl" onClick={askReopenLastSet}>
+            <Button variant="danger-outline" size="xl" className="h-auto min-h-11 min-w-[150px] flex-1 py-2 text-center leading-tight" onClick={askReopenLastSet}>
               {t('matchEnd.reopenLastSet')}
             </Button>
             <Button variant="secondary" size="xl" onClick={onManualAdjustments}>

@@ -171,3 +171,19 @@ export async function closeMovedMatches(database, { check }) {
   }
   return n
 }
+
+// The states of a match the server has closed (db/007)
+const CLOSING_STATUSES = ['approved', 'final']
+
+/**
+ * Is the local match known to be closed on the server? It carries the
+ * server's closed_at, it was closed on the device that took it over
+ * (OV_SCORER_MOVED, closed), or its local status is approved / final. Never
+ * a test match. (OpenVolley utils/matchReopen isKnownClosedOnServer.)
+ */
+export function isKnownClosedOnServer(match) {
+  if (!match || match.test === true) return false
+  if (match.closed_at) return true
+  if (isScorerMoved(match) && match.cloudBlock?.closed === true) return true
+  return CLOSING_STATUSES.includes(match.status)
+}

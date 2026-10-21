@@ -1407,7 +1407,8 @@
       "cancelKeepsUnapproved": "Annulla lascia la partita non approvata. Approva senza PDF la approva ora: salva il PDF dal referto più tardi.",
       "page": "Pagina {{page}} di {{pages}}",
       "keepWindowOpen": "Tieni aperta la finestra del referto finché il PDF è pronto."
-    }
+    },
+    "closedOnServer": "Questa partita è chiusa sul server: qui non può più essere modificata. Solo un admin può riaprirla (Riapri partita)."
   },
   "scoresheetPdf": {
     "zoomOut": "Riduci",
