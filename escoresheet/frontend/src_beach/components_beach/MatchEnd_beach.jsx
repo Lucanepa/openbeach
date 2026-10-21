@@ -31,7 +31,7 @@ import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { sanitizeForFilename } from '../utils_beach/stringUtils_beach'
 import { openAppWindow } from '../utils_beach/openAppWindow_beach'
 import { waitForScoresheetPdf, PDF_FAIL, PDF_REQUEST_PARAM } from '../utils_beach/scoresheetPdfRequest_beach'
-import { remarksWithMedical } from '../utils_beach/medicalRemarks_beach'
+import { sheetRemarksText } from '../utils_beach/sheetRemarks_beach'
 import { plausibleMinutes } from '../../scoresheet_pdf_beach/components_beach/sheetFormat_beach'
 import { isoOf, matchTimes, setEndMs, setStartMs } from '../../scoresheet_pdf_beach/components_beach/matchTimes_beach'
 import { formatTimeLocal } from '../utils_beach/timeUtils_beach'
@@ -1793,10 +1793,11 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
           )}
         </div>
         <div className={cn(SHEET_BOX, 'min-h-[60px]')}>
-          {/* the scorer's remarks, then the MTO / RIT lines (as on the sheet) */}
+          {/* the scorer's remarks, then the MTO / RIT lines and a set past the
+              running score's 44 boxes (as on the sheet: sheetRemarks_beach) */}
           <RemarksBox
             overflowSanctions={overflowSanctions}
-            remarks={remarksWithMedical(match?.remarks || '', events, { teamAKey: match?.coinTossTeamA || 'team1', teamNames: { team1: team1?.name || '', team2: team2?.name || '' } })}
+            remarks={sheetRemarksText(match?.remarks || '', { events, sets, teamAKey: match?.coinTossTeamA || 'team1', teamNames: { team1: team1?.name || '', team2: team2?.name || '' } })}
           />
         </div>
       </section>

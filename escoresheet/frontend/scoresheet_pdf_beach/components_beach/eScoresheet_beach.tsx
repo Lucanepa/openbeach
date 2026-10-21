@@ -4,7 +4,9 @@ import enLocale from 'i18n-iso-countries/langs/en.json';
 import { capitalizeWords, cleanTeamName, plausibleMinutes } from './sheetFormat_beach';
 import { isoOf, setEndMs, setStartMs } from './matchTimes_beach';
 // MTO / RIT: the chart marks and the remarks lines (shared with MatchEnd)
-import { medicalChartMarks, medicalRemarkLines } from '../../src_beach/utils_beach/medicalRemarks_beach.js';
+import { medicalChartMarks } from '../../src_beach/utils_beach/medicalRemarks_beach.js';
+// REMARKS: the scorer's own, MTO / RIT, a set past the 44 boxes (shared with MatchEnd)
+import { sheetRemarksText } from '../../src_beach/utils_beach/sheetRemarks_beach.js';
 
 // The sheet's many debug lines (whole match objects) only when asked for:
 // localStorage obScoresheetDebug = '1'. Logging them always slowed the
@@ -3029,27 +3031,17 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
       // Store total BMP count for pagination
       set('bmp_total_count', bmpRowIndex);
 
-      // MTO / RIT remarks lines (rule 26.2.2.7), from the same helper as the
-      // match end page's Remarks card
-      const mtoRitRemarks: string[] = medicalRemarkLines(events, {
+      // Forfait remarks are stored directly in match.remarks (FIVB format):
+      // CoinToss/Scoreboard saves the proper remark text. After them the
+      // remarks the sheet writes itself: the MTO / RIT lines (rule 26.2.2.7)
+      // and a set past the running score's 44 boxes, from the same helper as
+      // the match end page's Remarks card (sheetRemarks_beach)
+      const remarksText = sheetRemarksText(match?.remarks || '', {
+        events,
+        sets,
         teamAKey: match?.coinTossTeamA || 'team1',
         teamNames: { team1: team1Team?.name || '', team2: team2Team?.name || '' }
-      }).filter((line: string) => !(match?.remarks || '').includes(line));
-
-      // Forfait remarks are now stored directly in match.remarks (FIVB format)
-      // No auto-generation needed — CoinToss/Scoreboard saves the proper remark text
-
-      // Combine existing remarks (including forfait) with MTO/RIT remarks
-      let remarksText = '';
-      if (match?.remarks) {
-        remarksText = match.remarks;
-      }
-      if (mtoRitRemarks.length > 0) {
-        if (remarksText) {
-          remarksText += '\n\n';
-        }
-        remarksText += mtoRitRemarks.join('\n');
-      }
+      });
 
       if (remarksText) {
         set('remarks', remarksText);
