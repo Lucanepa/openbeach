@@ -6,6 +6,11 @@ import { NOTICE } from '../ui/volleyui/tones.js'
 import { cn } from '../ui/volleyui/cn.js'
 
 const points = (v) => (typeof v === 'number' ? v : Number(v) || 0)
+// An event's set in either shape: a local / JSON backup's setIndex, the
+// server's set_index (the database source). Read as setIndex only, past set 1
+// every event of a database restore counted as set 1: no time-outs and no
+// serving team (OpenVolley 1b6fb432).
+const setOf = (e) => e?.setIndex ?? e?.set_index ?? null
 
 /**
  * What a restore would bring back, from a backup in any of its shapes (the
@@ -30,8 +35,10 @@ export function restorePreviewSummary(d = {}) {
   const lineupOf = (team, live) =>
     lineupEvents.find(e => e.payload?.team === team)?.payload?.lineup || (isDbFormat ? live : null) || null
 
-  const timeoutEvents = events.filter(e => e.type === 'timeout' && e.setIndex === currentSetIndex)
-  const lastPoint = events.filter(e => e.type === 'point').sort((a, b) => (b.seq || 0) - (a.seq || 0))[0]
+  const timeoutEvents = events.filter(e => e.type === 'timeout' && setOf(e) === currentSetIndex)
+  // The team that won the last rally of the current set serves (beach: the
+  // rally winner serves); before its first point, the live state's
+  const lastPoint = events.filter(e => e.type === 'point' && (setOf(e) == null || setOf(e) === currentSetIndex)).sort((a, b) => (b.seq || 0) - (a.seq || 0))[0]
 
   return {
     team1Name,
@@ -50,7 +57,7 @@ export function restorePreviewSummary(d = {}) {
       team1: points(s.team1Points ?? s.team1_points),
       team2: points(s.team2Points ?? s.team2_points)
     })),
-    servingTeam: lastPoint?.payload?.scoringTeam || d.liveState?.serving_team || 'team1'
+    servingTeam: lastPoint?.payload?.team || lastPoint?.payload?.scoringTeam || d.liveState?.serving_team || 'team1'
   }
 }
 

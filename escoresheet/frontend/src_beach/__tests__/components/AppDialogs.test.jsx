@@ -44,6 +44,22 @@ describe('restore preview', () => {
     expect(s.team2Lineup).toEqual({ I: 5 })
   })
 
+  // OpenVolley 1b6fb432: the server's event rows say set_index
+  it('a database restore counts each event in its own set (set_index)', () => {
+    const s = restorePreviewSummary({
+      match: { team1_team: { name: 'A' } },
+      sets: [{ index: 1, team1_points: 21, team2_points: 15, finished: true }, { index: 2, team1_points: 3, team2_points: 4 }],
+      events: [
+        { type: 'timeout', set_index: 1, payload: { team: 'team1' } },
+        { type: 'timeout', set_index: 2, payload: { team: 'team2' } },
+        { type: 'point', set_index: 1, seq: 40, payload: { team: 'team1' } },
+        { type: 'point', set_index: 2, seq: 7, payload: { team: 'team2' } }
+      ],
+      liveState: { current_set: 2, serving_team: 'team1' }
+    })
+    expect(s).toMatchObject({ currentSetIndex: 2, team1Timeouts: 0, team2Timeouts: 1, servingTeam: 'team2' })
+  })
+
   it('a light, translated decision dialog: Cancel left, Restore right', async () => {
     await i18n.changeLanguage('de')
     const onConfirm = vi.fn()
