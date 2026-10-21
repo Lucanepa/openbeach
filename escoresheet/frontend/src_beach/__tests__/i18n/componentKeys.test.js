@@ -26,7 +26,9 @@ const SCREENS = [
   'components_beach/scoreboard/PhoneScoreboard_beach.jsx',
   // the MTO / RIT dialog was English in every language (its keys were in no locale)
   'components_beach/Scoreboard_beach.jsx',
-  'components_beach/TimeInput24_beach.jsx'
+  'components_beach/TimeInput24_beach.jsx',
+  // the guide showed raw keys (its button demo, troubleshooting q11 to q16)
+  'components_beach/InteractiveGuide_beach.jsx'
 ]
 
 function keysOf(file) {

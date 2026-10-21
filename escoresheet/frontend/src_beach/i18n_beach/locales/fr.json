@@ -2138,13 +2138,11 @@
       "refStep3": "On the referee's device, open the Referee Dashboard page",
       "refStep4": "Enter the PIN to connect",
       "refTip": "Scan the QR code shown in Options for quick access on mobile devices.",
-      "startFirst": "Start a rally first before awarding points.",
-      "pointAwarded": "Point awarded! Rally ended.",
-      "rallyInProgress": "Rally in progress",
-      "waitingForRally": "Waiting for rally to start",
-      "enabled": "Enabled",
-      "disabled": "Disabled",
-      "reset": "Reset Demo"
+      "connection": "Connexion",
+      "lan": "Réseau local",
+      "lanDesc": "les appareils du même Wi-Fi se connectent à cet appareil, sans Internet",
+      "cloud": "Cloud",
+      "cloudDesc": "les appareils, où qu'ils soient, se connectent via le serveur OpenBeach (Internet requis)"
     },
     "timeoutDemo": {
       "title": "Timeout Rules",
@@ -2219,7 +2217,21 @@
       "exportJson": "Export JSON",
       "uploadCloud": "Upload to Cloud"
     },
-    "footer": "openBeach eScoresheet - Professional Volleyball Scoring"
+    "footer": "openBeach eScoresheet - Professional Volleyball Scoring",
+    "buttonDemo": {
+      "title": "États des boutons",
+      "instruction": "Démarrez un échange, puis attribuez un point : chaque bouton n'est actif que lorsqu'il peut être utilisé.",
+      "alreadyActive": "Un échange est déjà en cours.",
+      "rallyStarted": "Échange démarré : attribuez maintenant un point.",
+      "startFirst": "Démarrez d'abord un échange avant d'attribuer des points.",
+      "pointAwarded": "Point attribué ! Échange terminé.",
+      "rallyInProgress": "Échange en cours",
+      "waitingForRally": "En attente du début de l'échange",
+      "enabled": "Actif",
+      "disabled": "Inactif",
+      "reset": "Réinitialiser la démo",
+      "tryIt": "Essayez"
+    }
   },
   "manualAdjustmentsEditor": {
     "title": "Ajustements Manuels",

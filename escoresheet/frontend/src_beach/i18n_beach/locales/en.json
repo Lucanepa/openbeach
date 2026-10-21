@@ -2138,13 +2138,11 @@
       "refStep3": "On the referee's device, open the referee dashboard page",
       "refStep4": "Enter the PIN to connect",
       "refTip": "Scan the QR code shown in options for quick access on mobile devices.",
-      "startFirst": "Start a rally first before awarding points.",
-      "pointAwarded": "Point awarded! Rally ended.",
-      "rallyInProgress": "Rally in progress",
-      "waitingForRally": "Waiting for rally to start",
-      "enabled": "Enabled",
-      "disabled": "Disabled",
-      "reset": "Reset demo"
+      "connection": "Connection",
+      "lan": "Local network",
+      "lanDesc": "devices on the same Wi-Fi connect to this device, no internet needed",
+      "cloud": "Cloud",
+      "cloudDesc": "devices anywhere connect through the OpenBeach server (needs internet)"
     },
     "timeoutDemo": {
       "title": "Timeout rules",
@@ -2219,7 +2217,21 @@
       "exportJson": "Export JSON",
       "uploadCloud": "Upload to cloud"
     },
-    "footer": "openBeach eScoresheet - professional volleyball scoring"
+    "footer": "openBeach eScoresheet - professional volleyball scoring",
+    "buttonDemo": {
+      "title": "Button states",
+      "instruction": "Start a rally, then award a point: each button is on only when it can be used.",
+      "alreadyActive": "A rally is already in progress.",
+      "rallyStarted": "Rally started: now award a point.",
+      "startFirst": "Start a rally first before awarding points.",
+      "pointAwarded": "Point awarded! Rally ended.",
+      "rallyInProgress": "Rally in progress",
+      "waitingForRally": "Waiting for rally to start",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "reset": "Reset demo",
+      "tryIt": "Try it"
+    }
   },
   "manualAdjustmentsEditor": {
     "title": "Manual adjustments",

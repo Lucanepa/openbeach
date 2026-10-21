@@ -1761,8 +1761,7 @@ export default function InteractiveGuide({ open, onClose }) {
                 t('interactiveGuide.setup.playerStep1'),
                 t('interactiveGuide.setup.playerStep2'),
                 t('interactiveGuide.setup.playerStep3'),
-                t('interactiveGuide.setup.playerStep4'),
-                t('interactiveGuide.setup.playerStep5')
+                t('interactiveGuide.setup.playerStep4')
               ]} />
 
               <TipBox type="tip">
@@ -1778,7 +1777,6 @@ export default function InteractiveGuide({ open, onClose }) {
               <p>{t('interactiveGuide.setup.signaturesDesc')}</p>
               <ul style={{ paddingLeft: 20 }}>
                 <li>{t('interactiveGuide.setup.sig1')}</li>
-                <li>{t('interactiveGuide.setup.sig2')}</li>
               </ul>
               <p style={{ marginTop: 8, fontSize: 13, opacity: 0.8 }}>
                 {t('interactiveGuide.setup.sigNote')}
@@ -2134,31 +2132,31 @@ export default function InteractiveGuide({ open, onClose }) {
 
             <Section title={t('interactiveGuide.troubleshooting.connectionIssues')} icon={<Globe />}>
               <QAItem
-                question={t('interactiveGuide.troubleshooting.q11')}
-                answer={t('interactiveGuide.troubleshooting.a11')}
+                question={t('interactiveGuide.troubleshooting.q5')}
+                answer={t('interactiveGuide.troubleshooting.a5')}
               />
               <QAItem
-                question={t('interactiveGuide.troubleshooting.q12')}
-                answer={t('interactiveGuide.troubleshooting.a12')}
+                question={t('interactiveGuide.troubleshooting.q6')}
+                answer={t('interactiveGuide.troubleshooting.a6')}
               />
               <QAItem
-                question={t('interactiveGuide.troubleshooting.q13')}
-                answer={t('interactiveGuide.troubleshooting.a13')}
+                question={t('interactiveGuide.troubleshooting.q7')}
+                answer={t('interactiveGuide.troubleshooting.a7')}
               />
             </Section>
 
             <Section title={t('interactiveGuide.troubleshooting.recovery')} icon={<Save />}>
               <QAItem
-                question={t('interactiveGuide.troubleshooting.q14')}
-                answer={t('interactiveGuide.troubleshooting.a14')}
+                question={t('interactiveGuide.troubleshooting.q8')}
+                answer={t('interactiveGuide.troubleshooting.a8')}
               />
               <QAItem
-                question={t('interactiveGuide.troubleshooting.q15')}
-                answer={t('interactiveGuide.troubleshooting.a15')}
+                question={t('interactiveGuide.troubleshooting.q9')}
+                answer={t('interactiveGuide.troubleshooting.a9')}
               />
               <QAItem
-                question={t('interactiveGuide.troubleshooting.q16')}
-                answer={t('interactiveGuide.troubleshooting.a16')}
+                question={t('interactiveGuide.troubleshooting.q10')}
+                answer={t('interactiveGuide.troubleshooting.a10')}
               />
             </Section>
           </div>

@@ -2138,13 +2138,11 @@
       "refStep3": "On the referee's device, open the Referee Dashboard page",
       "refStep4": "Enter the PIN to connect",
       "refTip": "Scan the QR code shown in Options for quick access on mobile devices.",
-      "startFirst": "Start a rally first before awarding points.",
-      "pointAwarded": "Point awarded! Rally ended.",
-      "rallyInProgress": "Rally in progress",
-      "waitingForRally": "Waiting for rally to start",
-      "enabled": "Enabled",
-      "disabled": "Disabled",
-      "reset": "Reset Demo"
+      "connection": "Verbindung",
+      "lan": "Lokales Netzwerk",
+      "lanDesc": "Geräte im selben WLAN verbinden sich mit diesem Gerät, ohne Internet",
+      "cloud": "Cloud",
+      "cloudDesc": "Geräte an jedem Ort verbinden sich über den OpenBeach-Server (braucht Internet)"
     },
     "timeoutDemo": {
       "title": "Timeout Rules",
@@ -2219,7 +2217,21 @@
       "exportJson": "Export JSON",
       "uploadCloud": "Upload to Cloud"
     },
-    "footer": "openBeach eScoresheet - Professional Volleyball Scoring"
+    "footer": "openBeach eScoresheet - Professional Volleyball Scoring",
+    "buttonDemo": {
+      "title": "Tastenzustände",
+      "instruction": "Starten Sie einen Ballwechsel und vergeben Sie dann einen Punkt: Jede Taste ist nur aktiv, wenn sie verwendet werden kann.",
+      "alreadyActive": "Ein Ballwechsel läuft bereits.",
+      "rallyStarted": "Ballwechsel gestartet: Vergeben Sie jetzt einen Punkt.",
+      "startFirst": "Starten Sie zuerst einen Ballwechsel, bevor Sie Punkte vergeben.",
+      "pointAwarded": "Punkt vergeben! Ballwechsel beendet.",
+      "rallyInProgress": "Ballwechsel läuft",
+      "waitingForRally": "Warten auf den Ballwechsel",
+      "enabled": "Aktiv",
+      "disabled": "Inaktiv",
+      "reset": "Demo zurücksetzen",
+      "tryIt": "Ausprobieren"
+    }
   },
   "manualAdjustmentsEditor": {
     "title": "Manuelle Anpassungen",

@@ -2138,13 +2138,11 @@
       "refStep3": "On the referee's device, open the Referee Dashboard page",
       "refStep4": "Enter the PIN to connect",
       "refTip": "Scan the QR code shown in Options for quick access on mobile devices.",
-      "startFirst": "Start a rally first before awarding points.",
-      "pointAwarded": "Point awarded! Rally ended.",
-      "rallyInProgress": "Rally in progress",
-      "waitingForRally": "Waiting for rally to start",
-      "enabled": "Enabled",
-      "disabled": "Disabled",
-      "reset": "Reset Demo"
+      "connection": "Verbindig",
+      "lan": "Lokals Netzwärch",
+      "lanDesc": "Grät im glichä WLAN verbindet sich mit dem Grät, ohni Internet",
+      "cloud": "Cloud",
+      "cloudDesc": "Grät a jedem Ort verbindet sich über de OpenBeach-Server (bruucht Internet)"
     },
     "timeoutDemo": {
       "title": "Timeout Rules",
@@ -2219,7 +2217,21 @@
       "exportJson": "Export JSON",
       "uploadCloud": "Upload to Cloud"
     },
-    "footer": "openBeach eScoresheet - Professional Volleyball Scoring"
+    "footer": "openBeach eScoresheet - Professional Volleyball Scoring",
+    "buttonDemo": {
+      "title": "Taschtezueständ",
+      "instruction": "Startet Sie en Ballwächsel und vergäbed Sie denn en Punkt: Jedi Taschte isch nur aktiv, wänn mer si cha bruuche.",
+      "alreadyActive": "Es lauft scho en Ballwächsel.",
+      "rallyStarted": "Ballwächsel gstartet: Vergäbed Sie jetzt en Punkt.",
+      "startFirst": "Startet Sie zerscht en Ballwächsel, bevor Sie Pünkt vergäbed.",
+      "pointAwarded": "Punkt vergäh! Ballwächsel fertig.",
+      "rallyInProgress": "Ballwächsel lauft",
+      "waitingForRally": "Warte uf de Ballwächsel",
+      "enabled": "Aktiv",
+      "disabled": "Inaktiv",
+      "reset": "Demo zruggsetze",
+      "tryIt": "Usprobiere"
+    }
   },
   "manualAdjustmentsEditor": {
     "title": "Manuelli Anpassige",
