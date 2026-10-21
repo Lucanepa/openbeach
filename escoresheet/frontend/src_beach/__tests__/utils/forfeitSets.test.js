@@ -37,4 +37,30 @@ describe('missingForfeitSets', () => {
       { index: 2, team1Points: 21, team2Points: 0 }
     ])
   })
+
+  // BUG-forfeit-set2: set 3 was opened at 0:0 while the forfeit of set 2 ran;
+  // the sets after it started at index 4, so nothing was awarded (1:1)
+  it('a set opened at 0:0 meanwhile is awarded, not stepped over', () => {
+    const sets = [
+      { id: 1, index: 1, finished: true, team1Points: 21, team2Points: 15 },
+      { id: 2, index: 2, finished: true, team1Points: 3, team2Points: 21 },
+      { id: 3, index: 3, finished: false, team1Points: 0, team2Points: 0 }
+    ]
+    expect(missingForfeitSets(sets, 'team2')).toEqual([{ id: 3, index: 3, team1Points: 0, team2Points: 15 }])
+  })
+
+  it('a forfeit in set 1 with set 2 opened meanwhile: set 2 is awarded, no set 3', () => {
+    const sets = [
+      { id: 1, index: 1, finished: true, team1Points: 2, team2Points: 21 },
+      { id: 2, index: 2, finished: false, team1Points: 0, team2Points: 0 }
+    ]
+    expect(missingForfeitSets(sets, 'team2')).toEqual([{ id: 2, index: 2, team1Points: 0, team2Points: 21 }])
+  })
+
+  it('an open set keeps the defaulting team\'s points, the opponent wins it by two', () => {
+    expect(missingForfeitSets([{ id: 7, index: 1, finished: false, team1Points: 20, team2Points: 5 }], 'team2')).toEqual([
+      { id: 7, index: 1, team1Points: 20, team2Points: 22 },
+      { index: 2, team1Points: 0, team2Points: 21 }
+    ])
+  })
 })

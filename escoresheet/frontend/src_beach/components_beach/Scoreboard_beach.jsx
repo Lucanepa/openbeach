@@ -1598,6 +1598,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
   const ensuringSetRef = useRef(false)
   const setCreationInProgressRef = useRef(false) // Prevent race condition: don't auto-create set while confirmSetEndTime is running
+  // A forfeit is awarding its sets (handleForfait): no next set at 0:0 and no
+  // set end dialog meanwhile. The match is marked ended only after it, so a
+  // forfeit in set 2 had set 3 opened at 0:0 and the match left at 1:1.
+  const forfeitInProgressRef = useRef(false)
 
   const ensureActiveSet = useCallback(async () => {
     if (!matchId) return
@@ -1629,7 +1633,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       .and(s => !s.finished)
       .first()
 
-    if (existing) {
+    if (existing || forfeitInProgressRef.current) {
       setCreationInProgressRef.current = false
       return
     }
@@ -1668,7 +1672,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
     // CRITICAL VALIDATION 3: Fresh duplicate check right before creation (race condition guard)
     const freshDuplicateCheck = await db.sets.where({ matchId }).and(s => s.index === nextIndex).first()
-    if (freshDuplicateCheck) {
+    if (freshDuplicateCheck || forfeitInProgressRef.current) {
       setCreationInProgressRef.current = false
       return
     }
@@ -1711,7 +1715,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
   useEffect(() => {
     // Skip if: no match, data exists with active set, already ensuring, or confirmSetEndTime is creating a set
-    if (!matchId || !data || data.set || ensuringSetRef.current || setCreationInProgressRef.current) return
+    if (!matchId || !data || data.set || ensuringSetRef.current || setCreationInProgressRef.current || forfeitInProgressRef.current) return
 
     // Skip if match is already ended (best-of-3 complete)
     if (data.match?.status === 'ended' || data.match?.status === 'approved' || data.match?.status === 'final') return
@@ -2121,8 +2125,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
   // Check if set has ended on page load/refresh (score indicates set over but modal not shown)
   useEffect(() => {
-    // Don't run if set creation is in progress (prevents race condition)
-    if (setCreationInProgressRef.current) return
+    // Don't run if set creation (or a forfeit's award) is in progress (prevents race condition)
+    if (setCreationInProgressRef.current || forfeitInProgressRef.current) return
     if (!data?.set || setEndTimeModal || data.set.finished) return
 
     // Don't re-show if user dismissed via undo for this set
@@ -6345,7 +6349,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
  
   // Handle forfait - award all remaining points and sets to opponent
   // scope: 'set' (only current set) or 'match' (all remaining sets)
-  const handleForfait = useCallback(async (teamKey, reason, scope = 'match') => {
+  const awardForfait = useCallback(async (teamKey, reason, scope = 'match') => {
     cLogger.logHandler('handleForfait', { teamKey, reason, scope })
     if (!data?.set || !data?.match) return
 
@@ -6395,34 +6399,21 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       })
     }
 
-    // Award all remaining sets to opponent ONLY if scope is 'match'
+    // Award all remaining sets to opponent ONLY if scope is 'match': the
+    // sets the match has that are not finished, then the sets it has not
+    // reached, until the opponent has the two sets it needs to win the match
+    // (FIVB Beach 6.4). A forfeit in set 1 left 1:0 and the match went on to
+    // set 2 at 0:0. The sheet leaves the grids of the added sets blank, the
+    // results show them won 21:0 (15:0). Read again: a set opened meanwhile
+    // is one of them.
     if (scope === 'match') {
-      const remainingSets = allSets.filter(s => s.index > currentSetIndex && !s.finished)
-      for (const set of remainingSets) {
-        const setPointsToWin = set.index === 3 ? 15 : 21
-        await db.sets.update(set.id, {
-          finished: true,
-          [opponentKey === 'team1' ? 'team1Points' : 'team2Points']: setPointsToWin,
-          [teamKey === 'team1' ? 'team1Points' : 'team2Points']: 0
-        })
-
-        await logEvent('set_end', {
-          team: opponentKey,
-          setIndex: set.index,
-          team1Points: opponentKey === 'team1' ? setPointsToWin : 0,
-          team2Points: opponentKey === 'team2' ? setPointsToWin : 0,
-          reason: reason || 'forfait'
-        })
-      }
-
-      // Then the sets the match has not reached: the opponent gets the sets
-      // it needs to win the match (FIVB Beach 6.4). A forfeit in set 1 left
-      // 1:0 and the match went on to set 2 at 0:0. The sheet leaves their
-      // grids blank, the results show them won 21:0 (15:0).
-      const missing = missingForfeitSets(await db.sets.where({ matchId }).toArray(), opponentKey)
-      const forfeitMatch = missing.length ? await db.matches.get(matchId) : null
-      for (const ms of missing) {
-        const newSetId = await db.sets.add({ matchId, index: ms.index, finished: true, team1Points: ms.team1Points, team2Points: ms.team2Points, reason: reason || 'forfait' })
+      const toAward = missingForfeitSets(await db.sets.where({ matchId }).toArray(), opponentKey)
+      const forfeitMatch = toAward.length ? await db.matches.get(matchId) : null
+      for (const ms of toAward) {
+        if (ms.id != null) {
+          await db.sets.update(ms.id, { finished: true, team1Points: ms.team1Points, team2Points: ms.team2Points })
+        }
+        const newSetId = ms.id != null ? null : await db.sets.add({ matchId, index: ms.index, finished: true, team1Points: ms.team1Points, team2Points: ms.team2Points, reason: reason || 'forfait' })
         await logEvent('set_end', {
           team: opponentKey,
           setIndex: ms.index,
@@ -6430,7 +6421,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           team2Points: ms.team2Points,
           reason: reason || 'forfait'
         })
-        if (forfeitMatch?.seed_key && forfeitMatch.test !== true) {
+        if (newSetId != null && forfeitMatch?.seed_key && forfeitMatch.test !== true) {
           await db.sync_queue.add({
             resource: 'set',
             action: 'insert',
@@ -6457,6 +6448,16 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       scope: scope
     })
   }, [data?.set, data?.match, matchId, logEvent])
+
+  // No next set and no set end dialog while the forfeit awards its sets
+  const handleForfait = useCallback(async (teamKey, reason, scope = 'match') => {
+    forfeitInProgressRef.current = true
+    try {
+      await awardForfait(teamKey, reason, scope)
+    } finally {
+      forfeitInProgressRef.current = false
+    }
+  }, [awardForfait])
 
   // Handle manual forfeit from "Stop the match" menu
   const handleManualForfeit = useCallback(async (teamKey) => {
