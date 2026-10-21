@@ -1,0 +1,6 @@
+OpenBeach 3.0.0
+- Now also on the phone: phone scoring screen with log, counters and serve number.
+- A match continued on another device moves scoring there; the first device is told and stops.
+- Phone: the keyboard no longer pushes the screen up.
+- Forfeit: the opponent gets the sets it needs; an admin can reopen a closed match.
+- Restore preview per set; "eScoresheet" in German too.
