@@ -556,6 +556,7 @@
       "confirmSanction": "Confirmer la sanction",
       "confirmUndo": "Annuler la dernière action ?",
       "confirmTimeout": "Confirmer le temps mort",
+      "confirmTimeoutRequest": "Confirmer la demande de temps mort ?",
       "decisionChange": "Changement de décision",
       "courtSwitchRequired": "Changement de côté requis",
       "teamsMustSwitchCourts": "Les équipes doivent changer de terrain",

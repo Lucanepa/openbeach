@@ -556,6 +556,7 @@
       "confirmSanction": "Sanktion bestätige",
       "confirmUndo": "Letzte Aktion rückgängig machen?",
       "confirmTimeout": "Timeout bestätige",
+      "confirmTimeoutRequest": "Timeout-Aafrag bestätige?",
       "decisionChange": "Entscheidsänderig",
       "courtSwitchRequired": "Siitewächsel nötig",
       "teamsMustSwitchCourts": "Teams müend d Siite wächsle",

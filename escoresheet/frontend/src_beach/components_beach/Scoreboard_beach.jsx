@@ -8157,7 +8157,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   fontWeight: 600
                 }}
               >
-                Close
+                {t('common.close')}
               </button>
             </div>
           </div>
@@ -14767,14 +14767,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               )
             })()}
             <p style={{ marginBottom: '24px', color: 'var(--muted)', fontSize: '16px' }}>
-              Confirm time-out request?
+              {t('scoreboard.modals.confirmTimeoutRequest')}
             </p>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
               <button onClick={confirmTimeout} style={{ fontSize: '16px' }}>
-                Confirm time-out
+                {t('scoreboard.buttons.confirmTimeout')}
               </button>
               <button className="secondary" onClick={cancelTimeout} style={{ fontSize: '16px' }}>
-                Cancel
+                {t('common.cancel')}
               </button>
             </div>
           </div>
@@ -15971,7 +15971,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     cursor: 'pointer'
                   }}
                 >
-                  Confirm
+                  {t('common.confirm')}
                 </button>
                 <button
                   onClick={cancelSanctionConfirm}
@@ -15986,7 +15986,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     cursor: 'pointer'
                   }}
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
               </div>
             </div>
@@ -16108,7 +16108,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     cursor: 'pointer'
                   }}
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
               </div>
             </div>
@@ -16162,7 +16162,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   cursor: 'pointer'
                 }}
               >
-                Yes, Reopen
+                {t('matchEnd.yesReopen')}
               </button>
               <button
                 onClick={() => setReopenSetConfirm(null)}
@@ -16177,7 +16177,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   cursor: 'pointer'
                 }}
               >
-                Cancel
+                {t('common.cancel')}
               </button>
             </div>
           </div>
@@ -16810,7 +16810,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     fontWeight: 600
                   }}
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
               </div>
             </div>
@@ -17344,7 +17344,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     cursor: 'pointer'
                   }}
                 >
-                  Confirm
+                  {t('common.confirm')}
                 </button>
                 <button
                   onClick={cancelReplayRally}
@@ -17359,7 +17359,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                     cursor: 'pointer'
                   }}
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
               </div>
             </div>
@@ -17509,7 +17509,7 @@ function SetStartTimeModal({ setIndex, defaultTime, scheduledTime = null, onConf
               cursor: 'pointer'
             }}
           >
-            Confirm
+            {t('common.confirm')}
           </button>
           <button
             onClick={onCancel}
@@ -17524,7 +17524,7 @@ function SetStartTimeModal({ setIndex, defaultTime, scheduledTime = null, onConf
               cursor: 'pointer'
             }}
           >
-            Cancel
+            {t('common.cancel')}
           </button>
         </div>
       </div>
