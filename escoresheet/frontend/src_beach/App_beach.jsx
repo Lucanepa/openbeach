@@ -1992,29 +1992,30 @@ export default function App() {
       if (!['live', 'ended', 'final'].includes(existing.status) && !isMatchSetupComplete) {
         await preloadMatchSetup(existing.id)
       }
-      setMatchId(existing.id)
 
       // Determine where to continue based on status
       // Note: status flow is live -> ended -> final (after approval)
       if (existing.status === 'live' || existing.status === 'ended' || existing.status === 'final') {
-        // Check if match is finished (one team has won 3 sets) - go to MatchEnd
+        // Check if match is finished (one team has won 2 sets: best of 3) - go to MatchEnd
         const sets = await db.sets.where('matchId').equals(existing.id).toArray()
         const finishedSets = sets.filter(s => s.finished)
         const team1SetsWon = finishedSets.filter(s => s.team1Points > s.team2Points).length
         const team2SetsWon = finishedSets.filter(s => s.team2Points > s.team1Points).length
-        const isMatchFinished = team1SetsWon >= 3 || team2SetsWon >= 3
+        const isMatchFinished = team1SetsWon >= 2 || team2SetsWon >= 2
+        // Match finished but not yet approved - go to MatchEnd, else to the scoreboard
+        const toMatchEnd = (existing.status === 'live' || existing.status === 'ended') && isMatchFinished && !existing.approved
 
+        // Match End opens filled: read before the home screen goes
+        if (toMatchEnd) await preloadMatchEnd(existing.id)
+        setMatchId(existing.id)
         setShowMatchSetup(false)
         setShowCoinToss(false)
+        setShowMatchEnd(toMatchEnd)
+        return
+      }
 
-        if ((existing.status === 'live' || existing.status === 'ended') && isMatchFinished && !existing.approved) {
-          // Match finished but not yet approved - go to MatchEnd
-          setShowMatchEnd(true)
-        } else {
-          // Match in progress - go to scoreboard
-          setShowMatchEnd(false)
-        }
-      } else if (isMatchSetupComplete && isCoinTossConfirmed) {
+      setMatchId(existing.id)
+      if (isMatchSetupComplete && isCoinTossConfirmed) {
         // Match setup and coin toss complete - go to scoreboard
         setShowMatchSetup(false)
         setShowCoinToss(false)
@@ -2127,18 +2128,21 @@ export default function App() {
       // Determine where to continue based on status
       // Note: status flow is live -> ended -> final (after approval)
       if (match.status === 'live' || match.status === 'ended' || match.status === 'final') {
-        // Check if match is finished (one team has won 3 sets) - go to MatchEnd
+        // Check if match is finished (one team has won 2 sets: best of 3) - go to MatchEnd
         const sets = await db.sets.where('matchId').equals(targetMatchId).toArray()
         const finishedSets = sets.filter(s => s.finished)
         const team1SetsWon = finishedSets.filter(s => s.team1Points > s.team2Points).length
         const team2SetsWon = finishedSets.filter(s => s.team2Points > s.team1Points).length
-        const isMatchFinished = team1SetsWon >= 3 || team2SetsWon >= 3
+        const isMatchFinished = team1SetsWon >= 2 || team2SetsWon >= 2
+        const toMatchEnd = (match.status === 'live' || match.status === 'ended') && isMatchFinished && !match.approved
 
+        // Match End opens filled: read before the home screen goes
+        if (toMatchEnd) await preloadMatchEnd(targetMatchId)
         setMatchId(targetMatchId)
         setShowMatchSetup(false)
         setShowCoinToss(false)
 
-        if ((match.status === 'live' || match.status === 'ended') && isMatchFinished && !match.approved) {
+        if (toMatchEnd) {
           // Match finished but not yet approved - go to MatchEnd
           setShowMatchEnd(true)
         } else {
