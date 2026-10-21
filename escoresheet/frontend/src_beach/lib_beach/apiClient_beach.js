@@ -15,6 +15,18 @@
  */
 
 import { getCloudApiUrl } from '../utils_beach/backendConfig_beach'
+import { deviceId, platformName } from '../utils_beach/identity_beach'
+
+/**
+ * This installation, as the writes name it (server db/019, the scoring-device
+ * handover: a match is scored on one device at a time). In the JSON body, not
+ * a header: an older backend ignores an unknown body field, while a new
+ * header would fail its CORS preflight. Null without storage.
+ */
+export function writingDevice() {
+  const id = deviceId()
+  return id ? { id, platform: platformName() } : null
+}
 
 // Client protocol version, sent as X-OV-Proto on every data request. The
 // backend refuses writes below 2 (426 OV_CLIENT_TOO_OLD), so queued jobs from
@@ -207,7 +219,9 @@ class QueryBuilder {
         body: JSON.stringify({
           table: this._table,
           action: this._action,
-          params: this._params
+          params: this._params,
+          // writes name the device (db/019); reads never need it
+          ...(this._action && this._action !== 'select' ? deviceField() : {})
         }),
         // A stalled request (captive portal, half-open TCP) must not hang the
         // page-wide sync flush forever.
@@ -231,6 +245,18 @@ export function apiFrom(table) {
 }
 
 // ==================== Helpers ====================
+
+// Milliseconds since `at` (an ISO time or epoch ms), null when unknown
+export function ageOf(at, now = Date.now()) {
+  const t = typeof at === 'number' ? at : (typeof at === 'string' ? Date.parse(at) : NaN)
+  if (!Number.isFinite(t)) return null
+  return Math.max(0, Math.round(now - t))
+}
+
+function deviceField() {
+  const device = writingDevice()
+  return device ? { device } : {}
+}
 
 function getAuthHeaders() {
   const headers = { 'Content-Type': 'application/json', 'X-OV-Proto': OV_PROTO }
@@ -332,8 +358,12 @@ export const savedTeamsApi = {
  * @param {{match: object, sets?: object[], events?: object[], liveState?: object|null}} payload
  * @returns {Promise<{data: {id: string, counts: {sets: number, events: number, liveState: number}, dropped?: object}|null, error: object|null, status: number}>}
  */
-export function apiMatchRestore({ match, sets = [], events = [], liveState = null }) {
-  return postJson('/api/match/restore', { match, sets, events, liveState }, {
+export function apiMatchRestore({ match, sets = [], events = [], liveState = null, queuedAt = null }) {
+  // The device: a backup restored here is this device's take-over (db/019),
+  // unless another device took the match over after the restore was made
+  // (age_ms: how long ago, by this device's own clock, so no clock skew)
+  const ageMs = ageOf(queuedAt)
+  return postJson('/api/match/restore', { match, sets, events, liveState, ...deviceField(), ...(ageMs != null ? { age_ms: ageMs } : {}) }, {
     timeoutMs: RESTORE_REQUEST_TIMEOUT_MS,
     fallbackError: 'Match restore failed'
   })
@@ -362,6 +392,21 @@ export function apiMatchClaim(externalId, pin) {
 }
 
 /**
+ * The scoring device of a match (db/019, the scoring-device handover).
+ * claim true: this device scores the match from now on (a join, "Take back
+ * scoring here"); the previous one is told and refused (409 OV_SCORER_MOVED).
+ * claim false: is this device the scorer? Needs a session; the creator, an
+ * editor or an admin of the match. 404 OV_MATCH_NOT_FOUND: not in the cloud
+ * yet; 409 OV_MATCH_CLOSED: closed; a 404 without code: an older backend.
+ * @returns {Promise<{data: {external_id: string, mine: boolean|null, moved?: boolean, scorer: {platform: string|null, at: string|null}|null, previous?: object|null}|null, error: object|null, status: number}>}
+ */
+export function apiMatchScorer(externalId, { claim = true } = {}) {
+  const device = writingDevice()
+  if (!device) return Promise.resolve({ data: null, error: { message: 'No device id', code: 'OV_NO_DEVICE' }, status: 0 })
+  return postJson('/api/match/scorer', { external_id: externalId, device, claim }, { fallbackError: 'Scoring device change failed' })
+}
+
+/**
  * Send event revisions (undo / delete / edit / restore of logged events, see
  * db_beach/eventHistory_beach.js) of one match. The server voids or edits its
  * copy of the events and keeps the revision (POST /api/match/event-revisions,
@@ -373,7 +418,9 @@ export function apiMatchClaim(externalId, pin) {
  * @returns {Promise<{data: {applied: number, pending: number}|null, error: object|null, status: number}>}
  */
 export function apiPostEventRevisions(matchExternalId, revisions) {
-  return postJson('/api/match/event-revisions', { match_external_id: matchExternalId, revisions }, {
+  // The device sending them (db/019): a revision's own device_id is the one
+  // that made it, which may be this installation's id before a "clear all"
+  return postJson('/api/match/event-revisions', { match_external_id: matchExternalId, revisions, ...deviceField() }, {
     fallbackError: 'Event history upload failed'
   })
 }

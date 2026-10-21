@@ -3156,5 +3156,31 @@
     "pdfFailed": "Le PDF n'a pas pu être créé : {{error}}",
     "sentTitle": "PDF prêt",
     "sent": "Il a été transmis à la page de fin de match. Vous pouvez fermer cette fenêtre."
+  },
+  "scorerMoved": {
+    "title": "Tenu sur un autre appareil",
+    "body": "Ce match est désormais tenu sur un autre appareil ({{platform}}, {{time}}). Cet appareil ne le tient plus.",
+    "bodyUnknown": "Ce match est désormais tenu sur un autre appareil. Cet appareil ne le tient plus.",
+    "bodyClosed": "Ce match a été poursuivi sur un autre appareil et il est maintenant clôturé. Cet appareil ne le tient plus.",
+    "takeBackHint": "Reprends-le seulement si tu marques à nouveau sur cet appareil. Le score de l'autre appareil est d'abord chargé (connexion nécessaire) ; l'autre appareil en est alors informé et s'arrête.",
+    "takeBack": "Reprendre le match ici",
+    "showResult": "Charger le résultat final",
+    "close": "Fermer",
+    "errors": {
+      "offline": "Pour le reprendre, il faut une connexion : cet appareil charge d'abord le score de l'autre appareil.",
+      "noPin": "Cet appareil n'a pas le PIN de ce match. Rejoins-le avec le numéro et le PIN du match.",
+      "notFound": "Le match est introuvable dans le cloud. Rejoins-le avec le numéro et le PIN du match.",
+      "otherMatch": "Le PIN enregistré sur cet appareil appartient à un autre match. Rejoins-le avec le numéro et le PIN du match.",
+      "failed": "Le match n'a pas pu être chargé depuis le cloud. Réessaie."
+    },
+    "platforms": {
+      "android": "téléphone ou tablette Android",
+      "ios": "iPhone ou iPad",
+      "linux": "ordinateur Linux",
+      "windows": "ordinateur Windows",
+      "macos": "Mac",
+      "desktop": "application de bureau",
+      "web": "navigateur"
+    }
   }
 }

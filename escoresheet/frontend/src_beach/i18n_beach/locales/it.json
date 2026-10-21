@@ -3156,5 +3156,31 @@
     "pdfFailed": "Non è stato possibile creare il PDF: {{error}}",
     "sentTitle": "PDF pronto",
     "sent": "È stato inviato alla pagina di fine partita. Puoi chiudere questa finestra."
+  },
+  "scorerMoved": {
+    "title": "Tenuta su un altro dispositivo",
+    "body": "Questa partita ora è tenuta su un altro dispositivo ({{platform}}, {{time}}). Questo dispositivo non la tiene più.",
+    "bodyUnknown": "Questa partita ora è tenuta su un altro dispositivo. Questo dispositivo non la tiene più.",
+    "bodyClosed": "Questa partita è stata continuata su un altro dispositivo ed è ora chiusa. Questo dispositivo non la tiene più.",
+    "takeBackHint": "Riprendila solo se segni di nuovo su questo dispositivo. Prima viene caricato il punteggio dell'altro dispositivo (serve una connessione); l'altro dispositivo viene poi avvisato e si ferma.",
+    "takeBack": "Riprendi la partita qui",
+    "showResult": "Carica il risultato finale",
+    "close": "Chiudi",
+    "errors": {
+      "offline": "Per riprenderla serve una connessione: questo dispositivo carica prima il punteggio dell'altro dispositivo.",
+      "noPin": "Su questo dispositivo manca il PIN di questa partita. Unisciti con il numero e il PIN della partita.",
+      "notFound": "La partita non è stata trovata nel cloud. Unisciti con il numero e il PIN della partita.",
+      "otherMatch": "Il PIN su questo dispositivo appartiene a un'altra partita. Unisciti con il numero e il PIN della partita.",
+      "failed": "Non è stato possibile caricare la partita dal cloud. Riprova."
+    },
+    "platforms": {
+      "android": "telefono o tablet Android",
+      "ios": "iPhone o iPad",
+      "linux": "computer Linux",
+      "windows": "computer Windows",
+      "macos": "Mac",
+      "desktop": "app desktop",
+      "web": "browser"
+    }
   }
 }

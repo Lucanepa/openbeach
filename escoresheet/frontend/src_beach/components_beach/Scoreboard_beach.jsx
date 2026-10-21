@@ -12,7 +12,8 @@ import { matchTimes, setDurationMinutes } from '../../scoresheet_pdf_beach/compo
 import SyncProgressModal_beach from './SyncProgressModal_beach'
 import ScoreboardOptionsModal from './options/ScoreboardOptionsModal_beach'
 import ConnectionSetupModal from './options/ConnectionSetupModal_beach'
-import { useSyncQueue } from '../hooks_beach/useSyncQueue_beach'
+import { useSyncQueue, checkScorerMoved } from '../hooks_beach/useSyncQueue_beach'
+import { isScorerMoved, SCORER_MOVED } from '../utils_beach/matchHandover_beach'
 import { useConfirmAction } from '../hooks_beach/useConfirmAction_beach'
 import { useActionLiveQuery } from '../hooks_beach/useActionLiveQuery_beach'
 import { useScorerActions, pickLiveStateSnapshot, isReportedActionError } from '../hooks_beach/useScorerActions_beach'
@@ -1185,8 +1186,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // The relay (referee, livescore, LedBox on the venue network): the
       // same state with serve_player, under the match's room key. Sent again
       // after every sync (relayPublisher_beach), works without the cloud.
+      // Never while another device scores the match (db/019): its tablets
+      // follow that one
       const relayKey = relayMatchKey(match)
-      if (relayKey) scorerPublisher.liveState(relayKey, { ...broadcastData, match_id: relayKey })
+      if (relayKey && !isScorerMoved(match)) scorerPublisher.liveState(relayKey, { ...broadcastData, match_id: relayKey })
 
       const ch = new BroadcastChannel('openbeach-scoreboard')
       ch.postMessage({ type: 'LIVE_STATE_UPDATE', data: broadcastData })
@@ -1458,8 +1461,20 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Reason: match_live_state needs sub-second latency for real-time spectator display.
       // Queuing would add 1s+ delay from the polling interval in useSyncQueue.
       // matches.current_set is queued on every set change (queueCurrentSet).
+      // Another device scores the match now (db/019, ScorerMovedModal_beach):
+      // this device's older state must not overwrite its live state
+      if (isScorerMoved(match)) return
       const liveStateResult = await apiFrom('match_live_state').upsert(liveStateData, { onConflict: 'match_id' })
 
+      if (liveStateResult.error?.code === SCORER_MOVED) {
+        // Another device holds the match. This device's claim may not be
+        // through yet (a join, a take-back): the next push goes again; the
+        // server tells whether this device lost it (ScorerMovedModal_beach).
+        // Never a dialog.
+        console.warn('[LiveState] Refused: another device holds this match')
+        if (match?.seed_key) checkScorerMoved(match.seed_key)
+        return
+      }
       if (liveStateResult.error) {
         console.error('[LiveState] Sync error:', liveStateResult.error)
         // Not signed in / not this account's match / offline / rate limited:

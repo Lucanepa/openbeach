@@ -19,6 +19,7 @@
  * with diagnostics mode on, the next load's page.load line names the reason.
  */
 import { reloadWithReason } from '../diagnostics_beach/reload_beach'
+import { clearStorageKeepingDeviceId } from './deviceId_beach'
 
 export const CACHE_BUST_PARAM = 'cache_bust'
 
@@ -89,7 +90,8 @@ export async function clearCachesAndReload({ includeLocalStorage = false } = {})
     const registrations = await navigator.serviceWorker.getRegistrations()
     await Promise.all(registrations.map((reg) => reg.unregister()))
   }
-  if (includeLocalStorage) localStorage.clear()
+  // (this installation's id stays: the matches in IndexedDB stay too)
+  if (includeLocalStorage) clearStorageKeepingDeviceId()
   reloadWithReason(includeLocalStorage ? 'clear-cache-and-storage' : 'clear-cache', { how: 'replace', url: buildReloadUrl() })
   return true
 }

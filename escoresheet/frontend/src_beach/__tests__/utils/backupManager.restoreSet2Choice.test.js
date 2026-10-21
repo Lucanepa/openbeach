@@ -19,6 +19,9 @@ vi.mock('../../db_beach/db_beach', () => {
   let id = 0
   const table = (name) => ({
     add: vi.fn(async (row) => { id += 1; if (name === 'matches') added.matches.push(row); return id }),
+    // the import replaces an earlier local copy of the match (none here)
+    filter: () => ({ toArray: async () => [] }),
+    get: async () => null,
     hook: () => {}
   })
   return {

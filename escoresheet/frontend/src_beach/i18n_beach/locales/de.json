@@ -3156,5 +3156,31 @@
     "pdfFailed": "Das PDF konnte nicht erstellt werden: {{error}}",
     "sentTitle": "PDF bereit",
     "sent": "Es ist bei der Spielende-Seite angekommen. Sie können dieses Fenster schliessen."
+  },
+  "scorerMoved": {
+    "title": "Auf einem anderen Gerät geführt",
+    "body": "Dieses Spiel wird jetzt auf einem anderen Gerät geführt ({{platform}}, {{time}}). Dieses Gerät führt es nicht mehr.",
+    "bodyUnknown": "Dieses Spiel wird jetzt auf einem anderen Gerät geführt. Dieses Gerät führt es nicht mehr.",
+    "bodyClosed": "Dieses Spiel wurde auf einem anderen Gerät weitergeführt und ist jetzt abgeschlossen. Dieses Gerät führt es nicht mehr.",
+    "takeBackHint": "Übernimm es nur, wenn du wieder auf diesem Gerät schreibst. Zuerst wird der Spielstand des anderen Geräts geladen (braucht eine Verbindung); das andere Gerät erfährt es dann und hört auf.",
+    "takeBack": "Hier wieder übernehmen",
+    "showResult": "Endergebnis laden",
+    "close": "Schliessen",
+    "errors": {
+      "offline": "Zum Übernehmen braucht es eine Verbindung: Zuerst wird der Spielstand des anderen Geräts geladen.",
+      "noPin": "Auf diesem Gerät fehlt der Spiel-PIN dieses Spiels. Tritt dem Spiel mit Spielnummer und Spiel-PIN bei.",
+      "notFound": "Das Spiel wurde in der Cloud nicht gefunden. Tritt ihm mit Spielnummer und Spiel-PIN bei.",
+      "otherMatch": "Der Spiel-PIN auf diesem Gerät gehört zu einem anderen Spiel. Tritt dem Spiel mit Spielnummer und Spiel-PIN bei.",
+      "failed": "Das Spiel konnte nicht aus der Cloud geladen werden. Versuche es nochmals."
+    },
+    "platforms": {
+      "android": "Android-Handy oder -Tablet",
+      "ios": "iPhone oder iPad",
+      "linux": "Linux-Computer",
+      "windows": "Windows-Computer",
+      "macos": "Mac",
+      "desktop": "Desktop-App",
+      "web": "Browser"
+    }
   }
 }

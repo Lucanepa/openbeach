@@ -15,6 +15,7 @@
  * (createScorerRelay, relayReconnectDelay, isRelayErrorFor).
  */
 import { getRelayWebSocketUrl } from './backendConfig_beach'
+import { isScorerMoved } from './matchHandover_beach'
 
 export const SPORT_TYPE = 'beach'
 
@@ -243,6 +244,9 @@ export async function readLocalBundle(db, matchId) {
 export async function readRelayBundle(db, matchId, { generate = generateGamePin } = {}) {
   const local = await readLocalBundle(db, matchId)
   if (!local) return null
+  // Another device scores the match now (db/019): its tablets follow that
+  // one, this device's older copy never goes to the room (no sync, no answer)
+  if (isScorerMoved(local.match)) return null
   const { gamePin, created } = ensureGamePin(local.match, generate)
   if (created) {
     await db.matches.update(matchId, { gamePin })
