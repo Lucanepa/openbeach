@@ -1409,14 +1409,14 @@
       "page": "Page {{page}} sur {{pages}}",
       "keepWindowOpen": "Laissez la fenêtre de la feuille de match ouverte jusqu'à ce que le PDF soit prêt."
     },
-    "closedOnServer": "Ce match est clôturé sur le serveur : il ne peut plus être modifié ici. Seul un admin peut le rouvrir (Rouvrir le match).",
+    "closedOnServer": "Ce match est clôturé sur le serveur : il ne peut plus être modifié ici. Seul un admin ou la gestion des compétitions peut le rouvrir (Rouvrir le match).",
     "reopenNeedsConnection": "Rouvrir un match clôturé nécessite une connexion au serveur.",
     "reopenCheckFailed": "Impossible de vérifier le match sur le serveur – merci de réessayer.",
     "reopenAdminTitle": "Rouvrir ce match clôturé ?",
     "reopenAdminBody": "Il repasse à « terminé » sur le serveur et peut être approuvé à nouveau. Ceci est consigné dans le journal.",
     "reopenReason": "Motif",
-    "reopenAdminOnlyTitle": "Seul un admin peut rouvrir ce match",
-    "reopenAdminOnlyBody": "Le match {{game}} est clôturé sur le serveur. Demande à un admin de le rouvrir, puis touche à nouveau « Rouvrir le match ».",
+    "reopenAdminOnlyTitle": "Seul un admin ou la gestion des compétitions peut rouvrir ce match",
+    "reopenAdminOnlyBody": "Le match {{game}} est clôturé sur le serveur. Demande à un admin ou à la gestion des compétitions de le rouvrir, puis touche à nouveau « Rouvrir le match ».",
     "reopenAdminConfirm": "Rouvrir"
   },
   "scoresheetPdf": {

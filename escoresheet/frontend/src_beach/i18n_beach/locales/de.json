@@ -1409,14 +1409,14 @@
       "page": "Seite {{page}} von {{pages}}",
       "keepWindowOpen": "Das Matchblatt-Fenster offen lassen, bis das PDF fertig ist."
     },
-    "closedOnServer": "Dieses Spiel ist auf dem Server abgeschlossen und kann hier nicht mehr geändert werden. Nur ein Admin kann es wieder öffnen («Spiel wieder öffnen»).",
+    "closedOnServer": "Dieses Spiel ist auf dem Server abgeschlossen und kann hier nicht mehr geändert werden. Nur ein Admin oder die Wettbewerbsleitung kann es wieder öffnen («Spiel wieder öffnen»).",
     "reopenNeedsConnection": "Zum Wiederöffnen eines abgeschlossenen Spiels braucht es eine Verbindung zum Server.",
     "reopenCheckFailed": "Das Spiel konnte auf dem Server nicht geprüft werden – bitte versuche es nochmals.",
     "reopenAdminTitle": "Dieses abgeschlossene Spiel wieder öffnen?",
     "reopenAdminBody": "Es geht auf dem Server zurück auf «beendet» und kann nochmals genehmigt werden. Dies wird im Protokoll festgehalten.",
     "reopenReason": "Grund",
-    "reopenAdminOnlyTitle": "Nur ein Admin kann dieses Spiel wieder öffnen",
-    "reopenAdminOnlyBody": "Spiel {{game}} ist auf dem Server abgeschlossen. Bitte einen Admin, es wieder zu öffnen, und tippe dann nochmals auf «Spiel wieder öffnen».",
+    "reopenAdminOnlyTitle": "Nur ein Admin oder die Wettbewerbsleitung kann dieses Spiel wieder öffnen",
+    "reopenAdminOnlyBody": "Spiel {{game}} ist auf dem Server abgeschlossen. Bitte einen Admin oder die Wettbewerbsleitung, es wieder zu öffnen, und tippe dann nochmals auf «Spiel wieder öffnen».",
     "reopenAdminConfirm": "Wieder öffnen"
   },
   "scoresheetPdf": {

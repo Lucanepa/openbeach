@@ -45,7 +45,7 @@ export function isClosingSyncJob(job) {
  * @param {object} args.match the local match row
  * @param {object[]} args.queue every sync_queue row (or at least this match's)
  * @param {boolean} args.online
- * @param {{isAdmin?: boolean}} [args.access]
+ * @param {{isAdmin?: boolean, canManageTeams?: boolean}} [args.access]
  * @param {(seedKey: string) => Promise<{data: object|null, error: object|null}>} args.readServerMatch
  * @returns {Promise<{kind: string, row?: object, supersedeIds?: number[]}>}
  */
@@ -75,6 +75,8 @@ export async function planReopen({ match, queue, online, access, readServerMatch
     ? true
     : (!('closed_at' in row) && CLOSING_STATUSES.includes(row.status))
   if (!closed) return { kind: 'serverOpen', row }
-  if (access?.isAdmin) return { kind: 'adminReopen', row }
+  // An admin, or a beach competition manager (owner, 2026-10-21; /api/me's
+  // beach canManageTeams): the server reopens a beach match for both
+  if (access?.isAdmin || access?.canManageTeams === true) return { kind: 'adminReopen', row }
   return { kind: 'adminOnly', row }
 }

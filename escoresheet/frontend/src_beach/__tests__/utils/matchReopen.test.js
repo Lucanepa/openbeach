@@ -62,6 +62,15 @@ describe('planReopen', () => {
     expect(readServerMatch).toHaveBeenCalledWith(SEED)
   })
 
+  it('closed on the server: a beach competition manager gets the reopen dialog too; a scorer does not', async () => {
+    const row = { id: 'uuid-1', status: 'approved', closed_at: '2026-10-10T18:00:00Z' }
+    const readServerMatch = read(row)
+    expect(await planReopen({ match: match(), queue: [closing(1, 'sent')], online: true, access: { isAdmin: false, canManageTeams: true }, readServerMatch }))
+      .toEqual({ kind: 'adminReopen', row })
+    expect(await planReopen({ match: match(), queue: [closing(1, 'sent')], online: true, access: { isAdmin: false, canScore: true, canManageTeams: false }, readServerMatch }))
+      .toEqual({ kind: 'adminOnly', row })
+  })
+
   it('already reopened on the server (closed_at null), or not in the cloud: local reopen', async () => {
     const row = { id: 'uuid-1', status: 'ended', closed_at: null }
     expect((await planReopen({ match: match(), queue: [closing(1, 'sent')], online: true, readServerMatch: read(row) })).kind).toBe('serverOpen')
