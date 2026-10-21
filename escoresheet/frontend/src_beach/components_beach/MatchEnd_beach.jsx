@@ -32,6 +32,7 @@ import { sanitizeForFilename } from '../utils_beach/stringUtils_beach'
 import { openAppWindow } from '../utils_beach/openAppWindow_beach'
 import { waitForScoresheetPdf, PDF_FAIL, PDF_REQUEST_PARAM } from '../utils_beach/scoresheetPdfRequest_beach'
 import { sheetRemarksText } from '../utils_beach/sheetRemarks_beach'
+import { compareEvents } from '../utils_beach/medicalRemarks_beach'
 import { plausibleMinutes } from '../../scoresheet_pdf_beach/components_beach/sheetFormat_beach'
 import { isoOf, matchTimes, setEndMs, setStartMs } from '../../scoresheet_pdf_beach/components_beach/matchTimes_beach'
 import { formatTimeLocal } from '../utils_beach/timeUtils_beach'
@@ -605,19 +606,15 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
         return new Date(a.ts).getTime() - new Date(b.ts).getTime()
       })
 
-    const getScoreAtEvent = (eventTimestamp, setIndex) => {
-      const pointEvents = events
-        .filter(e =>
-          e.setIndex === setIndex &&
-          e.type === 'point' &&
-          new Date(e.ts).getTime() <= eventTimestamp.getTime()
-        )
-        .sort((a, b) => {
-          const aSeq = a.seq || 0
-          const bSeq = b.seq || 0
-          if (aSeq !== 0 || bSeq !== 0) return aSeq - bSeq
-          return new Date(a.ts).getTime() - new Date(b.ts).getTime()
-        })
+    // The points of its set before it in the event order (seq; the time stamp
+    // only without one), as the PDF's running score: a time stamp comparison
+    // counted a delay penalty's own point, logged in the same millisecond
+    const getScoreAtEvent = (sanctionEvent) => {
+      const pointEvents = events.filter(e =>
+        e.setIndex === sanctionEvent.setIndex &&
+        e.type === 'point' &&
+        compareEvents(e, sanctionEvent) < 0
+      )
 
       let team1Score = 0
       let team2Score = 0
@@ -641,8 +638,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
 
       const teamLabel = (eventTeam === teamAKey) ? 'A' : 'B'
 
-      const eventTimestamp = new Date(event.ts)
-      const rawScore = getScoreAtEvent(eventTimestamp, setIndex)
+      const rawScore = getScoreAtEvent(event)
 
       const [teamAScoreStr, teamBScoreStr] = rawScore.split(':')
       const sanctionedTeamScore = teamLabel === 'A' ? teamAScoreStr : teamBScoreStr
