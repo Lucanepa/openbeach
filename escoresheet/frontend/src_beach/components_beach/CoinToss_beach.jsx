@@ -31,6 +31,7 @@ import { DateField } from '../ui/volleyui/DateField.jsx'
 import { Modal as KitModal, modalCancelClass, modalPrimaryClass, modalSaveClass, modalDangerClass } from '../ui/volleyui/Modal.jsx'
 import { NOTICE } from '../ui/volleyui/tones.js'
 import { teamBoxStyle } from '../utils_beach/teamColours_beach'
+import { focusLeaves, steadyOrder } from '../utils_beach/rosterOrder_beach'
 
 // The coin toss page: one kit page card on the stone page (App_beach paints
 // it), full width, in the `.ov-kit` scope.
@@ -201,6 +202,11 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
 
   // UI state
   const [rosterModal, setRosterModal] = useState(null) // 'teamA' | 'teamB' | null
+  // The roster's row order while focus is in it: a row keeps its place while
+  // its number is typed (utils_beach/rosterOrder_beach)
+  const [rosterEditOrder, setRosterEditOrder] = useState(null)
+  // (a list closed with focus in it fires no blur)
+  useEffect(() => { setRosterEditOrder(null) }, [rosterModal])
   const [orderSignatureModal, setOrderSignatureModal] = useState(null) // 'teamA' | 'teamB' | null
   const [addPlayerModal, setAddPlayerModal] = useState(null)
   const [deletePlayerModal, setDeletePlayerModal] = useState(null)
@@ -1585,14 +1591,10 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
   const teamBCoachSig = teamB === 'team1' ? team1CoachSignature : team2CoachSignature
   const hasCoach = match?.hasCoach
 
+  // By number, in the order taken when focus entered the list while it is
+  // in it (sorting on every digit moved the edited row away from the cursor)
   const sortRosterEntries = roster =>
-    (roster || [])
-      .map((player, index) => ({ player, index }))
-      .sort((a, b) => {
-        const an = Number(a.player?.number) || 0
-        const bn = Number(b.player?.number) || 0
-        return an - bn
-      })
+    steadyOrder(roster, rosterEditOrder).map(index => ({ player: roster[index], index }))
 
 
   // Volleyball images - responsive size (the serve marker: frozen)
@@ -2019,7 +2021,11 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                   </Button>
                 </div>
                 <div className="overflow-x-auto rounded-lg border border-stone-200">
-                  <table className="w-full border-collapse text-sm">
+                  <table
+                    className="w-full border-collapse text-sm"
+                    onFocus={() => { if (!rosterEditOrder) setRosterEditOrder(steadyOrder(roster, null)) }}
+                    onBlur={e => { if (focusLeaves(e)) setRosterEditOrder(null) }}
+                  >
                     <thead className="bg-stone-50 text-[11px] font-bold uppercase tracking-wide text-stone-500">
                       <tr>
                         <th className="px-2 py-2 text-left">{t('roster.number')}</th>
