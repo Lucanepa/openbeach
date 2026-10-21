@@ -2651,13 +2651,14 @@ body.ios-fullscreen {
   }
 }
 
-/* Phone layout: the scoring screen's small menus (player action menu,
-   sanction and medical dropdowns) are anchored next to the tapped player. On
-   a phone that puts them off screen, so they open centred and scroll when
-   taller than the screen. Only under .phone-layout: desktop and tablet keep
-   their anchored menus. */
-.match-record.phone-layout .modal-wrapper-roll-down,
-.match-record.phone-layout .modal-wrapper-roll-up {
+/* Phones and small tablets (.centre-dialogs, phoneLayout_beach.js
+   dialogsCentred): the scoring screen's small menus (player action menu,
+   sanction and medical dropdowns) are anchored next to the tapped player.
+   There that puts them off screen, so they open centred and scroll when
+   taller than the screen. A large tablet and the desktop keep their
+   anchored menus. */
+.match-record.centre-dialogs .modal-wrapper-roll-down,
+.match-record.centre-dialogs .modal-wrapper-roll-up {
   position: fixed !important;
   left: 50% !important;
   right: auto !important;
@@ -2666,8 +2667,8 @@ body.ios-fullscreen {
   transform: translate(-50%, -50%) !important;
 }
 
-.match-record.phone-layout .modal-wrapper-roll-down>div,
-.match-record.phone-layout .modal-wrapper-roll-up>div {
+.match-record.centre-dialogs .modal-wrapper-roll-down>div,
+.match-record.centre-dialogs .modal-wrapper-roll-up>div {
   max-height: 80dvh;
   max-width: calc(100vw - 24px);
   overflow-y: auto;

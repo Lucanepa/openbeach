@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Undo2, Menu } from 'lucide-react'
 import { ActionSheet } from '../../ui/volleyui/Modal.jsx'
 import { SAND_SURFACE, TEAM_COLOUR_MARK, discPaint, discRing, normaliseColour, readableText } from '../../utils_beach/teamColours_beach'
 import IntervalChoice, { ServeOrder } from './IntervalChoice_beach.jsx'
-import { PHONE_COURT_MIN_PX, PHONE_RECENT_HEIGHT_PX, PHONE_SQUARE_MIN_PX, PHONE_SQUARE_RESERVE_PX, tintOf } from './phoneLayout_beach'
+import { PHONE_COUNTER_HEIGHT_PX, PHONE_COURT_MIN_PX, PHONE_RECENT_MIN_PX, PHONE_SQUARE_MIN_PX, PHONE_SQUARE_RESERVE_PX, recentLinesFor, tintOf } from './phoneLayout_beach'
 
 /**
  * The beach scoring screen on a phone held upright (owner-approved mockup
@@ -40,7 +40,7 @@ import { PHONE_COURT_MIN_PX, PHONE_RECENT_HEIGHT_PX, PHONE_SQUARE_MIN_PX, PHONE_
  * @param {null|{ kind: 'toss'|'setup', choice?: { chooser, choice, names, leftTeamKey, servingTeamKey }, countdown?: number, countdownText?: string, total?: number }} props.between
  *   the interval before a set, while its setup is open (the desktop replaces the court with it);
  *   `choice`: the props of IntervalChoice_beach (who chooses, what they took)
- * @param {Array<{ id: any, text: string }>} props.recent newest first
+ * @param {Array<{ id: any, text: string, time?: string|null }>} props.recent newest first
  * @param {boolean} props.canUndo
  * @param {string} [props.scoreFont] CSS font family of scores and countdowns
  * @param {object} props.actions the Scoreboard's handlers (see Scoreboard_beach.jsx)
@@ -59,6 +59,19 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
   const [sheet, setSheet] = useState(null)
   const { left, right } = teams
   const idle = rally.status === 'idle'
+  // The last actions fill the height left over: as many whole lines as fit
+  // (three at the lowest), never a line cut in half
+  const recentRef = useRef(null)
+  const [recentLines, setRecentLines] = useState(3)
+  useLayoutEffect(() => {
+    const box = recentRef.current
+    if (!box || typeof ResizeObserver === 'undefined') return
+    const measure = () => setRecentLines(recentLinesFor(box.getBoundingClientRect().height))
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(box)
+    return () => observer.disconnect()
+  }, [])
   const inPlay = rally.status === 'in_play'
   // Players can be tapped (sanction / medical) as on the desktop court
   const playersOpen = idle && !rally.isRallyReplayed
@@ -104,6 +117,10 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
     const isServing = serving === team.side
     const p = paint[team.side]
     const dot = <span aria-hidden="true" style={{ flex: 'none', width: 10, height: 10, borderRadius: '50%', background: p.colour, border: `1px solid ${p.edge}` }} />
+    // The server's number on the serve pill (the player with the ball on the
+    // court). The word may be cut short on a narrow card, the number never is.
+    const serverNumber = isServing ? (team.players || []).find(pl => pl.serves)?.number : null
+    const server = serverNumber !== null && serverNumber !== undefined && serverNumber !== '' ? String(serverNumber) : null
     const info = (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0, overflow: 'hidden', alignItems: team.side === 'left' ? 'flex-start' : 'flex-end' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 5, maxWidth: '100%', minWidth: 0, flexDirection: team.side === 'left' ? 'row' : 'row-reverse' }}>
@@ -112,9 +129,12 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
         </span>
         <span
           aria-hidden={!isServing}
-          style={{ visibility: isServing ? 'visible' : 'hidden', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden', textOverflow: 'ellipsis', padding: '2px 6px', borderRadius: 999, background: 'var(--ov-text)', color: 'var(--ov-card)', fontSize: 10, fontWeight: 800, letterSpacing: '0.02em', lineHeight: 1.3, whiteSpace: 'nowrap' }}
+          data-testid={isServing ? 'phone-serve-pill' : undefined}
+          aria-label={isServing && server ? t('scoreboard.phone.serveNumber', { number: server, defaultValue: 'Serve #{{number}}' }) : undefined}
+          style={{ display: 'inline-flex', gap: 3, visibility: isServing ? 'visible' : 'hidden', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box', overflow: 'hidden', padding: '2px 6px', borderRadius: 999, background: 'var(--ov-text)', color: 'var(--ov-card)', fontSize: 10, fontWeight: 800, letterSpacing: '0.02em', lineHeight: 1.3, whiteSpace: 'nowrap' }}
         >
-          {t('scoreboard.labels.serveLabel')}
+          <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{t('scoreboard.labels.serveLabel')}</span>
+          {server && <span data-testid="phone-server-number" style={{ flex: 'none', fontVariantNumeric: 'tabular-nums' }}>#{server}</span>}
         </span>
         <span style={{ maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 11, fontWeight: 600, color: 'var(--ov-text-muted)' }}>
           {t('scoreboard.phone.setsWon', { count: team.setsWon })}
@@ -232,7 +252,10 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
   // As the desktop toolbox: the time-out between rallies (one per set), the
   // BMP when bmpAvailability_beach allows it; greyed when not
   const toDisabled = (team) => !idle || team.timeouts >= 1
-  const counter = (team, { label, value, disabled, onClick, testId, title }) => {
+  // Only the count taken, as the desktop counters: red once the set's one
+  // time-out is taken (OpenVolley 55d4815b; it read "1/1")
+  const COUNT_INK = { max: 'var(--ov-danger-text)' }
+  const counter = (team, { label, value, state = null, disabled, onClick, testId, title }) => {
     const p = paint[team.side]
     return (
       <button
@@ -242,7 +265,10 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
         disabled={disabled}
         title={title}
         style={{
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, minHeight: 56, minWidth: 0, padding: '0 4px',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, minHeight: PHONE_COUNTER_HEIGHT_PX, minWidth: 0,
+          // 6px above and below: at Android's larger text (1.3) the label
+          // touched the top border with none
+          padding: '6px 4px',
           borderRadius: 14,
           border: `2px solid ${disabled ? 'var(--ov-hairline-strong)' : p.edge}`,
           background: disabled ? 'var(--ov-sunken-strong)' : p.soft,
@@ -250,16 +276,17 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
           cursor: disabled ? 'default' : 'pointer'
         }}
       >
-        {/* One line as the mockup; a label longer than the button ("TEMPS
-            MORT") goes on two lines rather than out of it */}
-        <span style={{ maxWidth: '100%', fontSize: 'clamp(10px, 2.85vw, 11px)', lineHeight: 1.15, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', textAlign: 'center', textWrap: 'balance', overflowWrap: 'anywhere' }}>{label}</span>
-        <span style={{ fontSize: 20, lineHeight: 1.1, fontWeight: 800, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{value}</span>
+        {/* One line, small beside the count (the owner, 2026-10-21); a label
+            longer than the button ("TEMPS MORT") goes on two lines rather
+            than out of it */}
+        <span style={{ maxWidth: '100%', fontSize: 9, lineHeight: 1.15, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', textAlign: 'center', textWrap: 'balance', overflowWrap: 'anywhere' }}>{label}</span>
+        <span data-count-state={state || undefined} style={{ fontSize: 22, lineHeight: 1, fontWeight: 800, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', color: state ? COUNT_INK[state] : undefined }}>{value}</span>
       </button>
     )
   }
   const teamActions = (team) => (
     <div key={team.side} style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6 }}>
-      {counter(team, { label: t('scoreboard.phone.timeOut'), value: `${team.timeouts}/1`, disabled: toDisabled(team), onClick: () => actions.timeout(team.teamKey), testId: `phone-timeout-${team.side}` })}
+      {counter(team, { label: t('scoreboard.phone.timeOut'), value: team.timeouts, state: team.timeouts >= 1 ? 'max' : null, disabled: toDisabled(team), onClick: () => actions.timeout(team.teamKey), testId: `phone-timeout-${team.side}` })}
       {counter(team, { label: t('scoreboard.phone.bmpLeft'), value: team.bmp.remaining, disabled: !team.bmp.available, onClick: () => actions.teamBmp(team.teamKey), testId: `phone-bmp-${team.side}`, title: team.bmp.title })}
     </div>
   )
@@ -352,16 +379,16 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
         aria-label={t('scoreboard.buttons.pointTeam', { team: team.label })}
         onClick={() => actions.point(team.side)}
         className={squareClass}
-        style={{ minWidth: 0, borderRadius: 16, border: `2px solid ${p.edge}`, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, ...p.fill }}
+        style={{ minWidth: 0, borderRadius: 16, border: `2px solid ${p.edge}`, display: 'flex', alignItems: 'center', justifyContent: 'center', ...p.fill }}
       >
-        <span aria-hidden="true" style={{ fontSize: 40, fontWeight: 800, lineHeight: 1 }}>+1</span>
-        <span aria-hidden="true" style={{ fontSize: 14, fontWeight: 700 }}>{t('scoreboard.buttons.pointTeam', { team: team.label })}</span>
+        {/* "Point A", no "+1": a point is always one (OpenVolley 55d4815b) */}
+        <span aria-hidden="true" style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.1 }}>{t('scoreboard.buttons.pointTeam', { team: team.label })}</span>
       </button>
     )
   }
 
   // ---- the other actions --------------------------------------------------
-  const gridButton = (key, label, onClick, { disabled = false, muted = false, title } = {}) => (
+  const gridButton = (key, label, onClick, { disabled = false, muted = false, small = false, title } = {}) => (
     <button
       key={key}
       type="button"
@@ -376,7 +403,7 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
         color: disabled ? 'var(--ov-text-faint)' : 'var(--ov-text)',
         // Long words break only at their soft hyphens (Score-sheet), not
         // anywhere mid-word; overflowWrap is the last resort
-        fontSize: 12, lineHeight: 1.15, fontWeight: 600, overflow: 'hidden', overflowWrap: 'anywhere', hyphens: 'manual'
+        fontSize: small ? 10.5 : 12, lineHeight: 1.15, fontWeight: 600, overflow: 'hidden', overflowWrap: 'anywhere', hyphens: 'manual'
       }}
     >
       {label}
@@ -405,16 +432,21 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
         </div>
       </section>
 
-      <section aria-label={t('scoreboard.phone.recentActions')} data-testid="phone-recent" style={{ flex: 'none', margin: '4px 14px 8px', padding: '6px 10px', height: PHONE_RECENT_HEIGHT_PX, boxSizing: 'border-box', overflow: 'hidden', borderRadius: 10, background: 'var(--ov-sunken-strong)', display: 'flex', flexDirection: 'column', gap: 3 }}>
+      {/* Grows into the height left over (from nothing: what it shows never
+          sizes it): the screen is filled, no gap */}
+      <section ref={recentRef} aria-label={t('scoreboard.phone.recentActions')} data-testid="phone-recent" style={{ flex: '1 1 0px', margin: '4px 14px 8px', padding: '6px 10px', minHeight: PHONE_RECENT_MIN_PX, boxSizing: 'border-box', overflow: 'hidden', borderRadius: 10, background: 'var(--ov-sunken-strong)', display: 'flex', flexDirection: 'column', gap: 3 }}>
         {recent.length === 0 ? (
           <span style={{ fontSize: 12, color: 'var(--ov-text-muted)' }}>{t('scoreboard.phone.noActions')}</span>
-        ) : recent.map((r, i) => (
-          <span key={r.id} title={r.text} style={{ fontSize: 12, lineHeight: '15px', color: i === 0 ? 'var(--ov-text)' : 'var(--ov-text-muted)', fontWeight: i === 0 ? 700 : 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.text}</span>
+        ) : recent.slice(0, recentLines).map((r, i) => (
+          // the time first, small and muted, so the action's text keeps the line
+          <span key={r.id} title={r.time ? `${r.time} ${r.text}` : r.text} style={{ display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0, fontSize: 12, lineHeight: '15px', color: i === 0 ? 'var(--ov-text)' : 'var(--ov-text-muted)', fontWeight: i === 0 ? 700 : 500 }}>
+            {r.time && <span data-testid="phone-recent-time" style={{ flex: 'none', fontSize: 10, fontWeight: 600, color: 'var(--ov-text-muted)', fontVariantNumeric: 'tabular-nums' }}>{r.time}</span>}
+            <span style={{ minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.text}</span>
+          </span>
         ))}
       </section>
 
-      {/* Grows into the height left over: the screen is filled, no gap */}
-      <section aria-label={t('scoreboard.phone.teamActions')} style={{ flex: '1 0 auto', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, padding: '0 12px 8px' }}>
+      <section aria-label={t('scoreboard.phone.teamActions')} style={{ flex: 'none', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, padding: '0 12px 8px' }}>
         {teamActions(left)}
         {teamActions(right)}
       </section>
@@ -440,7 +472,8 @@ export default function PhoneScoreboard({ setNumber, pointsToWin, teams, serving
         {gridButton('sanction', t('scoreboard.sanction'), () => setSheet({ kind: 'sanction' }), { disabled: !playersOpen })}
         {gridButton('medical', t('scoreboard.phone.medical'), () => setSheet({ kind: 'medical' }), { disabled: !playersOpen })}
         {gridButton('replay', t('scoreboard.phone.replay'), () => actions.replay(), { disabled: !inPlay })}
-        {gridButton('decision', t('scoreboard.phone.decision'), () => actions.replay(), { disabled: !(idle && rally.canReplayRally) })}
+        {/* "Decision change" in small type (the owner, 2026-10-21: it read "Decision") */}
+        {gridButton('decision', t('scoreboard.phone.decision'), () => actions.replay(), { disabled: !(idle && rally.canReplayRally), small: true })}
         {gridButton('rosters', t('scoreboard.rosters'), () => actions.rosters(), { muted: true })}
         {gridButton('scoresheet', t('scoreboard.phone.scoresheet'), () => actions.scoresheet(), { muted: true })}
         {gridButton('remarks', t('scoreboard.phone.remarks'), () => actions.remarks(), { muted: true })}

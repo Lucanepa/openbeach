@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { PHONE_COURT_MIN_PX, PHONE_SQUARE_MIN_PX, PHONE_SQUARE_RESERVE_PX, detectDisplayMode, isPhoneScreen, normaliseDisplayMode, phoneHeldSideways, phoneLayoutActive, phoneLayoutKept, recentActions, tintOf } from '../../components_beach/scoreboard/phoneLayout_beach'
+import { PHONE_COURT_MIN_PX, PHONE_SQUARE_MIN_PX, PHONE_SQUARE_RESERVE_PX, PHONE_COUNTER_HEIGHT_PX, PHONE_RECENT_HEIGHT_PX, PHONE_RECENT_MAX_LINES, clockTime, dialogsCentred, recentLinesFor, detectDisplayMode, isPhoneScreen, normaliseDisplayMode, phoneHeldSideways, phoneLayoutActive, phoneLayoutKept, recentActions, tintOf } from '../../components_beach/scoreboard/phoneLayout_beach'
 
 describe('detectDisplayMode (the automatic display mode)', () => {
   it.each([[390, 844], [360, 740], [412, 915], [599, 1000]])('a %ix%i portrait phone gets the phone layout', (w, h) => {
@@ -162,6 +162,58 @@ describe('phone change-of-courts row (two pills on a 360px phone)', () => {
       const tto = [phone.ttoIn.replace('{{total}}', '21').replace('{{count}}', '21'), phone.ttoDone, phone.noTto]
       const longest = Math.max(...tto.map(s => s.length))
       expect(phone.switchNext.length + longest, `${lang}: ${phone.switchNext} + ${tto.join(' / ')}`).toBeLessThanOrEqual(46)
+    }
+  })
+})
+
+// Ported from OpenVolley (4bc5747c, 07ced9a2, 95f5982a, 2c85b160)
+describe('dialogsCentred (court-anchored menus)', () => {
+  it('always in the phone layout', () => {
+    expect(dialogsCentred({ phoneView: true, width: 1280, height: 800 })).toBe(true)
+  })
+
+  it.each([[412, 915], [915, 412], [962, 601], [1024, 600]])('a %ix%i phone or small tablet centres them', (w, h) => {
+    expect(dialogsCentred({ width: w, height: h })).toBe(true)
+  })
+
+  it.each([[1280, 800], [800, 1280], [1366, 650], [1920, 1080]])('a %ix%i tablet or laptop keeps them anchored', (w, h) => {
+    expect(dialogsCentred({ width: w, height: h })).toBe(false)
+  })
+})
+
+describe('recentLinesFor (the last actions fill the height left over)', () => {
+  it('three lines at their lowest, whole lines only, at most PHONE_RECENT_MAX_LINES', () => {
+    expect(recentLinesFor(PHONE_RECENT_HEIGHT_PX)).toBe(3)
+    expect(recentLinesFor(PHONE_RECENT_HEIGHT_PX + 17)).toBe(3)
+    expect(recentLinesFor(PHONE_RECENT_HEIGHT_PX + 18)).toBe(4)
+    expect(recentLinesFor(1000)).toBe(PHONE_RECENT_MAX_LINES)
+    expect(recentLinesFor(0)).toBe(1)
+  })
+
+  it('the counters keep a tappable height of their own', () => {
+    expect(PHONE_COUNTER_HEIGHT_PX).toBeGreaterThanOrEqual(48)
+  })
+})
+
+describe('the last actions\' time', () => {
+  it('each line has its local time, HH:MM', () => {
+    const at = new Date(2026, 9, 20, 19, 5).toISOString()
+    expect(recentActions([{ id: 1, seq: 1, type: 'point', payload: {}, setIndex: 1, ts: at }], 1, (e) => e.type)[0].time).toBe('19:05')
+    expect(clockTime({ ts: new Date(2026, 9, 20, 9, 7).getTime() })).toBe('09:07')
+    expect(clockTime({ ts: 'not a date' })).toBeNull()
+    expect(clockTime({})).toBeNull()
+  })
+})
+
+describe('the decision label', () => {
+  // set smaller (10.5px) in a ~70px button on a 360px phone: every piece
+  // between spaces and soft hyphens stays at 11 letters or fewer
+  it('has no piece too wide for its button', async () => {
+    for (const lang of ['en', 'de', 'de-CH', 'fr', 'it']) {
+      const { default: locale } = await import(`../../i18n_beach/locales/${lang}.json`)
+      for (const piece of locale.scoreboard.phone.decision.split(/[\s\u00ad]+/)) {
+        expect(piece.length, `${lang}: ${piece}`).toBeLessThanOrEqual(11)
+      }
     }
   })
 })

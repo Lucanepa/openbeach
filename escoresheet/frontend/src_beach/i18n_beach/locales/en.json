@@ -941,13 +941,14 @@
       "medicalTitle": "Medical time-out · RIT",
       "medicalHint": "Tap the injured player.",
       "refBmp": "Ref. BMP",
-      "decision": "Decision",
+      "decision": "Decision change",
       "remarks": "Remarks",
       "scoresheet": "Score­sheet",
       "sanctionPeople": "Player or coach",
       "sidewaysTitle": "Hold the phone upright",
       "sidewaysBody": "The scoring screen on a phone is made for portrait. Turn the phone back: the match, its dialogs and countdowns are kept.",
-      "replay": "Replay"
+      "replay": "Replay",
+      "serveNumber": "Serve #{{number}}"
     },
     "intervalChoice": {
       "chooses": "{{team}} chooses",

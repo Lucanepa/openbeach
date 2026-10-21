@@ -940,13 +940,14 @@
       "medicalTitle": "Temps mort médical · RIT",
       "medicalHint": "Touchez le joueur blessé.",
       "refBmp": "BMP arbitre",
-      "decision": "Décision",
+      "decision": "Change­ment de décision",
       "remarks": "Remar­ques",
       "scoresheet": "Feuille de match",
       "sanctionPeople": "Joueur ou coach",
       "sidewaysTitle": "Tenez le téléphone à la verticale",
       "sidewaysBody": "L’écran de saisie sur téléphone est conçu pour le format portrait. Retournez le téléphone : le match, ses dialogues et ses comptes à rebours sont conservés.",
-      "replay": "Rejouer"
+      "replay": "Rejouer",
+      "serveNumber": "Service #{{number}}"
     },
     "intervalChoice": {
       "chooses": "{{team}} choisit",

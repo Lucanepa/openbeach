@@ -129,7 +129,11 @@ describe('Scoreboard_beach: the phone layout', () => {
     await waitFor(() => expect(view.getByTestId('phone-score-left').textContent).toBe('1'))
     await waitFor(() => expect(view.getByRole('button', { name: 'Start rally' })).toBeTruthy())
     expect(view.getByTestId('phone-rhythm').textContent).toMatch(/Switch in 6/)
-    expect(view.getByTestId('phone-recent').textContent).toMatch(/Alpha \/ Beta/)
+    // the team by its letter (two names pushed the rest of the line out), the time first
+    expect(view.getByTestId('phone-recent').textContent).toMatch(/^\d\d:\d\dPoint — A \(A 1 : 0 B\)/)
+    expect(view.getByTestId('phone-recent-time').textContent).toMatch(/^\d\d:\d\d$/)
+    // the serve pill names the server (the player with the ball)
+    expect(view.getByTestId('phone-server-number').textContent).toMatch(/^#\d+$/)
     await settle()
 
     // ---- BMP B on the rally just played: the screen's BMP dialog ----
@@ -158,7 +162,9 @@ describe('Scoreboard_beach: the phone layout', () => {
     await waitFor(async () => expect((await ofType('timeout')).length).toBe(1))
     expect((await ofType('timeout'))[0].payload.team).toBe('team1')
     await waitFor(() => expect(view.getByTestId('phone-countdown')).toBeTruthy())
-    await waitFor(() => expect(view.getByTestId('phone-timeout-left').textContent).toMatch('1/1'))
+    // only the count taken, red once the set's one time-out is taken
+    await waitFor(() => expect(view.getByTestId('phone-timeout-left').textContent).toBe('Time-out1'))
+    expect(view.getByTestId('phone-timeout-left').querySelector('[data-count-state="max"]')).not.toBeNull()
     // one per set: greyed; the other team's stays open
     expect(view.getByTestId('phone-timeout-left').disabled).toBe(true)
     expect(view.getByTestId('phone-timeout-right').disabled).toBe(false)
@@ -173,7 +179,7 @@ describe('Scoreboard_beach: the phone layout', () => {
     await settle()
     fireEvent.click([...document.querySelectorAll('[data-testid="undo-confirm"] button')].at(-1))
     await waitFor(async () => expect((await ofType('timeout')).length).toBe(0))
-    await waitFor(() => expect(view.getByTestId('phone-timeout-left').textContent).toMatch('0/1'))
+    await waitFor(() => expect(view.getByTestId('phone-timeout-left').textContent).toBe('Time-out0'))
     expect(view.getByTestId('phone-timeout-left').disabled).toBe(false)
   }, 60000)
 

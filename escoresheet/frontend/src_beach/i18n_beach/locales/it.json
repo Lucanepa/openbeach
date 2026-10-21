@@ -940,13 +940,14 @@
       "medicalTitle": "Timeout medico · RIT",
       "medicalHint": "Tocca il giocatore infortunato.",
       "refBmp": "BMP arbitro",
-      "decision": "Decisione",
+      "decision": "Cambio decisione",
       "remarks": "Osserva\u00adzioni",
       "scoresheet": "Referto",
       "sanctionPeople": "Giocatore o coach",
       "sidewaysTitle": "Tieni il telefono in verticale",
       "sidewaysBody": "La schermata di punteggio sul telefono è pensata per il formato verticale. Ruota di nuovo il telefono: la partita, i dialoghi e i conti alla rovescia restano.",
-      "replay": "Ripeti"
+      "replay": "Ripeti",
+      "serveNumber": "Servizio #{{number}}"
     },
     "intervalChoice": {
       "chooses": "{{team}} sceglie",

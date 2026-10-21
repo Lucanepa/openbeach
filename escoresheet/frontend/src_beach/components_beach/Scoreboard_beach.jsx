@@ -49,7 +49,7 @@ import { TTO_TOTAL, courtChangeEvery, hasTechnicalTimeout, nextCourtEvents } fro
 import PhoneScoreboard from './scoreboard/PhoneScoreboard_beach.jsx'
 import IntervalChoice, { ServeOrder } from './scoreboard/IntervalChoice_beach.jsx'
 import { intervalChooser, intervalChoiceKey as intervalChoiceKeyOf, cleanIntervalChoices } from '../utils_beach/intervalChoice_beach'
-import { detectDisplayMode, isPhoneScreen, normaliseDisplayMode, phoneHeldSideways, phoneLayoutActive, readStoredDisplayMode, recentActions } from './scoreboard/phoneLayout_beach'
+import { PHONE_RECENT_MAX_LINES, detectDisplayMode, dialogsCentred, isPhoneScreen, normaliseDisplayMode, phoneHeldSideways, phoneLayoutActive, readStoredDisplayMode, recentActions } from './scoreboard/phoneLayout_beach'
 import { defaultSetStartTime, scheduledClock, withActualStartTimeRemark, actualStartTimeLine, startScheduleOf, typedStartNear } from '../utils_beach/setStartTime_beach'
 import { withoutAutoRemarks, errorText as correctionErrorText, pointsToWin as setPointsToWin } from '../utils_beach/corrections_beach'
 import { correctSetTimes } from '../utils_beach/applyCorrectionPlan_beach'
@@ -610,6 +610,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   // rather than falling back to the landscape layout.
   const isPhoneSideways = phoneHeldSideways(displayMode, { width: viewportWidth, height: viewportHeight })
   const isPhoneView = phoneLayoutActive(displayMode, { width: viewportWidth, height: viewportHeight }) || isPhoneSideways
+  // Phones and small tablets get the court-anchored menus centred
+  // (styles_beach.css .centre-dialogs): anchored next to the tapped player,
+  // they ran off the screen there. A large screen keeps them next to it.
+  const centreDialogs = dialogsCentred({ phoneView: isPhoneView, width: viewportWidth, height: viewportHeight })
   // A phone in the automatic mode, or the Phone mode, is not locked to
   // landscape; tablets and computers are locked as before
   const keepOrientationFree = displayMode === 'phone' || (displayMode === 'auto' && isPhoneScreen())
@@ -4981,20 +4985,22 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     )
   }
 
-  const getActionDescription = useCallback((event) => {
+  // teamLetters: the team as its letter (A / B) instead of its name, for the
+  // phone's last actions, where two names pushed the rest of the line out
+  // (OpenVolley 55d4815b)
+  const getActionDescription = useCallback((event, { teamLetters = false } = {}) => {
     if (!event || !data) return 'Unknown action'
-
-    const teamName = event.payload?.team === 'team1'
-      ? (data.team1Team?.name || 'team1')
-      : event.payload?.team === 'team2'
-        ? (data.team2Team?.name || 'team2')
-        : null
 
     // Determine team labels (A or B)
     const teamALabel = data?.match?.coinTossTeamA === 'team1' ? 'A' : 'B'
     const teamBLabel = data?.match?.coinTossTeamB === 'team1' ? 'A' : 'B'
     const team1Label = data?.match?.coinTossTeamA === 'team1' ? 'A' : (data?.match?.coinTossTeamB === 'team1' ? 'B' : 'A')
     const team2Label = data?.match?.coinTossTeamA === 'team2' ? 'A' : (data?.match?.coinTossTeamB === 'team2' ? 'B' : 'B')
+    const nameOf = (key) => key === 'team1'
+      ? (teamLetters ? team1Label : (data.team1Team?.name || 'team1'))
+      : (teamLetters ? team2Label : (data.team2Team?.name || 'team2'))
+
+    const teamName = event.payload?.team === 'team1' || event.payload?.team === 'team2' ? nameOf(event.payload.team) : null
 
     // Calculate score at time of event
     const setIdx = event.setIndex || 1
@@ -5068,8 +5074,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         eventDescription = t('corrections.describe.replay', 'Rally replayed')
       }
     } else if (event.type === 'decision_change') {
-      const fromTeam = event.payload?.fromTeam === 'team1' ? (data?.team1Team?.name || 'team1') : (data?.team2Team?.name || 'team2')
-      const toTeam = event.payload?.toTeam === 'team1' ? (data?.team1Team?.name || 'team1') : (data?.team2Team?.name || 'team2')
+      const fromTeam = nameOf(event.payload?.fromTeam === 'team1' ? 'team1' : 'team2')
+      const toTeam = nameOf(event.payload?.toTeam === 'team1' ? 'team1' : 'team2')
       eventDescription = `${t('corrections.describe.decisionChange', 'Decision change')} — ${t('scoreboard.actions.decisionChangeDetail', 'point moved from {{from}} to {{to}}', { from: fromTeam, to: toTeam })}`
     } else if (event.type === 'lineup') {
       // Only show initial lineups, not rotation lineups
@@ -7781,7 +7787,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       },
       centre,
       between,
-      recent: recentActions(data?.events, data?.set?.index, getActionDescription, 3),
+      recent: recentActions(data?.events, data?.set?.index, (e) => getActionDescription(e, { teamLetters: true }), PHONE_RECENT_MAX_LINES),
       canUndo,
       scoreFont: getScoreFont(),
       actions: {
@@ -7823,7 +7829,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   }
 
   return (
-    <div className={isPhoneView ? 'match-record phone-layout' : 'match-record'}>
+    <div className={['match-record', isPhoneView && 'phone-layout', centreDialogs && 'centre-dialogs'].filter(Boolean).join(' ')}>
       {setTransitionLoading && (
         // Taps wait while the set is being finished (the court still shows
         // the old set); the screen stays visible

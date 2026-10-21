@@ -11,6 +11,7 @@ import { getCloudApiUrl, isRelayOriginPage, isVenueMode } from '../utils_beach/b
 import UserButton from './auth/UserButton_beach'
 import { cn } from '../ui/volleyui/cn.js'
 import { SwitchTrack } from '../ui/volleyui/Switch.jsx'
+import { FOCUS_RING_INSET } from '../ui/volleyui/Button.jsx'
 import {
   FOCUS_RING, KIT_SCOPE, HEADER_BAR, HEADER_BTN, HEADER_BTN_ON, HEADER_SWITCH, POPOVER_PANEL, MENU_PANEL, MENU_TITLE,
   MENU_ROW, MENU_SUBROW, MENU_ROW_ON, MENU_NEST, MENU_SEP, MENU_ICON, MENU_COUNT, STATUS_PILL, STATUS_TONES
@@ -1096,7 +1097,14 @@ export default function MainHeader({
         </div>
 
       </div>
-      {/* Show thin expand bar when header is collapsed */}
+      {/* Show thin expand bar when header is collapsed. It stays 16px high
+          (the phone layout counts on it), but over the phone scoring screen
+          its middle takes taps 48px down, over the screen's title (no button
+          there): the bar alone was too small a target on a phone (OpenVolley
+          52ad0acc, 012a5d68). Its width stays clear of the phone header's
+          Undo and Menu buttons (2 x 44px + gaps, 106px from the right edge):
+          100% - 224px keeps a 6px gap on a 320-360px phone. Elsewhere the
+          toolbar below has buttons there. */}
       {effectivelyCollapsed && (
         <span className={KIT_SCOPE}>
           <button
@@ -1104,9 +1112,10 @@ export default function MainHeader({
             onClick={() => setIsCollapsed(false)}
             aria-label={t('header.showHeader', 'Show header')}
             title={t('header.showHeader', 'Show header')}
-            className={cn('flex h-4 w-full items-center justify-center border-b border-stone-200/70 bg-white text-stone-500 hover:bg-stone-100 transition-colors', FOCUS_RING)}
+            className={cn('relative flex h-4 w-full items-center justify-center overflow-visible border-0 border-b border-stone-200/70 bg-white p-0 text-stone-500 hover:bg-stone-100 transition-colors', FOCUS_RING_INSET)}
           >
-            <ChevronDown size={12} aria-hidden="true" />
+            <ChevronDown size={14} aria-hidden="true" />
+            {startCollapsed && <span aria-hidden="true" data-testid="header-expand-target" className="absolute left-1/2 top-0 h-12 w-[min(40%,calc(100%_-_224px),200px)] -translate-x-1/2" />}
           </button>
         </span>
       )}

@@ -940,13 +940,14 @@
       "medicalTitle": "Medizinischs Timeout · RIT",
       "medicalHint": "Verletzte Spieler aatippe.",
       "refBmp": "Schiri-BMP",
-      "decision": "Entscheid",
+      "decision": "Entscheids­änderig",
       "remarks": "Bemer­kige",
       "scoresheet": "Match­blatt",
       "sanctionPeople": "Spieler oder Coach",
       "sidewaysTitle": "Heb s Handy uufrächt",
       "sidewaysBody": "D Erfassig ufem Handy isch fürs Hochformat gmacht. Drääj s Handy zrugg: Spiil, Dialög und Countdowns blibed erhalte.",
-      "replay": "Wieder­hole"
+      "replay": "Wieder­hole",
+      "serveNumber": "Ufschlag #{{number}}"
     },
     "intervalChoice": {
       "chooses": "{{team}} wählt",
