@@ -400,6 +400,17 @@ export function apiMatchClaim(externalId, pin) {
  * yet; 409 OV_MATCH_CLOSED: closed; a 404 without code: an older backend.
  * @returns {Promise<{data: {external_id: string, mine: boolean|null, moved?: boolean, scorer: {platform: string|null, at: string|null}|null, previous?: object|null}|null, error: object|null, status: number}>}
  */
+/**
+ * An admin reopens a match the server has closed (db/007): it goes back to
+ * 'ended' there, its account approvals are voided (db/011), and the change is
+ * audit-logged with the reason. 409 OV_NOT_CLOSED: it is open already.
+ * @param {string} matchId the server's match id (uuid)
+ * @returns {Promise<{data: object|null, error: object|null, status: number}>}
+ */
+export function apiAdminReopenMatch(matchId, { reason } = {}) {
+  return postJson(`/api/admin/matches/${encodeURIComponent(matchId)}/reopen`, { reason }, { fallbackError: 'Reopening the match failed' })
+}
+
 export function apiMatchScorer(externalId, { claim = true } = {}) {
   const device = writingDevice()
   if (!device) return Promise.resolve({ data: null, error: { message: 'No device id', code: 'OV_NO_DEVICE' }, status: 0 })

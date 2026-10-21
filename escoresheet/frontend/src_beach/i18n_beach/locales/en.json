@@ -1410,7 +1410,15 @@
       "page": "Page {{page}} of {{pages}}",
       "keepWindowOpen": "Keep the scoresheet window open until the PDF is ready."
     },
-    "closedOnServer": "This match is closed on the server: it can no longer be changed here. Only an admin can reopen it (Reopen match)."
+    "closedOnServer": "This match is closed on the server: it can no longer be changed here. Only an admin can reopen it (Reopen match).",
+    "reopenNeedsConnection": "Reopening a closed match needs a connection to the server.",
+    "reopenCheckFailed": "Could not check the match on the server – please try again.",
+    "reopenAdminTitle": "Reopen this closed match?",
+    "reopenAdminBody": "It goes back to “ended” on the server and can be approved again. This is recorded in the audit log.",
+    "reopenReason": "Reason",
+    "reopenAdminOnlyTitle": "Only an admin can reopen this match",
+    "reopenAdminOnlyBody": "Game {{game}} is closed on the server. Ask an admin to reopen it, then tap “Reopen match” again.",
+    "reopenAdminConfirm": "Reopen"
   },
   "scoresheetPdf": {
     "zoomOut": "Zoom Out",

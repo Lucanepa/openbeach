@@ -1409,7 +1409,15 @@
       "page": "Pagina {{page}} di {{pages}}",
       "keepWindowOpen": "Tieni aperta la finestra del referto finché il PDF è pronto."
     },
-    "closedOnServer": "Questa partita è chiusa sul server: qui non può più essere modificata. Solo un admin può riaprirla (Riapri partita)."
+    "closedOnServer": "Questa partita è chiusa sul server: qui non può più essere modificata. Solo un admin può riaprirla (Riapri partita).",
+    "reopenNeedsConnection": "Per riaprire una partita chiusa serve una connessione al server.",
+    "reopenCheckFailed": "Impossibile verificare la partita sul server – riprova.",
+    "reopenAdminTitle": "Riaprire questa partita chiusa?",
+    "reopenAdminBody": "Torna a «terminata» sul server e può essere approvata di nuovo. Viene registrato nel registro.",
+    "reopenReason": "Motivo",
+    "reopenAdminOnlyTitle": "Solo un admin può riaprire questa partita",
+    "reopenAdminOnlyBody": "La partita {{game}} è chiusa sul server. Chiedi a un admin di riaprirla, poi tocca di nuovo «Riapri partita».",
+    "reopenAdminConfirm": "Riapri"
   },
   "scoresheetPdf": {
     "zoomOut": "Riduci",

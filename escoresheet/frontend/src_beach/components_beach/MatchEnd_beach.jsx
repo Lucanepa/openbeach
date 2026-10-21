@@ -36,6 +36,8 @@ import { plausibleMinutes } from '../../scoresheet_pdf_beach/components_beach/sh
 import { isoOf, matchTimes, setEndMs, setStartMs } from '../../scoresheet_pdf_beach/components_beach/matchTimes_beach'
 import { formatTimeLocal } from '../utils_beach/timeUtils_beach'
 import { isKnownClosedOnServer } from '../utils_beach/matchHandover_beach'
+import { planReopen } from '../utils_beach/matchReopen_beach'
+import { apiFrom, apiAdminReopenMatch } from '../lib_beach/apiClient_beach'
 import { saveMatchSignature, signatureEditLocked, signaturesPayload, clearedPostMatchSignatures, POST_MATCH_SIGNATURE_KEYS } from '../utils_beach/signatures_beach'
 import { approvalSignatureSources, phoneSignContext, signatureSourceUpdate, signedOnPhone, SLOT_OF_ROLE } from '../utils_beach/phoneSignature_beach'
 import { relayMatchKey } from '../utils_beach/relayPublisher_beach'
@@ -394,6 +396,12 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
   // closed match reopened it here and cleared its signatures while the server
   // refused every change).
   const [serverClosed, setServerClosed] = useState(false)
+  // Reopen after approval (utils_beach/matchReopen_beach): { kind: 'admin',
+  // row } | { kind: 'adminOnly' }
+  const [reopenDialog, setReopenDialog] = useState(null)
+  const [reopenReason, setReopenReason] = useState('')
+  const [reopenBusy, setReopenBusy] = useState(false)
+  const [reopenError, setReopenError] = useState('')
   const closedOnServer = serverClosed || isKnownClosedOnServer(data?.match)
   const finalActions = isApproved || closedOnServer
   const [isSaving, setIsSaving] = useState(false)
@@ -1461,16 +1469,87 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     }
   }
 
-  // Handle reopening match after approval - allows re-approval or adjustments
-  const handleReopenMatch = async () => {
-    cLogger.logHandler('handleReopenMatch', { matchId })
+  // Reopen after approval. Test matches and matches whose approval never
+  // reached the server reopen here; a match the server has closed needs an
+  // admin (server-side, audit-logged). It reopened locally only, and the
+  // server kept refusing the match's changes as closed (OpenVolley's
+  // utils/matchReopen, ported 2026-10-21).
+  const handleReopenMatchClick = async () => {
+    let queue = []
+    try {
+      queue = await db.sync_queue.where('resource').equals('match').toArray()
+    } catch { queue = [] }
+    const online = typeof navigator === 'undefined' || navigator.onLine !== false
+    const plan = await planReopen({
+      match: data?.match,
+      queue,
+      online,
+      access,
+      readServerMatch: (seedKey) => apiFrom('matches').select('id, status, closed_at').eq('external_id', seedKey).maybeSingle()
+    })
+    cLogger.logHandler('handleReopenMatchClick', { matchId, plan: plan.kind })
+    switch (plan.kind) {
+      case 'local':
+      case 'serverOpen':
+        return handleReopenMatch()
+      case 'localUnsynced':
+        try {
+          for (const id of plan.supersedeIds || []) await db.sync_queue.update(id, { status: 'superseded' })
+        } catch (err) {
+          console.warn('[MatchEnd] Could not supersede the unsent approval:', err?.message)
+        }
+        return handleReopenMatch()
+      case 'needsConnection':
+        showAlert(t('matchEnd.reopenNeedsConnection'), 'error')
+        return
+      case 'checkFailed':
+        showAlert(t('matchEnd.reopenCheckFailed'), 'error')
+        return
+      case 'adminReopen':
+        setReopenReason('')
+        setReopenError('')
+        setReopenDialog({ kind: 'admin', row: plan.row })
+        return
+      default:
+        setReopenDialog({ kind: 'adminOnly' })
+    }
+  }
+
+  const submitAdminReopen = async () => {
+    const row = reopenDialog?.row
+    const reason = reopenReason.trim()
+    if (!row?.id || reason.length < 3 || reopenBusy) return
+    setReopenBusy(true)
+    setReopenError('')
+    const { error } = await apiAdminReopenMatch(row.id, { reason })
+    setReopenBusy(false)
+    // Already open on the server (another admin was quicker): reopen here too
+    if (error && error.code !== 'OV_NOT_CLOSED') {
+      setReopenError(error.network || error.status === 0
+        ? t('matchEnd.reopenNeedsConnection')
+        : error.status === 403 ? t('approval.errors.forbidden') : t('matchEnd.reopenCheckFailed'))
+      return
+    }
+    setReopenDialog(null)
+    // The admin reopen voided the account approvals on the server (db/011)
+    await handleReopenMatch({ voidApprovals: true })
+  }
+
+  // Handle reopening match after approval - allows re-approval or adjustments.
+  // Nothing is queued: the server has the match open (or never saw it closed).
+  // voidApprovals: the admin reopen, which voided them on the server.
+  const handleReopenMatch = async ({ voidApprovals = false } = {}) => {
+    cLogger.logHandler('handleReopenMatch', { matchId, voidApprovals })
 
     try {
       // Clear approval state in database
       await db.matches.update(matchId, {
         approved: false,
         approvedAt: null,
-        status: 'ended' // Match is finished but not final
+        status: 'ended', // Match is finished but not final
+        // (the server has it open again, or never had it closed)
+        closed_at: null,
+        ...(voidApprovals ? { accountApprovals: null } : {})
       })
 
       // Update local state
@@ -1750,7 +1829,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
             <Button variant="dark" size="xl" className="min-w-[150px] flex-1" onClick={handleCloseMatch} disabled={isClosing} loading={isClosing}>
               {t('matchEnd.closeMatch')}
             </Button>
-            <Button variant="danger-outline" size="xl" onClick={handleReopenMatch} disabled={isClosing}>
+            <Button variant="danger-outline" size="xl" onClick={handleReopenMatchClick} disabled={isClosing}>
               {t('matchEnd.reopenMatch')}
             </Button>
           </>
@@ -1942,6 +2021,52 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
               >
                 {t('common.save')}
               </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Reopen a match the server has closed: admins give a reason */}
+      {reopenDialog?.kind === 'admin' && (
+        <Modal
+          tone="light"
+          title={t('matchEnd.reopenAdminTitle')}
+          open={true}
+          onClose={() => { if (!reopenBusy) setReopenDialog(null) }}
+          width={480}
+        >
+          <div className="ov-kit">
+            <p className="mb-3 text-sm text-stone-600">{t('matchEnd.reopenAdminBody')}</p>
+            <label className="mb-1 block text-xs font-medium text-stone-600" htmlFor="ob-reopen-reason">{t('matchEnd.reopenReason')}</label>
+            <Textarea id="ob-reopen-reason" rows={3} value={reopenReason} onChange={e => { setReopenReason(e.target.value); setReopenError('') }} maxLength={500} required />
+            {reopenError && <p role="alert" className="mt-1.5 text-xs font-medium text-red-600">{reopenError}</p>}
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" className={modalCancelClass} onClick={() => setReopenDialog(null)} disabled={reopenBusy}>
+                {t('common.cancel')}
+              </button>
+              <Button variant="danger" size="lg" loading={reopenBusy} disabled={reopenReason.trim().length < 3 || reopenBusy} onClick={submitAdminReopen} data-testid="admin-reopen-confirm">
+                {t('matchEnd.reopenAdminConfirm')}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Closed on the server and this account is no admin */}
+      {reopenDialog?.kind === 'adminOnly' && (
+        <Modal
+          tone="light"
+          title={t('matchEnd.reopenAdminOnlyTitle')}
+          open={true}
+          onClose={() => setReopenDialog(null)}
+          width={480}
+        >
+          <div className="ov-kit">
+            <p className="text-sm text-stone-600" data-testid="reopen-admin-only">
+              {t('matchEnd.reopenAdminOnlyBody', { game: data?.match?.gameN ?? data?.match?.game_n ?? '' })}
+            </p>
+            <div className="mt-4 flex justify-end">
+              <Button variant="dark" size="lg" onClick={() => setReopenDialog(null)}>{t('common.close')}</Button>
             </div>
           </div>
         </Modal>
