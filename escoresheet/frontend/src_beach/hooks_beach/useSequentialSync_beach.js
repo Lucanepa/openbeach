@@ -8,6 +8,8 @@ import { cloudSyncWaitNow } from '../utils_beach/cloudStatus_beach'
 // match-scoped ids, take-over by game PIN), instead of a second copy of it.
 
 const TIMED_OUT = 'timed_out'
+// A job dropped for one of these was set aside, not lost (see settleJob)
+const SET_ASIDE_CODES = ['OV_SCORER_MOVED', 'OV_MATCH_CLOSED']
 
 // Store the outcome of a direct processJob call on its sync_queue row and map it
 // to the executeAndWait result.
@@ -24,6 +26,13 @@ async function settleJob(job, jobId, result) {
 
   if (result === DROP_JOB) {
     await db.sync_queue.update(jobId, { status: 'dropped' })
+    // Set aside because another device scores the match (db/019,
+    // ScorerMovedModal_beach shows), or a match update for a match closed
+    // here: nothing failed, the set-end modal must not say "Sync failed"
+    // behind the handover notice
+    if (SET_ASIDE_CODES.includes(lastError?.code)) {
+      return { success: false, offline: true, setAside: true, jobId }
+    }
     return { success: false, error: 'Job cannot be attributed to a match', jobId }
   }
 

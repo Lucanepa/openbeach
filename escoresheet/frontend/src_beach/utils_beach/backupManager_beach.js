@@ -16,7 +16,7 @@ import { labelsInDesignation, eventTeamA } from './coinToss_beach'
 import { cleanIntervalChoices } from './intervalChoice_beach'
 import { refereeConnectionDefault } from '../constants_beach/testSeeds_beach'
 import { jobMatchKey } from './syncIds_beach'
-import { queueScorerClaim } from './matchHandover_beach'
+import { queueScorerClaim, isScorerMoved } from './matchHandover_beach'
 
 // IndexedDB key for storing file system directory handle
 const BACKUP_DB_NAME = 'escoresheet_backup'
@@ -350,6 +350,18 @@ export function pinsForRestore(jsonData, previous) {
  * @param {object} match the backup's match
  * @returns {object} what to add to it
  */
+/**
+ * The cloud block a restored match keeps. A backup taken after another device
+ * took the match over carries its OV_SCORER_MOVED block, but restoring it is
+ * this device's take-over (the restore job names the device, db/019): the
+ * block goes, or ScorerMovedModal_beach would stay over the restored match
+ * whatever the server answers. A block saying the match was closed there
+ * stays (the server refuses the restore as closed anyway).
+ */
+export function restoredBlock(match) {
+  return isScorerMoved(match) && match.cloudBlock?.closed !== true ? { cloudBlock: null } : {}
+}
+
 export function connectionsForRestore(match) {
   if (match?.test !== true || match.refereeConnectionEnabled !== undefined) return {}
   return { refereeConnectionEnabled: refereeConnectionDefault(match) }
@@ -433,6 +445,7 @@ export async function restoreMatchFromJson(jsonData) {
     // Create match with ID=1 (always single match in session)
     const matchId = await db.matches.add({
       ...match,
+      ...restoredBlock(match),
       id: 1, // Fixed ID for single match
       team1Id,
       team2Id,
@@ -662,6 +675,7 @@ export async function restoreMatchInPlace(matchId, jsonData) {
     await db.matches.update(matchId, {
       ...match,
       ...connectionsForRestore(match),
+      ...restoredBlock(match),
       id: matchId,
       seed_key: externalId, // Ensure seed_key is set for sync
       restoredAt: new Date().toISOString()

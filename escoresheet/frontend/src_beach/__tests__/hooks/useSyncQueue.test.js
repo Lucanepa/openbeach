@@ -1375,6 +1375,35 @@ describe('a match continued on another device', () => {
     expect(fakeDb.sync_queue.map.get(1).status).toBe('sent')
   })
 
+  // review 2026-10-21: a backup restored from a moved copy (or a block noted
+  // while the claim was on its way) kept ScorerMovedModal over the match
+  // after the server took this device's claim / restore
+  it('an accepted claim or restore clears the moved block; a block of a match closed there stays', async () => {
+    fakeDb.matches.reset([{ id: 1, seed_key: 'match_100_aaa', status: 'live', cloudBlock: { code: 'OV_SCORER_MOVED', scorer: { platform: 'android' } } }])
+    fakeDb.sync_queue.reset([{ id: 1, resource: 'match', action: 'scorer', status: 'queued', payload: { id: 'match_100_aaa' } }])
+    await runQueuePass()
+    expect(fakeDb.sync_queue.map.get(1).status).toBe('sent')
+    expect(fakeDb.matches.map.get(1).cloudBlock).toBeNull()
+
+    fakeDb.matches.reset([{ id: 1, seed_key: 'match_100_aaa', status: 'final', cloudBlock: { code: 'OV_SCORER_MOVED', closed: true } }])
+    fakeDb.sync_queue.reset([{ id: 2, resource: 'match', action: 'scorer', status: 'queued', payload: { id: 'match_100_aaa' } }])
+    await runQueuePass()
+    expect(fakeDb.matches.map.get(1).cloudBlock).toMatchObject({ code: 'OV_SCORER_MOVED', closed: true })
+  })
+
+  // port question 2026-10-21: the set-end sync said "Sync failed" behind
+  // ScorerMovedModal for a write that was only set aside
+  it('a set-end write set aside because another device scores the match is no sync error', async () => {
+    const { sendJobNow } = await import('../../hooks_beach/useSequentialSync_beach')
+    fakeDb.matches.reset([{ id: 1, seed_key: 'match_100_aaa', status: 'live' }])
+    fakeDb.sync_queue.reset([])
+    api.respond = (call) => (call.table === 'sets' ? refuse('OV_SCORER_MOVED', { scorer: { platform: 'android' } }) : defaultRespond(call))
+    const out = await sendJobNow({ resource: 'set', action: 'update', payload: { external_id: 'match_100_aaa:s:5', team1_points: 21, team2_points: 18, finished: true } }, 5000, { waitForCloud: () => true })
+    expect(out).toMatchObject({ success: false, offline: true, setAside: true })
+    expect(out.error).toBeUndefined()
+    expect(fakeDb.matches.map.get(1).cloudBlock).toMatchObject({ code: 'OV_SCORER_MOVED' })
+  })
+
   // review 2026-10-21 (reproduced): a parked claim let the joined device's
   // events go first; refused as moved, they put ScorerMovedModal on the
   // device the scorer was using

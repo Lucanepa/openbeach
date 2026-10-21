@@ -701,7 +701,32 @@ export async function processJob(job) {
       return DROP_JOB
     }
   }
+  if (result === true && job?.resource === 'match' && TAKE_OVER_ACTIONS.includes(job.action)) {
+    await clearScorerMoved(job)
+  }
   return result
+}
+
+// The writes that make this device the match's scorer (a claim, a backup
+// restore naming the device)
+const TAKE_OVER_ACTIONS = [SCORER_CLAIM_ACTION, 'restore']
+
+/**
+ * The server took this device's claim or restore: it scores the match again,
+ * so a moved block left on the local match (a backup restored from a moved
+ * copy, a block noted while the claim was on its way) goes. (OpenVolley
+ * clears a match's cloud block on any accepted write, clearCloudBlock.)
+ */
+async function clearScorerMoved(job) {
+  try {
+    const local = await findLocalMatchBySeed(jobMatchKey(job))
+    if (isScorerMoved(local) && local.cloudBlock?.closed !== true) {
+      await db.matches.update(local.id, { cloudBlock: null })
+      safeLog.log('[SyncQueue] This device scores the match again:', jobMatchKey(job))
+    }
+  } catch (err) {
+    safeLog.warn('[SyncQueue] Could not clear the moved block of a match:', err?.message)
+  }
 }
 
 // The jobs that write a match's score (the server checks their scoring device)
