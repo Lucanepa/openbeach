@@ -89,6 +89,42 @@ export async function queueSetScoreSync(db, { matchId, setIndex = null }) {
 }
 
 /**
+ * Queue a set as finished, with its score: a set a forfeit (or an expulsion)
+ * ends, and the sets a pre-match forfeit gives (CoinToss_beach). The set end
+ * of a played set sends finished itself; these only wrote Dexie, so the
+ * server's sets stayed unfinished (or missing) and a PIN approval was refused
+ * as OV_RESULT_NOT_SYNCED. `insert`: the set has no cloud row yet.
+ * @param {import('dexie').Dexie} db
+ * @param {{ matchId: number, setId: number, insert?: boolean }} p
+ * @returns {Promise<boolean>} true when a job was queued
+ */
+export async function queueSetFinishedSync(db, { matchId, setId, insert = false }) {
+  try {
+    const match = await db.matches.get(matchId)
+    if (!match || match.test || !match.seed_key) return false
+    const set = await db.sets.get(setId)
+    if (!set) return false
+    await db.sync_queue.add({
+      resource: 'set',
+      action: insert ? 'insert' : 'update',
+      payload: {
+        external_id: setExtId(match.seed_key, set.id),
+        ...(insert ? { match_id: match.seed_key, index: set.index } : {}),
+        team1_points: set.team1Points || 0,
+        team2_points: set.team2Points || 0,
+        finished: true
+      },
+      ts: new Date().toISOString(),
+      status: 'queued'
+    })
+    return true
+  } catch (err) {
+    console.warn('[eventSync] could not queue the finished set', matchId, setId, err?.message)
+    return false
+  }
+}
+
+/**
  * Is a live-state sync in the break between two sets? At the set end itself,
  * or while the match is in its interval and the set the snapshot shows is not
  * marked finished yet (once it is, the snapshot already counts it and moves on:

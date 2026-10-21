@@ -29,7 +29,7 @@ import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { apiFrom } from '../lib_beach/apiClient_beach'
 import { setExtId, eventExtId } from '../utils_beach/syncIds_beach'
 import { missingForfeitSets } from '../utils_beach/forfeitSets_beach'
-import { changesSetScore, isLiveSetInterval, queueSetScoreSync } from '../utils_beach/eventSync_beach'
+import { changesSetScore, isLiveSetInterval, queueSetScoreSync, queueSetFinishedSync } from '../utils_beach/eventSync_beach'
 import { planPointRemoval, scoreAfterRemoval, syncJobsForEvents, syncJobsForSets, eventUpsertJob, setReopenJob, planDecisionChangeReversal, scoreDeltaOfRemoval, teamSanctionFlags, UNSENT_STATUSES } from '../utils_beach/scorerCorrections_beach'
 import { askConfirm } from '../utils_beach/askConfirm_beach'
 import { rallyStatusOf, currentSetOf } from '../utils_beach/rally_beach'
@@ -6382,12 +6382,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         }
       }
 
-      // End the set
+      // End the set (on the server too: a PIN approval compares its finished sets)
       await db.sets.update(currentSet.id, {
         finished: true,
         [opponentKey === 'team1' ? 'team1Points' : 'team2Points']: opponentPoints,
         [teamKey === 'team1' ? 'team1Points' : 'team2Points']: teamPoints
       })
+      await queueSetFinishedSync(db, { matchId, setId: currentSet.id })
 
       // Log set end
       await logEvent('set_end', {
@@ -6412,6 +6413,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       for (const ms of toAward) {
         if (ms.id != null) {
           await db.sets.update(ms.id, { finished: true, team1Points: ms.team1Points, team2Points: ms.team2Points })
+          await queueSetFinishedSync(db, { matchId, setId: ms.id })
         }
         const newSetId = ms.id != null ? null : await db.sets.add({ matchId, index: ms.index, finished: true, team1Points: ms.team1Points, team2Points: ms.team2Points, reason: reason || 'forfait' })
         await logEvent('set_end', {

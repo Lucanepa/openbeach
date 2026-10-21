@@ -5,6 +5,7 @@ import { useAlert } from '../contexts_beach/AlertContext_beach'
 import { db } from '../db_beach/db_beach'
 import { apiFrom } from '../lib_beach/apiClient_beach'
 import { setExtId, eventExtId } from '../utils_beach/syncIds_beach'
+import { queueSetFinishedSync } from '../utils_beach/eventSync_beach'
 import { isBackendAvailable, getBackendUrl } from '../utils_beach/backendConfig_beach'
 import { cloudSyncWaitNow } from '../utils_beach/cloudStatus_beach'
 import { teamNameForCoinToss } from '../utils_beach/teamNames_beach'
@@ -600,10 +601,14 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
             team2Points: winnerTeam === 'team2' ? 21 : 0,
             reason: 'forfait'
           }
+          // queued for the cloud too: the server's finished sets are the
+          // result a PIN approval is checked against
           if (existingSet) {
             await db.sets.update(existingSet.id, setData)
+            await queueSetFinishedSync(db, { matchId, setId: existingSet.id })
           } else {
-            await db.sets.add(setData)
+            const setId = await db.sets.add(setData)
+            await queueSetFinishedSync(db, { matchId, setId, insert: true })
           }
         }
 

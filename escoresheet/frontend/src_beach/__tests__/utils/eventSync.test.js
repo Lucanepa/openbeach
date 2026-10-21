@@ -7,6 +7,7 @@ import {
   isScoreOnlySetUpdate,
   openSetOf,
   queueSetScoreSync,
+  queueSetFinishedSync,
   isEventRevisionJob,
   eventRevisionRequest,
   eventRevisionOutcome
@@ -84,6 +85,46 @@ describe('queueSetScoreSync', () => {
 
   it('never throws into the scoring flow', async () => {
     await expect(queueSetScoreSync({ matches: { get: () => { throw new Error('gone') } } }, { matchId: 1 })).resolves.toBe(false)
+  })
+})
+
+// A forfeit ended its sets only in Dexie: the server's sets stayed
+// unfinished and a PIN approval was refused (OV_RESULT_NOT_SYNCED)
+describe('queueSetFinishedSync', () => {
+  it('queues the set as finished, with its score', async () => {
+    const matchId = await db.matches.add({ seed_key: 'seed-1', test: false })
+    const setId = await db.sets.add({ matchId, index: 2, team1Points: 3, team2Points: 21, finished: true })
+    expect(await queueSetFinishedSync(db, { matchId, setId })).toBe(true)
+    const jobs = await db.sync_queue.toArray()
+    expect(jobs).toHaveLength(1)
+    expect(jobs[0]).toMatchObject({
+      resource: 'set', action: 'update', status: 'queued',
+      payload: { external_id: `seed-1:s:${setId}`, team1_points: 3, team2_points: 21, finished: true }
+    })
+    expect(jobs[0].payload).not.toHaveProperty('match_id')
+  })
+
+  it('insert: a set the server does not have yet, with its match and index', async () => {
+    const matchId = await db.matches.add({ seed_key: 'seed-1', test: false })
+    const setId = await db.sets.add({ matchId, index: 1, team1Points: 21, team2Points: 0, finished: true })
+    await queueSetFinishedSync(db, { matchId, setId, insert: true })
+    const [job] = await db.sync_queue.toArray()
+    expect(job).toMatchObject({
+      resource: 'set', action: 'insert',
+      payload: { external_id: `seed-1:s:${setId}`, match_id: 'seed-1', index: 1, team1_points: 21, team2_points: 0, finished: true }
+    })
+    // a finished set is not a running score: queueSetScoreSync keeps it
+    expect(isScoreOnlySetUpdate(job, `seed-1:s:${setId}`)).toBe(false)
+  })
+
+  it('nothing for a test match or a match without a seed_key', async () => {
+    const testMatch = await db.matches.add({ seed_key: 'seed-t', test: true })
+    const local = await db.matches.add({ test: false })
+    for (const matchId of [testMatch, local]) {
+      const setId = await db.sets.add({ matchId, index: 1, team1Points: 21, team2Points: 0, finished: true })
+      expect(await queueSetFinishedSync(db, { matchId, setId })).toBe(false)
+    }
+    expect(await db.sync_queue.count()).toBe(0)
   })
 })
 

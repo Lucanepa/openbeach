@@ -99,8 +99,13 @@ async function team1Forfeits(matchId) {
     if (close) fireEvent.click(close)
     expect(buttons('End match').length).toBe(1)
   })
-  await tapUntil('End match', () => buttons('End match').length === 0)
-  await waitFor(async () => expect((await db.matches.get(matchId))?.status).toBe('ended'), { timeout: 8000 })
+  // once it took (a second End match would forfeit again)
+  const started = async () => (await db.events.where({ matchId }).toArray()).some(e => e.type === 'point' && e.payload?.fromForfait)
+  for (let tap = 0; tap < 5 && !(await started()); tap++) {
+    clickButton('End match')
+    await waitFor(async () => expect(await started()).toBe(true), { timeout: 1000 }).catch(() => {})
+  }
+  await waitFor(async () => expect((await db.matches.get(matchId))?.status).toBe('ended'), { timeout: 20000 })
   // what a late re-render could still add
   await new Promise(r => setTimeout(r, 500))
 }
@@ -126,6 +131,20 @@ describe('Scoreboard_beach: a team forfeits (Stop the match)', () => {
     expect(sets.map(s => [s.index, s.finished, s.team1Points, s.team2Points])).toEqual([
       [1, true, 2, 21],
       [2, true, 0, 21]
+    ])
+  }, 30000)
+
+  // the awards were only in Dexie: the server's sets stayed unfinished and a
+  // PIN approval was refused (OV_RESULT_NOT_SYNCED)
+  it('an official match sends the awarded sets as finished', async () => {
+    const { matchId, set2 } = await seedMatch({ test: false, seed_key: 'seed-ff' })
+    await team1Forfeits(matchId)
+
+    const set3 = (await db.sets.where({ matchId }).toArray()).find(s => s.index === 3)
+    const finishedJobs = (await db.sync_queue.toArray()).filter(j => j.resource === 'set' && j.payload?.finished === true)
+    expect(finishedJobs.map(j => [j.action, j.payload.external_id, j.payload.team1_points, j.payload.team2_points])).toEqual([
+      ['update', `seed-ff:s:${set2}`, 3, 21],
+      ['insert', `seed-ff:s:${set3.id}`, 0, 15]
     ])
   }, 30000)
 })
