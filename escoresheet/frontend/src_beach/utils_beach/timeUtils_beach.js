@@ -155,13 +155,17 @@ export function localTimeNear(nearIso, time) {
   if (!first) return null
   const near = Date.parse(nearIso)
   const hour = 60 * 60 * 1000
-  return [0, hour, -hour]
+  const readings = [0, hour, -hour]
     .map(offset => new Date(Date.parse(first) + offset).toISOString())
     .filter(iso => {
       const local = splitLocalDateTime(iso)
       return local.date === date && local.time === time
     })
-    .reduce((best, iso) => (Math.abs(Date.parse(iso) - near) < Math.abs(Date.parse(best) - near) ? iso : best))
+  // A time the clocks skip (the hour they go forward, 02:00-02:59 on the last
+  // Sunday of March) has no reading: the date parser's, as before. The reduce
+  // of no reading threw, and the set end dialog's Confirm stayed dead.
+  if (readings.length === 0) return first
+  return readings.reduce((best, iso) => (Math.abs(Date.parse(iso) - near) < Math.abs(Date.parse(best) - near) ? iso : best))
 }
 
 /**

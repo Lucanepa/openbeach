@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { localTimeNear } from '../../utils_beach/timeUtils_beach'
+import { localTimeNear, parseLocalDateTimeToISO } from '../../utils_beach/timeUtils_beach'
 
 // The set end time in the hour the clocks go back (Europe/Zurich, 25.10.2026:
 // 02:00-02:59 twice). The dialog proposes the time as local HH:MM and its
@@ -21,6 +21,13 @@ describe('localTimeNear: a local HH:MM, the instant nearest the proposed one', (
   it('a typed time near the proposed one, in the repeated hour', () => {
     // proposed 02:10 CET (01:10Z), typed 02:08: two minutes earlier
     expect(localTimeNear('2026-10-25T01:10:00.000Z', '02:08')).toBe('2026-10-25T01:08:00.000Z')
+  })
+
+  it('a time the clocks skip (29.03.2026, 02:00-02:59 do not exist) is read as before, it does not throw', () => {
+    // threw "Reduce of empty array with no initial value": the set end
+    // dialog's Confirm stayed dead until the time was changed
+    expect(localTimeNear('2026-03-29T00:40:00.000Z', '02:30')).toBe(parseLocalDateTimeToISO('2026-03-29', '02:30'))
+    expect(localTimeNear('2027-03-28T01:10:00.000Z', '02:30')).toBe(parseLocalDateTimeToISO('2027-03-28', '02:30'))
   })
 
   it('any other day: the local time as before, to the minute', () => {
