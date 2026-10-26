@@ -1186,6 +1186,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         timeouts_a: snapshot.timeoutsA,
         timeouts_b: snapshot.timeoutsB,
         timeout_active: !!timeoutModal,
+        // the running time-out's start: a referee that opens during it reads
+        // this state from the relay and counts on from there
+        timeout_started_at: ((timeoutModal?.running || timeoutModal)?.started && (timeoutModal?.running || timeoutModal).startedAt) || null,
         set_interval_active: false,
         match_status: snapshot.matchStatus || 'live',
         game_n: gameNumberValue(match.gameN || match.game_n),
@@ -1218,6 +1221,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       ch.close()
     } catch (e) { console.error('[Broadcast] error:', e) }
   }, [matchId, captureFullStateSnapshot, timeoutModal])
+
+  // Once a time-out runs, the state goes out again with its start: the push
+  // of its event was made before the countdown showed (a tablet that opened
+  // or reloaded during the time-out read no start and showed none)
+  useEffect(() => {
+    if (timeoutModal?.started && timeoutModal.startedAt) broadcastToScoreboard()
+  }, [timeoutModal?.started, timeoutModal?.startedAt]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Listen for scoreboard state requests (when scoreboard opens mid-match)
   useEffect(() => {

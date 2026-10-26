@@ -104,4 +104,32 @@ describe('Scoreboard_beach: the live state of a time-out', () => {
     expect(state.last_event_data).toEqual({ duration: 45 })
     cleanup()
   }, 60000)
+
+  // The relay's live state is this screen's broadcast (the local scoreboard
+  // gets the same): it carried no start of the time-out, so a referee that
+  // opened during the time-out could not count it (stress test 2026-10-25)
+  it('the local scoreboard and the relay get the running time-out\'s start', async () => {
+    const local = []
+    const channel = new BroadcastChannel('openbeach-scoreboard')
+    channel.onmessage = (e) => { if (e.data?.type === 'LIVE_STATE_UPDATE') local.push(e.data.data) }
+    try {
+      const matchId = await setUpLiveSet()
+      render(<ScaleProvider><AlertProvider><LoggingProvider><Scoreboard matchId={matchId} /></LoggingProvider></AlertProvider></ScaleProvider>)
+      await waitFor(() => expect(document.querySelector('button[title="Timeout"]:not([disabled])')).toBeTruthy(), { timeout: 8000 })
+      await settle()
+      fireEvent.click(document.querySelector('button[title="Timeout"]:not([disabled])'))
+      await waitFor(() => expect(button('Confirm time-out')).toBeTruthy())
+      const before = Date.now()
+      fireEvent.click(button('Confirm time-out'))
+      await waitFor(() => {
+        const last = local.at(-1)
+        expect(last?.timeout_active).toBe(true)
+        expect(Math.abs(Date.parse(last?.timeout_started_at) - before)).toBeLessThan(5000)
+      }, { timeout: 8000 })
+    } finally {
+      channel.close()
+      cleanup()
+    }
+  }, 60000)
 })
+
