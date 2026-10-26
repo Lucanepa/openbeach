@@ -4020,12 +4020,18 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                   letterSpacing: '0.1em'
                 }}>RESULTS</span>
               </div>
-              <div className="flex-1">
+              {/* min-w-0 here and on the name cells: a flex item is as wide as
+                  its content at least, and a long pair name (one line) made
+                  this column wider than the box. The RESULTS column shrank
+                  to nothing and B's time-outs, the ending time and the
+                  winner's "2:0" were cut off the sheet (stress test
+                  2026-10-25): the names end in "..." instead */}
+              <div className="flex-1 min-w-0">
                 {/* Which team each half is (A left, B right) */}
                 <div className="flex text-[9px] font-bold border-b border-black text-black">
-                  <div className="flex-[3] border-r border-black px-1 overflow-hidden" style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{get('res_label_a') || 'A'}</div>
-                  <div className="w-32 border-r border-black" />
-                  <div className="flex-[3] px-1 text-right overflow-hidden" style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{get('res_label_b') || 'B'}</div>
+                  <div className="flex-[3] min-w-0 border-r border-black px-1 overflow-hidden" style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{get('res_label_a') || 'A'}</div>
+                  <div className="w-32 shrink-0 border-r border-black" />
+                  <div className="flex-[3] min-w-0 px-1 text-right overflow-hidden" style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{get('res_label_b') || 'B'}</div>
                 </div>
                 {/* Table Header */}
                 <div className="flex text-[9px] text-center font-bold border-b border-black bg-gray-100 text-black">
@@ -4101,7 +4107,7 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                 {/* Winner */}
                 <div className="flex h-6 px-1 items-center bg-gray-400 text-xs leading-none">
                   <span className="font-bold mr-2 shrink-0">Winning team</span>
-                  <Input value={get('winner_name')} onChange={v => set('winner_name', v)} className="flex-1 text-left font-bold text-xs" style={{ padding: 0, height: '100%' }} />
+                  <Input value={get('winner_name')} onChange={v => set('winner_name', v)} className="flex-1 min-w-0 text-left font-bold text-xs" style={{ padding: 0, height: '100%' }} />
                   <Input value={get('winner_country')} onChange={v => set('winner_country', v)} className="w-12 text-center font-bold text-[10px] ml-2" style={{ padding: 0, height: '100%' }} />
                   <div className="ml-4 font-bold text-sm flex items-center shrink-0 gap-0.5">
                     <span>2</span>
