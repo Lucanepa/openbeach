@@ -151,6 +151,24 @@ export function jobMatchKey(job) {
 }
 
 /**
+ * The jobs of `jobs` that belong to the local match `match`: those of its
+ * seed_key (jobMatchKey), and for a match without one the jobs that carried
+ * its bare local id as match_id. Deleting or replacing a match removes these
+ * only: the queue also holds the unsent writes of other matches, and for a
+ * match closed offline (Close match deletes its local copy) those jobs are
+ * the only copy of its end left on the device.
+ */
+export function jobsOfMatch(jobs, match) {
+  const seed = match?.seed_key || null
+  const localRef = match?.id != null ? String(match.id) : null
+  return (jobs || []).filter(j => {
+    const key = jobMatchKey(j)
+    if (seed) return key === seed
+    return localRef != null && key === localRef
+  })
+}
+
+/**
  * Rewrite every pending (queued or errored) set/event job to a namespaced
  * external_id. Used by the Dexie v18 upgrade (bare ids and legacy coin toss
  * ids, see db_beach.js); jobs that cannot be attributed to a match are marked 'dropped'

@@ -40,7 +40,7 @@ import {
   refereeConnectionDefault
 } from './constants_beach/testSeeds_beach'
 import { apiFrom } from './lib_beach/apiClient_beach'
-import { setExtId } from './utils_beach/syncIds_beach'
+import { setExtId, jobsOfMatch } from './utils_beach/syncIds_beach'
 import { wipeMatchEvents } from './db_beach/eventHistory_beach'
 import { isBackendAvailable, getBackendUrl, isServedFromLocalServer, getLocalServerStatusUrl, rememberRelayWsPort, isCloudOffline, setCloudOffline, isLanBackendUrl, isRelayOriginPage, isNativeApp } from './utils_beach/backendConfig_beach'
 import { useSystemBarsHidden } from './utils_beach/nativeSystemBars_beach'
@@ -1314,9 +1314,11 @@ export default function App() {
         await db.teams.delete(match.team2Id)
       }
 
-      // Delete all sync queue items (since we can't filter by matchId easily)
-      const syncQueueCount = await db.sync_queue.count()
-      await db.sync_queue.clear()
+      // This match's jobs only: the queue also holds the unsent writes of
+      // other matches (a match closed offline before has nothing else left on
+      // the device; clearing the table lost its end, stress test 2026-10-25)
+      const matchJobs = jobsOfMatch(await db.sync_queue.toArray(), match)
+      if (matchJobs.length > 0) await db.sync_queue.bulkDelete(matchJobs.map(j => j.id))
 
       // Delete match setup draft
       await db.match_setup.clear()
@@ -1559,8 +1561,9 @@ export default function App() {
           await db.teams.delete(currentMatch.team2Id)
         }
 
-        // Delete all sync queue items
-        await db.sync_queue.clear()
+        // This match's jobs only (the other matches' unsent writes stay)
+        const matchJobs = jobsOfMatch(await db.sync_queue.toArray(), currentMatch)
+        if (matchJobs.length > 0) await db.sync_queue.bulkDelete(matchJobs.map(j => j.id))
 
         // Delete match setup draft
         await db.match_setup.clear()

@@ -400,7 +400,14 @@ export async function restoreMatchFromJson(jsonData) {
     await db.events.clear()
     await db.sets.clear()
     await db.matches.clear()
-    await db.sync_queue.clear()
+    // The queue keeps the unsent writes of other matches: a match closed
+    // offline before (Close match deleted its local copy) has nothing else
+    // left on the device. This match's jobs go (the restore job below
+    // replaces them), and so does anything that cannot be attributed to a
+    // match (stress test 2026-10-25: clearing the table lost a match's end).
+    const queuedJobs = await db.sync_queue.toArray()
+    const keepJob = (j) => j.resource === 'activity' || (!!jobMatchKey(j) && jobMatchKey(j) !== externalId)
+    await db.sync_queue.bulkDelete(queuedJobs.filter(j => !keepJob(j)).map(j => j.id))
 
     // STEP B: Create teams (reuse existing or create new)
     let team1Id = null
