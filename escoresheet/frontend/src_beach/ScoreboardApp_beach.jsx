@@ -4,6 +4,7 @@ import { supabase } from './lib_beach/supabaseClient_beach'
 import { apiFrom } from './lib_beach/apiClient_beach'
 import { isBackendAvailable, getApiUrl } from './utils_beach/backendConfig_beach'
 import { createRelayLivescoreFeed, fetchRelayLivescoreList, relayLivescoreNow, relayLivescoreWsUrl } from './utils_beach/relayLivescore_beach'
+import { liveWindowStart } from './utils_beach/livescoreWindow_beach'
 import { ArrowLeft, ChevronRight, Globe, Monitor, Radio } from 'lucide-react'
 import { cn } from './ui/volleyui/cn.js'
 import { FOCUS_RING, Button } from './ui/volleyui/Button.jsx'
@@ -151,10 +152,12 @@ export default function ScoreboardApp() {
     if (relayMode || !isBackendAvailable()) return
     setLoadingGames(true)
     try {
-      // Beach rows only: the live-state table is shared with indoor
+      // Beach rows only: the live-state table is shared with indoor; the
+      // matches of the last day, as the livescore (livescoreWindow_beach)
       const { data } = await apiFrom('match_live_state')
         .select('*, matches!match_live_state_match_id_fkey_cascade(set_results)')
         .eq('sport_type', 'beach')
+        .gte('updated_at', liveWindowStart())
         .order('updated_at', { ascending: false })
       const beachGames = (data || []).filter(g => g.sport_type === 'beach')
       setAvailableGames(beachGames)
