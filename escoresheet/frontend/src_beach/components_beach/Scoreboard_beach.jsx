@@ -14,6 +14,7 @@ import ScoreboardOptionsModal from './options/ScoreboardOptionsModal_beach'
 import ConnectionSetupModal from './options/ConnectionSetupModal_beach'
 import { useSyncQueue, checkScorerMoved } from '../hooks_beach/useSyncQueue_beach'
 import { isScorerMoved, SCORER_MOVED } from '../utils_beach/matchHandover_beach'
+import { holdLiveState, liveStateWritten, isLiveStateRetryable } from '../utils_beach/liveStateOutbox_beach'
 import { useConfirmAction } from '../hooks_beach/useConfirmAction_beach'
 import { useActionLiveQuery } from '../hooks_beach/useActionLiveQuery_beach'
 import { useScorerActions, pickLiveStateSnapshot, isReportedActionError } from '../hooks_beach/useScorerActions_beach'
@@ -1249,7 +1250,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // queued, so it reaches the cloud offline-first
       if (changesSetScore(eventType)) void queueSetScoreSync(db, { matchId })
 
-      // Get the Supabase match UUID
+      // Get the Supabase match UUID. Offline, or the match not in the cloud
+      // yet: the state is built all the same and held for the sync queue
+      // (liveStateOutbox_beach), which sends it once the cloud answers
       let supabaseMatchId = null
       const externalId = match.externalId
       if (externalId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(externalId)) {
@@ -1261,10 +1264,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           .eq('external_id', seedKey)
           .eq('sport_type', SPORT_TYPE)
           .maybeSingle()
-        if (error || !matchData) return
-        supabaseMatchId = matchData.id
+        if (!error && matchData) supabaseMatchId = matchData.id
       }
-      if (!supabaseMatchId) return
 
       // Use cached snapshot if provided, otherwise fetch/compute. In the
       // break: fresh, the coming set's (the set end created it; the last
@@ -1470,7 +1471,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Another device scores the match now (db/019, ScorerMovedModal_beach):
       // this device's older state must not overwrite its live state
       if (isScorerMoved(match)) return
+      if (!supabaseMatchId) {
+        holdLiveState(match.seed_key, liveStateData)
+        return
+      }
       const liveStateResult = await apiFrom('match_live_state').upsert(liveStateData, { onConflict: 'match_id' })
+      if (!liveStateResult.error) liveStateWritten(match.seed_key, liveStateData.updated_at)
 
       if (liveStateResult.error?.code === SCORER_MOVED) {
         // Another device holds the match. This device's claim may not be
@@ -1488,6 +1494,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         // (4xx: a column the server lacks, a bad value) gets the modal once
         // per session, not on every point; a 5xx too, once.
         const st = liveStateResult.error.status
+        // Owed to the cloud: the sync queue sends it once the cloud answers
+        // again, and before the match is closed there (a refusal is not
+        // held: it would only be refused again)
+        if (isLiveStateRetryable(liveStateResult.error)) holdLiveState(match.seed_key, liveStateData)
         if (st === 401 || st === 403 || st === 426 || st === 429 || st === 0 || liveStateResult.error.network) return
         const kind = st >= 400 && st < 500 ? '4xx' : 'other'
         if (liveStateErrorShown.has(kind)) return

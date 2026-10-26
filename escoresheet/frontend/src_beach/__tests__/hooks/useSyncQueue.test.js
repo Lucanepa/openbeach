@@ -160,6 +160,7 @@ import {
   SCORER_MOVED_EVENT
 } from '../../hooks_beach/useSyncQueue_beach'
 import { useMemoryLocalStorage } from '../helpers/memoryStorage'
+import { holdLiveState, heldLiveState, resetLiveStateOutboxForTests } from '../../utils_beach/liveStateOutbox_beach'
 
 // Ported from OpenVolley src/hooks/__tests__/useSyncQueue.test.js: the queue's
 // session gate (401 pause, resume on sign-in), take-over by game PIN, the
@@ -701,6 +702,41 @@ describe('closing order (the approval waits for the older sets, events and remar
     fakeDb.sync_queue.reset([close(1), child(2, 'event', 9)])
     await runQueuePass()
     expect(fakeDb.sync_queue.map.get(1).status).toBe('sent')
+  })
+
+  // Stress test 2026-10-25 (ob-livestate-never-repushed): the match ended
+  // while the cloud was unreachable; the queue sent the match end, but the
+  // live state the scoring screen could not write was dropped, and once the
+  // match was approved the server refused every change of it (OV_MATCH_CLOSED)
+  it('the live state the scoring screen could not write goes up before the approval closes the match', async () => {
+    resetLiveStateOutboxForTests()
+    holdLiveState('match_100_aaa', { match_id: null, current_set: 2, points_a: 21, points_b: 0, sets_won_a: 2, sets_won_b: 0, match_status: 'ended', updated_at: new Date().toISOString() })
+    fakeDb.sync_queue.reset([close(1)])
+    const order = []
+    api.respond = (call) => {
+      if (call.table === 'match_live_state') order.push(`live:${call.data.match_status}:${call.data.match_id}`)
+      if (call.table === 'matches' && call.action === 'update') order.push(`match:${call.data.status}`)
+      return defaultRespond(call)
+    }
+    await runQueuePass()
+    expect(order).toEqual([`live:ended:${MATCH_UUID}`, 'match:approved'])
+    expect(heldLiveState('match_100_aaa')).toBeNull()
+  })
+
+  it('while the held live state cannot be sent the approval waits; a refusal of it does not hold it', async () => {
+    resetLiveStateOutboxForTests()
+    holdLiveState('match_100_aaa', { current_set: 2, points_a: 21, points_b: 0, match_status: 'ended', updated_at: new Date().toISOString() })
+    fakeDb.sync_queue.reset([close(1)])
+    let liveAnswer = { data: null, error: { message: 'Database unavailable', status: 503, code: 'OV_DB_UNAVAILABLE' } }
+    api.respond = (call) => (call.table === 'match_live_state' ? liveAnswer : defaultRespond(call))
+    await runQueuePass()
+    expect(fakeDb.sync_queue.map.get(1).status).toBe('queued')
+    expect(heldLiveState('match_100_aaa')).toMatchObject({ match_status: 'ended' })
+
+    liveAnswer = { data: null, error: { message: 'closed', status: 409, code: 'OV_MATCH_CLOSED' } }
+    await runQueuePass()
+    expect(fakeDb.sync_queue.map.get(1).status).toBe('sent')
+    expect(heldLiveState('match_100_aaa')).toBeNull()
   })
 })
 

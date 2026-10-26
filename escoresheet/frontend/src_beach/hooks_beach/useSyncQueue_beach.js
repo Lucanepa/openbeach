@@ -9,6 +9,7 @@ import { getCloudApiUrl, isCloudOffline, isRelayOriginPage } from '../utils_beac
 import { ACCESS_CHANGED_EVENT } from '../lib_beach/access_beach'
 import { parseExtId, resolveJobExternalId, jobMatchKey } from '../utils_beach/syncIds_beach'
 import { buildConnectionPins } from '../utils_beach/connectionPins_beach'
+import { sendHeldLiveState, sendHeldLiveStates } from '../utils_beach/liveStateOutbox_beach'
 import { SCORER_CLAIM_ACTION, SCORER_MOVED, isScorerMoved, noteScorerMoved, markScorerMoved, hasUnsentClaim, closeMovedMatches } from '../utils_beach/matchHandover_beach'
 
 // Beach rows share OpenVolley's tables (matches / sets / events /
@@ -927,6 +928,13 @@ async function processJobInner(job, ctx) {
       safeLog.log('[SyncQueue] Closing update waits for older set/event/remarks jobs of its match')
       return null
     }
+    // ... and for the live state the scoring screen could not write (the
+    // match ended offline): once the match is closed the server refuses it
+    // (db/007), and spectators would see the match live for good
+    if (isClosingJob(job) && await sendHeldLiveState(jobMatchKey(job), { apiFrom, sportType: SPORT_TYPE }) === 'kept') {
+      safeLog.log('[SyncQueue] Closing update waits for the live state of its match')
+      return null
+    }
 
     // ==================== MATCH ====================
     if (job.resource === 'match' && job.action === 'insert') {
@@ -1797,6 +1805,9 @@ export function useSyncQueue() {
         // Consumers that push state outside the queue (match_live_state) catch up
         window.dispatchEvent(new CustomEvent('sync-queue-drained', { detail: { sent: outcome.sent, pending: outcome.hasRetry } }))
       }
+      // The live state the scoring screen could not write goes now that the
+      // cloud answers (back online, signed in again, the database back)
+      if (!outcome.stopped) await sendHeldLiveStates({ apiFrom, sportType: SPORT_TYPE })
 
       if (outcome.processed === 0) {
         setSyncStatus('synced')
