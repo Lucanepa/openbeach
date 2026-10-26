@@ -556,6 +556,9 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   // Track consecutive fetch failures to detect deleted matches
   const fetchFailureCountRef = useRef(0)
   const MAX_FETCH_FAILURES = 3 // After 3 consecutive failures, assume match is deleted
+  // Failed reads in a row that were not "no such match" (the backend's
+  // per-IP limits, the network): the row-triggered refetch backs off on them
+  const fetchTroubleCountRef = useRef(0)
 
   // Force fetch fresh data from server
   const fetchFreshData = useCallback(async () => {
@@ -574,12 +577,19 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       if (seq !== fetchSeqRef.current || lastPushAtRef.current > startedAt) return
       if (result && result.success) {
         fetchFailureCountRef.current = 0 // Reset on success
+        fetchTroubleCountRef.current = 0
         updateMatchDataState(result)
         console.debug('[Referee] Updated match data:', {
           currentSet: result.sets?.find(s => !s.finished)?.index,
           team1Points: result.sets?.find(s => !s.finished)?.team1Points,
           team2Points: result.sets?.find(s => !s.finished)?.team2Points
         })
+      } else if (result?.error && result.error !== 'Match not found') {
+        // The read failed (rate limited, offline): not a sign the match is
+        // gone. Under the venue's per-IP limits three such answers in a row
+        // took the referee out of a running match.
+        fetchTroubleCountRef.current++
+        console.warn('[Referee] Fetch failed, the match stays:', result.error)
       } else {
         // Match not found or fetch failed
         fetchFailureCountRef.current++
@@ -589,13 +599,55 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         }
       }
     } catch (err) {
-      fetchFailureCountRef.current++
-      console.error(`[Referee] Error fetching fresh data (${fetchFailureCountRef.current}/${MAX_FETCH_FAILURES}):`, err)
-      if (fetchFailureCountRef.current >= MAX_FETCH_FAILURES) {
-        if (onExit) onExit()
-      }
+      // A thrown read (the network): the match stays, as above
+      fetchTroubleCountRef.current++
+      console.error('[Referee] Error fetching fresh data:', err)
     }
   }, [matchId, updateMatchDataState, isMasterMode, onExit])
+
+  // The database channel's rows (one per change of the scorer's live state:
+  // every point, every rally start) each refetched the whole match at once:
+  // 3 tablets made about 1600 reads in 2.3 minutes, 455 of 676 relay reads
+  // got 429, and the scorer's own reads in the same per-IP budget were
+  // refused, so its live-state pushes were dropped (stress test 2026-10-25,
+  // fast scoring behind one venue IP). A row now asks for one read:
+  // - While the relay pushes the bundle (one came in RELAY_PUSHING_MS), the
+  //   push brings what the row announces: a read only if none has come
+  //   ROW_REFETCH_FALLBACK_MS after the row.
+  // - Otherwise at once, but never two in ROW_REFETCH_GAP_MS: the rows in
+  //   between get one read after the gap.
+  // - After failed reads (rate limited, offline) the gap doubles, up to
+  //   ROW_REFETCH_MAX_GAP_MS, until a read succeeds.
+  const RELAY_PUSHING_MS = 15000
+  const ROW_REFETCH_FALLBACK_MS = 2500
+  const ROW_REFETCH_GAP_MS = 1500
+  const ROW_REFETCH_MAX_GAP_MS = 30000
+  const rowRefetchTimerRef = useRef(null)
+  const lastRowRefetchAtRef = useRef(0)
+  const fetchFreshDataRef = useRef(fetchFreshData)
+  fetchFreshDataRef.current = fetchFreshData
+  const requestRowRefetch = useCallback(() => {
+    if (rowRefetchTimerRef.current) return // one read is due: it covers this row
+    const rowAt = Date.now()
+    const run = () => {
+      rowRefetchTimerRef.current = null
+      lastRowRefetchAtRef.current = Date.now()
+      fetchFreshDataRef.current()
+    }
+    if (rowAt - lastPushAtRef.current < RELAY_PUSHING_MS) {
+      rowRefetchTimerRef.current = setTimeout(() => {
+        rowRefetchTimerRef.current = null
+        if (lastPushAtRef.current >= rowAt) return
+        run()
+      }, ROW_REFETCH_FALLBACK_MS)
+      return
+    }
+    const gap = Math.min(ROW_REFETCH_GAP_MS * (2 ** fetchTroubleCountRef.current), ROW_REFETCH_MAX_GAP_MS)
+    const wait = lastRowRefetchAtRef.current + gap - rowAt
+    if (wait <= 0) run()
+    else rowRefetchTimerRef.current = setTimeout(run, wait)
+  }, [])
+  useEffect(() => () => { if (rowRefetchTimerRef.current) clearTimeout(rowRefetchTimerRef.current) }, [])
 
   // Handle realtime data updates
   const handleRealtimeData = useCallback((result) => {
@@ -1088,7 +1140,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           } else {
             showLastEvent()
           }
-          fetchFreshData()
+          // one read for a burst of rows, none while the relay pushes
+          requestRowRefetch()
         }
       )
       // A transport of its own: the offline warning counts it (linkDown)
@@ -1100,7 +1153,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       dbChannelUpRef.current = false
       supabase.removeChannel(channel)
     }
-  }, [supabaseMatchUuid, isMasterMode, data?.match?.coinTossTeamA, fetchFreshData, updateMatchDataState])
+  }, [supabaseMatchUuid, isMasterMode, data?.match?.coinTossTeamA, requestRowRefetch, updateMatchDataState])
 
   // Handle timeout countdown timer
   useEffect(() => {
