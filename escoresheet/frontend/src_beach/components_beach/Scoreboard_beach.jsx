@@ -1503,16 +1503,23 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       }
       if (liveStateResult.error) {
         console.error('[LiveState] Sync error:', liveStateResult.error)
-        // Not signed in / not this account's match / offline / rate limited:
-        // the sync queue's banner explains that; no modal. Any other refusal
-        // (4xx: a column the server lacks, a bad value) gets the modal once
-        // per session, not on every point; a 5xx too, once.
+        // Not signed in / not this account's match / offline / rate limited /
+        // the backend or its database briefly down (5xx, a Cloudflare 502
+        // page during a deploy): the sync queue's banner explains that; no
+        // modal. The live state is best-effort and the next push supersedes
+        // it, while the modal covered the scoring screen and swallowed the
+        // next tap (stress test 2026-10-25). Any other refusal (4xx: a column
+        // the server lacks, a bad value) gets the modal once per session,
+        // not on every point.
         const st = liveStateResult.error.status
         // Owed to the cloud: the sync queue sends it once the cloud answers
         // again, and before the match is closed there (a refusal is not
         // held: it would only be refused again)
-        if (isLiveStateRetryable(liveStateResult.error)) holdLiveState(match.seed_key, liveStateData)
-        if (st === 401 || st === 403 || st === 426 || st === 429 || st === 0 || liveStateResult.error.network) return
+        if (isLiveStateRetryable(liveStateResult.error)) {
+          holdLiveState(match.seed_key, liveStateData)
+          return
+        }
+        if (st === 403) return
         const kind = st >= 400 && st < 500 ? '4xx' : 'other'
         if (liveStateErrorShown.has(kind)) return
         liveStateErrorShown.add(kind)
