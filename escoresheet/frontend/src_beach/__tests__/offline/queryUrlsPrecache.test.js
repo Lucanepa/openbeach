@@ -1,10 +1,11 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 // workbox's own precache lookup (what the service worker runs on a request)
 import { generateURLVariations } from 'workbox-precaching/utils/generateURLVariations.js'
 import { IGNORE_URL_PARAMETERS } from '../../../pwa-workbox.js'
+import { canReachAppServer } from '../../utils_beach/appReload_beach'
 
 // Offline, the service worker served the plain pages but none of the URLs
 // the app opens itself with a query string: Menu > Open scoreboard
@@ -44,6 +45,27 @@ describe('offline: the URLs the app opens with a query string', () => {
 
   it('workbox\'s default would send them to the network', () => {
     expect(precachedPage('/scoreboard_beach.html?mode=local', precached, undefined)).toBe(null)
+  })
+
+  // Options > Clear cache refuses offline: it asks the server first
+  // (canReachAppServer), with a query no cache holds. With every parameter
+  // ignored the precache answered that probe too, offline, and Clear cache
+  // wiped the caches and the worker and reloaded into a browser error page.
+  describe('the Clear cache probe', () => {
+    afterEach(() => vi.unstubAllGlobals())
+
+    it.each([
+      ['/', '?match=12'],
+      ['/index.html', ''],
+      ['/scoreboard_beach.html', '?mode=local'],
+      ['/referee_beach.html', '?match=12&pin=123456']
+    ])('of %s%s is never served from the precache', async (page, query) => {
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+      vi.stubGlobal('fetch', fetchMock)
+      await canReachAppServer(1000, { location: { pathname: page, href: ORIGIN + page + query } })
+      const probe = new URL(fetchMock.mock.calls[0][0])
+      expect(precachedPage(probe.pathname + probe.search, precached, IGNORE_URL_PARAMETERS)).toBe(null)
+    })
   })
 
   it('the main build and the subdomain builds use the rule', () => {
