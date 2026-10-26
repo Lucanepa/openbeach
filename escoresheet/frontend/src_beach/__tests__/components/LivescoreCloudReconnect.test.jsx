@@ -14,6 +14,7 @@ vi.mock('../../lib_beach/apiClient_beach', () => {
   const query = {
     select: () => query,
     eq: () => query,
+    gte: () => query,
     order: () => query,
     then: (res, rej) => {
       cloud.reads++

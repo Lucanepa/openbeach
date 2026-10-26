@@ -40,6 +40,7 @@ import { db } from '../../db_beach/db_beach'
 import Scoreboard from '../../components_beach/Scoreboard_beach'
 import { heldLiveState } from '../../utils_beach/liveStateOutbox_beach'
 import { useMemoryLocalStorage } from '../helpers/memoryStorage'
+import { GHOST_CLICK_MS } from '../../hooks_beach/useConfirmAction_beach'
 
 class OfflineSocket {
   constructor() { this.readyState = 3 }
@@ -66,6 +67,9 @@ afterAll(() => {
   vi.restoreAllMocks()
 })
 
+// a tap on the rally buttons the moment they changed is the end of the tap
+// that changed them (Scoreboard_beach rallyButtonsJustShown): wait as a scorer does
+const settle = () => new Promise(r => setTimeout(r, GHOST_CLICK_MS + 100))
 const button = (text) => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === text && !b.disabled)
 const SEED = 'match_1792931096817_live5xx'
 
@@ -114,6 +118,7 @@ describe('Scoreboard_beach: a transient live-state failure', () => {
       live.answer = { data: null, error }
       fireEvent.click(button('Start rally'))
       await waitFor(() => expect(button('Point A')).toBeTruthy(), { timeout: 5000 })
+      await settle()
       fireEvent.click(button('Point A'))
       await waitFor(() => expect(live.upserts.some(u => u.table === 'match_live_state' && u.row.last_event_type === 'point')).toBe(true), { timeout: 5000 })
       await new Promise(r => setTimeout(r, 300))
