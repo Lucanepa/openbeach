@@ -1593,7 +1593,8 @@ const DEVICE_ONLY_EVENT_TYPES = ['set_start', 'set3_coin_toss', 'between_sets_se
 async function keptLocalState(seedKey, cloudEvents) {
   const none = { events: [], sides: null, setStartTimes: {} }
   if (!seedKey) return none
-  const own = await db.matches.filter(m => localMatchKey(m) === seedKey).first()
+  // read as replaceLocalCopies reads the copies it replaces
+  const [own] = await db.matches.filter(m => localMatchKey(m) === seedKey).toArray()
   if (!own) return none
   const ownEvents = await db.events.where('matchId').equals(own.id).toArray()
   const seqOf = (e) => (Number.isFinite(Number(e?.seq)) ? Number(e.seq) : 0)
