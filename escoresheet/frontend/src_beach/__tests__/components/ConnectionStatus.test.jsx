@@ -122,6 +122,36 @@ describe('ConnectionStatus', () => {
 
       expect(screen.getByText('3')).toBeInTheDocument()
     })
+
+    // Stress test 2026-10-25: a refused match job held back every later write
+    // of the match while the pill said Ready (getSyncQueueStats 'held')
+    it('refused jobs that hold later writes back are sync errors, with Retry all', () => {
+      const onRetryErrors = vi.fn()
+      render(
+        <ConnectionStatus
+          {...defaultProps}
+          onRetryErrors={onRetryErrors}
+          connectionStatuses={{ server: 'connected', websocket: 'connected', supabase: 'connected' }}
+          queueStats={{ pending: 16, error: 0, failed: 1, held: 1 }}
+        />
+      )
+      expect(screen.getByText('1')).toBeInTheDocument()
+      expect(screen.queryByText('Ready')).toBeNull()
+      fireEvent.click(document.querySelector('[data-connection-menu] button'))
+      fireEvent.click(screen.getByText('Retry all'))
+      expect(onRetryErrors).toHaveBeenCalled()
+    })
+
+    it('a refused job that holds nothing back does not turn the pill red', () => {
+      render(
+        <ConnectionStatus
+          {...defaultProps}
+          connectionStatuses={{ server: 'connected', websocket: 'connected', supabase: 'connected' }}
+          queueStats={{ pending: 0, error: 0, failed: 2, held: 0 }}
+        />
+      )
+      expect(screen.queryByText('2')).toBeNull()
+    })
   })
 
   describe('dropdown menu', () => {

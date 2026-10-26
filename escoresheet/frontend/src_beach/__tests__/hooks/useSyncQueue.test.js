@@ -1200,7 +1200,25 @@ describe('getSyncQueueStats', () => {
       { id: 1, status: 'queued' }, { id: 2, status: 'sending' }, { id: 3, status: 'error' },
       { id: 4, status: 'failed' }, { id: 5, status: 'sent' }, { id: 6, status: 'dropped' }
     ])
-    expect(await getSyncQueueStats()).toEqual({ pending: 2, error: 1, failed: 1 })
+    expect(await getSyncQueueStats()).toEqual({ pending: 2, error: 1, failed: 1, held: 0 })
+  })
+
+  // Stress test 2026-10-25 (ob-failed-match-job-blocks-match-status-green):
+  // a refused second match insert held back every later job of the match
+  // (Postgres stayed at 1:1 while the device was at 5:5) and the pill said
+  // Ready, its menu only "Pending background sync: 16"
+  it('counts the refused jobs that hold later ones back', async () => {
+    const seed = 'match_100_aaa'
+    fakeDb.sync_queue.reset([
+      { id: 1, resource: 'match', action: 'insert', status: 'sent', payload: { external_id: seed } },
+      { id: 2, resource: 'match', action: 'insert', status: 'failed', payload: { external_id: seed, game_n: 'nope' } },
+      { id: 3, resource: 'event', action: 'insert', status: 'queued', payload: { external_id: `${seed}:e:9`, match_id: seed } },
+      { id: 4, resource: 'set', action: 'update', status: 'queued', payload: { external_id: `${seed}:s:1`, team1_points: 5 } },
+      // a refused update holds nothing back; nor a refused job of another match with nothing after it
+      { id: 5, resource: 'match', action: 'update', status: 'failed', payload: { id: seed, status: { nested: true } } },
+      { id: 6, resource: 'event', action: 'insert', status: 'failed', payload: { external_id: 'match_2_bbb:e:1', match_id: 'match_2_bbb' } }
+    ])
+    expect(await getSyncQueueStats()).toMatchObject({ pending: 2, failed: 3, held: 1 })
   })
 })
 
@@ -1424,7 +1442,7 @@ describe('a match continued on another device', () => {
     const outcome = await runQueuePass()
     expect(fakeDb.sync_queue.map.get(1).status).toBe('dropped')
     expect(outcome.hasFailed).toBeFalsy()
-    expect(await getSyncQueueStats()).toEqual({ pending: 0, error: 0, failed: 0 })
+    expect(await getSyncQueueStats()).toEqual({ pending: 0, error: 0, failed: 0, held: 0 })
   })
 
   it('a set or event refused as closed stays visible (it carries the score), as does an update of a match still open here', async () => {
@@ -1474,7 +1492,7 @@ describe('a match continued on another device', () => {
     expect(fakeDb.sync_queue.map.get(1).status).toBe('dropped')
     expect(fakeDb.sync_queue.map.get(2)).toMatchObject({ status: 'superseded', superseded_by: 'scorer-moved' })
     expect(fakeDb.sync_queue.map.get(3).status).toBe('sent')
-    expect(await getSyncQueueStats()).toEqual({ pending: 0, error: 0, failed: 0 })
+    expect(await getSyncQueueStats()).toEqual({ pending: 0, error: 0, failed: 0, held: 0 })
     expect(fakeDb.matches.map.get(1).cloudBlock).toMatchObject({ code: 'OV_SCORER_MOVED', scorer: { platform: 'android', at: '2026-10-20T17:54:25Z' } })
     expect(fakeDb.matches.map.get(1).cloudBlock.scorer).toEqual({ platform: 'android', at: '2026-10-20T17:54:25Z' })
     expect(seen).toEqual([{ seedKey: 'match_100_aaa' }])
@@ -1507,7 +1525,7 @@ describe('a match continued on another device', () => {
     expect(fakeDb.matches.map.get(1)).toMatchObject({ status: 'final', cloudBlock: { code: 'OV_SCORER_MOVED', scorer: { platform: 'android', at: 'T' }, closed: true } })
     expect(fakeDb.sync_queue.map.get(1).status).toBe('dropped')
     expect(fakeDb.sync_queue.map.get(2).status).toBe('superseded')
-    expect(await getSyncQueueStats()).toEqual({ pending: 0, error: 0, failed: 0 })
+    expect(await getSyncQueueStats()).toEqual({ pending: 0, error: 0, failed: 0, held: 0 })
   })
 
   it('a claim goes first among the match jobs', async () => {

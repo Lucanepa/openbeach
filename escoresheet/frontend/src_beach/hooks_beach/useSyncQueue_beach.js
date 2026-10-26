@@ -2014,15 +2014,36 @@ export function useSyncQueue() {
  * retry). Test matches never enter the queue.
  */
 export async function getSyncQueueStats() {
-  const [pending, error, failed] = await Promise.all([
+  const [pending, error, failedJobs] = await Promise.all([
     db.sync_queue.where('status').anyOf('queued', 'sending').count(),
     db.sync_queue.where('status').equals('error').count(),
-    db.sync_queue.where('status').equals('failed').count()
+    db.sync_queue.where('status').equals('failed').toArray()
   ])
-  return { pending, error, failed }
+  const held = failedJobs.length ? await failedJobsHolding(failedJobs) : 0
+  return { pending, error, failed: failedJobs.length, held }
 }
 
-const EMPTY_STATS = { pending: 0, error: 0, failed: 0 }
+/**
+ * How many refused ('failed') jobs hold a later queued job back
+ * (pendingEntityBlocks: a failed match insert, restore or delete holds its
+ * whole match, a failed insert its set or event). Those writes never go
+ * until someone looks: the connection pill counts them as sync errors. One
+ * refused match insert held back every later write of the match while the
+ * pill said Ready and the cloud stayed at 1:1 (stress test 2026-10-25).
+ */
+export async function failedJobsHolding(failedJobs) {
+  const queued = await db.sync_queue.where('status').equals('queued').toArray()
+  let n = 0
+  for (const failed of failedJobs) {
+    const blocks = pendingEntityBlocks([failed])
+    const holds = queued.some(j => j.id > failed.id &&
+      (blocks.has(entityKey(j)) || (jobMatchKey(j) != null && blocks.has(`whole:${jobMatchKey(j)}`))))
+    if (holds) n++
+  }
+  return n
+}
+
+const EMPTY_STATS = { pending: 0, error: 0, failed: 0, held: 0 }
 
 /** Live sync queue counts (see getSyncQueueStats); zeros until the first read. */
 export function useSyncQueueStats() {
