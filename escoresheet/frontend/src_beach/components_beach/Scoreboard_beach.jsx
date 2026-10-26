@@ -1354,14 +1354,18 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Calculate updated set scores including the just-finished set
       // eventData.winner is 'team1' or 'team2' from the set_end event
       // Fallback: if eventData.winner is undefined, calculate from snapshot points
+      // Team B is the other team: the snapshot has no teamBKey, so a set won
+      // by B was never counted here and a match B won stayed 'interval' on
+      // the referee, the scoreboards and the livescore (stress test 2026-10-25)
+      const snapshotTeamBKey = snapshot.teamAKey === 'team2' ? 'team1' : 'team2'
       const setWinner = eventData?.winner
         || (snapshot.pointsA > snapshot.pointsB ? snapshot.teamAKey : null)
-        || (snapshot.pointsB > snapshot.pointsA ? snapshot.teamBKey : null)
+        || (snapshot.pointsB > snapshot.pointsA ? snapshotTeamBKey : null)
       const updatedSetScoreA = isSetInterval && setWinner
         ? (setWinner === snapshot.teamAKey ? snapshot.setScoreA + 1 : snapshot.setScoreA)
         : snapshot.setScoreA
       const updatedSetScoreB = isSetInterval && setWinner
-        ? (setWinner === snapshot.teamBKey ? snapshot.setScoreB + 1 : snapshot.setScoreB)
+        ? (setWinner === snapshotTeamBKey ? snapshot.setScoreB + 1 : snapshot.setScoreB)
         : snapshot.setScoreB
 
       // Check if match is finished (best-of-3: one team won 2 sets) - don't increment current_set past the final set
