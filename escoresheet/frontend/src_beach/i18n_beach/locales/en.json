@@ -225,7 +225,7 @@
     "finals": "Finals",
     "coach": "Coach",
     "matchNumber": "Match number",
-    "matchNumberPlaceholder": "e.g. M01",
+    "matchNumberPlaceholder": "e.g. 12",
     "datePlaceholder": "dd.mm.yyyy",
     "timePlaceholder": "HH:MM",
     "courtPlaceholder": "e.g. 1, Center",
@@ -383,7 +383,8 @@
       "matchNotFound": "Match not found.",
       "allowPopups": "Please allow popups to view the scoresheet.",
       "errorSavingData": "Error saving data. Please try again.",
-      "duplicateGameNumber": "Game #{{number}} already exists. Please use a different number."
+      "duplicateGameNumber": "Game #{{number}} already exists. Please use a different number.",
+      "gameNumberInvalid": "A whole number from 1 to 9999."
     },
     "modals": {
       "syncing": "Syncing",
@@ -913,6 +914,7 @@
       "confirm": "Undo"
     },
     "confirmFailed": "That was not saved. Check the scoresheet and try again.",
+    "storageFull": "Not saved: this device's storage is full. Free some space (photos, videos) and try again, or continue the match on another device (backup or game PIN).",
     "bmpOnlyAfterPoint": "BMP: only after a point, before the next rally",
     "bmpOncePerRally": "BMP: once per rally, again after the next completed rally",
     "medicalEnd": "end",
@@ -2486,6 +2488,9 @@
     "replaceMatchTitle": "Delete the current match?",
     "replaceMatchBody": "The match on this device and all its data are deleted, then the new match starts. This cannot be undone.",
     "replaceMatchConfirm": "Delete and start new",
+    "replaceUnapprovedTitle": "Delete the finished match?",
+    "replaceUnapprovedBody": "This match is finished but not approved: its result and the signatures are only on this device. To keep them, cancel, open it with Continue match and approve it. Deleting it cannot be undone.",
+    "replaceUnapprovedConfirm": "Delete anyway and start new",
     "newTestMatchTitle": "Start a new test match?",
     "newTestMatchBody": "An official match is still recording on this device. It stays; the previous test match is deleted.",
     "newTestMatchConfirm": "Start test match",

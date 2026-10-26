@@ -225,7 +225,7 @@
     "finals": "Finales",
     "coach": "Entraîneur",
     "matchNumber": "N° de match",
-    "matchNumberPlaceholder": "ex. M01",
+    "matchNumberPlaceholder": "ex. 12",
     "datePlaceholder": "jj.mm.aaaa",
     "timePlaceholder": "HH:MM",
     "courtPlaceholder": "ex. 1, Centre",
@@ -380,7 +380,8 @@
       "matchNotFound": "Match introuvable.",
       "allowPopups": "Veuillez autoriser les pop-ups pour voir la feuille de match.",
       "errorSavingData": "Erreur lors de la sauvegarde. Veuillez réessayer.",
-      "duplicateGameNumber": "Match #{{number}} existe déjà. Veuillez utiliser un autre numéro."
+      "duplicateGameNumber": "Match #{{number}} existe déjà. Veuillez utiliser un autre numéro.",
+      "gameNumberInvalid": "Un nombre entier de 1 à 9999."
     },
     "modals": {
       "syncing": "Synchronisation",
@@ -913,6 +914,7 @@
       "confirm": "Annuler l'action"
     },
     "confirmFailed": "Cela n'a pas été enregistré. Vérifiez la feuille de match et réessayez.",
+    "storageFull": "Non enregistré : la mémoire de cet appareil est pleine. Libérez de l'espace (photos, vidéos) et réessayez, ou continuez le match sur un autre appareil (sauvegarde ou PIN du match).",
     "bmpOnlyAfterPoint": "BMP : seulement après un point, avant l'échange suivant",
     "bmpOncePerRally": "BMP : une fois par échange, de nouveau après le prochain échange terminé",
     "medicalEnd": "fin",
@@ -2486,6 +2488,9 @@
     "replaceMatchTitle": "Supprimer le match en cours ?",
     "replaceMatchBody": "Le match de cet appareil et toutes ses données sont supprimés, puis le nouveau match commence. Cette action est irréversible.",
     "replaceMatchConfirm": "Supprimer et recommencer",
+    "replaceUnapprovedTitle": "Supprimer le match terminé ?",
+    "replaceUnapprovedBody": "Ce match est terminé mais pas approuvé : son résultat et les signatures ne sont que sur cet appareil. Pour les garder, annulez, ouvrez-le avec « Continuer le match » et approuvez-le. Cette action est irréversible.",
+    "replaceUnapprovedConfirm": "Supprimer quand même et recommencer",
     "newTestMatchTitle": "Commencer un nouveau match test ?",
     "newTestMatchBody": "Un match officiel est encore en cours sur cet appareil. Il est conservé ; le match test précédent est supprimé.",
     "newTestMatchConfirm": "Commencer le match test",

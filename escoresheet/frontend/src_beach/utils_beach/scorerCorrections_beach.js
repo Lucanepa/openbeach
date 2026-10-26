@@ -214,6 +214,20 @@ export function setReopenJob(seedKey, set, now = new Date()) {
 }
 
 /**
+ * The sync job that removes a set from the cloud (Manual changes > Reopen
+ * set: the sets after the reopened one go).
+ */
+export function setDeleteJob(seedKey, set, now = new Date()) {
+  return {
+    resource: 'set',
+    action: 'delete',
+    payload: { external_id: setExtId(seedKey, set.id) },
+    ts: now.toISOString(),
+    status: 'queued'
+  }
+}
+
+/**
  * Plan the undo of a decision change (point swap): the point goes back to the
  * team it was first given to. Removing the decision_change event and
  * restoring the point's snapshot gives the old score back, but the point

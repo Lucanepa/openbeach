@@ -2,6 +2,7 @@ import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, mem
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useTranslation } from 'react-i18next'
 import { openAppWindow } from '../utils_beach/openAppWindow_beach'
+import { gameNumberValue, isValidGameNumber } from '../utils_beach/gameNumber_beach'
 import { useAlert } from '../contexts_beach/AlertContext_beach'
 import { useAuth } from '../contexts_beach/AuthContext_beach'
 import { db } from '../db_beach/db_beach'
@@ -910,7 +911,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           if (match.gameN) {
             let supabaseQuery = apiFrom('matches')
               .select('id, external_id')
-              .eq('game_n', parseInt(match.gameN, 10))
+              .eq('game_n', gameNumberValue(match.gameN))
             // Scope to same league/tournament via match_info JSONB
             if (match.league) {
               supabaseQuery = supabaseQuery.eq('match_info->>competition_name', match.league)
@@ -935,7 +936,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               external_id: match.seed_key,
               status: match.status || 'setup',
               scheduled_at: match.scheduledAt || null,
-              game_n: match.gameN ? parseInt(match.gameN, 10) : null,
+              game_n: gameNumberValue(match.gameN),
               game_pin: match.gamePin || null,
               test: match.test || false,
               match_info: {
@@ -1597,7 +1598,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           court,
           team1ShortName: team1ShortName || team1Name.trim().toUpperCase(),
           team2ShortName: team2ShortName || team2Name.trim().toUpperCase(),
-          game_n: gameN ? Number(gameN) : null,
+          game_n: gameNumberValue(gameN),
           gameNumber: gameN ? gameN : null,
           league,
           // The stored game PIN, or a new one; a test match keeps its PIN too
@@ -1848,10 +1849,17 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       return
     }
 
+    // The Match No. is a whole number from 1 to 9999 (gameNumber_beach)
+    if (gameN?.trim() && !isValidGameNumber(gameN)) {
+      setGameNError(t('matchSetup.validation.gameNumberInvalid', 'A whole number from 1 to 9999.'))
+      setNoticeModal({ message: t('matchSetup.validation.gameNumberInvalid', 'A whole number from 1 to 9999.') })
+      return
+    }
+
     // Check for duplicate game number locally (scoped to same league/tournament)
     if (gameN?.trim()) {
-      const gameNValue = parseInt(gameN, 10)
-      if (!isNaN(gameNValue)) {
+      const gameNValue = gameNumberValue(gameN)
+      if (gameNValue !== null) {
         const currentLeague = (league || '').trim().toLowerCase()
         const allMatches = await db.matches.toArray()
         const duplicate = allMatches.find(m =>
@@ -1960,7 +1968,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         phase: phase || null,
         round: round || null,
         hasCoach: hasCoach,
-        game_n: gameN ? parseInt(gameN, 10) : null,
+        game_n: gameNumberValue(gameN),
         seed_key: matchSeedKey, // Ensure seed_key is set
         matchInfoConfirmedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -1983,7 +1991,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       const syncPayload = {
         external_id: matchSeedKey,
         scheduled_at: scheduledAt || null,
-        game_n: gameN ? parseInt(gameN, 10) : null,
+        game_n: gameNumberValue(gameN),
         game_pin: match?.gamePin || null,
         test: false,
         // JSONB columns
@@ -2282,7 +2290,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         team2Color: team2Color || DEFAULT_TEAM2_COLOUR,
         team1Country: team1Country || '',
         team2Country: team2Country || '',
-        game_n: gameN ? Number(gameN) : null,
+        game_n: gameNumberValue(gameN),
         seed_key: seedKey, // Unique key for Supabase sync
         league,
         gamePin: generatedGamePin, // Game PIN for official matches (not test matches)
@@ -2352,7 +2360,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           ),
           // PINs for dashboard connections
           game_pin: generatedGamePin,
-          game_n: gameN ? Number(gameN) : null,
+          game_n: gameNumberValue(gameN),
           // Beach keys of the backend's validate-connection-pin (sport 'beach')
           connection_pins: buildConnectionPins({
             refereePin: generatedRefereePin,
@@ -2856,9 +2864,15 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                   onChange={async e => {
                     const val = e.target.value
                     setGameN(val)
+                    // A whole number from 1 to 9999 (gameNumber_beach), else
+                    // it cannot be confirmed
+                    if (val?.trim() && !isValidGameNumber(val)) {
+                      setGameNError(t('matchSetup.validation.gameNumberInvalid', 'A whole number from 1 to 9999.'))
+                      return
+                    }
                     // Check for local duplicates (scoped to same league/tournament)
-                    const parsed = parseInt(val, 10)
-                    if (val?.trim() && !isNaN(parsed)) {
+                    const parsed = gameNumberValue(val)
+                    if (parsed !== null) {
                       const currentLeague = (league || '').trim().toLowerCase()
                       const allMatches = await db.matches.toArray()
                       const dup = allMatches.find(m => m.id !== matchId && m.game_n === parsed && (m.league || '').trim().toLowerCase() === currentLeague)
@@ -2867,7 +2881,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                       setGameNError('')
                     }
                   }}
-                  placeholder="e.g. M01"
+                  inputMode="numeric"
+                  placeholder={t('matchSetup.matchNumberPlaceholder', 'e.g. 12')}
                 />
               </Field>
               <Field
@@ -4842,7 +4857,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     team2ShortName: team2ShortName || team2Name.trim().toUpperCase(),
                     team1Country: team1Country || '',
                     team2Country: team2Country || '',
-                    game_n: gameN ? Number(gameN) : null,
+                    game_n: gameNumberValue(gameN),
                     gameNumber: gameN ? gameN : null,
                     league,
                     scheduledAt,

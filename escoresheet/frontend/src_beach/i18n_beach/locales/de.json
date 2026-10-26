@@ -225,7 +225,7 @@
     "finals": "Finale",
     "coach": "Trainer",
     "matchNumber": "Spielnummer",
-    "matchNumberPlaceholder": "z.B. M01",
+    "matchNumberPlaceholder": "z.B. 12",
     "datePlaceholder": "TT.MM.JJJJ",
     "timePlaceholder": "HH:MM",
     "courtPlaceholder": "z.B. 1, Center",
@@ -380,7 +380,8 @@
       "matchNotFound": "Match nicht gefunden.",
       "allowPopups": "Bitte Popups erlauben, um das Spielprotokoll anzuzeigen.",
       "errorSavingData": "Fehler beim Speichern. Bitte erneut versuchen.",
-      "duplicateGameNumber": "Spiel #{{number}} existiert bereits. Bitte eine andere Nummer verwenden."
+      "duplicateGameNumber": "Spiel #{{number}} existiert bereits. Bitte eine andere Nummer verwenden.",
+      "gameNumberInvalid": "Eine ganze Zahl von 1 bis 9999."
     },
     "modals": {
       "syncing": "Synchronisierung",
@@ -913,6 +914,7 @@
       "confirm": "Rückgängig machen"
     },
     "confirmFailed": "Das wurde nicht gespeichert. Bitte das Matchblatt prüfen und erneut versuchen.",
+    "storageFull": "Nicht gespeichert: Der Speicher dieses Geräts ist voll. Platz freigeben (Fotos, Videos) und erneut versuchen, oder das Spiel auf einem anderen Gerät weiterführen (Backup oder Spiel-PIN).",
     "bmpOnlyAfterPoint": "BMP: nur nach einem Punkt, vor dem nächsten Ballwechsel",
     "bmpOncePerRally": "BMP: einmal pro Ballwechsel, wieder nach dem nächsten beendeten Ballwechsel",
     "medicalEnd": "Ende",
@@ -2486,6 +2488,9 @@
     "replaceMatchTitle": "Aktuelles Spiel löschen?",
     "replaceMatchBody": "Das Spiel auf diesem Gerät und alle seine Daten werden gelöscht, dann beginnt das neue Spiel. Das kann nicht rückgängig gemacht werden.",
     "replaceMatchConfirm": "Löschen und neu beginnen",
+    "replaceUnapprovedTitle": "Beendetes Spiel löschen?",
+    "replaceUnapprovedBody": "Dieses Spiel ist beendet, aber nicht genehmigt: Resultat und Unterschriften sind nur auf diesem Gerät. Um sie zu behalten: Abbrechen, das Spiel mit «Spiel fortsetzen» öffnen und genehmigen. Das Löschen kann nicht rückgängig gemacht werden.",
+    "replaceUnapprovedConfirm": "Trotzdem löschen und neu beginnen",
     "newTestMatchTitle": "Neues Testspiel starten?",
     "newTestMatchBody": "Auf diesem Gerät läuft noch ein offizielles Spiel. Es bleibt erhalten; das bisherige Testspiel wird gelöscht.",
     "newTestMatchConfirm": "Testspiel starten",

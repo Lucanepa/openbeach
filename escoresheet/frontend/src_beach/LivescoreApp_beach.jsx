@@ -4,6 +4,7 @@ import { supabase } from './lib_beach/supabaseClient_beach'
 import { apiFrom } from './lib_beach/apiClient_beach'
 import { isBackendAvailable, getApiUrl } from './utils_beach/backendConfig_beach'
 import { createRelayLivescoreFeed, fetchRelayLivescoreList, relayLivescoreNow, relayLivescoreWsUrl } from './utils_beach/relayLivescore_beach'
+import { liveWindowStart, countLiveGames } from './utils_beach/livescoreWindow_beach'
 import UpdateBanner from './components_beach/UpdateBanner_beach'
 import DashboardHeader from './components_beach/DashboardHeader_beach'
 import LegalLinks from './components_beach/LegalLinks_beach'
@@ -88,11 +89,13 @@ export default function LivescoreApp() {
     }
 
     try {
-      // Beach rows only (the live-state table is shared with indoor). The
-      // backend knows the embed with (set_results) only as one shape.
+      // Beach rows only (the live-state table is shared with indoor), of the
+      // last day (livescoreWindow_beach). The backend knows the embed with
+      // (set_results) only as one shape.
       const { data, error: fetchError } = await apiFrom('match_live_state')
         .select('*, matches!match_live_state_match_id_fkey_cascade(set_results)')
         .eq('sport_type', 'beach')
+        .gte('updated_at', liveWindowStart())
         .order('updated_at', { ascending: false })
 
       if (fetchError) {
@@ -361,7 +364,7 @@ export default function LivescoreApp() {
 
       <DashboardHeader
         title={t('livescore.title', 'Live scores')}
-        subtitle={t('livescore.gamesLive', { count: liveGames.length })}
+        subtitle={t('livescore.gamesLive', { count: countLiveGames(liveGames) })}
         onLoadGames={fetchLiveGames}
         loadingMatches={loading}
         matchCount={liveGames.length}

@@ -107,6 +107,7 @@ async function startSet() {
 async function endSet(point, setIndex) {
   await startSet()
   await waitFor(() => expect(button(point)).toBeTruthy(), { timeout: 8000 })
+  await settle()
   fireEvent.click(button(point))
   await waitFor(() => expect(document.body.textContent).toContain(`Set ${setIndex} end`), { timeout: 8000 })
   await settle()

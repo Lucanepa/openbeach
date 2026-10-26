@@ -13,6 +13,7 @@ import { ScaleProvider } from '../../contexts_beach/ScaleContext_beach'
 import { LoggingProvider } from '../../contexts_beach/LoggingContext_beach'
 import { db } from '../../db_beach/db_beach'
 import Scoreboard from '../../components_beach/Scoreboard_beach'
+import { GHOST_CLICK_MS } from '../../hooks_beach/useConfirmAction_beach'
 
 class OfflineSocket {
   constructor() { this.readyState = 3 }
@@ -39,6 +40,9 @@ afterAll(() => {
   vi.restoreAllMocks()
 })
 
+// a tap on the rally buttons the moment they changed is the end of the tap
+// that changed them (Scoreboard_beach rallyButtonsJustShown): wait as a scorer does
+const settle = () => new Promise(r => setTimeout(r, GHOST_CLICK_MS + 100))
 const buttons = (text) => [...document.querySelectorAll('button')].filter(b => b.textContent.trim() === text)
 
 describe('Scoreboard_beach: the player menu after a rally', () => {
@@ -66,6 +70,7 @@ describe('Scoreboard_beach: the player menu after a rally', () => {
 
     render(<ScaleProvider><AlertProvider><LoggingProvider><Scoreboard matchId={matchId} /></LoggingProvider></AlertProvider></ScaleProvider>)
     await waitFor(() => expect(buttons('Point A').length).toBeGreaterThan(0), { timeout: 8000 })
+    await settle()
     fireEvent.click(buttons('Point A')[0])
     await waitFor(() => expect(buttons('Start rally')).toHaveLength(1))
 

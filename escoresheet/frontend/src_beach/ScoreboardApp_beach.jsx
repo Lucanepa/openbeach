@@ -4,6 +4,7 @@ import { supabase } from './lib_beach/supabaseClient_beach'
 import { apiFrom } from './lib_beach/apiClient_beach'
 import { isBackendAvailable, getApiUrl } from './utils_beach/backendConfig_beach'
 import { createRelayLivescoreFeed, fetchRelayLivescoreList, relayLivescoreNow, relayLivescoreWsUrl } from './utils_beach/relayLivescore_beach'
+import { liveWindowStart } from './utils_beach/livescoreWindow_beach'
 import { ArrowLeft, ChevronRight, Globe, Monitor, Radio } from 'lucide-react'
 import { cn } from './ui/volleyui/cn.js'
 import { FOCUS_RING, Button } from './ui/volleyui/Button.jsx'
@@ -197,28 +198,51 @@ export default function ScoreboardApp() {
     }
   }, [relayMode, selectedMatchId, availableGames])
 
-  // Remote mode: fetch available games
+  // Remote mode: fetch available games. True when the list was read.
   const fetchGames = useCallback(async () => {
-    if (relayMode || !isBackendAvailable()) return
+    if (relayMode || !isBackendAvailable()) return true
     setLoadingGames(true)
     try {
-      // Beach rows only: the live-state table is shared with indoor
-      const { data } = await apiFrom('match_live_state')
+      // Beach rows only: the live-state table is shared with indoor; the
+      // matches of the last day, as the livescore (livescoreWindow_beach)
+      const { data, error } = await apiFrom('match_live_state')
         .select('*, matches!match_live_state_match_id_fkey_cascade(set_results)')
         .eq('sport_type', 'beach')
+        .gte('updated_at', liveWindowStart())
         .order('updated_at', { ascending: false })
+      if (error) {
+        console.error('[Scoreboard] Error fetching games:', error)
+        return false
+      }
       const beachGames = (data || []).filter(g => g.sport_type === 'beach')
       setAvailableGames(beachGames)
+      return true
     } catch (err) {
       console.error('[Scoreboard] Error fetching games:', err)
+      return false
     } finally {
       setLoadingGames(false)
     }
   }, [relayMode])
 
+  // The list is read when the picker opens. A refused read (the venue's
+  // per-IP limit: 429) left it empty, "no games" for good (stress test
+  // 2026-10-25): it is read again, after 3 s, 6 s, ... up to 30 s apart,
+  // until it is read or the picker closes.
   useEffect(() => {
-    if (connectionMode === 'remote' && !selectedMatchId) {
-      fetchGames()
+    if (connectionMode !== 'remote' || selectedMatchId) return undefined
+    let cancelled = false
+    let timer = null
+    let attempt = 0
+    const load = async () => {
+      const ok = await fetchGames()
+      if (cancelled || ok) return
+      timer = setTimeout(load, Math.min(3000 * (2 ** attempt++), 30000))
+    }
+    load()
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
     }
   }, [connectionMode, selectedMatchId, fetchGames])
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAlert } from '../contexts_beach/AlertContext_beach'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -15,7 +15,7 @@ import ConnectionSetupModal from './options/ConnectionSetupModal_beach'
 import { useSyncQueue, checkScorerMoved } from '../hooks_beach/useSyncQueue_beach'
 import { isScorerMoved, SCORER_MOVED } from '../utils_beach/matchHandover_beach'
 import { holdLiveState, liveStateWritten, isLiveStateRetryable, scorerLiveOrder, cachedCloudMatchId, rememberCloudMatchId } from '../utils_beach/liveStateOutbox_beach'
-import { useConfirmAction } from '../hooks_beach/useConfirmAction_beach'
+import { useConfirmAction, GHOST_CLICK_MS, swallowFollowingClicks } from '../hooks_beach/useConfirmAction_beach'
 import { useActionLiveQuery } from '../hooks_beach/useActionLiveQuery_beach'
 import { useScorerActions, pickLiveStateSnapshot, isReportedActionError } from '../hooks_beach/useScorerActions_beach'
 import { withActivityContext, currentActivityContext, maxVoidedSeq, rememberSeedKey, withoutEventHistory } from '../db_beach/eventHistory_beach'
@@ -31,7 +31,7 @@ import { apiFrom } from '../lib_beach/apiClient_beach'
 import { setExtId, eventExtId } from '../utils_beach/syncIds_beach'
 import { missingForfeitSets } from '../utils_beach/forfeitSets_beach'
 import { changesSetScore, isLiveSetInterval, queueSetScoreSync, queueSetFinishedSync, queueSetStartTimeSync } from '../utils_beach/eventSync_beach'
-import { planPointRemoval, scoreAfterRemoval, syncJobsForEvents, syncJobsForSets, eventUpsertJob, setReopenJob, planDecisionChangeReversal, scoreDeltaOfRemoval, teamSanctionFlags, UNSENT_STATUSES } from '../utils_beach/scorerCorrections_beach'
+import { planPointRemoval, scoreAfterRemoval, syncJobsForEvents, syncJobsForSets, eventUpsertJob, setReopenJob, setDeleteJob, planDecisionChangeReversal, scoreDeltaOfRemoval, teamSanctionFlags, UNSENT_STATUSES } from '../utils_beach/scorerCorrections_beach'
 import { askConfirm } from '../utils_beach/askConfirm_beach'
 import { rallyStatusOf, currentSetOf } from '../utils_beach/rally_beach'
 import { toast } from '../ui/volleyui/uiStore.js'
@@ -45,7 +45,7 @@ import { captureFullStateSnapshot as captureStateSnapshot, refreshIntervalSnapsh
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
 import { swapTeamDesignation, coinTossCloud, setFirstServer, switchFirstServeUpdate, labelsInDesignation, eventTeamA } from '../utils_beach/coinToss_beach'
 import { set3TossBefore, set3TossUndoUpdate, undoKeepsMatch } from '../utils_beach/set3Toss_beach'
-import { staleCourtSwitches, switchBackUpdate, snapshotsAfterSwitchBack, pendingTto, pendingCourtDialog } from '../utils_beach/courtSwitchState_beach'
+import { staleCourtSwitches, switchBackUpdate, snapshotsAfterSwitchBack, pendingTto, pendingCourtDialog, courtSwitchMadeAt } from '../utils_beach/courtSwitchState_beach'
 import { teamBmpBlockReason } from '../utils_beach/bmpAvailability_beach'
 import { TTO_TOTAL, courtChangeEvery, hasTechnicalTimeout, nextCourtEvents } from '../utils_beach/courtRhythm_beach'
 import PhoneScoreboard from './scoreboard/PhoneScoreboard_beach.jsx'
@@ -62,17 +62,18 @@ import { medicalStartPayload, medicalEndPayload, findOpenMedical, formatMedicalD
 // Sport type for beach volleyball
 const SPORT_TYPE = 'beach'
 
-// Team time-out and technical time-out countdowns: 45 s ON PURPOSE, do not
-// "fix" them to 30 s. FIVB Beach rules 15.4.1 / 15.4.2 give 30 s, but the
-// referee whistles at 45 s (Swiss practice): the countdown runs to the whistle.
-const TEAM_TIMEOUT_SECONDS = 45
-const TTO_SECONDS = 45
+// Team time-out and technical time-out countdowns: 45 s ON PURPOSE (see
+// countdownClock_beach), here, in the live state and on the referee
+import { TEAM_TIMEOUT_SECONDS, TTO_SECONDS } from '../utils_beach/countdownClock_beach'
+import { isStorageFullError } from '../utils_beach/storageFull_beach'
+// The match number of the live state: the integer column's (gameNumber_beach)
+import { gameNumberValue } from '../utils_beach/gameNumber_beach'
 import CountryFlag from './CountryFlag_beach'
 import SignaturePad from './SignaturePad_beach'
 import { saveMatchSignature } from '../utils_beach/signatures_beach'
 import { signatureSourceUpdate } from '../utils_beach/phoneSignature_beach'
 import { uploadBackupToCloud, uploadLogsToCloud, triggerContinuousBackup } from '../utils_beach/logger_beach'
-import { splitLocalDateTime, parseLocalDateTimeToISO, roundToMinute, formatTimeLocal } from '../utils_beach/timeUtils_beach'
+import { splitLocalDateTime, parseLocalDateTimeToISO, roundToMinute, formatTimeLocal, localTimeNear } from '../utils_beach/timeUtils_beach'
 import { TimeInput24 } from './TimeInput24_beach'
 import { uploadScoresheetAsync } from '../utils_beach/scoresheetUploader_beach'
 import { useConnectionHealthMonitor } from '../hooks_beach/useConnectionHealthMonitor_beach'
@@ -344,7 +345,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     // A scorer action's failure is reported once (useScorerActions_beach)
     if (isReportedActionError(err)) return
     console.error('[confirm] action failed after its dialog closed', err)
-    showAlert(t('scoreboard.confirmFailed'), 'error')
+    // The device's storage is full: say so. Every tap showed the general
+    // "not saved, try again", and the scorer kept trying (stress test
+    // 2026-10-25, IndexedDB writes failing with QuotaExceededError)
+    showAlert(isStorageFullError(err) ? t('scoreboard.storageFull') : t('scoreboard.confirmFailed'), 'error')
   }, [showAlert, t])
   const { syncState, syncSetEnd, resetSyncState } = useSequentialSync()
   const [syncModalOpen, setSyncModalOpen] = useState(false)
@@ -724,75 +728,82 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   }, [])
 
   // Single-tab enforcement - prevent opening scoresheet in multiple tabs for same match
+  // A Web Lock held for the screen's life: the browser frees it when the tab
+  // reloads, closes or crashes. The localStorage mark below is cleared only
+  // when the screen unmounts, which none of those do: after any reload the
+  // tab found its old page's mark, claimed it and returned before setting up
+  // its answers, so a later tab opened the same live match as well and both
+  // scored (stress test 2026-10-25). A tab that finds the lock held shows
+  // "Scoresheet already open" and scores once the other tab is gone.
   useEffect(() => {
     if (!matchId) return
+    if (typeof navigator === 'undefined' || !navigator.locks?.request) return
+    const abort = new AbortController()
+    let release = null
+    // Queued, not ifAvailable: the screen remounting in this tab (React's
+    // development double mount) frees the lock a moment after asking again
+    const busy = setTimeout(() => setDuplicateTabError(true), 1000)
+    navigator.locks.request(`scoresheet-${matchId}`, { signal: abort.signal }, () => {
+      // granted just after the screen unmounted: hand it straight back
+      if (abort.signal.aborted) return undefined
+      clearTimeout(busy)
+      setDuplicateTabError(false)
+      return new Promise(resolve => { release = resolve })
+    }).catch(() => {}) // aborted: the screen unmounted before it got the lock
+    return () => {
+      clearTimeout(busy)
+      abort.abort()
+      if (release) release()
+    }
+  }, [matchId])
+
+  // Without Web Locks: the mark in localStorage and a BroadcastChannel. Every
+  // tab answers a new tab's question, including one that found a mark left by
+  // a page that is gone (a reload, a closed tab, a crash) and took it over,
+  // and a tab clears its mark when its page goes away.
+  useEffect(() => {
+    if (!matchId) return
+    if (typeof navigator !== 'undefined' && navigator.locks?.request) return
 
     const channelName = `scoresheet-${matchId}`
     const storageKey = `scoresheet-active-${matchId}`
     const tabId = tabIdRef.current
+    let probe = null
+    let duplicate = false
 
-    // Try to claim this tab as active
-    const existingTab = localStorage.getItem(storageKey)
-    if (existingTab && existingTab !== tabId) {
-      // Another tab might be active, check via BroadcastChannel
-      try {
-        const channel = new BroadcastChannel(channelName)
-
-        // Ask if any other tab is active
-        const checkTimeout = setTimeout(() => {
-          // No response, claim the tab
-          localStorage.setItem(storageKey, tabId)
-          channel.close()
-        }, 200)
-
-        channel.onmessage = (event) => {
-          if (event.data.type === 'PING') {
-            // Another tab is checking, respond
-            channel.postMessage({ type: 'PONG', tabId: tabId })
-          } else if (event.data.type === 'PONG' && event.data.tabId !== tabId) {
-            // Another tab responded, this is a duplicate
-            clearTimeout(checkTimeout)
-            setDuplicateTabError(true)
-            channel.close()
-          } else if (event.data.type === 'NEW_TAB' && event.data.tabId !== tabId) {
-            // A new tab just opened, tell it we're here
-            channel.postMessage({ type: 'PONG', tabId: tabId })
-          }
-        }
-
-        // Announce ourselves
-        channel.postMessage({ type: 'NEW_TAB', tabId: tabId })
-
-        return () => {
-          clearTimeout(checkTimeout)
-          channel.close()
-          // Only remove from storage if we're the active tab
-          if (localStorage.getItem(storageKey) === tabId) {
-            localStorage.removeItem(storageKey)
-          }
-        }
-      } catch {
-        // BroadcastChannel not supported, fall back to localStorage only
-        localStorage.setItem(storageKey, tabId)
-      }
-    } else {
-      // Claim this tab as active
-      localStorage.setItem(storageKey, tabId)
-    }
-
-    // Set up BroadcastChannel for ongoing communication
-    let channel
+    let channel = null
     try {
       channel = new BroadcastChannel(channelName)
-
       channel.onmessage = (event) => {
-        if (event.data.type === 'PING' || event.data.type === 'NEW_TAB') {
+        const { type, tabId: from } = event.data || {}
+        if (from === tabId || duplicate) return
+        if (type === 'PING' || type === 'NEW_TAB') {
           // Another tab is checking or just opened, respond
-          channel.postMessage({ type: 'PONG', tabId: tabId })
+          channel.postMessage({ type: 'PONG', tabId })
+        } else if (type === 'PONG' && probe) {
+          // Another tab answered our question: this one is the duplicate
+          clearTimeout(probe)
+          probe = null
+          duplicate = true
+          setDuplicateTabError(true)
         }
       }
     } catch {
       // BroadcastChannel not supported
+    }
+
+    const existingTab = localStorage.getItem(storageKey)
+    if (existingTab && existingTab !== tabId && channel) {
+      // Another tab might be active, or the mark is left over: ask, and take
+      // it when nobody answers
+      probe = setTimeout(() => {
+        probe = null
+        localStorage.setItem(storageKey, tabId)
+      }, 200)
+      channel.postMessage({ type: 'NEW_TAB', tabId })
+    } else {
+      // Claim this tab as active
+      localStorage.setItem(storageKey, tabId)
     }
 
     // Listen for storage events (when another tab changes localStorage)
@@ -803,14 +814,20 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       }
     }
     window.addEventListener('storage', handleStorage)
-
-    return () => {
-      window.removeEventListener('storage', handleStorage)
-      if (channel) channel.close()
+    const clearMark = () => {
       // Only remove from storage if we're the active tab
       if (localStorage.getItem(storageKey) === tabId) {
         localStorage.removeItem(storageKey)
       }
+    }
+    window.addEventListener('pagehide', clearMark)
+
+    return () => {
+      if (probe) clearTimeout(probe)
+      window.removeEventListener('storage', handleStorage)
+      window.removeEventListener('pagehide', clearMark)
+      if (channel) channel.close()
+      clearMark()
     }
   }, [matchId])
 
@@ -1187,9 +1204,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         timeouts_a: snapshot.timeoutsA,
         timeouts_b: snapshot.timeoutsB,
         timeout_active: !!timeoutModal,
+        // the running time-out's start: a referee that opens during it reads
+        // this state from the relay and counts on from there
+        timeout_started_at: ((timeoutModal?.running || timeoutModal)?.started && (timeoutModal?.running || timeoutModal).startedAt) || null,
         set_interval_active: false,
         match_status: snapshot.matchStatus || 'live',
-        game_n: match.gameN || match.game_n || null,
+        game_n: gameNumberValue(match.gameN || match.game_n),
         league: match.league || null,
         gender: match.match_type_2 || null,
         updated_at: new Date().toISOString()
@@ -1219,6 +1239,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       ch.close()
     } catch (e) { console.error('[Broadcast] error:', e) }
   }, [matchId, captureFullStateSnapshot, timeoutModal])
+
+  // Once a time-out runs, the state goes out again with its start: the push
+  // of its event was made before the countdown showed (a tablet that opened
+  // or reloaded during the time-out read no start and showed none)
+  useEffect(() => {
+    if (timeoutModal?.started && timeoutModal.startedAt) broadcastToScoreboard()
+  }, [timeoutModal?.started, timeoutModal?.startedAt]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Listen for scoreboard state requests (when scoreboard opens mid-match)
   useEffect(() => {
@@ -1369,14 +1396,18 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Calculate updated set scores including the just-finished set
       // eventData.winner is 'team1' or 'team2' from the set_end event
       // Fallback: if eventData.winner is undefined, calculate from snapshot points
+      // Team B is the other team: the snapshot has no teamBKey, so a set won
+      // by B was never counted here and a match B won stayed 'interval' on
+      // the referee, the scoreboards and the livescore (stress test 2026-10-25)
+      const snapshotTeamBKey = snapshot.teamAKey === 'team2' ? 'team1' : 'team2'
       const setWinner = eventData?.winner
         || (snapshot.pointsA > snapshot.pointsB ? snapshot.teamAKey : null)
-        || (snapshot.pointsB > snapshot.pointsA ? snapshot.teamBKey : null)
+        || (snapshot.pointsB > snapshot.pointsA ? snapshotTeamBKey : null)
       const updatedSetScoreA = isSetInterval && setWinner
         ? (setWinner === snapshot.teamAKey ? snapshot.setScoreA + 1 : snapshot.setScoreA)
         : snapshot.setScoreA
       const updatedSetScoreB = isSetInterval && setWinner
-        ? (setWinner === snapshot.teamBKey ? snapshot.setScoreB + 1 : snapshot.setScoreB)
+        ? (setWinner === snapshotTeamBKey ? snapshot.setScoreB + 1 : snapshot.setScoreB)
         : snapshot.setScoreB
 
       // Check if match is finished (best-of-3: one team won 2 sets) - don't increment current_set past the final set
@@ -1485,7 +1516,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         match_status: matchStatus,
         scorer_attention_trigger: scorerAttentionTrigger,
         // Match metadata (from IndexedDB match record)
-        game_n: match.gameN || match.game_n || null,
+        game_n: gameNumberValue(match.gameN || match.game_n),
         league: match.league || null,
         gender: match.match_type_2 || null,
         updated_at: stampedAt
@@ -1968,6 +1999,30 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     [data?.events, data?.set]
   )
 
+  // Start rally and Point A | Point B take turns in the same place (and the
+  // phone's rally buttons theirs): the second tap of a double or triple tap,
+  // a wet or bouncing finger, landed on the button that had just replaced
+  // the first one. Point, Start rally, point within 300 ms gave one rally
+  // two points, on official matches on the server too (stress test
+  // 2026-10-25, triple taps 120 to 200 ms apart, 5 bursts in 8). For
+  // GHOST_CLICK_MS after the buttons change (drawn: a layout effect, before
+  // the next tap can reach them), a tap on them is the end of the tap that
+  // changed them, as after a confirm (useConfirmAction): a rally never ends
+  // that soon after its start, nor starts that soon after its point. Taps
+  // only (ported from OpenVolley 904f6350 without its keys: a key is pressed
+  // on purpose). Not when the screen first shows them. Monotonic clock: a
+  // device clock set back must not hold them.
+  const rallyButtonsRef = useRef({ status: null, changedAt: -Infinity })
+  useLayoutEffect(() => {
+    const buttons = rallyButtonsRef.current
+    if (buttons.status !== null && buttons.status !== rallyStatus) buttons.changedAt = performance.now()
+    buttons.status = rallyStatus
+  }, [rallyStatus])
+  const rallyButtonsJustShown = useCallback(
+    () => performance.now() - rallyButtonsRef.current.changedAt < GHOST_CLICK_MS,
+    []
+  )
+
   // The rally of the set being played, read from the database (inside an
   // action: its transaction). A tap is checked against it, not against the
   // screen, which on a slow tablet can be seconds behind
@@ -2218,6 +2273,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       }
     }
   }, [data?.set, data?.sets, setEndTimeModal])
+
+  // A set end confirmed in another tab (the set rows are shared): this tab's
+  // dialog closes, there is nothing left to confirm
+  useEffect(() => {
+    if (!setEndTimeModal || !data?.sets) return
+    const rowsOfSet = data.sets.filter(s => s.index === setEndTimeModal.setIndex)
+    if (rowsOfSet.length > 0 && rowsOfSet.every(s => s.finished)) setSetEndTimeModal(null)
+  }, [setEndTimeModal, data?.sets])
 
   // Format countdown time: mm:ss format, but only seconds when < 60
   const formatCountdown = useCallback((seconds) => {
@@ -3168,7 +3231,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           if (type === 'substitution') {
             eventData = { playerIn: payload?.playerIn, playerOut: payload?.playerOut }
           } else if (type === 'timeout') {
-            eventData = { duration: 30 }
+            // The time-out's length: the referee counts it from this row (a
+            // tablet that joins in the time-out, one without the relay). It
+            // said 30 while this screen and its relay action count 45, so
+            // the tablets showed 30 or 45, whichever came first.
+            eventData = { duration: TEAM_TIMEOUT_SECONDS }
           } else if (type === 'set_end') {
             // Note: logEvent('set_end', { team: winner, ... }) uses 'team' for the winner
             eventData = { setIndex: payload?.setIndex || data.set.index, winner: payload?.team }
@@ -3975,6 +4042,26 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     rallyStartTimeRef.current = Date.now()
   }), [runAction, deferUi, readRallyStatus, logEvent, isFirstRally, data?.team1Players, data?.team2Players, data?.events, data?.set, data?.match, matchId, getNextSubSeq, syncToReferee, checkAccidentalRallyStart, accidentalRallyStartDuration, getCurrentServe, getServingPlayer, leftisTeam1, leftTeam, rightTeam, courtSwitchModal, ttoModal, askPendingCourtDialog])
 
+  // A tap on the rally buttons (Start rally, Point A | Point B), on every
+  // layout: none the moment they changed (rallyButtonsJustShown), that is
+  // the second tap of the one that changed them. Their keys, and the
+  // accidental-start and accidental-point questions' Yes, call the handlers
+  // themselves.
+  const tapStartRally = useCallback(() => {
+    if (rallyButtonsJustShown()) {
+      console.warn('[Scoreboard] Start rally tap as the rally buttons changed (a double tap): ignored')
+      return
+    }
+    handleStartRally()
+  }, [handleStartRally, rallyButtonsJustShown])
+  const tapPoint = useCallback((side) => {
+    if (rallyButtonsJustShown()) {
+      console.warn('[Scoreboard] Point tap as the rally buttons changed (a double tap): ignored')
+      return
+    }
+    handlePoint(side)
+  }, [handlePoint, rallyButtonsJustShown])
+
   const handleReplay = useCallback(async () => {
     // During rally: ask first, confirmReplay logs the replay event (no point to undo)
     if (rallyStatus === 'in_play') {
@@ -4233,6 +4320,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
     const { setIndex, winner, team1Points, team2Points } = setEndTimeModal
 
+    // The dialog closes at once, so the second tap of a double tap landed on
+    // "End set interval" under it and the interval was over before it began
+    // (stress test 2026-10-25, 3 of 4 double taps): taps right after this
+    // Confirm are swallowed, as after the other confirms (useConfirmAction)
+    swallowFollowingClicks(GHOST_CLICK_MS)
+
     // Guard: Check if this set was already confirmed to prevent double-processing
     if (confirmedSetEndRef.current.has(setIndex)) {
       setSetEndTimeModal(null)
@@ -4241,6 +4334,16 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
     // Mark this set as being confirmed
     confirmedSetEndRef.current.add(setIndex)
+
+    // Ended already: in another tab of this device (the set rows are shared),
+    // this tab's dialog still open. Its set_end went into the set being
+    // played (set 2), at 0:0 (stress test 2026-10-25)
+    const rowsOfSet = (await db.sets.where('matchId').equals(matchId).toArray()).filter(s => s.index === setIndex)
+    if (rowsOfSet.length > 0 && rowsOfSet.every(s => s.finished)) {
+      console.log('[SET_END] Set', setIndex, 'already finished (in another tab) - nothing to write')
+      setSetEndTimeModal(null)
+      return
+    }
 
     // Close modal immediately to prevent multiple confirmations
     setSetEndTimeModal(null)
@@ -4471,6 +4574,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         // the LedBox keep showing it (as OpenVolley does). The relay drops the
         // room once no scoreboard holds it any more.
         syncFunctionRef.current?.()
+
+        // The local scoreboard and the relay's live state get the end too.
+        // Their last state was the set_end event's snapshot, taken before
+        // the set counted and the match ended: "Set 2 • 0 - 1", not ended,
+        // for good, as nothing is scored after it (stress test 2026-10-25;
+        // the database's live state counts the set on its own)
+        await broadcastToScoreboard()
 
         // Trigger event backup for Safari/Firefox (match end)
         onTriggerEventBackup?.('match_end')
@@ -4726,7 +4836,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
       // Don't re-throw - the match can continue from local data
     }
-  }, [setEndTimeModal, data?.match, data?.set, matchId, logEvent, onFinishSet, getCurrentServe, teamAKey, onTriggerEventBackup, syncSetEnd, resetSyncState, showAlert, t, refreshScoresheet])
+  }, [setEndTimeModal, data?.match, data?.set, matchId, logEvent, onFinishSet, getCurrentServe, teamAKey, onTriggerEventBackup, syncSetEnd, resetSyncState, showAlert, t, refreshScoresheet, broadcastToScoreboard])
 
   // Confirm set 3 side and service choices (works with both modal and inline UI)
   const confirmSet3SideService = useCallback(async (leftTeam, firstServe, inlineMode = false) => {
@@ -5714,6 +5824,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           }
           // The ended set is open again, in the cloud too
           const undoMatch = await db.matches.get(matchId)
+          // A next set already sent is removed there (the set ended again
+          // opens another one: two rows of that set)
+          if (nextSet && undoMatch && !undoMatch.test && undoMatch.seed_key) {
+            await db.sync_queue.add(setDeleteJob(undoMatch.seed_key, nextSet))
+          }
           const endedSetIndex = lastEvent.payload?.setIndex ?? lastEvent.setIndex
           const endedSet = (await db.sets.where({ matchId }).toArray()).find(s => s.index === endedSetIndex)
           if (endedSet) {
@@ -5723,6 +5838,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               await db.sync_queue.add(setReopenJob(undoMatch.seed_key, reopened))
             }
           }
+          // Its end can be confirmed again (confirmSetEndTime drops a second
+          // confirm of a set it has ended)
+          confirmedSetEndRef.current.delete(endedSetIndex)
         } else {
           // The cloud set row follows the restored score (queued: also offline)
           await queueSetScoreSync(db, { matchId, setIndex: lastEvent.setIndex ?? data.set.index })
@@ -5773,6 +5891,67 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   const cancelUndo = useCallback(() => {
     setUndoConfirm(null)
   }, [])
+
+  // Manual changes > Reopen set: one action, as MatchEnd's Reopen last set.
+  // It only marked the set not finished and deleted the later sets and their
+  // events row by row: the set kept its set_end (the next set end wrote a
+  // second one), its index stayed in confirmedSetEndRef, so the set could
+  // not be ended again until a reload (Confirm closed the dialog and wrote
+  // nothing, the score went on past 21), and no job reached the cloud, which
+  // kept set 1 finished and the old set 2, next to the set 2 played again
+  // (stress test 2026-10-25). Now the set_end goes with the later sets' events
+  // (the event history voids them on the server), the later sets go here and
+  // in the cloud, the set is open again there, and its end can be confirmed.
+  const confirmReopenSet = useCallback(() => runAction('reopenSet', async () => {
+    const target = reopenSetConfirm
+    deferUi(() => setReopenSetConfirm(null))
+    if (!target) return
+    const reopened = await db.sets.get(target.setId)
+    if (!reopened || reopened.matchId !== matchId) return
+    const later = (await db.sets.where('matchId').equals(matchId).toArray()).filter(s => s.index > reopened.index)
+    const laterIndexes = new Set(later.map(s => s.index))
+    const events = await db.events.where('matchId').equals(matchId).toArray()
+    await discardEvents(events.filter(e => laterIndexes.has(e.setIndex) ||
+      (e.type === 'set_end' && e.setIndex === reopened.index)))
+
+    const match = await db.matches.get(matchId)
+    const cloud = !!(match?.seed_key && !match.test)
+    if (later.length > 0) {
+      await db.sets.bulkDelete(later.map(s => s.id))
+      // Their set inserts and score updates not sent yet go; a set already
+      // in the cloud is removed there
+      const unsent = await db.sync_queue.where('status').anyOf(...UNSENT_STATUSES).toArray()
+      const staleSetJobs = syncJobsForSets(unsent, later.map(s => s.id))
+      if (staleSetJobs.length > 0) await db.sync_queue.bulkDelete(staleSetJobs.map(j => j.id))
+      if (cloud) {
+        for (const s of later) await db.sync_queue.add(setDeleteJob(match.seed_key, s))
+      }
+    }
+    await db.sets.update(reopened.id, { finished: false, endTime: null })
+    if (cloud) await db.sync_queue.add(setReopenJob(match.seed_key, await db.sets.get(reopened.id)))
+
+    // Update match status back to 'live' if it was 'final'
+    if (match?.status === 'final') {
+      await db.matches.update(matchId, { status: 'live' })
+      if (cloud) {
+        await db.sync_queue.add({
+          resource: 'match',
+          action: 'update',
+          payload: { id: match.seed_key, status: 'live' },
+          ts: new Date().toISOString(),
+          status: 'queued'
+        })
+      }
+    }
+
+    // The set (and the later ones, played again) can be ended again
+    for (const index of [reopened.index, ...laterIndexes]) confirmedSetEndRef.current.delete(index)
+    if (setEndModalDismissedRef.current != null && setEndModalDismissedRef.current >= reopened.index) setEndModalDismissedRef.current = null
+
+    afterRefereeSync()
+    afterLiveState('undo')
+    afterScoresheetRefresh()
+  }, { reason: 'reopen_set' }), [runAction, deferUi, reopenSetConfirm, matchId, discardEvents, afterRefereeSync, afterLiveState, afterScoresheetRefresh])
 
   // Handle replay rally - undo last point (go back to state before the point, no rally restart)
   // A replayed rally scores no point, here or on the server: the point (with
@@ -7418,6 +7597,17 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
 
     const setIndex = modal.set.index
+
+    // Made already: in another tab of this device (the match and its events
+    // are shared), this tab's dialog still open. Its Switch courts put the
+    // teams back on the sides they had just left and logged a second change
+    // at the same score (stress test 2026-10-25)
+    const switchAt = (Number(modal.team1Points) || 0) + (Number(modal.team2Points) || 0)
+    if (courtSwitchMadeAt(await db.events.where('matchId').equals(matchId).toArray(), setIndex, switchAt)) {
+      console.log('[COURT_SWITCH] Set', setIndex, 'at', switchAt, 'already switched (in another tab) - nothing to write')
+      return
+    }
+
     const teamAKey = data.match.coinTossTeamA || 'team1'
     const teamBKey = teamAKey === 'team1' ? 'team2' : 'team1'
 
@@ -7940,9 +8130,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       actions: {
         undo: showUndoConfirm,
         menu: () => setPhoneMenuOpen(true),
-        point: (side) => handlePoint(side),
+        point: (side) => tapPoint(side),
         // The desktop button hands its click event over too
-        startRally: () => handleStartRally(),
+        startRally: () => tapStartRally(),
         timeout: (teamKey) => handleTimeout(teamKey),
         teamBmp: (teamKey) => handleTeamBMP(teamKey),
         refereeBmp: handleRefereeBMP,
@@ -10473,7 +10663,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   return (
                                     <button
                                       className={cn('rally-btn start', SB_RALLY_START)}
-                                      onClick={() => handleStartRally()}
+                                      onClick={() => tapStartRally()}
                                       style={{ padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'max(64px, calc(92px * var(--scale-factor, 1)))' }}
                                     >
                                       {t('scoreboard.buttons.startSet', 'Start set')} {(data?.set?.index || 1)}
@@ -10485,7 +10675,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 return (
                                   <button
                                     className={cn('rally-btn start', SB_RALLY_START)}
-                                    onClick={() => handleStartRally()}
+                                    onClick={() => tapStartRally()}
                                     disabled={data?.match?.status === 'complete' || set3TossPending}
                                     title={set3TossPending ? t('scoreboard.set3TossFirst', 'Record the set 3 coin toss first') : undefined}
                                     style={{ padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'max(64px, calc(92px * var(--scale-factor, 1)))' }}
@@ -10520,14 +10710,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   )}
                                   <button
                                     className={cn('rally-point-button tabular-nums', SB_RALLY_POINT)}
-                                    onClick={() => handlePoint('left')}
+                                    onClick={() => tapPoint('left')}
                                     style={rallyRowButton(scaleFactor, 'point')}
                                   >
                                     {t('scoreboard.buttons.pointTeam', { team: teamALabel || teamAShortName })}
                                   </button>
                                   <button
                                     className={cn('rally-point-button tabular-nums', SB_RALLY_POINT)}
-                                    onClick={() => handlePoint('right')}
+                                    onClick={() => tapPoint('right')}
                                     style={rallyRowButton(scaleFactor, 'point')}
                                   >
                                     {t('scoreboard.buttons.pointTeam', { team: teamBLabel || teamBShortName })}
@@ -15629,7 +15819,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               }`
           }
           open={true}
+          // Resolved only by its outcome (Player recovered, or the forfeit):
+          // no × that does nothing (it was shown, announced as "Close")
           onClose={() => {}}
+          hideCloseButton={true}
           width={400}
         >
           <div style={{ padding: '24px', textAlign: 'center' }}>
@@ -16206,27 +16399,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             </p>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
               <button
-                onClick={async () => {
-                  // Mark the set as not finished
-                  await db.sets.update(reopenSetConfirm.setId, { finished: false })
-
-                  // Delete all subsequent sets
-                  const allSets = await db.sets.where('matchId').equals(matchId).toArray()
-                  const setsToDelete = allSets.filter(s => s.index > reopenSetConfirm.setIndex)
-                  for (const s of setsToDelete) {
-                    // Delete events for this set
-                    await db.events.where('matchId').equals(matchId).and(e => e.setIndex === s.index).delete()
-                    // Delete the set
-                    await db.sets.delete(s.id)
-                  }
-
-                  // Update match status back to 'live' if it was 'final'
-                  if (data.match?.status === 'final') {
-                    await db.matches.update(matchId, { status: 'live' })
-                  }
-
-                  setReopenSetConfirm(null)
-                }}
+                onClick={() => { confirmReopenSet().catch(() => {}) }}
                 style={{
                   padding: '12px 24px',
                   fontSize: '14px',
@@ -17641,10 +17814,10 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
       return
     }
     setIsConfirming(true)
-    // Get the date component from defaultTime and combine with entered time
-    const { date } = splitLocalDateTime(defaultTime)
-    // Convert local time to UTC ISO string
-    const isoString = parseLocalDateTimeToISO(date, time)
+    // The entered local time on defaultTime's date, as UTC ISO: the reading
+    // nearest the proposed time, so the hour the clocks go back is not
+    // taken for the hour before (localTimeNear)
+    const isoString = localTimeNear(defaultTime, time)
     onConfirm(isoString)
   }
 

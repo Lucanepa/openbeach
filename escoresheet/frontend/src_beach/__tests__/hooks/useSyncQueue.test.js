@@ -434,6 +434,23 @@ describe('runQueuePass', () => {
     ])
   })
 
+  // Manual changes > Reopen set removes the later sets: their rows go in the
+  // cloud too, or the set played again got a second row (stress 2026-10-25)
+  it('removes a set from the cloud, scoped to its match', async () => {
+    fakeDb.sync_queue.reset([
+      { id: 1, resource: 'set', action: 'delete', status: 'queued', payload: { external_id: 'match_100_aaa:s:6' } }
+    ])
+
+    await runQueuePass()
+
+    expect(fakeDb.sync_queue.map.get(1).status).toBe('sent')
+    const del = api.calls.find(c => c.table === 'sets' && c.action === 'delete')
+    expect(del.filters).toEqual([
+      ['eq', 'match_id', MATCH_UUID],
+      ['in', 'external_id', ['match_100_aaa:s:6', '6']]
+    ])
+  })
+
   it('drops a set/event job that cannot be attributed to a match', async () => {
     fakeDb.sync_queue.reset([
       { id: 1, resource: 'event', action: 'insert', status: 'queued', payload: { external_id: '41' } }

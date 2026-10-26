@@ -57,7 +57,8 @@ describe('confirmation dialogs close before they write and refuse a double tap',
 
   it('a failed write after the dialog closed is shown to the scorer', () => {
     const b = between('const onConfirmFailed = useCallback(', '}, [showAlert, t])')
-    expect(b).toContain("showAlert(t('scoreboard.confirmFailed'), 'error')")
+    // (the device's storage full says so: scoreboard.storageFull)
+    expect(b).toContain("showAlert(isStorageFullError(err) ? t('scoreboard.storageFull') : t('scoreboard.confirmFailed'), 'error')")
   })
 })
 

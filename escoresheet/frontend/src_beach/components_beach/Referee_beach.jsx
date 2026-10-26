@@ -36,6 +36,7 @@ import { db } from '../db_beach/db_beach'
 import TestModeControls from './TestModeControls_beach'
 import SimpleHeader from './SimpleHeader_beach'
 import DonutCountdown from './DonutCountdown_beach'
+import { monotonicNow, elapsedWhenSent, elapsedOnJoin, countdownAnchor, secondsLeft, TEAM_TIMEOUT_SECONDS, TTO_SECONDS } from '../utils_beach/countdownClock_beach'
 import { supabase } from '../lib_beach/supabaseClient_beach'  // Realtime only
 import { apiFrom } from '../lib_beach/apiClient_beach'
 import { isBackendAvailable, isVenueMode } from '../utils_beach/backendConfig_beach'
@@ -290,6 +291,16 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   const [lastEvent, setLastEvent] = useState(null) // { type, team, data, timestamp }
   const intervalDismissedRef = useRef(false) // Track when interval was manually dismissed
   const setIntervalDuration = 60 // 1 minute for beach volleyball (FIVB standard)
+  // The countdowns as shown, for the database channel's handler: its effect
+  // does not rerun on them, so it read the ones of its mount (none) and every
+  // row of a running time-out restarted it, with the row's length (30 s
+  // where the relay action had said 45: stress test 2026-10-25)
+  const timeoutModalRef = useRef(null)
+  const ttoModalRef = useRef(null)
+  const betweenSetsCountdownRef = useRef(null)
+  useEffect(() => { timeoutModalRef.current = timeoutModal }, [timeoutModal])
+  useEffect(() => { ttoModalRef.current = ttoModal }, [ttoModal])
+  useEffect(() => { betweenSetsCountdownRef.current = betweenSetsCountdown }, [betweenSetsCountdown])
   const [peekingLineup, setPeekingLineup] = useState({ left: false, right: false }) // Track which team's lineup is being peeked
 
   // Reset peeking state on any mouseup/touchend (since overlay disappears when peeking)
@@ -545,6 +556,9 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
   // Track consecutive fetch failures to detect deleted matches
   const fetchFailureCountRef = useRef(0)
   const MAX_FETCH_FAILURES = 3 // After 3 consecutive failures, assume match is deleted
+  // Failed reads in a row that were not "no such match" (the backend's
+  // per-IP limits, the network): the row-triggered refetch backs off on them
+  const fetchTroubleCountRef = useRef(0)
 
   // Force fetch fresh data from server
   const fetchFreshData = useCallback(async () => {
@@ -563,12 +577,19 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       if (seq !== fetchSeqRef.current || lastPushAtRef.current > startedAt) return
       if (result && result.success) {
         fetchFailureCountRef.current = 0 // Reset on success
+        fetchTroubleCountRef.current = 0
         updateMatchDataState(result)
         console.debug('[Referee] Updated match data:', {
           currentSet: result.sets?.find(s => !s.finished)?.index,
           team1Points: result.sets?.find(s => !s.finished)?.team1Points,
           team2Points: result.sets?.find(s => !s.finished)?.team2Points
         })
+      } else if (result?.error && result.error !== 'Match not found') {
+        // The read failed (rate limited, offline): not a sign the match is
+        // gone. Under the venue's per-IP limits three such answers in a row
+        // took the referee out of a running match.
+        fetchTroubleCountRef.current++
+        console.warn('[Referee] Fetch failed, the match stays:', result.error)
       } else {
         // Match not found or fetch failed
         fetchFailureCountRef.current++
@@ -578,13 +599,55 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         }
       }
     } catch (err) {
-      fetchFailureCountRef.current++
-      console.error(`[Referee] Error fetching fresh data (${fetchFailureCountRef.current}/${MAX_FETCH_FAILURES}):`, err)
-      if (fetchFailureCountRef.current >= MAX_FETCH_FAILURES) {
-        if (onExit) onExit()
-      }
+      // A thrown read (the network): the match stays, as above
+      fetchTroubleCountRef.current++
+      console.error('[Referee] Error fetching fresh data:', err)
     }
   }, [matchId, updateMatchDataState, isMasterMode, onExit])
+
+  // The database channel's rows (one per change of the scorer's live state:
+  // every point, every rally start) each refetched the whole match at once:
+  // 3 tablets made about 1600 reads in 2.3 minutes, 455 of 676 relay reads
+  // got 429, and the scorer's own reads in the same per-IP budget were
+  // refused, so its live-state pushes were dropped (stress test 2026-10-25,
+  // fast scoring behind one venue IP). A row now asks for one read:
+  // - While the relay pushes the bundle (one came in RELAY_PUSHING_MS), the
+  //   push brings what the row announces: a read only if none has come
+  //   ROW_REFETCH_FALLBACK_MS after the row.
+  // - Otherwise at once, but never two in ROW_REFETCH_GAP_MS: the rows in
+  //   between get one read after the gap.
+  // - After failed reads (rate limited, offline) the gap doubles, up to
+  //   ROW_REFETCH_MAX_GAP_MS, until a read succeeds.
+  const RELAY_PUSHING_MS = 15000
+  const ROW_REFETCH_FALLBACK_MS = 2500
+  const ROW_REFETCH_GAP_MS = 1500
+  const ROW_REFETCH_MAX_GAP_MS = 30000
+  const rowRefetchTimerRef = useRef(null)
+  const lastRowRefetchAtRef = useRef(0)
+  const fetchFreshDataRef = useRef(fetchFreshData)
+  fetchFreshDataRef.current = fetchFreshData
+  const requestRowRefetch = useCallback(() => {
+    if (rowRefetchTimerRef.current) return // one read is due: it covers this row
+    const rowAt = Date.now()
+    const run = () => {
+      rowRefetchTimerRef.current = null
+      lastRowRefetchAtRef.current = Date.now()
+      fetchFreshDataRef.current()
+    }
+    if (rowAt - lastPushAtRef.current < RELAY_PUSHING_MS) {
+      rowRefetchTimerRef.current = setTimeout(() => {
+        rowRefetchTimerRef.current = null
+        if (lastPushAtRef.current >= rowAt) return
+        run()
+      }, ROW_REFETCH_FALLBACK_MS)
+      return
+    }
+    const gap = Math.min(ROW_REFETCH_GAP_MS * (2 ** fetchTroubleCountRef.current), ROW_REFETCH_MAX_GAP_MS)
+    const wait = lastRowRefetchAtRef.current + gap - rowAt
+    if (wait <= 0) run()
+    else rowRefetchTimerRef.current = setTimeout(run, wait)
+  }, [])
+  useEffect(() => () => { if (rowRefetchTimerRef.current) clearTimeout(rowRefetchTimerRef.current) }, [])
 
   // Handle realtime data updates
   const handleRealtimeData = useCallback((result) => {
@@ -624,8 +687,13 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     setData(prev => (prev ? { ...prev, liveState: tracker.newest } : prev))
   }, [updateMatchDataState])
 
-  // Handle realtime actions (timeout, set_end)
-  const handleRealtimeAction = useCallback((action, actionData) => {
+  // Handle realtime actions (timeout, set_end). The countdowns they start
+  // run on this tablet's own clock (utils_beach/countdownClock_beach): their
+  // start is the scorer's clock, as is the action's send time (meta.sentAt,
+  // the relay's _scoreboardTimestamp), and the difference of the two is how
+  // long the countdown had run when it was sent. Counted against this
+  // tablet's Date.now(), a tablet 150 s slow showed 173, one fast none.
+  const handleRealtimeAction = useCallback((action, actionData, meta = {}) => {
     const receiveTimestamp = Date.now()
 
     if (action === 'timeout') {
@@ -636,11 +704,14 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
         receiveTimestamp
       })
       timeoutActiveRef.current = true
+      const duration = actionData.countdown || TEAM_TIMEOUT_SECONDS
       const newTimeoutModal = {
         team: actionData.team,
-        countdown: actionData.countdown || 30,
+        countdown: duration,
+        // the scorer's clock: which time-out this is (the database row's is compared)
         startTimestamp: actionData.startTimestamp || Date.now(), // Fallback for backward compat
-        initialCountdown: actionData.countdown || 30,
+        anchor: countdownAnchor(elapsedWhenSent(actionData.startTimestamp, meta?.sentAt, duration * 1000)),
+        initialCountdown: duration,
         started: true
       }
       setTimeoutModal(newTimeoutModal)
@@ -665,10 +736,12 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       } else {
         // The scorer's break runs: no longer dismissed
         intervalDismissedRef.current = false
+        const duration = actionData.countdown || setIntervalDuration
         setBetweenSetsCountdown({
-          countdown: actionData.countdown || 60,
+          countdown: duration,
           startTimestamp: actionData.startTimestamp || Date.now(), // Fallback for backward compat
-          initialCountdown: actionData.countdown || 60,
+          anchor: countdownAnchor(elapsedWhenSent(actionData.startTimestamp, meta?.sentAt, duration * 1000)),
+          initialCountdown: duration,
           started: true,
           setIndex: actionData.setIndex,
           winner: actionData.winner
@@ -687,10 +760,12 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       setShowIntervalModal(false)
     } else if (action === 'tto') {
       ttoActiveRef.current = true
+      const duration = actionData.countdown || TTO_SECONDS
       setTtoModal({
-        countdown: actionData.countdown || 45,
+        countdown: duration,
         startTimestamp: actionData.startTimestamp || Date.now(),
-        initialCountdown: actionData.countdown || 45,
+        anchor: countdownAnchor(elapsedWhenSent(actionData.startTimestamp, meta?.sentAt, duration * 1000)),
+        initialCountdown: duration,
         started: true
       })
     } else if (action === 'end_tto') {
@@ -799,7 +874,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     if (isMasterMode || !matchId) return undefined
     return subscribeToMatchData(matchId, (msg) => {
       if (!msg) return
-      if (msg._action) handleRealtimeAction(msg._action, msg._actionData)
+      // with the scorer's clock when it sent an action (countdownClock_beach)
+      if (msg._action) handleRealtimeAction(msg._action, msg._actionData, { sentAt: msg._scoreboardTimestamp })
       else if (msg._liveState) handleRelayLiveState(msg._liveState)
       else if (msg.match) handleRealtimeData({ success: true, ...msg })
     })
@@ -925,14 +1001,19 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
             const serverStartTs = state.timeout_started_at ? new Date(state.timeout_started_at).getTime() : Date.now()
 
             // Only update/start if not already tracking THIS timeout (compare start timestamps)
-            if (!timeoutModal || Math.abs(timeoutModal.startTimestamp - serverStartTs) > 2000) {
+            const currentTimeout = timeoutModalRef.current
+            if (!currentTimeout || Math.abs(currentTimeout.startTimestamp - serverStartTs) > 2000) {
               const team = getTeamFromSide(state.last_event_team)
+              const duration = state.last_event_data?.duration || TEAM_TIMEOUT_SECONDS
               timeoutActiveRef.current = true
               setTimeoutModal({
                 team,
-                countdown: state.last_event_data?.duration || 30,
+                countdown: duration,
                 startTimestamp: serverStartTs,
-                initialCountdown: state.last_event_data?.duration || 30,
+                // on this tablet's clock: the row's start and its push time
+                // (updated_at) are both the scorer's
+                anchor: countdownAnchor(elapsedWhenSent(state.timeout_started_at, state.updated_at, duration * 1000)),
+                initialCountdown: duration,
                 started: true
               })
               setShowTimeoutModal(true)
@@ -956,12 +1037,14 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           })
           if (state.tto_active) {
             const serverStartTs = state.tto_started_at ? new Date(state.tto_started_at).getTime() : Date.now()
-            if (!ttoModal || Math.abs(ttoModal.startTimestamp - serverStartTs) > 2000) {
+            const currentTto = ttoModalRef.current
+            if (!currentTto || Math.abs(currentTto.startTimestamp - serverStartTs) > 2000) {
               ttoActiveRef.current = true
               setTtoModal({
-                countdown: 45,
+                countdown: TTO_SECONDS,
                 startTimestamp: serverStartTs,
-                initialCountdown: 45,
+                anchor: countdownAnchor(elapsedWhenSent(state.tto_started_at, state.updated_at, TTO_SECONDS * 1000)),
+                initialCountdown: TTO_SECONDS,
                 started: true
               })
             }
@@ -1011,12 +1094,14 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
               // Only update if not already tracking this interval, and never
               // revive one the scorer already ended (end_interval)
+              const currentInterval = betweenSetsCountdownRef.current
               if (!intervalDismissedRef.current &&
-                  (!betweenSetsCountdown || Math.abs(betweenSetsCountdown.startTimestamp - serverStartTs) > 2000)) {
+                  (!currentInterval || Math.abs(currentInterval.startTimestamp - serverStartTs) > 2000)) {
                 setBetweenSetsCountdown({
-                  countdown: 60,
+                  countdown: setIntervalDuration,
                   startTimestamp: serverStartTs,
-                  initialCountdown: 60,
+                  anchor: countdownAnchor(elapsedWhenSent(state.set_interval_started_at, state.updated_at, setIntervalDuration * 1000)),
+                  initialCountdown: setIntervalDuration,
                   started: true,
                   setIndex: state.last_event_data?.setIndex || state.current_set,
                   winner: state.last_event_data?.winner
@@ -1055,7 +1140,8 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
           } else {
             showLastEvent()
           }
-          fetchFreshData()
+          // one read for a burst of rows, none while the relay pushes
+          requestRowRefetch()
         }
       )
       // A transport of its own: the offline warning counts it (linkDown)
@@ -1067,14 +1153,17 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
       dbChannelUpRef.current = false
       supabase.removeChannel(channel)
     }
-  }, [supabaseMatchUuid, isMasterMode, data?.match?.coinTossTeamA, fetchFreshData, updateMatchDataState])
+  }, [supabaseMatchUuid, isMasterMode, data?.match?.coinTossTeamA, requestRowRefetch, updateMatchDataState])
 
   // Handle timeout countdown timer
   useEffect(() => {
     if (!timeoutModal || !timeoutModal.started) return
 
     const startTimestamp = timeoutModal.startTimestamp
-    const initialCountdown = timeoutModal.initialCountdown || 30
+    const initialCountdown = timeoutModal.initialCountdown || TEAM_TIMEOUT_SECONDS
+    // On this tablet's monotonic clock (the anchor set on receipt; without
+    // one, from the start as this tablet's clock sees it, within the length)
+    const anchor = timeoutModal.anchor ?? countdownAnchor(Math.min(Math.max(0, Date.now() - startTimestamp), initialCountdown * 1000))
 
     if (timeoutModal.countdown <= 0) {
       // Don't auto-clear here, wait for tick to hit 0 to avoid rapid state flickering
@@ -1084,14 +1173,12 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
     // Update every 100ms for smooth visuals
     const timer = setInterval(() => {
-      const now = Date.now()
-      const elapsed = Math.floor((now - startTimestamp) / 1000)
-      const remaining = Math.max(0, initialCountdown - elapsed)
+      const remaining = secondsLeft(anchor, initialCountdown)
 
       if (remaining <= 0) {
         // If it was already 0 for a bit, clear it
         setTimeoutModal(prev => {
-          if (prev && prev.countdown === 0 && (Date.now() - (prev.startTimestamp + prev.initialCountdown * 1000)) > 2000) {
+          if (prev && prev.countdown === 0 && (monotonicNow() - (anchor + initialCountdown * 1000)) > 2000) {
             return null
           }
           if (!prev) return null
@@ -1108,7 +1195,44 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     }, 100)
 
     return () => clearInterval(timer)
-  }, [timeoutModal?.started, timeoutModal?.startTimestamp, timeoutModal?.initialCountdown])
+  }, [timeoutModal?.started, timeoutModal?.startTimestamp, timeoutModal?.anchor, timeoutModal?.initialCountdown])
+
+  // A referee that opens, or reloads, while a time-out runs: the countdown
+  // from the live state it loads. It started only on a change of the live
+  // state or on the scorer's action, and none comes during a time-out: a
+  // tablet that joined or was reloaded in it showed no time-out (stress test
+  // 2026-10-25). Only a time-out this tablet has not shown yet: the
+  // database and the relay's actions start, run and end the others.
+  const shownTimeoutStartsRef = useRef([])
+  useEffect(() => {
+    if (timeoutModal?.startTimestamp) shownTimeoutStartsRef.current = [...shownTimeoutStartsRef.current.slice(-9), timeoutModal.startTimestamp]
+  }, [timeoutModal?.startTimestamp])
+  const loadedLiveState = data?.liveState
+  const loadedTeamAKey = data?.match?.coinTossTeamA
+  useEffect(() => {
+    const state = loadedLiveState
+    if (isMasterMode || !state?.timeout_active || !state.timeout_started_at) return
+    const startTs = new Date(state.timeout_started_at).getTime()
+    if (!Number.isFinite(startTs) || timeoutModalRef.current) return
+    if (shownTimeoutStartsRef.current.some(ts => Math.abs(ts - startTs) <= 2000)) return
+    const duration = (state.last_event_type === 'timeout' && state.last_event_data?.duration) || TEAM_TIMEOUT_SECONDS
+    const elapsed = elapsedOnJoin(state.timeout_started_at, state.updated_at, duration * 1000)
+    if (elapsed >= duration * 1000) return
+    const team1OnLeft = ((state.side_a || 'left') === 'left') === ((loadedTeamAKey || 'team1') === 'team1')
+    const team = state.last_event_type === 'timeout'
+      ? (state.last_event_team === 'left' ? (team1OnLeft ? 'team1' : 'team2') : (team1OnLeft ? 'team2' : 'team1'))
+      : null
+    timeoutActiveRef.current = true
+    setTimeoutModal({
+      team,
+      countdown: duration,
+      startTimestamp: startTs,
+      anchor: countdownAnchor(elapsed),
+      initialCountdown: duration,
+      started: true
+    })
+    setShowTimeoutModal(true)
+  }, [loadedLiveState, loadedTeamAKey, isMasterMode])
 
   // Handle TTO countdown timer (45 seconds). 45 s on purpose, like the team
   // time-out (the whistle at 45 s, Swiss practice; FIVB 15.4.1/15.4.2 say 30 s):
@@ -1117,16 +1241,16 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     if (!ttoModal || !ttoModal.started) return
 
     const startTimestamp = ttoModal.startTimestamp
-    const initialCountdown = ttoModal.initialCountdown || 45
+    const initialCountdown = ttoModal.initialCountdown || TTO_SECONDS
+    // On this tablet's monotonic clock, as the time-out's
+    const anchor = ttoModal.anchor ?? countdownAnchor(Math.min(Math.max(0, Date.now() - startTimestamp), initialCountdown * 1000))
 
     const timer = setInterval(() => {
-      const now = Date.now()
-      const elapsed = Math.floor((now - startTimestamp) / 1000)
-      const remaining = Math.max(0, initialCountdown - elapsed)
+      const remaining = secondsLeft(anchor, initialCountdown)
 
       if (remaining <= 0) {
         setTtoModal(prev => {
-          if (prev && prev.countdown === 0 && (Date.now() - (prev.startTimestamp + prev.initialCountdown * 1000)) > 2000) {
+          if (prev && prev.countdown === 0 && (monotonicNow() - (anchor + initialCountdown * 1000)) > 2000) {
             ttoActiveRef.current = false
             return null
           }
@@ -1143,7 +1267,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     }, 100)
 
     return () => clearInterval(timer)
-  }, [ttoModal?.started, ttoModal?.startTimestamp, ttoModal?.initialCountdown])
+  }, [ttoModal?.started, ttoModal?.startTimestamp, ttoModal?.anchor, ttoModal?.initialCountdown])
 
   // MTO / RIT: rebuilt from the events (reconnect, a missed action, an
   // undone start), and its countdown ticks while it runs
@@ -1796,10 +1920,11 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     // AND it wasn't manually dismissed
     if (isBetweenSets && betweenSetsCountdown === null && !intervalDismissedRef.current) {
       setBetweenSetsCountdown({
-        countdown: 60,
+        countdown: setIntervalDuration,
         started: true,
         startTimestamp: Date.now(),
-        initialCountdown: 60
+        anchor: countdownAnchor(0),
+        initialCountdown: setIntervalDuration
       })
       setShowIntervalModal(true)
     } else if (!isBetweenSets) {
@@ -1815,17 +1940,17 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     if (!betweenSetsCountdown || !betweenSetsCountdown.started) return
 
     const startTimestamp = betweenSetsCountdown.startTimestamp || Date.now()
-    const initialCountdown = betweenSetsCountdown.initialCountdown || 60
+    const initialCountdown = betweenSetsCountdown.initialCountdown || setIntervalDuration
+    // On this tablet's monotonic clock, as the time-out's
+    const anchor = betweenSetsCountdown.anchor ?? countdownAnchor(Math.min(Math.max(0, Date.now() - startTimestamp), initialCountdown * 1000))
 
     // Update every 100ms for smooth visuals
     const timer = setInterval(() => {
-      const now = Date.now()
-      const elapsed = Math.floor((now - startTimestamp) / 1000)
-      const remaining = Math.max(0, initialCountdown - elapsed)
+      const remaining = secondsLeft(anchor, initialCountdown)
 
       if (remaining <= 0) {
         setBetweenSetsCountdown(prev => {
-          if (prev && prev.countdown === 0 && (Date.now() - (prev.startTimestamp + prev.initialCountdown * 1000)) > 2000) {
+          if (prev && prev.countdown === 0 && (monotonicNow() - (anchor + initialCountdown * 1000)) > 2000) {
             return prev // Keep it at 0
           }
           if (!prev) return null
@@ -1841,7 +1966,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
     }, 100)
 
     return () => clearInterval(timer)
-  }, [betweenSetsCountdown?.started, betweenSetsCountdown?.startTimestamp, betweenSetsCountdown?.initialCountdown])
+  }, [betweenSetsCountdown?.started, betweenSetsCountdown?.startTimestamp, betweenSetsCountdown?.anchor, betweenSetsCountdown?.initialCountdown])
 
   // Check if match is waiting for coin toss (status is 'setup' or no data yet)
   // This must be checked BEFORE the !data return to show awaiting screen
@@ -2979,7 +3104,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
               {timeoutModal ? (
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: '20px', color: 'var(--ov-text-muted)', fontWeight: 600, marginBottom: '4px' }}>TIMEOUT</div>
-                  <DonutCountdown current={timeoutModal.countdown} total={45} size={130} strokeWidth={6}>
+                  <DonutCountdown current={timeoutModal.countdown} total={timeoutModal.initialCountdown || TEAM_TIMEOUT_SECONDS} size={130} strokeWidth={6}>
                     <div style={{ fontSize: vmin(5), fontFamily: getScoreFont(), fontWeight: 600, color: timeoutModal.countdown <= 10 ? 'var(--ov-danger-text)' : 'var(--ov-success)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
                       {timeoutModal.countdown}"
                     </div>
@@ -2998,7 +3123,7 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
                     <strong style={{ fontSize: '16px', color: 'var(--ov-text)', fontVariantNumeric: 'tabular-nums' }}>{leftPoints} - {rightPoints}</strong>
                     <span style={{ background: rightColor, ...TEAM_COLOUR_MARK, color: isLightColour(rightColor) ? '#000' : '#fff', boxShadow: 'inset 0 0 0 1px rgb(0 0 0 / 0.12)', padding: '1px 5px', borderRadius: '3px', fontSize: '11px', fontWeight: 700 }}>{rightLabel}</span>
                   </div>
-                  <DonutCountdown current={ttoModal.countdown} total={45} size={130} strokeWidth={6}>
+                  <DonutCountdown current={ttoModal.countdown} total={ttoModal.initialCountdown || TTO_SECONDS} size={130} strokeWidth={6}>
                     <div style={{ fontSize: vmin(5), fontFamily: getScoreFont(), fontWeight: 600, color: ttoModal.countdown <= 10 ? 'var(--ov-danger-text)' : 'var(--ov-success)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
                       {ttoModal.countdown}"
                     </div>

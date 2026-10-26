@@ -81,11 +81,13 @@ async function startSet() {
 // Team A wins the rally in play (the first one is started by startSet)
 async function pointA() {
   const before = (await ofType('point')).length
+  await settle()
   fireEvent.click(button('Point A'))
   await waitFor(async () => expect((await ofType('point')).length).toBe(before + 1))
 }
 async function startRally() {
   await waitFor(() => expect(button('Start rally')).toBeTruthy())
+  await settle()
   fireEvent.click(button('Start rally'))
   await waitFor(() => expect(button('Point A')).toBeTruthy())
 }

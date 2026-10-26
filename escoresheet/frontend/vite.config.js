@@ -7,6 +7,7 @@ import { readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, resolve } from 'path'
 import { PWA_INCLUDE_ASSETS, PWA_ICONS, THEME_COLOR } from './pwa-icons.js'
+import { IGNORE_URL_PARAMETERS } from './pwa-workbox.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -107,6 +108,9 @@ export default defineConfig({
         // code links) opened the scoretable once the worker was installed.
         // The subdomain builds (scripts/build-subdomains.js) do the same.
         navigateFallback: null,
+        // A page the app opens with a query (?mode=local, ?action=print,
+        // ?cache_bust=..) is its precached file, offline too (pwa-workbox.js)
+        ignoreURLParametersMatching: IGNORE_URL_PARAMETERS,
         // Use NetworkFirst for API calls, but CacheFirst for assets
         runtimeCaching: [
           {

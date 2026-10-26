@@ -77,6 +77,14 @@ export function staleCourtSwitches(events, setIndex, total, match) {
 }
 
 /**
+ * Whether the change of courts at `total` points of set `setIndex` is made
+ * (its `court_switch` logged at that score).
+ */
+export function courtSwitchMadeAt(events, setIndex, total) {
+  return inSet(events, setIndex).some(e => e.type === 'court_switch' && switchTotal(e) === total)
+}
+
+/**
  * The match fields that put the teams back where they were before the stale
  * changes `stale` (oldest first): the sides saved by the oldest one, or, for
  * one logged without them, the side flipped once per change.
@@ -146,7 +154,7 @@ export function pendingCourtDialog(events, set, match) {
   const ending = (team1 >= toWin && team1 - team2 >= 2) || (team2 >= toWin && team2 - team1 >= 2)
   if (ending || total === 0 || total % courtChangeInterval(setIndex) !== 0) return null
   const setEvents = inSet(events, setIndex)
-  if (setEvents.some(e => e.type === 'court_switch' && switchTotal(e) === total)) return null
+  if (courtSwitchMadeAt(setEvents, setIndex, total)) return null
   if (hasTto(setIndex) && total === TTO_TOTAL) {
     const tto = setEvents.some(e => e.type === 'technical_to')
     if (tto && !pendingTto(events, setIndex, match)) return null

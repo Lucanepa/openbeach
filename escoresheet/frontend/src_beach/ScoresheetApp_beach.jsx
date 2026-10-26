@@ -37,6 +37,39 @@ const getPdfObjectUrl = async (path) => {
   return URL.createObjectURL(blob)
 }
 
+// The backend lists a folder a page at a time (limit, at most 1000; offset):
+// every entry of `path`, page after page. A single call of 50 showed about 16
+// matches of a day (each stores 3 files, cut by name: game1, game10..19,
+// game2..) and dropped the rest without a word (stress test 2026-10-25).
+const LIST_PAGE = 1000
+const listAll = async (path, options = {}) => {
+  const entries = []
+  for (let offset = 0; ; offset += LIST_PAGE) {
+    const { data, error } = await apiStorage
+      .from('scoresheets')
+      .list(path, { ...options, limit: LIST_PAGE, offset })
+    if (error) return { data: null, error }
+    entries.push(...(data || []))
+    if (!data || data.length < LIST_PAGE) return { data: entries, error: null }
+  }
+}
+
+// Map `items` through `fn` with at most `limit` calls running (the archive
+// reads each match's final JSON: all of them at once is a burst on the
+// backend's per-IP storage budget)
+const mapLimited = async (items, limit, fn) => {
+  const results = new Array(items.length)
+  let next = 0
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++
+      results[i] = await fn(items[i])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return results
+}
+
 // Extract team name from scoresheet JSON, checking all possible key formats
 const extractTeamName = (json, teamNum) => {
   const team = json[`team${teamNum}Team`] || json[`team_${teamNum}Team`] || json[`team${teamNum}`]
@@ -53,9 +86,7 @@ const fetchAllScoresheets = async () => {
     }
 
     // List all date folders under beach/ in the scoresheets bucket
-    const { data: folders, error: foldersError } = await apiStorage
-      .from('scoresheets')
-      .list(BEACH_SCORESHEET_PREFIX, { limit: 100, sortBy: { column: 'name', order: 'desc' } })
+    const { data: folders, error: foldersError } = await listAll(BEACH_SCORESHEET_PREFIX, { sortBy: { column: 'name', order: 'desc' } })
 
     if (foldersError) {
       console.error('[Scoresheet] Error listing folders:', foldersError)
@@ -68,9 +99,7 @@ const fetchAllScoresheets = async () => {
     for (const folder of folders || []) {
       if (!folder.name || folder.name.startsWith('.')) continue
 
-      const { data: files, error: filesError } = await apiStorage
-        .from('scoresheets')
-        .list(inBeachFolder(folder.name), { limit: 50 })
+      const { data: files, error: filesError } = await listAll(inBeachFolder(folder.name))
 
       if (filesError) {
         console.error(`[Scoresheet] Error listing files in ${folder.name}:`, filesError)
@@ -90,53 +119,52 @@ const fetchAllScoresheets = async () => {
           date: folder.name,
           game: parsed.game,
           path: inBeachFolder(`${folder.name}/${file.name}`),
+          pdfName: fileNames.has(parsed.pdfName) ? parsed.pdfName : null,
           pdfPath: fileNames.has(parsed.pdfName) ? inBeachFolder(`${folder.name}/${parsed.pdfName}`) : null
         })
       }
     }
 
     // Fetch metadata for each scoresheet (team names, score, grouping fields)
-    const enrichedScoresheets = await Promise.all(
-      scoresheets.slice(0, 50).map(async (item) => {
-        try {
-          const { data, error } = await apiStorage
-            .from('scoresheets')
-            .download(item.path)
+    const enrichedScoresheets = await mapLimited(scoresheets, 6, async (item) => {
+      try {
+        const { data, error } = await apiStorage
+          .from('scoresheets')
+          .download(item.path)
 
-          if (error || !data) return null
+        if (error || !data) return null
 
-          const text = await data.text()
-          const json = JSON.parse(text)
+        const text = await data.text()
+        const json = JSON.parse(text)
 
-          console.log(`[Scoresheet] ${item.path} → sport_type: "${json.match?.sport_type}"`)
+        console.log(`[Scoresheet] ${item.path} → sport_type: "${json.match?.sport_type}"`)
 
-          // Only show beach volleyball scoresheets — sport_type MUST be 'beach'
-          if (json.match?.sport_type !== 'beach') {
-            console.warn(`[Scoresheet] FILTERED OUT ${item.path} (sport_type="${json.match?.sport_type}")`)
-            return null
-          }
-
-          const match = json.match || {}
-
-          return {
-            ...item,
-            team1: extractTeamName(json, 1),
-            team2: extractTeamName(json, 2),
-            finalScore: match.final_score || '',
-            uploadedAt: json.uploadedAt,
-            // Grouping fields
-            competition: match.eventName || match.league || '',
-            gender: match.matchGender || match.gender || match.match_type_2 || '',
-            phase: match.matchPhase || match.phase || '',
-            round: match.matchRound || match.round || '',
-            scheduledAt: match.scheduledAt || '',
-            gameN: parseInt(match.game_n || match.gameNumber || item.game, 10) || 0
-          }
-        } catch {
+        // Only show beach volleyball scoresheets — sport_type MUST be 'beach'
+        if (json.match?.sport_type !== 'beach') {
+          console.warn(`[Scoresheet] FILTERED OUT ${item.path} (sport_type="${json.match?.sport_type}")`)
           return null
         }
-      })
-    )
+
+        const match = json.match || {}
+
+        return {
+          ...item,
+          team1: extractTeamName(json, 1),
+          team2: extractTeamName(json, 2),
+          finalScore: match.final_score || '',
+          uploadedAt: json.uploadedAt,
+          // Grouping fields
+          competition: match.eventName || match.league || '',
+          gender: match.matchGender || match.gender || match.match_type_2 || '',
+          phase: match.matchPhase || match.phase || '',
+          round: match.matchRound || match.round || '',
+          scheduledAt: match.scheduledAt || '',
+          gameN: parseInt(match.game_n || match.gameNumber || item.game, 10) || 0
+        }
+      } catch {
+        return null
+      }
+    })
 
     return enrichedScoresheets.filter(Boolean)
   } catch (error) {
@@ -145,13 +173,32 @@ const fetchAllScoresheets = async () => {
   }
 }
 
-// Get URL parameters
+// Get URL parameters (file: the PDF's name in the date folder)
 const getUrlParams = () => {
   const params = new URLSearchParams(window.location.search)
   const date = params.get('date')
   const game = params.get('game')
-  return { date, game }
+  const file = params.get('file')
+  return { date, game, file }
 }
+
+/**
+ * The stored PDF a View PDF link opens: the file the list found
+ * (game{n}_{seed}.pdf: every match since the seed key; game numbers repeat
+ * across tournaments and accounts), else, for a link without one, the old
+ * game{n}.pdf. Only a plain file name of the date folder is taken.
+ * @param {{ date: string, game?: string, file?: string|null }} params
+ */
+export const archivePdfPath = ({ date, game, file }) => (
+  file && /^game[A-Za-z0-9_-]+\.pdf$/.test(file)
+    ? inBeachFolder(`${date}/${file}`)
+    : inBeachFolder(`${date}/game${game}.pdf`)
+)
+
+/** The View PDF link of a listed match (archivePdfPath reads it). */
+export const archivePdfHref = (item) => (
+  `?date=${encodeURIComponent(item.date)}&game=${encodeURIComponent(item.game)}${item.pdfName ? `&file=${encodeURIComponent(item.pdfName)}` : ''}`
+)
 
 // Label maps for display (sentence case)
 const genderLabels = { men: 'Men', women: 'Women' }
@@ -203,8 +250,10 @@ const TOOLBAR_LINK = cn(
   FOCUS_RING
 )
 
-// Scoresheet PDF viewer — embeds the PDF from Supabase storage
-const ScoresheetViewer = ({ date, game }) => {
+// Scoresheet PDF viewer — embeds the PDF from Supabase storage. It opened
+// game{n}.pdf, which no match since the seed key has: 'Scoresheet not found'
+// for every one (stress test 2026-10-25); the list's link now names the file.
+const ScoresheetViewer = ({ date, game, file }) => {
   const { t } = useTranslation()
   const [pdfUrl, setPdfUrl] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -215,7 +264,7 @@ const ScoresheetViewer = ({ date, game }) => {
     let cancelled = false
     const loadPdf = async () => {
       try {
-        const url = await getPdfObjectUrl(inBeachFolder(`${date}/game${game}.pdf`))
+        const url = await getPdfObjectUrl(archivePdfPath({ date, game, file }))
         if (cancelled) {
           if (url) URL.revokeObjectURL(url)
           return
@@ -224,7 +273,7 @@ const ScoresheetViewer = ({ date, game }) => {
           objectUrl = url
           setPdfUrl(url)
         } else {
-          setError(`PDF not found: ${inBeachFolder(`${date}/game${game}.pdf`)}`)
+          setError(`PDF not found: ${archivePdfPath({ date, game, file })}`)
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load PDF')
@@ -237,7 +286,7 @@ const ScoresheetViewer = ({ date, game }) => {
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [date, game])
+  }, [date, game, file])
 
   if (loading) {
     return <PageLoading label={t('scoresheetApp.loadingScoresheet')} />
@@ -297,7 +346,7 @@ const MatchCard = ({ item }) => {
       }
       status={item.pdfPath ? (
         <a
-          href={`?date=${item.date}&game=${item.game}`}
+          href={archivePdfHref(item)}
           className={cn('inline-flex h-11 items-center gap-1.5 rounded-lg bg-slate-900 px-3 text-xs font-medium text-white transition-colors hover:bg-slate-800', FOCUS_RING)}
         >
           <FileText size={14} aria-hidden="true" />
@@ -587,11 +636,11 @@ const formatCompDate = (dateStr) => dayLabel(dateStr) || dateStr
 
 // Main app component
 export default function ScoresheetApp() {
-  const { date, game } = getUrlParams()
+  const { date, game, file } = getUrlParams()
 
   // If date and game are provided, show the PDF viewer
   if (date && game) {
-    return <ScoresheetViewer date={date} game={game} />
+    return <ScoresheetViewer date={date} game={game} file={file} />
   }
 
   // Otherwise show the list

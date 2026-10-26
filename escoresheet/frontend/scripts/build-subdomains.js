@@ -22,6 +22,7 @@ import { readFileSync, writeFileSync, existsSync, rmSync, renameSync, copyFileSy
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { PWA_INCLUDE_ASSETS, PWA_ICONS, THEME_COLOR } from '../pwa-icons.js'
+import { IGNORE_URL_PARAMETERS } from '../pwa-workbox.js'
 import { subdomains, htmlFor } from './subdomain-pages.js'
 import { precacheUnderFinalName } from './subdomain-precache.js'
 
@@ -87,6 +88,9 @@ async function buildSubdomain(subdomain, basePath = '/') {
             skipWaiting: false,
             clientsClaim: true,
             navigateFallback: null,
+            // Same offline rule as the main build (pwa-workbox.js): /?cache_bust=..
+            // is the precached index.html
+            ignoreURLParametersMatching: IGNORE_URL_PARAMETERS,
             runtimeCaching: [
               {
                 urlPattern: /^https?:\/\/.*\/api\/.*/i,
