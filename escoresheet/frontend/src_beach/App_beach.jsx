@@ -902,6 +902,28 @@ export default function App() {
     }
   }, [activeMatch, matchId])
 
+  // A finished match not approved yet (status 'ended') reopens on Match End,
+  // as a live one reopens on the scoring screen. A reload, a crash or a dead
+  // battery while the captains signed opened Home, where nothing said the
+  // match was not approved, and New match > Delete and start new threw it
+  // away with its signatures (stress test 2026-10-25). Only as the app
+  // starts: Home chosen from Match End stays Home.
+  const endedRestoreRef = useRef(false)
+  useEffect(() => {
+    if (endedRestoreRef.current || currentMatch === undefined) return
+    endedRestoreRef.current = true
+    if (matchId || currentMatch?.status !== 'ended' || currentMatch.approved) return
+    const endedId = currentMatch.id
+    ;(async () => {
+      // Match End opens filled, as from Continue match
+      await preloadMatchEnd(endedId)
+      setMatchId(endedId)
+      setShowMatchSetup(false)
+      setShowCoinToss(false)
+      setShowMatchEnd(true)
+    })()
+  }, [currentMatch, matchId])
+
   // Check for pending roster upload on mount
   useEffect(() => {
     if (!currentMatch) return
@@ -1519,8 +1541,21 @@ export default function App() {
     setShowCompetitionPicker(false)
   }
 
-  /** "Delete the current match?" before a new one replaces it. */
+  /**
+   * "Delete the current match?" before a new one replaces it. A finished
+   * match not approved yet says so: its result and signatures exist only on
+   * this device until it is approved.
+   */
   function askReplaceMatch() {
+    if (currentMatch?.status === 'ended' && !currentMatch.approved) {
+      return confirmDialog({
+        title: t('app.replaceUnapprovedTitle', 'Delete the finished match?'),
+        message: t('app.replaceUnapprovedBody', 'This match is finished but not approved: its result and the signatures are only on this device. To keep them, cancel, open it with Continue match and approve it. Deleting it cannot be undone.'),
+        confirmLabel: t('app.replaceUnapprovedConfirm', 'Delete anyway and start new'),
+        cancelLabel: t('common.cancel', 'Cancel'),
+        tone: 'danger'
+      })
+    }
     return confirmDialog({
       title: t('app.replaceMatchTitle', 'Delete the current match?'),
       message: t('app.replaceMatchBody', 'The match on this device and all its data are deleted, then the new match starts. This cannot be undone.'),

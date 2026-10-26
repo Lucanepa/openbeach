@@ -17,7 +17,7 @@ afterEach(async () => {
   await Promise.all(db.tables.map(t => t.clear()))
 })
 
-async function finishedMatch({ test, scores }) {
+async function finishedMatch({ test, scores, approved = false }) {
   const team1 = await db.teams.add({ name: 'Müller / Weber', shortName: 'MÜL' })
   const team2 = await db.teams.add({ name: 'Schmidt / Fischer', shortName: 'SCH' })
   await db.players.bulkAdd([1, 2].flatMap(n => [
@@ -29,7 +29,7 @@ async function finishedMatch({ test, scores }) {
     team1Id: team1, team2Id: team2, status: 'ended', test, gameN: test ? undefined : 4711,
     createdAt: start, matchInfoConfirmedAt: start,
     coinTossConfirmed: true, coinTossTeamA: 'team1', coinTossTeamB: 'team2', coinTossServeA: true, coinTossServeB: false,
-    firstServe: 'team1', team1CaptainSignature: 'x', team2CaptainSignature: 'x'
+    firstServe: 'team1', team1CaptainSignature: 'x', team2CaptainSignature: 'x', approved
   })
   await db.sets.bulkAdd(scores.map(([team1Points, team2Points], i) => (
     { matchId, index: i + 1, team1Points, team2Points, finished: true, startTime: start, endTime: start }
@@ -37,8 +37,13 @@ async function finishedMatch({ test, scores }) {
   await db.events.add({ matchId, setIndex: 1, type: 'coin_toss', payload: {}, seq: 1, ts: start })
 }
 
-async function continueToMatchEnd() {
+// Continue match from the home screen. The app opens a finished match not
+// approved on Match End by itself (AppReopenEndedMatch): the match comes once
+// the home screen shows, as when the scorer went home from Match End.
+async function continueToMatchEnd(setUp) {
   mountApp()
+  await waitFor(() => expect(button('New match')).toBeTruthy(), { timeout: 8000 })
+  await setUp()
   await waitFor(() => expect(button('Continue match')).toBeTruthy(), { timeout: 8000 })
   const { states, stop } = track(() => ({
     home: !!button('Restore match'),
@@ -55,8 +60,7 @@ async function continueToMatchEnd() {
 
 describe('App: Continue match on a finished best-of-3 match', () => {
   it('a test match won 2:0 opens Match End, no scoreboard first', async () => {
-    await finishedMatch({ test: true, scores: [[21, 15], [21, 18]] })
-    const states = await continueToMatchEnd()
+    const states = await continueToMatchEnd(() => finishedMatch({ test: true, scores: [[21, 15], [21, 18]] }))
     expect(states.at(-1)).toEqual({ home: false, scoreboard: false, matchEnd: true })
     // the home screen, then the filled Match End: no scoreboard, nothing between
     expect(states.filter(s => s.scoreboard)).toEqual([])
@@ -64,8 +68,7 @@ describe('App: Continue match on a finished best-of-3 match', () => {
   }, 30000)
 
   it('an official match won 2:1 opens Match End, no scoreboard first', async () => {
-    await finishedMatch({ test: false, scores: [[21, 15], [18, 21], [15, 12]] })
-    const states = await continueToMatchEnd()
+    const states = await continueToMatchEnd(() => finishedMatch({ test: false, scores: [[21, 15], [18, 21], [15, 12]] }))
     expect(states.at(-1)).toEqual({ home: false, scoreboard: false, matchEnd: true })
     // the home screen, then the filled Match End: no scoreboard, nothing between
     expect(states.filter(s => s.scoreboard)).toEqual([])
