@@ -6,7 +6,7 @@
  */
 
 import { db } from '../db_beach/db_beach'
-import { wipeMatchEvents } from '../db_beach/eventHistory_beach'
+import { wipeMatchEvents, withoutEventHistory } from '../db_beach/eventHistory_beach'
 import { apiFrom, apiStorage, apiMatchRestoreByPin } from '../lib_beach/apiClient_beach'
 import { isBackendAvailable, getApiUrl } from '../utils_beach/backendConfig_beach'
 import { sanitizeSimple } from './stringUtils'
@@ -15,8 +15,10 @@ import { isTeam1LeftInSet, leftTeamInSet } from './courtSides_beach'
 import { labelsInDesignation, eventTeamA } from './coinToss_beach'
 import { cleanIntervalChoices } from './intervalChoice_beach'
 import { refereeConnectionDefault } from '../constants_beach/testSeeds_beach'
-import { jobMatchKey } from './syncIds_beach'
+import { jobMatchKey, setExtId, eventExtId, parseExtId } from './syncIds_beach'
 import { queueScorerClaim, isScorerMoved } from './matchHandover_beach'
+import { postMatchSignaturesFromServer } from './signatures_beach'
+import { listMatchBackups } from './logger_beach'
 
 // IndexedDB key for storing file system directory handle
 const BACKUP_DB_NAME = 'escoresheet_backup'
@@ -400,7 +402,14 @@ export async function restoreMatchFromJson(jsonData) {
     await db.events.clear()
     await db.sets.clear()
     await db.matches.clear()
-    await db.sync_queue.clear()
+    // The queue keeps the unsent writes of other matches: a match closed
+    // offline before (Close match deleted its local copy) has nothing else
+    // left on the device. This match's jobs go (the restore job below
+    // replaces them), and so does anything that cannot be attributed to a
+    // match (stress test 2026-10-25: clearing the table lost a match's end).
+    const queuedJobs = await db.sync_queue.toArray()
+    const keepJob = (j) => j.resource === 'activity' || (!!jobMatchKey(j) && jobMatchKey(j) !== externalId)
+    await db.sync_queue.bulkDelete(queuedJobs.filter(j => !keepJob(j)).map(j => j.id))
 
     // STEP B: Create teams (reuse existing or create new)
     let team1Id = null
@@ -1270,7 +1279,11 @@ export async function fetchMatchByPin(gamePin, gameN, { restoreByPin = apiMatchR
     set2Choice,
     // The backend never returns game_pin: keep the one that proved access, so
     // the imported match can still claim its cloud copy
-    gamePin: String(gamePin ?? '').trim()
+    gamePin: String(gamePin ?? '').trim(),
+    // The highest set / event ids the match has used on the server (voided
+    // events included; backend restore-by-pin): the ids the importing device
+    // gives out stay above
+    idFloor: data.idFloor || null
   }
 }
 
@@ -1293,6 +1306,8 @@ export async function importMatchFromSupabase(cloudData) {
     // unsent writes would overwrite the score the other device left. Its sets
     // and events go (replaced, not undone: nothing is voided on the server),
     // its unsent jobs are superseded; other local matches are kept.
+    // What only this device knows of the match is read first (keptLocalState)
+    const kept = await keptLocalState(match.external_id, events)
     await replaceLocalCopies(match.external_id)
 
     // Extract team data from JSONB columns
@@ -1357,10 +1372,12 @@ export async function importMatchFromSupabase(cloudData) {
       // Signatures: prefer JSONB, fallback to legacy
       team1CaptainSignature: signatures.team1_captain || match.team1_captain_signature,
       team2CaptainSignature: signatures.team2_captain || match.team2_captain_signature,
-      team1CaptainPostGameSignature: signatures.team1_captain_post_game || match.team1_captain_post_game_signature,
-      team2CaptainPostGameSignature: signatures.team2_captain_post_game || match.team2_captain_post_game_signature,
-      refereeSignature: signatures.referee || match.referee_signature,
-      scorerSignature: signatures.scorer || match.scorer_signature,
+      // The closing ones (captains, assistant scorer, scorer, referees) in
+      // the fields Match end and the sheet read (they were stored as
+      // team1CaptainPostGameSignature / refereeSignature, which nothing
+      // reads: Match end asked everyone to sign again, and the next
+      // signature sent null for the others, erasing them on the server)
+      ...postMatchSignaturesFromServer(signatures),
       // Coin toss: prefer JSONB, fallback to legacy
       coinTossConfirmed: coinToss.confirmed !== undefined ? coinToss.confirmed : match.coin_toss_confirmed,
       coinTossTeamA: coinToss.team_a || match.coin_toss_team_a,
@@ -1374,6 +1391,9 @@ export async function importMatchFromSupabase(cloudData) {
       // Court sides (courtSides_beach): without them the court showed A on the left
       ...(courtSides.setLeftTeamOverrides ? { setLeftTeamOverrides: { ...courtSides.setLeftTeamOverrides } } : {}),
       ...(courtSides.set3LeftTeam ? { set3LeftTeam: courtSides.set3LeftTeam } : {}),
+      // ... unless this device's own copy is not older than the cloud's: its
+      // sides include the change of courts of a TTO, which only it knows
+      ...(kept.sides || {}),
       // Set 3's toss: its winner hides the toss buttons, so its first server
       // (and the side chosen in the break since) come with it
       ...(set3Toss.set3CoinTossWinner ? { set3CoinTossWinner: set3Toss.set3CoinTossWinner } : {}),
@@ -1444,49 +1464,190 @@ export async function importMatchFromSupabase(cloudData) {
       }
     }
 
-    // Create sets
-    for (const set of sets) {
-      await db.sets.add({
-        matchId: localMatchId,
-        index: set.index,
-        team1Points: set.team1_points,
-        team2Points: set.team2_points,
-        finished: set.finished,
-        startTime: set.start_time,
-        endTime: set.end_time,
-        externalId: set.external_id
-      })
-    }
+    // Sets and events keep the local ids their cloud rows are keyed with
+    // (`<match>:s:<id>`, `<match>:e:<id>`, utils_beach/syncIds_beach): every
+    // later write of this device derives the external_id from the local id
+    // (the running set score, the set end, an undo's revision). Imported
+    // under new ids, they wrote rows the cloud did not have: after "Take back
+    // scoring here" set 1 (':s:1') stayed at the score of the hand-over while
+    // the device updated ':s:2', the approval's result had no finished set,
+    // and an undo voided ':e:17' instead of the real ':e:10' (stress test
+    // 2026-10-25; OpenVolley 83d8b9af).
+    const seedKey = match.external_id
+    const setIds = sets.map(s => cloudLocalId(seedKey, 'set', s.external_id))
+    // Events without an external_id are not cloud rows (the line-ups
+    // fetchMatchByPin makes up from the live state): new ids, never sent
+    const cloudEvents = events.filter(e => e.external_id != null)
+    const eventIds = cloudEvents.map(e => cloudLocalId(seedKey, 'event', e.external_id))
+    const keepIds = await idsAreFree(db.sets, setIds) && await idsAreFree(db.events, eventIds)
+    // Ids this device gives out from now on stay above every id the match has
+    // used on the server (voided events and revisions of events never
+    // uploaded too, restore-by-pin's idFloor): a new rally under the id of an
+    // event voided there is "born voided" (db/015), it would never count
+    const floor = cloudData.idFloor || {}
+    const setFloor = Math.max(Number(floor.set) || 0, ...setIds.map(id => id || 0))
+    const eventFloor = Math.max(Number(floor.event) || 0, ...eventIds.map(id => id || 0))
 
-    // If no sets exist but match has coin toss confirmed or has events, create Set 1
-    // This handles the case where a match was started but no rallies were played yet
-    if (sets.length === 0 && (match.coin_toss_confirmed || events.length > 0)) {
-      await db.sets.add({
-        matchId: localMatchId,
-        index: 1,
-        team1Points: 0,
-        team2Points: 0,
-        finished: false
-      })
-    }
+    const setRow = (set) => ({
+      matchId: localMatchId,
+      index: set.index,
+      team1Points: set.team1_points,
+      team2Points: set.team2_points,
+      finished: set.finished,
+      // the start time this device's scorer confirmed (keptLocalState)
+      startTime: kept.setStartTimes[set.index] || set.start_time,
+      endTime: set.end_time,
+      externalId: set.external_id
+    })
+    const eventRow = (event) => ({
+      matchId: localMatchId,
+      setIndex: event.set_index,
+      type: event.type,
+      payload: event.payload,
+      ts: event.ts,
+      seq: event.seq,
+      externalId: event.external_id
+    })
 
-    // Create events
-    for (const event of events) {
-      await db.events.add({
-        matchId: localMatchId,
-        setIndex: event.set_index,
-        type: event.type,
-        payload: event.payload,
-        ts: event.ts,
-        seq: event.seq,
-        externalId: event.external_id
-      })
-    }
+    // Imported as they are: no history of their own on this device (an add
+    // under an explicit id is otherwise a "restore" of a voided event)
+    await withoutEventHistory(localMatchId, async () => {
+      const newSetIds = []
+      const newEventIds = []
+      if (keepIds) {
+        for (let i = 0; i < sets.length; i++) await db.sets.add({ ...setRow(sets[i]), id: setIds[i] })
+        for (let i = 0; i < cloudEvents.length; i++) await db.events.add({ ...eventRow(cloudEvents[i]), id: eventIds[i] })
+      }
+      await raiseIdGenerator(db.sets, setFloor, { matchId: localMatchId, index: 0 })
+      await raiseIdGenerator(db.events, eventFloor, { matchId: localMatchId, type: 'rally_start', setIndex: 0, seq: 0 })
+      if (!keepIds) {
+        for (const set of sets) newSetIds.push(await db.sets.add(setRow(set)))
+        for (const event of cloudEvents) newEventIds.push(await db.events.add(eventRow(event)))
+      }
+
+      // If no sets exist but match has coin toss confirmed or has events, create Set 1
+      // This handles the case where a match was started but no rallies were played yet
+      if (sets.length === 0 && (match.coin_toss_confirmed || events.length > 0)) {
+        await db.sets.add({
+          matchId: localMatchId,
+          index: 1,
+          team1Points: 0,
+          team2Points: 0,
+          finished: false
+        })
+      }
+
+      for (const event of events) {
+        if (event.external_id == null) await db.events.add(eventRow(event))
+      }
+
+      // This device's events the cloud never gets (keptLocalState): new ids
+      for (const event of kept.events) await db.events.add({ ...event, matchId: localMatchId })
+
+      if (!keepIds && !match.test) {
+        // Another local match holds one of the ids (or a cloud id is not this
+        // match's own): the cloud rows move to this device's new ids instead,
+        // in one server transaction (POST /api/match/restore, as a backup
+        // restore does; test matches never sync)
+        console.warn(`[Import] ${seedKey}: the cloud ids cannot be kept on this device; re-keying the cloud rows`)
+        await db.sync_queue.add({
+          resource: 'match',
+          action: 'restore',
+          payload: {
+            match: filterMatchPayload({ external_id: seedKey, status: match.status }),
+            sets: sets.map((s, i) => ({ ...cloudChildRow(s), external_id: setExtId(seedKey, newSetIds[i]) })),
+            events: cloudEvents.map((e, i) => ({ ...cloudChildRow(e), external_id: eventExtId(seedKey, newEventIds[i]) })),
+            liveState: cloudData.liveState ? cloudChildRow(cloudData.liveState) : null
+          },
+          ts: new Date().toISOString(),
+          status: 'queued'
+        })
+      }
+    })
   })
 
   await afterJoin(importedMatchId, { claim: true })
   return importedMatchId
 }
+
+// The event types the scoring screen writes without a sync job
+// (eventRevisions_beach LOCAL_ONLY_EVENT_TYPES), and the first rally_start of
+// a set, which is added the same way
+const DEVICE_ONLY_EVENT_TYPES = ['set_start', 'set3_coin_toss', 'between_sets_setup_confirmed', 'technical_to']
+
+/**
+ * What only this device knows of match `seedKey`, read before its own copy is
+ * replaced by the cloud's (importMatchFromSupabase: "Take back scoring here",
+ * a restore by PIN on a device that had the match):
+ * - `events`: its set_start, technical_to (with the TTO's change of courts),
+ *   set 3 toss and first-rally events, which never reach the cloud. Without
+ *   them a take-back after the TTO asked for the TTO again and switched the
+ *   courts a second time, and the sheet lost its set starts (stress test
+ *   2026-10-25). Only when the cloud has no event this copy lacks after them
+ *   (the other device did not score on): otherwise they may be stale.
+ * - `sides`: its court sides on the same condition (a TTO's change of courts
+ *   is in no cloud event), and `setStartTimes` (index -> the start time its
+ *   scorer confirmed; the cloud had the time the set row was created).
+ * The events come without id and match id (the import gives new ones).
+ */
+async function keptLocalState(seedKey, cloudEvents) {
+  const none = { events: [], sides: null, setStartTimes: {} }
+  if (!seedKey) return none
+  // read as replaceLocalCopies reads the copies it replaces
+  const [own] = await db.matches.filter(m => localMatchKey(m) === seedKey).toArray()
+  if (!own) return none
+  const ownEvents = await db.events.where('matchId').equals(own.id).toArray()
+  const seqOf = (e) => (Number.isFinite(Number(e?.seq)) ? Number(e.seq) : 0)
+  const ownLast = Math.max(0, ...ownEvents.map(seqOf))
+  const cloudLast = Math.max(0, ...(cloudEvents || []).filter(e => e.external_id != null).map(seqOf))
+  if (cloudLast > ownLast) return none
+  const cloudIds = new Set((cloudEvents || []).map(e => e.external_id).filter(Boolean))
+  const firstRallyOfSet = new Map()
+  for (const e of [...ownEvents].sort((a, b) => seqOf(a) - seqOf(b))) {
+    if (e.type === 'rally_start' && !firstRallyOfSet.has(e.setIndex)) firstRallyOfSet.set(e.setIndex, e.id)
+  }
+  const deviceOnly = (e) => DEVICE_ONLY_EVENT_TYPES.includes(e.type) || (e.type === 'rally_start' && firstRallyOfSet.get(e.setIndex) === e.id)
+  // eslint-disable-next-line no-unused-vars
+  const events = ownEvents.filter(e => deviceOnly(e) && !cloudIds.has(eventExtId(seedKey, e.id))).map(({ id: _id, matchId: _matchId, ...e }) => e)
+  const sides = {
+    ...(own.setLeftTeamOverrides ? { setLeftTeamOverrides: { ...own.setLeftTeamOverrides } } : {}),
+    ...(own.set3LeftTeam ? { set3LeftTeam: own.set3LeftTeam } : {})
+  }
+  const setStartTimes = {}
+  for (const set of await db.sets.where('matchId').equals(own.id).toArray()) {
+    if (set.startTime && set.index != null) setStartTimes[set.index] = set.startTime
+  }
+  return { events, sides: Object.keys(sides).length ? sides : null, setStartTimes }
+}
+
+// The local id a cloud set/event row of match `seedKey` is keyed with
+// (`<seedKey>:s:<id>` / `<seedKey>:e:<id>`), or null
+function cloudLocalId(seedKey, kind, externalId) {
+  const p = parseExtId(externalId)
+  return p && p.seedKey === seedKey && p.kind === kind && Number.isSafeInteger(p.localId) && p.localId > 0 ? p.localId : null
+}
+
+// Can rows be stored under these ids: each one its own, none in use?
+async function idsAreFree(table, ids) {
+  if (ids.some(id => id == null) || new Set(ids).size !== ids.length) return false
+  if (ids.length === 0) return true
+  const rows = await table.bulkGet(ids)
+  return rows.every(row => row === undefined)
+}
+
+// Make `table` give out ids above `floor` from now on. IndexedDB moves its
+// key generator past every numeric key added explicitly, so a row is added
+// under `floor` and removed again; an id in use means it is past it already.
+async function raiseIdGenerator(table, floor, row) {
+  if (!Number.isSafeInteger(floor) || floor <= 0) return
+  if ((await table.get(floor)) !== undefined) return
+  await table.add({ ...row, id: floor })
+  await table.delete(floor)
+}
+
+// A cloud row as a restore job sends it back: the server's own keys left out
+// eslint-disable-next-line no-unused-vars
+const cloudChildRow = ({ id: _id, match_id: _matchId, updated_at: _updated, ...row }) => row
 
 // Remove the local copies of match `externalId` (inside the caller's
 // transaction: matches, sets, events, sync_queue); their unsent jobs are
@@ -1602,46 +1763,10 @@ export async function listCloudBackups(gamePin, gameN = 1) {
     throw new Error('Supabase not configured')
   }
 
-  // Use the same path format as logger.js continuous backups
-  const folderPath = `backups/backup_g${gameN}`
-
-  const { data, error } = await apiStorage
-    .from('backup')
-    .list(folderPath, {
-      sortBy: { column: 'name', order: 'desc' }
-    })
-
-  if (error) throw error
-
-  // Parse filenames to extract useful info
-  // Format: backup_g785111_set2_scoreleft23_scoreright23_20260105_113229_798.json
-  return (data || [])
-    .filter(f => f.name.endsWith('.json'))
-    .map(f => {
-      const match = f.name.match(/^backup_g(\d+)_set(\d+)_scoreleft(\d+)_scoreright(\d+)_(\d{8})_(\d{6})_(\d{3})\.json$/)
-      if (match) {
-        return {
-          name: f.name,
-          path: `${folderPath}/${f.name}`,
-          gameN: parseInt(match[1]),
-          setIndex: parseInt(match[2]),
-          leftScore: parseInt(match[3]),
-          rightScore: parseInt(match[4]),
-          date: match[5],
-          time: match[6],
-          ms: match[7],
-          created: f.created_at,
-          size: f.metadata?.size || 0
-        }
-      }
-      // Fallback for files that don't match the pattern
-      return {
-        name: f.name,
-        path: `${folderPath}/${f.name}`,
-        created: f.created_at,
-        size: f.metadata?.size || 0
-      }
-    })
+  // The backups of the match this game number AND game PIN name, newest
+  // first (logger_beach listMatchBackups: beach game numbers repeat)
+  // eslint-disable-next-line no-unused-vars
+  return (await listMatchBackups(gamePin, gameN)).map(({ created_at, ...b }) => ({ ...b, created: created_at }))
 }
 
 /**

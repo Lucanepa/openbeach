@@ -31,6 +31,20 @@ export const POST_MATCH_SIGNATURE_KEYS = Object.freeze({
   ref1Signature: 'ref1'
 })
 
+/**
+ * The post-match signature fields of a match row from the server's
+ * `signatures` JSONB, the inverse of signaturesPayload (null when missing).
+ * A copy restored from the server (backupManager_beach
+ * importMatchFromSupabase: a restore by game PIN, "Take back scoring here")
+ * must hold every one of them in the field the app reads: its next signature
+ * sends the whole object back, and a slot missing here would be erased on
+ * the server. (OpenVolley e19ed2f8)
+ */
+export function postMatchSignaturesFromServer(signatures) {
+  const s = signatures || {}
+  return Object.fromEntries(Object.entries(POST_MATCH_SIGNATURE_KEYS).map(([field, key]) => [field, s[key] || null]))
+}
+
 /** The match-row field of a coin-toss pad ('team1-captain', 'team2-coach', ...), or null. */
 export function signatureFieldOfRole(role) {
   return ({

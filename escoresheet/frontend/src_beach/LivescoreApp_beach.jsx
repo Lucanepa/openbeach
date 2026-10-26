@@ -165,7 +165,14 @@ export default function LivescoreApp() {
           }
         }
       )
-      .subscribe()
+      // The realtime connection says SUBSCRIBED again after every reconnect
+      // (relayRealtime_beach), and the changes made while it was down are
+      // never sent: the list is read again, or a Wi-Fi drop left the cards on
+      // the score from before it until the next point (stress test
+      // 2026-10-25; as OpenVolley's LivescoreApp)
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') fetchLiveGames()
+      })
 
     channelRef.current = channel
 

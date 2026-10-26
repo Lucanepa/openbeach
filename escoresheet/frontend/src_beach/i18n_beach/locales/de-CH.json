@@ -780,6 +780,10 @@
       "body": "Das Spiil isch scho imene andere Tab oder Fänschter offe. Schliess dä Tab und erfass im andere wiiter, damit sich die beide nöd überschriibed.",
       "close": "Dä Tab schliesse"
     },
+    "matchGone": {
+      "title": "Das Spiil isch nüme uf däm Grät",
+      "body": "Sini Date uf däm Grät sind glöscht worde (zum Biispiil sind d Websitedate im Browser glöscht worde). Was synchronisiert worde isch, bliibt i de Cloud: Uf de Startsiite «Spiil widerherstelle» mit de Spiilnummere und em Spiil-PIN öffne."
+    },
     "rotate": {
       "title": "Grät drähe",
       "body": "D Spiilerfassig funktioniert im Querformat. Drähj s Grät, zum wiiterzmache.",

@@ -96,6 +96,7 @@ vi.mock('../../lib_beach/apiClient_beach', () => {
   return {
     AUTH_TOKEN_CHANGE_EVENT: 'api-auth-token-change',
     AUTH_TOKEN_STORAGE_KEY: 'api_auth_token',
+    BACKEND_REACHED_EVENT: 'ob-backend-reached',
     apiFrom: (table) => builder(table),
     apiMatchRestore: async (payload) => {
       const call = { table: '__restore', action: 'restore', data: payload, filters: [] }
@@ -121,6 +122,15 @@ vi.mock('../../lib_beach/apiClient_beach', () => {
       const call = { table: '__revisions', action: 'post', data: { matchExternalId, revisions }, filters: [] }
       api.calls.push(call)
       return api.respond(call)
+    },
+    apiStorage: {
+      from: (bucket) => ({
+        upload: async (path, file, options) => {
+          const call = { table: '__storage', action: 'upload', data: { bucket, path, file, options }, filters: [] }
+          api.calls.push(call)
+          return api.respond(call)
+        }
+      })
     }
   }
 })
@@ -157,9 +167,13 @@ import {
   STOP_PASS,
   checkScorerMoved,
   matchEndUpdateNeeded,
-  SCORER_MOVED_EVENT
+  SCORER_MOVED_EVENT,
+  setPageLoadedAtForTests,
+  withQueueLock,
+  QUEUE_LOCK_NAME
 } from '../../hooks_beach/useSyncQueue_beach'
 import { useMemoryLocalStorage } from '../helpers/memoryStorage'
+import { holdLiveState, heldLiveState, resetLiveStateOutboxForTests } from '../../utils_beach/liveStateOutbox_beach'
 
 // Ported from OpenVolley src/hooks/__tests__/useSyncQueue.test.js: the queue's
 // session gate (401 pause, resume on sign-in), take-over by game PIN, the
@@ -602,6 +616,25 @@ describe('retryErrorsInternal', () => {
     expect(fakeDb.sync_queue.map.get(1).status).toBe('queued')
     expect(fakeDb.sync_queue.map.get(2).status).toBe('sending')
   })
+
+  // Stress test 2026-10-25 (ob-crash-during-set-end-sync-leaves-sending-job):
+  // the browser died 1.5 s into a set end's sync; after the reopen the row
+  // stayed 'sending' for 2 minutes, the cloud set unfinished meanwhile
+  it('hands back at once a "sending" job claimed before this page was loaded (a crashed page)', async () => {
+    const loadedAt = Date.now()
+    setPageLoadedAtForTests(loadedAt)
+    try {
+      fakeDb.sync_queue.reset([
+        { id: 1, resource: 'set', action: 'update', status: 'sending', sending_since: loadedAt - 1500, payload: {} },
+        { id: 2, resource: 'set', action: 'update', status: 'sending', sending_since: loadedAt + 10, payload: {} }
+      ])
+      await retryErrorsInternal()
+      expect(fakeDb.sync_queue.map.get(1).status).toBe('queued')
+      expect(fakeDb.sync_queue.map.get(2).status).toBe('sending')
+    } finally {
+      setPageLoadedAtForTests(0)
+    }
+  })
 })
 
 describe('event delete jobs (Undo, Replay, decision change, event editor)', () => {
@@ -701,6 +734,81 @@ describe('closing order (the approval waits for the older sets, events and remar
     fakeDb.sync_queue.reset([close(1), child(2, 'event', 9)])
     await runQueuePass()
     expect(fakeDb.sync_queue.map.get(1).status).toBe('sent')
+  })
+
+  // Stress test 2026-10-25 (ob-livestate-never-repushed): the match ended
+  // while the cloud was unreachable; the queue sent the match end, but the
+  // live state the scoring screen could not write was dropped, and once the
+  // match was approved the server refused every change of it (OV_MATCH_CLOSED)
+  it('the live state the scoring screen could not write goes up before the approval closes the match', async () => {
+    resetLiveStateOutboxForTests()
+    holdLiveState('match_100_aaa', { match_id: null, current_set: 2, points_a: 21, points_b: 0, sets_won_a: 2, sets_won_b: 0, match_status: 'ended', updated_at: new Date().toISOString() })
+    fakeDb.sync_queue.reset([close(1)])
+    const order = []
+    api.respond = (call) => {
+      if (call.table === 'match_live_state') order.push(`live:${call.data.match_status}:${call.data.match_id}`)
+      if (call.table === 'matches' && call.action === 'update') order.push(`match:${call.data.status}`)
+      return defaultRespond(call)
+    }
+    await runQueuePass()
+    expect(order).toEqual([`live:ended:${MATCH_UUID}`, 'match:approved'])
+    expect(heldLiveState('match_100_aaa')).toBeNull()
+  })
+
+  it('while the held live state cannot be sent the approval waits; a refusal of it does not hold it', async () => {
+    resetLiveStateOutboxForTests()
+    holdLiveState('match_100_aaa', { current_set: 2, points_a: 21, points_b: 0, match_status: 'ended', updated_at: new Date().toISOString() })
+    fakeDb.sync_queue.reset([close(1)])
+    let liveAnswer = { data: null, error: { message: 'Database unavailable', status: 503, code: 'OV_DB_UNAVAILABLE' } }
+    api.respond = (call) => (call.table === 'match_live_state' ? liveAnswer : defaultRespond(call))
+    await runQueuePass()
+    expect(fakeDb.sync_queue.map.get(1).status).toBe('queued')
+    expect(heldLiveState('match_100_aaa')).toMatchObject({ match_status: 'ended' })
+
+    liveAnswer = { data: null, error: { message: 'closed', status: 409, code: 'OV_MATCH_CLOSED' } }
+    await runQueuePass()
+    expect(fakeDb.sync_queue.map.get(1).status).toBe('sent')
+    expect(heldLiveState('match_100_aaa')).toBeNull()
+  })
+})
+
+describe('scoresheet upload job', () => {
+  // Stress test 2026-10-25 (ob-scoresheet-upload-fire-once): approved while the
+  // cloud was unreachable, the PDF and the final JSON never reached it;
+  // nothing retried them. As OpenVolley ba894c6d.
+  it('stores the file it carries; while the cloud is unreachable it waits and goes with a later pass', async () => {
+    const pdf = new Blob(['%PDF-1.7'], { type: 'application/pdf' })
+    fakeDb.sync_queue.reset([
+      { id: 1, resource: 'scoresheet', action: 'upload', status: 'queued', payload: { path: 'beach/2026-10-25/game702_k1_final.json', file: new Blob(['{}']), contentType: 'application/json', match_external_id: 'match_100_aaa' } },
+      { id: 2, resource: 'scoresheet', action: 'upload', status: 'queued', payload: { path: 'beach/2026-10-25/game702_k1.pdf', file: pdf, contentType: 'application/pdf', match_external_id: 'match_100_aaa' } }
+    ])
+    api.respond = (call) => call.table === '__storage'
+      ? { data: null, error: { message: 'Failed to fetch', status: 0, network: true } }
+      : ok()
+    const offline = await runQueuePass()
+    expect(offline.stopped).toBe(true)
+    expect([...fakeDb.sync_queue.map.values()].map(j => j.status)).toEqual(['queued', 'queued'])
+
+    api.calls = []
+    api.respond = defaultRespond
+    const outcome = await runQueuePass()
+    expect(outcome.sent).toBe(2)
+    const stored = api.calls.filter(c => c.table === '__storage')
+    expect(stored.map(c => c.data.path)).toEqual(['beach/2026-10-25/game702_k1_final.json', 'beach/2026-10-25/game702_k1.pdf'])
+    expect(stored[1].data).toMatchObject({ bucket: 'scoresheets', file: pdf, options: { contentType: 'application/pdf', upsert: true } })
+    expect([...fakeDb.sync_queue.map.values()].map(j => j.status)).toEqual(['sent', 'sent'])
+    // a sent job keeps no copy of the file
+    expect([...fakeDb.sync_queue.map.values()].map(j => j.payload.file)).toEqual([null, null])
+  })
+
+  it('goes after the match\'s own writes (the approval first)', async () => {
+    fakeDb.sync_queue.reset([
+      { id: 1, resource: 'scoresheet', action: 'upload', status: 'queued', payload: { path: 'beach/d/game1_k.pdf', file: new Blob(['x']), contentType: 'application/pdf', match_external_id: 'match_100_aaa' } },
+      { id: 2, resource: 'match', action: 'update', status: 'queued', retry_count: 0, payload: { id: 'match_100_aaa', status: 'approved' } }
+    ])
+    await runQueuePass()
+    const order = api.calls.filter(c => c.table === '__storage' || (c.table === 'matches' && c.action === 'update')).map(c => c.table)
+    expect(order).toEqual(['matches', '__storage'])
   })
 })
 
@@ -1088,13 +1196,71 @@ describe('pruneSyncQueue', () => {
   })
 })
 
+// Stress test 2026-10-25 (ob-two-tabs-double-flush): a second tab of the app
+// ran its own queue pass over the same rows and sent 22 of 47 jobs twice
+describe('withQueueLock (one queue pass per device, across tabs)', () => {
+  // jsdom has no navigator.locks: defined per test
+  const setLocks = (value) => Object.defineProperty(navigator, 'locks', { value, configurable: true })
+  afterEach(() => {
+    delete navigator.locks
+  })
+  function fakeLocks() {
+    const held = new Set()
+    return {
+      held,
+      request: vi.fn(async (name, opts, cb) => {
+        if (held.has(name)) return opts?.ifAvailable ? cb(null) : undefined
+        held.add(name)
+        try { return await cb({ name }) } finally { held.delete(name) }
+      })
+    }
+  }
+
+  it('a tab that finds the pass running in another tab skips its own', async () => {
+    const locks = fakeLocks()
+    setLocks(locks)
+    let release
+    const otherTab = withQueueLock(() => new Promise(r => { release = r }))
+    const pass = vi.fn(async () => ({ sent: 1 }))
+    expect(await withQueueLock(pass)).toBeNull()
+    expect(pass).not.toHaveBeenCalled()
+    release({ sent: 3 })
+    expect(await otherTab).toEqual({ sent: 3 })
+    expect(await withQueueLock(pass)).toEqual({ sent: 1 })
+    expect(locks.request.mock.calls[0][0]).toBe(QUEUE_LOCK_NAME)
+  })
+
+  it('without Web Locks the pass runs', async () => {
+    setLocks(undefined)
+    expect(await withQueueLock(async () => 'ran')).toBe('ran')
+  })
+})
+
 describe('getSyncQueueStats', () => {
   it('counts pending, errored and failed jobs', async () => {
     fakeDb.sync_queue.reset([
       { id: 1, status: 'queued' }, { id: 2, status: 'sending' }, { id: 3, status: 'error' },
       { id: 4, status: 'failed' }, { id: 5, status: 'sent' }, { id: 6, status: 'dropped' }
     ])
-    expect(await getSyncQueueStats()).toEqual({ pending: 2, error: 1, failed: 1 })
+    expect(await getSyncQueueStats()).toEqual({ pending: 2, error: 1, failed: 1, held: 0 })
+  })
+
+  // Stress test 2026-10-25 (ob-failed-match-job-blocks-match-status-green):
+  // a refused second match insert held back every later job of the match
+  // (Postgres stayed at 1:1 while the device was at 5:5) and the pill said
+  // Ready, its menu only "Pending background sync: 16"
+  it('counts the refused jobs that hold later ones back', async () => {
+    const seed = 'match_100_aaa'
+    fakeDb.sync_queue.reset([
+      { id: 1, resource: 'match', action: 'insert', status: 'sent', payload: { external_id: seed } },
+      { id: 2, resource: 'match', action: 'insert', status: 'failed', payload: { external_id: seed, game_n: 'nope' } },
+      { id: 3, resource: 'event', action: 'insert', status: 'queued', payload: { external_id: `${seed}:e:9`, match_id: seed } },
+      { id: 4, resource: 'set', action: 'update', status: 'queued', payload: { external_id: `${seed}:s:1`, team1_points: 5 } },
+      // a refused update holds nothing back; nor a refused job of another match with nothing after it
+      { id: 5, resource: 'match', action: 'update', status: 'failed', payload: { id: seed, status: { nested: true } } },
+      { id: 6, resource: 'event', action: 'insert', status: 'failed', payload: { external_id: 'match_2_bbb:e:1', match_id: 'match_2_bbb' } }
+    ])
+    expect(await getSyncQueueStats()).toMatchObject({ pending: 2, failed: 3, held: 1 })
   })
 })
 
@@ -1109,6 +1275,47 @@ describe('useSyncQueue flush loop', () => {
     vi.useRealTimers()
     vi.restoreAllMocks()
     localStorage.removeItem('api_auth_token')
+  })
+
+  // Stress test 2026-10-25 (ob-probe-backoff-slow-recovery): after an outage
+  // with the Wi-Fi up the queue went idle only 35-41 s after the backend was
+  // back (the probe backoff, reset only by an 'online' event)
+  const outageQueue = () => [
+    { id: 1, resource: 'set', action: 'update', status: 'queued', retry_count: 0, payload: { external_id: 'match_100_aaa:s:5', team1_points: 21, team2_points: 3, finished: true } },
+    { id: 2, resource: 'match', action: 'update', status: 'queued', retry_count: 0, payload: { id: 'match_100_aaa', current_set: 2 } }
+  ]
+  const unreachable = { data: null, error: { message: 'Failed to fetch', status: 0, network: true } }
+
+  it('the queue drains as soon as the backend answers another request, without an online event', async () => {
+    fakeDb.sync_queue.reset(outageQueue())
+    let cloudUp = false
+    api.respond = (call) => (cloudUp ? defaultRespond(call) : unreachable)
+    const { result, unmount } = renderHook(() => useSyncQueue())
+    await act(async () => { await vi.advanceTimersByTimeAsync(80000) })
+    expect([...fakeDb.sync_queue.map.values()].some(j => j.status === 'sent')).toBe(false)
+
+    cloudUp = true
+    await act(async () => {
+      // (apiClient: a live-state write got through)
+      window.dispatchEvent(new Event('ob-backend-reached'))
+      await vi.advanceTimersByTimeAsync(1000)
+    })
+    expect([...fakeDb.sync_queue.map.values()].every(j => j.status === 'sent')).toBe(true)
+    expect(result.current.syncStatus).toBe('synced')
+    unmount()
+  })
+
+  it('a failed probe is retried at least every 15 s', async () => {
+    fakeDb.sync_queue.reset(outageQueue())
+    let cloudUp = false
+    api.respond = (call) => (cloudUp ? defaultRespond(call) : unreachable)
+    const { unmount } = renderHook(() => useSyncQueue())
+    // (probes at 0, 5, 15, 30, 45 ... 255 s; with a 60 s cap the next one was at 315 s)
+    await act(async () => { await vi.advanceTimersByTimeAsync(256000) })
+    cloudUp = true
+    await act(async () => { await vi.advanceTimersByTimeAsync(15000) })
+    expect([...fakeDb.sync_queue.map.values()].every(j => j.status === 'sent')).toBe(true)
+    unmount()
   })
 
   it('sends nothing without a stored session, then resumes on sign-in', async () => {
@@ -1277,7 +1484,7 @@ describe('a match continued on another device', () => {
     const outcome = await runQueuePass()
     expect(fakeDb.sync_queue.map.get(1).status).toBe('dropped')
     expect(outcome.hasFailed).toBeFalsy()
-    expect(await getSyncQueueStats()).toEqual({ pending: 0, error: 0, failed: 0 })
+    expect(await getSyncQueueStats()).toEqual({ pending: 0, error: 0, failed: 0, held: 0 })
   })
 
   it('a set or event refused as closed stays visible (it carries the score), as does an update of a match still open here', async () => {
@@ -1327,7 +1534,7 @@ describe('a match continued on another device', () => {
     expect(fakeDb.sync_queue.map.get(1).status).toBe('dropped')
     expect(fakeDb.sync_queue.map.get(2)).toMatchObject({ status: 'superseded', superseded_by: 'scorer-moved' })
     expect(fakeDb.sync_queue.map.get(3).status).toBe('sent')
-    expect(await getSyncQueueStats()).toEqual({ pending: 0, error: 0, failed: 0 })
+    expect(await getSyncQueueStats()).toEqual({ pending: 0, error: 0, failed: 0, held: 0 })
     expect(fakeDb.matches.map.get(1).cloudBlock).toMatchObject({ code: 'OV_SCORER_MOVED', scorer: { platform: 'android', at: '2026-10-20T17:54:25Z' } })
     expect(fakeDb.matches.map.get(1).cloudBlock.scorer).toEqual({ platform: 'android', at: '2026-10-20T17:54:25Z' })
     expect(seen).toEqual([{ seedKey: 'match_100_aaa' }])
@@ -1360,7 +1567,7 @@ describe('a match continued on another device', () => {
     expect(fakeDb.matches.map.get(1)).toMatchObject({ status: 'final', cloudBlock: { code: 'OV_SCORER_MOVED', scorer: { platform: 'android', at: 'T' }, closed: true } })
     expect(fakeDb.sync_queue.map.get(1).status).toBe('dropped')
     expect(fakeDb.sync_queue.map.get(2).status).toBe('superseded')
-    expect(await getSyncQueueStats()).toEqual({ pending: 0, error: 0, failed: 0 })
+    expect(await getSyncQueueStats()).toEqual({ pending: 0, error: 0, failed: 0, held: 0 })
   })
 
   it('a claim goes first among the match jobs', async () => {

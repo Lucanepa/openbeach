@@ -14,6 +14,7 @@ import ScoreboardOptionsModal from './options/ScoreboardOptionsModal_beach'
 import ConnectionSetupModal from './options/ConnectionSetupModal_beach'
 import { useSyncQueue, checkScorerMoved } from '../hooks_beach/useSyncQueue_beach'
 import { isScorerMoved, SCORER_MOVED } from '../utils_beach/matchHandover_beach'
+import { holdLiveState, liveStateWritten, isLiveStateRetryable, scorerLiveOrder, cachedCloudMatchId, rememberCloudMatchId } from '../utils_beach/liveStateOutbox_beach'
 import { useConfirmAction } from '../hooks_beach/useConfirmAction_beach'
 import { useActionLiveQuery } from '../hooks_beach/useActionLiveQuery_beach'
 import { useScorerActions, pickLiveStateSnapshot, isReportedActionError } from '../hooks_beach/useScorerActions_beach'
@@ -29,7 +30,7 @@ import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { apiFrom } from '../lib_beach/apiClient_beach'
 import { setExtId, eventExtId } from '../utils_beach/syncIds_beach'
 import { missingForfeitSets } from '../utils_beach/forfeitSets_beach'
-import { changesSetScore, isLiveSetInterval, queueSetScoreSync, queueSetFinishedSync } from '../utils_beach/eventSync_beach'
+import { changesSetScore, isLiveSetInterval, queueSetScoreSync, queueSetFinishedSync, queueSetStartTimeSync } from '../utils_beach/eventSync_beach'
 import { planPointRemoval, scoreAfterRemoval, syncJobsForEvents, syncJobsForSets, eventUpsertJob, setReopenJob, planDecisionChangeReversal, scoreDeltaOfRemoval, teamSanctionFlags, UNSENT_STATUSES } from '../utils_beach/scorerCorrections_beach'
 import { askConfirm } from '../utils_beach/askConfirm_beach'
 import { rallyStatusOf, currentSetOf } from '../utils_beach/rally_beach'
@@ -897,6 +898,23 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   const preloaded = usePreloaded(matchId != null ? scoreboardKey(matchId) : null)
   const [data, commits] = useActionLiveQuery(() => readScoreboard(matchId), [matchId], preloaded)
 
+  // The match is no longer in this device's database while its scoring screen
+  // is open: the database was deleted under it (clear-db, the browser's "clear
+  // site data", an update that clears it). Dexie opens an empty one, the read
+  // finds no match (null, not the undefined of a first read still running)
+  // and the screen said 'Loading…' for good while every tap timed out (stress
+  // test 2026-10-25). A take-back replaces the local copy and opens the new
+  // one at once, so only a read that stays empty for a moment counts.
+  const [matchGone, setMatchGone] = useState(false)
+  useEffect(() => {
+    if (data !== null) {
+      setMatchGone(false)
+      return undefined
+    }
+    const timer = setTimeout(() => setMatchGone(true), 1500)
+    return () => clearTimeout(timer)
+  }, [data])
+
   // --- Live connection health monitoring ---
   const handleDeviceDisconnected = useCallback(({ label }) => {
     showAlert(t('scoreboard.deviceDisconnected', { defaultValue: '{{device}} disconnected', device: label }), 'warning')
@@ -1234,6 +1252,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // screen never writes, so every later push ended the break on the
     // referee and the livescore. Not the pushes that end it.
     const keepInterval = breakRunningRef.current && !['set_end', 'end_interval', 'set_start'].includes(eventType)
+    // This push's place among the pushes of this page, and its time, taken
+    // when its action runs (not after the awaits below): the cloud writes go
+    // in this order, an older one never over a newer (scorerLiveOrder)
+    const liveSeq = scorerLiveOrder.next()
+    const stampedAt = new Date().toISOString()
 
     // Always broadcast locally (works offline, no Supabase needed)
     broadcastToScoreboard(cachedSnapshot)
@@ -1249,11 +1272,15 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // queued, so it reaches the cloud offline-first
       if (changesSetScore(eventType)) void queueSetScoreSync(db, { matchId })
 
-      // Get the Supabase match UUID
+      // Get the Supabase match UUID. Offline, or the match not in the cloud
+      // yet: the state is built all the same and held for the sync queue
+      // (liveStateOutbox_beach), which sends it once the cloud answers
       let supabaseMatchId = null
       const externalId = match.externalId
       if (externalId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(externalId)) {
         supabaseMatchId = externalId
+      } else if (cachedCloudMatchId(match.seed_key)) {
+        supabaseMatchId = cachedCloudMatchId(match.seed_key)
       } else {
         const seedKey = match.seed_key || String(matchId)
         const { data: matchData, error } = await apiFrom('matches')
@@ -1261,10 +1288,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           .eq('external_id', seedKey)
           .eq('sport_type', SPORT_TYPE)
           .maybeSingle()
-        if (error || !matchData) return
-        supabaseMatchId = matchData.id
+        if (!error && matchData) {
+          supabaseMatchId = matchData.id
+          rememberCloudMatchId(match.seed_key, matchData.id)
+        }
       }
-      if (!supabaseMatchId) return
 
       // Use cached snapshot if provided, otherwise fetch/compute. In the
       // break: fresh, the coming set's (the set end created it; the last
@@ -1460,7 +1488,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         game_n: match.gameN || match.game_n || null,
         league: match.league || null,
         gender: match.match_type_2 || null,
-        updated_at: new Date().toISOString()
+        updated_at: stampedAt
       }
 
       // DIRECT SUPABASE WRITE (bypasses sync_queue) - see architecture note at top of file
@@ -1470,7 +1498,16 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Another device scores the match now (db/019, ScorerMovedModal_beach):
       // this device's older state must not overwrite its live state
       if (isScorerMoved(match)) return
-      const liveStateResult = await apiFrom('match_live_state').upsert(liveStateData, { onConflict: 'match_id' })
+      if (!supabaseMatchId) {
+        holdLiveState(match.seed_key, liveStateData)
+        return
+      }
+      // One upsert at a time, in the order of the actions; one older than the
+      // last written is dropped (the server keeps the last arrival)
+      const liveStateResult = await scorerLiveOrder.write(liveSeq,
+        () => apiFrom('match_live_state').upsert(liveStateData, { onConflict: 'match_id' }))
+      if (liveStateResult?.skipped) return
+      if (!liveStateResult.error) liveStateWritten(match.seed_key, liveStateData.updated_at)
 
       if (liveStateResult.error?.code === SCORER_MOVED) {
         // Another device holds the match. This device's claim may not be
@@ -1483,12 +1520,23 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       }
       if (liveStateResult.error) {
         console.error('[LiveState] Sync error:', liveStateResult.error)
-        // Not signed in / not this account's match / offline / rate limited:
-        // the sync queue's banner explains that; no modal. Any other refusal
-        // (4xx: a column the server lacks, a bad value) gets the modal once
-        // per session, not on every point; a 5xx too, once.
+        // Not signed in / not this account's match / offline / rate limited /
+        // the backend or its database briefly down (5xx, a Cloudflare 502
+        // page during a deploy): the sync queue's banner explains that; no
+        // modal. The live state is best-effort and the next push supersedes
+        // it, while the modal covered the scoring screen and swallowed the
+        // next tap (stress test 2026-10-25). Any other refusal (4xx: a column
+        // the server lacks, a bad value) gets the modal once per session,
+        // not on every point.
         const st = liveStateResult.error.status
-        if (st === 401 || st === 403 || st === 426 || st === 429 || st === 0 || liveStateResult.error.network) return
+        // Owed to the cloud: the sync queue sends it once the cloud answers
+        // again, and before the match is closed there (a refusal is not
+        // held: it would only be refused again)
+        if (isLiveStateRetryable(liveStateResult.error)) {
+          holdLiveState(match.seed_key, liveStateData)
+          return
+        }
+        if (st === 403) return
         const kind = st >= 400 && st < 500 ? '4xx' : 'other'
         if (liveStateErrorShown.has(kind)) return
         liveStateErrorShown.add(kind)
@@ -4077,8 +4125,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     const confirmedMs = new Date(roundToMinute(time)).getTime()
     const timeDifferent = expectedMs !== confirmedMs
 
-    // Update set with start time (absolute timestamp)
+    // Update set with start time (absolute timestamp), and the cloud's set row
     await db.sets.update(data.set.id, { startTime: roundToMinute(time) })
+    await queueSetStartTimeSync(db, { matchId, setId: data.set.id })
 
     // Set 1 at another time than scheduled: "Actual start time: HH:MM" in
     // the remarks (replaced when confirmed again, removed at the scheduled
@@ -7556,6 +7605,33 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       }
     }
   }, [data, setTransitionLoading, onFinishSet])
+
+  // The match's data left this device (see matchGone): say so and point to
+  // Restore match; what reached the cloud is kept there
+  if (matchGone) {
+    return (
+      <div className="ov-kit fixed inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-stone-50 to-stone-100 px-4" style={{ zIndex: 9999 }}>
+        <div className="w-full max-w-md rounded-2xl border border-stone-200/70 bg-white p-6 text-center shadow-card-lg">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+            <TriangleAlert size={24} />
+          </div>
+          <h1 className="text-lg font-bold text-stone-900">
+            {t('scoreboard.matchGone.title', 'This match is no longer on this device')}
+          </h1>
+          <p className="mt-2 text-sm text-stone-600">
+            {t('scoreboard.matchGone.body', 'Its data on this device was removed (for example, the browser’s site data was cleared). What was synced is kept in the cloud: on the home screen, open Restore match with the match number and the game PIN.')}
+          </p>
+          <button
+            type="button"
+            onClick={() => onOpenSetup?.()}
+            className={cn('mt-6 inline-flex h-11 w-full items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800 transition-colors', FOCUS_RING)}
+          >
+            {t('Home')}
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   // Only the first load is a full-page loader. The set end's steps are a small
   // status over the scoring screen (it was blanked for seconds, saying

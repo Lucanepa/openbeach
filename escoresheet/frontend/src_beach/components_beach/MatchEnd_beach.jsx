@@ -23,7 +23,9 @@ import {
 } from '../utils_beach/accountApproval_beach'
 import AccountApprovalDialog from './AccountApprovalDialog_beach'
 import { askConfirm } from '../utils_beach/askConfirm_beach'
-import { uploadScoresheet, uploadScoresheetPdf } from '../utils_beach/scoresheetUploader_beach'
+import { scoresheetStoragePath, scoresheetUploadJob, scoresheetJsonBlob, uploadQueuedScoresheet } from '../utils_beach/scoresheetUploader_beach'
+import { exportMatchData } from '../utils_beach/backupManager_beach'
+import { uploadBackupToCloud } from '../utils_beach/logger_beach'
 import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { exportLogsAsNDJSON } from '../utils_beach/comprehensiveLogger_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
@@ -804,7 +806,20 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     const field = signatureFieldMap[role]
     const saved = await saveMatchSignature(db, matchId, field, signatureData, field ? signatureSourceUpdate(field, signatureData, meta) : null)
     if (!saved && field) showAlert(t('matchEnd.signatureSaveFailed'), 'error')
+    if (saved) backupToCloud()
     return saved
+  }
+
+  // A cloud backup after every signature (or Clear) and after the approval,
+  // in the background. Restore match lists only these backups, and the last
+  // one was the set end's: a tablet that died at Match end came back on
+  // another device with no closing signature and not approved (stress test
+  // 2026-10-25)
+  const backupToCloud = () => {
+    if (!match || match.test || !isBackendAvailable()) return
+    exportMatchData(matchId)
+      .then(data => uploadBackupToCloud(matchId, data))
+      .catch(err => console.warn('[MatchEnd] Cloud backup failed:', err?.message))
   }
 
   // A signature drawn here or received from a phone (the pad's onSave)
@@ -1157,6 +1172,39 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     }
   }
 
+  // The approval's PDF and final JSON for the 'scoresheets' bucket, queued
+  // as sync jobs that carry the files (see handleApprove)
+  const queueApprovalFiles = async ({ pdfResult, team1: t1, team2: t2, sets: allSets, events: allEvents }) => {
+    const jobs = []
+    // PDF: beach/{date}/game{n}_{seed}.pdf (only if generation succeeded)
+    if (pdfResult?.blob) jobs.push(scoresheetUploadJob(match, scoresheetStoragePath(match, { ext: 'pdf' }), pdfResult.blob, 'application/pdf'))
+    // Final JSON (_final suffix: the approved match), with the
+    // country-enriched team objects so the archive PDF renders correctly
+    jobs.push(scoresheetUploadJob(match, scoresheetStoragePath(match, { final: true }), scoresheetJsonBlob({
+      match,
+      team1: t1,
+      team2: t2,
+      team1Players,
+      team2Players,
+      sets: allSets,
+      events: allEvents
+    }), 'application/json'))
+    try {
+      await db.transaction('rw', db.sync_queue, async () => {
+        for (const job of jobs) await db.sync_queue.add(job)
+      })
+    } catch (queueErr) {
+      // IndexedDB refused the files (storage full): one try now, in the
+      // background, as before the queue took them
+      console.warn('[MatchEnd] Could not queue the scoresheet uploads, uploading them once now:', queueErr?.message)
+      for (const job of jobs) {
+        uploadQueuedScoresheet(job.payload)
+          .then(({ error }) => { if (error) console.warn('Failed to upload scoresheet to cloud:', error) })
+          .catch(uploadErr => console.warn('Error uploading scoresheet:', uploadErr))
+      }
+    }
+  }
+
   const handleApprove = async () => {
     cLogger.logHandler('handleApprove', { matchId, allSignaturesDone })
     setIsSaving(true)
@@ -1310,36 +1358,6 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       const zipBlob = await zip.generateAsync({ type: 'blob' })
       const zipFilename = `Match_${sanitizeForFilename(team1?.name || 'Team 1')}_vs_${sanitizeForFilename(team2?.name || 'Team 2')}_${matchDate}.zip`
 
-      // Upload PDF and final JSON to Supabase storage "scoresheets" bucket
-      if (isBackendAvailable() && !match?.test) {
-        try {
-          // Upload PDF: beach/{date}/game{n}_{seed}.pdf (scoresheetStoragePath)
-          if (pdfResult) {
-            const pdfUpload = await uploadScoresheetPdf(match, pdfResult.blob)
-            if (!pdfUpload.success) console.warn('Failed to upload PDF to cloud:', pdfUpload.error)
-          }
-
-          // Upload final JSON (with _final suffix for approved matches)
-          // Use country-enriched team objects so the archive PDF renders correctly
-          const jsonResult = await uploadScoresheet({
-            match,
-            team1: team1WithCountry,
-            team2: team2WithCountry,
-            team1Players,
-            team2Players,
-            sets: allSets,
-            events: allEvents,
-            final: true
-          })
-          if (jsonResult.success) {
-          } else {
-            console.warn('Failed to upload final JSON:', jsonResult.error)
-          }
-        } catch (uploadErr) {
-          console.warn('Error uploading scoresheet:', uploadErr)
-        }
-      }
-
       // Download ZIP
       const zipLink = document.createElement('a')
       zipLink.download = zipFilename
@@ -1393,6 +1411,17 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
           current_set: null
         })
       })
+
+      // The cloud copies of the PDF and the final JSON ('scoresheets' bucket)
+      // go up after the approval, through the sync queue, which retries them
+      // until they are stored (scoresheetUploadJob). Uploaded once and
+      // awaited before it, an approval made while the cloud was unreachable
+      // left the cloud without them for good, and a stalled upload held
+      // "Confirm and approve" (stress test 2026-10-25).
+      if (isBackendAvailable() && !match?.test) {
+        await queueApprovalFiles({ pdfResult, team1: team1WithCountry, team2: team2WithCountry, sets: allSets, events: allEvents })
+      }
+      backupToCloud()
 
       // Update UI state to show post-approval buttons
       setDownloadProgress(null)

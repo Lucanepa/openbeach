@@ -8,6 +8,7 @@ import {
   openSetOf,
   queueSetScoreSync,
   queueSetFinishedSync,
+  queueSetStartTimeSync,
   isEventRevisionJob,
   eventRevisionRequest,
   eventRevisionOutcome
@@ -200,5 +201,24 @@ describe('event revision jobs (the event history for the server)', () => {
     expect(eventRevisionOutcome({ error: { status: 404, code: 'OV_MATCH_NOT_FOUND' } })).toBe('wait')
     expect(eventRevisionOutcome({ error: { message: 'Not found' }, status: 404 })).toBe('no_route')
     expect(eventRevisionOutcome({ error: { status: 409, code: 'OV_MATCH_CLOSED' } })).toBe('error')
+  })
+})
+
+// Stress test 2026-10-25 (ob-takeback-loses-tto-courtswitch-setstart): the
+// confirmed set start time stayed on the device; the cloud kept the time the
+// set row was created
+describe('queueSetStartTimeSync', () => {
+  it('queues the confirmed start time of the set; a test match sends nothing', async () => {
+    const matchId = await db.matches.add({ seed_key: 'seed-1', test: false })
+    const setId = await db.sets.add({ matchId, index: 1, startTime: '2026-10-25T13:40:00.000Z' })
+    expect(await queueSetStartTimeSync(db, { matchId, setId })).toBe(true)
+    const [job] = await db.sync_queue.toArray()
+    expect(job).toMatchObject({ resource: 'set', action: 'update', status: 'queued', payload: { external_id: `seed-1:s:${setId}`, start_time: '2026-10-25T13:40:00.000Z' } })
+    // not a score-only update: the running score never drops it
+    expect(isScoreOnlySetUpdate(job, `seed-1:s:${setId}`)).toBe(false)
+
+    const testMatch = await db.matches.add({ seed_key: 'seed-2', test: true })
+    const testSet = await db.sets.add({ matchId: testMatch, index: 1, startTime: '2026-10-25T13:40:00.000Z' })
+    expect(await queueSetStartTimeSync(db, { matchId: testMatch, setId: testSet })).toBe(false)
   })
 })

@@ -191,6 +191,11 @@ export default function ConnectionStatus({
     const hasViableConnection = serverWebsocketViable || supabaseViable
 
     if (!hasViableConnection) {
+      // The device is offline or the cloud cannot be reached: the points are
+      // kept here and go when it is back. That is not an error: every Wi-Fi
+      // drop read as a red "Error" next to the header's "Online" toggle
+      // (stress test 2026-10-25). Jobs the server refused still are (below).
+      if (supabaseStatus === 'offline') return 'offline'
       return 'attention' // No viable connection path
     }
 
@@ -208,22 +213,34 @@ export default function ConnectionStatus({
     return 'connected'
   }
 
-  const venue = queueStats.error > 0 ? null : venueBadge({ connectionStatuses, venueMode })
-  const overallStatus = queueStats.error > 0 ? 'attention' : getOverallStatus()
-  const statusInfo = venue
-    ? (venue.key === 'venue'
-        ? { tone: 'ok', text: t('connectionStatus.venueMode', 'Venue mode') }
-        : { tone: 'error', text: t('connectionStatus.venueNoRelay', 'No relay') })
-    : getStatusColor(overallStatus)
+  // Jobs the server refused: those waiting out a backoff ('error'), and the
+  // ones refused for good that hold later writes back ('held',
+  // getSyncQueueStats). A refused match insert held back every later write
+  // of its match while the pill said Ready (stress test 2026-10-25)
+  const syncErrors = (queueStats.error || 0) + (queueStats.held || 0)
+  const venue = syncErrors > 0 ? null : venueBadge({ connectionStatuses, venueMode })
+  const overallStatus = syncErrors > 0 ? 'attention' : getOverallStatus()
 
   // Jobs waiting: "Syncing..." only when they can go now; signed out they
-  // wait for a sign-in, without a cloud here they stay on the device
+  // wait for a sign-in, offline they wait for the cloud, without a cloud
+  // here they stay on the device
   const pendingKey = pendingSyncLabel({ pending: queueStats.pending, signedIn: isSignedInOnDevice(), cloudStatus: connectionStatuses.supabase })
+  const offlineWord = t('connectionStatus.offline', 'Offline')
   const pendingWord = pendingKey === 'not_signed_in'
     ? t('matchSetup.syncState.notSignedIn', 'Not signed in')
     : pendingKey === 'local_only'
       ? t('matchSetup.syncState.localOnly', 'Local only')
-      : pendingKey === 'syncing' ? 'Syncing...' : null
+      : pendingKey === 'offline' ? offlineWord
+        : pendingKey === 'syncing' ? 'Syncing...' : null
+
+  // Offline is amber: saved on this device, waiting for the cloud
+  const statusInfo = venue
+    ? (venue.key === 'venue'
+        ? { tone: 'ok', text: t('connectionStatus.venueMode', 'Venue mode') }
+        : { tone: 'error', text: t('connectionStatus.venueNoRelay', 'No relay') })
+    : overallStatus === 'offline' || (overallStatus === 'connected' && pendingKey === 'offline')
+      ? { tone: 'warn', text: offlineWord }
+      : getStatusColor(overallStatus)
 
   // Trigger sizes: the header uses 'normal' (h-8, the bar's button height).
   const sizeClasses = {
@@ -237,10 +254,11 @@ export default function ConnectionStatus({
   const pillWord = venue ? statusInfo.text :
     overallStatus === 'connected' ? (pendingWord || 'Connected') :
       overallStatus === 'awaiting_match' ? 'Ready' :
-        'Error'
+        overallStatus === 'offline' ? offlineWord :
+          'Error'
   // compact: the pill's name says the word and the error count it does not show
-  const pillLabel = queueStats.error > 0
-    ? t('connectionStatus.withErrors', { status: pillWord, count: queueStats.error, defaultValue: '{{status}}, {{count}} sync errors' })
+  const pillLabel = syncErrors > 0
+    ? t('connectionStatus.withErrors', { status: pillWord, count: syncErrors, defaultValue: '{{status}}, {{count}} sync errors' })
     : pillWord
 
   return (
@@ -261,12 +279,12 @@ export default function ConnectionStatus({
         className={cn(STATUS_PILL, FOCUS_RING, overallTone.pill, currentSize.trigger, compact && 'px-2')}
       >
         <span className={cn('inline-block shrink-0 rounded-full', currentSize.dot, overallTone.dot)}></span>
-        {(!compact || queueStats.error > 0) && (
+        {(!compact || syncErrors > 0) && (
           <span className="inline-flex items-center">
             {!compact && pillWord}
-            {queueStats.error > 0 && (
+            {syncErrors > 0 && (
               <span className={cn('inline-flex min-w-[1.125rem] h-[1.125rem] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold tabular-nums text-white', !compact && 'ml-1')}>
-                {queueStats.error}
+                {syncErrors}
               </span>
             )}
           </span>
@@ -346,7 +364,7 @@ export default function ConnectionStatus({
                 </div>
 
                 {/* Queue Stats for the cloud */}
-                {key === 'supabase' && (queueStats.pending > 0 || queueStats.error > 0) && (
+                {key === 'supabase' && (queueStats.pending > 0 || syncErrors > 0) && (
                   <div className="mx-2 mb-2 mt-1 flex flex-col gap-1 rounded-lg bg-stone-50 p-2 text-[11px]">
                     {queueStats.pending > 0 && (
                       <div className="flex justify-between text-sky-800">
@@ -354,11 +372,11 @@ export default function ConnectionStatus({
                         <span className="font-bold tabular-nums">{queueStats.pending}</span>
                       </div>
                     )}
-                    {queueStats.error > 0 && (
+                    {syncErrors > 0 && (
                       <div className="flex items-center justify-between text-red-700">
                         <span>Synchronization errors:</span>
                         <div className="flex items-center gap-2">
-                          <span className="font-bold tabular-nums">{queueStats.error}</span>
+                          <span className="font-bold tabular-nums">{syncErrors}</span>
                           <button
                             type="button"
                             onClick={(e) => {

@@ -1,8 +1,26 @@
 /**
- * Logger - Captures console logs and backs up to Supabase storage
+ * Logger - Captures console logs and backs them up to the cloud storage.
+ *
+ * Log upload (ported from OpenVolley src/utils/logger.js, d2cc2851 and
+ * 9616bd4f): every buffer entry carries a sequence number that keeps growing
+ * across reloads (taken from the clock). uploadLogsToCloud sends only the
+ * entries after the last successful upload (cursor in localStorage), as a new
+ * chunk file logs/<game folder>/logs_<utc>_<seq>.txt: nothing already up there
+ * is downloaded or sent again, and no file grows towards the storage cap. It
+ * downloaded logs.txt and uploaded it again with the whole 1000-line buffer
+ * appended, after every action: about 14 MB per rally once the file neared
+ * the 5 MiB cap, every upload refused with 413 from then on, and every later
+ * match with the same game number started at the cap (stress test
+ * 2026-10-25). The every-action backup sends logs at most once a minute (and
+ * at once when EARLY_UPLOAD_UNSENT lines wait); set end, match end, coin toss
+ * and match creation send at once. A chunk the server refuses for good (413,
+ * a bad path) is skipped, never sent again. Entries not uploaded yet are kept
+ * in localStorage when the page is hidden or closed and come back at the next
+ * start, for the same account only (sign-out and account deletion drop them).
+ * Nothing is sent without a session the server has not refused.
  */
 
-import { apiStorage, canUseStorage } from '../lib_beach/apiClient_beach'
+import { apiStorage, canUseStorage, AUTH_TOKEN_STORAGE_KEY } from '../lib_beach/apiClient_beach'
 import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
 
 // In-memory log buffer
@@ -12,7 +30,15 @@ const MAX_BUFFER_SIZE = 1000
 // Last backup tracking to avoid duplicate uploads
 let lastBackupTime = 0
 let isBackupInProgress = false
-let backupSequence = 0 // Sequential counter for backups
+
+// Grows across reloads: microseconds of the clock, or one more than the last
+let lastSeq = 0
+function nextSeq(now = Date.now()) {
+  // First entry of this page load: never at or below what was uploaded before
+  if (lastSeq === 0) lastSeq = readCursor()
+  lastSeq = Math.max(lastSeq + 1, now * 1000)
+  return lastSeq
+}
 
 // Original console methods
 const originalConsole = {
@@ -27,7 +53,8 @@ const originalConsole = {
  * Format a log entry
  */
 function formatLogEntry(level, args) {
-  const timestamp = new Date().toISOString()
+  const now = Date.now()
+  const timestamp = new Date(now).toISOString()
   const message = args.map(arg => {
     if (typeof arg === 'object') {
       try {
@@ -39,7 +66,7 @@ function formatLogEntry(level, args) {
     return String(arg)
   }).join(' ')
 
-  return { timestamp, level, message }
+  return { seq: nextSeq(now), timestamp, level, message }
 }
 
 /**
@@ -48,14 +75,30 @@ function formatLogEntry(level, args) {
 function addToBuffer(entry) {
   logBuffer.push(entry)
   if (logBuffer.length > MAX_BUFFER_SIZE) {
+    const evicted = logBuffer.length - MAX_BUFFER_SIZE
+    const cursor = readCursor()
+    for (let i = 0; i < evicted; i++) if (logBuffer[i].seq > cursor) droppedUnsent++
     logBuffer = logBuffer.slice(-MAX_BUFFER_SIZE)
   }
 }
+
+let pageListenersInstalled = false
 
 /**
  * Intercept console methods
  */
 export function initLogger() {
+  restorePendingLogs()
+
+  if (typeof window !== 'undefined' && !pageListenersInstalled) {
+    pageListenersInstalled = true
+    // Lines not uploaded yet survive a reload or a closed tab
+    window.addEventListener('pagehide', persistPendingLogs)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') persistPendingLogs()
+    })
+  }
+
   console.log = (...args) => {
     addToBuffer(formatLogEntry('log', args))
     originalConsole.log(...args)
@@ -130,70 +173,274 @@ export function downloadLogs(matchId = null) {
   return filename
 }
 
-/**
- * Upload logs to Supabase storage - appends to a single log file per game
- * @param {string|null} matchId - Match ID for organizing logs
- * @param {string|number|null} gameNumber - Game number for human-readable folder names
- */
-// Log files this page uploaded (or found) already: no listing before the next append
-const knownLogFiles = new Set()
+// ── Log upload ──────────────────────────────────────────────────────────────
 
-export async function uploadLogsToCloud(matchId = null, gameNumber = null) {
-  if (!isBackendAvailable()) {
-    console.warn('[Logger] Supabase not configured - cannot upload logs')
+/** localStorage: seq of the last entry uploaded (any game folder). */
+export const LOG_CURSOR_KEY = 'ob_log_upload_cursor'
+/** localStorage: entries not uploaded yet, saved when the page is hidden/closed. */
+export const LOG_PENDING_KEY = 'ob_log_pending'
+/** The every-action backup sends logs at most this often (set/match end send at once). */
+export const LOG_UPLOAD_MIN_INTERVAL_MS = 60 * 1000
+/** One chunk stays well under the 5 MiB storage cap; the oldest lines are cut first. */
+export const MAX_LOG_CHUNK_BYTES = 1024 * 1024
+/** The every-action backup uploads at once (no 60 s wait) when this many lines wait. */
+export const EARLY_UPLOAD_UNSENT = 600
+const MAX_PENDING_ENTRIES = 500
+const MAX_PENDING_CHARS = 512 * 1024
+
+let memoryCursor = 0
+let cursorLoaded = false
+let droppedUnsent = 0 // unsent lines evicted from the buffer since the last upload
+let lastLogUploadAt = 0
+let logUploadInFlight = false
+let queuedLogUpload = null
+
+/** The signed-in user's id from the stored session, or null. */
+function storedSessionUserId() {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) : null
+    const session = raw ? JSON.parse(raw) : null
+    return session?.user?.id ?? null
+  } catch {
     return null
   }
+}
 
+function readStoredCursor() {
+  try {
+    const stored = Number(localStorage.getItem(LOG_CURSOR_KEY))
+    return Number.isFinite(stored) ? stored : 0
+  } catch {
+    return 0 // storage blocked: memory only
+  }
+}
+
+// This tab's cursor: the stored one once at start, then only its own uploads
+function readCursor() {
+  if (!cursorLoaded) {
+    cursorLoaded = true
+    memoryCursor = Math.max(memoryCursor, readStoredCursor())
+  }
+  return memoryCursor
+}
+
+function writeCursor(seq) {
+  readCursor()
+  if (seq > memoryCursor) memoryCursor = seq
+  // Never move the shared copy back (another tab may have uploaded later lines)
+  const stored = Math.max(readStoredCursor(), memoryCursor)
+  try { localStorage.setItem(LOG_CURSOR_KEY, String(stored)) } catch { /* memory only */ }
+}
+
+/** Entries the cloud does not have yet (after this tab's upload cursor). */
+export function getUnsentLogs() {
+  const cursor = readCursor()
+  return logBuffer.filter(e => e.seq > cursor)
+}
+
+function readPending() {
+  const raw = localStorage.getItem(LOG_PENDING_KEY)
+  if (!raw) return null
+  const saved = JSON.parse(raw)
+  if (saved && Array.isArray(saved.entries)) return { uid: saved.uid ?? null, entries: saved.entries }
+  return null
+}
+
+/**
+ * Keep the entries not uploaded yet for the next start of the app (pagehide,
+ * tab hidden), tagged with the signed-in account. Lines another scorer tab of
+ * the same account saved are merged, not overwritten. Capped; the newest
+ * entries win.
+ */
+export function persistPendingLogs() {
+  try {
+    const uid = storedSessionUserId()
+    let previous = []
+    try {
+      const saved = readPending()
+      if (saved && saved.uid === uid) previous = saved.entries
+    } catch { /* unreadable: overwrite */ }
+    const bySeq = new Map()
+    for (const e of [...previous, ...getUnsentLogs()]) {
+      if (e && Number.isFinite(e.seq) && typeof e.message === 'string') bySeq.set(e.seq, e)
+    }
+    const pending = [...bySeq.values()].sort((a, b) => a.seq - b.seq).slice(-MAX_PENDING_ENTRIES)
+    let chars = 0
+    let from = pending.length
+    while (from > 0 && chars + pending[from - 1].message.length <= MAX_PENDING_CHARS) {
+      from--
+      chars += pending[from].message.length
+    }
+    const kept = pending.slice(from)
+    if (kept.length === 0) localStorage.removeItem(LOG_PENDING_KEY)
+    else localStorage.setItem(LOG_PENDING_KEY, JSON.stringify({ uid, entries: kept }))
+  } catch { /* storage full or blocked */ }
+}
+
+/** Remove uploaded entries from the saved pending lines (this tab saved them earlier). */
+function prunePending(uploaded) {
+  try {
+    const saved = readPending()
+    if (!saved) return
+    const seqs = new Set(uploaded.map(e => e.seq))
+    const left = saved.entries.filter(e => !seqs.has(e?.seq))
+    if (left.length === saved.entries.length) return
+    if (left.length === 0) localStorage.removeItem(LOG_PENDING_KEY)
+    else localStorage.setItem(LOG_PENDING_KEY, JSON.stringify({ uid: saved.uid, entries: left }))
+  } catch { /* storage blocked */ }
+}
+
+/**
+ * Forget every line not uploaded yet (saved and in memory): sign-out and
+ * account deletion, so the next account on this device never uploads them.
+ */
+export function discardUnsentLogs() {
+  try { localStorage.removeItem(LOG_PENDING_KEY) } catch { /* storage blocked */ }
+  const last = Math.max(lastSeq, logBuffer.length > 0 ? logBuffer[logBuffer.length - 1].seq : 0)
+  if (last > 0) writeCursor(last)
+  droppedUnsent = 0
+}
+
+/**
+ * Put the entries saved by persistPendingLogs back into the buffer, only when
+ * the same account (or none) is signed in now. Not filtered by the shared
+ * cursor: another scorer tab may have uploaded later lines; an upload removes
+ * its lines from the saved copy instead (prunePending).
+ * @returns {number} how many came back
+ */
+export function restorePendingLogs() {
+  try {
+    const saved = readPending()
+    localStorage.removeItem(LOG_PENDING_KEY)
+    if (!saved || saved.uid !== storedSessionUserId()) return 0
+    const have = new Set(logBuffer.map(e => e.seq))
+    const restored = saved.entries.filter(e =>
+      e && Number.isFinite(e.seq) && !have.has(e.seq) && typeof e.message === 'string')
+    if (restored.length === 0) return 0
+    for (const e of restored) if (e.seq > lastSeq) lastSeq = e.seq
+    // This tab sends them, even below the shared cursor (another tab's uploads)
+    const firstRestored = Math.min(...restored.map(e => e.seq))
+    if (readCursor() >= firstRestored) memoryCursor = firstRestored - 1
+    logBuffer = [...restored, ...logBuffer].sort((a, b) => a.seq - b.seq).slice(-MAX_BUFFER_SIZE)
+    return restored.length
+  } catch {
+    return 0
+  }
+}
+
+function formatEntries(entries) {
+  return entries.map(entry =>
+    `[${entry.timestamp}] [${String(entry.level).toUpperCase()}] ${entry.message}`
+  ).join('\n')
+}
+
+const utf8Length = (text) => new TextEncoder().encode(text).length
+
+/** Text of one upload chunk, cut from the oldest lines down to maxBytes. */
+export function buildLogChunk(entries, maxBytes = MAX_LOG_CHUNK_BYTES) {
+  const text = formatEntries(entries)
+  // A UTF-8 character is at most 4 bytes (3 per UTF-16 unit)
+  if (text.length * 3 <= maxBytes || utf8Length(text) <= maxBytes) return text
+  let kept = entries
+  let body = text
+  while (kept.length > 1 && utf8Length(body) > maxBytes - 128) {
+    kept = kept.slice(Math.ceil(kept.length / 10))
+    body = formatEntries(kept)
+  }
+  return `[logger] ${entries.length - kept.length} older lines left out (chunk size cap)\n${body}`
+}
+
+// 4xx other than 401 / 408 / 429: sending the same chunk again cannot succeed
+function isPermanentUploadError(error) {
+  const status = error?.status ?? 0
+  return status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429
+}
+
+// yyyymmdd_hhmmss (UTC)
+const utcStamp = (ms) => new Date(ms).toISOString().replace(/[-:]/g, '').replace('T', '_').slice(0, 15)
+
+/**
+ * Upload the log lines added since the last successful upload, as a new
+ * chunk file in the game's folder. Without a session, or with nothing new,
+ * nothing is sent; the lines wait for the next upload.
+ * @param {string|null} matchId - Match ID for organizing logs
+ * @param {string|number|null} gameNumber - Game number for human-readable folder names
+ * @param {{minIntervalMs?: number}} [options] - skip when the last upload is more recent
+ * @returns {Promise<string|null>} the uploaded path, or null
+ */
+export async function uploadLogsToCloud(matchId = null, gameNumber = null, { minIntervalMs = 0 } = {}) {
+  if (!isBackendAvailable()) return null
   // Storage needs a session: signed out, nothing is sent (no 401s)
   if (!canUseStorage()) return null
+  if (logUploadInFlight) {
+    // An immediate upload (set/match end) runs right after the one in flight
+    if (!minIntervalMs) queuedLogUpload = { matchId, gameNumber }
+    return null
+  }
+  const now = Date.now()
+  if (minIntervalMs > 0 && now - lastLogUploadAt < minIntervalMs) return null
 
-  const newLogs = exportLogsAsText()
+  const entries = getUnsentLogs()
+  if (entries.length === 0) return null
+  const lastEntrySeq = entries[entries.length - 1].seq
+  const dropped = droppedUnsent
+  const chunk = buildLogChunk(entries)
+  const body = dropped > 0 ? `[logger] ${dropped} lines dropped (buffer full before upload)\n${chunk}` : chunk
+
   // Use gameNumber if available for human-readable paths, fall back to matchId
   const folderName = gameNumber ? `game_${gameNumber}` : (matchId ? `match_${matchId}` : 'general')
-  const filename = `logs/${folderName}/logs.txt` // Single file name, not timestamped
+  const filename = `logs/${folderName}/logs_${utcStamp(now)}_${lastEntrySeq.toString(36)}.txt`
 
+  logUploadInFlight = true
+  lastLogUploadAt = now
   try {
-    // Read the existing log file to append to it; whether it exists comes
-    // from a listing (a download of a missing file is a 404 in the server log)
-    let existingLogs = ''
-    let exists = knownLogFiles.has(filename)
-    if (!exists) {
-      const { data: listed, error: listError } = await apiStorage.from('backup').list(`logs/${folderName}`)
-      exists = !listError && Array.isArray(listed) && listed.some(f => f?.name === 'logs.txt')
-    }
-    if (exists) {
-      const { data: existingData, error: downloadError } = await apiStorage
-        .from('backup')
-        .download(filename)
-      if (!downloadError && existingData) {
-        existingLogs = await existingData.text()
-      }
-    }
-
-    // Append new logs to existing logs
-    const combinedLogs = existingLogs
-      ? `${existingLogs}\n${newLogs}`
-      : newLogs
-
-    // Upload combined logs (will replace the file)
     const { data, error } = await apiStorage
       .from('backup')
-      .upload(filename, combinedLogs, {
+      .upload(filename, body, {
         contentType: 'text/plain',
-        upsert: true // Replace existing file
+        upsert: true // the same chunk sent again replaces itself
       })
 
     if (error) {
-      console.error('[Logger] Failed to upload logs:', error)
+      if (isPermanentUploadError(error)) {
+        // Refused for good (size, path): skip these lines rather than retry forever
+        writeCursor(lastEntrySeq)
+        prunePending(entries)
+        droppedUnsent = Math.max(0, droppedUnsent - dropped)
+        console.warn('[Logger] Log upload refused, these lines are skipped:', error)
+      } else {
+        console.warn('[Logger] Log upload failed, will retry:', error)
+      }
       return null
     }
 
-    knownLogFiles.add(filename)
+    writeCursor(lastEntrySeq)
+    prunePending(entries)
+    droppedUnsent = Math.max(0, droppedUnsent - dropped)
     return data?.path || filename
   } catch (err) {
-    console.error('[Logger] Error uploading logs:', err)
+    console.warn('[Logger] Error uploading logs:', err)
     return null
+  } finally {
+    logUploadInFlight = false
+    const next = queuedLogUpload
+    queuedLogUpload = null
+    if (next) uploadLogsToCloud(next.matchId, next.gameNumber).catch(() => {})
   }
+}
+
+/** Test hook: forget the buffer, cursor and timers. */
+export function resetLoggerForTests() {
+  logBuffer = []
+  lastSeq = 0
+  memoryCursor = 0
+  cursorLoaded = false
+  droppedUnsent = 0
+  lastLogUploadAt = 0
+  logUploadInFlight = false
+  queuedLogUpload = null
+  lastBackupTime = 0
+  isBackupInProgress = false
 }
 
 /**
@@ -224,14 +471,8 @@ export async function uploadBackupToCloud(matchId, backupData) {
     }
   }
 
-  // Generate UTC timestamp in yyyymmdd_hhmmss_ms format for uniqueness
-  const now = new Date()
-  const utcDate = now.toISOString().slice(0, 10).replace(/-/g, '') // yyyymmdd
-  const utcTime = now.toISOString().slice(11, 19).replace(/:/g, '') // hhmmss
-  const ms = now.getMilliseconds().toString().padStart(3, '0') // milliseconds
-
-  // Folder structure: backups/backup_g{gameN}/
-  const filename = `backups/backup_g${gameN}/backup_g${gameN}_set${setIndex}_scoreleft${leftScore}_scoreright${rightScore}_${utcDate}_${utcTime}_${ms}.json`
+  // backups/backup_g{gameN}/backup_g{gameN}_p{PIN tag}_{utc}_set..., see backupFileName
+  const filename = `${backupFolder(gameN)}/${backupFileName(gameN, backupData?.match?.gamePin ?? backupData?.match?.game_pin, { setIndex, leftScore, rightScore })}`
 
   try {
     const { data, error } = await apiStorage
@@ -253,9 +494,95 @@ export async function uploadBackupToCloud(matchId, backupData) {
   }
 }
 
+// ── Cloud backups of a match ───────────────────────────────────────────────
+//
+// The folder is the account's backups of a game NUMBER, and beach game
+// numbers start at 1 again at every tournament: last weekend's game 5 and
+// today's share it. The listing was by name (backup_g{n}_set{s}_scoreleft..),
+// which is not time order, capped at 100 by the server, and the game PIN was
+// not used: a restore listed 97-99 rows of the older match, the newest
+// backup of today's could be missing, and a wrong PIN gave the same list
+// (stress test 2026-10-25). A backup name now carries a tag of the match's
+// game PIN and then its UTC time, so the server lists the backups of the
+// match the PIN names, newest first. Names of older app versions (no tag)
+// are listed by their file time when the match has none of the new ones.
+
+export const backupFolder = (gameN) => `backups/backup_g${gameN}`
+
 /**
- * List all cloud backups for a game
- * @param {string} gamePin - Game PIN (unused but kept for API compatibility)
+ * A short tag of a game PIN for backup names (FNV-1a, 8 hex digits), or null
+ * without one. Not a secret: the files are only listed to their account.
+ */
+export function backupPinTag(gamePin) {
+  const pin = String(gamePin ?? '').trim()
+  if (!pin) return null
+  let h = 0x811c9dc5
+  for (let i = 0; i < pin.length; i++) {
+    h ^= pin.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h.toString(16).padStart(8, '0')
+}
+
+/**
+ * File name of a cloud backup:
+ * backup_g{gameN}_p{PIN tag}_{yyyymmdd}_{hhmmss}_{ms}_set{s}_scoreleft{l}_scoreright{r}.json
+ * (without a PIN: the older backup_g{gameN}_set{s}_..._{yyyymmdd}_{hhmmss}_{ms}.json)
+ */
+export function backupFileName(gameN, gamePin, { setIndex = 1, leftScore = 0, rightScore = 0, now = new Date() } = {}) {
+  const iso = now.toISOString()
+  const utcDate = iso.slice(0, 10).replace(/-/g, '') // yyyymmdd
+  const utcTime = iso.slice(11, 19).replace(/:/g, '') // hhmmss
+  const ms = String(now.getUTCMilliseconds()).padStart(3, '0')
+  const tag = backupPinTag(gamePin)
+  if (!tag) return `backup_g${gameN}_set${setIndex}_scoreleft${leftScore}_scoreright${rightScore}_${utcDate}_${utcTime}_${ms}.json`
+  return `backup_g${gameN}_p${tag}_${utcDate}_${utcTime}_${ms}_set${setIndex}_scoreleft${leftScore}_scoreright${rightScore}.json`
+}
+
+/** The parts of a backup file name (either form), or null. */
+export function parseBackupFileName(name) {
+  let m = /^backup_g(\d+)_p([0-9a-f]{8})_(\d{8})_(\d{6})_(\d{3})_set(\d+)_scoreleft(\d+)_scoreright(\d+)\.json$/.exec(String(name || ''))
+  if (m) return { gameN: parseInt(m[1]), pinTag: m[2], date: m[3], time: m[4], ms: m[5], setIndex: parseInt(m[6]), leftScore: parseInt(m[7]), rightScore: parseInt(m[8]) }
+  m = /^backup_g(\d+)_set(\d+)_scoreleft(\d+)_scoreright(\d+)_(\d{8})_(\d{6})_(\d{3})\.json$/.exec(String(name || ''))
+  if (m) return { gameN: parseInt(m[1]), pinTag: null, setIndex: parseInt(m[2]), leftScore: parseInt(m[3]), rightScore: parseInt(m[4]), date: m[5], time: m[6], ms: m[7] }
+  return null
+}
+
+const BACKUP_LIST_LIMIT = 100
+
+/**
+ * The cloud backups of the match with game number `gameN` and game PIN
+ * `gamePin`, newest first (at most 100): the ones named with its PIN tag,
+ * else (backups of an app before the tag) the untagged ones by file time.
+ * Throws the storage error.
+ * @returns {Promise<Array<{ name, path, created_at, size, gameN?, setIndex?, leftScore?, rightScore?, date?, time?, ms? }>>}
+ */
+export async function listMatchBackups(gamePin, gameN = 1) {
+  const folder = backupFolder(gameN)
+  const tag = backupPinTag(gamePin)
+  const entry = (f) => {
+    const parts = parseBackupFileName(f.name)
+    // eslint-disable-next-line no-unused-vars
+    const { pinTag: _tag, ...info } = parts || {}
+    return { name: f.name, path: `${folder}/${f.name}`, ...info, created_at: f.created_at, size: f.metadata?.size || 0 }
+  }
+  const listed = async (options) => {
+    const { data, error } = await apiStorage.from('backup').list(folder, options)
+    if (error) throw error
+    return (data || []).filter(f => typeof f?.name === 'string' && f.name.endsWith('.json'))
+  }
+  if (tag) {
+    const own = await listed({ search: `backup_g${gameN}_p${tag}_`, sortBy: { column: 'name', order: 'desc' }, limit: BACKUP_LIST_LIMIT })
+    const mine = own.filter(f => parseBackupFileName(f.name)?.pinTag === tag)
+    if (mine.length) return mine.map(entry)
+  }
+  const legacy = await listed({ search: `backup_g${gameN}_set`, sortBy: { column: 'created_at', order: 'desc' }, limit: BACKUP_LIST_LIMIT })
+  return legacy.filter(f => parseBackupFileName(f.name)?.pinTag === null).map(entry)
+}
+
+/**
+ * List the cloud backups of a match (see listMatchBackups)
+ * @param {string} gamePin - Game PIN of the match
  * @param {number} gameN - Game number
  * @returns {Array} List of backup files with name and metadata
  */
@@ -266,42 +593,9 @@ export async function listCloudBackups(gamePin, gameN = 1) {
   }
 
   try {
-    const { data, error } = await apiStorage
-      .from('backup')
-      .list(`backups/backup_g${gameN}`, {
-        sortBy: { column: 'name', order: 'desc' }
-      })
-
-    if (error) {
-      console.error('[Logger] Failed to list backups:', error)
-      return []
-    }
-
-    // Parse filenames like "backup_g1_set2_scoreleft15_scoreright12_20250104_153045_123.json"
-    return (data || []).map(file => {
-      const match = file.name.match(/^backup_g(\d+)_set(\d+)_scoreleft(\d+)_scoreright(\d+)_(\d{8})_(\d{6})_(\d{3})\.json$/)
-      if (match) {
-        return {
-          name: file.name,
-          path: `backups/backup_g${gameN}/${file.name}`,
-          gameN: parseInt(match[1]),
-          setIndex: parseInt(match[2]),
-          leftScore: parseInt(match[3]),
-          rightScore: parseInt(match[4]),
-          date: match[5],
-          time: match[6],
-          ms: match[7],
-          created_at: file.created_at
-        }
-      }
-      return {
-        name: file.name,
-        path: `backups/backup_g${gameN}/${file.name}`,
-        created_at: file.created_at
-      }
-    })
+    return await listMatchBackups(gamePin, gameN)
   } catch (err) {
-    console.error('[Logger] Error listing backups:', err)
+    console.error('[Logger] Failed to list backups:', err)
     return []
   }
 }
@@ -376,8 +670,10 @@ export function formatBackupTimestamp(date, time, ms) {
  * @param {string|number|null} gameNumber - Game number for human-readable paths
  */
 export async function triggerContinuousBackup(matchId, getBackupData, gameNumber = null) {
-  // Skip if backup already in progress
-  if (isBackupInProgress) {
+  // Skip if backup already in progress (until its uploads are done: on a slow
+  // link they piled up, one set per action), or signed out (the cloud would
+  // refuse it)
+  if (isBackupInProgress || !canUseStorage()) {
     return
   }
 
@@ -393,11 +689,16 @@ export async function triggerContinuousBackup(matchId, getBackupData, gameNumber
   try {
     const backupData = await getBackupData()
     if (backupData) {
-      // Upload in parallel (non-blocking)
-      Promise.all([
+      // Upload in parallel; the caller does not wait (runOrDefer), the next
+      // action's backup does
+      await Promise.all([
         uploadBackupToCloud(matchId, backupData),
-        uploadLogsToCloud(matchId, gameNumber)
-      ]).catch(err => {
+        // Logs: only the new lines, at most once a minute (set/match end send
+        // at once), or at once when the buffer is filling up
+        uploadLogsToCloud(matchId, gameNumber, {
+          minIntervalMs: getUnsentLogs().length >= EARLY_UPLOAD_UNSENT ? 0 : LOG_UPLOAD_MIN_INTERVAL_MS
+        })
+      ]).catch(() => {
         // Silent fail - don't block UI
       })
     }
