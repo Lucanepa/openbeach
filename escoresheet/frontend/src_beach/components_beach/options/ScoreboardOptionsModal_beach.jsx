@@ -4,6 +4,7 @@ import { useAlert } from '../../contexts_beach/AlertContext_beach'
 import Modal from '../Modal_beach'
 import { listCloudBackups, loadCloudBackup } from '../../utils_beach/logger_beach'
 import { restoreMatchInPlace } from '../../utils_beach/backupManager_beach'
+import { db } from '../../db_beach/db_beach'
 import { clearCachesAndReload } from '../../utils_beach/appReload_beach'
 import BackupTable from '../BackupTable_beach'
 import { SatelliteDish } from '../Icons_beach'
@@ -135,7 +136,10 @@ export default function ScoreboardOptionsModal({
     }
     setBackupsLoading(true)
     try {
-      const backups = await listCloudBackups(matchId)
+      // The backups of this match: its game number and game PIN (the local
+      // id was passed as the PIN, which listed game 1's backups)
+      const match = await db.matches.get(matchId)
+      const backups = await listCloudBackups(match?.gamePin ?? match?.game_pin, match?.gameN || match?.game_n || 1)
       setCloudBackups(backups)
       setShowCloudBackups(true)
     } catch (err) {

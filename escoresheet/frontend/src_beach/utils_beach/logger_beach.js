@@ -471,14 +471,8 @@ export async function uploadBackupToCloud(matchId, backupData) {
     }
   }
 
-  // Generate UTC timestamp in yyyymmdd_hhmmss_ms format for uniqueness
-  const now = new Date()
-  const utcDate = now.toISOString().slice(0, 10).replace(/-/g, '') // yyyymmdd
-  const utcTime = now.toISOString().slice(11, 19).replace(/:/g, '') // hhmmss
-  const ms = now.getMilliseconds().toString().padStart(3, '0') // milliseconds
-
-  // Folder structure: backups/backup_g{gameN}/
-  const filename = `backups/backup_g${gameN}/backup_g${gameN}_set${setIndex}_scoreleft${leftScore}_scoreright${rightScore}_${utcDate}_${utcTime}_${ms}.json`
+  // backups/backup_g{gameN}/backup_g{gameN}_p{PIN tag}_{utc}_set..., see backupFileName
+  const filename = `${backupFolder(gameN)}/${backupFileName(gameN, backupData?.match?.gamePin ?? backupData?.match?.game_pin, { setIndex, leftScore, rightScore })}`
 
   try {
     const { data, error } = await apiStorage
@@ -500,9 +494,95 @@ export async function uploadBackupToCloud(matchId, backupData) {
   }
 }
 
+// ── Cloud backups of a match ───────────────────────────────────────────────
+//
+// The folder is the account's backups of a game NUMBER, and beach game
+// numbers start at 1 again at every tournament: last weekend's game 5 and
+// today's share it. The listing was by name (backup_g{n}_set{s}_scoreleft..),
+// which is not time order, capped at 100 by the server, and the game PIN was
+// not used: a restore listed 97-99 rows of the older match, the newest
+// backup of today's could be missing, and a wrong PIN gave the same list
+// (stress test 2026-10-25). A backup name now carries a tag of the match's
+// game PIN and then its UTC time, so the server lists the backups of the
+// match the PIN names, newest first. Names of older app versions (no tag)
+// are listed by their file time when the match has none of the new ones.
+
+export const backupFolder = (gameN) => `backups/backup_g${gameN}`
+
 /**
- * List all cloud backups for a game
- * @param {string} gamePin - Game PIN (unused but kept for API compatibility)
+ * A short tag of a game PIN for backup names (FNV-1a, 8 hex digits), or null
+ * without one. Not a secret: the files are only listed to their account.
+ */
+export function backupPinTag(gamePin) {
+  const pin = String(gamePin ?? '').trim()
+  if (!pin) return null
+  let h = 0x811c9dc5
+  for (let i = 0; i < pin.length; i++) {
+    h ^= pin.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h.toString(16).padStart(8, '0')
+}
+
+/**
+ * File name of a cloud backup:
+ * backup_g{gameN}_p{PIN tag}_{yyyymmdd}_{hhmmss}_{ms}_set{s}_scoreleft{l}_scoreright{r}.json
+ * (without a PIN: the older backup_g{gameN}_set{s}_..._{yyyymmdd}_{hhmmss}_{ms}.json)
+ */
+export function backupFileName(gameN, gamePin, { setIndex = 1, leftScore = 0, rightScore = 0, now = new Date() } = {}) {
+  const iso = now.toISOString()
+  const utcDate = iso.slice(0, 10).replace(/-/g, '') // yyyymmdd
+  const utcTime = iso.slice(11, 19).replace(/:/g, '') // hhmmss
+  const ms = String(now.getUTCMilliseconds()).padStart(3, '0')
+  const tag = backupPinTag(gamePin)
+  if (!tag) return `backup_g${gameN}_set${setIndex}_scoreleft${leftScore}_scoreright${rightScore}_${utcDate}_${utcTime}_${ms}.json`
+  return `backup_g${gameN}_p${tag}_${utcDate}_${utcTime}_${ms}_set${setIndex}_scoreleft${leftScore}_scoreright${rightScore}.json`
+}
+
+/** The parts of a backup file name (either form), or null. */
+export function parseBackupFileName(name) {
+  let m = /^backup_g(\d+)_p([0-9a-f]{8})_(\d{8})_(\d{6})_(\d{3})_set(\d+)_scoreleft(\d+)_scoreright(\d+)\.json$/.exec(String(name || ''))
+  if (m) return { gameN: parseInt(m[1]), pinTag: m[2], date: m[3], time: m[4], ms: m[5], setIndex: parseInt(m[6]), leftScore: parseInt(m[7]), rightScore: parseInt(m[8]) }
+  m = /^backup_g(\d+)_set(\d+)_scoreleft(\d+)_scoreright(\d+)_(\d{8})_(\d{6})_(\d{3})\.json$/.exec(String(name || ''))
+  if (m) return { gameN: parseInt(m[1]), pinTag: null, setIndex: parseInt(m[2]), leftScore: parseInt(m[3]), rightScore: parseInt(m[4]), date: m[5], time: m[6], ms: m[7] }
+  return null
+}
+
+const BACKUP_LIST_LIMIT = 100
+
+/**
+ * The cloud backups of the match with game number `gameN` and game PIN
+ * `gamePin`, newest first (at most 100): the ones named with its PIN tag,
+ * else (backups of an app before the tag) the untagged ones by file time.
+ * Throws the storage error.
+ * @returns {Promise<Array<{ name, path, created_at, size, gameN?, setIndex?, leftScore?, rightScore?, date?, time?, ms? }>>}
+ */
+export async function listMatchBackups(gamePin, gameN = 1) {
+  const folder = backupFolder(gameN)
+  const tag = backupPinTag(gamePin)
+  const entry = (f) => {
+    const parts = parseBackupFileName(f.name)
+    // eslint-disable-next-line no-unused-vars
+    const { pinTag: _tag, ...info } = parts || {}
+    return { name: f.name, path: `${folder}/${f.name}`, ...info, created_at: f.created_at, size: f.metadata?.size || 0 }
+  }
+  const listed = async (options) => {
+    const { data, error } = await apiStorage.from('backup').list(folder, options)
+    if (error) throw error
+    return (data || []).filter(f => typeof f?.name === 'string' && f.name.endsWith('.json'))
+  }
+  if (tag) {
+    const own = await listed({ search: `backup_g${gameN}_p${tag}_`, sortBy: { column: 'name', order: 'desc' }, limit: BACKUP_LIST_LIMIT })
+    const mine = own.filter(f => parseBackupFileName(f.name)?.pinTag === tag)
+    if (mine.length) return mine.map(entry)
+  }
+  const legacy = await listed({ search: `backup_g${gameN}_set`, sortBy: { column: 'created_at', order: 'desc' }, limit: BACKUP_LIST_LIMIT })
+  return legacy.filter(f => parseBackupFileName(f.name)?.pinTag === null).map(entry)
+}
+
+/**
+ * List the cloud backups of a match (see listMatchBackups)
+ * @param {string} gamePin - Game PIN of the match
  * @param {number} gameN - Game number
  * @returns {Array} List of backup files with name and metadata
  */
@@ -513,42 +593,9 @@ export async function listCloudBackups(gamePin, gameN = 1) {
   }
 
   try {
-    const { data, error } = await apiStorage
-      .from('backup')
-      .list(`backups/backup_g${gameN}`, {
-        sortBy: { column: 'name', order: 'desc' }
-      })
-
-    if (error) {
-      console.error('[Logger] Failed to list backups:', error)
-      return []
-    }
-
-    // Parse filenames like "backup_g1_set2_scoreleft15_scoreright12_20250104_153045_123.json"
-    return (data || []).map(file => {
-      const match = file.name.match(/^backup_g(\d+)_set(\d+)_scoreleft(\d+)_scoreright(\d+)_(\d{8})_(\d{6})_(\d{3})\.json$/)
-      if (match) {
-        return {
-          name: file.name,
-          path: `backups/backup_g${gameN}/${file.name}`,
-          gameN: parseInt(match[1]),
-          setIndex: parseInt(match[2]),
-          leftScore: parseInt(match[3]),
-          rightScore: parseInt(match[4]),
-          date: match[5],
-          time: match[6],
-          ms: match[7],
-          created_at: file.created_at
-        }
-      }
-      return {
-        name: file.name,
-        path: `backups/backup_g${gameN}/${file.name}`,
-        created_at: file.created_at
-      }
-    })
+    return await listMatchBackups(gamePin, gameN)
   } catch (err) {
-    console.error('[Logger] Error listing backups:', err)
+    console.error('[Logger] Failed to list backups:', err)
     return []
   }
 }

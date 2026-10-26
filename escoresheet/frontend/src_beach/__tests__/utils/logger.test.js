@@ -8,7 +8,7 @@ import { useMemoryLocalStorage } from '../helpers/memoryStorage'
 // times), then every rally moved ~14 MB and got 413, and the next match with
 // the same number started at the cap. Ported from OpenVolley
 // src/utils/__tests__/logger.test.js (d2cc2851, 9616bd4f).
-const storage = vi.hoisted(() => ({ uploads: [], downloads: 0, lists: 0, result: null, session: true }))
+const storage = vi.hoisted(() => ({ uploads: [], downloads: 0, lists: 0, listCalls: [], folders: {}, result: null, session: true }))
 vi.mock('../../lib_beach/apiClient_beach', () => ({
   AUTH_TOKEN_STORAGE_KEY: 'api_auth_token',
   canUseStorage: () => storage.session,
@@ -22,9 +22,16 @@ vi.mock('../../lib_beach/apiClient_beach', () => ({
         storage.downloads++
         return { data: null, error: { code: 'OV_STORAGE_NOT_FOUND' } }
       },
-      list: async () => {
+      // The backend's list (lib/storage.js): search is a name prefix, sorted
+      // by name or a time column, then cut at the limit (default 100)
+      list: async (folder, options = {}) => {
         storage.lists++
-        return { data: [], error: null }
+        storage.listCalls.push({ folder, options })
+        let files = (storage.folders[folder] || []).filter(f => !options.search || f.name.toLowerCase().startsWith(options.search.toLowerCase()))
+        const col = options.sortBy?.column || 'name'
+        const desc = options.sortBy?.order === 'desc'
+        files = [...files].sort((a, b) => (a[col] < b[col] ? -1 : a[col] > b[col] ? 1 : 0) * (desc ? -1 : 1))
+        return { data: files.slice(0, options.limit || 100), error: null }
       }
     })
   }
@@ -40,7 +47,11 @@ import {
   restorePendingLogs,
   discardUnsentLogs,
   resetLoggerForTests,
-  LOG_UPLOAD_MIN_INTERVAL_MS
+  LOG_UPLOAD_MIN_INTERVAL_MS,
+  uploadBackupToCloud,
+  listMatchBackups,
+  backupFileName,
+  backupPinTag
 } from '../../utils_beach/logger_beach'
 
 const signIn = (userId = 'u1') => localStorage.setItem('api_auth_token', JSON.stringify({ access_token: 't', user: { id: userId } }))
@@ -61,6 +72,8 @@ beforeEach(() => {
   storage.uploads = []
   storage.downloads = 0
   storage.lists = 0
+  storage.listCalls = []
+  storage.folders = {}
   storage.result = null
   storage.session = true
   vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -159,5 +172,54 @@ describe('lines not uploaded yet', () => {
     await uploadLogsToCloud(1, 61)
     expect(logUploads()[0].body).not.toContain('[G] mine')
     expect(logUploads()[0].body).toContain('[G] theirs')
+  })
+})
+
+// Stress test 2026-10-25 (ob-restore-backups-by-game-number-pin-ignored):
+// Restore match listed backups/backup_g<n> by name (not time order), cut at
+// 100 by the server, with the game PIN unused: last weekend's game with the
+// same number filled the list, today's newest backup was missing, and a
+// wrong PIN gave the same list
+describe('cloud backups of one match', () => {
+  const at = (d, h, m, s) => new Date(Date.UTC(2026, 9, d, h, m, s))
+  const fileOf = (name, created) => ({ name, created_at: created.toISOString(), metadata: { size: 100 } })
+
+  it('a backup is named with its game PIN\'s tag, then its time', async () => {
+    const backup = { match: { gameN: 5, gamePin: '424242' }, sets: [{ index: 1, team1Points: 10, team2Points: 11 }] }
+    await uploadBackupToCloud(1, backup)
+    expect(storage.uploads[0].path).toMatch(new RegExp(`^backups/backup_g5/backup_g5_p${backupPinTag('424242')}_\\d{8}_\\d{6}_\\d{3}_set1_scoreleft10_scoreright11\\.json$`))
+    expect(backupPinTag('424242')).not.toBe(backupPinTag('000000'))
+  })
+
+  it('lists only the backups of the match the PIN names, newest first, past 100 of another match', async () => {
+    const files = []
+    // last weekend's game 5 (other PIN): 120 backups, sets 1-3
+    for (let i = 0; i < 120; i++) {
+      const t = at(18, 10, 0, i)
+      files.push(fileOf(backupFileName(5, '111111', { setIndex: 1 + (i % 3), leftScore: i % 22, rightScore: 3, now: t }), t))
+    }
+    // today's game 5: 10 backups, the newest at set 1 10:11
+    for (let i = 0; i < 10; i++) {
+      const t = at(25, 12, 0, i)
+      files.push(fileOf(backupFileName(5, '424242', { setIndex: 1, leftScore: i + 1, rightScore: i + 2, now: t }), t))
+    }
+    storage.folders['backups/backup_g5'] = files
+    const list = await listMatchBackups('424242', 5)
+    expect(list).toHaveLength(10)
+    expect(list[0]).toMatchObject({ setIndex: 1, leftScore: 10, rightScore: 11, path: expect.stringMatching(/^backups\/backup_g5\//) })
+    expect(list.map(b => `${b.date}${b.time}${b.ms}`)).toEqual([...list.map(b => `${b.date}${b.time}${b.ms}`)].sort().reverse())
+    // a wrong PIN lists none of them
+    expect(await listMatchBackups('000000', 5)).toEqual([])
+  })
+
+  it('backups of an app before the tag (no PIN in the name) are listed by their file time', async () => {
+    storage.folders['backups/backup_g7'] = [
+      fileOf('backup_g7_set1_scoreleft9_scoreright3_20261025_120009_000.json', at(25, 12, 0, 9)),
+      fileOf('backup_g7_set1_scoreleft10_scoreright3_20261025_120010_000.json', at(25, 12, 0, 10)),
+      fileOf('backup_g7_set3_scoreleft14_scoreright3_20261018_100000_000.json', at(18, 10, 0, 0))
+    ]
+    const list = await listMatchBackups('424242', 7)
+    expect(list.map(b => `${b.setIndex}:${b.leftScore}`)).toEqual(['1:10', '1:9', '3:14'])
+    expect(storage.listCalls.at(-1).options).toMatchObject({ sortBy: { column: 'created_at', order: 'desc' }, limit: 100 })
   })
 })

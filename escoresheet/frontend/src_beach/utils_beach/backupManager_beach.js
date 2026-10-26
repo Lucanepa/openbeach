@@ -18,6 +18,7 @@ import { refereeConnectionDefault } from '../constants_beach/testSeeds_beach'
 import { jobMatchKey, setExtId, eventExtId, parseExtId } from './syncIds_beach'
 import { queueScorerClaim, isScorerMoved } from './matchHandover_beach'
 import { postMatchSignaturesFromServer } from './signatures_beach'
+import { listMatchBackups } from './logger_beach'
 
 // IndexedDB key for storing file system directory handle
 const BACKUP_DB_NAME = 'escoresheet_backup'
@@ -1703,46 +1704,10 @@ export async function listCloudBackups(gamePin, gameN = 1) {
     throw new Error('Supabase not configured')
   }
 
-  // Use the same path format as logger.js continuous backups
-  const folderPath = `backups/backup_g${gameN}`
-
-  const { data, error } = await apiStorage
-    .from('backup')
-    .list(folderPath, {
-      sortBy: { column: 'name', order: 'desc' }
-    })
-
-  if (error) throw error
-
-  // Parse filenames to extract useful info
-  // Format: backup_g785111_set2_scoreleft23_scoreright23_20260105_113229_798.json
-  return (data || [])
-    .filter(f => f.name.endsWith('.json'))
-    .map(f => {
-      const match = f.name.match(/^backup_g(\d+)_set(\d+)_scoreleft(\d+)_scoreright(\d+)_(\d{8})_(\d{6})_(\d{3})\.json$/)
-      if (match) {
-        return {
-          name: f.name,
-          path: `${folderPath}/${f.name}`,
-          gameN: parseInt(match[1]),
-          setIndex: parseInt(match[2]),
-          leftScore: parseInt(match[3]),
-          rightScore: parseInt(match[4]),
-          date: match[5],
-          time: match[6],
-          ms: match[7],
-          created: f.created_at,
-          size: f.metadata?.size || 0
-        }
-      }
-      // Fallback for files that don't match the pattern
-      return {
-        name: f.name,
-        path: `${folderPath}/${f.name}`,
-        created: f.created_at,
-        size: f.metadata?.size || 0
-      }
-    })
+  // The backups of the match this game number AND game PIN name, newest
+  // first (logger_beach listMatchBackups: beach game numbers repeat)
+  // eslint-disable-next-line no-unused-vars
+  return (await listMatchBackups(gamePin, gameN)).map(({ created_at, ...b }) => ({ ...b, created: created_at }))
 }
 
 /**
