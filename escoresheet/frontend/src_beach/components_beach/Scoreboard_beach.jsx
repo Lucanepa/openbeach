@@ -14,7 +14,7 @@ import ScoreboardOptionsModal from './options/ScoreboardOptionsModal_beach'
 import ConnectionSetupModal from './options/ConnectionSetupModal_beach'
 import { useSyncQueue, checkScorerMoved } from '../hooks_beach/useSyncQueue_beach'
 import { isScorerMoved, SCORER_MOVED } from '../utils_beach/matchHandover_beach'
-import { useConfirmAction, GHOST_CLICK_MS } from '../hooks_beach/useConfirmAction_beach'
+import { useConfirmAction, GHOST_CLICK_MS, swallowFollowingClicks } from '../hooks_beach/useConfirmAction_beach'
 import { useActionLiveQuery } from '../hooks_beach/useActionLiveQuery_beach'
 import { useScorerActions, pickLiveStateSnapshot, isReportedActionError } from '../hooks_beach/useScorerActions_beach'
 import { withActivityContext, currentActivityContext, maxVoidedSeq, rememberSeedKey, withoutEventHistory } from '../db_beach/eventHistory_beach'
@@ -4256,6 +4256,12 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     }
 
     const { setIndex, winner, team1Points, team2Points } = setEndTimeModal
+
+    // The dialog closes at once, so the second tap of a double tap landed on
+    // "End set interval" under it and the interval was over before it began
+    // (stress test 2026-10-25, 3 of 4 double taps): taps right after this
+    // Confirm are swallowed, as after the other confirms (useConfirmAction)
+    swallowFollowingClicks(GHOST_CLICK_MS)
 
     // Guard: Check if this set was already confirmed to prevent double-processing
     if (confirmedSetEndRef.current.has(setIndex)) {

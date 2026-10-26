@@ -44,7 +44,9 @@ export const GHOST_CLICK_MS = 450
 
 const activeGuards = new Set()
 
-function swallowFollowingClicks(ms) {
+// Exported for the confirms that do not run through useConfirmAction (the
+// set end's Confirm)
+export function swallowFollowingClicks(ms) {
   if (typeof window === 'undefined') return
   const until = Date.now() + ms
   const swallow = (e) => {
