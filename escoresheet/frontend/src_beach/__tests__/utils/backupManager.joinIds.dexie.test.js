@@ -167,3 +167,57 @@ describe('importMatchFromSupabase: the closing signatures', () => {
     expect(signaturesPayload(m)).toMatchObject({ team1_captain_post_game: 'data:c1', ref1: 'data:r1', ref2: 'data:r2', scorer: 'data:s' })
   })
 })
+
+// Stress test 2026-10-25 (ob-takeback-loses-tto-courtswitch-setstart): the
+// scoring screen writes set_start, technical_to (with the TTO's change of
+// courts) and the first rally_start of a set without a sync job. "Take back
+// scoring here" replaced the device's copy with the cloud's, which has none
+// of them: the TTO was asked again, the teams went back to the wrong sides,
+// and set 1's confirmed start time became the row's creation time
+describe('importMatchFromSupabase: what only this device knows', () => {
+  beforeEach(async () => {
+    await db.open()
+    await Promise.all(db.tables.map(t => t.clear()))
+  })
+
+  async function ownCopy() {
+    const own = await db.matches.add({ seed_key: seed, status: 'live', gamePin: '123456', gameN: 61, setLeftTeamOverrides: { 1: 'team2' } })
+    await db.sets.add({ id: 1, matchId: own, index: 1, team1Points: 2, team2Points: 2, finished: false, startTime: '2026-10-25T13:40:00.000Z' })
+    // the cloud's ten events (ids 1..10, seq 1..10) and this device's own:
+    // set_start (seq 2.5), first rally_start (2.6), a TTO after the 10th (10.5)
+    for (let i = 1; i <= 10; i++) await db.events.add({ id: i, matchId: own, setIndex: 1, type: i === 1 ? 'coin_toss' : 'point', seq: i, payload: {} })
+    await db.events.add({ id: 11, matchId: own, setIndex: 1, type: 'set_start', seq: 2.5, payload: { setIndex: 1, startTime: '2026-10-25T13:40:00.000Z' } })
+    await db.events.add({ id: 12, matchId: own, setIndex: 1, type: 'rally_start', seq: 2.6, payload: {} })
+    await db.events.add({ id: 13, matchId: own, setIndex: 1, type: 'technical_to', seq: 10.5, payload: { courtSwitched: true, teamA: 'team1' } })
+    return own
+  }
+
+  it('keeps its set_start, technical_to and first rally_start, its sides and its confirmed set start', async () => {
+    await ownCopy()
+    const localMatchId = await importMatchFromSupabase(cloudMatch())
+    const events = await db.events.where('matchId').equals(localMatchId).sortBy('seq')
+    expect(events.filter(e => !Number.isInteger(e.seq)).map(e => [e.type, e.seq, e.payload])).toEqual([
+      ['set_start', 2.5, { setIndex: 1, startTime: '2026-10-25T13:40:00.000Z' }],
+      ['rally_start', 2.6, {}],
+      ['technical_to', 10.5, { courtSwitched: true, teamA: 'team1' }]
+    ])
+    // the cloud rows keep their ids; the kept events get new ones, above them
+    expect(events.filter(e => Number.isInteger(e.seq)).map(e => e.id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    expect(Math.min(...events.filter(e => !Number.isInteger(e.seq)).map(e => e.id))).toBeGreaterThan(10)
+    const m = await db.matches.get(localMatchId)
+    expect(m.setLeftTeamOverrides).toEqual({ 1: 'team2' })
+    expect((await db.sets.where('matchId').equals(localMatchId).first()).startTime).toBe('2026-10-25T13:40:00.000Z')
+    // nothing of them is sent (they never were)
+    expect((await db.sync_queue.toArray()).filter(j => j.resource === 'event')).toEqual([])
+  })
+
+  it('not when the other device scored on: the cloud copy is newer', async () => {
+    await ownCopy()
+    const cloud = cloudMatch()
+    cloud.events.push({ id: 'cloud-event-x', external_id: `${seed}:e:41`, set_index: 1, seq: 11, type: 'point', payload: { team: 'team2' }, ts: '2026-10-25T12:30:00Z' })
+    const localMatchId = await importMatchFromSupabase(cloud)
+    const events = await db.events.where('matchId').equals(localMatchId).toArray()
+    expect(events.filter(e => !Number.isInteger(e.seq))).toEqual([])
+    expect((await db.sets.where('matchId').equals(localMatchId).first()).startTime).toBe('2026-10-25T12:25:00Z')
+  })
+})

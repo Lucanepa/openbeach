@@ -1306,6 +1306,8 @@ export async function importMatchFromSupabase(cloudData) {
     // unsent writes would overwrite the score the other device left. Its sets
     // and events go (replaced, not undone: nothing is voided on the server),
     // its unsent jobs are superseded; other local matches are kept.
+    // What only this device knows of the match is read first (keptLocalState)
+    const kept = await keptLocalState(match.external_id, events)
     await replaceLocalCopies(match.external_id)
 
     // Extract team data from JSONB columns
@@ -1389,6 +1391,9 @@ export async function importMatchFromSupabase(cloudData) {
       // Court sides (courtSides_beach): without them the court showed A on the left
       ...(courtSides.setLeftTeamOverrides ? { setLeftTeamOverrides: { ...courtSides.setLeftTeamOverrides } } : {}),
       ...(courtSides.set3LeftTeam ? { set3LeftTeam: courtSides.set3LeftTeam } : {}),
+      // ... unless this device's own copy is not older than the cloud's: its
+      // sides include the change of courts of a TTO, which only it knows
+      ...(kept.sides || {}),
       // Set 3's toss: its winner hides the toss buttons, so its first server
       // (and the side chosen in the break since) come with it
       ...(set3Toss.set3CoinTossWinner ? { set3CoinTossWinner: set3Toss.set3CoinTossWinner } : {}),
@@ -1489,7 +1494,8 @@ export async function importMatchFromSupabase(cloudData) {
       team1Points: set.team1_points,
       team2Points: set.team2_points,
       finished: set.finished,
-      startTime: set.start_time,
+      // the start time this device's scorer confirmed (keptLocalState)
+      startTime: kept.setStartTimes[set.index] || set.start_time,
       endTime: set.end_time,
       externalId: set.external_id
     })
@@ -1535,6 +1541,9 @@ export async function importMatchFromSupabase(cloudData) {
         if (event.external_id == null) await db.events.add(eventRow(event))
       }
 
+      // This device's events the cloud never gets (keptLocalState): new ids
+      for (const event of kept.events) await db.events.add({ ...event, matchId: localMatchId })
+
       if (!keepIds && !match.test) {
         // Another local match holds one of the ids (or a cloud id is not this
         // match's own): the cloud rows move to this device's new ids instead,
@@ -1559,6 +1568,55 @@ export async function importMatchFromSupabase(cloudData) {
 
   await afterJoin(importedMatchId, { claim: true })
   return importedMatchId
+}
+
+// The event types the scoring screen writes without a sync job
+// (eventRevisions_beach LOCAL_ONLY_EVENT_TYPES), and the first rally_start of
+// a set, which is added the same way
+const DEVICE_ONLY_EVENT_TYPES = ['set_start', 'set3_coin_toss', 'between_sets_setup_confirmed', 'technical_to']
+
+/**
+ * What only this device knows of match `seedKey`, read before its own copy is
+ * replaced by the cloud's (importMatchFromSupabase: "Take back scoring here",
+ * a restore by PIN on a device that had the match):
+ * - `events`: its set_start, technical_to (with the TTO's change of courts),
+ *   set 3 toss and first-rally events, which never reach the cloud. Without
+ *   them a take-back after the TTO asked for the TTO again and switched the
+ *   courts a second time, and the sheet lost its set starts (stress test
+ *   2026-10-25). Only when the cloud has no event this copy lacks after them
+ *   (the other device did not score on): otherwise they may be stale.
+ * - `sides`: its court sides on the same condition (a TTO's change of courts
+ *   is in no cloud event), and `setStartTimes` (index -> the start time its
+ *   scorer confirmed; the cloud had the time the set row was created).
+ * The events come without id and match id (the import gives new ones).
+ */
+async function keptLocalState(seedKey, cloudEvents) {
+  const none = { events: [], sides: null, setStartTimes: {} }
+  if (!seedKey) return none
+  const own = await db.matches.filter(m => localMatchKey(m) === seedKey).first()
+  if (!own) return none
+  const ownEvents = await db.events.where('matchId').equals(own.id).toArray()
+  const seqOf = (e) => (Number.isFinite(Number(e?.seq)) ? Number(e.seq) : 0)
+  const ownLast = Math.max(0, ...ownEvents.map(seqOf))
+  const cloudLast = Math.max(0, ...(cloudEvents || []).filter(e => e.external_id != null).map(seqOf))
+  if (cloudLast > ownLast) return none
+  const cloudIds = new Set((cloudEvents || []).map(e => e.external_id).filter(Boolean))
+  const firstRallyOfSet = new Map()
+  for (const e of [...ownEvents].sort((a, b) => seqOf(a) - seqOf(b))) {
+    if (e.type === 'rally_start' && !firstRallyOfSet.has(e.setIndex)) firstRallyOfSet.set(e.setIndex, e.id)
+  }
+  const deviceOnly = (e) => DEVICE_ONLY_EVENT_TYPES.includes(e.type) || (e.type === 'rally_start' && firstRallyOfSet.get(e.setIndex) === e.id)
+  // eslint-disable-next-line no-unused-vars
+  const events = ownEvents.filter(e => deviceOnly(e) && !cloudIds.has(eventExtId(seedKey, e.id))).map(({ id: _id, matchId: _matchId, ...e }) => e)
+  const sides = {
+    ...(own.setLeftTeamOverrides ? { setLeftTeamOverrides: { ...own.setLeftTeamOverrides } } : {}),
+    ...(own.set3LeftTeam ? { set3LeftTeam: own.set3LeftTeam } : {})
+  }
+  const setStartTimes = {}
+  for (const set of await db.sets.where('matchId').equals(own.id).toArray()) {
+    if (set.startTime && set.index != null) setStartTimes[set.index] = set.startTime
+  }
+  return { events, sides: Object.keys(sides).length ? sides : null, setStartTimes }
 }
 
 // The local id a cloud set/event row of match `seedKey` is keyed with

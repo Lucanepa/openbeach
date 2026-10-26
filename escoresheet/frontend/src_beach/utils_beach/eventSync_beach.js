@@ -125,6 +125,36 @@ export async function queueSetFinishedSync(db, { matchId, setId, insert = false 
 }
 
 /**
+ * Queue the start time the scorer confirmed for a set (the set start dialog).
+ * It was written locally only: the cloud kept the time the set row was
+ * created, and a device that took the match back (or a restore by PIN)
+ * replaced the confirmed time with it, so the sheet's set 1 ended before it
+ * started (stress test 2026-10-25).
+ * @param {import('dexie').Dexie} db
+ * @param {{ matchId: number, setId: number }} p
+ * @returns {Promise<boolean>} true when a job was queued
+ */
+export async function queueSetStartTimeSync(db, { matchId, setId }) {
+  try {
+    const match = await db.matches.get(matchId)
+    if (!match || match.test || !match.seed_key) return false
+    const set = await db.sets.get(setId)
+    if (!set?.startTime) return false
+    await db.sync_queue.add({
+      resource: 'set',
+      action: 'update',
+      payload: { external_id: setExtId(match.seed_key, set.id), start_time: set.startTime },
+      ts: new Date().toISOString(),
+      status: 'queued'
+    })
+    return true
+  } catch (err) {
+    console.warn('[eventSync] could not queue the set start time', matchId, setId, err?.message)
+    return false
+  }
+}
+
+/**
  * Is a live-state sync in the break between two sets? At the set end itself,
  * or while the match is in its interval and the set the snapshot shows is not
  * marked finished yet (once it is, the snapshot already counts it and moves on:

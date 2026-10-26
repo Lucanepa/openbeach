@@ -30,7 +30,7 @@ import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { apiFrom } from '../lib_beach/apiClient_beach'
 import { setExtId, eventExtId } from '../utils_beach/syncIds_beach'
 import { missingForfeitSets } from '../utils_beach/forfeitSets_beach'
-import { changesSetScore, isLiveSetInterval, queueSetScoreSync, queueSetFinishedSync } from '../utils_beach/eventSync_beach'
+import { changesSetScore, isLiveSetInterval, queueSetScoreSync, queueSetFinishedSync, queueSetStartTimeSync } from '../utils_beach/eventSync_beach'
 import { planPointRemoval, scoreAfterRemoval, syncJobsForEvents, syncJobsForSets, eventUpsertJob, setReopenJob, planDecisionChangeReversal, scoreDeltaOfRemoval, teamSanctionFlags, UNSENT_STATUSES } from '../utils_beach/scorerCorrections_beach'
 import { askConfirm } from '../utils_beach/askConfirm_beach'
 import { rallyStatusOf, currentSetOf } from '../utils_beach/rally_beach'
@@ -4087,8 +4087,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     const confirmedMs = new Date(roundToMinute(time)).getTime()
     const timeDifferent = expectedMs !== confirmedMs
 
-    // Update set with start time (absolute timestamp)
+    // Update set with start time (absolute timestamp), and the cloud's set row
     await db.sets.update(data.set.id, { startTime: roundToMinute(time) })
+    await queueSetStartTimeSync(db, { matchId, setId: data.set.id })
 
     // Set 1 at another time than scheduled: "Actual start time: HH:MM" in
     // the remarks (replaced when confirmed again, removed at the scheduled
