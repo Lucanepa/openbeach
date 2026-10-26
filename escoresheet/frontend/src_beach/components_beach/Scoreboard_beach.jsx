@@ -71,7 +71,7 @@ import SignaturePad from './SignaturePad_beach'
 import { saveMatchSignature } from '../utils_beach/signatures_beach'
 import { signatureSourceUpdate } from '../utils_beach/phoneSignature_beach'
 import { uploadBackupToCloud, uploadLogsToCloud, triggerContinuousBackup } from '../utils_beach/logger_beach'
-import { splitLocalDateTime, parseLocalDateTimeToISO, roundToMinute, formatTimeLocal } from '../utils_beach/timeUtils_beach'
+import { splitLocalDateTime, parseLocalDateTimeToISO, roundToMinute, formatTimeLocal, localTimeNear } from '../utils_beach/timeUtils_beach'
 import { TimeInput24 } from './TimeInput24_beach'
 import { uploadScoresheetAsync } from '../utils_beach/scoresheetUploader_beach'
 import { useConnectionHealthMonitor } from '../hooks_beach/useConnectionHealthMonitor_beach'
@@ -17717,10 +17717,10 @@ function SetEndTimeModal({ setIndex, winner, team1Points, team2Points, defaultTi
       return
     }
     setIsConfirming(true)
-    // Get the date component from defaultTime and combine with entered time
-    const { date } = splitLocalDateTime(defaultTime)
-    // Convert local time to UTC ISO string
-    const isoString = parseLocalDateTimeToISO(date, time)
+    // The entered local time on defaultTime's date, as UTC ISO: the reading
+    // nearest the proposed time, so the hour the clocks go back is not
+    // taken for the hour before (localTimeNear)
+    const isoString = localTimeNear(defaultTime, time)
     onConfirm(isoString)
   }
 
