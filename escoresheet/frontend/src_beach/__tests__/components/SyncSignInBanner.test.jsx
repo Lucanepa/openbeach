@@ -11,7 +11,7 @@ vi.mock('../../components_beach/auth/ProfileModal_beach', () => ({
 }))
 
 import { waitFor } from '@testing-library/react'
-import SyncSignInBanner, { shouldShowSyncSignIn, shouldShowJoinBeach } from '../../components_beach/auth/SyncSignInBanner_beach'
+import SyncSignInBanner, { shouldShowSyncSignIn, shouldShowJoinBeach, SYNC_BANNER_SPACE_VAR } from '../../components_beach/auth/SyncSignInBanner_beach'
 
 describe('SyncSignInBanner', () => {
   it('shows only while the queue waits for a session', () => {
@@ -77,6 +77,33 @@ describe('SyncSignInBanner', () => {
     } finally {
       auth.user = null
       auth.access = { known: false }
+    }
+  })
+
+  // Floating at the bottom of the page (the coin toss, the setup), the
+  // banner lay over the page's last action, "Confirm the coin toss", at every
+  // common window size, and no scroll position showed it (stress test
+  // 2026-10-25): it now keeps its space free under the page (App's .panel
+  // pads its scroll end by SYNC_BANNER_SPACE_VAR).
+  it('keeps its space free under the page while it floats at the bottom', () => {
+    sessionStorage.clear()
+    const height = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(97)
+    const space = () => document.documentElement.style.getPropertyValue(SYNC_BANNER_SPACE_VAR)
+    try {
+      const { rerender, unmount } = render(<SyncSignInBanner syncStatus="auth_required" />)
+      expect(space()).toBe('calc(env(safe-area-inset-bottom, 0px) + 121px)')
+      // the scoring screen's one line at the top takes no space at the bottom
+      rerender(<SyncSignInBanner syncStatus="auth_required" compact />)
+      expect(space()).toBe('')
+      rerender(<SyncSignInBanner syncStatus="auth_required" />)
+      expect(space()).not.toBe('')
+      fireEvent.click(screen.getByText('Later'))
+      expect(space()).toBe('')
+      unmount()
+      expect(space()).toBe('')
+    } finally {
+      height.mockRestore()
+      sessionStorage.clear()
     }
   })
 })

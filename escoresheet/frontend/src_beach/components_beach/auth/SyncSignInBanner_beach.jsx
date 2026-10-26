@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useLayoutEffect } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../contexts_beach/AuthContext_beach'
@@ -9,6 +9,18 @@ import { cn } from '../../ui/volleyui/cn.js'
 import { FOCUS_RING } from '../../ui/volleyui/Button.jsx'
 
 const DISMISS_KEY = 'ob_sync_signin_banner_dismissed'
+
+/**
+ * The space the banner takes at the bottom of the window while it floats
+ * there (every screen but the scoring screen's top line): the page's
+ * scroller (App's .panel) keeps it free under its last element. Without it
+ * the banner lay over the page's last action, "Confirm the coin toss" at
+ * every common window size (stress test 2026-10-25); being fixed, no scroll
+ * position showed the button. Unset while the banner is not there.
+ */
+export const SYNC_BANNER_SPACE_VAR = '--ob-sync-banner-space'
+// Above the banner's top edge: its 16 px from the bottom and a gap
+const SPACE_ABOVE_PX = 16 + 8
 const JOIN_DISMISS_KEY = 'ob_sync_join_banner_dismissed'
 
 function readDismissed(key = DISMISS_KEY) {
@@ -66,6 +78,30 @@ export default function SyncSignInBanner({ syncStatus, compact = false }) {
   const signInVisible = shouldShowSyncSignIn({ syncStatus, loading, dismissed })
   const joinVisible = !signInVisible && shouldShowJoinBeach({ syncStatus, loading, dismissed: joinDismissed, user, access })
   const visible = signInVisible || joinVisible
+  const bannerRef = useRef(null)
+  // Floating over the bottom of the page (not the compact top line)
+  const reserving = visible && !compact && !showLogin && !showAccount
+
+  useLayoutEffect(() => {
+    const root = typeof document !== 'undefined' ? document.documentElement : null
+    const el = bannerRef.current
+    if (!root) return undefined
+    if (!reserving || !el) {
+      root.style.removeProperty(SYNC_BANNER_SPACE_VAR)
+      return undefined
+    }
+    // Its height changes with the window's width (the text wraps)
+    const update = () => {
+      root.style.setProperty(SYNC_BANNER_SPACE_VAR, `calc(env(safe-area-inset-bottom, 0px) + ${Math.ceil(el.offsetHeight) + SPACE_ABOVE_PX}px)`)
+    }
+    update()
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null
+    observer?.observe(el)
+    return () => {
+      observer?.disconnect()
+      root.style.removeProperty(SYNC_BANNER_SPACE_VAR)
+    }
+  }, [reserving])
   // Signed in as far as the app knows, but the backend refused the session
   const sessionExpired = !!user
   const title = joinVisible
@@ -109,6 +145,7 @@ export default function SyncSignInBanner({ syncStatus, compact = false }) {
     <>
       {visible && !showLogin && !showAccount && (
         <div
+          ref={bannerRef}
           role="status"
           aria-live="polite"
           // Kit amber banner (decide / stale), floating, no-print, as in

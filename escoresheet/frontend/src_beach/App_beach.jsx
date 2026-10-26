@@ -18,7 +18,7 @@ import StartupConnectivityModal from './components_beach/StartupConnectivityModa
 import { useSyncQueue, useSyncQueueStats, checkScorerMoved, matchEndUpdateNeeded, isClosedHere } from './hooks_beach/useSyncQueue_beach'
 import { isScorerMoved, takeBackScoring } from './utils_beach/matchHandover_beach'
 import ScorerMovedModal from './components_beach/ScorerMovedModal_beach'
-import SyncSignInBanner from './components_beach/auth/SyncSignInBanner_beach'
+import SyncSignInBanner, { SYNC_BANNER_SPACE_VAR } from './components_beach/auth/SyncSignInBanner_beach'
 import useAutoBackup from './hooks_beach/useAutoBackup_beach'
 import { useDashboardServer } from './hooks_beach/useDashboardServer_beach'
 // Beach volleyball ball image
@@ -2372,6 +2372,9 @@ export default function App() {
               width: '100%',
               maxWidth: '100%',
               padding: phoneScoringShown ? 0 : '10px',
+              // The sign-in banner floating at the bottom: the last action
+              // (Confirm the coin toss) scrolls clear of it
+              ...(phoneScoringShown ? {} : { paddingBottom: `calc(10px + var(${SYNC_BANNER_SPACE_VAR}, 0px))` }),
               // Vertical centering for CoinToss and MatchSetup screens
               ...(showCoinToss || showMatchSetup ? {
                 display: 'flex',
