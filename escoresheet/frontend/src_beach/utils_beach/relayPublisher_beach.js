@@ -16,6 +16,7 @@
  */
 import { getRelayWebSocketUrl } from './backendConfig_beach'
 import { isScorerMoved } from './matchHandover_beach'
+import { writingDevice } from '../lib_beach/apiClient_beach'
 
 export const SPORT_TYPE = 'beach'
 
@@ -168,8 +169,20 @@ export function toWireBundle({ match, team1Team = null, team2Team = null, team1P
  * @param {object} local  see toWireBundle
  * @param {{ now?: number }} [options]
  */
-export function syncMatchMessage(key, local, { now = Date.now() } = {}) {
-  return { type: 'sync-match-data', matchId: key, ...toWireBundle(local), _timestamp: now }
+export function syncMatchMessage(key, local, { now = Date.now(), device = writingDevice() } = {}) {
+  return {
+    type: 'sync-match-data',
+    matchId: key,
+    ...toWireBundle(local),
+    // This installation (db/019): the cloud relay refuses the copy of a
+    // device the match has moved away from ('scorer-moved'). Such a device
+    // re-syncs at once when it is back online, before it has heard of the
+    // move, and the referee followed its stale score while the database and
+    // the livescore had the new device's (stress test 2026-10-25). A relay
+    // that does not check it ignores it.
+    ...(device ? { device } : {}),
+    _timestamp: now
+  }
 }
 
 /**
