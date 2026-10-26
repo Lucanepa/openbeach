@@ -84,4 +84,40 @@ describe('App: deleting or replacing the match on the device', () => {
     host.unmount()
     view.unmount()
   }, 30000)
+
+  // Approved offline, then New match without Close match: replacing it
+  // deleted its own unsent jobs, the approval among them, so the cloud never
+  // had the approved result. Close match keeps them; so does the replace now
+  it('"Delete and start new" keeps an approved match\'s own unsent jobs, as Close match does', async () => {
+    const start = new Date(Date.now() - 3600000).toISOString()
+    const team1 = await db.teams.add({ name: 'Müller / Weber', shortName: 'MÜL' })
+    const team2 = await db.teams.add({ name: 'Schmidt / Fischer', shortName: 'SCH' })
+    const matchId = await db.matches.add({
+      team1Id: team1, team2Id: team2, status: 'ended', approved: true, approvedAt: start, test: false, seed_key: OPEN, gamePin: '424242', gameN: 7,
+      createdAt: start, matchInfoConfirmedAt: start, coinTossConfirmed: true
+    })
+    await db.sets.bulkAdd([
+      { matchId, index: 1, team1Points: 21, team2Points: 10, finished: true },
+      { matchId, index: 2, team1Points: 21, team2Points: 12, finished: true }
+    ])
+    const approvedJobs = [
+      { resource: 'set', action: 'update', payload: { external_id: `${OPEN}:s:2`, finished: true, team1_points: 21, team2_points: 12 } },
+      { resource: 'match', action: 'update', payload: { id: OPEN, status: 'approved', approval: { by: 'scorer' } } }
+    ]
+    await db.sync_queue.bulkAdd(approvedJobs.map(j => ({ ...j, ts: start, status: 'queued' })))
+
+    const view = mountApp()
+    const host = render(<div className="ov-kit ov-kit-host"><UiHost /></div>)
+    await waitFor(() => expect(button('New match')).toBeTruthy(), { timeout: 8000 })
+    fireEvent.click(button('New match'))
+    await waitFor(() => expect(button('Official match')).toBeTruthy(), { timeout: 8000 })
+    fireEvent.click(button('Official match'))
+    await waitFor(() => expect(button('Delete and start new')).toBeTruthy(), { timeout: 8000 })
+    fireEvent.click(button('Delete and start new'))
+    await waitFor(async () => expect(await db.matches.get(matchId)).toBeUndefined(), { timeout: 8000 })
+
+    expect((await remaining()).map(j => j.payload)).toEqual(approvedJobs.map(j => j.payload))
+    host.unmount()
+    view.unmount()
+  }, 30000)
 })

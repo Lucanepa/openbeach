@@ -1596,9 +1596,14 @@ export default function App() {
           await db.teams.delete(currentMatch.team2Id)
         }
 
-        // This match's jobs only (the other matches' unsent writes stay)
-        const matchJobs = jobsOfMatch(await db.sync_queue.toArray(), currentMatch)
-        if (matchJobs.length > 0) await db.sync_queue.bulkDelete(matchJobs.map(j => j.id))
+        // This match's jobs only (the other matches' unsent writes stay). An
+        // approved match keeps its own, as Close match does: approved offline
+        // and replaced without Close match, its approval, last set and
+        // scoresheet files never reached the cloud
+        if (currentMatch.approved !== true) {
+          const matchJobs = jobsOfMatch(await db.sync_queue.toArray(), currentMatch)
+          if (matchJobs.length > 0) await db.sync_queue.bulkDelete(matchJobs.map(j => j.id))
+        }
 
         // Delete match setup draft
         await db.match_setup.clear()
