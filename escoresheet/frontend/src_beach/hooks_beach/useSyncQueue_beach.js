@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db_beach/db_beach'
-import { apiFrom, apiMatchRestore, apiMatchClaim, apiMatchScorer, apiPostEventRevisions, AUTH_TOKEN_CHANGE_EVENT, AUTH_TOKEN_STORAGE_KEY } from '../lib_beach/apiClient_beach'
+import { apiFrom, apiMatchRestore, apiMatchClaim, apiMatchScorer, apiPostEventRevisions, AUTH_TOKEN_CHANGE_EVENT, AUTH_TOKEN_STORAGE_KEY, BACKEND_REACHED_EVENT } from '../lib_beach/apiClient_beach'
 import { isEventRevisionJob, eventRevisionRequest, eventRevisionOutcome } from '../utils_beach/eventSync_beach'
 import { emitActivity, noteSyncPass } from '../utils_beach/activity/bus_beach'
 import { uploadActivityBatch, activityFlushJob } from '../utils_beach/activity/upload_beach'
@@ -142,9 +142,13 @@ const AUTH_RECHECK_MS = 5 * 60 * 1000
 const ERROR_BACKOFF_BASE = 30000
 const ERROR_BACKOFF_MAX = 10 * 60 * 1000
 
-// Backoff for the connection probe after a failure: 5s, 10s, 20s ... capped at 60s
+// Backoff for the connection probe after a failure: 5s, 10s, then every 15s.
+// (Capped at 60 s, a cloud back after an outage with the Wi-Fi up waited up
+// to a minute for the next probe, the pill on "Error" all along: stress test
+// 2026-10-25.) Any answer of the backend in between (BACKEND_REACHED_EVENT)
+// probes at once.
 const PROBE_BACKOFF_BASE = 5000
-const PROBE_BACKOFF_MAX = 60000
+const PROBE_BACKOFF_MAX = 15000
 
 // A 'sending' job (claimed by useSequentialSync) older than this is assumed
 // abandoned (tab closed mid-request) and handed back to the queue.
@@ -1962,6 +1966,14 @@ export function useSyncQueue() {
       }, 200)
     }
     window.addEventListener('sync-queue-write', handleQueueWrite)
+    // The backend answered another request after failing ones (a live-state
+    // write, a status read): it is back, no need to wait out the probe backoff
+    const handleBackendReached = () => {
+      probeFailures.current = 0
+      nextProbeAt.current = 0
+      if (!flushInProgress) flush()
+    }
+    window.addEventListener(BACKEND_REACHED_EVENT, handleBackendReached)
 
     // Fallback poll every 5s to catch any missed items (e.g., tab focus, retries)
     const interval = setInterval(() => {
@@ -1970,6 +1982,7 @@ export function useSyncQueue() {
 
     return () => {
       window.removeEventListener('sync-queue-write', handleQueueWrite)
+      window.removeEventListener(BACKEND_REACHED_EVENT, handleBackendReached)
       clearInterval(interval)
       if (flushTimerRef.current) clearTimeout(flushTimerRef.current)
     }

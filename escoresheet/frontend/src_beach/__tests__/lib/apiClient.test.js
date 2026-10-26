@@ -5,7 +5,7 @@ vi.mock('../../utils_beach/backendConfig_beach', () => ({
   getCloudApiUrl: (path) => `http://backend.test${path}`
 }))
 
-import { apiFrom, apiAuth, apiStorage, apiGet, savedTeamsApi, apiMatchRestore, apiMatchRestoreByPin, apiMatchClaim, isSessionRejected, normalizeError, toBase64, canUseStorage, apiMatchScorer, apiPostEventRevisions, ageOf, storageUploadTimeoutMs, DB_REQUEST_TIMEOUT_MS } from '../../lib_beach/apiClient_beach'
+import { apiFrom, apiAuth, apiStorage, apiGet, savedTeamsApi, apiMatchRestore, apiMatchRestoreByPin, apiMatchClaim, isSessionRejected, normalizeError, toBase64, canUseStorage, apiMatchScorer, apiPostEventRevisions, ageOf, storageUploadTimeoutMs, DB_REQUEST_TIMEOUT_MS, BACKEND_REACHED_EVENT } from '../../lib_beach/apiClient_beach'
 import { useMemoryLocalStorage } from '../helpers/memoryStorage'
 
 // Ported from OpenVolley src/lib/__tests__/apiClient.test.js, plus the
@@ -519,5 +519,37 @@ describe('saved teams (GET /api/saved-teams?sport=beach)', () => {
     const r = await apiGet('/api/x')
     expect(globalThis.fetch.mock.calls[0][1].headers.Authorization).toBeUndefined()
     expect(r.data).toEqual({ ok: true })
+  })
+})
+
+// Stress test 2026-10-25 (ob-probe-backoff-slow-recovery): the cloud back
+// while the venue Wi-Fi stayed up fired no 'online' event; the sync queue
+// waited out its probe backoff (35-41 s) although the live state got through
+describe('BACKEND_REACHED_EVENT', () => {
+  let seen
+  const count = () => { seen++ }
+  beforeEach(() => {
+    seen = 0
+    window.addEventListener(BACKEND_REACHED_EVENT, count)
+  })
+  afterEach(() => {
+    window.removeEventListener(BACKEND_REACHED_EVENT, count)
+    vi.restoreAllMocks()
+  })
+
+  it('is dispatched once when the backend answers again after requests failed to reach it', async () => {
+    globalThis.fetch = vi.fn(async () => { throw new TypeError('Failed to fetch') })
+    await apiFrom('match_live_state').upsert({ match_id: 'm' })
+    await apiMatchScorer('match_1_a', { claim: false })
+    expect(seen).toBe(0)
+    // a tunnel / proxy answering 502 is not the backend
+    globalThis.fetch = vi.fn(async () => jsonResponse({ error: 'bad gateway' }, 502))
+    await apiFrom('matches').select('id').limit(1)
+    expect(seen).toBe(0)
+    globalThis.fetch = vi.fn(async () => jsonResponse({ data: null, error: null }))
+    await apiFrom('matches').select('id').limit(1)
+    expect(seen).toBe(1)
+    await apiFrom('match_live_state').upsert({ match_id: 'm' })
+    expect(seen).toBe(1)
   })
 })

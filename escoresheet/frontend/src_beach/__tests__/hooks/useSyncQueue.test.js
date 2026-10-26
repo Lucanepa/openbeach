@@ -96,6 +96,7 @@ vi.mock('../../lib_beach/apiClient_beach', () => {
   return {
     AUTH_TOKEN_CHANGE_EVENT: 'api-auth-token-change',
     AUTH_TOKEN_STORAGE_KEY: 'api_auth_token',
+    BACKEND_REACHED_EVENT: 'ob-backend-reached',
     apiFrom: (table) => builder(table),
     apiMatchRestore: async (payload) => {
       const call = { table: '__restore', action: 'restore', data: payload, filters: [] }
@@ -1214,6 +1215,47 @@ describe('useSyncQueue flush loop', () => {
     vi.useRealTimers()
     vi.restoreAllMocks()
     localStorage.removeItem('api_auth_token')
+  })
+
+  // Stress test 2026-10-25 (ob-probe-backoff-slow-recovery): after an outage
+  // with the Wi-Fi up the queue went idle only 35-41 s after the backend was
+  // back (the probe backoff, reset only by an 'online' event)
+  const outageQueue = () => [
+    { id: 1, resource: 'set', action: 'update', status: 'queued', retry_count: 0, payload: { external_id: 'match_100_aaa:s:5', team1_points: 21, team2_points: 3, finished: true } },
+    { id: 2, resource: 'match', action: 'update', status: 'queued', retry_count: 0, payload: { id: 'match_100_aaa', current_set: 2 } }
+  ]
+  const unreachable = { data: null, error: { message: 'Failed to fetch', status: 0, network: true } }
+
+  it('the queue drains as soon as the backend answers another request, without an online event', async () => {
+    fakeDb.sync_queue.reset(outageQueue())
+    let cloudUp = false
+    api.respond = (call) => (cloudUp ? defaultRespond(call) : unreachable)
+    const { result, unmount } = renderHook(() => useSyncQueue())
+    await act(async () => { await vi.advanceTimersByTimeAsync(80000) })
+    expect([...fakeDb.sync_queue.map.values()].some(j => j.status === 'sent')).toBe(false)
+
+    cloudUp = true
+    await act(async () => {
+      // (apiClient: a live-state write got through)
+      window.dispatchEvent(new Event('ob-backend-reached'))
+      await vi.advanceTimersByTimeAsync(1000)
+    })
+    expect([...fakeDb.sync_queue.map.values()].every(j => j.status === 'sent')).toBe(true)
+    expect(result.current.syncStatus).toBe('synced')
+    unmount()
+  })
+
+  it('a failed probe is retried at least every 15 s', async () => {
+    fakeDb.sync_queue.reset(outageQueue())
+    let cloudUp = false
+    api.respond = (call) => (cloudUp ? defaultRespond(call) : unreachable)
+    const { unmount } = renderHook(() => useSyncQueue())
+    // (probes at 0, 5, 15, 30, 45 ... 255 s; with a 60 s cap the next one was at 315 s)
+    await act(async () => { await vi.advanceTimersByTimeAsync(256000) })
+    cloudUp = true
+    await act(async () => { await vi.advanceTimersByTimeAsync(15000) })
+    expect([...fakeDb.sync_queue.map.values()].every(j => j.status === 'sent')).toBe(true)
+    unmount()
   })
 
   it('sends nothing without a stored session, then resumes on sign-in', async () => {
