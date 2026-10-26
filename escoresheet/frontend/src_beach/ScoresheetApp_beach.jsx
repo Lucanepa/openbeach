@@ -90,6 +90,7 @@ const fetchAllScoresheets = async () => {
           date: folder.name,
           game: parsed.game,
           path: inBeachFolder(`${folder.name}/${file.name}`),
+          pdfName: fileNames.has(parsed.pdfName) ? parsed.pdfName : null,
           pdfPath: fileNames.has(parsed.pdfName) ? inBeachFolder(`${folder.name}/${parsed.pdfName}`) : null
         })
       }
@@ -145,13 +146,32 @@ const fetchAllScoresheets = async () => {
   }
 }
 
-// Get URL parameters
+// Get URL parameters (file: the PDF's name in the date folder)
 const getUrlParams = () => {
   const params = new URLSearchParams(window.location.search)
   const date = params.get('date')
   const game = params.get('game')
-  return { date, game }
+  const file = params.get('file')
+  return { date, game, file }
 }
+
+/**
+ * The stored PDF a View PDF link opens: the file the list found
+ * (game{n}_{seed}.pdf: every match since the seed key; game numbers repeat
+ * across tournaments and accounts), else, for a link without one, the old
+ * game{n}.pdf. Only a plain file name of the date folder is taken.
+ * @param {{ date: string, game?: string, file?: string|null }} params
+ */
+export const archivePdfPath = ({ date, game, file }) => (
+  file && /^game[A-Za-z0-9_-]+\.pdf$/.test(file)
+    ? inBeachFolder(`${date}/${file}`)
+    : inBeachFolder(`${date}/game${game}.pdf`)
+)
+
+/** The View PDF link of a listed match (archivePdfPath reads it). */
+export const archivePdfHref = (item) => (
+  `?date=${encodeURIComponent(item.date)}&game=${encodeURIComponent(item.game)}${item.pdfName ? `&file=${encodeURIComponent(item.pdfName)}` : ''}`
+)
 
 // Label maps for display (sentence case)
 const genderLabels = { men: 'Men', women: 'Women' }
@@ -203,8 +223,10 @@ const TOOLBAR_LINK = cn(
   FOCUS_RING
 )
 
-// Scoresheet PDF viewer — embeds the PDF from Supabase storage
-const ScoresheetViewer = ({ date, game }) => {
+// Scoresheet PDF viewer — embeds the PDF from Supabase storage. It opened
+// game{n}.pdf, which no match since the seed key has: 'Scoresheet not found'
+// for every one (stress test 2026-10-25); the list's link now names the file.
+const ScoresheetViewer = ({ date, game, file }) => {
   const { t } = useTranslation()
   const [pdfUrl, setPdfUrl] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -215,7 +237,7 @@ const ScoresheetViewer = ({ date, game }) => {
     let cancelled = false
     const loadPdf = async () => {
       try {
-        const url = await getPdfObjectUrl(inBeachFolder(`${date}/game${game}.pdf`))
+        const url = await getPdfObjectUrl(archivePdfPath({ date, game, file }))
         if (cancelled) {
           if (url) URL.revokeObjectURL(url)
           return
@@ -224,7 +246,7 @@ const ScoresheetViewer = ({ date, game }) => {
           objectUrl = url
           setPdfUrl(url)
         } else {
-          setError(`PDF not found: ${inBeachFolder(`${date}/game${game}.pdf`)}`)
+          setError(`PDF not found: ${archivePdfPath({ date, game, file })}`)
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load PDF')
@@ -237,7 +259,7 @@ const ScoresheetViewer = ({ date, game }) => {
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [date, game])
+  }, [date, game, file])
 
   if (loading) {
     return <PageLoading label={t('scoresheetApp.loadingScoresheet')} />
@@ -297,7 +319,7 @@ const MatchCard = ({ item }) => {
       }
       status={item.pdfPath ? (
         <a
-          href={`?date=${item.date}&game=${item.game}`}
+          href={archivePdfHref(item)}
           className={cn('inline-flex h-11 items-center gap-1.5 rounded-lg bg-slate-900 px-3 text-xs font-medium text-white transition-colors hover:bg-slate-800', FOCUS_RING)}
         >
           <FileText size={14} aria-hidden="true" />
@@ -587,11 +609,11 @@ const formatCompDate = (dateStr) => dayLabel(dateStr) || dateStr
 
 // Main app component
 export default function ScoresheetApp() {
-  const { date, game } = getUrlParams()
+  const { date, game, file } = getUrlParams()
 
   // If date and game are provided, show the PDF viewer
   if (date && game) {
-    return <ScoresheetViewer date={date} game={game} />
+    return <ScoresheetViewer date={date} game={game} file={file} />
   }
 
   // Otherwise show the list
