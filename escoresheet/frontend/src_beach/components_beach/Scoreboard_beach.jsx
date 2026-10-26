@@ -64,6 +64,7 @@ const SPORT_TYPE = 'beach'
 // Team time-out and technical time-out countdowns: 45 s ON PURPOSE (see
 // countdownClock_beach), here, in the live state and on the referee
 import { TEAM_TIMEOUT_SECONDS, TTO_SECONDS } from '../utils_beach/countdownClock_beach'
+import { isStorageFullError } from '../utils_beach/storageFull_beach'
 // The match number of the live state: the integer column's (gameNumber_beach)
 import { gameNumberValue } from '../utils_beach/gameNumber_beach'
 import CountryFlag from './CountryFlag_beach'
@@ -343,7 +344,10 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     // A scorer action's failure is reported once (useScorerActions_beach)
     if (isReportedActionError(err)) return
     console.error('[confirm] action failed after its dialog closed', err)
-    showAlert(t('scoreboard.confirmFailed'), 'error')
+    // The device's storage is full: say so. Every tap showed the general
+    // "not saved, try again", and the scorer kept trying (stress test
+    // 2026-10-25, IndexedDB writes failing with QuotaExceededError)
+    showAlert(isStorageFullError(err) ? t('scoreboard.storageFull') : t('scoreboard.confirmFailed'), 'error')
   }, [showAlert, t])
   const { syncState, syncSetEnd, resetSyncState } = useSequentialSync()
   const [syncModalOpen, setSyncModalOpen] = useState(false)

@@ -910,6 +910,7 @@
       "confirm": "Annulla azione"
     },
     "confirmFailed": "Non è stato salvato. Controlla il referto e riprova.",
+    "storageFull": "Non salvato: la memoria di questo dispositivo è piena. Libera spazio (foto, video) e riprova, oppure continua la partita su un altro dispositivo (backup o PIN della partita).",
     "bmpOnlyAfterPoint": "BMP: solo dopo un punto, prima dello scambio successivo",
     "bmpOncePerRally": "BMP: una volta per scambio, di nuovo dopo il prossimo scambio concluso",
     "medicalEnd": "fine",

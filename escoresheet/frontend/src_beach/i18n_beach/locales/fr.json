@@ -910,6 +910,7 @@
       "confirm": "Annuler l'action"
     },
     "confirmFailed": "Cela n'a pas été enregistré. Vérifiez la feuille de match et réessayez.",
+    "storageFull": "Non enregistré : la mémoire de cet appareil est pleine. Libérez de l'espace (photos, vidéos) et réessayez, ou continuez le match sur un autre appareil (sauvegarde ou PIN du match).",
     "bmpOnlyAfterPoint": "BMP : seulement après un point, avant l'échange suivant",
     "bmpOncePerRally": "BMP : une fois par échange, de nouveau après le prochain échange terminé",
     "medicalEnd": "fin",

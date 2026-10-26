@@ -910,6 +910,7 @@
       "confirm": "Rückgängig machen"
     },
     "confirmFailed": "Das wurde nicht gespeichert. Bitte das Matchblatt prüfen und erneut versuchen.",
+    "storageFull": "Nicht gespeichert: Der Speicher dieses Geräts ist voll. Platz freigeben (Fotos, Videos) und erneut versuchen, oder das Spiel auf einem anderen Gerät weiterführen (Backup oder Spiel-PIN).",
     "bmpOnlyAfterPoint": "BMP: nur nach einem Punkt, vor dem nächsten Ballwechsel",
     "bmpOncePerRally": "BMP: einmal pro Ballwechsel, wieder nach dem nächsten beendeten Ballwechsel",
     "medicalEnd": "Ende",

@@ -910,6 +910,7 @@
       "confirm": "Rückgängig machen"
     },
     "confirmFailed": "Das isch nöd gspeicheret worde. Bitte s Matchblatt prüefe und nomal probiere.",
+    "storageFull": "Nöd gspeicheret: De Speicher vo dem Gerät isch voll. Platz freimache (Fotene, Videos) und nomal probiere, oder s Spiil uf emne andere Gerät wiiterfüehre (Backup oder Spiil-PIN).",
     "bmpOnlyAfterPoint": "BMP: nur nach einem Punkt, vor dem nächsten Ballwechsel",
     "bmpOncePerRally": "BMP: einmal pro Ballwechsel, wieder nach dem nächsten beendeten Ballwechsel",
     "medicalEnd": "Ende",

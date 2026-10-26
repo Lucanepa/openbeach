@@ -910,6 +910,7 @@
       "confirm": "Undo"
     },
     "confirmFailed": "That was not saved. Check the scoresheet and try again.",
+    "storageFull": "Not saved: this device's storage is full. Free some space (photos, videos) and try again, or continue the match on another device (backup or game PIN).",
     "bmpOnlyAfterPoint": "BMP: only after a point, before the next rally",
     "bmpOncePerRally": "BMP: once per rally, again after the next completed rally",
     "medicalEnd": "end",
