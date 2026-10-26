@@ -420,3 +420,27 @@ installEventHistoryHooks(db)
 
 // Every change of match.remarks is queued for the server (remarksSync_beach.js, backend db/017)
 installRemarksSyncHook(db)
+
+// Ask for DURABLE storage for the origin, as OpenVolley's db.js does. All match
+// state lives in IndexedDB, and after Close match the sync queue holds the only
+// copy of a match end the cloud has not received yet. Without this the browser
+// treats the origin as "best-effort" and may evict it whole under storage
+// pressure or inactivity (Safari's ~7-day eviction): the web app's
+// navigator.storage.persisted() was false in every run of the stress test
+// 2026-10-25. Feature-detected and non-blocking; the native apps (Capacitor,
+// Tauri) are durable anyway.
+export async function requestPersistentStorage() {
+  try {
+    if (typeof navigator === 'undefined' || !navigator.storage?.persist) return null
+    if (await navigator.storage.persisted?.()) return true
+    const granted = await navigator.storage.persist()
+    if (!granted) console.warn('[db] Persistent storage not granted: IndexedDB is evictable')
+    return granted
+  } catch (e) {
+    console.warn('[db] persist() request failed:', e?.message)
+    return null
+  }
+}
+
+// Once on load (does not block the module).
+requestPersistentStorage()
