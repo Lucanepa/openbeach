@@ -30,6 +30,10 @@ const MAX_BUFFER_SIZE = 1000
 // Last backup tracking to avoid duplicate uploads
 let lastBackupTime = 0
 let isBackupInProgress = false
+// The newest action's backup skipped by the window or a running upload, and
+// the timer that takes it (triggerContinuousBackup)
+let skippedBackup = null
+let skippedBackupTimer = null
 
 // Grows across reloads: microseconds of the clock, or one more than the last
 let lastSeq = 0
@@ -441,6 +445,9 @@ export function resetLoggerForTests() {
   queuedLogUpload = null
   lastBackupTime = 0
   isBackupInProgress = false
+  skippedBackup = null
+  if (skippedBackupTimer) clearTimeout(skippedBackupTimer)
+  skippedBackupTimer = null
 }
 
 /**
@@ -663,6 +670,21 @@ export function formatBackupTimestamp(date, time, ms) {
   })
 }
 
+const BACKUP_MIN_INTERVAL_MS = 2000
+
+// One backup after the window and the running upload, for the newest action
+// skipped meanwhile (its getBackupData reads the match then: the newest state)
+function takeSkippedBackupLater() {
+  if (skippedBackupTimer || isBackupInProgress || !skippedBackup) return
+  const wait = Math.max(0, BACKUP_MIN_INTERVAL_MS - (Date.now() - lastBackupTime))
+  skippedBackupTimer = setTimeout(() => {
+    skippedBackupTimer = null
+    const next = skippedBackup
+    skippedBackup = null
+    if (next) triggerContinuousBackup(next.matchId, next.getBackupData, next.gameNumber)
+  }, wait)
+}
+
 /**
  * Trigger backup on every action (non-blocking, with minimal delay between uploads)
  * @param {number} matchId - Match ID
@@ -670,18 +692,24 @@ export function formatBackupTimestamp(date, time, ms) {
  * @param {string|number|null} gameNumber - Game number for human-readable paths
  */
 export async function triggerContinuousBackup(matchId, getBackupData, gameNumber = null) {
-  // Skip if backup already in progress (until its uploads are done: on a slow
-  // link they piled up, one set per action), or signed out (the cloud would
-  // refuse it)
-  if (isBackupInProgress || !canUseStorage()) {
+  // Signed out: nothing (the cloud would refuse it)
+  if (!canUseStorage()) {
     return
   }
 
-  // Minimum 2 seconds between backups to avoid flooding
+  // Skip while a backup is in progress (until its uploads are done: on a slow
+  // link they piled up, one set per action), and within 2 seconds of the last
+  // one (flooding). The newest action skipped gets one backup afterwards:
+  // without it the newest cloud backup stayed an action behind when the
+  // actions came quickly, and restoring it rolled the cloud back (a point
+  // lost; integration smoke 2026-10-26)
   const now = Date.now()
-  if (now - lastBackupTime < 2000) {
+  if (isBackupInProgress || now - lastBackupTime < BACKUP_MIN_INTERVAL_MS) {
+    skippedBackup = { matchId, getBackupData, gameNumber }
+    takeSkippedBackupLater()
     return
   }
+  skippedBackup = null
 
   isBackupInProgress = true
   lastBackupTime = now
@@ -706,5 +734,6 @@ export async function triggerContinuousBackup(matchId, getBackupData, gameNumber
     // Silent fail
   } finally {
     isBackupInProgress = false
+    takeSkippedBackupLater()
   }
 }

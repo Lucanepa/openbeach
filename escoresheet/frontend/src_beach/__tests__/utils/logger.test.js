@@ -149,6 +149,42 @@ describe('log upload', () => {
   })
 })
 
+describe('the every-action backup', () => {
+  // Scripted rallies (Start rally to point in about 0.5 s) left the newest
+  // cloud backup a point behind for good: an action within 2 s of the last
+  // backup, or while it uploads, was skipped and nothing caught up. Restoring
+  // that backup on another device rolled the cloud back from 1:1 to 0:1
+  // (integration smoke 2026-10-26)
+  it('the newest action skipped by the 2 s window or a running upload gets one backup afterwards, of the newest state', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    let points = 1
+    const backup = async () => ({ match: { gameN: 62 }, sets: [{ index: 1, team1Points: points, team2Points: 0 }] })
+    const backups = () => storage.uploads.filter(u => u.path.startsWith('backups/'))
+    await triggerContinuousBackup(1, backup, 62)
+    points = 2
+    await triggerContinuousBackup(1, backup, 62)
+    points = 3
+    await triggerContinuousBackup(1, backup, 62)
+    expect(backups()).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(backups()).toHaveLength(2)
+    expect(JSON.parse(backups()[1].body).sets[0].team1Points).toBe(3)
+    // nothing skipped since: no other
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(backups()).toHaveLength(2)
+  })
+
+  it('signed out: nothing, now or later', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    storage.session = false
+    const backup = async () => ({ match: { gameN: 63 }, sets: [] })
+    await triggerContinuousBackup(1, backup, 63)
+    await triggerContinuousBackup(1, backup, 63)
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(storage.uploads).toHaveLength(0)
+  })
+})
+
 describe('lines not uploaded yet', () => {
   it('come back after a reload for the same account, never for another one', () => {
     logLines('[F] unsent')
