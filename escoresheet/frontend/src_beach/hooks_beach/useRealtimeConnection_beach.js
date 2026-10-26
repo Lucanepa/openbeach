@@ -41,7 +41,8 @@ const SUPABASE_RECHECK_INTERVAL = 30000
  * @param {string|number} options.matchId - Match ID to subscribe to
  * @param {string} options.preferredConnection - Ignored (kept for backward compat)
  * @param {function} options.onData - Callback when data is received
- * @param {function} options.onAction - Callback when action is received (timeout, sanction, etc.)
+ * @param {function} options.onAction - Callback when action is received (timeout, sanction, etc.):
+ *   (action, actionData, { sentAt }) - sentAt: the scorer's clock when it sent it
  * @param {function} options.onDeleted - Callback when match is deleted from server
  * @param {boolean} options.enabled - Whether to enable the connection
  */
@@ -255,7 +256,9 @@ export function useRealtimeConnection({
         // Check if this is an action
         if (data && data._action) {
           if (onActionRef.current) {
-            onActionRef.current(data._action, data._actionData)
+            // with the scorer's clock when it sent the action: a countdown
+            // it starts runs on the receiver's own clock (countdownClock_beach)
+            onActionRef.current(data._action, data._actionData, { sentAt: data._scoreboardTimestamp })
           }
         } else if (data && data.match) {
           if (onDataRef.current) {

@@ -61,11 +61,9 @@ import { medicalStartPayload, medicalEndPayload, findOpenMedical, formatMedicalD
 // Sport type for beach volleyball
 const SPORT_TYPE = 'beach'
 
-// Team time-out and technical time-out countdowns: 45 s ON PURPOSE, do not
-// "fix" them to 30 s. FIVB Beach rules 15.4.1 / 15.4.2 give 30 s, but the
-// referee whistles at 45 s (Swiss practice): the countdown runs to the whistle.
-const TEAM_TIMEOUT_SECONDS = 45
-const TTO_SECONDS = 45
+// Team time-out and technical time-out countdowns: 45 s ON PURPOSE (see
+// countdownClock_beach), here, in the live state and on the referee
+import { TEAM_TIMEOUT_SECONDS, TTO_SECONDS } from '../utils_beach/countdownClock_beach'
 import CountryFlag from './CountryFlag_beach'
 import SignaturePad from './SignaturePad_beach'
 import { saveMatchSignature } from '../utils_beach/signatures_beach'
@@ -3169,7 +3167,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           if (type === 'substitution') {
             eventData = { playerIn: payload?.playerIn, playerOut: payload?.playerOut }
           } else if (type === 'timeout') {
-            eventData = { duration: 30 }
+            // The time-out's length: the referee counts it from this row (a
+            // tablet that joins in the time-out, one without the relay). It
+            // said 30 while this screen and its relay action count 45, so
+            // the tablets showed 30 or 45, whichever came first.
+            eventData = { duration: TEAM_TIMEOUT_SECONDS }
           } else if (type === 'set_end') {
             // Note: logEvent('set_end', { team: winner, ... }) uses 'team' for the winner
             eventData = { setIndex: payload?.setIndex || data.set.index, winner: payload?.team }
