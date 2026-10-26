@@ -104,6 +104,7 @@ async function endSet1() {
   fireEvent.click(button('Confirm'))
   // team1 is team A (coinTossTeamA team1): its button is "Point A"
   await waitFor(() => expect(button('Point A')).toBeTruthy())
+  await settle()
   fireEvent.click(button('Point A'))
   await waitFor(() => expect(document.body.textContent).toContain('Set 1 end'), { timeout: 8000 })
   await settle()

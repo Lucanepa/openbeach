@@ -111,6 +111,7 @@ describe('Scoreboard_beach: the set 3 toss and its choices reach the tablets and
     await waitFor(() => expect(button('Confirm')).toBeTruthy(), { timeout: 5000 })
     fireEvent.click(button('Confirm'))
     await waitFor(() => expect(button('Point B')).toBeTruthy(), { timeout: 8000 })
+    await settle()
     fireEvent.click(button('Point B'))
     await waitFor(() => expect(document.body.textContent).toContain('Set 2 end'), { timeout: 8000 })
     await settle()

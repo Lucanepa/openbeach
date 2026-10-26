@@ -81,10 +81,12 @@ describe('Scoreboard_beach: scorer actions against the real database', () => {
 
     // Three points for team 1, each a double tap on "Point A"
     for (let i = 1; i <= 3; i++) {
+      await settle()
       tapTwice(button('Point A'))
       await waitFor(async () => expect((await ofType('point')).length).toBe(i))
       if (i < 3) {
         await waitFor(() => expect(button('Start rally')).toBeTruthy())
+        await settle()
         fireEvent.click(button('Start rally'))
         await waitFor(() => expect(button('Point A')).toBeTruthy())
       }
@@ -186,8 +188,10 @@ describe('Scoreboard_beach: scorer actions against the real database', () => {
     // court_switch with its sync job
     for (let i = 0; i < 2; i++) {
       await waitFor(() => expect(button('Start rally')).toBeTruthy())
+      await settle()
       fireEvent.click(button('Start rally'))
       await waitFor(() => expect(button('Point A')).toBeTruthy())
+      await settle()
       tapTwice(button('Point A'))
       await waitFor(async () => expect((await score())[0]).toBe(3 + i))
     }

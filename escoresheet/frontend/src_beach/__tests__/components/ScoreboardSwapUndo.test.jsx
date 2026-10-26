@@ -56,6 +56,7 @@ const points = async (matchId) => db.events.where({ matchId, type: 'point' }).co
 async function scorePoint(matchId, label) {
   const before = await points(matchId)
   await waitFor(() => expect(button(label)).toBeTruthy(), { timeout: 8000 })
+  await settle()
   fireEvent.click(button(label))
   await waitFor(async () => expect(await points(matchId)).toBe(before + 1), { timeout: 5000 })
   await settle()
@@ -101,6 +102,7 @@ describe('Scoreboard_beach: an undo after "Swap team A ↔ B"', () => {
     fireEvent.click(button('Confirm'))
     await scorePoint(matchId, 'Point A')
     await waitFor(() => expect(button('Start rally')).toBeTruthy(), { timeout: 5000 })
+    await settle()
     fireEvent.click(button('Start rally'))
     await scorePoint(matchId, 'Point A')
     expect(setFirstServer(await db.matches.get(matchId), 3)).toBe('team1')

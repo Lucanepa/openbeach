@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAlert } from '../contexts_beach/AlertContext_beach'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -14,7 +14,7 @@ import ScoreboardOptionsModal from './options/ScoreboardOptionsModal_beach'
 import ConnectionSetupModal from './options/ConnectionSetupModal_beach'
 import { useSyncQueue, checkScorerMoved } from '../hooks_beach/useSyncQueue_beach'
 import { isScorerMoved, SCORER_MOVED } from '../utils_beach/matchHandover_beach'
-import { useConfirmAction } from '../hooks_beach/useConfirmAction_beach'
+import { useConfirmAction, GHOST_CLICK_MS } from '../hooks_beach/useConfirmAction_beach'
 import { useActionLiveQuery } from '../hooks_beach/useActionLiveQuery_beach'
 import { useScorerActions, pickLiveStateSnapshot, isReportedActionError } from '../hooks_beach/useScorerActions_beach'
 import { withActivityContext, currentActivityContext, maxVoidedSeq, rememberSeedKey, withoutEventHistory } from '../db_beach/eventHistory_beach'
@@ -1931,6 +1931,30 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   const rallyStatus = useMemo(
     () => (data?.set ? rallyStatusOf(data.events, data.set.index) : 'idle'),
     [data?.events, data?.set]
+  )
+
+  // Start rally and Point A | Point B take turns in the same place (and the
+  // phone's rally buttons theirs): the second tap of a double or triple tap,
+  // a wet or bouncing finger, landed on the button that had just replaced
+  // the first one. Point, Start rally, point within 300 ms gave one rally
+  // two points, on official matches on the server too (stress test
+  // 2026-10-25, triple taps 120 to 200 ms apart, 5 bursts in 8). For
+  // GHOST_CLICK_MS after the buttons change (drawn: a layout effect, before
+  // the next tap can reach them), a tap on them is the end of the tap that
+  // changed them, as after a confirm (useConfirmAction): a rally never ends
+  // that soon after its start, nor starts that soon after its point. Taps
+  // only (ported from OpenVolley 904f6350 without its keys: a key is pressed
+  // on purpose). Not when the screen first shows them. Monotonic clock: a
+  // device clock set back must not hold them.
+  const rallyButtonsRef = useRef({ status: null, changedAt: -Infinity })
+  useLayoutEffect(() => {
+    const buttons = rallyButtonsRef.current
+    if (buttons.status !== null && buttons.status !== rallyStatus) buttons.changedAt = performance.now()
+    buttons.status = rallyStatus
+  }, [rallyStatus])
+  const rallyButtonsJustShown = useCallback(
+    () => performance.now() - rallyButtonsRef.current.changedAt < GHOST_CLICK_MS,
+    []
   )
 
   // The rally of the set being played, read from the database (inside an
@@ -3947,6 +3971,26 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // Track when rally started (for accidental point award check)
     rallyStartTimeRef.current = Date.now()
   }), [runAction, deferUi, readRallyStatus, logEvent, isFirstRally, data?.team1Players, data?.team2Players, data?.events, data?.set, data?.match, matchId, getNextSubSeq, syncToReferee, checkAccidentalRallyStart, accidentalRallyStartDuration, getCurrentServe, getServingPlayer, leftisTeam1, leftTeam, rightTeam, courtSwitchModal, ttoModal, askPendingCourtDialog])
+
+  // A tap on the rally buttons (Start rally, Point A | Point B), on every
+  // layout: none the moment they changed (rallyButtonsJustShown), that is
+  // the second tap of the one that changed them. Their keys, and the
+  // accidental-start and accidental-point questions' Yes, call the handlers
+  // themselves.
+  const tapStartRally = useCallback(() => {
+    if (rallyButtonsJustShown()) {
+      console.warn('[Scoreboard] Start rally tap as the rally buttons changed (a double tap): ignored')
+      return
+    }
+    handleStartRally()
+  }, [handleStartRally, rallyButtonsJustShown])
+  const tapPoint = useCallback((side) => {
+    if (rallyButtonsJustShown()) {
+      console.warn('[Scoreboard] Point tap as the rally buttons changed (a double tap): ignored')
+      return
+    }
+    handlePoint(side)
+  }, [handlePoint, rallyButtonsJustShown])
 
   const handleReplay = useCallback(async () => {
     // During rally: ask first, confirmReplay logs the replay event (no point to undo)
@@ -7975,9 +8019,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       actions: {
         undo: showUndoConfirm,
         menu: () => setPhoneMenuOpen(true),
-        point: (side) => handlePoint(side),
+        point: (side) => tapPoint(side),
         // The desktop button hands its click event over too
-        startRally: () => handleStartRally(),
+        startRally: () => tapStartRally(),
         timeout: (teamKey) => handleTimeout(teamKey),
         teamBmp: (teamKey) => handleTeamBMP(teamKey),
         refereeBmp: handleRefereeBMP,
@@ -10508,7 +10552,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   return (
                                     <button
                                       className={cn('rally-btn start', SB_RALLY_START)}
-                                      onClick={() => handleStartRally()}
+                                      onClick={() => tapStartRally()}
                                       style={{ padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'max(64px, calc(92px * var(--scale-factor, 1)))' }}
                                     >
                                       {t('scoreboard.buttons.startSet', 'Start set')} {(data?.set?.index || 1)}
@@ -10520,7 +10564,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 return (
                                   <button
                                     className={cn('rally-btn start', SB_RALLY_START)}
-                                    onClick={() => handleStartRally()}
+                                    onClick={() => tapStartRally()}
                                     disabled={data?.match?.status === 'complete' || set3TossPending}
                                     title={set3TossPending ? t('scoreboard.set3TossFirst', 'Record the set 3 coin toss first') : undefined}
                                     style={{ padding: '12px 36px', fontSize: '20px', fontWeight: 700, minHeight: 'max(64px, calc(92px * var(--scale-factor, 1)))' }}
@@ -10555,14 +10599,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                   )}
                                   <button
                                     className={cn('rally-point-button tabular-nums', SB_RALLY_POINT)}
-                                    onClick={() => handlePoint('left')}
+                                    onClick={() => tapPoint('left')}
                                     style={rallyRowButton(scaleFactor, 'point')}
                                   >
                                     {t('scoreboard.buttons.pointTeam', { team: teamALabel || teamAShortName })}
                                   </button>
                                   <button
                                     className={cn('rally-point-button tabular-nums', SB_RALLY_POINT)}
-                                    onClick={() => handlePoint('right')}
+                                    onClick={() => tapPoint('right')}
                                     style={rallyRowButton(scaleFactor, 'point')}
                                   >
                                     {t('scoreboard.buttons.pointTeam', { team: teamBLabel || teamBShortName })}

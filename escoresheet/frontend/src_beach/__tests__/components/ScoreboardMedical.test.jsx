@@ -80,6 +80,7 @@ describe('Scoreboard_beach: MTO / RIT are recorded (issue 4a)', () => {
     const matchId = await setUpMatch()
     render(<ScaleProvider><AlertProvider><LoggingProvider><Scoreboard matchId={matchId} /></LoggingProvider></AlertProvider></ScaleProvider>)
     await startSet()
+    await settle()
     fireEvent.click(button('Point A'))
     await waitFor(async () => expect((await ofType('point')).length).toBe(1))
     await settle()
