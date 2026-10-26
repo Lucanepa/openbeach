@@ -184,7 +184,8 @@ export default function ScoreboardApp() {
         .eq('match_id', selectedMatchId)
         .single()
       if (data) {
-        setGameState(data)
+        // Never over a newer row a realtime update brought meanwhile
+        setGameState(prev => (prev?.match_id === data.match_id && prev?.updated_at && data.updated_at && data.updated_at < prev.updated_at ? prev : data))
         setConnectionStatus('connected')
       }
     }
@@ -202,7 +203,14 @@ export default function ScoreboardApp() {
         setGameState(payload.new)
         setConnectionStatus('connected')
       })
-      .subscribe()
+      // SUBSCRIBED comes again after every reconnect of the realtime
+      // connection (relayRealtime_beach), which never sends the changes made
+      // while it was down: the row is read again, or a Wi-Fi drop left the
+      // display on the score from before it, LIVE, until the next point
+      // (stress test 2026-10-25)
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') fetchState()
+      })
 
     channelRef.current = channel
 
