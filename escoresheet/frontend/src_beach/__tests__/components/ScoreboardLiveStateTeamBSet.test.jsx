@@ -169,3 +169,34 @@ describe('Scoreboard_beach: the local scoreboard at the match end', () => {
     cleanup()
   }, 60000)
 })
+
+// The same at a set end: the local scoreboard's and the relay's last state
+// was the set_end event's snapshot (set 1, sets 0-0) for the whole interval.
+// The database row of that action counts the set but is stamped as the action
+// runs, the relay's copy just after it: a referee kept the relay's as the
+// newer and read sets 0-0 in the interval (stress fixes, integration
+// 2026-10-26). The state goes out again once the set counted, stamped after
+// the row.
+describe('Scoreboard_beach: the local scoreboard and the relay at a set end', () => {
+  const local = []
+  let channel
+  beforeEach(() => {
+    local.length = 0
+    channel = new BroadcastChannel('openbeach-scoreboard')
+    channel.onmessage = (e) => { if (e.data?.type === 'LIVE_STATE_UPDATE') local.push(e.data.data) }
+  })
+  afterEach(() => channel.close())
+
+  it('set 1 won by B: set 2, sets 0-1, not older than the database row', async () => {
+    const matchId = await setUpMatch({ index: 1, a: 4 })
+    render(<ScaleProvider><AlertProvider><LoggingProvider><Scoreboard matchId={matchId} /></LoggingProvider></AlertProvider></ScaleProvider>)
+    await teamBEndsTheSet('Set 1 end')
+    await waitFor(() => expect(setEndStates().length).toBeGreaterThan(0), { timeout: 8000 })
+    await waitFor(() => {
+      const last = local.at(-1)
+      expect([last?.current_set, last?.sets_won_a, last?.sets_won_b]).toEqual([2, 0, 1])
+    }, { timeout: 8000 })
+    expect(Date.parse(local.at(-1).updated_at)).toBeGreaterThanOrEqual(Date.parse(setEndStates().at(-1).updated_at))
+    cleanup()
+  }, 60000)
+})

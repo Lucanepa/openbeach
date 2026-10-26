@@ -4817,6 +4817,18 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           // Refresh eScoresheet to show the new set
           refreshScoresheet()
 
+          // The relay (referee, livescore, LedBox) and the local scoreboard
+          // get the set end too, as at the match end: their last state was
+          // the set_end event's snapshot, taken before the set counted (set 1
+          // at 21:0, sets 0-0). The database's row counts the set, but it is
+          // stamped as the action runs (scorerLiveOrder) and the relay's copy
+          // just after it, so a referee kept the relay's as the newer, and it
+          // reads the match back no more while the relay pushes: sets 0-0 for
+          // the whole interval (stress fixes, integration 2026-10-26). The
+          // new set's bundle, then a fresh state: set 2 at 0:0, the set counted.
+          syncFunctionRef.current?.()
+          await broadcastToScoreboard()
+
         } finally {
           // Release lock and clear loading overlay
           setCreationInProgressRef.current = false
