@@ -1643,6 +1643,26 @@ export async function runQueuePass() {
 // (restore/delete are not idempotent).
 let flushInProgress = false
 
+// ... and one queue pass per device at a time, across the tabs of the app
+// (Web Locks; the flag above is one page's): a second tab of the app, idle on
+// the home screen, ran its own pass over the same rows and sent 22 of 47 jobs
+// a second time (stress test 2026-10-25). A tab that finds the lock taken
+// skips its pass (null); the tab holding it sends the jobs. Without Web Locks
+// (an old WebView) the pass runs as before.
+export const QUEUE_LOCK_NAME = 'ob-sync-queue'
+export async function withQueueLock(fn) {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : null
+  if (!locks || typeof locks.request !== 'function') return fn()
+  let ran = false
+  let result = null
+  await locks.request(QUEUE_LOCK_NAME, { ifAvailable: true }, async (lock) => {
+    if (!lock) return
+    ran = true
+    result = await fn()
+  })
+  return ran ? result : null
+}
+
 // Last run of flush's throttled housekeeping (requeue of errored jobs, prune)
 let lastRequeueAt = 0
 let lastPruneAt = 0
@@ -1826,7 +1846,9 @@ export function useSyncQueue() {
       // A session is there (the checks above): the "sign in again" banner must
       // not stay up through this pass (a long queue takes a minute)
       if (currentSyncStatus === 'auth_required') setSyncStatus('syncing')
-      const outcome = await runQueuePass()
+      const outcome = await withQueueLock(() => runQueuePass())
+      // Another tab of the app is sending the queue now
+      if (!outcome) return
       noteSyncPass({ sent: outcome.sent, failed: outcome.hasFailed || outcome.hasError ? 1 : 0, pending: outcome.hasRetry ? 1 : 0 })
 
       if (outcome.authRequired) {

@@ -168,7 +168,9 @@ import {
   checkScorerMoved,
   matchEndUpdateNeeded,
   SCORER_MOVED_EVENT,
-  setPageLoadedAtForTests
+  setPageLoadedAtForTests,
+  withQueueLock,
+  QUEUE_LOCK_NAME
 } from '../../hooks_beach/useSyncQueue_beach'
 import { useMemoryLocalStorage } from '../helpers/memoryStorage'
 import { holdLiveState, heldLiveState, resetLiveStateOutboxForTests } from '../../utils_beach/liveStateOutbox_beach'
@@ -1191,6 +1193,46 @@ describe('pruneSyncQueue', () => {
     ])
     expect(await pruneSyncQueue({ now })).toBe(3)
     expect([...fakeDb.sync_queue.map.keys()]).toEqual([4, 5, 6, 7])
+  })
+})
+
+// Stress test 2026-10-25 (ob-two-tabs-double-flush): a second tab of the app
+// ran its own queue pass over the same rows and sent 22 of 47 jobs twice
+describe('withQueueLock (one queue pass per device, across tabs)', () => {
+  // jsdom has no navigator.locks: defined per test
+  const setLocks = (value) => Object.defineProperty(navigator, 'locks', { value, configurable: true })
+  afterEach(() => {
+    delete navigator.locks
+  })
+  function fakeLocks() {
+    const held = new Set()
+    return {
+      held,
+      request: vi.fn(async (name, opts, cb) => {
+        if (held.has(name)) return opts?.ifAvailable ? cb(null) : undefined
+        held.add(name)
+        try { return await cb({ name }) } finally { held.delete(name) }
+      })
+    }
+  }
+
+  it('a tab that finds the pass running in another tab skips its own', async () => {
+    const locks = fakeLocks()
+    setLocks(locks)
+    let release
+    const otherTab = withQueueLock(() => new Promise(r => { release = r }))
+    const pass = vi.fn(async () => ({ sent: 1 }))
+    expect(await withQueueLock(pass)).toBeNull()
+    expect(pass).not.toHaveBeenCalled()
+    release({ sent: 3 })
+    expect(await otherTab).toEqual({ sent: 3 })
+    expect(await withQueueLock(pass)).toEqual({ sent: 1 })
+    expect(locks.request.mock.calls[0][0]).toBe(QUEUE_LOCK_NAME)
+  })
+
+  it('without Web Locks the pass runs', async () => {
+    setLocks(undefined)
+    expect(await withQueueLock(async () => 'ran')).toBe('ran')
   })
 })
 
