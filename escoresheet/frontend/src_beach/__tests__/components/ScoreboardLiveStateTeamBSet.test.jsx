@@ -9,7 +9,7 @@
 // 2026-10-25). On the real scoring screen over the app's Dexie database
 // (fake IndexedDB), the backend on, its live-state write recorded.
 import '../helpers/fakeIndexedDb'
-import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest'
+import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach, vi } from 'vitest'
 import { render, fireEvent, waitFor, cleanup } from '@testing-library/react'
 
 const upserts = vi.hoisted(() => [])
@@ -140,6 +140,32 @@ describe('Scoreboard_beach: the live state counts a set won by team B', () => {
     expect([state.sets_won_a, state.sets_won_b]).toEqual([0, 2])
     expect(state.current_set).toBe(2)
     expect(state.match_status).toBe('ended')
+    cleanup()
+  }, 60000)
+})
+
+// The local scoreboard (BroadcastChannel) and the venue relay get the same
+// state (broadcastToScoreboard). Their last one at the match end was the
+// set_end event's snapshot, taken before the set counted: "Set 2 • 0 - 1",
+// not ended, for good, whichever team won (stress test 2026-10-25)
+describe('Scoreboard_beach: the local scoreboard at the match end', () => {
+  const local = []
+  let channel
+  beforeEach(() => {
+    local.length = 0
+    channel = new BroadcastChannel('openbeach-scoreboard')
+    channel.onmessage = (e) => { if (e.data?.type === 'LIVE_STATE_UPDATE') local.push(e.data.data) }
+  })
+  afterEach(() => channel.close())
+
+  it('the match won by B 2-0: ended, sets 0-2', async () => {
+    const matchId = await setUpMatch({ index: 2, a: 4, finished: [{ index: 1, team1: 4, team2: 21 }] })
+    render(<ScaleProvider><AlertProvider><LoggingProvider><Scoreboard matchId={matchId} /></LoggingProvider></AlertProvider></ScaleProvider>)
+    await teamBEndsTheSet('Match end')
+    await waitFor(() => {
+      const last = local.at(-1)
+      expect([last?.sets_won_a, last?.sets_won_b, last?.match_status]).toEqual([0, 2, 'ended'])
+    }, { timeout: 8000 })
     cleanup()
   }, 60000)
 })

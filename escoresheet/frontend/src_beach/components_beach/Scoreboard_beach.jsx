@@ -4516,6 +4516,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         // room once no scoreboard holds it any more.
         syncFunctionRef.current?.()
 
+        // The local scoreboard and the relay's live state get the end too.
+        // Their last state was the set_end event's snapshot, taken before
+        // the set counted and the match ended: "Set 2 • 0 - 1", not ended,
+        // for good, as nothing is scored after it (stress test 2026-10-25;
+        // the database's live state counts the set on its own)
+        await broadcastToScoreboard()
+
         // Trigger event backup for Safari/Firefox (match end)
         onTriggerEventBackup?.('match_end')
 
@@ -4770,7 +4777,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
       // Don't re-throw - the match can continue from local data
     }
-  }, [setEndTimeModal, data?.match, data?.set, matchId, logEvent, onFinishSet, getCurrentServe, teamAKey, onTriggerEventBackup, syncSetEnd, resetSyncState, showAlert, t, refreshScoresheet])
+  }, [setEndTimeModal, data?.match, data?.set, matchId, logEvent, onFinishSet, getCurrentServe, teamAKey, onTriggerEventBackup, syncSetEnd, resetSyncState, showAlert, t, refreshScoresheet, broadcastToScoreboard])
 
   // Confirm set 3 side and service choices (works with both modal and inline UI)
   const confirmSet3SideService = useCallback(async (leftTeam, firstServe, inlineMode = false) => {
