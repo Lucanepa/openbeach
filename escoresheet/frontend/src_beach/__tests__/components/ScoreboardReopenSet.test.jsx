@@ -24,6 +24,8 @@ import { db } from '../../db_beach/db_beach'
 import Scoreboard from '../../components_beach/Scoreboard_beach'
 import { GHOST_CLICK_MS } from '../../hooks_beach/useConfirmAction_beach'
 import { setExtId } from '../../utils_beach/syncIds_beach'
+import { approvalsApi } from '../../lib_beach/approvalsApi_beach'
+import { POST_MATCH_SIGNATURE_KEYS } from '../../utils_beach/signatures_beach'
 
 class OfflineSocket {
   constructor() { this.readyState = 3 }
@@ -94,6 +96,38 @@ async function setUpMatch() {
   return matchId
 }
 
+// The same match left 'ended' (the status the set end, a forfeit and Match
+// End write) with every closing signature made (one on a phone) and two
+// account approvals, and the scoreboard open on it: set 1 ended, set 2 open
+// at 5:0 (Match End's Manual adjustments untick a set's Finished, or a
+// restore of a cloud row in that state; with every set finished the
+// scoreboard has no set to show)
+async function setUpEndedMatch() {
+  const matchId = await setUpMatch()
+  const t = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+  const set1 = (await db.sets.where({ matchId }).toArray()).find(s => s.index === 1)
+  await db.sets.update(set1.id, { finished: true, endTime: t })
+  await db.sets.add({ matchId, index: 2, team1Points: 5, team2Points: 0, finished: false, startTime: t })
+  let seq = 500
+  const events = [
+    { matchId, setIndex: 1, type: 'set_end', payload: { team1Points: 21, team2Points: 0 }, seq: seq++, ts: t },
+    { matchId, setIndex: 2, type: 'set_start', payload: {}, seq: seq++, ts: t }
+  ]
+  for (let k = 1; k <= 5; k++) {
+    events.push({ matchId, setIndex: 2, type: 'rally_start', payload: {}, seq: seq++, ts: t })
+    events.push({ matchId, setIndex: 2, type: 'point', payload: { team: 'team1', score: { team1: k, team2: 0 } }, seq: seq++, ts: t })
+  }
+  await db.events.bulkAdd(events)
+  const record = (slot) => ({ id: `${slot}-approval`, slot, name: `Official ${slot}`, short_id: 'AB12CD34', approved_at: t })
+  await db.matches.update(matchId, {
+    status: 'ended',
+    ...Object.fromEntries(Object.keys(POST_MATCH_SIGNATURE_KEYS).map(field => [field, `data:image/png;base64,${field}`])),
+    signatureSources: { ref1Signature: { via: 'phone', at: t } },
+    accountApprovals: { scorer: record('scorer'), referee1: record('referee1') }
+  })
+  return matchId
+}
+
 const mount = (matchId) => render(<ScaleProvider><AlertProvider><LoggingProvider><Scoreboard matchId={matchId} /></LoggingProvider></AlertProvider></ScaleProvider>)
 
 async function confirmSetEnd() {
@@ -151,5 +185,40 @@ describe('Scoreboard_beach: Manual changes > Reopen set', () => {
     const setEnds = await ofType('set_end')
     expect(setEnds).toHaveLength(1)
     expect(setEnds[0].setIndex).toBe(1)
+  }, 60000)
+
+  // Only a 'final' match went back to live, a status beach writes at Close
+  // match only: a finished match not approved is 'ended'. It stayed 'ended'
+  // here and in the cloud with its signatures and approvals, which then
+  // certified the new result unsigned; a reload opened Match End with set 1
+  // unfinished.
+  it('a match left ended, reopened, is live again, its closing signatures and approvals gone, here and in the cloud', async () => {
+    const undo = vi.spyOn(approvalsApi, 'undo').mockResolvedValue({ data: null, error: null, status: 200 })
+    const matchId = await setUpEndedMatch()
+    const set2 = (await db.sets.where({ matchId }).toArray()).find(s => s.index === 2)
+    mount(matchId)
+
+    await reopenSet1()
+    const match = await db.matches.get(matchId)
+    expect(match.status).toBe('live')
+    expect(match.approved).toBe(false)
+    expect(match.approvedAt ?? null).toBeNull()
+    for (const field of Object.keys(POST_MATCH_SIGNATURE_KEYS)) expect(match[field] ?? null).toBeNull()
+    expect(match.signatureSources?.ref1Signature ?? null).toBeNull()
+    expect(match.accountApprovals ?? null).toBeNull()
+    expect((await db.sets.where({ matchId }).toArray()).map(s => [s.index, !!s.finished])).toEqual([[1, false]])
+
+    // The cloud: live, every closing signature cleared; set 2 removed
+    const jobs = await db.sync_queue.toArray()
+    const live = jobs.find(j => j.resource === 'match' && j.action === 'update' && j.payload.status === 'live')
+    expect(live?.payload.id).toBe(SEED)
+    for (const key of Object.values(POST_MATCH_SIGNATURE_KEYS)) expect(live.payload.signatures[key]).toBeNull()
+    expect(jobs.some(j => j.resource === 'set' && j.action === 'delete' && j.payload.external_id === setExtId(SEED, set2.id))).toBe(true)
+    // The account approvals undone on the server at once (online)
+    await waitFor(() => expect(undo.mock.calls.map(c => c[0]).sort()).toEqual(['referee1-approval', 'scorer-approval']))
+
+    // Set 1 ends again, and set 2 opens to be played again
+    await confirmSetEnd()
+    await waitFor(async () => expect((await db.sets.where({ matchId }).toArray()).map(s => [s.index, !!s.finished])).toEqual([[1, true], [2, false]]), { timeout: 10000 })
   }, 60000)
 })

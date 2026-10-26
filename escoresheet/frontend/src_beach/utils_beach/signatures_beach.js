@@ -61,6 +61,27 @@ export function clearedPostMatchSignatures() {
 }
 
 /**
+ * The match-row update of a finished match that is live again (Match End's
+ * Reopen last set, the scoreboard's Manual changes > Reopen set): status
+ * 'live', not approved, every post-match signature and its "signed on phone"
+ * record cleared - they certify a result that no longer stands and must be
+ * collected again - and the local copy of the account approvals gone: they
+ * certify the result too (OpenVolley clearedPostMatchSignatures). Offline the
+ * server undo is skipped; a replay to the same score must not bring them back
+ * from this copy.
+ */
+export function reopenedMatchUpdate() {
+  return {
+    status: 'live',
+    approved: false,
+    approvedAt: null,
+    ...clearedPostMatchSignatures(),
+    ...Object.fromEntries(Object.keys(POST_MATCH_SIGNATURE_KEYS).map(field => [`signatureSources.${field}`, null])),
+    accountApprovals: null
+  }
+}
+
+/**
  * Re-sign and Clear are closed once the match is approved or closed: the
  * signatures then belong to an approved sheet. "Reopen" opens them again.
  */

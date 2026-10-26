@@ -70,7 +70,8 @@ import { isStorageFullError } from '../utils_beach/storageFull_beach'
 import { gameNumberValue } from '../utils_beach/gameNumber_beach'
 import CountryFlag from './CountryFlag_beach'
 import SignaturePad from './SignaturePad_beach'
-import { saveMatchSignature } from '../utils_beach/signatures_beach'
+import { saveMatchSignature, signaturesPayload, clearedPostMatchSignatures, reopenedMatchUpdate } from '../utils_beach/signatures_beach'
+import { undoAccountApprovalsBestEffort } from '../lib_beach/approvalsApi_beach'
 import { signatureSourceUpdate } from '../utils_beach/phoneSignature_beach'
 import { uploadBackupToCloud, uploadLogsToCloud, triggerContinuousBackup } from '../utils_beach/logger_beach'
 import { splitLocalDateTime, parseLocalDateTimeToISO, roundToMinute, formatTimeLocal, localTimeNear } from '../utils_beach/timeUtils_beach'
@@ -5942,18 +5943,35 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     await db.sets.update(reopened.id, { finished: false, endTime: null })
     if (cloud) await db.sync_queue.add(setReopenJob(match.seed_key, await db.sets.get(reopened.id)))
 
-    // Update match status back to 'live' if it was 'final'
-    if (match?.status === 'final') {
-      await db.matches.update(matchId, { status: 'live' })
+    // A finished match is live again, as MatchEnd's Reopen last set does it.
+    // Only 'final' was checked, which beach writes at Close match only: the
+    // set end, the forfeit and Match End write 'ended'. A match reopened
+    // there (Match End before the approval, a 2-0 whose set 1 was ended
+    // wrongly) stayed 'ended' here and in the cloud, with the old result and
+    // the captains', referee's and scorer's signatures, which then certified
+    // the new result unsigned; no next set was opened after the set ended
+    // again ('ended' stops it), and a reload opened Match End on a set
+    // unfinished. The signatures, their "signed on phone" records and the
+    // approvals go (they are collected again), here and in the cloud (the
+    // server voids the account approvals on 'live'; online they are undone
+    // at once too, after the commit: no fetch inside the action).
+    if (['ended', 'approved', 'final'].includes(match?.status)) {
+      await db.matches.update(matchId, reopenedMatchUpdate())
       if (cloud) {
         await db.sync_queue.add({
           resource: 'match',
           action: 'update',
-          payload: { id: match.seed_key, status: 'live' },
+          payload: {
+            id: match.seed_key,
+            status: 'live',
+            // the post-match signatures were synced as they were made: cleared there too
+            signatures: signaturesPayload({ ...match, ...clearedPostMatchSignatures() })
+          },
           ts: new Date().toISOString(),
           status: 'queued'
         })
       }
+      runOrDefer({ run: () => undoAccountApprovalsBestEffort(match) })
     }
 
     // The set (and the later ones, played again) can be ended again
@@ -5963,7 +5981,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     afterRefereeSync()
     afterLiveState('undo')
     afterScoresheetRefresh()
-  }, { reason: 'reopen_set' }), [runAction, deferUi, reopenSetConfirm, matchId, discardEvents, afterRefereeSync, afterLiveState, afterScoresheetRefresh])
+  }, { reason: 'reopen_set' }), [runAction, deferUi, runOrDefer, reopenSetConfirm, matchId, discardEvents, afterRefereeSync, afterLiveState, afterScoresheetRefresh])
 
   // Handle replay rally - undo last point (go back to state before the point, no rally restart)
   // A replayed rally scores no point, here or on the server: the point (with
