@@ -2004,6 +2004,15 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
               // Only check the fromPenalty flag - don't check recent events as it can cause false positives
               const isPointFromOtherTeamPenalty = event.payload?.fromPenalty === true;
 
+              // A penalty point comes between rallies: the team serving is
+              // the one that won the set's last point (or the set's first
+              // server), not the last rally_start's, which right after a
+              // side-out is the other team's
+              if (isPointFromOtherTeamPenalty) {
+                const lastPoint = setEvents.slice(0, eventIndex).reverse().find((e: any) => e.type === 'point');
+                servingTeam = lastPoint?.payload?.team || teamUp || null;
+              }
+
               // Determine if the serving team lost the point (opponent scored)
               const servingTeamLostPoint = servingTeam && pointTeam !== servingTeam;
 
@@ -2095,9 +2104,12 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
               // currentServiceOrder is already updated from rally_start events, so use it directly
               // For BMP points: only record rotation if it's a successful challenge (reversedTeam exists)
               // because that means the serve genuinely changed. Skip for referee BMP or unsuccessful.
-              // For penalty/forfait points: skip rotation as they happen between rallies (no actual service change)
+              // A penalty against the serving team gives the opponent the point
+              // and the serve, as the scorer's rotation counts it: its server's
+              // turn is lost like a rally's (the box got no score, the rows
+              // slid: stress test 2026-10-25). Forfait points: no rotation.
               const isFromForfait = event.payload?.fromForfait === true;
-              const shouldTrackRotation = isFromBMP ? !!reversedTeam : (!isPointFromOtherTeamPenalty && !isFromForfait);
+              const shouldTrackRotation = isFromBMP ? !!reversedTeam : !isFromForfait;
               if (shouldTrackRotation && servingTeamLostPoint && servingTeam && serviceOrder && Object.keys(serviceOrder).length > 0 && currentServiceOrder !== null) {
                 const currentRowKey = orderToRow[currentServiceOrder];
                 if (currentRowKey && serviceRotationColumn[currentRowKey] !== undefined) {
