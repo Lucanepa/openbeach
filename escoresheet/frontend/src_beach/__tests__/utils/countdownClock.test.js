@@ -34,3 +34,15 @@ describe('countdowns on the device\'s own clock', () => {
     expect(b).toBeGreaterThanOrEqual(a)
   })
 })
+
+describe('a countdown joined while it runs', () => {
+  it('this device\'s clock when plausible, else the sender\'s readings', async () => {
+    const { elapsedOnJoin } = await import('../../utils_beach/countdownClock_beach')
+    const start = Date.parse('2026-10-26T19:40:00.000Z')
+    // joined 10 s in, clocks agree: 10 s
+    expect(elapsedOnJoin(start, start + 100, 45000, start + 10000)).toBe(10000)
+    // this clock 150 s behind or ahead: the readings' 0.1 s
+    expect(elapsedOnJoin(start, start + 100, 45000, start - 140000)).toBe(100)
+    expect(elapsedOnJoin(start, start + 100, 45000, start + 160000)).toBe(100)
+  })
+})

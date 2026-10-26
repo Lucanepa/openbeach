@@ -36,7 +36,7 @@ import { db } from '../db_beach/db_beach'
 import TestModeControls from './TestModeControls_beach'
 import SimpleHeader from './SimpleHeader_beach'
 import DonutCountdown from './DonutCountdown_beach'
-import { monotonicNow, elapsedWhenSent, countdownAnchor, secondsLeft, TEAM_TIMEOUT_SECONDS, TTO_SECONDS } from '../utils_beach/countdownClock_beach'
+import { monotonicNow, elapsedWhenSent, elapsedOnJoin, countdownAnchor, secondsLeft, TEAM_TIMEOUT_SECONDS, TTO_SECONDS } from '../utils_beach/countdownClock_beach'
 import { supabase } from '../lib_beach/supabaseClient_beach'  // Realtime only
 import { apiFrom } from '../lib_beach/apiClient_beach'
 import { isBackendAvailable, isVenueMode } from '../utils_beach/backendConfig_beach'
@@ -1196,6 +1196,43 @@ export default function Referee({ matchId, onExit, isMasterMode }) {
 
     return () => clearInterval(timer)
   }, [timeoutModal?.started, timeoutModal?.startTimestamp, timeoutModal?.anchor, timeoutModal?.initialCountdown])
+
+  // A referee that opens, or reloads, while a time-out runs: the countdown
+  // from the live state it loads. It started only on a change of the live
+  // state or on the scorer's action, and none comes during a time-out: a
+  // tablet that joined or was reloaded in it showed no time-out (stress test
+  // 2026-10-25). Only a time-out this tablet has not shown yet: the
+  // database and the relay's actions start, run and end the others.
+  const shownTimeoutStartsRef = useRef([])
+  useEffect(() => {
+    if (timeoutModal?.startTimestamp) shownTimeoutStartsRef.current = [...shownTimeoutStartsRef.current.slice(-9), timeoutModal.startTimestamp]
+  }, [timeoutModal?.startTimestamp])
+  const loadedLiveState = data?.liveState
+  const loadedTeamAKey = data?.match?.coinTossTeamA
+  useEffect(() => {
+    const state = loadedLiveState
+    if (isMasterMode || !state?.timeout_active || !state.timeout_started_at) return
+    const startTs = new Date(state.timeout_started_at).getTime()
+    if (!Number.isFinite(startTs) || timeoutModalRef.current) return
+    if (shownTimeoutStartsRef.current.some(ts => Math.abs(ts - startTs) <= 2000)) return
+    const duration = (state.last_event_type === 'timeout' && state.last_event_data?.duration) || TEAM_TIMEOUT_SECONDS
+    const elapsed = elapsedOnJoin(state.timeout_started_at, state.updated_at, duration * 1000)
+    if (elapsed >= duration * 1000) return
+    const team1OnLeft = ((state.side_a || 'left') === 'left') === ((loadedTeamAKey || 'team1') === 'team1')
+    const team = state.last_event_type === 'timeout'
+      ? (state.last_event_team === 'left' ? (team1OnLeft ? 'team1' : 'team2') : (team1OnLeft ? 'team2' : 'team1'))
+      : null
+    timeoutActiveRef.current = true
+    setTimeoutModal({
+      team,
+      countdown: duration,
+      startTimestamp: startTs,
+      anchor: countdownAnchor(elapsed),
+      initialCountdown: duration,
+      started: true
+    })
+    setShowTimeoutModal(true)
+  }, [loadedLiveState, loadedTeamAKey, isMasterMode])
 
   // Handle TTO countdown timer (45 seconds). 45 s on purpose, like the team
   // time-out (the whistle at 45 s, Swiss practice; FIVB 15.4.1/15.4.2 say 30 s):

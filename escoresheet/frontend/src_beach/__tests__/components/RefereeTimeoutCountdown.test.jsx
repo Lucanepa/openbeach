@@ -157,4 +157,35 @@ describe('Referee_beach: the time-out countdown', () => {
     expect(shown).toBeGreaterThanOrEqual(34)
     expect(shown).toBeLessThanOrEqual(35)
   })
+
+  // Opened (or reloaded) 10 s into the time-out: no row comes during it, and
+  // the countdown started only on a row or an action, so the tablet showed
+  // no time-out at all (stress test 2026-10-25, the reloaded and the
+  // late-joined referee)
+  it('a referee that opens 10 s into the time-out counts it from what it loads', async () => {
+    const start = Date.now() - 10000
+    render(<Referee matchId="match_seed" onExit={() => {}} isMasterMode={false} />)
+    await waitFor(() => expect(relay.subscriber).toBeTypeOf('function'))
+    await act(async () => { relay.subscriber(bundle(timeoutRow(start, start + 40, 45))) })
+    await settle()
+    const shown = shownSeconds()
+    expect(shown).toBeGreaterThanOrEqual(34)
+    expect(shown).toBeLessThanOrEqual(35)
+  })
+
+  it('a time-out that ended is not started again from a stale copy of the live state', async () => {
+    const start = Date.now() - 5000
+    await openMatch(start - 5000)
+    await act(async () => { relay.subscriber({ _action: 'timeout', _actionData: { team: 'team1', countdown: 45, startTimestamp: start }, _scoreboardTimestamp: start + 20 }) })
+    await settle()
+    expect(shownSeconds()).not.toBeNull()
+    await act(async () => { relay.subscriber({ _action: 'end_timeout', _actionData: {} }) })
+    await settle()
+    expect(shownSeconds()).toBeNull()
+    // a bundle read before the end: its live state still runs the time-out
+    await act(async () => { relay.subscriber(bundle(timeoutRow(start, start + 40, 45))) })
+    await settle()
+    expect(shownSeconds()).toBeNull()
+  })
 })
+

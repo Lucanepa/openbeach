@@ -54,6 +54,26 @@ export function elapsedWhenSent(startedAt, sentAt, durationMs) {
 }
 
 /**
+ * How long a countdown has run for a device that opens while it runs (a
+ * referee that joins, or reloads, in a time-out): the row it reads was
+ * pushed as the countdown started, so the scorer's two readings say about 0.
+ * This device's own clock is taken when it is plausible, not before the push
+ * and not past the end; else (a clock off by minutes) the readings'
+ * difference.
+ * @param {number|string|null} startedAt
+ * @param {number|string|null} sentAt
+ * @param {number} durationMs
+ * @param {number} [now] Date.now()
+ */
+export function elapsedOnJoin(startedAt, sentAt, durationMs, now = Date.now()) {
+  const atSend = elapsedWhenSent(startedAt, sentAt, durationMs)
+  const start = toMs(startedAt)
+  if (start == null) return atSend
+  const wall = now - start
+  return wall >= atSend && wall <= durationMs ? wall : atSend
+}
+
+/**
  * The countdown's start on this device's monotonic clock, from how long it
  * has already run.
  * @param {number} [elapsedMs=0]
