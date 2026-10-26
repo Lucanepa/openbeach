@@ -10,6 +10,7 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vites
 import { render, screen, fireEvent, act, waitFor, cleanup } from '@testing-library/react'
 import Dexie from 'dexie'
 import { IDBFactory, IDBKeyRange } from 'fake-indexeddb'
+import { useMemoryLocalStorage } from '../helpers/memoryStorage'
 
 vi.mock('../../contexts_beach/AlertContext_beach', () => ({ useAlert: () => ({ showAlert: vi.fn() }) }))
 vi.mock('../../contexts_beach/ScaleContext_beach', () => ({ useScale: () => ({ scaleFactor: 1, vmin: (v) => v * 10 }) }))
@@ -18,10 +19,10 @@ vi.mock('../../utils_beach/comprehensiveLogger_beach', () => ({ exportLogsAsNDJS
 const backend = vi.hoisted(() => ({ on: false }))
 vi.mock('../../utils_beach/backendConfig_beach', async (orig) => ({ ...(await orig()), isBackendAvailable: () => backend.on, getCloudApiUrl: () => null }))
 // Direct storage uploads: recorded, never answered (a connection that passes no data)
-const uploads = vi.hoisted(() => ({ paths: [] }))
+const uploads = vi.hoisted(() => ({ paths: [], bodies: {} }))
 vi.mock('../../lib_beach/apiClient_beach', async (orig) => ({
   ...(await orig()),
-  apiStorage: { from: () => ({ upload: (path) => { uploads.paths.push(path); return new Promise(() => {}) } }) }
+  apiStorage: { from: () => ({ upload: (path, body) => { uploads.paths.push(path); uploads.bodies[path] = body; return new Promise(() => {}) } }) }
 }))
 
 // The scoresheet window: each open gets a fresh fake window the test can close
@@ -164,7 +165,30 @@ describe('MatchEnd_beach: the approval PDF', () => {
     expect(files[1].payload.file).toBeTruthy()
     expect((await db.matches.get(matchId)).approved).toBe(true)
     // nothing went up directly (the queue sends them)
-    expect(uploads.paths).toEqual([])
+    expect(uploads.paths.filter(p => !p.startsWith('backups/'))).toEqual([])
+  })
+
+  // Stress test 2026-10-25 (ob-restore-at-match-end-drops-signatures-approval):
+  // no cloud backup was taken after the signatures or the approval, so a
+  // restore at Match end (the tablet died) came back unsigned, not approved
+  it('an official match: the approval leaves a cloud backup with the signatures and the approval', async () => {
+    backend.on = true
+    useMemoryLocalStorage()
+    localStorage.setItem('api_auth_token', JSON.stringify({ access_token: 'tok', expires_at: Math.floor(Date.now() / 1000) + 3600 }))
+    await seed({
+      test: false, seed_key: 'match_1759740000000_obbak', gameN: 703, gameNumber: '703',
+      team1PostGameCaptainSignature: 'data:c1', team2PostGameCaptainSignature: 'data:c2', scorerSignature: 'data:s', ref1Signature: 'data:r1'
+    })
+    renderMatchEnd()
+    await approve()
+    await waitFor(() => expect(opened).toHaveLength(1))
+    await postFromSheet({ type: 'pdfError', reason: 'failed', message: 'boom' })
+    await click(await screen.findByRole('button', { name: 'Approve without PDF' }))
+    expect(await screen.findByRole('button', { name: 'Close match' })).toBeInTheDocument()
+    await waitFor(() => expect(uploads.paths.some(p => p.startsWith('backups/backup_g703/'))).toBe(true))
+    const path = uploads.paths.find(p => p.startsWith('backups/backup_g703/'))
+    const backup = JSON.parse(uploads.bodies[path])
+    expect(backup.match).toMatchObject({ approved: true, team1PostGameCaptainSignature: 'data:c1', ref1Signature: 'data:r1', scorerSignature: 'data:s' })
   })
 
   it('Approve without PDF approves the match', async () => {

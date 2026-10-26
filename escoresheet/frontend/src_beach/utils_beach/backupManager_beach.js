@@ -17,6 +17,7 @@ import { cleanIntervalChoices } from './intervalChoice_beach'
 import { refereeConnectionDefault } from '../constants_beach/testSeeds_beach'
 import { jobMatchKey, setExtId, eventExtId, parseExtId } from './syncIds_beach'
 import { queueScorerClaim, isScorerMoved } from './matchHandover_beach'
+import { postMatchSignaturesFromServer } from './signatures_beach'
 
 // IndexedDB key for storing file system directory handle
 const BACKUP_DB_NAME = 'escoresheet_backup'
@@ -1368,10 +1369,12 @@ export async function importMatchFromSupabase(cloudData) {
       // Signatures: prefer JSONB, fallback to legacy
       team1CaptainSignature: signatures.team1_captain || match.team1_captain_signature,
       team2CaptainSignature: signatures.team2_captain || match.team2_captain_signature,
-      team1CaptainPostGameSignature: signatures.team1_captain_post_game || match.team1_captain_post_game_signature,
-      team2CaptainPostGameSignature: signatures.team2_captain_post_game || match.team2_captain_post_game_signature,
-      refereeSignature: signatures.referee || match.referee_signature,
-      scorerSignature: signatures.scorer || match.scorer_signature,
+      // The closing ones (captains, assistant scorer, scorer, referees) in
+      // the fields Match end and the sheet read (they were stored as
+      // team1CaptainPostGameSignature / refereeSignature, which nothing
+      // reads: Match end asked everyone to sign again, and the next
+      // signature sent null for the others, erasing them on the server)
+      ...postMatchSignaturesFromServer(signatures),
       // Coin toss: prefer JSONB, fallback to legacy
       coinTossConfirmed: coinToss.confirmed !== undefined ? coinToss.confirmed : match.coin_toss_confirmed,
       coinTossTeamA: coinToss.team_a || match.coin_toss_team_a,

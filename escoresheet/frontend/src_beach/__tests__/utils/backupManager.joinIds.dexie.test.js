@@ -134,3 +134,36 @@ describe('importMatchFromSupabase: the device continues the cloud rows', () => {
     expect(out.idFloor).toEqual({ set: 3, event: 160 })
   })
 })
+
+// Stress test 2026-10-25 (ob-restore-at-match-end-drops-signatures-approval):
+// the import stored the server's closing signatures as
+// team1CaptainPostGameSignature / refereeSignature, which nothing reads, and
+// dropped ref1 / ref2 / asst_scorer: Match end asked everyone to sign again
+describe('importMatchFromSupabase: the closing signatures', () => {
+  beforeEach(async () => {
+    await db.open()
+    await Promise.all(db.tables.map(t => t.clear()))
+  })
+
+  it('come back in the fields Match end and the sheet read', async () => {
+    const cloud = cloudMatch()
+    cloud.match.signatures = {
+      team1_captain: 'data:pre1', team2_captain: 'data:pre2',
+      team1_captain_post_game: 'data:c1', team2_captain_post_game: 'data:c2',
+      scorer: 'data:s', asst_scorer: null, ref1: 'data:r1', ref2: 'data:r2'
+    }
+    const localMatchId = await importMatchFromSupabase(cloud)
+    const m = await db.matches.get(localMatchId)
+    expect(m).toMatchObject({
+      team1PostGameCaptainSignature: 'data:c1',
+      team2PostGameCaptainSignature: 'data:c2',
+      scorerSignature: 'data:s',
+      asstScorerSignature: null,
+      ref1Signature: 'data:r1',
+      ref2Signature: 'data:r2'
+    })
+    // the next signature on this device sends them all back (signaturesPayload)
+    const { signaturesPayload } = await import('../../utils_beach/signatures_beach')
+    expect(signaturesPayload(m)).toMatchObject({ team1_captain_post_game: 'data:c1', ref1: 'data:r1', ref2: 'data:r2', scorer: 'data:s' })
+  })
+})

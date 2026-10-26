@@ -24,6 +24,8 @@ import {
 import AccountApprovalDialog from './AccountApprovalDialog_beach'
 import { askConfirm } from '../utils_beach/askConfirm_beach'
 import { scoresheetStoragePath, scoresheetUploadJob, scoresheetJsonBlob, uploadQueuedScoresheet } from '../utils_beach/scoresheetUploader_beach'
+import { exportMatchData } from '../utils_beach/backupManager_beach'
+import { uploadBackupToCloud } from '../utils_beach/logger_beach'
 import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { exportLogsAsNDJSON } from '../utils_beach/comprehensiveLogger_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
@@ -804,7 +806,20 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     const field = signatureFieldMap[role]
     const saved = await saveMatchSignature(db, matchId, field, signatureData, field ? signatureSourceUpdate(field, signatureData, meta) : null)
     if (!saved && field) showAlert(t('matchEnd.signatureSaveFailed'), 'error')
+    if (saved) backupToCloud()
     return saved
+  }
+
+  // A cloud backup after every signature (or Clear) and after the approval,
+  // in the background. Restore match lists only these backups, and the last
+  // one was the set end's: a tablet that died at Match end came back on
+  // another device with no closing signature and not approved (stress test
+  // 2026-10-25)
+  const backupToCloud = () => {
+    if (!match || match.test || !isBackendAvailable()) return
+    exportMatchData(matchId)
+      .then(data => uploadBackupToCloud(matchId, data))
+      .catch(err => console.warn('[MatchEnd] Cloud backup failed:', err?.message))
   }
 
   // A signature drawn here or received from a phone (the pad's onSave)
@@ -1406,6 +1421,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       if (isBackendAvailable() && !match?.test) {
         await queueApprovalFiles({ pdfResult, team1: team1WithCountry, team2: team2WithCountry, sets: allSets, events: allEvents })
       }
+      backupToCloud()
 
       // Update UI state to show post-approval buttons
       setDownloadProgress(null)
