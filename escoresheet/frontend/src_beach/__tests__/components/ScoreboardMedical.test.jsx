@@ -103,6 +103,10 @@ describe('Scoreboard_beach: MTO / RIT are recorded (issue 4a)', () => {
     expect(mto.payload).toMatchObject({ team: 'team1', playerNumber: 2, playerName: 'Beta', team1Points: 1, team2Points: 0, servingTeam: 'team1' })
     expect(mto.payload.startTime).toBeTruthy()
     await waitFor(() => expect(document.querySelector('[data-testid="medical-player"]')?.textContent).toContain('#2 Beta'))
+    // resolved by its outcome only: no Close that does nothing (stress test
+    // 2026-10-25: the × was shown, and tapping it left the dialog open)
+    const medicalDialog = document.querySelector('[data-testid="medical-player"]').closest('[role="dialog"]')
+    expect(medicalDialog.querySelector('[data-modal-close]')).toBeNull()
 
     // the forfeit asks first; Back returns to the countdown
     fireEvent.click(document.querySelector('[data-testid="medical-forfeit"]'))

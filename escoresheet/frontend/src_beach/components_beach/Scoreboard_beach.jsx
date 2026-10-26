@@ -15722,7 +15722,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               }`
           }
           open={true}
+          // Resolved only by its outcome (Player recovered, or the forfeit):
+          // no × that does nothing (it was shown, announced as "Close")
           onClose={() => {}}
+          hideCloseButton={true}
           width={400}
         >
           <div style={{ padding: '24px', textAlign: 'center' }}>
