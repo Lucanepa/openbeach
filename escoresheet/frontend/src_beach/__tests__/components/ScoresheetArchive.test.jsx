@@ -1,6 +1,11 @@
 // The scoresheet archive (scoresheet_archive_beach.html): its list of the
 // account's approved matches and its View PDF.
 //
+// The list read one page of 50 files per date folder (and 50 matches in
+// all): each match stores 3 files, so about 16 matches of a day were shown,
+// cut by name (game1, game10..19, game2..), and the rest dropped without a
+// word: 24 approved, '16 scoresheets', games 2-9 missing.
+//
 // View PDF opened beach/{date}/game{n}.pdf, but every match since the seed
 // key stores game{n}_{seed}.pdf: "Scoresheet not found" for every official
 // match (stress test 2026-10-25). The storage is the backend's, faked here
@@ -109,4 +114,24 @@ describe('Scoresheet archive: View PDF', () => {
     await waitFor(() => expect(store.downloads.length).toBeGreaterThan(0), { timeout: 5000 })
     expect(store.downloads.at(-1)).toBe('beach/2026-06-01/game4.pdf')
   })
+})
+
+describe('Scoresheet archive: every approved match of a day', () => {
+  it('24 matches on one date (72 files): all 24 are listed', async () => {
+    for (let game = 1; game <= 24; game++) storeMatch('2026-10-24', game, `match_${game}_abcdef`)
+    render(<ScoresheetApp />)
+    const links = await viewPdfLinks(24)
+    const games = links.map(a => Number(new URL(a.href).searchParams.get('game'))).sort((a, b) => a - b)
+    expect(games).toEqual(Array.from({ length: 24 }, (_, i) => i + 1))
+    expect(document.body.textContent).toContain('24 scoresheets')
+  })
+
+  it('more files than a page of the backend: the next page is read', async () => {
+    // 340 matches, 1020 files, in one folder: the backend's page is 1000
+    for (let game = 1; game <= 340; game++) storeMatch('2026-10-25', game, 'match_x')
+    render(<ScoresheetApp />)
+    await waitFor(() => expect(document.body.textContent).toContain('340 scoresheets'), { timeout: 15000 })
+    const folderLists = store.lists.filter(l => l.dir === 'beach/2026-10-25')
+    expect(folderLists.map(l => l.options.offset)).toEqual([0, 1000])
+  }, 30000)
 })
