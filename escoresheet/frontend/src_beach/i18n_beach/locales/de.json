@@ -780,6 +780,10 @@
       "body": "Dieses Spiel ist bereits in einem anderen Tab oder Fenster geöffnet. Schliesse diesen Tab und erfasse im anderen weiter, damit sich die beiden nicht überschreiben.",
       "close": "Diesen Tab schliessen"
     },
+    "matchGone": {
+      "title": "Dieses Spiel ist nicht mehr auf diesem Gerät",
+      "body": "Seine Daten auf diesem Gerät wurden entfernt (zum Beispiel wurden die Websitedaten im Browser gelöscht). Was synchronisiert wurde, bleibt in der Cloud: Öffne auf der Startseite «Spiel wiederherstellen» mit der Spielnummer und der Spiel-PIN."
+    },
     "rotate": {
       "title": "Gerät drehen",
       "body": "Die Spielerfassung funktioniert im Querformat. Drehe das Gerät, um weiterzufahren.",

@@ -898,6 +898,23 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   const preloaded = usePreloaded(matchId != null ? scoreboardKey(matchId) : null)
   const [data, commits] = useActionLiveQuery(() => readScoreboard(matchId), [matchId], preloaded)
 
+  // The match is no longer in this device's database while its scoring screen
+  // is open: the database was deleted under it (clear-db, the browser's "clear
+  // site data", an update that clears it). Dexie opens an empty one, the read
+  // finds no match (null, not the undefined of a first read still running)
+  // and the screen said 'Loading…' for good while every tap timed out (stress
+  // test 2026-10-25). A take-back replaces the local copy and opens the new
+  // one at once, so only a read that stays empty for a moment counts.
+  const [matchGone, setMatchGone] = useState(false)
+  useEffect(() => {
+    if (data !== null) {
+      setMatchGone(false)
+      return undefined
+    }
+    const timer = setTimeout(() => setMatchGone(true), 1500)
+    return () => clearTimeout(timer)
+  }, [data])
+
   // --- Live connection health monitoring ---
   const handleDeviceDisconnected = useCallback(({ label }) => {
     showAlert(t('scoreboard.deviceDisconnected', { defaultValue: '{{device}} disconnected', device: label }), 'warning')
@@ -7588,6 +7605,33 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       }
     }
   }, [data, setTransitionLoading, onFinishSet])
+
+  // The match's data left this device (see matchGone): say so and point to
+  // Restore match; what reached the cloud is kept there
+  if (matchGone) {
+    return (
+      <div className="ov-kit fixed inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-stone-50 to-stone-100 px-4" style={{ zIndex: 9999 }}>
+        <div className="w-full max-w-md rounded-2xl border border-stone-200/70 bg-white p-6 text-center shadow-card-lg">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+            <TriangleAlert size={24} />
+          </div>
+          <h1 className="text-lg font-bold text-stone-900">
+            {t('scoreboard.matchGone.title', 'This match is no longer on this device')}
+          </h1>
+          <p className="mt-2 text-sm text-stone-600">
+            {t('scoreboard.matchGone.body', 'Its data on this device was removed (for example, the browser’s site data was cleared). What was synced is kept in the cloud: on the home screen, open Restore match with the match number and the game PIN.')}
+          </p>
+          <button
+            type="button"
+            onClick={() => onOpenSetup?.()}
+            className={cn('mt-6 inline-flex h-11 w-full items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800 transition-colors', FOCUS_RING)}
+          >
+            {t('Home')}
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   // Only the first load is a full-page loader. The set end's steps are a small
   // status over the scoring screen (it was blanked for seconds, saying

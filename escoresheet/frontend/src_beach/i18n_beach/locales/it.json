@@ -780,6 +780,10 @@
       "body": "Questa partita è già aperta in un’altra scheda o finestra. Chiudi questa scheda e continua nell’altra, così non si sovrascrivono a vicenda.",
       "close": "Chiudi questa scheda"
     },
+    "matchGone": {
+      "title": "Questa partita non è più su questo dispositivo",
+      "body": "I suoi dati su questo dispositivo sono stati rimossi (ad esempio, i dati del sito sono stati cancellati nel browser). Ciò che è stato sincronizzato resta nel cloud: nella schermata iniziale apri «Ripristina partita» con il numero e il PIN della partita."
+    },
     "rotate": {
       "title": "Ruota il dispositivo",
       "body": "La schermata di refertazione funziona in orizzontale. Ruota il dispositivo per continuare.",

@@ -780,6 +780,10 @@
       "body": "Ce match est déjà ouvert dans un autre onglet ou une autre fenêtre. Fermez cet onglet et continuez dans l’autre, pour qu’ils ne s’écrasent pas mutuellement.",
       "close": "Fermer cet onglet"
     },
+    "matchGone": {
+      "title": "Ce match n’est plus sur cet appareil",
+      "body": "Ses données sur cet appareil ont été supprimées (par exemple, les données du site ont été effacées dans le navigateur). Ce qui a été synchronisé reste dans le cloud : sur l’écran d’accueil, ouvrez « Restaurer le match » avec le numéro et le PIN du match."
+    },
     "rotate": {
       "title": "Tournez votre appareil",
       "body": "L’écran de saisie fonctionne en paysage. Tournez votre appareil pour continuer.",
