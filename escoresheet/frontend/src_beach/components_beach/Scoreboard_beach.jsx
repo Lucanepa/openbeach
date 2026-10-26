@@ -14,7 +14,7 @@ import ScoreboardOptionsModal from './options/ScoreboardOptionsModal_beach'
 import ConnectionSetupModal from './options/ConnectionSetupModal_beach'
 import { useSyncQueue, checkScorerMoved } from '../hooks_beach/useSyncQueue_beach'
 import { isScorerMoved, SCORER_MOVED } from '../utils_beach/matchHandover_beach'
-import { holdLiveState, liveStateWritten, isLiveStateRetryable } from '../utils_beach/liveStateOutbox_beach'
+import { holdLiveState, liveStateWritten, isLiveStateRetryable, scorerLiveOrder, cachedCloudMatchId, rememberCloudMatchId } from '../utils_beach/liveStateOutbox_beach'
 import { useConfirmAction } from '../hooks_beach/useConfirmAction_beach'
 import { useActionLiveQuery } from '../hooks_beach/useActionLiveQuery_beach'
 import { useScorerActions, pickLiveStateSnapshot, isReportedActionError } from '../hooks_beach/useScorerActions_beach'
@@ -1235,6 +1235,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // screen never writes, so every later push ended the break on the
     // referee and the livescore. Not the pushes that end it.
     const keepInterval = breakRunningRef.current && !['set_end', 'end_interval', 'set_start'].includes(eventType)
+    // This push's place among the pushes of this page, and its time, taken
+    // when its action runs (not after the awaits below): the cloud writes go
+    // in this order, an older one never over a newer (scorerLiveOrder)
+    const liveSeq = scorerLiveOrder.next()
+    const stampedAt = new Date().toISOString()
 
     // Always broadcast locally (works offline, no Supabase needed)
     broadcastToScoreboard(cachedSnapshot)
@@ -1257,6 +1262,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const externalId = match.externalId
       if (externalId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(externalId)) {
         supabaseMatchId = externalId
+      } else if (cachedCloudMatchId(match.seed_key)) {
+        supabaseMatchId = cachedCloudMatchId(match.seed_key)
       } else {
         const seedKey = match.seed_key || String(matchId)
         const { data: matchData, error } = await apiFrom('matches')
@@ -1264,7 +1271,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           .eq('external_id', seedKey)
           .eq('sport_type', SPORT_TYPE)
           .maybeSingle()
-        if (!error && matchData) supabaseMatchId = matchData.id
+        if (!error && matchData) {
+          supabaseMatchId = matchData.id
+          rememberCloudMatchId(match.seed_key, matchData.id)
+        }
       }
 
       // Use cached snapshot if provided, otherwise fetch/compute. In the
@@ -1461,7 +1471,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         game_n: match.gameN || match.game_n || null,
         league: match.league || null,
         gender: match.match_type_2 || null,
-        updated_at: new Date().toISOString()
+        updated_at: stampedAt
       }
 
       // DIRECT SUPABASE WRITE (bypasses sync_queue) - see architecture note at top of file
@@ -1475,7 +1485,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         holdLiveState(match.seed_key, liveStateData)
         return
       }
-      const liveStateResult = await apiFrom('match_live_state').upsert(liveStateData, { onConflict: 'match_id' })
+      // One upsert at a time, in the order of the actions; one older than the
+      // last written is dropped (the server keeps the last arrival)
+      const liveStateResult = await scorerLiveOrder.write(liveSeq,
+        () => apiFrom('match_live_state').upsert(liveStateData, { onConflict: 'match_id' }))
+      if (liveStateResult?.skipped) return
       if (!liveStateResult.error) liveStateWritten(match.seed_key, liveStateData.updated_at)
 
       if (liveStateResult.error?.code === SCORER_MOVED) {

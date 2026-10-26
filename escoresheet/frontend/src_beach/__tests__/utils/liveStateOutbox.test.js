@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { useMemoryLocalStorage } from '../helpers/memoryStorage'
 import {
   holdLiveState, heldLiveState, liveStateWritten, sendHeldLiveState, sendHeldLiveStates,
-  isLiveStateRetryable, resetLiveStateOutboxForTests
+  isLiveStateRetryable, resetLiveStateOutboxForTests, createLiveStateOrder, cachedCloudMatchId, rememberCloudMatchId
 } from '../../utils_beach/liveStateOutbox_beach'
 
 // Stress test 2026-10-25 (ob-livestate-never-repushed): a live-state write
@@ -77,5 +77,49 @@ describe('liveStateOutbox', () => {
     for (const e of [{ status: 400 }, { status: 403, code: 'OV_SCORER_REQUIRED' }, { status: 409, code: 'OV_MATCH_CLOSED' }, null]) {
       expect(isLiveStateRetryable(e)).toBe(false)
     }
+  })
+})
+
+// Stress test 2026-10-25 (ob-livestate-push-reorder): a point and its quick
+// Undo pushed at the same time; the point's push waited for its match lookup,
+// landed after the Undo's with a later stamp, and the cloud kept the undone
+// point
+describe('createLiveStateOrder', () => {
+  it('writes one at a time in the order of the actions; an older one after a newer is skipped', async () => {
+    const order = createLiveStateOrder()
+    const point = order.next()
+    const undo = order.next()
+    const written = []
+    let release
+    const slow = new Promise(r => { release = r })
+    // the Undo's write is asked for first (the point's push still waited)
+    const undoWrite = order.write(undo, async () => { written.push('undo'); return { error: null } })
+    const pointWrite = order.write(point, async () => { await slow; written.push('point'); return { error: null } })
+    release()
+    expect(await undoWrite).toEqual({ error: null })
+    expect(await pointWrite).toEqual({ skipped: true })
+    expect(written).toEqual(['undo'])
+  })
+
+  it('a write in flight finishes before the next starts', async () => {
+    const order = createLiveStateOrder()
+    const a = order.next()
+    const b = order.next()
+    const log = []
+    let release
+    const slow = new Promise(r => { release = r })
+    const wa = order.write(a, async () => { log.push('a:start'); await slow; log.push('a:end') })
+    const wb = order.write(b, async () => { log.push('b:start') })
+    await new Promise(r => setTimeout(r, 5))
+    expect(log).toEqual(['a:start'])
+    release()
+    await Promise.all([wa, wb])
+    expect(log).toEqual(['a:start', 'a:end', 'b:start'])
+  })
+
+  it('the cloud match id is looked up once per match', () => {
+    expect(cachedCloudMatchId(SEED)).toBeNull()
+    rememberCloudMatchId(SEED, 'uuid-9')
+    expect(cachedCloudMatchId(SEED)).toBe('uuid-9')
   })
 })

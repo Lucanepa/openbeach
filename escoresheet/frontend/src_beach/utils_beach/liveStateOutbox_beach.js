@@ -153,8 +153,51 @@ export async function sendHeldLiveStates(deps) {
   return out
 }
 
+/**
+ * The order of this page's live-state writes. The scoring screen's pushes run
+ * at the same time (one per action, not awaited), and each awaited a lookup
+ * of the cloud match id before its upsert: a quick Undo's push could land
+ * before the point it undid, and the point's push, stamped later, overwrote
+ * it (stress test 2026-10-25: the livescore kept the undone point until the
+ * next one). `next()` numbers a push when its action runs; `write(n, fn)` runs
+ * the upserts one at a time in that order and skips one older than the last
+ * written ({ skipped: true }). (OpenVolley relayPublisher createLiveStateOrder)
+ */
+export function createLiveStateOrder() {
+  let seq = 0
+  let lastWritten = 0
+  let chain = Promise.resolve()
+  return {
+    next() {
+      seq += 1
+      return seq
+    },
+    /** @returns {Promise<any>} fn's result, or { skipped: true } */
+    write(n, fn) {
+      const run = async () => {
+        if (n < lastWritten) return { skipped: true }
+        lastWritten = n
+        return fn()
+      }
+      const pending = chain.then(run, run)
+      chain = pending.catch(() => {})
+      return pending
+    }
+  }
+}
+
+export const scorerLiveOrder = createLiveStateOrder()
+
+// seed_key -> cloud match id: looked up once, not before every push
+const cloudMatchIds = new Map()
+export const cachedCloudMatchId = (seedKey) => (seedKey ? cloudMatchIds.get(seedKey) || null : null)
+export function rememberCloudMatchId(seedKey, id) {
+  if (seedKey && id) cloudMatchIds.set(seedKey, id)
+}
+
 /** Tests: forget what this page wrote. */
 export function resetLiveStateOutboxForTests() {
   lastWrittenAt.clear()
+  cloudMatchIds.clear()
   for (const k of heldLiveStateKeys()) dropHeldLiveState(k)
 }
