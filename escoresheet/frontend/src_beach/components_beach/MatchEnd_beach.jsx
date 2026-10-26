@@ -2030,6 +2030,10 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
                 className={modalSaveClass}
                 onClick={async () => {
                   await db.matches.update(matchId, { remarks: remarksText.trim() })
+                  // The cloud has the remarks only from the approval on
+                  // (remarksSnapshotJob): until then the backup is their one
+                  // copy off this device, as for the signatures
+                  backupToCloud()
                   setShowRemarksModal(false)
                   setRemarksText('')
                 }}

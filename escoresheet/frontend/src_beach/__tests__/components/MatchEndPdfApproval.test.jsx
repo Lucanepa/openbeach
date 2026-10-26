@@ -191,6 +191,23 @@ describe('MatchEnd_beach: the approval PDF', () => {
     expect(backup.match).toMatchObject({ approved: true, team1PostGameCaptainSignature: 'data:c1', ref1Signature: 'data:r1', scorerSignature: 'data:s' })
   })
 
+  // Remarks saved after the signatures (not approved yet) are on the server
+  // only from the approval on: no backup was taken, so a restore at Match end
+  // came back without them (re-verification 2026-10-26)
+  it('an official match: remarks saved at Match end leave a cloud backup with them', async () => {
+    backend.on = true
+    useMemoryLocalStorage()
+    localStorage.setItem('api_auth_token', JSON.stringify({ access_token: 'tok', expires_at: Math.floor(Date.now() / 1000) + 3600 }))
+    await seed({ test: false, seed_key: 'match_1759740000000_obrem', gameN: 704, gameNumber: '704', scorerSignature: 'data:s', ref1Signature: 'data:r1' })
+    renderMatchEnd()
+    await click(await screen.findByRole('button', { name: 'Edit remarks' }))
+    await act(async () => { fireEvent.change(screen.getByRole('textbox', { name: 'Remarks' }), { target: { value: 'Team B protested at 18:15' } }) })
+    await click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(uploads.paths.some(p => p.startsWith('backups/backup_g704/'))).toBe(true))
+    const backup = JSON.parse(uploads.bodies[uploads.paths.find(p => p.startsWith('backups/backup_g704/'))])
+    expect(backup.match).toMatchObject({ remarks: 'Team B protested at 18:15', scorerSignature: 'data:s' })
+  })
+
   it('Approve without PDF approves the match', async () => {
     await seed()
     renderMatchEnd()
