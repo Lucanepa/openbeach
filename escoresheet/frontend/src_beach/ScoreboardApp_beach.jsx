@@ -54,6 +54,38 @@ function normalizeState(raw) {
   }
 }
 
+// The Remote game of this display (ScoreboardApp: comes back after a reload)
+const REMOTE_GAME_KEY = 'ob_scoreboard_remote_match'
+
+function storedRemoteGame() {
+  try {
+    return localStorage.getItem(REMOTE_GAME_KEY) || null
+  } catch {
+    return null
+  }
+}
+
+function setUrlParams(params) {
+  try {
+    const url = new URL(window.location.href)
+    for (const [k, v] of Object.entries(params)) {
+      if (v == null) url.searchParams.delete(k)
+      else url.searchParams.set(k, v)
+    }
+    window.history.replaceState(window.history.state, '', url.toString())
+  } catch { /* no history API: the stored choice still brings it back */ }
+}
+
+function rememberRemoteGame(matchId) {
+  try { localStorage.setItem(REMOTE_GAME_KEY, String(matchId)) } catch { /* storage blocked */ }
+  setUrlParams({ mode: 'remote', match: String(matchId) })
+}
+
+function forgetRemoteGame() {
+  try { localStorage.removeItem(REMOTE_GAME_KEY) } catch { /* storage blocked */ }
+  setUrlParams({ mode: null, match: null })
+}
+
 /**
  * Arena Scoreboard App for Beach Volleyball
  * - Local mode: receives data from scorer via BroadcastChannel (same device)
@@ -75,14 +107,33 @@ export default function ScoreboardApp() {
   const selectedRef = useRef(null)
   selectedRef.current = selectedMatchId
 
-  // Check URL params for auto-connect (opened from scorer menu)
+  // Check URL params for auto-connect (opened from scorer menu). A Remote
+  // display comes back to its game after a reload or a restart (a power
+  // blip, the OS discarding the tab, Refresh to update): the game is in the
+  // URL (?mode=remote&match=<id>, a link that can be bookmarked) and the last
+  // choice in localStorage. It went back to "Choose how to connect", with
+  // someone to walk to it (stress test 2026-10-25).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const mode = params.get('mode')
     if (mode === 'local') {
       setConnectionMode('local')
+      return
+    }
+    const remoteGame = (mode === 'remote' && params.get('match')) || (!mode ? storedRemoteGame() : null)
+    if (remoteGame) {
+      setConnectionMode('remote')
+      setSelectedMatchId(remoteGame)
+    } else if (mode === 'remote') {
+      setConnectionMode('remote')
     }
   }, [])
+
+  // The chosen Remote game: kept for the next load, and in the URL
+  useEffect(() => {
+    if (connectionMode !== 'remote' || !selectedMatchId) return
+    rememberRemoteGame(selectedMatchId)
+  }, [connectionMode, selectedMatchId])
 
   // Local mode: listen on BroadcastChannel
   useEffect(() => {
@@ -225,6 +276,7 @@ export default function ScoreboardApp() {
 
   // Reset to setup
   const handleBack = () => {
+    forgetRemoteGame()
     setGameState(null)
     setSelectedMatchId(null)
     setConnectionMode(null)
