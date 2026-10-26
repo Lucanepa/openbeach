@@ -225,7 +225,7 @@
     "finals": "Finales",
     "coach": "Entraîneur",
     "matchNumber": "N° de match",
-    "matchNumberPlaceholder": "ex. M01",
+    "matchNumberPlaceholder": "ex. 12",
     "datePlaceholder": "jj.mm.aaaa",
     "timePlaceholder": "HH:MM",
     "courtPlaceholder": "ex. 1, Centre",
@@ -380,7 +380,8 @@
       "matchNotFound": "Match introuvable.",
       "allowPopups": "Veuillez autoriser les pop-ups pour voir la feuille de match.",
       "errorSavingData": "Erreur lors de la sauvegarde. Veuillez réessayer.",
-      "duplicateGameNumber": "Match #{{number}} existe déjà. Veuillez utiliser un autre numéro."
+      "duplicateGameNumber": "Match #{{number}} existe déjà. Veuillez utiliser un autre numéro.",
+      "gameNumberInvalid": "Un nombre entier de 1 à 9999."
     },
     "modals": {
       "syncing": "Synchronisation",

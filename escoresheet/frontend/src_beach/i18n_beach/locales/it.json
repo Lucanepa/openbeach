@@ -225,7 +225,7 @@
     "finals": "Finali",
     "coach": "Allenatore",
     "matchNumber": "Numero partita",
-    "matchNumberPlaceholder": "es. M01",
+    "matchNumberPlaceholder": "es. 12",
     "datePlaceholder": "gg.mm.aaaa",
     "timePlaceholder": "HH:MM",
     "courtPlaceholder": "es. 1, Centro",
@@ -380,7 +380,8 @@
       "matchNotFound": "Match non trovato.",
       "allowPopups": "Consenti i popup per visualizzare il referto.",
       "errorSavingData": "Errore nel salvataggio. Riprova.",
-      "duplicateGameNumber": "Partita #{{number}} esiste già. Utilizzare un altro numero."
+      "duplicateGameNumber": "Partita #{{number}} esiste già. Utilizzare un altro numero.",
+      "gameNumberInvalid": "Un numero intero da 1 a 9999."
     },
     "modals": {
       "syncing": "Sincronizzazione",

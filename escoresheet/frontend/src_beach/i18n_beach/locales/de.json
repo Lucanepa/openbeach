@@ -225,7 +225,7 @@
     "finals": "Finale",
     "coach": "Trainer",
     "matchNumber": "Spielnummer",
-    "matchNumberPlaceholder": "z.B. M01",
+    "matchNumberPlaceholder": "z.B. 12",
     "datePlaceholder": "TT.MM.JJJJ",
     "timePlaceholder": "HH:MM",
     "courtPlaceholder": "z.B. 1, Center",
@@ -380,7 +380,8 @@
       "matchNotFound": "Match nicht gefunden.",
       "allowPopups": "Bitte Popups erlauben, um das Spielprotokoll anzuzeigen.",
       "errorSavingData": "Fehler beim Speichern. Bitte erneut versuchen.",
-      "duplicateGameNumber": "Spiel #{{number}} existiert bereits. Bitte eine andere Nummer verwenden."
+      "duplicateGameNumber": "Spiel #{{number}} existiert bereits. Bitte eine andere Nummer verwenden.",
+      "gameNumberInvalid": "Eine ganze Zahl von 1 bis 9999."
     },
     "modals": {
       "syncing": "Synchronisierung",

@@ -225,7 +225,7 @@
     "finals": "Finals",
     "coach": "Coach",
     "matchNumber": "Match number",
-    "matchNumberPlaceholder": "e.g. M01",
+    "matchNumberPlaceholder": "e.g. 12",
     "datePlaceholder": "dd.mm.yyyy",
     "timePlaceholder": "HH:MM",
     "courtPlaceholder": "e.g. 1, Center",
@@ -383,7 +383,8 @@
       "matchNotFound": "Match not found.",
       "allowPopups": "Please allow popups to view the scoresheet.",
       "errorSavingData": "Error saving data. Please try again.",
-      "duplicateGameNumber": "Game #{{number}} already exists. Please use a different number."
+      "duplicateGameNumber": "Game #{{number}} already exists. Please use a different number.",
+      "gameNumberInvalid": "A whole number from 1 to 9999."
     },
     "modals": {
       "syncing": "Syncing",

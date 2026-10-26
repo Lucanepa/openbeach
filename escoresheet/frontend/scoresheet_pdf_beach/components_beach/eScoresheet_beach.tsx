@@ -7,6 +7,7 @@ import { isoOf, setEndMs, setStartMs } from './matchTimes_beach';
 import { medicalChartMarks } from '../../src_beach/utils_beach/medicalRemarks_beach.js';
 // REMARKS: the scorer's own, MTO / RIT, a set past the 44 boxes (shared with MatchEnd)
 import { sheetRemarksText } from '../../src_beach/utils_beach/sheetRemarks_beach.js';
+import { gameNumberValue } from '../../src_beach/utils_beach/gameNumber_beach.js';
 
 // The sheet's many debug lines (whole match objects) only when asked for:
 // localStorage obScoresheetDebug = '1'. Logging them always slowed the
@@ -342,8 +343,11 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
         // Match header info - use match setup fields
         if (match.eventName) set('competition', match.eventName);
         else if (match.league) set('competition', match.league);
-        // Match number - use game_n (the actual field name in the database)
-        if (match.game_n != null) set('match_no', String(match.game_n));
+        // Match number - use game_n (the actual field name in the database);
+        // a match number saved as free text before it had to be a number
+        // ("M01": game_n NaN) prints as typed, never "NaN"
+        const matchNo = gameNumberValue(match.game_n) ?? (match.gameNumber != null && String(match.gameNumber).trim() ? String(match.gameNumber).trim() : null);
+        if (matchNo != null) set('match_no', String(matchNo));
         // Don't fall back to externalId as it often contains 'test-match-default' or similar
         if (match.site) set('site', match.site);
         else if (match.city) set('site', match.city);
@@ -2859,7 +2863,7 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
           const date = new Date(match.scheduledAt);
           set('bmp_date', date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }));
         }
-        set('bmp_match_no', String(match.game_n || ''));
+        set('bmp_match_no', String(gameNumberValue(match.game_n) ?? match.gameNumber ?? ''));
         // Convert phase to capitalize (replace underscores with spaces and capitalize)
         // Use fallback to match.phase like main scoresheet
         const phaseStr = match.matchPhase || match.phase || '';

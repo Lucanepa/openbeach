@@ -225,7 +225,7 @@
     "finals": "Finale",
     "coach": "Trainer",
     "matchNumber": "Spiilnummere",
-    "matchNumberPlaceholder": "z.B. M01",
+    "matchNumberPlaceholder": "z.B. 12",
     "datePlaceholder": "TT.MM.JJJJ",
     "timePlaceholder": "HH:MM",
     "courtPlaceholder": "z.B. 1, Center",
@@ -380,7 +380,8 @@
       "matchNotFound": "Match nöd gfunde.",
       "allowPopups": "Bitte Popups erlaube, zum s Spiilprotokoll azeige.",
       "errorSavingData": "Fehler bim Speichere. Bitte nomal versuche.",
-      "duplicateGameNumber": "Spiel #{{number}} git's scho. Bitte e anderi Nummer verwände."
+      "duplicateGameNumber": "Spiel #{{number}} git's scho. Bitte e anderi Nummer verwände.",
+      "gameNumberInvalid": "E ganzi Zahl vo 1 bis 9999."
     },
     "modals": {
       "syncing": "Synchronisierig",

@@ -64,6 +64,8 @@ const SPORT_TYPE = 'beach'
 // Team time-out and technical time-out countdowns: 45 s ON PURPOSE (see
 // countdownClock_beach), here, in the live state and on the referee
 import { TEAM_TIMEOUT_SECONDS, TTO_SECONDS } from '../utils_beach/countdownClock_beach'
+// The match number of the live state: the integer column's (gameNumber_beach)
+import { gameNumberValue } from '../utils_beach/gameNumber_beach'
 import CountryFlag from './CountryFlag_beach'
 import SignaturePad from './SignaturePad_beach'
 import { saveMatchSignature } from '../utils_beach/signatures_beach'
@@ -1182,7 +1184,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         timeout_active: !!timeoutModal,
         set_interval_active: false,
         match_status: snapshot.matchStatus || 'live',
-        game_n: match.gameN || match.game_n || null,
+        game_n: gameNumberValue(match.gameN || match.game_n),
         league: match.league || null,
         gender: match.match_type_2 || null,
         updated_at: new Date().toISOString()
@@ -1472,7 +1474,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         match_status: matchStatus,
         scorer_attention_trigger: scorerAttentionTrigger,
         // Match metadata (from IndexedDB match record)
-        game_n: match.gameN || match.game_n || null,
+        game_n: gameNumberValue(match.gameN || match.game_n),
         league: match.league || null,
         gender: match.match_type_2 || null,
         updated_at: new Date().toISOString()
