@@ -168,6 +168,27 @@ describe('importMatchFromSupabase: the closing signatures', () => {
   })
 })
 
+// The live state takes the team names from the match row (stateSnapshot_beach);
+// the import wrote them only on the team rows, so after "Take back scoring
+// here" or a restore by PIN every push had empty team names and the remote
+// scoreboard and the livescore showed "Team A" / "Team B" (stress test
+// 2026-10-26)
+describe('importMatchFromSupabase: the team names', () => {
+  beforeEach(async () => {
+    await db.open()
+    await Promise.all(db.tables.map(t => t.clear()))
+  })
+
+  it('are on the match row, and the live state sends them', async () => {
+    const localMatchId = await importMatchFromSupabase(cloudMatch())
+    const m = await db.matches.get(localMatchId)
+    expect(m).toMatchObject({ team1Name: 'Synth One', team2Name: 'Synth Two' })
+    const { captureFullStateSnapshot } = await import('../../utils_beach/stateSnapshot_beach')
+    const snap = await captureFullStateSnapshot(db, localMatchId)
+    expect([snap.teamAName, snap.teamBName].sort()).toEqual(['Synth One', 'Synth Two'])
+  })
+})
+
 // Stress test 2026-10-25 (ob-takeback-loses-tto-courtswitch-setstart): the
 // scoring screen writes set_start, technical_to (with the TTO's change of
 // courts) and the first rally_start of a set without a sync job. "Take back

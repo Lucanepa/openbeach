@@ -1364,6 +1364,13 @@ export async function importMatchFromSupabase(cloudData) {
       gameNumber: match.game_n ? String(match.game_n) : null, // Also set gameNumber
       test: match.test || false,
       seed_key: match.external_id,
+      // The names at match level, as every other way a match is made writes
+      // them: the live state reads them there (stateSnapshot_beach), and
+      // after "Take back scoring here" or a restore by PIN every push had
+      // empty team names, so the remote scoreboard and the livescore showed
+      // "Team A" / "Team B" for the rest of the match
+      team1Name: team1Data.name || null,
+      team2Name: team2Data.name || null,
       // Short names at match level (for easy access)
       team1ShortName: team1Data.short_name || null,
       team2ShortName: team2Data.short_name || null,
