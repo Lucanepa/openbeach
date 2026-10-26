@@ -30,7 +30,7 @@ import { apiFrom } from '../lib_beach/apiClient_beach'
 import { setExtId, eventExtId } from '../utils_beach/syncIds_beach'
 import { missingForfeitSets } from '../utils_beach/forfeitSets_beach'
 import { changesSetScore, isLiveSetInterval, queueSetScoreSync, queueSetFinishedSync } from '../utils_beach/eventSync_beach'
-import { planPointRemoval, scoreAfterRemoval, syncJobsForEvents, syncJobsForSets, eventUpsertJob, setReopenJob, planDecisionChangeReversal, scoreDeltaOfRemoval, teamSanctionFlags, UNSENT_STATUSES } from '../utils_beach/scorerCorrections_beach'
+import { planPointRemoval, scoreAfterRemoval, syncJobsForEvents, syncJobsForSets, eventUpsertJob, setReopenJob, setDeleteJob, planDecisionChangeReversal, scoreDeltaOfRemoval, teamSanctionFlags, UNSENT_STATUSES } from '../utils_beach/scorerCorrections_beach'
 import { askConfirm } from '../utils_beach/askConfirm_beach'
 import { rallyStatusOf, currentSetOf } from '../utils_beach/rally_beach'
 import { toast } from '../ui/volleyui/uiStore.js'
@@ -5696,6 +5696,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           }
           // The ended set is open again, in the cloud too
           const undoMatch = await db.matches.get(matchId)
+          // A next set already sent is removed there (the set ended again
+          // opens another one: two rows of that set)
+          if (nextSet && undoMatch && !undoMatch.test && undoMatch.seed_key) {
+            await db.sync_queue.add(setDeleteJob(undoMatch.seed_key, nextSet))
+          }
           const endedSetIndex = lastEvent.payload?.setIndex ?? lastEvent.setIndex
           const endedSet = (await db.sets.where({ matchId }).toArray()).find(s => s.index === endedSetIndex)
           if (endedSet) {
@@ -5705,6 +5710,9 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
               await db.sync_queue.add(setReopenJob(undoMatch.seed_key, reopened))
             }
           }
+          // Its end can be confirmed again (confirmSetEndTime drops a second
+          // confirm of a set it has ended)
+          confirmedSetEndRef.current.delete(endedSetIndex)
         } else {
           // The cloud set row follows the restored score (queued: also offline)
           await queueSetScoreSync(db, { matchId, setIndex: lastEvent.setIndex ?? data.set.index })
@@ -5755,6 +5763,67 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
   const cancelUndo = useCallback(() => {
     setUndoConfirm(null)
   }, [])
+
+  // Manual changes > Reopen set: one action, as MatchEnd's Reopen last set.
+  // It only marked the set not finished and deleted the later sets and their
+  // events row by row: the set kept its set_end (the next set end wrote a
+  // second one), its index stayed in confirmedSetEndRef, so the set could
+  // not be ended again until a reload (Confirm closed the dialog and wrote
+  // nothing, the score went on past 21), and no job reached the cloud, which
+  // kept set 1 finished and the old set 2, next to the set 2 played again
+  // (stress test 2026-10-25). Now the set_end goes with the later sets' events
+  // (the event history voids them on the server), the later sets go here and
+  // in the cloud, the set is open again there, and its end can be confirmed.
+  const confirmReopenSet = useCallback(() => runAction('reopenSet', async () => {
+    const target = reopenSetConfirm
+    deferUi(() => setReopenSetConfirm(null))
+    if (!target) return
+    const reopened = await db.sets.get(target.setId)
+    if (!reopened || reopened.matchId !== matchId) return
+    const later = (await db.sets.where('matchId').equals(matchId).toArray()).filter(s => s.index > reopened.index)
+    const laterIndexes = new Set(later.map(s => s.index))
+    const events = await db.events.where('matchId').equals(matchId).toArray()
+    await discardEvents(events.filter(e => laterIndexes.has(e.setIndex) ||
+      (e.type === 'set_end' && e.setIndex === reopened.index)))
+
+    const match = await db.matches.get(matchId)
+    const cloud = !!(match?.seed_key && !match.test)
+    if (later.length > 0) {
+      await db.sets.bulkDelete(later.map(s => s.id))
+      // Their set inserts and score updates not sent yet go; a set already
+      // in the cloud is removed there
+      const unsent = await db.sync_queue.where('status').anyOf(...UNSENT_STATUSES).toArray()
+      const staleSetJobs = syncJobsForSets(unsent, later.map(s => s.id))
+      if (staleSetJobs.length > 0) await db.sync_queue.bulkDelete(staleSetJobs.map(j => j.id))
+      if (cloud) {
+        for (const s of later) await db.sync_queue.add(setDeleteJob(match.seed_key, s))
+      }
+    }
+    await db.sets.update(reopened.id, { finished: false, endTime: null })
+    if (cloud) await db.sync_queue.add(setReopenJob(match.seed_key, await db.sets.get(reopened.id)))
+
+    // Update match status back to 'live' if it was 'final'
+    if (match?.status === 'final') {
+      await db.matches.update(matchId, { status: 'live' })
+      if (cloud) {
+        await db.sync_queue.add({
+          resource: 'match',
+          action: 'update',
+          payload: { id: match.seed_key, status: 'live' },
+          ts: new Date().toISOString(),
+          status: 'queued'
+        })
+      }
+    }
+
+    // The set (and the later ones, played again) can be ended again
+    for (const index of [reopened.index, ...laterIndexes]) confirmedSetEndRef.current.delete(index)
+    if (setEndModalDismissedRef.current != null && setEndModalDismissedRef.current >= reopened.index) setEndModalDismissedRef.current = null
+
+    afterRefereeSync()
+    afterLiveState('undo')
+    afterScoresheetRefresh()
+  }, { reason: 'reopen_set' }), [runAction, deferUi, reopenSetConfirm, matchId, discardEvents, afterRefereeSync, afterLiveState, afterScoresheetRefresh])
 
   // Handle replay rally - undo last point (go back to state before the point, no rally restart)
   // A replayed rally scores no point, here or on the server: the point (with
@@ -16172,27 +16241,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
             </p>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
               <button
-                onClick={async () => {
-                  // Mark the set as not finished
-                  await db.sets.update(reopenSetConfirm.setId, { finished: false })
-
-                  // Delete all subsequent sets
-                  const allSets = await db.sets.where('matchId').equals(matchId).toArray()
-                  const setsToDelete = allSets.filter(s => s.index > reopenSetConfirm.setIndex)
-                  for (const s of setsToDelete) {
-                    // Delete events for this set
-                    await db.events.where('matchId').equals(matchId).and(e => e.setIndex === s.index).delete()
-                    // Delete the set
-                    await db.sets.delete(s.id)
-                  }
-
-                  // Update match status back to 'live' if it was 'final'
-                  if (data.match?.status === 'final') {
-                    await db.matches.update(matchId, { status: 'live' })
-                  }
-
-                  setReopenSetConfirm(null)
-                }}
+                onClick={() => { confirmReopenSet().catch(() => {}) }}
                 style={{
                   padding: '12px 24px',
                   fontSize: '14px',

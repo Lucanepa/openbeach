@@ -1244,6 +1244,31 @@ async function processJobInner(job, ctx) {
       return true
     }
 
+    // A set removed on the scoring device (Manual changes > Reopen set: the
+    // sets after it go), by external_id, scoped to its match as the update.
+    // Its events are voided by the event history; without this its row
+    // stayed and the set played again next to it got a second row.
+    if (job.resource === 'set' && job.action === 'delete') {
+      const { external_id } = job.payload
+      const parsed = parseExtId(external_id)
+      if (!parsed) return DROP_JOB
+      const { data: matchData, error: lookupError } = await apiFrom('matches')
+        .select('id')
+        .eq('external_id', parsed.seedKey)
+        .maybeSingle()
+      if (lookupError) return failureResult(lookupError, ctx)
+      if (!matchData) return true // the match is not in the cloud: nor is the set
+      const { error } = await apiFrom('sets')
+        .delete()
+        .eq('match_id', matchData.id)
+        .in('external_id', [external_id, String(parsed.localId)])
+      if (error) {
+        safeLog.error('[SyncQueue] Set delete error:', error, job.payload)
+        return failureResult(error, ctx)
+      }
+      return true
+    }
+
     // ==================== EVENT ====================
     if (job.resource === 'event' && job.action === 'insert') {
       // Resolve match_id from external_id
