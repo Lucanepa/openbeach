@@ -166,7 +166,8 @@ import {
   STOP_PASS,
   checkScorerMoved,
   matchEndUpdateNeeded,
-  SCORER_MOVED_EVENT
+  SCORER_MOVED_EVENT,
+  setPageLoadedAtForTests
 } from '../../hooks_beach/useSyncQueue_beach'
 import { useMemoryLocalStorage } from '../helpers/memoryStorage'
 import { holdLiveState, heldLiveState, resetLiveStateOutboxForTests } from '../../utils_beach/liveStateOutbox_beach'
@@ -611,6 +612,25 @@ describe('retryErrorsInternal', () => {
     await retryErrorsInternal()
     expect(fakeDb.sync_queue.map.get(1).status).toBe('queued')
     expect(fakeDb.sync_queue.map.get(2).status).toBe('sending')
+  })
+
+  // Stress test 2026-10-25 (ob-crash-during-set-end-sync-leaves-sending-job):
+  // the browser died 1.5 s into a set end's sync; after the reopen the row
+  // stayed 'sending' for 2 minutes, the cloud set unfinished meanwhile
+  it('hands back at once a "sending" job claimed before this page was loaded (a crashed page)', async () => {
+    const loadedAt = Date.now()
+    setPageLoadedAtForTests(loadedAt)
+    try {
+      fakeDb.sync_queue.reset([
+        { id: 1, resource: 'set', action: 'update', status: 'sending', sending_since: loadedAt - 1500, payload: {} },
+        { id: 2, resource: 'set', action: 'update', status: 'sending', sending_since: loadedAt + 10, payload: {} }
+      ])
+      await retryErrorsInternal()
+      expect(fakeDb.sync_queue.map.get(1).status).toBe('queued')
+      expect(fakeDb.sync_queue.map.get(2).status).toBe('sending')
+    } finally {
+      setPageLoadedAtForTests(0)
+    }
   })
 })
 

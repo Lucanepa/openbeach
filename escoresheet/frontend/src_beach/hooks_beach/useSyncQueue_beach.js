@@ -149,6 +149,19 @@ const PROBE_BACKOFF_MAX = 60000
 // A 'sending' job (claimed by useSequentialSync) older than this is assumed
 // abandoned (tab closed mid-request) and handed back to the queue.
 const SENDING_STALE_MS = 2 * 60 * 1000
+// ... and one claimed before this page was loaded is handed back at once: no
+// request of a page that was closed or crashed can still be in flight. A set
+// end synced over slow venue internet, the browser killed 1.5 s later: its
+// update stayed 'sending' for 2 minutes after the reopen, the cloud showed
+// the set unfinished and the approval waited behind it (stress test
+// 2026-10-25). A row another open tab claimed before this one loaded is
+// handed back too; sending it again is harmless (the writes are upserts by
+// external_id, the revisions carry their rev_uid).
+let pageLoadedAt = Date.now()
+/** Tests: this page's load time (the 'sending' rows claimed before it are reclaimed). */
+export function setPageLoadedAtForTests(ms) {
+  pageLoadedAt = ms
+}
 
 // Jobs the backend refused ('failed') come back on their own once an hour, at
 // most this many times (and at every app start): a refusal can be temporary
@@ -529,7 +542,7 @@ export async function retryErrorsInternal({ force = false, includeFailed = false
     const sending = await db.sync_queue.where('status').equals('sending').toArray()
     let reclaimed = 0
     for (const job of sending) {
-      if (!job.sending_since || now - job.sending_since > SENDING_STALE_MS) {
+      if (!job.sending_since || now - job.sending_since > SENDING_STALE_MS || job.sending_since < pageLoadedAt) {
         await db.sync_queue.update(job.id, { status: 'queued' })
         reclaimed++
       }
