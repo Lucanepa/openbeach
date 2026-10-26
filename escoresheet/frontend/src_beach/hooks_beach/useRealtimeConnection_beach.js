@@ -116,14 +116,42 @@ export function useRealtimeConnection({
   }, [])
 
   // Helper: fetch data and deliver to callback
+  // The database's change notifications come in bursts (a rally: its events,
+  // the set row, the live state twice), and each read the whole match: under
+  // fast scoring every tablet behind the venue's IP tripped its per-IP read
+  // limits (stress test 2026-10-25). One read at a time; the notifications
+  // during it get one more read after it, and never two within FETCH_GAP_MS.
+  const FETCH_GAP_MS = 1000
+  const fetchStateRef = useRef({ inFlight: false, again: false, timer: null, lastAt: 0 })
+  const fetchAndDeliverRef = useRef(null)
   const fetchAndDeliver = useCallback((reason) => {
+    const st = fetchStateRef.current
+    if (st.inFlight || st.timer) { st.again = true; return }
+    const wait = st.lastAt + FETCH_GAP_MS - Date.now()
+    if (wait > 0) {
+      st.timer = setTimeout(() => { st.timer = null; fetchAndDeliverRef.current?.(reason) }, wait)
+      return
+    }
+    st.inFlight = true
+    st.again = false
+    st.lastAt = Date.now()
     getMatchData(matchId).then(result => {
-      if (result.success && onDataRef.current) {
+      if (result.success && onDataRef.current && isMountedRef.current) {
         onDataRef.current(result)
       }
     }).catch(err => {
       console.error(`[RealtimeConnection] Error fetching data after ${reason}:`, err)
+    }).finally(() => {
+      st.inFlight = false
+      if (st.again && isMountedRef.current) fetchAndDeliverRef.current?.(reason)
     })
+  }, [matchId])
+  fetchAndDeliverRef.current = fetchAndDeliver
+  useEffect(() => () => {
+    const st = fetchStateRef.current
+    if (st.timer) clearTimeout(st.timer)
+    st.timer = null
+    st.again = false
   }, [matchId])
 
   // Helper: build a Supabase channel with all subscriptions
