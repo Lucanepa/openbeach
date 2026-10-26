@@ -40,7 +40,7 @@ import { isoOf, matchTimes, setEndMs, setStartMs } from '../../scoresheet_pdf_be
 import { formatTimeLocal } from '../utils_beach/timeUtils_beach'
 import { isKnownClosedOnServer } from '../utils_beach/matchHandover_beach'
 import { planReopen } from '../utils_beach/matchReopen_beach'
-import { apiFrom, apiAdminReopenMatch } from '../lib_beach/apiClient_beach'
+import { apiFrom, apiAdminReopenMatch, BACKEND_REACHED_EVENT } from '../lib_beach/apiClient_beach'
 import { saveMatchSignature, signatureEditLocked, signaturesPayload, clearedPostMatchSignatures, reopenedMatchUpdate } from '../utils_beach/signatures_beach'
 import { approvalSignatureSources, phoneSignContext, signatureSourceUpdate, signedOnPhone, SLOT_OF_ROLE } from '../utils_beach/phoneSignature_beach'
 import { relayMatchKey } from '../utils_beach/relayPublisher_beach'
@@ -686,6 +686,26 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     return { sanctions: sanctionRecords, improperRequests: improperReqs }
   }, [data])
 
+  // A Match end backup (backupToCloud below) that did not reach the cloud is
+  // taken again once the cloud answers: the queue sent jobs, the backend
+  // answered again, the device is back online. The upload is fire-and-forget
+  // and nothing retried it: with the signatures and the approval made
+  // offline, the newest backup stayed the set end's, and a restore on
+  // another device came back unsigned and not approved while the server row
+  // had it all (re-verification 2026-10-26).
+  const backupMissedRef = useRef(false)
+  const backupAgainRef = useRef(null)
+  useEffect(() => {
+    const retry = () => {
+      if (!backupMissedRef.current) return
+      backupMissedRef.current = false
+      backupAgainRef.current?.()
+    }
+    const triggers = ['online', BACKEND_REACHED_EVENT, 'sync-queue-drained']
+    for (const name of triggers) window.addEventListener(name, retry)
+    return () => { for (const name of triggers) window.removeEventListener(name, retry) }
+  }, [])
+
   if (!data) return null
 
   const { match, team1, team2, team1Players, team2Players, sets, events } = data
@@ -819,8 +839,14 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     if (!match || match.test || !isBackendAvailable()) return
     exportMatchData(matchId)
       .then(data => uploadBackupToCloud(matchId, data))
-      .catch(err => console.warn('[MatchEnd] Cloud backup failed:', err?.message))
+      // no path: not stored (offline, refused, signed out): again later
+      .then(path => { backupMissedRef.current = !path })
+      .catch(err => {
+        backupMissedRef.current = true
+        console.warn('[MatchEnd] Cloud backup failed:', err?.message)
+      })
   }
+  backupAgainRef.current = backupToCloud
 
   // A signature drawn here or received from a phone (the pad's onSave)
   const handleSaveSignature = async (role, signatureData, meta) => {

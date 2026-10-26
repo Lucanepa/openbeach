@@ -18,11 +18,20 @@ vi.mock('../../contexts_beach/LoggingContext_beach', () => ({ useComponentLoggin
 vi.mock('../../utils_beach/comprehensiveLogger_beach', () => ({ exportLogsAsNDJSON: async () => '' }))
 const backend = vi.hoisted(() => ({ on: false }))
 vi.mock('../../utils_beach/backendConfig_beach', async (orig) => ({ ...(await orig()), isBackendAvailable: () => backend.on, getCloudApiUrl: () => null }))
-// Direct storage uploads: recorded, never answered (a connection that passes no data)
-const uploads = vi.hoisted(() => ({ paths: [], bodies: {} }))
+// Direct storage uploads: recorded, never answered (a connection that passes
+// no data), or refused at once with uploads.fail (no network)
+const uploads = vi.hoisted(() => ({ paths: [], bodies: {}, fail: false }))
 vi.mock('../../lib_beach/apiClient_beach', async (orig) => ({
   ...(await orig()),
-  apiStorage: { from: () => ({ upload: (path, body) => { uploads.paths.push(path); uploads.bodies[path] = body; return new Promise(() => {}) } }) }
+  apiStorage: {
+    from: () => ({
+      upload: (path, body) => {
+        uploads.paths.push(path)
+        uploads.bodies[path] = body
+        return uploads.fail ? Promise.resolve({ data: null, error: { message: 'Failed to fetch', status: 0 } }) : new Promise(() => {})
+      }
+    })
+  }
 }))
 
 // The scoresheet window: each open gets a fresh fake window the test can close
@@ -70,6 +79,7 @@ beforeEach(async () => {
   opened.length = 0
   backend.on = false
   uploads.paths = []
+  uploads.fail = false
   await db.open()
   await Promise.all(db.tables.map(t => t.clear()))
 })
@@ -189,6 +199,40 @@ describe('MatchEnd_beach: the approval PDF', () => {
     const path = uploads.paths.find(p => p.startsWith('backups/backup_g703/'))
     const backup = JSON.parse(uploads.bodies[path])
     expect(backup.match).toMatchObject({ approved: true, team1PostGameCaptainSignature: 'data:c1', ref1Signature: 'data:r1', scorerSignature: 'data:s' })
+  })
+
+  // Offline at Match end: the backups after the signatures and the approval
+  // failed and nothing took them again, so a restore on another device came
+  // back unsigned and not approved while the server row had it all once the
+  // queue drained (re-verification 2026-10-26)
+  it('an official match: a Match end backup that failed offline is taken again once the cloud answers', async () => {
+    backend.on = true
+    useMemoryLocalStorage()
+    localStorage.setItem('api_auth_token', JSON.stringify({ access_token: 'tok', expires_at: Math.floor(Date.now() / 1000) + 3600 }))
+    await seed({
+      test: false, seed_key: 'match_1759740000000_obretry', gameN: 705, gameNumber: '705',
+      team1PostGameCaptainSignature: 'data:c1', team2PostGameCaptainSignature: 'data:c2', scorerSignature: 'data:s', ref1Signature: 'data:r1'
+    })
+    uploads.fail = true
+    renderMatchEnd()
+    await approve()
+    await waitFor(() => expect(opened).toHaveLength(1))
+    await postFromSheet({ type: 'pdfError', reason: 'failed', message: 'boom' })
+    await click(await screen.findByRole('button', { name: 'Approve without PDF' }))
+    expect(await screen.findByRole('button', { name: 'Close match' })).toBeInTheDocument()
+    const backups = () => uploads.paths.filter(p => p.startsWith('backups/backup_g705/'))
+    await waitFor(() => expect(backups()).toHaveLength(1))
+    await new Promise(r => setTimeout(r, 50))
+
+    // Back online: the queue sends the approval, and the backup goes again
+    uploads.fail = false
+    await act(async () => { window.dispatchEvent(new CustomEvent('sync-queue-drained', { detail: { sent: 3, pending: false } })) })
+    await waitFor(() => expect(backups()).toHaveLength(2))
+    expect(JSON.parse(uploads.bodies[backups()[1]]).match).toMatchObject({ approved: true, ref1Signature: 'data:r1', scorerSignature: 'data:s' })
+    // once: the next answer of the cloud takes no other
+    await act(async () => { window.dispatchEvent(new Event('online')) })
+    await new Promise(r => setTimeout(r, 100))
+    expect(backups()).toHaveLength(2)
   })
 
   // Remarks saved after the signatures (not approved yet) are on the server
