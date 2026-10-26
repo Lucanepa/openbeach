@@ -1,5 +1,6 @@
 import { apiStorage } from '../lib_beach/apiClient_beach'
 import { isBackendAvailable } from '../utils_beach/backendConfig_beach'
+import { SCORESHEET_UPLOAD_RESOURCE } from './syncIds_beach'
 
 /**
  * Folder of every beach scoresheet in the shared 'scoresheets' bucket. Indoor
@@ -72,6 +73,80 @@ export async function uploadScoresheetPdf(match, blob) {
 }
 
 /**
+ * The scoresheet JSON file of a match (what uploadScoresheet stores), with the
+ * keys eScoresheet_beach.tsx reads (team1Team / team2Team, team1Players /
+ * team2Players) and the coin toss keys normalised (team_1 -> team1).
+ */
+export function scoresheetJsonBlob({ match, team1, team2, team1Players, team2Players, sets, events }) {
+  const normalizeTeamKey = (key) => {
+    if (!key) return key
+    if (key === 'team_1') return 'team1'
+    if (key === 'team_2') return 'team2'
+    return key
+  }
+
+  // Build match object with normalized coinTossData for PDF rendering
+  const normalizedMatch = {
+    ...match,
+    sport_type: 'beach',
+    team_1Country: match?.team1Country || '',
+    team_2Country: match?.team2Country || '',
+    coinTossTeamA: normalizeTeamKey(match?.coinTossTeamA),
+    coinTossTeamB: normalizeTeamKey(match?.coinTossTeamB),
+    coinTossData: {
+      coinTossWinner: normalizeTeamKey(match?.coinTossWinner),
+      teamA: normalizeTeamKey(match?.coinTossTeamA),
+      teamB: normalizeTeamKey(match?.coinTossTeamB)
+    }
+  }
+
+  const scoresheetData = {
+    match: normalizedMatch,
+    team1: team1,
+    team2: team2,
+    team1Team: team1,
+    team2Team: team2,
+    team_1Team: team1,
+    team_2Team: team2,
+    team1Players,
+    team2Players,
+    team_1Players: team1Players,
+    team_2Players: team2Players,
+    // eslint-disable-next-line no-unused-vars
+    sets: (sets || []).map(({ matchId, lineupA, lineupB, serverNumber, ...rest }) => rest),
+    events,
+    uploadedAt: new Date().toISOString()
+  }
+  return new Blob([JSON.stringify(scoresheetData)], { type: 'application/json' })
+}
+
+/**
+ * A sync_queue job that stores one scoresheet file (the approval's PDF or
+ * final JSON) in the 'scoresheets' bucket. The job carries the file itself (a
+ * Blob, kept by IndexedDB), so the queue retries it like the match's other
+ * writes until it is stored, also after Close match has removed the match
+ * from this device. They were uploaded once, at the approval: an approval
+ * made while the venue Wi-Fi or the backend was down left the cloud without
+ * the PDF for good (the manager's Scoresheets list: pdf false), with nothing
+ * but a console warning (stress test 2026-10-25; OpenVolley ba894c6d).
+ */
+export function scoresheetUploadJob(match, path, file, contentType) {
+  return {
+    resource: SCORESHEET_UPLOAD_RESOURCE,
+    action: 'upload',
+    // match_external_id: the match the file belongs to (jobMatchKey)
+    payload: { path, file, contentType, match_external_id: match?.seed_key || null },
+    ts: new Date().toISOString(),
+    status: 'queued'
+  }
+}
+
+/** Store the file of a scoresheetUploadJob ({ data, error } as apiStorage). */
+export function uploadQueuedScoresheet({ path, file, contentType } = {}) {
+  return apiStorage.from('scoresheets').upload(path, file, { contentType, upsert: true })
+}
+
+/**
  * Upload scoresheet data as JSON to the backend's 'scoresheets' bucket.
  * Uploads to: scoresheets/beach/{scheduled_date}/game{n}_{seed}.json (or
  * ..._final.json if final=true), see scoresheetStoragePath.
@@ -108,51 +183,7 @@ export async function uploadScoresheet({
   }
 
   try {
-    // Normalize coinToss keys (team_1 -> team1) for scoresheet compatibility
-    const normalizeTeamKey = (key) => {
-      if (!key) return key
-      if (key === 'team_1') return 'team1'
-      if (key === 'team_2') return 'team2'
-      return key
-    }
-
-    // Build match object with normalized coinTossData for PDF rendering
-    const normalizedMatch = {
-      ...match,
-      sport_type: 'beach',
-      team_1Country: match?.team1Country || '',
-      team_2Country: match?.team2Country || '',
-      coinTossTeamA: normalizeTeamKey(match?.coinTossTeamA),
-      coinTossTeamB: normalizeTeamKey(match?.coinTossTeamB),
-      coinTossData: {
-        coinTossWinner: normalizeTeamKey(match?.coinTossWinner),
-        teamA: normalizeTeamKey(match?.coinTossTeamA),
-        teamB: normalizeTeamKey(match?.coinTossTeamB)
-      }
-    }
-
-    // Prepare scoresheet data as JSON
-    // Use keys that eScoresheet_beach.tsx expects: team1Team/team2Team, team1Players/team2Players
-    const scoresheetData = {
-      match: normalizedMatch,
-      team1: team1,
-      team2: team2,
-      team1Team: team1,
-      team2Team: team2,
-      team_1Team: team1,
-      team_2Team: team2,
-      team1Players,
-      team2Players,
-      team_1Players: team1Players,
-      team_2Players: team2Players,
-      sets: (sets || []).map(({ matchId, lineupA, lineupB, serverNumber, ...rest }) => rest),
-      events,
-      uploadedAt: new Date().toISOString()
-    }
-
-    // Convert to JSON string
-    const jsonString = JSON.stringify(scoresheetData)
-    const jsonBlob = new Blob([jsonString], { type: 'application/json' })
+    const jsonBlob = scoresheetJsonBlob({ match, team1, team2, team1Players, team2Players, sets, events })
 
     // beach/{scheduled_date}/game{n}_{seed}.json or ..._final.json
     const storagePath = scoresheetStoragePath(match, { final })

@@ -121,6 +121,15 @@ vi.mock('../../lib_beach/apiClient_beach', () => {
       const call = { table: '__revisions', action: 'post', data: { matchExternalId, revisions }, filters: [] }
       api.calls.push(call)
       return api.respond(call)
+    },
+    apiStorage: {
+      from: (bucket) => ({
+        upload: async (path, file, options) => {
+          const call = { table: '__storage', action: 'upload', data: { bucket, path, file, options }, filters: [] }
+          api.calls.push(call)
+          return api.respond(call)
+        }
+      })
     }
   }
 })
@@ -737,6 +746,46 @@ describe('closing order (the approval waits for the older sets, events and remar
     await runQueuePass()
     expect(fakeDb.sync_queue.map.get(1).status).toBe('sent')
     expect(heldLiveState('match_100_aaa')).toBeNull()
+  })
+})
+
+describe('scoresheet upload job', () => {
+  // Stress test 2026-10-25 (ob-scoresheet-upload-fire-once): approved while the
+  // cloud was unreachable, the PDF and the final JSON never reached it;
+  // nothing retried them. As OpenVolley ba894c6d.
+  it('stores the file it carries; while the cloud is unreachable it waits and goes with a later pass', async () => {
+    const pdf = new Blob(['%PDF-1.7'], { type: 'application/pdf' })
+    fakeDb.sync_queue.reset([
+      { id: 1, resource: 'scoresheet', action: 'upload', status: 'queued', payload: { path: 'beach/2026-10-25/game702_k1_final.json', file: new Blob(['{}']), contentType: 'application/json', match_external_id: 'match_100_aaa' } },
+      { id: 2, resource: 'scoresheet', action: 'upload', status: 'queued', payload: { path: 'beach/2026-10-25/game702_k1.pdf', file: pdf, contentType: 'application/pdf', match_external_id: 'match_100_aaa' } }
+    ])
+    api.respond = (call) => call.table === '__storage'
+      ? { data: null, error: { message: 'Failed to fetch', status: 0, network: true } }
+      : ok()
+    const offline = await runQueuePass()
+    expect(offline.stopped).toBe(true)
+    expect([...fakeDb.sync_queue.map.values()].map(j => j.status)).toEqual(['queued', 'queued'])
+
+    api.calls = []
+    api.respond = defaultRespond
+    const outcome = await runQueuePass()
+    expect(outcome.sent).toBe(2)
+    const stored = api.calls.filter(c => c.table === '__storage')
+    expect(stored.map(c => c.data.path)).toEqual(['beach/2026-10-25/game702_k1_final.json', 'beach/2026-10-25/game702_k1.pdf'])
+    expect(stored[1].data).toMatchObject({ bucket: 'scoresheets', file: pdf, options: { contentType: 'application/pdf', upsert: true } })
+    expect([...fakeDb.sync_queue.map.values()].map(j => j.status)).toEqual(['sent', 'sent'])
+    // a sent job keeps no copy of the file
+    expect([...fakeDb.sync_queue.map.values()].map(j => j.payload.file)).toEqual([null, null])
+  })
+
+  it('goes after the match\'s own writes (the approval first)', async () => {
+    fakeDb.sync_queue.reset([
+      { id: 1, resource: 'scoresheet', action: 'upload', status: 'queued', payload: { path: 'beach/d/game1_k.pdf', file: new Blob(['x']), contentType: 'application/pdf', match_external_id: 'match_100_aaa' } },
+      { id: 2, resource: 'match', action: 'update', status: 'queued', retry_count: 0, payload: { id: 'match_100_aaa', status: 'approved' } }
+    ])
+    await runQueuePass()
+    const order = api.calls.filter(c => c.table === '__storage' || (c.table === 'matches' && c.action === 'update')).map(c => c.table)
+    expect(order).toEqual(['matches', '__storage'])
   })
 })
 

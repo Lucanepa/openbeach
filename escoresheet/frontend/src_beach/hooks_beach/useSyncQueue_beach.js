@@ -7,7 +7,8 @@ import { emitActivity, noteSyncPass } from '../utils_beach/activity/bus_beach'
 import { uploadActivityBatch, activityFlushJob } from '../utils_beach/activity/upload_beach'
 import { getCloudApiUrl, isCloudOffline, isRelayOriginPage } from '../utils_beach/backendConfig_beach'
 import { ACCESS_CHANGED_EVENT } from '../lib_beach/access_beach'
-import { parseExtId, resolveJobExternalId, jobMatchKey } from '../utils_beach/syncIds_beach'
+import { parseExtId, resolveJobExternalId, jobMatchKey, SCORESHEET_UPLOAD_RESOURCE } from '../utils_beach/syncIds_beach'
+import { uploadQueuedScoresheet } from '../utils_beach/scoresheetUploader_beach'
 import { buildConnectionPins } from '../utils_beach/connectionPins_beach'
 import { sendHeldLiveState, sendHeldLiveStates } from '../utils_beach/liveStateOutbox_beach'
 import { SCORER_CLAIM_ACTION, SCORER_MOVED, isScorerMoved, noteScorerMoved, markScorerMoved, hasUnsentClaim, closeMovedMatches } from '../utils_beach/matchHandover_beach'
@@ -125,7 +126,9 @@ function filterSetPayload(payload) {
 // Resource processing order - matches must be synced before sets/events (FK
 // dependency); 'activity': the activity log upload (utils_beach/activity),
 // needs no match row
-const RESOURCE_ORDER = ['match', 'set', 'event', 'activity']
+// 'scoresheet': the approval's PDF and final JSON (scoresheetUploader_beach),
+// after the match's own writes
+const RESOURCE_ORDER = ['match', 'set', 'event', SCORESHEET_UPLOAD_RESOURCE, 'activity']
 
 // Max retries for jobs waiting on dependencies (e.g., event waiting for match to sync)
 const MAX_DEPENDENCY_RETRIES = 10
@@ -1339,6 +1342,20 @@ async function processJobInner(job, ctx) {
       return true
     }
 
+    // ==================== SCORESHEET FILES ====================
+    // The approval's PDF and final JSON (MatchEnd_beach): the job carries the file
+    if (job.resource === SCORESHEET_UPLOAD_RESOURCE && job.action === 'upload') {
+      if (!job.payload?.path || !job.payload?.file) return DROP_JOB
+      const { error } = await uploadQueuedScoresheet(job.payload)
+      if (error) {
+        safeLog.warn('[SyncQueue] Scoresheet upload error:', error.code || error.status || error.message)
+        return failureResult(error, ctx)
+      }
+      // Stored: the sent job (kept a week) no longer needs its copy of the file
+      await db.sync_queue.update(job.id, { payload: { ...job.payload, file: null } })
+      return true
+    }
+
     // Unknown resource/action - mark as done to avoid infinite loop
     safeLog.warn('[SyncQueue] Unknown job type:', job.resource, job.action)
     return true
@@ -1355,6 +1372,7 @@ async function processJobInner(job, ctx) {
 // only blocks later updates of the same entity.
 function entityKey(job) {
   if (job.resource === 'match') return `match:${jobMatchKey(job)}`
+  if (job.resource === SCORESHEET_UPLOAD_RESOURCE) return `${job.resource}:${job.payload?.path}`
   return `${job.resource}:${job.payload?.external_id}`
 }
 

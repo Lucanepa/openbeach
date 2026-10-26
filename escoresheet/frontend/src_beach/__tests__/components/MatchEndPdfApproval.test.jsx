@@ -15,7 +15,14 @@ vi.mock('../../contexts_beach/AlertContext_beach', () => ({ useAlert: () => ({ s
 vi.mock('../../contexts_beach/ScaleContext_beach', () => ({ useScale: () => ({ scaleFactor: 1, vmin: (v) => v * 10 }) }))
 vi.mock('../../contexts_beach/LoggingContext_beach', () => ({ useComponentLogging: () => ({ logHandler: () => {} }) }))
 vi.mock('../../utils_beach/comprehensiveLogger_beach', () => ({ exportLogsAsNDJSON: async () => '' }))
-vi.mock('../../utils_beach/backendConfig_beach', async (orig) => ({ ...(await orig()), isBackendAvailable: () => false, getCloudApiUrl: () => null }))
+const backend = vi.hoisted(() => ({ on: false }))
+vi.mock('../../utils_beach/backendConfig_beach', async (orig) => ({ ...(await orig()), isBackendAvailable: () => backend.on, getCloudApiUrl: () => null }))
+// Direct storage uploads: recorded, never answered (a connection that passes no data)
+const uploads = vi.hoisted(() => ({ paths: [] }))
+vi.mock('../../lib_beach/apiClient_beach', async (orig) => ({
+  ...(await orig()),
+  apiStorage: { from: () => ({ upload: (path) => { uploads.paths.push(path); return new Promise(() => {}) } }) }
+}))
 
 // The scoresheet window: each open gets a fresh fake window the test can close
 const opened = []
@@ -60,6 +67,8 @@ async function seed(extra = {}) {
 beforeEach(async () => {
   cleanup()
   opened.length = 0
+  backend.on = false
+  uploads.paths = []
   await db.open()
   await Promise.all(db.tables.map(t => t.clear()))
 })
@@ -125,6 +134,37 @@ describe('MatchEnd_beach: the approval PDF', () => {
     expect(remarks).toBe(approval - 1)
     expect(jobs[remarks].payload).toEqual({ id: 'match_1759740000000_obappr', remarks: 'Actual start time: 10:05' })
     expect('remarks' in jobs[approval].payload).toBe(false)
+  })
+
+  // Stress test 2026-10-25 (ob-scoresheet-upload-fire-once): approved while
+  // the venue Wi-Fi or the backend was down, the PDF and the final JSON were
+  // uploaded once, failed, and never reached the cloud (the manager's
+  // Scoresheets list: pdf false); a stalled upload also held the approval
+  it('an official match: the approval queues the PDF and the final JSON with their files, nothing is uploaded directly', async () => {
+    backend.on = true
+    await seed({
+      test: false, seed_key: 'match_1759740000000_obpdf', gameNumber: 702,
+      team1PostGameCaptainSignature: 'data:c1', team2PostGameCaptainSignature: 'data:c2', scorerSignature: 'data:s', ref1Signature: 'data:r1'
+    })
+    renderMatchEnd()
+    await approve()
+    await waitFor(() => expect(opened).toHaveLength(1))
+    await postFromSheet({ type: 'pdfBlob', arrayBuffer: new ArrayBuffer(8), filename: 'x.pdf' })
+    expect(await screen.findByRole('button', { name: 'Close match' })).toBeInTheDocument()
+    await waitFor(async () => expect((await db.sync_queue.toArray()).filter(j => j.resource === 'scoresheet')).toHaveLength(2))
+    const files = (await db.sync_queue.toArray()).filter(j => j.resource === 'scoresheet')
+    expect(files.map(j => [j.action, j.status, j.payload.contentType])).toEqual([
+      ['upload', 'queued', 'application/pdf'],
+      ['upload', 'queued', 'application/json']
+    ])
+    expect(files[0].payload.path).toMatch(/^beach\/\d{4}-\d{2}-\d{2}\/game702_match_1759740000000_obpdf\.pdf$/)
+    expect(files[1].payload.path).toMatch(/^beach\/\d{4}-\d{2}-\d{2}\/game702_match_1759740000000_obpdf_final\.json$/)
+    expect(files.map(j => j.payload.match_external_id)).toEqual(['match_1759740000000_obpdf', 'match_1759740000000_obpdf'])
+    expect(files[0].payload.file).toBeTruthy()
+    expect(files[1].payload.file).toBeTruthy()
+    expect((await db.matches.get(matchId)).approved).toBe(true)
+    // nothing went up directly (the queue sends them)
+    expect(uploads.paths).toEqual([])
   })
 
   it('Approve without PDF approves the match', async () => {

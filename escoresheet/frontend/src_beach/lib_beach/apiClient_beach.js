@@ -502,6 +502,17 @@ export function canUseStorage() {
   return storageSession() !== null
 }
 
+/**
+ * Upper bound for one storage upload of `bodyLength` characters: the /api/db
+ * bound plus the time the body takes at 20 KB/s (a ~1 MB scoresheet PDF on a
+ * weak venue uplink). Uploads had none: a connection that passed no data held
+ * an upload for good, and with the scoresheet files in the sync queue it would
+ * hold the queue's pass with it (stress test 2026-10-25; OpenVolley 47b211db).
+ */
+export function storageUploadTimeoutMs(bodyLength) {
+  return DB_REQUEST_TIMEOUT_MS + Math.ceil((Number(bodyLength) || 0) / 20000) * 1000
+}
+
 export const apiStorage = {
   from(bucket) {
     return {
@@ -521,16 +532,18 @@ export const apiStorage = {
         }
 
         try {
+          const body = JSON.stringify({
+            bucket,
+            path,
+            fileBase64,
+            contentType: options.contentType,
+            upsert: options.upsert
+          })
           const response = await fetch(apiUrl, {
             method: 'POST',
             headers: getAuthHeaders(),
-            body: JSON.stringify({
-              bucket,
-              path,
-              fileBase64,
-              contentType: options.contentType,
-              upsert: options.upsert
-            })
+            body,
+            signal: requestTimeoutSignal(storageUploadTimeoutMs(body.length))
           })
           return noteStorageAuth(await safeJsonResponse(response, 'Storage upload failed'), token)
         } catch (err) {

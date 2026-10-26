@@ -5,7 +5,7 @@ vi.mock('../../utils_beach/backendConfig_beach', () => ({
   getCloudApiUrl: (path) => `http://backend.test${path}`
 }))
 
-import { apiFrom, apiAuth, apiStorage, apiGet, savedTeamsApi, apiMatchRestore, apiMatchRestoreByPin, apiMatchClaim, isSessionRejected, normalizeError, toBase64, canUseStorage, apiMatchScorer, apiPostEventRevisions, ageOf } from '../../lib_beach/apiClient_beach'
+import { apiFrom, apiAuth, apiStorage, apiGet, savedTeamsApi, apiMatchRestore, apiMatchRestoreByPin, apiMatchClaim, isSessionRejected, normalizeError, toBase64, canUseStorage, apiMatchScorer, apiPostEventRevisions, ageOf, storageUploadTimeoutMs, DB_REQUEST_TIMEOUT_MS } from '../../lib_beach/apiClient_beach'
 import { useMemoryLocalStorage } from '../helpers/memoryStorage'
 
 // Ported from OpenVolley src/lib/__tests__/apiClient.test.js, plus the
@@ -243,6 +243,27 @@ describe('storage upload encoding', () => {
     const result = await apiStorage.from('backup').upload('logs/x.txt', 'ü 🏐', { contentType: 'text/plain' })
     expect(result.error).toBeNull()
     expect(decode(sentBody().fileBase64)).toBe('ü 🏐')
+  })
+
+  // The scoresheet PDF and final JSON go through the sync queue now: an upload
+  // on a connection that passes no data must end, or it holds the queue
+  it('an upload is bounded: the /api/db bound plus its body at 20 KB/s, and a hung one ends as a network error', async () => {
+    expect(storageUploadTimeoutMs(0)).toBe(DB_REQUEST_TIMEOUT_MS)
+    expect(storageUploadTimeoutMs(1400000)).toBe(DB_REQUEST_TIMEOUT_MS + 70000)
+    localStorage.setItem('api_auth_token', JSON.stringify({ access_token: 'up-tok', expires_at: Math.floor(Date.now() / 1000) + 3600 }))
+    let signal = null
+    globalThis.fetch = vi.fn((url, init) => {
+      signal = init.signal
+      return new Promise((resolve, reject) => init.signal.addEventListener('abort', () => reject(new DOMException('timed out', 'TimeoutError'))))
+    })
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => {
+      const ctrl = new AbortController()
+      setTimeout(() => ctrl.abort(), 5)
+      return ctrl.signal
+    })
+    const result = await apiStorage.from('scoresheets').upload('beach/d/game1_k.pdf', 'pdf', { contentType: 'application/pdf' })
+    expect(signal).toBeTruthy()
+    expect(result.error).toMatchObject({ status: 0, network: true })
   })
 
   it('storage sends nothing signed out, nor again with a token the server refused (401)', async () => {
