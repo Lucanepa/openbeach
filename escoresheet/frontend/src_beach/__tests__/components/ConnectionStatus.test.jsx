@@ -107,6 +107,48 @@ describe('ConnectionStatus', () => {
       localStorage.removeItem('api_auth_token')
     })
 
+    // Stress test 2026-10-25: every Wi-Fi drop read as a red "Error" next to
+    // the header's "Online" toggle, although the points are saved here and
+    // go when the cloud is back
+    it('the device offline: an amber "Offline", not a red "Error"', () => {
+      render(
+        <ConnectionStatus
+          {...defaultProps}
+          connectionStatuses={{ server: 'disconnected', websocket: 'disconnected', supabase: 'offline' }}
+          queueStats={{ pending: 4, error: 0 }}
+        />
+      )
+      expect(screen.getByText('Offline')).toBeInTheDocument()
+      expect(screen.queryByText('Error')).toBeNull()
+      expect(document.querySelector('[data-connection-menu] button span').className).toContain('bg-amber-500')
+    })
+
+    it('offline with jobs the server refused it is still an error', () => {
+      render(
+        <ConnectionStatus
+          {...defaultProps}
+          connectionStatuses={{ server: 'disconnected', websocket: 'disconnected', supabase: 'offline' }}
+          queueStats={{ pending: 4, error: 2 }}
+        />
+      )
+      expect(screen.getByText('Error')).toBeInTheDocument()
+    })
+
+    it('jobs waiting for an unreachable cloud say "Offline", not "Local only"', () => {
+      useMemoryLocalStorage()
+      localStorage.setItem('api_auth_token', JSON.stringify({ access_token: 'tok' }))
+      render(
+        <ConnectionStatus
+          {...defaultProps}
+          connectionStatuses={{ server: 'connected', websocket: 'connected', supabase: 'offline' }}
+          queueStats={{ pending: 2, error: 0 }}
+        />
+      )
+      expect(screen.getByText('Offline')).toBeInTheDocument()
+      expect(screen.queryByText('Local only')).toBeNull()
+      localStorage.removeItem('api_auth_token')
+    })
+
     it('should show error count badge when there are errors', () => {
       render(
         <ConnectionStatus
