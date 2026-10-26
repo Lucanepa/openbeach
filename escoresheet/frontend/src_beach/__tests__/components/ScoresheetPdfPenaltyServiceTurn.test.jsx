@@ -34,7 +34,7 @@ const B = 'team2'
 // or a sanction on a team ({ team, type, playerNumber }); a penalty gives the
 // opponent the point, and the serve when the sanctioned team served (the
 // scorer's rotation)
-function buildMatch(steps) {
+function buildMatch(steps, { setServiceOrder = true } = {}) {
   let seq = 0
   let clock = 0
   const events = []
@@ -85,7 +85,8 @@ function buildMatch(steps) {
     sets: [{
       id: 1, matchId: 7, index: 1, team1Points: score.team1, team2Points: score.team2, finished: false,
       startTime: '2026-10-25T09:00:00.000Z',
-      serviceOrder: { team1_player1: 1, team2_player1: 2, team1_player2: 3, team2_player2: 4 }
+      // the app stores no service order on its sets: the sheet reads it
+      ...(setServiceOrder ? { serviceOrder: { team1_player1: 1, team2_player1: 2, team1_player2: 3, team2_player2: 4 } } : {})
     }],
     events
   }
@@ -116,5 +117,45 @@ describe('score sheet PDF: a penalty against the serving team ends its service t
     expect(boxes(f, 'r2')).toEqual(['1', '4'])
     expect(boxes(f, 'r3')).toEqual(['2', '6'])
     expect(boxes(f, 'r4')).toEqual(['2', '6'])
+  })
+
+  // A delay penalty can be given before Start set: against the team to serve
+  // first (A), B gets the point and the serve, and B #1 serves the set's first
+  // rally. Read from that rally_start, the sheet put B up as the first server
+  // (I = B #1), A down with A #2 as its first server, and A #1's lost turn at
+  // 0 was never written (re-verification 2026-10-26)
+  it.each([
+    ['as the app stores it (no service order on the set)', false],
+    ['with a service order on the set', true]
+  ])('a penalty against the first server before the set\'s first serve: I is its lost turn at 0 (%s)', (_, setServiceOrder) => {
+    const f = fill(buildMatch([
+      { team: A, type: 'delay_warning' },
+      { team: A, type: 'delay_penalty' }, // 0:1, I (A #1) loses its turn at A 0; B #1 serves
+      'B', // 0:2
+      'A', // 1:2, II loses its serve at B 2; III (A #2) serves
+      'B', // 1:3, III loses its serve at A 1; IV (B #2) serves
+      'A' // 2:3, IV loses its serve at B 3; I serves
+    ], { setServiceOrder }))
+    expect(f.s1_team_up).toBe(A)
+    // I = A #1, II = B #1, III = A #2, IV = B #2
+    expect([f.s1_r1_player, f.s1_r2_player, f.s1_r3_player, f.s1_r4_player]).toEqual(['1', '1', '2', '2'])
+    expect(boxes(f, 'r1')).toEqual(['0'])
+    expect(boxes(f, 'r2')).toEqual(['2'])
+    expect(boxes(f, 'r3')).toEqual(['1'])
+    expect(boxes(f, 'r4')).toEqual(['3'])
+  })
+
+  it('a penalty against the receiving team before the first serve changes nothing: the server serves on', () => {
+    const f = fill(buildMatch([
+      { team: B, type: 'delay_warning' },
+      { team: B, type: 'delay_penalty' }, // 1:0, A #1 serves on
+      'B', // 1:1, I loses its serve at A 1
+      'A', // 2:1, II loses its serve at B 1
+      'B' // 2:2, III loses its serve at A 2
+    ], { setServiceOrder: false }))
+    expect(f.s1_team_up).toBe(A)
+    expect(boxes(f, 'r1')).toEqual(['1'])
+    expect(boxes(f, 'r2')).toEqual(['1'])
+    expect(boxes(f, 'r3')).toEqual(['2'])
   })
 })

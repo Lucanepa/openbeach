@@ -17,6 +17,29 @@ const SCORESHEET_DEBUG = (() => {
 })();
 const debugLog = (...args: unknown[]) => { if (SCORESHEET_DEBUG) console.log(...args); };
 
+/**
+ * The team that lost its first service turn of a set to a penalty before the
+ * set's first serve, else null. A delay penalty can be given before Start set
+ * (delay warnings carry over the match): against the team to serve first, the
+ * opponent gets the point and the serve, so the set's first rally_start is
+ * the OTHER team's. Read from that rally_start, the sheet put the other team
+ * up (I) and made the penalised team's second server its first, and the lost
+ * turn at 0 was never written. Against the receiving team the server keeps
+ * the serve: nothing changes (null).
+ * @param setEvents the set's events in time order
+ * @param plannedFirstServer the set's first server by the coin toss / set data
+ */
+export function firstTurnLostToPenalty(setEvents: any[], plannedFirstServer: string | null): string | null {
+  if (!plannedFirstServer) return null;
+  for (const e of setEvents || []) {
+    if (e?.type === 'rally_start') return null;
+    if (e?.type === 'point') {
+      return e.payload?.fromPenalty === true && e.payload?.team && e.payload.team !== plannedFirstServer ? plannedFirstServer : null;
+    }
+  }
+  return null;
+}
+
 // Register locale for country code conversion
 countries.registerLocale(enLocale);
 
@@ -729,12 +752,14 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
           let firstServeTeam: string | null = null;
 
           // Primary source: first rally_start event tells us who actually served first
+          // (taken below, after the set's first-serve data it is checked against)
+          let rallyFirstServeTeam: string | null = null;
           if (events && Array.isArray(events)) {
             const firstRallyStart = events.find((e: any) =>
               e.type === 'rally_start' && (e.setIndex || 1) === setNum
             );
             if (firstRallyStart?.payload?.servingTeam) {
-              firstServeTeam = firstRallyStart.payload.servingTeam;
+              rallyFirstServeTeam = firstRallyStart.payload.servingTeam;
             }
           }
 
@@ -777,6 +802,18 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                 }
               }
             }
+          }
+
+          // The first rally_start is who served first, unless a penalty
+          // before it took the first server's turn: that rally_start is then
+          // the opponent's, and the set's first-serve data names the team up
+          // (firstTurnLostToPenalty)
+          // (the set's events in time order, as the service boxes read them)
+          const setEventsInOrder = (Array.isArray(events) ? events : [])
+            .filter((e: any) => (e.setIndex || 1) === setNum)
+            .sort((a: any, b: any) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
+          if (rallyFirstServeTeam && !firstTurnLostToPenalty(setEventsInOrder, firstServeTeam)) {
+            firstServeTeam = rallyFirstServeTeam;
           }
 
           // Set team_up and team_down constants for this set
@@ -1288,6 +1325,21 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                 team2FirstServe = firstReceiverServe.payload?.servingPlayerNumber;
               }
             }
+          }
+
+          // The team whose first turn a penalty took before the set's first
+          // serve (firstTurnLostToPenalty; the team up): its first rally_start
+          // is its SECOND server's, the first server is the teammate
+          const lostFirstTurn = firstTurnLostToPenalty(setEvents, get(`${prefix}_team_up`) || null);
+          if (lostFirstTurn === 'team1' || lostFirstTurn === 'team2') {
+            const servedFirst = lostFirstTurn === 'team1' ? team1FirstServe : team2FirstServe;
+            const teamPlayers = lostFirstTurn === 'team1' ? team1PlayersArray : team2PlayersArray;
+            const mate = servedFirst === undefined ? undefined
+              : teamPlayers.find((p: any) => p?.number != null && String(p.number) !== String(servedFirst));
+            // not known (it never served, or no teammate): the match's data below
+            const firstServer = mate ? mate.number : undefined;
+            if (lostFirstTurn === 'team1') team1FirstServe = firstServer;
+            else team2FirstServe = firstServer;
           }
 
           // Fallback to match-level data only if no rally_start events exist for this set
@@ -1876,9 +1928,11 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
           // Service rotation order is global: I (1) -> II (2) -> III (3) -> IV (4) -> I (1) -> ...
           let currentServiceOrder: number | null = null; // Will be set from first rally_start event
 
-          // Find first rally_start to determine initial service order
+          // Find first rally_start to determine initial service order (not
+          // when a penalty took the first server's turn before it: that
+          // rally_start is the opponent's, the set starts with I's lost turn)
           const firstRallyStart = setEvents.find((e: any) => e.type === 'rally_start');
-          if (firstRallyStart && serviceOrder && Object.keys(serviceOrder).length > 0) {
+          if (firstRallyStart && !lostFirstTurn && serviceOrder && Object.keys(serviceOrder).length > 0) {
             const servingTeamFromEvent = firstRallyStart.payload?.servingTeam;
             const servingPlayerNumber = firstRallyStart.payload?.servingPlayerNumber;
             const teamKey = servingTeamFromEvent === teamAKey ? teamAKey : teamBKey;
