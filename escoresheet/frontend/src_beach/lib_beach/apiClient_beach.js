@@ -72,7 +72,27 @@ async function safeJsonResponse(response, fallbackError = 'Request failed') {
 
 // Network failures (fetch rejects) carry no HTTP status.
 function networkError(err) {
+  noteBackendUnreachable()
   return { message: err?.message || 'Network unavailable', status: 0, network: true }
+}
+
+/**
+ * Dispatched on window when the cloud backend answers again after requests
+ * failed to reach it. An outage of the uplink or of the cloud while the venue
+ * Wi-Fi stays up fires no 'online' event, so the sync queue waited out its
+ * probe backoff (up to 60 s) although the scoreboard's own writes already got
+ * through (stress test 2026-10-25; OpenVolley eebb02d8).
+ */
+export const BACKEND_REACHED_EVENT = 'ob-backend-reached'
+let backendUnreachable = false
+function noteBackendUnreachable() {
+  backendUnreachable = true
+}
+// Any answer of the backend itself (not a 5xx of a proxy or tunnel in front of it)
+function noteBackendAnswered(response) {
+  if (!backendUnreachable || !response || response.status >= 500) return
+  backendUnreachable = false
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(BACKEND_REACHED_EVENT))
 }
 
 // Upper bound for one /api/db round trip.
@@ -230,6 +250,7 @@ class QueryBuilder {
     } catch (err) {
       return { data: null, error: networkError(err), count: undefined, status: 0 }
     }
+    noteBackendAnswered(response)
 
     const result = await safeJsonResponse(response, 'Database operation failed')
     return { data: result.data ?? null, error: result.error ?? null, count: result.count, status: result.status }
@@ -287,6 +308,7 @@ async function postJson(path, body, { auth = true, timeoutMs = DB_REQUEST_TIMEOU
   } catch (err) {
     return { data: null, error: networkError(err), status: 0 }
   }
+  noteBackendAnswered(response)
   const result = await safeJsonResponse(response, fallbackError)
   return { data: result.data ?? null, error: result.error ?? null, status: result.status }
 }
@@ -309,6 +331,7 @@ export async function apiGet(path, { timeoutMs = DB_REQUEST_TIMEOUT_MS, fallback
   } catch (err) {
     return { data: null, error: networkError(err), status: 0 }
   }
+  noteBackendAnswered(response)
   const result = await safeJsonResponse(response, fallbackError)
   return { data: result.data ?? null, error: result.error ?? null, status: result.status }
 }
@@ -502,6 +525,17 @@ export function canUseStorage() {
   return storageSession() !== null
 }
 
+/**
+ * Upper bound for one storage upload of `bodyLength` characters: the /api/db
+ * bound plus the time the body takes at 20 KB/s (a ~1 MB scoresheet PDF on a
+ * weak venue uplink). Uploads had none: a connection that passed no data held
+ * an upload for good, and with the scoresheet files in the sync queue it would
+ * hold the queue's pass with it (stress test 2026-10-25; OpenVolley 47b211db).
+ */
+export function storageUploadTimeoutMs(bodyLength) {
+  return DB_REQUEST_TIMEOUT_MS + Math.ceil((Number(bodyLength) || 0) / 20000) * 1000
+}
+
 export const apiStorage = {
   from(bucket) {
     return {
@@ -521,16 +555,18 @@ export const apiStorage = {
         }
 
         try {
+          const body = JSON.stringify({
+            bucket,
+            path,
+            fileBase64,
+            contentType: options.contentType,
+            upsert: options.upsert
+          })
           const response = await fetch(apiUrl, {
             method: 'POST',
             headers: getAuthHeaders(),
-            body: JSON.stringify({
-              bucket,
-              path,
-              fileBase64,
-              contentType: options.contentType,
-              upsert: options.upsert
-            })
+            body,
+            signal: requestTimeoutSignal(storageUploadTimeoutMs(body.length))
           })
           return noteStorageAuth(await safeJsonResponse(response, 'Storage upload failed'), token)
         } catch (err) {

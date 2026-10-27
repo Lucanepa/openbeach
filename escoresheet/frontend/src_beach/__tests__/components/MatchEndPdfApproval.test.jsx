@@ -10,12 +10,29 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vites
 import { render, screen, fireEvent, act, waitFor, cleanup } from '@testing-library/react'
 import Dexie from 'dexie'
 import { IDBFactory, IDBKeyRange } from 'fake-indexeddb'
+import { useMemoryLocalStorage } from '../helpers/memoryStorage'
 
 vi.mock('../../contexts_beach/AlertContext_beach', () => ({ useAlert: () => ({ showAlert: vi.fn() }) }))
 vi.mock('../../contexts_beach/ScaleContext_beach', () => ({ useScale: () => ({ scaleFactor: 1, vmin: (v) => v * 10 }) }))
 vi.mock('../../contexts_beach/LoggingContext_beach', () => ({ useComponentLogging: () => ({ logHandler: () => {} }) }))
 vi.mock('../../utils_beach/comprehensiveLogger_beach', () => ({ exportLogsAsNDJSON: async () => '' }))
-vi.mock('../../utils_beach/backendConfig_beach', async (orig) => ({ ...(await orig()), isBackendAvailable: () => false, getCloudApiUrl: () => null }))
+const backend = vi.hoisted(() => ({ on: false }))
+vi.mock('../../utils_beach/backendConfig_beach', async (orig) => ({ ...(await orig()), isBackendAvailable: () => backend.on, getCloudApiUrl: () => null }))
+// Direct storage uploads: recorded, never answered (a connection that passes
+// no data), or refused at once with uploads.fail (no network)
+const uploads = vi.hoisted(() => ({ paths: [], bodies: {}, fail: false }))
+vi.mock('../../lib_beach/apiClient_beach', async (orig) => ({
+  ...(await orig()),
+  apiStorage: {
+    from: () => ({
+      upload: (path, body) => {
+        uploads.paths.push(path)
+        uploads.bodies[path] = body
+        return uploads.fail ? Promise.resolve({ data: null, error: { message: 'Failed to fetch', status: 0 } }) : new Promise(() => {})
+      }
+    })
+  }
+}))
 
 // The scoresheet window: each open gets a fresh fake window the test can close
 const opened = []
@@ -60,6 +77,9 @@ async function seed(extra = {}) {
 beforeEach(async () => {
   cleanup()
   opened.length = 0
+  backend.on = false
+  uploads.paths = []
+  uploads.fail = false
   await db.open()
   await Promise.all(db.tables.map(t => t.clear()))
 })
@@ -125,6 +145,111 @@ describe('MatchEnd_beach: the approval PDF', () => {
     expect(remarks).toBe(approval - 1)
     expect(jobs[remarks].payload).toEqual({ id: 'match_1759740000000_obappr', remarks: 'Actual start time: 10:05' })
     expect('remarks' in jobs[approval].payload).toBe(false)
+  })
+
+  // Stress test 2026-10-25 (ob-scoresheet-upload-fire-once): approved while
+  // the venue Wi-Fi or the backend was down, the PDF and the final JSON were
+  // uploaded once, failed, and never reached the cloud (the manager's
+  // Scoresheets list: pdf false); a stalled upload also held the approval
+  it('an official match: the approval queues the PDF and the final JSON with their files, nothing is uploaded directly', async () => {
+    backend.on = true
+    await seed({
+      test: false, seed_key: 'match_1759740000000_obpdf', gameNumber: 702,
+      team1PostGameCaptainSignature: 'data:c1', team2PostGameCaptainSignature: 'data:c2', scorerSignature: 'data:s', ref1Signature: 'data:r1'
+    })
+    renderMatchEnd()
+    await approve()
+    await waitFor(() => expect(opened).toHaveLength(1))
+    await postFromSheet({ type: 'pdfBlob', arrayBuffer: new ArrayBuffer(8), filename: 'x.pdf' })
+    expect(await screen.findByRole('button', { name: 'Close match' })).toBeInTheDocument()
+    await waitFor(async () => expect((await db.sync_queue.toArray()).filter(j => j.resource === 'scoresheet')).toHaveLength(2))
+    const files = (await db.sync_queue.toArray()).filter(j => j.resource === 'scoresheet')
+    expect(files.map(j => [j.action, j.status, j.payload.contentType])).toEqual([
+      ['upload', 'queued', 'application/pdf'],
+      ['upload', 'queued', 'application/json']
+    ])
+    expect(files[0].payload.path).toMatch(/^beach\/\d{4}-\d{2}-\d{2}\/game702_match_1759740000000_obpdf\.pdf$/)
+    expect(files[1].payload.path).toMatch(/^beach\/\d{4}-\d{2}-\d{2}\/game702_match_1759740000000_obpdf_final\.json$/)
+    expect(files.map(j => j.payload.match_external_id)).toEqual(['match_1759740000000_obpdf', 'match_1759740000000_obpdf'])
+    expect(files[0].payload.file).toBeTruthy()
+    expect(files[1].payload.file).toBeTruthy()
+    expect((await db.matches.get(matchId)).approved).toBe(true)
+    // nothing went up directly (the queue sends them)
+    expect(uploads.paths.filter(p => !p.startsWith('backups/'))).toEqual([])
+  })
+
+  // Stress test 2026-10-25 (ob-restore-at-match-end-drops-signatures-approval):
+  // no cloud backup was taken after the signatures or the approval, so a
+  // restore at Match end (the tablet died) came back unsigned, not approved
+  it('an official match: the approval leaves a cloud backup with the signatures and the approval', async () => {
+    backend.on = true
+    useMemoryLocalStorage()
+    localStorage.setItem('api_auth_token', JSON.stringify({ access_token: 'tok', expires_at: Math.floor(Date.now() / 1000) + 3600 }))
+    await seed({
+      test: false, seed_key: 'match_1759740000000_obbak', gameN: 703, gameNumber: '703',
+      team1PostGameCaptainSignature: 'data:c1', team2PostGameCaptainSignature: 'data:c2', scorerSignature: 'data:s', ref1Signature: 'data:r1'
+    })
+    renderMatchEnd()
+    await approve()
+    await waitFor(() => expect(opened).toHaveLength(1))
+    await postFromSheet({ type: 'pdfError', reason: 'failed', message: 'boom' })
+    await click(await screen.findByRole('button', { name: 'Approve without PDF' }))
+    expect(await screen.findByRole('button', { name: 'Close match' })).toBeInTheDocument()
+    await waitFor(() => expect(uploads.paths.some(p => p.startsWith('backups/backup_g703/'))).toBe(true))
+    const path = uploads.paths.find(p => p.startsWith('backups/backup_g703/'))
+    const backup = JSON.parse(uploads.bodies[path])
+    expect(backup.match).toMatchObject({ approved: true, team1PostGameCaptainSignature: 'data:c1', ref1Signature: 'data:r1', scorerSignature: 'data:s' })
+  })
+
+  // Offline at Match end: the backups after the signatures and the approval
+  // failed and nothing took them again, so a restore on another device came
+  // back unsigned and not approved while the server row had it all once the
+  // queue drained (re-verification 2026-10-26)
+  it('an official match: a Match end backup that failed offline is taken again once the cloud answers', async () => {
+    backend.on = true
+    useMemoryLocalStorage()
+    localStorage.setItem('api_auth_token', JSON.stringify({ access_token: 'tok', expires_at: Math.floor(Date.now() / 1000) + 3600 }))
+    await seed({
+      test: false, seed_key: 'match_1759740000000_obretry', gameN: 705, gameNumber: '705',
+      team1PostGameCaptainSignature: 'data:c1', team2PostGameCaptainSignature: 'data:c2', scorerSignature: 'data:s', ref1Signature: 'data:r1'
+    })
+    uploads.fail = true
+    renderMatchEnd()
+    await approve()
+    await waitFor(() => expect(opened).toHaveLength(1))
+    await postFromSheet({ type: 'pdfError', reason: 'failed', message: 'boom' })
+    await click(await screen.findByRole('button', { name: 'Approve without PDF' }))
+    expect(await screen.findByRole('button', { name: 'Close match' })).toBeInTheDocument()
+    const backups = () => uploads.paths.filter(p => p.startsWith('backups/backup_g705/'))
+    await waitFor(() => expect(backups()).toHaveLength(1))
+    await new Promise(r => setTimeout(r, 50))
+
+    // Back online: the queue sends the approval, and the backup goes again
+    uploads.fail = false
+    await act(async () => { window.dispatchEvent(new CustomEvent('sync-queue-drained', { detail: { sent: 3, pending: false } })) })
+    await waitFor(() => expect(backups()).toHaveLength(2))
+    expect(JSON.parse(uploads.bodies[backups()[1]]).match).toMatchObject({ approved: true, ref1Signature: 'data:r1', scorerSignature: 'data:s' })
+    // once: the next answer of the cloud takes no other
+    await act(async () => { window.dispatchEvent(new Event('online')) })
+    await new Promise(r => setTimeout(r, 100))
+    expect(backups()).toHaveLength(2)
+  })
+
+  // Remarks saved after the signatures (not approved yet) are on the server
+  // only from the approval on: no backup was taken, so a restore at Match end
+  // came back without them (re-verification 2026-10-26)
+  it('an official match: remarks saved at Match end leave a cloud backup with them', async () => {
+    backend.on = true
+    useMemoryLocalStorage()
+    localStorage.setItem('api_auth_token', JSON.stringify({ access_token: 'tok', expires_at: Math.floor(Date.now() / 1000) + 3600 }))
+    await seed({ test: false, seed_key: 'match_1759740000000_obrem', gameN: 704, gameNumber: '704', scorerSignature: 'data:s', ref1Signature: 'data:r1' })
+    renderMatchEnd()
+    await click(await screen.findByRole('button', { name: 'Edit remarks' }))
+    await act(async () => { fireEvent.change(screen.getByRole('textbox', { name: 'Remarks' }), { target: { value: 'Team B protested at 18:15' } }) })
+    await click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(uploads.paths.some(p => p.startsWith('backups/backup_g704/'))).toBe(true))
+    const backup = JSON.parse(uploads.bodies[uploads.paths.find(p => p.startsWith('backups/backup_g704/'))])
+    expect(backup.match).toMatchObject({ remarks: 'Team B protested at 18:15', scorerSignature: 'data:s' })
   })
 
   it('Approve without PDF approves the match', async () => {

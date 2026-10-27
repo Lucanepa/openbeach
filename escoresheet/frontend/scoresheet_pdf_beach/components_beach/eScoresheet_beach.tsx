@@ -7,6 +7,7 @@ import { isoOf, setEndMs, setStartMs } from './matchTimes_beach';
 import { medicalChartMarks } from '../../src_beach/utils_beach/medicalRemarks_beach.js';
 // REMARKS: the scorer's own, MTO / RIT, a set past the 44 boxes (shared with MatchEnd)
 import { sheetRemarksText } from '../../src_beach/utils_beach/sheetRemarks_beach.js';
+import { gameNumberValue } from '../../src_beach/utils_beach/gameNumber_beach.js';
 
 // The sheet's many debug lines (whole match objects) only when asked for:
 // localStorage obScoresheetDebug = '1'. Logging them always slowed the
@@ -15,6 +16,29 @@ const SCORESHEET_DEBUG = (() => {
   try { return typeof localStorage !== 'undefined' && localStorage.getItem('obScoresheetDebug') === '1'; } catch { return false; }
 })();
 const debugLog = (...args: unknown[]) => { if (SCORESHEET_DEBUG) console.log(...args); };
+
+/**
+ * The team that lost its first service turn of a set to a penalty before the
+ * set's first serve, else null. A delay penalty can be given before Start set
+ * (delay warnings carry over the match): against the team to serve first, the
+ * opponent gets the point and the serve, so the set's first rally_start is
+ * the OTHER team's. Read from that rally_start, the sheet put the other team
+ * up (I) and made the penalised team's second server its first, and the lost
+ * turn at 0 was never written. Against the receiving team the server keeps
+ * the serve: nothing changes (null).
+ * @param setEvents the set's events in time order
+ * @param plannedFirstServer the set's first server by the coin toss / set data
+ */
+export function firstTurnLostToPenalty(setEvents: any[], plannedFirstServer: string | null): string | null {
+  if (!plannedFirstServer) return null;
+  for (const e of setEvents || []) {
+    if (e?.type === 'rally_start') return null;
+    if (e?.type === 'point') {
+      return e.payload?.fromPenalty === true && e.payload?.team && e.payload.team !== plannedFirstServer ? plannedFirstServer : null;
+    }
+  }
+  return null;
+}
 
 // Register locale for country code conversion
 countries.registerLocale(enLocale);
@@ -342,8 +366,11 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
         // Match header info - use match setup fields
         if (match.eventName) set('competition', match.eventName);
         else if (match.league) set('competition', match.league);
-        // Match number - use game_n (the actual field name in the database)
-        if (match.game_n != null) set('match_no', String(match.game_n));
+        // Match number - use game_n (the actual field name in the database);
+        // a match number saved as free text before it had to be a number
+        // ("M01": game_n NaN) prints as typed, never "NaN"
+        const matchNo = gameNumberValue(match.game_n) ?? (match.gameNumber != null && String(match.gameNumber).trim() ? String(match.gameNumber).trim() : null);
+        if (matchNo != null) set('match_no', String(matchNo));
         // Don't fall back to externalId as it often contains 'test-match-default' or similar
         if (match.site) set('site', match.site);
         else if (match.city) set('site', match.city);
@@ -725,12 +752,14 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
           let firstServeTeam: string | null = null;
 
           // Primary source: first rally_start event tells us who actually served first
+          // (taken below, after the set's first-serve data it is checked against)
+          let rallyFirstServeTeam: string | null = null;
           if (events && Array.isArray(events)) {
             const firstRallyStart = events.find((e: any) =>
               e.type === 'rally_start' && (e.setIndex || 1) === setNum
             );
             if (firstRallyStart?.payload?.servingTeam) {
-              firstServeTeam = firstRallyStart.payload.servingTeam;
+              rallyFirstServeTeam = firstRallyStart.payload.servingTeam;
             }
           }
 
@@ -773,6 +802,18 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                 }
               }
             }
+          }
+
+          // The first rally_start is who served first, unless a penalty
+          // before it took the first server's turn: that rally_start is then
+          // the opponent's, and the set's first-serve data names the team up
+          // (firstTurnLostToPenalty)
+          // (the set's events in time order, as the service boxes read them)
+          const setEventsInOrder = (Array.isArray(events) ? events : [])
+            .filter((e: any) => (e.setIndex || 1) === setNum)
+            .sort((a: any, b: any) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
+          if (rallyFirstServeTeam && !firstTurnLostToPenalty(setEventsInOrder, firstServeTeam)) {
+            firstServeTeam = rallyFirstServeTeam;
           }
 
           // Set team_up and team_down constants for this set
@@ -1284,6 +1325,21 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                 team2FirstServe = firstReceiverServe.payload?.servingPlayerNumber;
               }
             }
+          }
+
+          // The team whose first turn a penalty took before the set's first
+          // serve (firstTurnLostToPenalty; the team up): its first rally_start
+          // is its SECOND server's, the first server is the teammate
+          const lostFirstTurn = firstTurnLostToPenalty(setEvents, get(`${prefix}_team_up`) || null);
+          if (lostFirstTurn === 'team1' || lostFirstTurn === 'team2') {
+            const servedFirst = lostFirstTurn === 'team1' ? team1FirstServe : team2FirstServe;
+            const teamPlayers = lostFirstTurn === 'team1' ? team1PlayersArray : team2PlayersArray;
+            const mate = servedFirst === undefined ? undefined
+              : teamPlayers.find((p: any) => p?.number != null && String(p.number) !== String(servedFirst));
+            // not known (it never served, or no teammate): the match's data below
+            const firstServer = mate ? mate.number : undefined;
+            if (lostFirstTurn === 'team1') team1FirstServe = firstServer;
+            else team2FirstServe = firstServer;
           }
 
           // Fallback to match-level data only if no rally_start events exist for this set
@@ -1872,9 +1928,11 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
           // Service rotation order is global: I (1) -> II (2) -> III (3) -> IV (4) -> I (1) -> ...
           let currentServiceOrder: number | null = null; // Will be set from first rally_start event
 
-          // Find first rally_start to determine initial service order
+          // Find first rally_start to determine initial service order (not
+          // when a penalty took the first server's turn before it: that
+          // rally_start is the opponent's, the set starts with I's lost turn)
           const firstRallyStart = setEvents.find((e: any) => e.type === 'rally_start');
-          if (firstRallyStart && serviceOrder && Object.keys(serviceOrder).length > 0) {
+          if (firstRallyStart && !lostFirstTurn && serviceOrder && Object.keys(serviceOrder).length > 0) {
             const servingTeamFromEvent = firstRallyStart.payload?.servingTeam;
             const servingPlayerNumber = firstRallyStart.payload?.servingPlayerNumber;
             const teamKey = servingTeamFromEvent === teamAKey ? teamAKey : teamBKey;
@@ -2004,6 +2062,15 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
               // Only check the fromPenalty flag - don't check recent events as it can cause false positives
               const isPointFromOtherTeamPenalty = event.payload?.fromPenalty === true;
 
+              // A penalty point comes between rallies: the team serving is
+              // the one that won the set's last point (or the set's first
+              // server), not the last rally_start's, which right after a
+              // side-out is the other team's
+              if (isPointFromOtherTeamPenalty) {
+                const lastPoint = setEvents.slice(0, eventIndex).reverse().find((e: any) => e.type === 'point');
+                servingTeam = lastPoint?.payload?.team || teamUp || null;
+              }
+
               // Determine if the serving team lost the point (opponent scored)
               const servingTeamLostPoint = servingTeam && pointTeam !== servingTeam;
 
@@ -2095,9 +2162,12 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
               // currentServiceOrder is already updated from rally_start events, so use it directly
               // For BMP points: only record rotation if it's a successful challenge (reversedTeam exists)
               // because that means the serve genuinely changed. Skip for referee BMP or unsuccessful.
-              // For penalty/forfait points: skip rotation as they happen between rallies (no actual service change)
+              // A penalty against the serving team gives the opponent the point
+              // and the serve, as the scorer's rotation counts it: its server's
+              // turn is lost like a rally's (the box got no score, the rows
+              // slid: stress test 2026-10-25). Forfait points: no rotation.
               const isFromForfait = event.payload?.fromForfait === true;
-              const shouldTrackRotation = isFromBMP ? !!reversedTeam : (!isPointFromOtherTeamPenalty && !isFromForfait);
+              const shouldTrackRotation = isFromBMP ? !!reversedTeam : !isFromForfait;
               if (shouldTrackRotation && servingTeamLostPoint && servingTeam && serviceOrder && Object.keys(serviceOrder).length > 0 && currentServiceOrder !== null) {
                 const currentRowKey = orderToRow[currentServiceOrder];
                 if (currentRowKey && serviceRotationColumn[currentRowKey] !== undefined) {
@@ -2847,7 +2917,7 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
           const date = new Date(match.scheduledAt);
           set('bmp_date', date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }));
         }
-        set('bmp_match_no', String(match.game_n || ''));
+        set('bmp_match_no', String(gameNumberValue(match.game_n) ?? match.gameNumber ?? ''));
         // Convert phase to capitalize (replace underscores with spaces and capitalize)
         // Use fallback to match.phase like main scoresheet
         const phaseStr = match.matchPhase || match.phase || '';
@@ -4004,12 +4074,18 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                   letterSpacing: '0.1em'
                 }}>RESULTS</span>
               </div>
-              <div className="flex-1">
+              {/* min-w-0 here and on the name cells: a flex item is as wide as
+                  its content at least, and a long pair name (one line) made
+                  this column wider than the box. The RESULTS column shrank
+                  to nothing and B's time-outs, the ending time and the
+                  winner's "2:0" were cut off the sheet (stress test
+                  2026-10-25): the names end in "..." instead */}
+              <div className="flex-1 min-w-0">
                 {/* Which team each half is (A left, B right) */}
                 <div className="flex text-[9px] font-bold border-b border-black text-black">
-                  <div className="flex-[3] border-r border-black px-1 overflow-hidden" style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{get('res_label_a') || 'A'}</div>
-                  <div className="w-32 border-r border-black" />
-                  <div className="flex-[3] px-1 text-right overflow-hidden" style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{get('res_label_b') || 'B'}</div>
+                  <div className="flex-[3] min-w-0 border-r border-black px-1 overflow-hidden" style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{get('res_label_a') || 'A'}</div>
+                  <div className="w-32 shrink-0 border-r border-black" />
+                  <div className="flex-[3] min-w-0 px-1 text-right overflow-hidden" style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{get('res_label_b') || 'B'}</div>
                 </div>
                 {/* Table Header */}
                 <div className="flex text-[9px] text-center font-bold border-b border-black bg-gray-100 text-black">
@@ -4085,7 +4161,7 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                 {/* Winner */}
                 <div className="flex h-6 px-1 items-center bg-gray-400 text-xs leading-none">
                   <span className="font-bold mr-2 shrink-0">Winning team</span>
-                  <Input value={get('winner_name')} onChange={v => set('winner_name', v)} className="flex-1 text-left font-bold text-xs" style={{ padding: 0, height: '100%' }} />
+                  <Input value={get('winner_name')} onChange={v => set('winner_name', v)} className="flex-1 min-w-0 text-left font-bold text-xs" style={{ padding: 0, height: '100%' }} />
                   <Input value={get('winner_country')} onChange={v => set('winner_country', v)} className="w-12 text-center font-bold text-[10px] ml-2" style={{ padding: 0, height: '100%' }} />
                   <div className="ml-4 font-bold text-sm flex items-center shrink-0 gap-0.5">
                     <span>2</span>

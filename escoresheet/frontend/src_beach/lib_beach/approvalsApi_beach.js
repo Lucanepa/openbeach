@@ -73,6 +73,20 @@ export const approvalsApi = {
   undo: (id, opts) => approvalRequest('DELETE', `/api/approvals/${enc(id)}`, undefined, opts)
 }
 
+/**
+ * A finished match reopened (the scoreboard's Manual changes > Reopen set;
+ * MatchEnd's Reopen last set does the same): its result changes, so its
+ * account approvals go. The server voids them once the status 'live' syncs;
+ * online and not closed, they are undone now as well. Never throws.
+ * @param {object} match the local match row (its accountApprovals)
+ */
+export async function undoAccountApprovalsBestEffort(match) {
+  const records = Object.values(match?.accountApprovals || {}).filter(r => r?.id)
+  if (!records.length || match?.closed_at) return
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return
+  await Promise.allSettled(records.map(r => approvalsApi.undo(r.id)))
+}
+
 // Approval error codes -> approval.errors.<key>
 const APPROVAL_ERROR_KEYS = {
   OV_APPROVAL_PIN_INVALID: 'pinInvalid',

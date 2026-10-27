@@ -20,6 +20,12 @@ describe('sync display while not signed in', () => {
     expect(pendingSyncLabel({ pending: 3, signedIn: true, cloudStatus: 'connected' })).toBe('syncing')
     expect(pendingSyncLabel({ pending: 0, signedIn: false })).toBeNull()
   })
+
+  it('a cloud that is there but cannot be reached now is "offline", not "local only"', () => {
+    expect(pendingSyncLabel({ pending: 3, signedIn: true, cloudStatus: 'offline' })).toBe('offline')
+    expect(pendingSyncLabel({ pending: 3, signedIn: false, cloudStatus: 'offline' })).toBe('offline')
+    expect(pendingSyncLabel({ pending: 3, signedIn: true, cloudStatus: 'not_applicable' })).toBe('local_only')
+  })
 })
 
 describe('isSignedInOnDevice', () => {

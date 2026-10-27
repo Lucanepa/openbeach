@@ -4,6 +4,7 @@ import { supabase } from './lib_beach/supabaseClient_beach'
 import { apiFrom } from './lib_beach/apiClient_beach'
 import { isBackendAvailable, getApiUrl } from './utils_beach/backendConfig_beach'
 import { createRelayLivescoreFeed, fetchRelayLivescoreList, relayLivescoreNow, relayLivescoreWsUrl } from './utils_beach/relayLivescore_beach'
+import { liveWindowStart } from './utils_beach/livescoreWindow_beach'
 import { ArrowLeft, ChevronRight, Globe, Monitor, Radio } from 'lucide-react'
 import { cn } from './ui/volleyui/cn.js'
 import { FOCUS_RING, Button } from './ui/volleyui/Button.jsx'
@@ -54,6 +55,38 @@ function normalizeState(raw) {
   }
 }
 
+// The Remote game of this display (ScoreboardApp: comes back after a reload)
+const REMOTE_GAME_KEY = 'ob_scoreboard_remote_match'
+
+function storedRemoteGame() {
+  try {
+    return localStorage.getItem(REMOTE_GAME_KEY) || null
+  } catch {
+    return null
+  }
+}
+
+function setUrlParams(params) {
+  try {
+    const url = new URL(window.location.href)
+    for (const [k, v] of Object.entries(params)) {
+      if (v == null) url.searchParams.delete(k)
+      else url.searchParams.set(k, v)
+    }
+    window.history.replaceState(window.history.state, '', url.toString())
+  } catch { /* no history API: the stored choice still brings it back */ }
+}
+
+function rememberRemoteGame(matchId) {
+  try { localStorage.setItem(REMOTE_GAME_KEY, String(matchId)) } catch { /* storage blocked */ }
+  setUrlParams({ mode: 'remote', match: String(matchId) })
+}
+
+function forgetRemoteGame() {
+  try { localStorage.removeItem(REMOTE_GAME_KEY) } catch { /* storage blocked */ }
+  setUrlParams({ mode: null, match: null })
+}
+
 /**
  * Arena Scoreboard App for Beach Volleyball
  * - Local mode: receives data from scorer via BroadcastChannel (same device)
@@ -75,14 +108,33 @@ export default function ScoreboardApp() {
   const selectedRef = useRef(null)
   selectedRef.current = selectedMatchId
 
-  // Check URL params for auto-connect (opened from scorer menu)
+  // Check URL params for auto-connect (opened from scorer menu). A Remote
+  // display comes back to its game after a reload or a restart (a power
+  // blip, the OS discarding the tab, Refresh to update): the game is in the
+  // URL (?mode=remote&match=<id>, a link that can be bookmarked) and the last
+  // choice in localStorage. It went back to "Choose how to connect", with
+  // someone to walk to it (stress test 2026-10-25).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const mode = params.get('mode')
     if (mode === 'local') {
       setConnectionMode('local')
+      return
+    }
+    const remoteGame = (mode === 'remote' && params.get('match')) || (!mode ? storedRemoteGame() : null)
+    if (remoteGame) {
+      setConnectionMode('remote')
+      setSelectedMatchId(remoteGame)
+    } else if (mode === 'remote') {
+      setConnectionMode('remote')
     }
   }, [])
+
+  // The chosen Remote game: kept for the next load, and in the URL
+  useEffect(() => {
+    if (connectionMode !== 'remote' || !selectedMatchId) return
+    rememberRemoteGame(selectedMatchId)
+  }, [connectionMode, selectedMatchId])
 
   // Local mode: listen on BroadcastChannel
   useEffect(() => {
@@ -146,28 +198,51 @@ export default function ScoreboardApp() {
     }
   }, [relayMode, selectedMatchId, availableGames])
 
-  // Remote mode: fetch available games
+  // Remote mode: fetch available games. True when the list was read.
   const fetchGames = useCallback(async () => {
-    if (relayMode || !isBackendAvailable()) return
+    if (relayMode || !isBackendAvailable()) return true
     setLoadingGames(true)
     try {
-      // Beach rows only: the live-state table is shared with indoor
-      const { data } = await apiFrom('match_live_state')
+      // Beach rows only: the live-state table is shared with indoor; the
+      // matches of the last day, as the livescore (livescoreWindow_beach)
+      const { data, error } = await apiFrom('match_live_state')
         .select('*, matches!match_live_state_match_id_fkey_cascade(set_results)')
         .eq('sport_type', 'beach')
+        .gte('updated_at', liveWindowStart())
         .order('updated_at', { ascending: false })
+      if (error) {
+        console.error('[Scoreboard] Error fetching games:', error)
+        return false
+      }
       const beachGames = (data || []).filter(g => g.sport_type === 'beach')
       setAvailableGames(beachGames)
+      return true
     } catch (err) {
       console.error('[Scoreboard] Error fetching games:', err)
+      return false
     } finally {
       setLoadingGames(false)
     }
   }, [relayMode])
 
+  // The list is read when the picker opens. A refused read (the venue's
+  // per-IP limit: 429) left it empty, "no games" for good (stress test
+  // 2026-10-25): it is read again, after 3 s, 6 s, ... up to 30 s apart,
+  // until it is read or the picker closes.
   useEffect(() => {
-    if (connectionMode === 'remote' && !selectedMatchId) {
-      fetchGames()
+    if (connectionMode !== 'remote' || selectedMatchId) return undefined
+    let cancelled = false
+    let timer = null
+    let attempt = 0
+    const load = async () => {
+      const ok = await fetchGames()
+      if (cancelled || ok) return
+      timer = setTimeout(load, Math.min(3000 * (2 ** attempt++), 30000))
+    }
+    load()
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
     }
   }, [connectionMode, selectedMatchId, fetchGames])
 
@@ -184,7 +259,8 @@ export default function ScoreboardApp() {
         .eq('match_id', selectedMatchId)
         .single()
       if (data) {
-        setGameState(data)
+        // Never over a newer row a realtime update brought meanwhile
+        setGameState(prev => (prev?.match_id === data.match_id && prev?.updated_at && data.updated_at && data.updated_at < prev.updated_at ? prev : data))
         setConnectionStatus('connected')
       }
     }
@@ -202,7 +278,14 @@ export default function ScoreboardApp() {
         setGameState(payload.new)
         setConnectionStatus('connected')
       })
-      .subscribe()
+      // SUBSCRIBED comes again after every reconnect of the realtime
+      // connection (relayRealtime_beach), which never sends the changes made
+      // while it was down: the row is read again, or a Wi-Fi drop left the
+      // display on the score from before it, LIVE, until the next point
+      // (stress test 2026-10-25)
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') fetchState()
+      })
 
     channelRef.current = channel
 
@@ -217,6 +300,7 @@ export default function ScoreboardApp() {
 
   // Reset to setup
   const handleBack = () => {
+    forgetRemoteGame()
     setGameState(null)
     setSelectedMatchId(null)
     setConnectionMode(null)

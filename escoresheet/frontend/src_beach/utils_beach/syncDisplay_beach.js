@@ -41,11 +41,14 @@ export function cardSyncStatus({ hasError = false, hasQueued = false, signedIn =
  * itself is fine.
  * @param {{ pending?: number, signedIn?: boolean, cloudStatus?: string|null }} p
  *   cloudStatus: the cloud row's status (cloudStatusFor)
- * @returns {'syncing'|'not_signed_in'|'local_only'|null} null: nothing waits
+ * @returns {'syncing'|'not_signed_in'|'local_only'|'offline'|null} null: nothing waits
  */
 export function pendingSyncLabel({ pending = 0, signedIn = true, cloudStatus = null } = {}) {
   if (!(pending > 0)) return null
-  // No cloud here (a LAN relay, no backend, offline): the jobs stay on the device
+  // The device is offline or the cloud does not answer now: the jobs go when
+  // it is back. "Local only" said they never would (stress test 2026-10-25)
+  if (cloudStatus === 'offline') return 'offline'
+  // No cloud here (a LAN relay, no backend): the jobs stay on the device
   if (cloudStatus && cloudStatus !== 'connected') return 'local_only'
   if (!signedIn) return 'not_signed_in'
   return 'syncing'

@@ -31,6 +31,20 @@ export const POST_MATCH_SIGNATURE_KEYS = Object.freeze({
   ref1Signature: 'ref1'
 })
 
+/**
+ * The post-match signature fields of a match row from the server's
+ * `signatures` JSONB, the inverse of signaturesPayload (null when missing).
+ * A copy restored from the server (backupManager_beach
+ * importMatchFromSupabase: a restore by game PIN, "Take back scoring here")
+ * must hold every one of them in the field the app reads: its next signature
+ * sends the whole object back, and a slot missing here would be erased on
+ * the server. (OpenVolley e19ed2f8)
+ */
+export function postMatchSignaturesFromServer(signatures) {
+  const s = signatures || {}
+  return Object.fromEntries(Object.entries(POST_MATCH_SIGNATURE_KEYS).map(([field, key]) => [field, s[key] || null]))
+}
+
 /** The match-row field of a coin-toss pad ('team1-captain', 'team2-coach', ...), or null. */
 export function signatureFieldOfRole(role) {
   return ({
@@ -44,6 +58,27 @@ export function signatureFieldOfRole(role) {
 /** Every post-match signature field emptied (match end "Reopen last set"). */
 export function clearedPostMatchSignatures() {
   return Object.fromEntries(Object.keys(POST_MATCH_SIGNATURE_KEYS).map(field => [field, null]))
+}
+
+/**
+ * The match-row update of a finished match that is live again (Match End's
+ * Reopen last set, the scoreboard's Manual changes > Reopen set): status
+ * 'live', not approved, every post-match signature and its "signed on phone"
+ * record cleared - they certify a result that no longer stands and must be
+ * collected again - and the local copy of the account approvals gone: they
+ * certify the result too (OpenVolley clearedPostMatchSignatures). Offline the
+ * server undo is skipped; a replay to the same score must not bring them back
+ * from this copy.
+ */
+export function reopenedMatchUpdate() {
+  return {
+    status: 'live',
+    approved: false,
+    approvedAt: null,
+    ...clearedPostMatchSignatures(),
+    ...Object.fromEntries(Object.keys(POST_MATCH_SIGNATURE_KEYS).map(field => [`signatureSources.${field}`, null])),
+    accountApprovals: null
+  }
 }
 
 /**

@@ -110,11 +110,13 @@ async function startSet() {
 }
 async function startRally() {
   await waitFor(() => expect(button('Start rally')).toBeTruthy())
+  await settle()
   fireEvent.click(button('Start rally'))
   await waitFor(() => expect(button('Point A')).toBeTruthy())
 }
 async function point(label) {
   const before = (await ofType('point')).length
+  await settle()
   fireEvent.click(button(label))
   await waitFor(async () => expect((await ofType('point')).length).toBe(before + 1))
   await waitFor(() => expect(button(label)).toBeFalsy())

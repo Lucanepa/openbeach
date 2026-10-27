@@ -1,6 +1,7 @@
 import { expect, afterEach, vi } from 'vitest'
 import { cleanup, configure } from '@testing-library/react'
 import * as matchers from '@testing-library/jest-dom/matchers'
+import { resetGhostClickGuard } from '../hooks_beach/useConfirmAction_beach'
 
 // Extend Vitest's expect with jest-dom matchers
 expect.extend(matchers)
@@ -14,9 +15,12 @@ expect.extend(matchers)
 // its assertion rather than a test timeout.
 configure({ asyncUtilTimeout: 10000 })
 
-// Cleanup after each test
+// Cleanup after each test. A confirm's ghost-click guard (useConfirmAction:
+// every click of the next 450 ms is swallowed) never outlives its test: the
+// next test's first tap, a few ms later, was swallowed and it failed
 afterEach(() => {
   cleanup()
+  resetGhostClickGuard()
 })
 
 // Mock matchMedia for tests

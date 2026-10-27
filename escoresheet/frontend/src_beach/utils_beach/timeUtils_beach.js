@@ -139,6 +139,36 @@ export function splitLocalDateTime(isoString) {
 }
 
 /**
+ * The instant a local "HH:MM" on the local date of `nearIso` stands for, the
+ * one nearest `nearIso`. In the hour the clocks go back (Europe/Zurich, the
+ * last Sunday of October, 02:00-02:59 twice) a wall time is ambiguous, and
+ * new Date('YYYY-MM-DDTHH:MM') takes its first (summer time) occurrence: the
+ * set end confirmed as proposed at 02:05 CET was stored an hour early, before
+ * the set's start (stress test 2026-10-25). Both readings are tried.
+ * @param {string} nearIso - ISO string the time was proposed from
+ * @param {string} time - HH:MM (local)
+ * @returns {string|null} UTC ISO string
+ */
+export function localTimeNear(nearIso, time) {
+  const { date } = splitLocalDateTime(nearIso)
+  const first = parseLocalDateTimeToISO(date, time)
+  if (!first) return null
+  const near = Date.parse(nearIso)
+  const hour = 60 * 60 * 1000
+  const readings = [0, hour, -hour]
+    .map(offset => new Date(Date.parse(first) + offset).toISOString())
+    .filter(iso => {
+      const local = splitLocalDateTime(iso)
+      return local.date === date && local.time === time
+    })
+  // A time the clocks skip (the hour they go forward, 02:00-02:59 on the last
+  // Sunday of March) has no reading: the date parser's, as before. The reduce
+  // of no reading threw, and the set end dialog's Confirm stayed dead.
+  if (readings.length === 0) return first
+  return readings.reduce((best, iso) => (Math.abs(Date.parse(iso) - near) < Math.abs(Date.parse(best) - near) ? iso : best))
+}
+
+/**
  * Round UTC ISO string to the nearest minute (seconds and ms set to zero)
  * @param {string} isoString - ISO 8601 string
  * @returns {string|null} Wrapped ISO string with zeroed seconds/ms

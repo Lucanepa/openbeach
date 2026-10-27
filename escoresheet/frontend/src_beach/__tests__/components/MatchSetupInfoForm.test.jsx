@@ -112,7 +112,7 @@ describe('MatchSetup_beach match info', () => {
 
   it('signed out, "Create match" saves at once: a toast, no "Syncing" box', async () => {
     await openInfo()
-    const gameN = screen.getByPlaceholderText('e.g. M01')
+    const gameN = screen.getByPlaceholderText('e.g. 12')
     await act(async () => { fireEvent.change(gameN, { target: { value: '12' } }) })
     await act(async () => { fireEvent.change(screen.getByPlaceholderText('Enter the competition'), { target: { value: 'Coop Beachtour' } }) })
     await act(async () => { fireEvent.change(screen.getByPlaceholderText('Enter the site'), { target: { value: 'Zürich' } }) })
@@ -123,6 +123,28 @@ describe('MatchSetup_beach match info', () => {
     expect(getToastsSnapshot().at(-1).message).toBe('Saved on this device. Sign in to sync it to the cloud.')
     expect(screen.queryByText(/Syncing to database/)).toBeNull()
     expect(screen.queryByText(/sync pending/)).toBeNull()
+  })
+})
+
+// The Match No. was free text ("e.g. M01"): "M01" printed NaN on the sheet,
+// "12.5" kept the match off the livescore, "3000000000" out of the cloud
+// (stress test 2026-10-25). It takes a whole number from 1 to 9999.
+describe('MatchSetup_beach Match No.', () => {
+  it('only a whole number from 1 to 9999 can be confirmed', async () => {
+    await openInfo()
+    const gameN = screen.getByPlaceholderText('e.g. 12')
+    expect(gameN.getAttribute('inputmode')).toBe('numeric')
+    await act(async () => { fireEvent.change(screen.getByPlaceholderText('Enter the competition'), { target: { value: 'Coop Beachtour' } }) })
+    await act(async () => { fireEvent.change(screen.getByPlaceholderText('Enter the site'), { target: { value: 'Zürich' } }) })
+    const confirm = () => screen.getAllByRole('button', { name: 'Create match' }).at(-1)
+    for (const bad of ['M01', '12.5', '3000000000']) {
+      await act(async () => { fireEvent.change(gameN, { target: { value: bad } }) })
+      expect(screen.getByText('A whole number from 1 to 9999.')).toBeInTheDocument()
+      expect(confirm()).toBeDisabled()
+    }
+    await act(async () => { fireEvent.change(gameN, { target: { value: '12' } }) })
+    await waitFor(() => expect(screen.queryByText('A whole number from 1 to 9999.')).toBeNull())
+    await waitFor(() => expect(confirm()).not.toBeDisabled())
   })
 })
 

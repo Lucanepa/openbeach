@@ -113,6 +113,10 @@ describe('the wire shape: team1 = home, team2 = away', () => {
     expect(msg._timestamp).toBe(42)
     for (const k of ['team1Team', 'team2Team', 'team1Players', 'team2Players', 'team1', 'team2']) expect(k in msg, k).toBe(false)
     expect(msg.match.gamePin).toBe('987654')
+    // the installation the cloud relay checks against the match's scoring
+    // device (db/019, ob-handover-old-device-overwrites-referee)
+    expect(syncMatchMessage('match_1700000000000_abc123', local(), { device: { id: 'dev-1', platform: 'web' } }).device).toEqual({ id: 'dev-1', platform: 'web' })
+    expect('device' in syncMatchMessage('match_1700000000000_abc123', local(), { device: null })).toBe(false)
     expect(JSON.stringify(msg).includes('local-secret')).toBe(false)
   })
 

@@ -85,6 +85,7 @@ describe('Scoreboard_beach: team BMP (issues 3 and 14)', () => {
     expect(bmpButtons()).toHaveLength(2)
     expect(bmpButtons().every(b => b.disabled)).toBe(true)
 
+    await settle()
     fireEvent.click(button('Point A'))
     await waitFor(async () => expect((await ofType('point')).length).toBe(1))
     await waitFor(() => expect(bmpButtons().every(b => !b.disabled)).toBe(true))
@@ -99,11 +100,13 @@ describe('Scoreboard_beach: team BMP (issues 3 and 14)', () => {
 
     // the next rally starts: greyed again
     await waitFor(() => expect(button('Start rally')).toBeTruthy())
+    await settle()
     fireEvent.click(button('Start rally'))
     await waitFor(() => expect(button('Point A')).toBeTruthy())
     await waitFor(() => expect(bmpButtons().every(b => b.disabled)).toBe(true))
 
     // a confirmed BMP still records the request, then its outcome as a sub-event
+    await settle()
     fireEvent.click(button('Point A'))
     await waitFor(async () => expect((await ofType('point')).length).toBe(2))
     await waitFor(() => expect(bmpButtons().every(b => !b.disabled)).toBe(true))

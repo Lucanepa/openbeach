@@ -94,11 +94,13 @@ async function startSet() {
 }
 async function startRally() {
   await waitFor(() => expect(button('Start rally')).toBeTruthy())
+  await settle()
   fireEvent.click(button('Start rally'))
   await waitFor(() => expect(button('Point A')).toBeTruthy())
 }
 async function point(label) {
   const before = (await ofType('point')).length
+  await settle()
   fireEvent.click(button(label))
   await waitFor(async () => expect((await ofType('point')).length).toBe(before + 1))
   // and on screen (the rally over): an Undo tapped before the screen has the
@@ -351,6 +353,7 @@ describe('Scoreboard_beach B1: the courts follow the score', () => {
     expect(await sides(matchId)).toBe(sidesBefore)
     expect(switchOpen()).toBe(false)
 
+    await settle()
     fireEvent.click(button('Start rally'))
     await waitFor(() => expect(switchOpen()).toBe(true))
     expect(button('Point A')).toBeFalsy()
@@ -384,6 +387,7 @@ describe('Scoreboard_beach B1: the courts follow the score', () => {
     expect(await ofType('technical_to')).toHaveLength(0)
     expect(await sides(matchId)).toBe(sidesBeforeTto)
 
+    await settle()
     fireEvent.click(button('Start rally'))
     await waitFor(() => expect(ttoOpen()).toBe(true))
     expect(await ofType('technical_to')).toHaveLength(1)

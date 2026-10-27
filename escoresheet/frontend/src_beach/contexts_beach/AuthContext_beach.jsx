@@ -7,6 +7,7 @@ import { accessFromMe, accessFromRoles, accessChanged, publishAccess, ACCESS_CHA
 // (or an invite redeemed on another device) shows without a reload.
 export const PENDING_PROFILE_POLL_MS = 60000
 import { clearSavedTeams, clearSavedTeamsOfOtherAccount, refreshSavedTeams } from '../db_beach/savedTeams_beach'
+import { discardUnsentLogs } from '../utils_beach/logger_beach'
 
 function readCachedProfile() {
   try {
@@ -167,6 +168,9 @@ export function AuthProvider({ children }) {
       setProfile(null)
       setMe(null)
       localStorage.removeItem('cachedProfile')
+      // Console lines not uploaded yet belong to this account: never upload
+      // them under the next one signing in on this device
+      discardUnsentLogs()
       // The saved teams cache holds personal data of this account
       await clearSavedTeams()
     }
@@ -252,6 +256,7 @@ export function AuthProvider({ children }) {
       setProfile(null)
       setMe(null)
       localStorage.removeItem('cachedProfile')
+      discardUnsentLogs()
       await clearSavedTeams()
 
       return { error: null }

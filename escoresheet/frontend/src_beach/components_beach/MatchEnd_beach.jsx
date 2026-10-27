@@ -23,7 +23,9 @@ import {
 } from '../utils_beach/accountApproval_beach'
 import AccountApprovalDialog from './AccountApprovalDialog_beach'
 import { askConfirm } from '../utils_beach/askConfirm_beach'
-import { uploadScoresheet, uploadScoresheetPdf } from '../utils_beach/scoresheetUploader_beach'
+import { scoresheetStoragePath, scoresheetUploadJob, scoresheetJsonBlob, uploadQueuedScoresheet } from '../utils_beach/scoresheetUploader_beach'
+import { exportMatchData } from '../utils_beach/backupManager_beach'
+import { uploadBackupToCloud } from '../utils_beach/logger_beach'
 import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { exportLogsAsNDJSON } from '../utils_beach/comprehensiveLogger_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
@@ -38,8 +40,8 @@ import { isoOf, matchTimes, setEndMs, setStartMs } from '../../scoresheet_pdf_be
 import { formatTimeLocal } from '../utils_beach/timeUtils_beach'
 import { isKnownClosedOnServer } from '../utils_beach/matchHandover_beach'
 import { planReopen } from '../utils_beach/matchReopen_beach'
-import { apiFrom, apiAdminReopenMatch } from '../lib_beach/apiClient_beach'
-import { saveMatchSignature, signatureEditLocked, signaturesPayload, clearedPostMatchSignatures, POST_MATCH_SIGNATURE_KEYS } from '../utils_beach/signatures_beach'
+import { apiFrom, apiAdminReopenMatch, BACKEND_REACHED_EVENT } from '../lib_beach/apiClient_beach'
+import { saveMatchSignature, signatureEditLocked, signaturesPayload, clearedPostMatchSignatures, reopenedMatchUpdate } from '../utils_beach/signatures_beach'
 import { approvalSignatureSources, phoneSignContext, signatureSourceUpdate, signedOnPhone, SLOT_OF_ROLE } from '../utils_beach/phoneSignature_beach'
 import { relayMatchKey } from '../utils_beach/relayPublisher_beach'
 import CountryFlag from './CountryFlag_beach'
@@ -684,6 +686,26 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     return { sanctions: sanctionRecords, improperRequests: improperReqs }
   }, [data])
 
+  // A Match end backup (backupToCloud below) that did not reach the cloud is
+  // taken again once the cloud answers: the queue sent jobs, the backend
+  // answered again, the device is back online. The upload is fire-and-forget
+  // and nothing retried it: with the signatures and the approval made
+  // offline, the newest backup stayed the set end's, and a restore on
+  // another device came back unsigned and not approved while the server row
+  // had it all (re-verification 2026-10-26).
+  const backupMissedRef = useRef(false)
+  const backupAgainRef = useRef(null)
+  useEffect(() => {
+    const retry = () => {
+      if (!backupMissedRef.current) return
+      backupMissedRef.current = false
+      backupAgainRef.current?.()
+    }
+    const triggers = ['online', BACKEND_REACHED_EVENT, 'sync-queue-drained']
+    for (const name of triggers) window.addEventListener(name, retry)
+    return () => { for (const name of triggers) window.removeEventListener(name, retry) }
+  }, [])
+
   if (!data) return null
 
   const { match, team1, team2, team1Players, team2Players, sets, events } = data
@@ -804,8 +826,27 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     const field = signatureFieldMap[role]
     const saved = await saveMatchSignature(db, matchId, field, signatureData, field ? signatureSourceUpdate(field, signatureData, meta) : null)
     if (!saved && field) showAlert(t('matchEnd.signatureSaveFailed'), 'error')
+    if (saved) backupToCloud()
     return saved
   }
+
+  // A cloud backup after every signature (or Clear) and after the approval,
+  // in the background. Restore match lists only these backups, and the last
+  // one was the set end's: a tablet that died at Match end came back on
+  // another device with no closing signature and not approved (stress test
+  // 2026-10-25)
+  const backupToCloud = () => {
+    if (!match || match.test || !isBackendAvailable()) return
+    exportMatchData(matchId)
+      .then(data => uploadBackupToCloud(matchId, data))
+      // no path: not stored (offline, refused, signed out): again later
+      .then(path => { backupMissedRef.current = !path })
+      .catch(err => {
+        backupMissedRef.current = true
+        console.warn('[MatchEnd] Cloud backup failed:', err?.message)
+      })
+  }
+  backupAgainRef.current = backupToCloud
 
   // A signature drawn here or received from a phone (the pad's onSave)
   const handleSaveSignature = async (role, signatureData, meta) => {
@@ -1157,6 +1198,39 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     }
   }
 
+  // The approval's PDF and final JSON for the 'scoresheets' bucket, queued
+  // as sync jobs that carry the files (see handleApprove)
+  const queueApprovalFiles = async ({ pdfResult, team1: t1, team2: t2, sets: allSets, events: allEvents }) => {
+    const jobs = []
+    // PDF: beach/{date}/game{n}_{seed}.pdf (only if generation succeeded)
+    if (pdfResult?.blob) jobs.push(scoresheetUploadJob(match, scoresheetStoragePath(match, { ext: 'pdf' }), pdfResult.blob, 'application/pdf'))
+    // Final JSON (_final suffix: the approved match), with the
+    // country-enriched team objects so the archive PDF renders correctly
+    jobs.push(scoresheetUploadJob(match, scoresheetStoragePath(match, { final: true }), scoresheetJsonBlob({
+      match,
+      team1: t1,
+      team2: t2,
+      team1Players,
+      team2Players,
+      sets: allSets,
+      events: allEvents
+    }), 'application/json'))
+    try {
+      await db.transaction('rw', db.sync_queue, async () => {
+        for (const job of jobs) await db.sync_queue.add(job)
+      })
+    } catch (queueErr) {
+      // IndexedDB refused the files (storage full): one try now, in the
+      // background, as before the queue took them
+      console.warn('[MatchEnd] Could not queue the scoresheet uploads, uploading them once now:', queueErr?.message)
+      for (const job of jobs) {
+        uploadQueuedScoresheet(job.payload)
+          .then(({ error }) => { if (error) console.warn('Failed to upload scoresheet to cloud:', error) })
+          .catch(uploadErr => console.warn('Error uploading scoresheet:', uploadErr))
+      }
+    }
+  }
+
   const handleApprove = async () => {
     cLogger.logHandler('handleApprove', { matchId, allSignaturesDone })
     setIsSaving(true)
@@ -1310,36 +1384,6 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       const zipBlob = await zip.generateAsync({ type: 'blob' })
       const zipFilename = `Match_${sanitizeForFilename(team1?.name || 'Team 1')}_vs_${sanitizeForFilename(team2?.name || 'Team 2')}_${matchDate}.zip`
 
-      // Upload PDF and final JSON to Supabase storage "scoresheets" bucket
-      if (isBackendAvailable() && !match?.test) {
-        try {
-          // Upload PDF: beach/{date}/game{n}_{seed}.pdf (scoresheetStoragePath)
-          if (pdfResult) {
-            const pdfUpload = await uploadScoresheetPdf(match, pdfResult.blob)
-            if (!pdfUpload.success) console.warn('Failed to upload PDF to cloud:', pdfUpload.error)
-          }
-
-          // Upload final JSON (with _final suffix for approved matches)
-          // Use country-enriched team objects so the archive PDF renders correctly
-          const jsonResult = await uploadScoresheet({
-            match,
-            team1: team1WithCountry,
-            team2: team2WithCountry,
-            team1Players,
-            team2Players,
-            sets: allSets,
-            events: allEvents,
-            final: true
-          })
-          if (jsonResult.success) {
-          } else {
-            console.warn('Failed to upload final JSON:', jsonResult.error)
-          }
-        } catch (uploadErr) {
-          console.warn('Error uploading scoresheet:', uploadErr)
-        }
-      }
-
       // Download ZIP
       const zipLink = document.createElement('a')
       zipLink.download = zipFilename
@@ -1393,6 +1437,17 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
           current_set: null
         })
       })
+
+      // The cloud copies of the PDF and the final JSON ('scoresheets' bucket)
+      // go up after the approval, through the sync queue, which retries them
+      // until they are stored (scoresheetUploadJob). Uploaded once and
+      // awaited before it, an approval made while the cloud was unreachable
+      // left the cloud without them for good, and a stalled upload held
+      // "Confirm and approve" (stress test 2026-10-25).
+      if (isBackendAvailable() && !match?.test) {
+        await queueApprovalFiles({ pdfResult, team1: team1WithCountry, team2: team2WithCountry, sets: allSets, events: allEvents })
+      }
+      backupToCloud()
 
       // Update UI state to show post-approval buttons
       setDownloadProgress(null)
@@ -1583,21 +1638,10 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
 
       await db.sets.update(lastSet.id, { finished: false })
 
-      // Set match status back to 'live' and clear all signature fields
-      await db.matches.update(matchId, {
-        status: 'live',
-        approved: false,
-        approvedAt: null,
-        // Clear all post-match signature fields (the ones the boxes write) -
-        // they must be re-collected after changes - and their "signed on phone" records
-        ...clearedPostMatchSignatures(),
-        ...Object.fromEntries(Object.keys(POST_MATCH_SIGNATURE_KEYS).map(field => [`signatureSources.${field}`, null])),
-        // and the local copy of the account approvals: they certify the
-        // result too (OpenVolley clearedPostMatchSignatures). Offline the
-        // server undo above is skipped; a replay to the same score must not
-        // bring them back from this copy.
-        accountApprovals: null
-      })
+      // Set match status back to 'live', not approved, and clear all
+      // post-match signature fields, their "signed on phone" records and the
+      // local copy of the account approvals
+      await db.matches.update(matchId, reopenedMatchUpdate())
 
       // Delete the set_end event for this set to keep event log clean
       // Find set_end event for this set
@@ -2012,6 +2056,10 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
                 className={modalSaveClass}
                 onClick={async () => {
                   await db.matches.update(matchId, { remarks: remarksText.trim() })
+                  // The cloud has the remarks only from the approval on
+                  // (remarksSnapshotJob): until then the backup is their one
+                  // copy off this device, as for the signatures
+                  backupToCloud()
                   setShowRemarksModal(false)
                   setRemarksText('')
                 }}

@@ -5,6 +5,7 @@ import {
   parseExtId,
   isBareLocalId,
   jobMatchKey,
+  jobsOfMatch,
   resolveJobExternalId,
   rewriteQueuedSyncJobs,
   legacyCoinTossSeed
@@ -166,6 +167,27 @@ describe('jobMatchKey', () => {
     expect(jobMatchKey({ resource: 'set', action: 'insert', payload: { match_id: 'm1', external_id: 'm1:s:3' } })).toBe('m1')
     expect(jobMatchKey({ resource: 'set', action: 'update', payload: { external_id: 'm1:s:3' } })).toBe('m1')
     expect(jobMatchKey({ resource: 'event', action: 'insert', payload: { external_id: '7' } })).toBeNull()
+  })
+})
+
+// Deleting / replacing a match removes its jobs only (stress test 2026-10-25:
+// the whole queue went, with the unsent end of a match closed offline)
+describe('jobsOfMatch', () => {
+  const jobs = [
+    { id: 1, resource: 'match', action: 'update', payload: { id: 'm1', status: 'final' } },
+    { id: 2, resource: 'set', action: 'update', payload: { external_id: 'm1:s:2' } },
+    { id: 3, resource: 'event', action: 'insert', payload: { external_id: 'm2:e:4', match_id: 'm2' } },
+    { id: 4, resource: 'match', action: 'restore', payload: { match: { external_id: 'm2' } } },
+    { id: 5, resource: 'activity', action: 'flush', payload: {} },
+    { id: 6, resource: 'set', action: 'insert', payload: { external_id: '3', match_id: '9' } }
+  ]
+  it('the jobs of the match\'s seed_key, none of another match or of none', () => {
+    expect(jobsOfMatch(jobs, { id: 9, seed_key: 'm2' }).map(j => j.id)).toEqual([3, 4])
+    expect(jobsOfMatch(jobs, { id: 1, seed_key: 'm1' }).map(j => j.id)).toEqual([1, 2])
+  })
+  it('a match without a seed_key: the jobs that carried its local id', () => {
+    expect(jobsOfMatch(jobs, { id: 9 }).map(j => j.id)).toEqual([6])
+    expect(jobsOfMatch(jobs, null)).toEqual([])
   })
 })
 

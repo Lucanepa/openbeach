@@ -147,7 +147,32 @@ export function jobMatchKey(job) {
     if (typeof p.match_id === 'string' && p.match_id && !UUID.test(p.match_id)) return p.match_id
     return parseExtId(p.external_id)?.seedKey || null
   }
+  if (job?.resource === SCORESHEET_UPLOAD_RESOURCE) return p.match_external_id || null
   return null
+}
+
+/**
+ * sync_queue resource of a scoresheet file upload (action 'upload'):
+ * utils_beach/scoresheetUploader_beach scoresheetUploadJob.
+ */
+export const SCORESHEET_UPLOAD_RESOURCE = 'scoresheet'
+
+/**
+ * The jobs of `jobs` that belong to the local match `match`: those of its
+ * seed_key (jobMatchKey), and for a match without one the jobs that carried
+ * its bare local id as match_id. Deleting or replacing a match removes these
+ * only: the queue also holds the unsent writes of other matches, and for a
+ * match closed offline (Close match deletes its local copy) those jobs are
+ * the only copy of its end left on the device.
+ */
+export function jobsOfMatch(jobs, match) {
+  const seed = match?.seed_key || null
+  const localRef = match?.id != null ? String(match.id) : null
+  return (jobs || []).filter(j => {
+    const key = jobMatchKey(j)
+    if (seed) return key === seed
+    return localRef != null && key === localRef
+  })
 }
 
 /**
