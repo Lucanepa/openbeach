@@ -400,13 +400,78 @@ export function matchBackupFromDatabaseExport(jsonData) {
 }
 
 /**
+ * The match backup inside a file Match End writes: the MatchData_*.json in
+ * the ZIP that Approve downloads, as the app wrote it before 2026-10-30
+ * ({ match: { ...the match row, team1, team2 }, team1Players, team2Players,
+ * sets, events, exportedAt }), and the scoresheet JSON the approval stores
+ * in the cloud (scoresheetJsonBlob: the teams beside the match, uploadedAt).
+ * Neither has `version`: the restore refused the one file a scorer keeps of
+ * an approved match. In exportMatchData's shape (the teams taken out of the
+ * match row); null for any other file. (OpenVolley
+ * matchBackupFromMatchEndExport.)
+ * @param {object} jsonData a parsed backup file
+ */
+export function matchBackupFromMatchEndExport(jsonData) {
+  const isRecord = (v) => !!v && typeof v === 'object' && !Array.isArray(v)
+  if (!isRecord(jsonData) || jsonData.version || !isRecord(jsonData.match)) return null
+  if (!Array.isArray(jsonData.sets) && !Array.isArray(jsonData.events)) return null
+  const { team1, team2, ...match } = jsonData.match
+  const rows = (list) => (Array.isArray(list) ? list.filter(Boolean) : [])
+  return {
+    version: 1,
+    lastUpdated: jsonData.exportedAt || jsonData.uploadedAt || null,
+    match,
+    team1: isRecord(jsonData.team1) ? jsonData.team1 : (isRecord(team1) ? team1 : null),
+    team2: isRecord(jsonData.team2) ? jsonData.team2 : (isRecord(team2) ? team2 : null),
+    team1Players: rows(jsonData.team1Players),
+    team2Players: rows(jsonData.team2Players),
+    sets: rows(jsonData.sets),
+    events: rows(jsonData.events)
+  }
+}
+
+/**
+ * A match file in the shape the restores read (exportMatchData's): a backup
+ * file as it is, a whole-database export or a Match End file converted.
+ * Every picked file and both restores go through it.
+ * @param {object} jsonData a parsed backup file
+ */
+export function matchBackupFromFile(jsonData) {
+  return matchBackupFromDatabaseExport(jsonData) || matchBackupFromMatchEndExport(jsonData) || jsonData
+}
+
+/**
+ * The MatchData_*.json of the match-end ZIP (MatchEnd_beach, Approve): the
+ * backup file format (exportMatchData), so Restore match takes it back as it
+ * is, with the time it was written as exportedAt too.
+ * @param {{ match: object, team1?: object, team2?: object, team1Players?: object[], team2Players?: object[], sets?: object[], events?: object[] }} data
+ * @param {Date} [now]
+ */
+export function matchEndExportData({ match, team1, team2, team1Players, team2Players, sets, events }, now = new Date()) {
+  const at = now.toISOString()
+  return {
+    version: 1,
+    lastUpdated: at,
+    match,
+    team1: team1 || null,
+    team2: team2 || null,
+    team1Players: team1Players || [],
+    team2Players: team2Players || [],
+    sets: sets || [],
+    events: events || [],
+    exportedAt: at
+  }
+}
+
+/**
  * Restore match from JSON backup data
  * REPLACE: removes this match's local copy (other local matches are kept),
  * restores it from the backup and queues the Supabase restore.
  */
 export async function restoreMatchFromJson(jsonData) {
-  // A whole-database export holds the match it was written for
-  jsonData = matchBackupFromDatabaseExport(jsonData) || jsonData
+  // A whole-database export holds the match it was written for, a Match End
+  // file the match in its own shape
+  jsonData = matchBackupFromFile(jsonData)
   // Validate schema
   if (!jsonData?.version || !jsonData.match) {
     throw new Error('Invalid backup file format')
@@ -682,7 +747,7 @@ export function restoredTossChoices(coinToss = {}, events = []) {
  * IMPORTANT: Queues sync job to update match_live_state in Supabase
  */
 export async function restoreMatchInPlace(matchId, jsonData) {
-  jsonData = matchBackupFromDatabaseExport(jsonData) || jsonData
+  jsonData = matchBackupFromFile(jsonData)
   if (!jsonData?.version || !jsonData.match) {
     throw new Error('Invalid backup file format')
   }
