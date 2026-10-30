@@ -126,6 +126,33 @@ describe('useAutoBackup in the desktop app', () => {
     unmount()
   })
 
+  // OpenVolley 2026-10-29: the desktop app reopened its copy of match
+  // 406970, which a phone had continued and closed a week before, and wrote
+  // a fresh backup file of it at open
+  it('writes no backup of a copy another device went on with, and keeps backing up one approved here', async () => {
+    const { default: useAutoBackup } = await import('../../hooks_beach/useAutoBackup_beach')
+    const moved = { code: 'OV_SCORER_MOVED', scorer: { platform: 'android' }, at: 1 }
+    const before = writes.length
+
+    state.match = { id: 7, gameN: 321, seed_key: 'seedabc', status: 'live', cloudBlock: moved }
+    const stale = renderHook(() => useAutoBackup(7))
+    await new Promise(r => setTimeout(r, 300)) // opened
+    act(() => fakeDb.write('matches', 'updating', { remarks: 'late' }, 7, state.match))
+    // closed on the device that took it over (markScorerMoved: 'final')
+    state.match = { ...state.match, cloudBlock: { ...moved, closed: true }, status: 'final' }
+    act(() => fakeDb.write('matches', 'updating', { status: 'final' }, 7, state.match))
+    await new Promise(r => setTimeout(r, 300))
+    expect(writes).toHaveLength(before)
+    stale.unmount()
+
+    // approved here; another device's note afterwards changes nothing
+    state.match = { id: 7, gameN: 321, seed_key: 'seedabc', status: 'ended', approved: true, cloudBlock: moved }
+    const approved = renderHook(() => useAutoBackup(7))
+    await waitFor(() => expect(writes).toHaveLength(before + 1))
+    expect(JSON.parse(writes.at(-1).contents).match).toMatchObject({ status: 'ended', approved: true })
+    approved.unmount()
+  })
+
   it('opens the backup folder through the backup_open_dir command', async () => {
     const { default: useAutoBackup } = await import('../../hooks_beach/useAutoBackup_beach')
     const { result } = renderHook(() => useAutoBackup(null))

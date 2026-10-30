@@ -9,6 +9,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { detectBackupPlatform, isNativeBackupPlatform, createPlatformStore } from './platform_beach'
 import { createNativeBackupEngine } from './engine_beach'
+import { isContinuedElsewhere } from '../matchReopen_beach'
 
 export { detectBackupPlatform, isNativeBackupPlatform } from './platform_beach'
 export { subscribeMatchWrites } from './matchWriteHook_beach'
@@ -26,7 +27,9 @@ export function getNativeBackupEngine() {
         createPlatformStore(),
         import('../backupManager_beach')
       ])
-      engine = createNativeBackupEngine({ store, exportMatch: exportMatchData })
+      // No new file of a copy another device went on with: its state is older
+      // than the match's (OpenVolley 2026-10-29, match 406970)
+      engine = createNativeBackupEngine({ store, exportMatch: exportMatchData, skipMatch: isContinuedElsewhere })
       engine.subscribe(emit)
       emit()
       return engine

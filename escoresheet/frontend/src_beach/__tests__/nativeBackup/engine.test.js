@@ -165,6 +165,39 @@ describe('native backup engine', () => {
     expect(engine.getStatus().error).toBe('Match not found')
   })
 
+  // OpenVolley 2026-10-29: a stale copy of match 406970 (continued and
+  // closed on a phone) got a fresh backup file at open on the desktop app
+  it('writes no file of a match skipMatch names, read from the state it would write', async () => {
+    const skipMatch = vi.fn((match) => match.cloudBlock?.code === 'OV_SCORER_MOVED')
+    const { engine, store, m, tick } = setup({ engine: { skipMatch } })
+    m.point('team1')
+    engine.notify(1)
+    await engine.flush()
+    expect(eventFiles(store)).toHaveLength(1)
+    // another device took the match over: that write and the next ones make no file
+    m.state.match.cloudBlock = { code: 'OV_SCORER_MOVED' }
+    tick()
+    engine.notify(1)
+    await engine.flush()
+    m.point('team2')
+    tick()
+    engine.notify(1)
+    await engine.flush()
+    expect(eventFiles(store)).toHaveLength(1)
+    expect(skipMatch).toHaveBeenLastCalledWith(expect.objectContaining({ cloudBlock: { code: 'OV_SCORER_MOVED' } }))
+    expect(engine.getStatus()).toMatchObject({ count: 1, error: null }) // skipped, not failed
+    // the scorer's own "Back up now" still writes it
+    await engine.backupNow(1)
+    expect(eventFiles(store)).toHaveLength(2)
+    // taken back here ("Take back scoring here"): backed up again
+    delete m.state.match.cloudBlock
+    m.point('team1')
+    tick()
+    engine.notify(1)
+    await engine.flush()
+    expect(eventFiles(store)).toHaveLength(3)
+  })
+
   it('caps each match at maxPerMatch event files, oldest deleted first', async () => {
     const { engine, store, m, tick } = setup({ maxPerMatch: 3 })
     for (let i = 0; i < 5; i++) {
