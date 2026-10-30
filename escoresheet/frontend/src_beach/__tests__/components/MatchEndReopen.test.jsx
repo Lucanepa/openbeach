@@ -100,4 +100,18 @@ describe('MatchEnd_beach: Reopen match on a match the server has closed', () => 
     await waitFor(async () => expect((await db.matches.get(matchId)).status).toBe('ended'))
     expect(server.reopen).not.toHaveBeenCalled()
   })
+
+  // OpenVolley 4032fc8b: the writes the server refused as closed were set
+  // aside (useSyncQueue_beach); the server open again, they go out again
+  it('open on the server: the writes set aside as closed are queued again, the closed block goes; a closing write stays aside', async () => {
+    server.row = { id: 'uuid-1', status: 'ended', closed_at: null }
+    await seed({ cloudBlock: { code: 'OV_MATCH_CLOSED', claim: null, at: 1 } })
+    const ev = await db.sync_queue.add({ resource: 'event', action: 'insert', status: 'superseded', superseded_by: 'server-closed', ts: new Date().toISOString(), payload: { external_id: 'seed-1:e:7', match_id: 'seed-1' } })
+    const approval = await db.sync_queue.add({ resource: 'match', action: 'update', status: 'superseded', superseded_by: 'server-closed', ts: new Date().toISOString(), payload: { id: 'seed-1', status: 'approved' } })
+    renderMatchEnd()
+    await clickEl(await screen.findByRole('button', { name: 'Reopen match' }))
+    await waitFor(async () => expect((await db.sync_queue.get(ev)).status).toBe('queued'))
+    expect(await db.sync_queue.get(approval)).toMatchObject({ status: 'superseded', superseded_by: 'server-closed' })
+    expect(await db.matches.get(matchId)).toMatchObject({ status: 'ended', approved: false, cloudBlock: null })
+  })
 })

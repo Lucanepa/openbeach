@@ -3232,5 +3232,8 @@
       "desktop": "application de bureau",
       "web": "navigateur"
     }
+  },
+  "cloudBlock": {
+    "restoreRefused": "Ce match est clôturé sur le serveur : cette sauvegarde ne peut plus être restaurée. Charge la version officielle avec le numéro et le PIN du match."
   }
 }

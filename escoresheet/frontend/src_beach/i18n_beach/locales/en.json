@@ -3232,5 +3232,8 @@
       "desktop": "desktop app",
       "web": "browser"
     }
+  },
+  "cloudBlock": {
+    "restoreRefused": "This match is closed on the server, so this backup cannot be restored. Load the official version with the game number and game PIN."
   }
 }

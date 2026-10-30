@@ -3232,5 +3232,8 @@
       "desktop": "app desktop",
       "web": "browser"
     }
+  },
+  "cloudBlock": {
+    "restoreRefused": "Questa partita è chiusa sul server: questo backup non può più essere ripristinato. Carica la versione ufficiale con il numero e il PIN della partita."
   }
 }

@@ -14,6 +14,18 @@
  * set aside (never sent over the other device's score); taking it back loads
  * the cloud copy first.
  *
+ * Closed on the server. Once the server has closed a match (approved /
+ * final, db/007) it refuses every write of its score with 409
+ * OV_MATCH_CLOSED. The first refusal sets aside every unsent write of the
+ * match (status 'superseded', superseded_by 'server-closed'): no lasting
+ * "Refused by the server" that holds back every newer write of the match,
+ * and the local sets and events stay. They are sent again only once the
+ * server has the match open again (Match End's Reopen match finds it open,
+ * or an admin reopens it). Devices stuck before this version are cleared at
+ * app start, offline too (setAsideClosedCopies). (OpenVolley 4032fc8b,
+ * 2026-10-23, match 406970: a phone's live copy of the closed match kept its
+ * refused restore 'failed' for days.)
+ *
  * Ported from OpenVolley escoresheet/frontend/src/utils/matchHandover.js
  * (2026-10-20, game 406970: started on the PC, finished on a phone), without
  * its retirement of a local copy the server refused with OV_GAME_TAKEN: beach
@@ -26,6 +38,11 @@ export const SCORER_MOVED = 'OV_SCORER_MOVED'
 export const SCORER_CLAIM_ACTION = 'scorer'
 // superseded_by of the jobs a device set aside when another one took the match over
 export const SCORER_MOVED_BY = 'scorer-moved'
+export const MATCH_CLOSED = 'OV_MATCH_CLOSED'
+// superseded_by of the jobs set aside because the server has closed their match
+export const SERVER_CLOSED_BY = 'server-closed'
+// The states of a match the server has closed (db/007)
+const CLOSING_STATUSES = ['approved', 'final']
 // Jobs not sent yet (a retry would send them)
 const OPEN_JOB = ['queued', 'error', 'failed']
 
@@ -82,6 +99,86 @@ export async function setAsideMovedJobs(database, seedKey) {
   const jobs = await database.sync_queue.where('status').anyOf(OPEN_JOB).toArray()
   const ids = jobs.filter(j => SCORING_RESOURCES.includes(j.resource) && jobMatchKey(j) === seedKey).map(j => j.id)
   for (const id of ids) await database.sync_queue.update(id, { status: 'superseded', superseded_by: SCORER_MOVED_BY })
+  return ids.length
+}
+
+// A write that closes its match (approved / final): matchReopen_beach
+// isClosingSyncJob, kept here (that module imports this one)
+const isClosingWrite = (j) => j?.resource === 'match' &&
+  CLOSING_STATUSES.includes(j.action === 'restore' ? j.payload?.match?.status : j.payload?.status)
+// The writes set aside when the server has closed their match. Never a claim
+// (a closed match answers it as done, and hasUnsentClaim reads it) and never
+// a delete (a match delete answered "closed" is done: the local copy is gone).
+const isClosedWrite = (j) => SCORING_RESOURCES.includes(j.resource) && j.action !== SCORER_CLAIM_ACTION && j.action !== 'delete'
+
+/**
+ * The server has closed `seedKey` (409 OV_MATCH_CLOSED): its unsent writes,
+ * restores and writes of a local copy that is gone included, are set aside
+ * (status 'superseded', superseded_by 'server-closed'). The server would
+ * refuse each of them, and one kept as 'failed' is a lasting "Refused by the
+ * server" that holds back every newer write of the match. The local sets and
+ * events stay; requeueClosedJobs sends the writes again once the server has
+ * the match open. A write in flight is left to its sender. A closing write
+ * (approved / final) is not set aside: the server still takes approved ->
+ * final on a closed match (db/007), and Close match queues 'final' after
+ * deleting the local copy, so an older write of the match refused later
+ * must not take it along. (OpenVolley setAsideClosedJobs.)
+ * @returns {Promise<number>} jobs set aside
+ */
+export async function setAsideClosedJobs(database, seedKey) {
+  if (!seedKey || !database?.sync_queue) return 0
+  const jobs = await database.sync_queue.where('status').anyOf(OPEN_JOB).toArray()
+  const ids = jobs.filter(j => isClosedWrite(j) && !isClosingWrite(j) && jobMatchKey(j) === seedKey).map(j => j.id)
+  for (const id of ids) await database.sync_queue.update(id, { status: 'superseded', superseded_by: SERVER_CLOSED_BY })
+  return ids.length
+}
+
+/**
+ * Once per app start, offline too: the unsent writes of every local match the
+ * server refused as closed are set aside, and so is every write an older
+ * version parked as 'failed' with OV_MATCH_CLOSED. The parked write alone,
+ * not its match's others: a match without the block may have been reopened
+ * since. (OpenVolley setAsideClosedCopies.)
+ * @returns {Promise<number>} jobs set aside
+ */
+export async function setAsideClosedCopies(database) {
+  if (!database?.sync_queue || !database?.matches) return 0
+  let n = 0
+  const blocked = (await database.matches.toArray()).filter(m => m.test !== true && !!m.seed_key && m.cloudBlock?.code === MATCH_CLOSED)
+  for (const m of blocked) n += await setAsideClosedJobs(database, m.seed_key)
+  const parked = await database.sync_queue.where('status').equals('failed').toArray()
+  for (const j of parked) {
+    if (!isClosedWrite(j) || j.last_error?.code !== MATCH_CLOSED) continue
+    await database.sync_queue.update(j.id, { status: 'superseded', superseded_by: SERVER_CLOSED_BY })
+    n++
+  }
+  return n
+}
+
+// A write set aside as closed: with the match's others ('superseded'), or the
+// refused write itself, which the queue stores as 'dropped' (the mark stays)
+const SET_ASIDE = ['superseded', 'dropped']
+const jobTime = (j) => (typeof j.ts === 'number' ? j.ts : Date.parse(j.ts))
+
+/**
+ * The server has `seedKey` open again (an admin reopened it): the writes set
+ * aside as closed are queued again, in place (same ids, so the same order).
+ * Callers use it only when the server is known to have the match open. Two
+ * kinds stay aside: a closing write (approved / final), which would close the
+ * match the scorer has just reopened, and the writes of an older local copy:
+ * a copy loaded from the cloud or restored from a backup after them
+ * (`since`: its importedAt / restoredAt) replaced the rows they describe.
+ * (OpenVolley requeueClosedJobs.)
+ * @param {{ since?: string|number|null }} [options]
+ * @returns {Promise<number>} jobs queued again
+ */
+export async function requeueClosedJobs(database, seedKey, { since = null } = {}) {
+  if (!seedKey || !database?.sync_queue) return 0
+  const from = since == null ? NaN : (typeof since === 'number' ? since : Date.parse(since))
+  const jobs = await database.sync_queue.where('status').anyOf(SET_ASIDE).toArray()
+  const ids = jobs.filter(j => j.superseded_by === SERVER_CLOSED_BY && jobMatchKey(j) === seedKey && !isClosingWrite(j) &&
+    (!Number.isFinite(from) || jobTime(j) >= from)).map(j => j.id)
+  for (const id of ids) await database.sync_queue.update(id, { status: 'queued', retry_count: 0, superseded_by: null })
   return ids.length
 }
 
@@ -172,18 +269,17 @@ export async function closeMovedMatches(database, { check }) {
   return n
 }
 
-// The states of a match the server has closed (db/007)
-const CLOSING_STATUSES = ['approved', 'final']
-
 /**
  * Is the local match known to be closed on the server? It carries the
- * server's closed_at, it was closed on the device that took it over
+ * server's closed_at, the server refused a write of it as closed (cloudBlock
+ * OV_MATCH_CLOSED), it was closed on the device that took it over
  * (OV_SCORER_MOVED, closed), or its local status is approved / final. Never
  * a test match. (OpenVolley utils/matchReopen isKnownClosedOnServer.)
  */
 export function isKnownClosedOnServer(match) {
   if (!match || match.test === true) return false
   if (match.closed_at) return true
+  if (match.cloudBlock?.code === MATCH_CLOSED) return true
   if (isScorerMoved(match) && match.cloudBlock?.closed === true) return true
   return CLOSING_STATUSES.includes(match.status)
 }

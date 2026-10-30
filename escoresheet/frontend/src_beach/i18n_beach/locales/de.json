@@ -3232,5 +3232,8 @@
       "desktop": "Desktop-App",
       "web": "Browser"
     }
+  },
+  "cloudBlock": {
+    "restoreRefused": "Dieses Spiel ist auf dem Server abgeschlossen, darum lässt sich dieses Backup nicht wiederherstellen. Lade die offizielle Version mit Spielnummer und Spiel-PIN."
   }
 }

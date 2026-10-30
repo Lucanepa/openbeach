@@ -39,11 +39,9 @@ export const CLOSING_STATUSES = ['approved', 'final']
  * whose match the server has closed: the server's closed_at on the row, or a
  * write the server refused as closed (cloudBlock OV_MATCH_CLOSED). Never a
  * test match; never a match another device took over (isScorerMoved).
- * Reads only local evidence. (OpenVolley utils/matchReopen
- * isStaleClosedCopy.) OpenBeach does not record a write refused as closed on
- * a live copy yet (useSyncQueue_beach sets it aside or drops it): until it
- * does, only the handover half of isContinuedElsewhere stops a copy's
- * backups.
+ * Reads only local evidence, so it holds offline too: such a copy can no
+ * longer be scored or synced (useSyncQueue_beach records the first write
+ * refused as closed). (OpenVolley utils/matchReopen isStaleClosedCopy.)
  */
 export function isStaleClosedCopy(match) {
   if (!match || match.test === true) return false

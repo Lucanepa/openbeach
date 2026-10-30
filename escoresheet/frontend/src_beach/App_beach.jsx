@@ -2843,7 +2843,11 @@ export default function App() {
                   openRestoredMatch(newMatchId, cloudData)
                 } catch (err) {
                   console.error('[Restore] Failed to restore match:', err)
-                  setRestoreError(err.message || t('restorePreview.failed', 'Could not restore the match.'))
+                  // backupManager refuses a backup of a match the server has
+                  // closed before it writes anything: say so plainly
+                  setRestoreError(err?.code === 'OV_MATCH_CLOSED'
+                    ? t('cloudBlock.restoreRefused')
+                    : (err.message || t('restorePreview.failed', 'Could not restore the match.')))
                 } finally {
                   setRestoreLoading(false)
                 }
