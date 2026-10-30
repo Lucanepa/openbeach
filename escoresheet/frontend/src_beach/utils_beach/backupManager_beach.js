@@ -371,7 +371,8 @@ export function connectionsForRestore(match) {
 
 /**
  * Restore match from JSON backup data
- * WIPE & REPLACE: Clears all local match data, restores from backup, queues Supabase sync
+ * REPLACE: removes this match's local copy (other local matches are kept),
+ * restores it from the backup and queues the Supabase restore.
  */
 export async function restoreMatchFromJson(jsonData) {
   // Validate schema
@@ -390,18 +391,32 @@ export async function restoreMatchFromJson(jsonData) {
 
   let restoredMatchId = null
 
-  // Start transaction - WIPE then RESTORE
+  // Start transaction - REPLACE this match only
   await db.transaction('rw', db.matches, db.teams, db.players, db.sets, db.events, db.sync_queue, async () => {
+    // STEP A: remove THIS match's local copy (by seed_key) with its sets,
+    // events, teams and players. Other local matches (and a team row one of
+    // them still uses), referees and scorers are kept: the restore cleared
+    // every match, set and event on the device, so restoring one match lost
+    // the others (as OpenVolley b3227e75, 92a288da).
+    const previous = externalId ? await db.matches.filter(m => localMatchKey(m) === externalId).toArray() : []
     // An app backup file has no PINs: keep those of the local copy it
-    // replaces (read before the wipe), or make new ones
-    const previous = externalId ? await db.matches.filter(m => localMatchKey(m) === externalId).first() : null
-    match = { ...match, ...pinsForRestore(jsonData, previous || null), ...connectionsForRestore(match) }
-
-    // STEP A: WIPE ALL existing match data from IndexedDB
-    // (Keep teams/players/referees/scorers as they're reusable)
-    await db.events.clear()
-    await db.sets.clear()
-    await db.matches.clear()
+    // replaces (read before it goes), or make new ones
+    match = { ...match, ...pinsForRestore(jsonData, previous[0] || null), ...connectionsForRestore(match) }
+    const replacedIds = new Set(previous.map(old => old.id))
+    for (const old of previous) {
+      // replaced, not undone: the restored events are not voided (db_beach/eventHistory_beach)
+      await wipeMatchEvents(db, old.id)
+      await db.sets.where('matchId').equals(old.id).delete()
+      await db.matches.delete(old.id)
+      for (const teamId of [old.team1Id, old.team2Id]) {
+        if (teamId == null) continue
+        const usedElsewhere = await db.matches.filter(m => !replacedIds.has(m.id) && (m.team1Id === teamId || m.team2Id === teamId)).count()
+        if (usedElsewhere) continue
+        await db.players.where('teamId').equals(teamId).delete()
+        await db.teams.delete(teamId)
+      }
+    }
+    if (previous.length) console.debug(`[Restore] Replaced ${previous.length} local copy/copies of match ${externalId}`)
     // The queue keeps the unsent writes of other matches: a match closed
     // offline before (Close match deleted its local copy) has nothing else
     // left on the device. This match's jobs go (the restore job below
@@ -411,51 +426,34 @@ export async function restoreMatchFromJson(jsonData) {
     const keepJob = (j) => j.resource === 'activity' || (!!jobMatchKey(j) && jobMatchKey(j) !== externalId)
     await db.sync_queue.bulkDelete(queuedJobs.filter(j => !keepJob(j)).map(j => j.id))
 
-    // STEP B: Create teams (reuse existing or create new)
+    // STEP B: the restored match's own team rows, always new. A team found
+    // by name could be another local match's (the same pair plays several
+    // matches of a tournament): the restore overwrote it and replaced its
+    // players, and both matches shared one row.
     let team1Id = null
     let team2Id = null
 
     if (team1) {
-      const existingTeam1 = await db.teams.where('name').equals(team1.name).first()
-      if (existingTeam1) {
-        team1Id = existingTeam1.id
-        await db.teams.update(team1Id, {
-          ...team1,
-          id: team1Id,
-          updatedAt: new Date().toISOString()
-        })
-      } else {
-        team1Id = await db.teams.add({
-          ...team1,
-          id: undefined,
-          createdAt: new Date().toISOString()
-        })
-      }
+      team1Id = await db.teams.add({
+        ...team1,
+        id: undefined,
+        createdAt: new Date().toISOString()
+      })
     }
 
     if (team2) {
-      const existingTeam2 = await db.teams.where('name').equals(team2.name).first()
-      if (existingTeam2) {
-        team2Id = existingTeam2.id
-        await db.teams.update(team2Id, {
-          ...team2,
-          id: team2Id,
-          updatedAt: new Date().toISOString()
-        })
-      } else {
-        team2Id = await db.teams.add({
-          ...team2,
-          id: undefined,
-          createdAt: new Date().toISOString()
-        })
-      }
+      team2Id = await db.teams.add({
+        ...team2,
+        id: undefined,
+        createdAt: new Date().toISOString()
+      })
     }
 
-    // Create match with ID=1 (always single match in session)
+    // New auto-increment id: other local matches keep theirs
     const matchId = await db.matches.add({
       ...match,
       ...restoredBlock(match),
-      id: 1, // Fixed ID for single match
+      id: undefined,
       team1Id,
       team2Id,
       seed_key: externalId, // Ensure seed_key is set for sync
@@ -464,15 +462,7 @@ export async function restoreMatchFromJson(jsonData) {
 
     restoredMatchId = matchId
 
-    // Delete existing players for these teams and recreate
-    if (team1Id) {
-      await db.players.where('teamId').equals(team1Id).delete()
-    }
-    if (team2Id) {
-      await db.players.where('teamId').equals(team2Id).delete()
-    }
-
-    // Create players
+    // Create players (the teams are new: no players to replace)
     if (team1Players?.length && team1Id) {
       for (const player of team1Players) {
         await db.players.add({
@@ -493,28 +483,13 @@ export async function restoreMatchFromJson(jsonData) {
       }
     }
 
-    // Create sets with sequential IDs
-    if (sets?.length) {
-      for (let i = 0; i < sets.length; i++) {
-        const set = sets[i]
-        await db.sets.add({
-          ...set,
-          id: i + 1, // Sequential IDs
-          matchId
-        })
-      }
+    // Create sets and events with new auto-increment ids (fixed ids would
+    // collide with other local matches' rows)
+    for (const set of sets || []) {
+      await db.sets.add({ ...set, id: undefined, matchId })
     }
-
-    // Create events with sequential IDs
-    if (events?.length) {
-      for (let i = 0; i < events.length; i++) {
-        const event = events[i]
-        await db.events.add({
-          ...event,
-          id: i + 1, // Sequential IDs
-          matchId
-        })
-      }
+    for (const event of events || []) {
+      await db.events.add({ ...event, id: undefined, matchId })
     }
 
     // STEP C: Queue Supabase 'restore' sync job (DELETE first, then UPSERT)
