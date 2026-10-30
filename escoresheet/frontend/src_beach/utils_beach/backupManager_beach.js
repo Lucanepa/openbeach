@@ -370,13 +370,45 @@ export function connectionsForRestore(match) {
 }
 
 /**
+ * The match backup inside a whole-database export: the scoreboard's set-end
+ * download (a browser's only automatic backup offline) and its other
+ * exports write every table of the device as { exportDate, matchId,
+ * matches, teams, players, sets, events, ... }, which the restore refused.
+ * The match of its `matchId` with its teams, players, sets and events, in
+ * exportMatchData's shape; null for any other file. (OpenVolley
+ * matchBackupFromDatabaseExport.)
+ * @param {object} jsonData a parsed backup file
+ */
+export function matchBackupFromDatabaseExport(jsonData) {
+  if (!jsonData || jsonData.match || !Array.isArray(jsonData.matches)) return null
+  const match = jsonData.matches.find(m => m && m.id != null && String(m.id) === String(jsonData.matchId))
+  if (!match) return null
+  const rows = (list) => (Array.isArray(list) ? list.filter(Boolean) : [])
+  const teamOf = (id) => (id != null ? rows(jsonData.teams).find(t => t.id === id) || null : null)
+  const playersOf = (id) => (id != null ? rows(jsonData.players).filter(p => p.teamId === id) : [])
+  return {
+    version: 1,
+    lastUpdated: jsonData.exportDate || null,
+    match,
+    team1: teamOf(match.team1Id),
+    team2: teamOf(match.team2Id),
+    team1Players: playersOf(match.team1Id),
+    team2Players: playersOf(match.team2Id),
+    sets: rows(jsonData.sets).filter(r => r.matchId === match.id),
+    events: rows(jsonData.events).filter(r => r.matchId === match.id)
+  }
+}
+
+/**
  * Restore match from JSON backup data
  * REPLACE: removes this match's local copy (other local matches are kept),
  * restores it from the backup and queues the Supabase restore.
  */
 export async function restoreMatchFromJson(jsonData) {
+  // A whole-database export holds the match it was written for
+  jsonData = matchBackupFromDatabaseExport(jsonData) || jsonData
   // Validate schema
-  if (!jsonData.version || !jsonData.match) {
+  if (!jsonData?.version || !jsonData.match) {
     throw new Error('Invalid backup file format')
   }
 
@@ -650,7 +682,8 @@ export function restoredTossChoices(coinToss = {}, events = []) {
  * IMPORTANT: Queues sync job to update match_live_state in Supabase
  */
 export async function restoreMatchInPlace(matchId, jsonData) {
-  if (!jsonData.version || !jsonData.match) {
+  jsonData = matchBackupFromDatabaseExport(jsonData) || jsonData
+  if (!jsonData?.version || !jsonData.match) {
     throw new Error('Invalid backup file format')
   }
 
