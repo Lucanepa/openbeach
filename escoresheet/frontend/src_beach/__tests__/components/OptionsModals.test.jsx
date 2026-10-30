@@ -121,6 +121,29 @@ describe('Home → Options', () => {
   })
 })
 
+// A browser without a backup folder downloads at the set end, at the match
+// end and every few minutes when the match changed (useAutoBackup_beach),
+// but the Options listed the set start and a timeout too
+describe('Home → Options → Backup in a browser without a folder', () => {
+  const backup = (over = {}) => ({
+    hasFileSystemAccess: false, autoBackupEnabled: true, backupFrequency: 5, lastBackup: null, backupError: null,
+    isBackingUp: false, toggleAutoBackup: vi.fn(), selectBackupDir: vi.fn(), clearBackupDir: vi.fn(), manualBackup: vi.fn(), ...over
+  })
+
+  it('lists when it downloads: the set end, the match end, every few minutes', () => {
+    renderHome({ backup: backup() })
+    const list = screen.getByTestId('browser-auto-download')
+    expect([...list.querySelectorAll('li')].map(li => li.textContent)).toEqual(['Set end', 'Match end', 'Every 5 min, if the match changed'])
+    expect(screen.getByText('Auto-download (when enabled):')).toBeInTheDocument()
+  })
+
+  it('with its own minutes, in the page language', async () => {
+    await i18n.changeLanguage('de')
+    renderHome({ backup: backup({ backupFrequency: 10 }) })
+    expect(within(screen.getByTestId('browser-auto-download')).getByText('Alle 10 Min., wenn sich das Spiel geändert hat')).toBeInTheDocument()
+  })
+})
+
 describe('Scoring screen → Options', () => {
   it('its toggles are named switches and its (i) are buttons', () => {
     render(

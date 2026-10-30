@@ -40,7 +40,7 @@ import { lockLandscape as lockNativeLandscape, unlockOrientation as unlockNative
 import { scorerRelay, scorerPublisher, scorerRelayUrl, readRelayBundle, relayMatchKey } from '../utils_beach/relayPublisher_beach'
 import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { useDiagCommits } from '../diagnostics_beach/commits_beach'
-import { exportMatchData } from '../utils_beach/backupManager_beach'
+import { exportMatchData, getBackupSettings, saveBackupSettings } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot, refreshIntervalSnapshots } from '../utils_beach/stateSnapshot_beach'
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
 import { swapTeamDesignation, coinTossCloud, setFirstServer, switchFirstServeUpdate, labelsInDesignation, eventTeamA } from '../utils_beach/coinToss_beach'
@@ -569,8 +569,19 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     localStorage.setItem('showNamesOnCourt', String(val))
   }
   const [expandedPlayerName, setExpandedPlayerName] = useState(null) // 'team1-12' | 'team2-5' | null - tracks which player name is expanded
-  const [autoDownloadAtSetEnd, setAutoDownloadAtSetEnd] = useState(true)
-  const [alwaysDownloadAtSetEnd, setAlwaysDownloadAtSetEnd] = useState(false)
+  // Options > "Auto-download data at set end" (on by default) and "Download
+  // even if sync succeeded" (off): kept across matches and restarts
+  // (backupManager_beach's backup settings); every new scoreboard put them back
+  const [autoDownloadAtSetEnd, setAutoDownloadAtSetEndState] = useState(() => getBackupSettings().autoDownloadAtSetEnd)
+  const setAutoDownloadAtSetEnd = (val) => {
+    setAutoDownloadAtSetEndState(val)
+    saveBackupSettings({ autoDownloadAtSetEnd: val })
+  }
+  const [alwaysDownloadAtSetEnd, setAlwaysDownloadAtSetEndState] = useState(() => getBackupSettings().alwaysDownloadAtSetEnd)
+  const setAlwaysDownloadAtSetEnd = (val) => {
+    setAlwaysDownloadAtSetEndState(val)
+    saveBackupSettings({ alwaysDownloadAtSetEnd: val })
+  }
   const [viewportWidth, setViewportWidth] = useState(() => typeof window !== 'undefined' ? window.innerWidth : 1366)
   const [viewportHeight, setViewportHeight] = useState(() => typeof window !== 'undefined' ? window.innerHeight : 768)
   // Compact mode: landscape (width >= height) = width <= 960 OR height < 768

@@ -352,11 +352,15 @@ export default function HomeOptionsModal({
                   <strong className="font-semibold">{t('options.limitedBrowserSupport')}</strong>{' '}
                   {t('options.limitedBrowserSupportDesc')}
                 </div>
-                <div className="text-xs text-stone-500">{t('options.eventBasedAutoDownload')}</div>
-                <ul className="grid grid-cols-2 gap-1 text-xs text-stone-700">
-                  {['setStart', 'setEnd', 'matchEnd', 'timeoutCalled'].map(k => (
+                <div className="text-xs text-stone-500">{t('options.autoDownloadWhen')}</div>
+                {/* What useAutoBackup_beach downloads here: at the set end and the
+                    match end (BROWSER_DOWNLOAD_EVENTS), and every few minutes
+                    when the match changed. Never at a set start or a timeout. */}
+                <ul className="grid grid-cols-2 gap-1 text-xs text-stone-700" data-testid="browser-auto-download">
+                  {['setEnd', 'matchEnd'].map(k => (
                     <li key={k} className="flex items-center gap-1.5"><Check size={13} className="text-emerald-600" aria-hidden="true" />{t(`options.${k}`)}</li>
                   ))}
+                  <li className="col-span-2 flex items-center gap-1.5"><Check size={13} className="text-emerald-600" aria-hidden="true" />{t('options.autoDownloadEveryMinutes', { minutes: backup.backupFrequency })}</li>
                 </ul>
                 <div className="text-[11px] text-stone-400">{t('options.eventBasedNote')}</div>
               </div>
