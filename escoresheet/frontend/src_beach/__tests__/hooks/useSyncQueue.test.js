@@ -167,6 +167,8 @@ import {
   probeErrorStatus,
   STOP_PASS,
   checkScorerMoved,
+  askScoringDevice,
+  noteMatchClosedOnServer,
   matchEndUpdateNeeded,
   SCORER_MOVED_EVENT,
   setPageLoadedAtForTests,
@@ -1874,6 +1876,37 @@ describe('a match closed on the server', () => {
     await runQueuePass()
     expect(fakeDb.matches.map.get(1).cloudBlock).toBeUndefined()
     expect(fakeDb.sync_queue.map.get(1).status).toBe('failed')
+  })
+
+  // the self-check on open read the server's row (utils_beach/deviceSelfCheck_beach)
+  it('noteMatchClosedOnServer marks the copy exactly as a refused write does; a moved copy stays moved, final', async () => {
+    fakeDb.sync_queue.reset([eventInsert(1), setUpdate(2)])
+    expect(await noteMatchClosedOnServer(1)).toBe(true)
+    expect(fakeDb.matches.map.get(1)).toMatchObject({ status: 'live', cloudBlock: { code: 'OV_MATCH_CLOSED' } })
+    for (const id of [1, 2]) expect(fakeDb.sync_queue.map.get(id)).toMatchObject({ status: 'superseded', superseded_by: 'server-closed' })
+    expect(api.calls).toEqual([])
+
+    fakeDb.matches.reset([{ id: 1, seed_key: SEED, status: 'live', cloudBlock: { code: 'OV_SCORER_MOVED', scorer: { platform: 'android' }, at: 3 } }])
+    expect(await noteMatchClosedOnServer(1)).toBe(true)
+    expect(fakeDb.matches.map.get(1)).toMatchObject({ status: 'final', cloudBlock: { code: 'OV_SCORER_MOVED', closed: true } })
+
+    fakeDb.matches.reset([{ id: 1, seed_key: SEED, status: 'live', test: true }])
+    expect(await noteMatchClosedOnServer(1)).toBe(false)
+    expect(await noteMatchClosedOnServer(99)).toBe(false)
+  })
+
+  it('askScoringDevice: "here" when the server says this device (or none) scores it, "moved" and marked when another does, null without an answer', async () => {
+    api.respond = (call) => (call.table === '__scorer' ? ok({ mine: true }) : defaultRespond(call))
+    expect(await askScoringDevice(SEED)).toBe('here')
+    api.respond = (call) => (call.table === '__scorer' ? ok({ mine: null }) : defaultRespond(call))
+    expect(await askScoringDevice(SEED)).toBe('here')
+    api.respond = (call) => (call.table === '__scorer' ? { data: null, error: { network: true, status: 0 } } : defaultRespond(call))
+    expect(await askScoringDevice(SEED)).toBeNull()
+    expect(fakeDb.matches.map.get(1).cloudBlock).toBeUndefined()
+    api.respond = (call) => (call.table === '__scorer' ? ok({ mine: false, scorer: { platform: 'android', at: 'T' } }) : defaultRespond(call))
+    expect(await askScoringDevice(SEED)).toBe('moved')
+    expect(fakeDb.matches.map.get(1).cloudBlock).toMatchObject({ code: 'OV_SCORER_MOVED' })
+    expect(api.calls.filter(c => c.table === '__scorer').every(c => c.action === 'status')).toBe(true)
   })
 
   describe('at app start (devices stuck before this version)', () => {

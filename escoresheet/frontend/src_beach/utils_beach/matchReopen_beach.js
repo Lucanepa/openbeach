@@ -41,7 +41,9 @@ export const CLOSING_STATUSES = ['approved', 'final']
  * test match; never a match another device took over (isScorerMoved).
  * Reads only local evidence, so it holds offline too: such a copy can no
  * longer be scored or synced (useSyncQueue_beach records the first write
- * refused as closed). (OpenVolley utils/matchReopen isStaleClosedCopy.)
+ * refused as closed, the self-check the server's row). It is never resumed
+ * on its own and opens read-only (ClosedOnServerModal_beach). (OpenVolley
+ * utils/matchReopen isStaleClosedCopy.)
  */
 export function isStaleClosedCopy(match) {
   if (!match || match.test === true) return false
@@ -66,6 +68,21 @@ export function isContinuedElsewhere(match) {
   if (!match || match.test === true) return false
   if (match.approved === true || match.status === 'ended') return false
   return isScorerMoved(match) || isStaleClosedCopy(match)
+}
+
+/**
+ * Does the server's row of a match (`matches`: id, status, closed_at) say it
+ * is closed? closed_at decides when the row carries it: the backend refuses
+ * every write of a match with closed_at set (db/007), and an admin's reopen
+ * clears it. A row without the column (another account's match: the public
+ * columns only) is closed at approved / final, the states that close it.
+ * No row: nothing is closed there. (OpenVolley utils/matchReopen
+ * serverRowClosed.)
+ */
+export function serverRowClosed(row) {
+  if (!row) return false
+  if (row.closed_at) return true
+  return !('closed_at' in row) && CLOSING_STATUSES.includes(row.status)
 }
 
 /** A sync job that marks its match approved/final on the server. */
@@ -106,10 +123,7 @@ export async function planReopen({ match, queue, online, access, readServerMatch
   const row = result.data
   // Not in the cloud (or not visible to this account): nothing is closed there
   if (!row) return { kind: 'serverOpen' }
-  const closed = row.closed_at
-    ? true
-    : (!('closed_at' in row) && CLOSING_STATUSES.includes(row.status))
-  if (!closed) return { kind: 'serverOpen', row }
+  if (!serverRowClosed(row)) return { kind: 'serverOpen', row }
   // An admin, or a beach competition manager (owner, 2026-10-21; /api/me's
   // beach canManageTeams): the server reopens a beach match for both
   if (access?.isAdmin || access?.canManageTeams === true) return { kind: 'adminReopen', row }

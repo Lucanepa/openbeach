@@ -1105,7 +1105,14 @@
       "title": "Eliminare «{{name}}»?",
       "body": "Elimina tutti i set, gli eventi, i giocatori e i dati delle squadre di questa partita, su questo dispositivo e nel cloud. Non si può annullare.",
       "pinLabel": "Inserisci il PIN della partita per confermare",
-      "confirm": "Elimina"
+      "confirm": "Elimina",
+      "removeCopyOnly": "Viene eliminata solo questa copia. L'altra copia di questa partita su questo dispositivo e la partita sul server restano.",
+      "lossTitle": "Questa copia contiene ciò che il server non ha:",
+      "lossChanges_one": "{{count}} modifica non inviata",
+      "lossChanges_other": "{{count}} modifiche non inviate",
+      "lossEvents_one": "{{count}} evento non presente sul server",
+      "lossEvents_other": "{{count}} eventi non presenti sul server",
+      "lossEnd": "Eliminandola vanno persi per sempre."
     },
     "restoreModal": {
       "title": "Ripristina partita",
@@ -1121,6 +1128,26 @@
       "score": "Set {{set}} · {{team1}}:{{team2}} · set {{setsTeam1}}:{{setsTeam2}}",
       "notStarted": "Non iniziata",
       "lastSaved": "Ultimo salvataggio {{time}}"
+    },
+    "selfCheck": {
+      "closedCopy": "La partita {{game}} è chiusa sul server. La copia di questo dispositivo non è aggiornata e non è stata aperta.",
+      "duplicateCopy": "La partita {{game}} è due volte su questo dispositivo e ogni copia contiene qualcosa che manca all'altra. Rimuovi quella che non hai refertato.",
+      "removedCopy": "Una seconda copia della partita {{game}} è stata rimossa da questo dispositivo: l'altra copia contiene tutto ciò che aveva.",
+      "show": "Mostra",
+      "remove": "Rimuovi",
+      "dismiss": "Nascondi",
+      "cleanUpLine_one": "La partita {{game}} ha {{count}} copia in più su questo dispositivo, che non contiene nulla di proprio.",
+      "cleanUpLine_other": "La partita {{game}} ha {{count}} copie in più su questo dispositivo, che non contengono nulla di proprio.",
+      "cleanUp": "Riordina",
+      "cleanUpConfirm_one": "Rimuovere la copia in più della partita {{game}} da questo dispositivo? Non contiene nulla che manchi all'altra copia. Sul server non cambia nulla.",
+      "cleanUpConfirm_other": "Rimuovere le {{count}} copie in più della partita {{game}} da questo dispositivo? Non contengono nulla che manchi all'altra copia. Sul server non cambia nulla."
+    },
+    "matchState": {
+      "here": "Refertata qui",
+      "moved": "Su un altro dispositivo",
+      "closed": "Chiusa sul server",
+      "unchecked": "Non verificata",
+      "unsent": "Modifiche non inviate"
     }
   },
   "options": {
@@ -3239,6 +3266,20 @@
     }
   },
   "cloudBlock": {
-    "restoreRefused": "Questa partita è chiusa sul server: questo backup non può più essere ripristinato. Carica la versione ufficiale con il numero e il PIN della partita."
+    "restoreRefused": "Questa partita è chiusa sul server: questo backup non può più essere ripristinato. Carica la versione ufficiale con il numero e il PIN della partita.",
+    "closedCopy": {
+      "title": "Chiusa sul server",
+      "body": "Questa partita è chiusa sul server. La copia di questo dispositivo è diversa dalla versione ufficiale e non può più essere refertata né sincronizzata.",
+      "loadOfficial": "Carica la versione ufficiale",
+      "remove": "Rimuovi da questo dispositivo",
+      "usePin": "Inserisci numero e PIN della partita",
+      "errors": {
+        "offline": "Per caricare la versione ufficiale serve una connessione.",
+        "needsPin": "Il PIN su questo dispositivo non carica la versione ufficiale. Inserisci il numero e il PIN della partita.",
+        "failed": "Non è stato possibile caricare la versione ufficiale. Riprova o inserisci il numero e il PIN della partita."
+      }
+    },
+    "removeLocalOnly": "Viene eliminata solo la copia di questo dispositivo. La versione ufficiale resta sul server.",
+    "removeMovedLocalOnly": "Viene eliminata solo la copia di questo dispositivo. La partita resta sul server e sul dispositivo che la referta."
   }
 }

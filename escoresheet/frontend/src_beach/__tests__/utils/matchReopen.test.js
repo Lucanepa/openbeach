@@ -2,7 +2,7 @@
 // an admin (OpenVolley src/components/__tests__/MatchEndReopen.test.jsx,
 // ported with utils_beach/matchReopen_beach 2026-10-21).
 import { describe, it, expect, vi } from 'vitest'
-import { planReopen, isClosingSyncJob, isContinuedElsewhere, isStaleClosedCopy } from '../../utils_beach/matchReopen_beach'
+import { planReopen, isClosingSyncJob, isContinuedElsewhere, isStaleClosedCopy, serverRowClosed } from '../../utils_beach/matchReopen_beach'
 
 const SEED = 'match_100_aaa'
 const match = (over = {}) => ({ id: 1, seed_key: SEED, test: false, status: 'approved', gameN: 4711, ...over })
@@ -130,5 +130,15 @@ describe('isContinuedElsewhere', () => {
     expect(isContinuedElsewhere({ status: 'live', test: true, cloudBlock: closed })).toBe(false)
     expect(isContinuedElsewhere({ status: 'live', test: true, cloudBlock: moved })).toBe(false)
     expect(isContinuedElsewhere(null)).toBe(false)
+  })
+})
+
+describe('serverRowClosed (the self-check and the reopen read the same rule)', () => {
+  it('closed_at decides; a row without the column is closed at approved / final; no row is not closed', () => {
+    expect(serverRowClosed({ status: 'live', closed_at: '2026-10-20T18:40:00Z' })).toBe(true)
+    expect(serverRowClosed({ status: 'final', closed_at: null })).toBe(false)
+    expect(serverRowClosed({ status: 'approved' })).toBe(true)
+    expect(serverRowClosed({ status: 'ended' })).toBe(false)
+    expect(serverRowClosed(null)).toBe(false)
   })
 })

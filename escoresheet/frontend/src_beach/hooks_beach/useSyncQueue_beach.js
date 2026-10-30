@@ -785,11 +785,11 @@ async function isMovedMatch(job) {
  * closed, the local copy is final too.
  * @returns {Promise<boolean>} true when the match was marked
  */
-async function recordScorerMoved(job, error) {
-  const seedKey = jobMatchKey(job)
+async function recordScorerMoved(job, error, { local: given = null } = {}) {
+  const seedKey = given ? given.seed_key : jobMatchKey(job)
   if (!seedKey) return false
   try {
-    const local = await findLocalMatchBySeed(seedKey)
+    const local = given || await findLocalMatchBySeed(seedKey)
     if (!local) return false
     const n = await markScorerMoved(db, local, {
       scorer: error.code === SCORER_MOVED ? (error.scorer ?? null) : null,
@@ -858,6 +858,9 @@ async function recordMatchClosed(job, { local: given = null } = {}) {
   try {
     const local = given || await findLocalMatchBySeed(seedKey)
     if (local?.test === true) return false
+    // Another device took it over: the moved notice stays, closed there
+    // (final here, as a refusal of its writes marks it)
+    if (isScorerMoved(local)) return recordScorerMoved(job, { code: MATCH_CLOSED }, { local })
     if (local && local.approved !== true) {
       const prev = local.cloudBlock?.code === MATCH_CLOSED ? local.cloudBlock : null
       const mods = { cloudBlock: { code: MATCH_CLOSED, claim: null, at: prev?.at || Date.now() } }
@@ -918,6 +921,28 @@ async function clearClosedBlock(job) {
 }
 
 /**
+ * The server's own row says match `localId` is closed, and no write of it
+ * was refused: the self-check on open read it (utils_beach/deviceSelfCheck_beach).
+ * A copy that writes nothing never hears of the close otherwise (OpenVolley
+ * 2026-10-27: the owner's PC opened match 406970 live a week after a phone
+ * had closed it). Marked exactly as a write refused with 409 OV_MATCH_CLOSED
+ * marks it (recordMatchClosed): the same block, its unsent writes set aside,
+ * final when it ended here, moved and final when another device took it
+ * over. Never a test match. Never throws.
+ * @returns {Promise<boolean>} true when the copy was marked
+ */
+export async function noteMatchClosedOnServer(localId) {
+  try {
+    const local = localId == null ? null : await db.matches.get(localId)
+    if (!local?.seed_key || local.test === true) return false
+    return await recordMatchClosed(null, { local })
+  } catch (err) {
+    safeLog.warn('[SyncQueue] Could not mark a match closed on the server:', err?.message)
+    return false
+  }
+}
+
+/**
  * The relay said another device took a match over (scorer-moved, db/019):
  * when the server confirms this device no longer scores it, its local match
  * gets the OV_SCORER_MOVED block (ScorerMovedModal_beach). Never throws.
@@ -925,17 +950,49 @@ async function clearClosedBlock(job) {
  */
 export async function checkScorerMoved(seedKey) {
   try {
-    const marked = await noteScorerMoved(db, seedKey, { check: (key) => apiMatchScorer(key, { claim: false }) })
-    if (!marked) return false
-    safeLog.log('[SyncQueue] Another device scores this match now:', seedKey)
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent(SCORER_MOVED_EVENT, { detail: { seedKey } }))
-    }
-    return true
+    return (await scorerCheck(seedKey)).moved
   } catch (err) {
     safeLog.warn('[SyncQueue] Could not check the scoring device of a match:', err?.message)
     return false
   }
+}
+
+/**
+ * Which device scores `seedKey`, for the home screen's state of a copy (the
+ * self-check, utils_beach/deviceSelfCheck_beach): 'moved' when another
+ * device does (the copy is marked, as by checkScorerMoved), 'here' when the
+ * server answered that this device does or that none does, null when it was
+ * not asked or gave no answer (no connection, a claim of this device still
+ * unsent, a test or final copy). Never throws. (OpenVolley askScoringDevice.)
+ * @returns {Promise<'moved'|'here'|null>}
+ */
+export async function askScoringDevice(seedKey) {
+  try {
+    const { moved, answer } = await scorerCheck(seedKey)
+    if (moved) return 'moved'
+    return answer && !answer.error && answer.data && answer.data.mine !== false ? 'here' : null
+  } catch (err) {
+    safeLog.warn('[SyncQueue] Could not check the scoring device of a match:', err?.message)
+    return null
+  }
+}
+
+// checkScorerMoved and askScoringDevice: the server's answer, and the marking
+async function scorerCheck(seedKey) {
+  let answer = null
+  const moved = await noteScorerMoved(db, seedKey, {
+    check: async (key) => {
+      answer = await apiMatchScorer(key, { claim: false })
+      return answer
+    }
+  })
+  if (moved) {
+    safeLog.log('[SyncQueue] Another device scores this match now:', seedKey)
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(SCORER_MOVED_EVENT, { detail: { seedKey } }))
+    }
+  }
+  return { moved, answer }
 }
 
 async function processJobOnce(job) {

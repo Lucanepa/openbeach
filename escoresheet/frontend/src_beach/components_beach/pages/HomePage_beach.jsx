@@ -5,6 +5,7 @@ import { ChevronDown, LifeBuoy, Loader2, MonitorPlay, Settings } from 'lucide-re
 import SupportFeedbackModal from '../SupportFeedbackModal_beach'
 import { Button, FOCUS_RING_INSET } from '../../ui/volleyui/Button.jsx'
 import { Card } from '../../ui/volleyui/Card.jsx'
+import { StatusPill } from '../../ui/volleyui/StatusPill.jsx'
 import { cn } from '../../ui/volleyui/cn.js'
 import { BRAND } from '../../brand_beach'
 import { formatTakeOver } from '../ScorerMovedModal_beach'
@@ -32,7 +33,9 @@ export default function HomePage({
   restartTestMatch,
   onOpenSettings,
   onRestoreMatch,
-  // the match Continue resumes (App_beach): { team1, team2, score, lastSaved }
+  // what the self-check found (App_beach, SelfCheckNotice_beach)
+  selfCheckNotice = null,
+  // the match Continue resumes (App_beach): { team1, team2, score, lastSaved, state, unsent }
   continueInfo = null
 }) {
   const { t, i18n } = useTranslation()
@@ -51,6 +54,8 @@ export default function HomePage({
             draggable={false}
           />
         </div>
+
+        {selfCheckNotice}
 
         <Card className="w-full space-y-3">
           {/* New match, with its menu (pushes the stack down) */}
@@ -100,14 +105,21 @@ export default function HomePage({
           {/* Continue: the match in progress on this device, in one tap.
               Opening the app always lands here, never on a match (the owner,
               2026-10-27, as the established e-scoresheets do): the card says
-              which match, where it stands and when it was last saved, so the
-              scorer resumes the right one. */}
+              which match, where it stands, when it was last saved and what
+              the server said about it, so the scorer resumes the right one,
+              and sees a copy closed on the server or scored on another
+              device before opening it (read-only then). */}
           {hasMatch && (
             <div data-testid="continue-card" className="space-y-3 rounded-xl border border-stone-200/70 bg-stone-50/60 p-3">
               {continueInfo && (
                 <div className="px-1">
-                  <div className="min-w-0 text-base font-semibold leading-snug text-stone-900">
-                    {`${continueInfo.team1 || t('common.team1', 'Team 1')} – ${continueInfo.team2 || t('common.team2', 'Team 2')}`}
+                  <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
+                    <span className="min-w-0 text-base font-semibold leading-snug text-stone-900">
+                      {`${continueInfo.team1 || t('common.team1', 'Team 1')} – ${continueInfo.team2 || t('common.team2', 'Team 2')}`}
+                    </span>
+                    <span className="flex flex-wrap items-center gap-1">
+                      <MatchStateChips state={continueInfo.state} unsent={continueInfo.unsent} />
+                    </span>
                   </div>
                   <div className="mt-1 text-xl font-bold tabular-nums text-stone-900">{scoreText(t, continueInfo.score)}</div>
                   {continueInfo.lastSaved != null && (
@@ -205,5 +217,27 @@ export default function HomePage({
         />
       </div>
     </div>
+  )
+}
+
+// What the server said about a copy (utils_beach/deviceSelfCheck_beach
+// copyState), and whether it holds changes the server does not have yet
+const MATCH_STATE_TONE = { here: 'done', moved: 'attention', closed: 'brand', unchecked: 'neutral' }
+
+function MatchStateChips({ state, unsent = 0 }) {
+  const { t } = useTranslation()
+  return (
+    <>
+      {state && (
+        <span data-testid="match-state" className="inline-flex">
+          <StatusPill tone={MATCH_STATE_TONE[state] || 'neutral'}>{t(`home.matchState.${state}`)}</StatusPill>
+        </span>
+      )}
+      {unsent > 0 && (
+        <span data-testid="match-state" className="inline-flex">
+          <StatusPill tone="todo">{t('home.matchState.unsent')}</StatusPill>
+        </span>
+      )}
+    </>
   )
 }

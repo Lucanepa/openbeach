@@ -1105,7 +1105,14 @@
       "title": "Delete «{{name}}»?",
       "body": "This deletes all sets, events, players and team data of this match, on this device and in the cloud. It cannot be undone.",
       "pinLabel": "Enter the game PIN to confirm",
-      "confirm": "Delete"
+      "confirm": "Delete",
+      "removeCopyOnly": "Only this copy is deleted. The other copy of this match on this device, and the match on the server, stay.",
+      "lossTitle": "This copy holds what the server does not have:",
+      "lossChanges_one": "{{count}} change not sent",
+      "lossChanges_other": "{{count}} changes not sent",
+      "lossEvents_one": "{{count}} event not on the server",
+      "lossEvents_other": "{{count}} events not on the server",
+      "lossEnd": "Deleting it loses them for good."
     },
     "restoreModal": {
       "title": "Restore match",
@@ -1121,6 +1128,26 @@
       "score": "Set {{set}} · {{team1}}:{{team2}} · sets {{setsTeam1}}:{{setsTeam2}}",
       "notStarted": "Not started",
       "lastSaved": "Last saved {{time}}"
+    },
+    "selfCheck": {
+      "closedCopy": "Match {{game}} is closed on the server. The copy on this device is out of date and was not opened.",
+      "duplicateCopy": "Match {{game}} is on this device twice, and each copy holds something the other lacks. Remove the one you did not score.",
+      "removedCopy": "Removed a second copy of match {{game}} from this device: the other copy holds everything it had.",
+      "show": "Show",
+      "remove": "Remove",
+      "dismiss": "Dismiss",
+      "cleanUpLine_one": "Match {{game}} has {{count}} extra copy on this device that holds nothing of its own.",
+      "cleanUpLine_other": "Match {{game}} has {{count}} extra copies on this device that hold nothing of their own.",
+      "cleanUp": "Clean up",
+      "cleanUpConfirm_one": "Remove the extra copy of match {{game}} from this device? It holds nothing the other copy lacks. Nothing changes on the server.",
+      "cleanUpConfirm_other": "Remove the {{count}} extra copies of match {{game}} from this device? They hold nothing the other copy lacks. Nothing changes on the server."
+    },
+    "matchState": {
+      "here": "Scoring here",
+      "moved": "On another device",
+      "closed": "Closed on the server",
+      "unchecked": "Not checked",
+      "unsent": "Unsent changes"
     }
   },
   "options": {
@@ -3239,6 +3266,20 @@
     }
   },
   "cloudBlock": {
-    "restoreRefused": "This match is closed on the server, so this backup cannot be restored. Load the official version with the game number and game PIN."
+    "restoreRefused": "This match is closed on the server, so this backup cannot be restored. Load the official version with the game number and game PIN.",
+    "closedCopy": {
+      "title": "Closed on the server",
+      "body": "This match is closed on the server. The copy on this device differs from the official version and can no longer be scored or synced.",
+      "loadOfficial": "Load the official version",
+      "remove": "Remove from this device",
+      "usePin": "Enter match number and PIN",
+      "errors": {
+        "offline": "Loading the official version needs a connection.",
+        "needsPin": "The game PIN on this device does not load the official version. Enter the match number and game PIN.",
+        "failed": "The official version could not be loaded. Try again or enter the match number and game PIN."
+      }
+    },
+    "removeLocalOnly": "Only the copy on this device is deleted. The official version stays on the server.",
+    "removeMovedLocalOnly": "Only the copy on this device is deleted. The match stays on the server and on the device that scores it."
   }
 }
