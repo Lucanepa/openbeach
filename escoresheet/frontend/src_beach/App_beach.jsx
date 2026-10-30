@@ -2507,7 +2507,9 @@ export default function App() {
         m.team2Id != null ? db.teams.get(m.team2Id) : null,
         db.sets.where('matchId').equals(m.id).toArray(),
         newestEventOf(db, m.id),
-        m.seed_key && m.test !== true ? db.sync_queue.toArray() : []
+        // only the writes unsentOfMatch counts (unsent or set aside): a long
+        // offline spell leaves thousands of sent rows, re-read at every change
+        m.seed_key && m.test !== true ? db.sync_queue.where('status').anyOf(['queued', 'sending', 'error', 'failed', 'superseded', 'dropped']).toArray() : []
       ])
       const here = new Set(serverHereKey ? serverHereKey.split(',').map(Number) : [])
       return {
