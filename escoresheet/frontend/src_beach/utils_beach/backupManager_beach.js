@@ -760,6 +760,15 @@ export async function restoreMatchInPlace(matchId, jsonData) {
     console.warn('[RestoreInPlace] No external_id found - Supabase sync will be skipped')
   }
 
+  // Refuse to overwrite the open match with another match's backup: the cloud
+  // backup folders are keyed by game number only, so a listing can hold
+  // backups of other matches that share it (as OpenVolley)
+  const currentMatch = await db.matches.get(matchId)
+  const currentKey = localMatchKey(currentMatch)
+  if (currentKey && externalId && currentKey !== externalId) {
+    throw new Error('This backup belongs to a different match')
+  }
+
   await db.transaction('rw', db.matches, db.sets, db.events, db.sync_queue, async () => {
     // Update match data (keep same ID)
     await db.matches.update(matchId, {
@@ -767,6 +776,12 @@ export async function restoreMatchInPlace(matchId, jsonData) {
       ...connectionsForRestore(match),
       ...restoredBlock(match),
       id: matchId,
+      // The backup's team ids are local ids of the device and the copy that
+      // wrote it: restoreMatchFromJson gives a restored match new team rows
+      // and removes the replaced copy's, so an older backup named deleted
+      // rows (no teams, no players). The open match keeps its own (as
+      // OpenVolley 92a288da).
+      ...(currentMatch ? { team1Id: currentMatch.team1Id, team2Id: currentMatch.team2Id } : {}),
       seed_key: externalId, // Ensure seed_key is set for sync
       restoredAt: new Date().toISOString()
     })
