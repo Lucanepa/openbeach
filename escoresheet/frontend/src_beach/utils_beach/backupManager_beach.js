@@ -17,6 +17,7 @@ import { cleanIntervalChoices } from './intervalChoice_beach'
 import { refereeConnectionDefault } from '../constants_beach/testSeeds_beach'
 import { jobMatchKey, setExtId, eventExtId, parseExtId } from './syncIds_beach'
 import { queueScorerClaim, isScorerMoved } from './matchHandover_beach'
+import { CLOSING_STATUSES } from './matchReopen_beach'
 import { postMatchSignaturesFromServer } from './signatures_beach'
 import { listMatchBackups } from './logger_beach'
 
@@ -463,6 +464,14 @@ export function matchEndExportData({ match, team1, team2, team1Players, team2Pla
   }
 }
 
+// A backup of an approved or final match: once the match is closed on the
+// server, the server refuses every write of it (db/007, 409
+// OV_MATCH_CLOSED), a restore job on every retry. Such a file is restored on
+// the device only, until the restore asks the server whether the match is
+// closed there. (An approval here keeps the status 'ended' and sets
+// approved; approved / final come from the server.)
+const isClosedBackup = (match) => match?.approved === true || CLOSING_STATUSES.includes(match?.status)
+
 // Ids given out above the highest one a backup carries: the device that
 // wrote it may have used (and undone) more after it wrote the file
 const RESTORE_ID_MARGIN = 1000
@@ -624,8 +633,11 @@ export async function restoreMatchFromJson(jsonData) {
       newEventIds.push(await db.events.add({ ...event, id: undefined, matchId }))
     }
 
-    // STEP C: Queue Supabase 'restore' sync job (DELETE first, then UPSERT)
-    if (externalId) {
+    // STEP C: Queue Supabase 'restore' sync job (DELETE first, then UPSERT);
+    // none for an approved or final match (isClosedBackup)
+    if (externalId && isClosedBackup(match)) {
+      console.warn(`[Restore] ${externalId} is approved or final: restored on this device only, no restore job`)
+    } else if (externalId) {
 
       // Build match payload for Supabase (convert local field names to Supabase column names)
       const matchPayload = {
@@ -835,8 +847,11 @@ export async function restoreMatchInPlace(matchId, jsonData) {
       newEventIds.push(await db.events.add({ ...event, id: undefined, matchId }))
     }
 
-    // Queue Supabase 'restore' sync job (same as restoreMatchFromJson)
-    if (externalId) {
+    // Queue Supabase 'restore' sync job (same as restoreMatchFromJson; none
+    // for an approved or final match, isClosedBackup)
+    if (externalId && isClosedBackup(match)) {
+      console.warn(`[RestoreInPlace] ${externalId} is approved or final: restored on this device only, no restore job`)
+    } else if (externalId) {
 
       // PINs from the local match after the update above (backup fields over
       // the current ones, so the game PIN an app backup file lacks is still sent)
