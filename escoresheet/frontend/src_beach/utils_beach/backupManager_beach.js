@@ -531,20 +531,22 @@ export async function restoreMatchFromJson(jsonData) {
   let restoredMatchId = null
 
   // Start transaction - REPLACE this match only
-  await db.transaction('rw', db.matches, db.teams, db.players, db.sets, db.events, db.sync_queue, async () => {
+  await db.transaction('rw', db.matches, db.teams, db.players, db.sets, db.events, db.event_history, db.sync_queue, async () => {
     // STEP A: remove THIS match's local copy (by seed_key) with its sets,
-    // events, teams and players. Other local matches (and a team row one of
-    // them still uses), referees and scorers are kept: the restore cleared
-    // every match, set and event on the device, so restoring one match lost
-    // the others (as OpenVolley b3227e75, 92a288da).
+    // events, event history, teams and players. Other local matches (and a
+    // team row one of them still uses), referees and scorers are kept: the
+    // restore cleared every match, set and event on the device, so restoring
+    // one match lost the others (as OpenVolley b3227e75, 92a288da).
     const previous = externalId ? await db.matches.filter(m => localMatchKey(m) === externalId).toArray() : []
     // An app backup file has no PINs: keep those of the local copy it
     // replaces (read before it goes), or make new ones
     match = { ...match, ...pinsForRestore(jsonData, previous[0] || null), ...connectionsForRestore(match) }
     const replacedIds = new Set(previous.map(old => old.id))
     for (const old of previous) {
-      // replaced, not undone: the restored events are not voided (db_beach/eventHistory_beach)
-      await wipeMatchEvents(db, old.id)
+      // replaced, not undone: the restored events are not voided
+      // (db_beach/eventHistory_beach). The copy's history goes with it, as
+      // when a match is deleted: no match has its local id any more.
+      await wipeMatchEvents(db, old.id, { dropHistory: true })
       await db.sets.where('matchId').equals(old.id).delete()
       await db.matches.delete(old.id)
       for (const teamId of [old.team1Id, old.team2Id]) {
