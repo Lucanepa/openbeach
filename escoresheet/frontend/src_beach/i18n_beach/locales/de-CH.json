@@ -1274,7 +1274,7 @@
     "showNamesOnCourt": "Näme uf em Fäld aazeige",
     "showNamesOnCourtInfo": "Spielernäme unter de Fäldpositione aazeige",
     "autoDownloadAtSetEnd": "Auto-Download bi Satzendi",
-    "autoDownloadAtSetEndInfo": "Spiildate automatisch am Endi vo jedem Satz zur Sicherig abelade.",
+    "autoDownloadAtSetEndInfo": "Wenn es Satzendi nöd i d Cloud chunnt (offline, abgmäldet, fählgschlage, uf d Siite gleit, will es anders Grät s Spiil füehrt, oder nach 10 s nonig gschickt), d Spiildate als Sicherigsdatei abelade; bi some Testspiil, wo nie gschickt wird, a jedem Satzendi. Mit dere Datei holt «Spiil widerherstelle» s Spiil zrugg.",
     "alwaysDownloadAtSetEnd": "Au bi erfolgricher Sync abelade",
     "alwaysDownloadAtSetEndInfo": "Backup-Datei immer abelade, au wenn d Cloud-Sync erfolgrich gsi isch. Standardmässig wird s Backup nur abelade, wenn d Sync fählschlaat oder mer offline isch.",
     "configureKeys": "Taste konfiguriere",

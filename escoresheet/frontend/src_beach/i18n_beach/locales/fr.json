@@ -1274,7 +1274,7 @@
     "showNamesOnCourt": "Afficher les noms sur la Cour",
     "showNamesOnCourtInfo": "Afficher les noms de famille des joueurs sous les cercles de position du terrain",
     "autoDownloadAtSetEnd": "Téléchargement automatique des données à la fin du set",
-    "autoDownloadAtSetEndInfo": "Télécharger automatiquement les données du jeu lorsqu'une partie se termine pour les sauvegarder. En cas d'urgence, les données locales peuvent être utilisées pour restaurer le jeu.",
+    "autoDownloadAtSetEndInfo": "Lorsqu'une fin de set n'arrive pas dans le nuage (hors ligne, déconnecté, échec, mise de côté parce qu'un autre appareil tient le match, ou toujours pas envoyée après 10 s), télécharger les données du match dans un fichier de sauvegarde ; pour un match test, jamais envoyé, à chaque fin de set. Avec ce fichier, « Restaurer le match » récupère le match.",
     "alwaysDownloadAtSetEnd": "Télécharger même si la sync a réussi",
     "alwaysDownloadAtSetEndInfo": "Toujours télécharger le fichier de sauvegarde, même lorsque la synchronisation cloud a réussi. Par défaut, la sauvegarde n'est téléchargée que lorsque la sync échoue ou que vous êtes hors ligne.",
     "configureKeys": "Configuration des clés",

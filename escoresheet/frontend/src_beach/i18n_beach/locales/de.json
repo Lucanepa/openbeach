@@ -1274,7 +1274,7 @@
     "showNamesOnCourt": "Namen auf dem Feld anzeigen",
     "showNamesOnCourtInfo": "Spielernamen unter den Feldpositionen anzeigen",
     "autoDownloadAtSetEnd": "Auto-Download bei Satzende",
-    "autoDownloadAtSetEndInfo": "Spieldaten automatisch am Ende jedes Satzes zur Sicherung herunterladen. Bei Notfällen können die lokalen Daten zur Wiederherstellung verwendet werden.",
+    "autoDownloadAtSetEndInfo": "Wenn ein Satzende nicht in die Cloud gelangt (offline, abgemeldet, fehlgeschlagen, beiseitegelegt, weil ein anderes Gerät das Spiel führt, oder nach 10 s noch nicht gesendet), die Spieldaten als Sicherungsdatei herunterladen; bei einem Testspiel, das nie gesendet wird, an jedem Satzende. Mit dieser Datei holt «Spiel wiederherstellen» das Spiel zurück.",
     "alwaysDownloadAtSetEnd": "Auch bei erfolgreicher Sync herunterladen",
     "alwaysDownloadAtSetEndInfo": "Backup-Datei immer herunterladen, auch wenn die Cloud-Synchronisierung erfolgreich war. Standardmässig wird das Backup nur heruntergeladen, wenn die Sync fehlschlägt oder Sie offline sind.",
     "configureKeys": "Tasten konfigurieren",
