@@ -73,8 +73,8 @@ describe('restoring a match closed on the server', () => {
 
   it('the server cannot be asked: local evidence decides', async () => {
     const offline = async () => null
-    // the backup itself is approved
-    await expect(bm.restoreMatchFromJson(backup({ status: 'approved' }), { checkServer: offline }))
+    // the backup carries the block of a refused write
+    await expect(bm.restoreMatchFromJson(backup({ cloudBlock: { code: 'OV_MATCH_CLOSED', at: 1 } }), { checkServer: offline }))
       .rejects.toMatchObject({ code: 'OV_MATCH_CLOSED' })
     // the local copy it would replace was refused as closed
     const id = await db.matches.add({ seed_key: SEED, status: 'live', cloudBlock: { code: 'OV_MATCH_CLOSED', at: 1 } })
@@ -87,6 +87,16 @@ describe('restoring a match closed on the server', () => {
     const newId = await bm.restoreMatchFromJson(backup(), { checkServer: offline })
     expect(await db.matches.get(newId)).toMatchObject({ seed_key: SEED, status: 'live' })
     expect(await restoreJobs()).toHaveLength(1)
+  })
+
+  // fix/backup-basics (42b51a2): the file of an approved or final match is
+  // the closed match itself, restored on the device without a restore job
+  it('the backup of an approved or final match never asks: restored on the device, no restore job', async () => {
+    const checkServer = vi.fn(async () => true)
+    const id = await bm.restoreMatchFromJson(backup({ status: 'final' }), { checkServer })
+    expect(await db.matches.get(id)).toMatchObject({ seed_key: SEED, status: 'final' })
+    expect(checkServer).not.toHaveBeenCalled()
+    expect(await restoreJobs()).toEqual([])
   })
 
   it('a test backup never asks the server', async () => {

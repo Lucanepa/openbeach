@@ -88,6 +88,14 @@ describe('a Match End file (the MatchData JSON of the approval ZIP)', () => {
     expect(r.players).toEqual([['Müller', r.match.team1Id], ['Bianchi', r.match.team2Id]])
     expect(r.sets).toEqual(['1:21-7', '2:21-19'])
     expect(r.events).toEqual([1, 2])
+    // approved: restored on this device only, the server refuses its restore
+    expect((await db.sync_queue.toArray()).filter(j => j.action === 'restore')).toEqual([])
+  })
+
+  it('an older file of a match not approved sends the teams of its match row with the restore job', async () => {
+    const file = olderFile()
+    delete file.match.approved
+    await bm.restoreMatchFromJson(file)
     const job = (await db.sync_queue.toArray()).find(j => j.action === 'restore')
     expect(job.payload.match).toMatchObject({ external_id: SEED, team1_data: { name: 'Müller / Weber' }, team2_data: { name: 'Rossi / Bianchi' } })
     expect(job.payload.sets).toHaveLength(2)

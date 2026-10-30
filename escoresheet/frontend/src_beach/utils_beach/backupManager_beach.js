@@ -17,6 +17,7 @@ import { cleanIntervalChoices } from './intervalChoice_beach'
 import { refereeConnectionDefault } from '../constants_beach/testSeeds_beach'
 import { jobMatchKey, setExtId, eventExtId, parseExtId } from './syncIds_beach'
 import { queueScorerClaim, isScorerMoved, isKnownClosedOnServer, MATCH_CLOSED } from './matchHandover_beach'
+import { CLOSING_STATUSES } from './matchReopen_beach'
 import { postMatchSignaturesFromServer } from './signatures_beach'
 import { listMatchBackups } from './logger_beach'
 
@@ -467,7 +468,6 @@ export function matchEndExportData({ match, team1, team2, team1Players, team2Pla
 // it: the restore's Confirm must never wait long on a slow backend.
 const SERVER_CLOSED_TIMEOUT_MS = 4000
 const TIMED_OUT = Symbol('timedOut')
-const CLOSING_STATUSES = ['approved', 'final']
 
 // Public columns behind a public filter, so this also works signed out and
 // sees every match, not only this account's.
@@ -515,7 +515,8 @@ export function closedOnServerError(externalId, gameN) {
 // A backup of a match the server has closed restores a live copy whose
 // restore job the server refuses for good (409 OV_MATCH_CLOSED: OpenVolley
 // 2026-10-20, match 406970). Such a restore is refused before anything is
-// replaced. The server's answer decides; an explicit "open" (an admin
+// replaced (a backup of the closed match itself is restored on the device
+// only, isClosedBackup, and never asked about). The server's answer decides; an explicit "open" (an admin
 // reopened it) wins over stale local evidence. Only when the server cannot be
 // asked does local evidence decide: the backup row or a local copy known
 // closed there. (OpenVolley 4032fc8b.)
@@ -543,12 +544,53 @@ function withoutClosedEvidence(...rows) {
   return changes
 }
 
+// A backup of an approved or final match: once the match is closed on the
+// server, the server refuses every write of it (db/007, 409
+// OV_MATCH_CLOSED), a restore job on every retry. Such a file is restored on
+// the device only: it holds the closed match itself, which opens on Match
+// End and is never written to the server again, so the closed guard
+// (refuseIfClosedOnServer) does not ask about it. (An approval here keeps
+// the status 'ended' and sets approved; approved / final come from the
+// server.)
+const isClosedBackup = (match) => match?.approved === true || CLOSING_STATUSES.includes(match?.status)
+
+// Ids given out above the highest one a backup carries: the device that
+// wrote it may have used (and undone) more after it wrote the file
+const RESTORE_ID_MARGIN = 1000
+
+/**
+ * Make this device give out set and event ids above every id the backup of
+ * match `seedKey` carries (its rows' local ids, the cloud ids of rows
+ * imported from the cloud, an `idFloor` { set, event } like restore-by-pin's)
+ * plus RESTORE_ID_MARGIN. A restore gives the rows new local ids and its
+ * restore job keys the cloud rows by them; the server re-inserts the events
+ * and one whose external_id has a latest 'void' revision (event_revisions
+ * survives a restore) is born voided (backend db/015). A fresh device
+ * restoring another device's file gave out ids from 1: the restored
+ * ':e:20' was voided because the other device had undone its own ':e:20'.
+ * Inside the restore's transaction (sets, events), after its match row.
+ */
+async function raiseIdsAboveBackup(jsonData, seedKey, matchId) {
+  const floor = jsonData.idFloor || {}
+  const top = (rows, kind, own) => (rows || []).reduce((max, r) => Math.max(
+    max,
+    Number.isSafeInteger(r?.id) ? r.id : 0,
+    cloudLocalId(seedKey, kind, r?.externalId ?? r?.external_id) || 0
+  ), Number.isSafeInteger(Number(own)) ? Number(own) : 0)
+  // the generators' rows are added and removed again: no history
+  await withoutEventHistory(matchId, async () => {
+    await raiseIdGenerator(db.sets, top(jsonData.sets, 'set', floor.set) + RESTORE_ID_MARGIN, { matchId, index: 0 })
+    await raiseIdGenerator(db.events, top(jsonData.events, 'event', floor.event) + RESTORE_ID_MARGIN, { matchId, type: 'rally_start', setIndex: 0, seq: 0 })
+  })
+}
+
 /**
  * Restore match from JSON backup data
  * REPLACE: removes this match's local copy (other local matches are kept),
  * restores it from the backup and queues the Supabase restore.
- * Refused (err.code 'OV_MATCH_CLOSED', nothing changed) for a match closed on
- * the server; a test backup never asks.
+ * Refused (err.code 'OV_MATCH_CLOSED', nothing changed) for a backup of a
+ * match still open in it that the server has closed; a test backup, and the
+ * backup of an approved or final match, never ask.
  * @param {object} jsonData the backup
  * @param {{checkServer?: (externalId: string) => Promise<boolean|null>}} [options]
  */
@@ -564,14 +606,19 @@ export async function restoreMatchFromJson(jsonData, { checkServer = serverClose
   const { team1, team2, team1Players, team2Players, sets, events } = jsonData
   let match = jsonData.match
 
-  // Get external_id for Supabase sync (seed_key in local, external_id in backup)
-  const externalId = match.seed_key || match.seedKey || match.external_id
+  // Get external_id for Supabase sync (seed_key in local, external_id in
+  // backup; older rows seedKey / externalId): the key the copy it replaces is
+  // found by (localMatchKey). Without externalId, a backup keyed by it alone
+  // replaced nothing and was added again on every restore.
+  const externalId = localMatchKey(match)
   if (!externalId) {
     console.warn('[Restore] No external_id found - Supabase sync will be skipped')
   }
 
-  // Before anything is deleted, added or queued (test matches never sync)
-  const guarded = !!externalId && !match.test
+  // Before anything is deleted, added or queued (test matches never sync;
+  // the backup of a closed match is restored on the device only, without a
+  // restore job: isClosedBackup)
+  const guarded = !!externalId && !match.test && !isClosedBackup(match)
   if (guarded) {
     const localCopies = await db.matches.filter(m => localMatchKey(m) === externalId).toArray()
     await refuseIfClosedOnServer(externalId, match, localCopies, checkServer)
@@ -580,20 +627,22 @@ export async function restoreMatchFromJson(jsonData, { checkServer = serverClose
   let restoredMatchId = null
 
   // Start transaction - REPLACE this match only
-  await db.transaction('rw', db.matches, db.teams, db.players, db.sets, db.events, db.sync_queue, async () => {
+  await db.transaction('rw', db.matches, db.teams, db.players, db.sets, db.events, db.event_history, db.sync_queue, async () => {
     // STEP A: remove THIS match's local copy (by seed_key) with its sets,
-    // events, teams and players. Other local matches (and a team row one of
-    // them still uses), referees and scorers are kept: the restore cleared
-    // every match, set and event on the device, so restoring one match lost
-    // the others (as OpenVolley b3227e75, 92a288da).
+    // events, event history, teams and players. Other local matches (and a
+    // team row one of them still uses), referees and scorers are kept: the
+    // restore cleared every match, set and event on the device, so restoring
+    // one match lost the others (as OpenVolley b3227e75, 92a288da).
     const previous = externalId ? await db.matches.filter(m => localMatchKey(m) === externalId).toArray() : []
     // An app backup file has no PINs: keep those of the local copy it
     // replaces (read before it goes), or make new ones
     match = { ...match, ...pinsForRestore(jsonData, previous[0] || null), ...connectionsForRestore(match) }
     const replacedIds = new Set(previous.map(old => old.id))
     for (const old of previous) {
-      // replaced, not undone: the restored events are not voided (db_beach/eventHistory_beach)
-      await wipeMatchEvents(db, old.id)
+      // replaced, not undone: the restored events are not voided
+      // (db_beach/eventHistory_beach). The copy's history goes with it, as
+      // when a match is deleted: no match has its local id any more.
+      await wipeMatchEvents(db, old.id, { dropHistory: true })
       await db.sets.where('matchId').equals(old.id).delete()
       await db.matches.delete(old.id)
       for (const teamId of [old.team1Id, old.team2Id]) {
@@ -674,7 +723,9 @@ export async function restoreMatchFromJson(jsonData, { checkServer = serverClose
 
     // Create sets and events with new auto-increment ids (fixed ids would
     // collide with other local matches' rows); the cloud external_id is
-    // built from them (setsPayload / eventsPayload below).
+    // built from them (setsPayload / eventsPayload below). Above every id
+    // the backup carries: never one the server has voided.
+    if (externalId) await raiseIdsAboveBackup(jsonData, externalId, matchId)
     const newSetIds = []
     for (const set of sets || []) {
       newSetIds.push(await db.sets.add({ ...set, id: undefined, matchId }))
@@ -684,8 +735,11 @@ export async function restoreMatchFromJson(jsonData, { checkServer = serverClose
       newEventIds.push(await db.events.add({ ...event, id: undefined, matchId }))
     }
 
-    // STEP C: Queue Supabase 'restore' sync job (DELETE first, then UPSERT)
-    if (externalId) {
+    // STEP C: Queue Supabase 'restore' sync job (DELETE first, then UPSERT);
+    // none for an approved or final match (isClosedBackup)
+    if (externalId && isClosedBackup(match)) {
+      console.warn(`[Restore] ${externalId} is approved or final: restored on this device only, no restore job`)
+    } else if (externalId) {
 
       // Build match payload for Supabase (convert local field names to Supabase column names)
       const matchPayload = {
@@ -847,15 +901,24 @@ export async function restoreMatchInPlace(matchId, jsonData, { checkServer = ser
 
   const { match, team1, team2, team1Players, team2Players, sets, events } = jsonData
 
-  // Get external_id for Supabase sync
-  const externalId = match.seed_key || match.seedKey || match.external_id
+  // Get external_id for Supabase sync (the match's key, as restoreMatchFromJson)
+  const externalId = localMatchKey(match)
   if (!externalId) {
     console.warn('[RestoreInPlace] No external_id found - Supabase sync will be skipped')
   }
 
-  // Before the open match is overwritten (test matches never sync)
+  // Refuse to overwrite the open match with another match's backup: the cloud
+  // backup folders are keyed by game number only, so a listing can hold
+  // backups of other matches that share it (as OpenVolley)
   const currentMatch = await db.matches.get(matchId)
-  const guarded = !!externalId && !match.test
+  const currentKey = localMatchKey(currentMatch)
+  if (currentKey && externalId && currentKey !== externalId) {
+    throw new Error('This backup belongs to a different match')
+  }
+
+  // Before the open match is overwritten (test matches never sync; the
+  // backup of a closed match is restored on the device only, isClosedBackup)
+  const guarded = !!externalId && !match.test && !isClosedBackup(match)
   if (guarded) {
     await refuseIfClosedOnServer(externalId, match, currentMatch ? [currentMatch] : [], checkServer)
   }
@@ -869,6 +932,12 @@ export async function restoreMatchInPlace(matchId, jsonData, { checkServer = ser
       ...restoredBlock(match),
       ...(guarded ? withoutClosedEvidence(match, currentMatch) : {}),
       id: matchId,
+      // The backup's team ids are local ids of the device and the copy that
+      // wrote it: restoreMatchFromJson gives a restored match new team rows
+      // and removes the replaced copy's, so an older backup named deleted
+      // rows (no teams, no players). The open match keeps its own (as
+      // OpenVolley 92a288da).
+      ...(currentMatch ? { team1Id: currentMatch.team1Id, team2Id: currentMatch.team2Id } : {}),
       seed_key: externalId, // Ensure seed_key is set for sync
       restoredAt: new Date().toISOString()
     })
@@ -878,7 +947,9 @@ export async function restoreMatchInPlace(matchId, jsonData, { checkServer = ser
     // replaced, not undone: the restored events are not voided (db_beach/eventHistory_beach)
     await wipeMatchEvents(db, matchId)
 
-    // Recreate sets and events (new ids: the cloud external_id is built from them)
+    // Recreate sets and events (new ids: the cloud external_id is built from
+    // them), above every id the backup carries (raiseIdsAboveBackup)
+    if (externalId) await raiseIdsAboveBackup(jsonData, externalId, matchId)
     const newSetIds = []
     for (const set of sets || []) {
       newSetIds.push(await db.sets.add({ ...set, id: undefined, matchId }))
@@ -888,8 +959,11 @@ export async function restoreMatchInPlace(matchId, jsonData, { checkServer = ser
       newEventIds.push(await db.events.add({ ...event, id: undefined, matchId }))
     }
 
-    // Queue Supabase 'restore' sync job (same as restoreMatchFromJson)
-    if (externalId) {
+    // Queue Supabase 'restore' sync job (same as restoreMatchFromJson; none
+    // for an approved or final match, isClosedBackup)
+    if (externalId && isClosedBackup(match)) {
+      console.warn(`[RestoreInPlace] ${externalId} is approved or final: restored on this device only, no restore job`)
+    } else if (externalId) {
 
       // PINs from the local match after the update above (backup fields over
       // the current ones, so the game PIN an app backup file lacks is still sent)
