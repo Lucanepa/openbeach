@@ -519,8 +519,11 @@ export async function restoreMatchFromJson(jsonData) {
   const { team1, team2, team1Players, team2Players, sets, events } = jsonData
   let match = jsonData.match
 
-  // Get external_id for Supabase sync (seed_key in local, external_id in backup)
-  const externalId = match.seed_key || match.seedKey || match.external_id
+  // Get external_id for Supabase sync (seed_key in local, external_id in
+  // backup; older rows seedKey / externalId): the key the copy it replaces is
+  // found by (localMatchKey). Without externalId, a backup keyed by it alone
+  // replaced nothing and was added again on every restore.
+  const externalId = localMatchKey(match)
   if (!externalId) {
     console.warn('[Restore] No external_id found - Supabase sync will be skipped')
   }
@@ -798,8 +801,8 @@ export async function restoreMatchInPlace(matchId, jsonData) {
 
   const { match, team1, team2, team1Players, team2Players, sets, events } = jsonData
 
-  // Get external_id for Supabase sync
-  const externalId = match.seed_key || match.seedKey || match.external_id
+  // Get external_id for Supabase sync (the match's key, as restoreMatchFromJson)
+  const externalId = localMatchKey(match)
   if (!externalId) {
     console.warn('[RestoreInPlace] No external_id found - Supabase sync will be skipped')
   }
