@@ -2257,7 +2257,9 @@ export default function App() {
         const team2SetsWon = finishedSets.filter(s => s.team2Points > s.team1Points).length
         const isMatchFinished = team1SetsWon >= 2 || team2SetsWon >= 2
         // Match finished but not yet approved - go to MatchEnd, else to the scoreboard
-        const toMatchEnd = (existing.status === 'live' || existing.status === 'ended') && isMatchFinished && !existing.approved
+        // 'ended' without the sets won = forfeit or stopped match (Impossibility
+        // to resume): also Match End, as OpenVolley
+        const toMatchEnd = ((existing.status === 'live' && isMatchFinished) || existing.status === 'ended') && !existing.approved
 
         // Match End opens filled: read before the home screen goes
         if (toMatchEnd) await preloadMatchEnd(existing.id)
@@ -2412,7 +2414,11 @@ export default function App() {
         const team1SetsWon = finishedSets.filter(s => s.team1Points > s.team2Points).length
         const team2SetsWon = finishedSets.filter(s => s.team2Points > s.team1Points).length
         const isMatchFinished = team1SetsWon >= 2 || team2SetsWon >= 2
-        const toMatchEnd = (match.status === 'live' || match.status === 'ended') && isMatchFinished && !match.approved
+        // 'ended' without the sets won = forfeit or stopped match (Impossibility
+        // to resume): also Match End. An approved or final match is closed: its
+        // Match End too (Close match), not the scoring screen (as OpenVolley)
+        const closed = match.approved === true || match.status === 'approved' || match.status === 'final'
+        const toMatchEnd = (match.status === 'live' && isMatchFinished) || match.status === 'ended' || closed
 
         // Match End opens filled: read before the home screen goes
         if (toMatchEnd) await preloadMatchEnd(targetMatchId)

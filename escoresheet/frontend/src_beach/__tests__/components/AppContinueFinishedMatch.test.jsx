@@ -74,4 +74,13 @@ describe('App: Continue match on a finished best-of-3 match', () => {
     expect(states.filter(s => s.scoreboard)).toEqual([])
     expect(states.filter(s => !s.home && !s.matchEnd)).toEqual([])
   }, 30000)
+
+  // Impossibility to resume ends the match without a winner. Since the app
+  // opens on Home, Continue is the way back, and it opened the scoring screen
+  // of the stopped match: its signatures and approval out of reach
+  it('a match stopped at 1:1 (ended, no winner) opens Match End, no scoreboard first', async () => {
+    const states = await continueToMatchEnd(() => finishedMatch({ test: false, scores: [[21, 15], [18, 21]] }))
+    expect(states.at(-1)).toEqual({ home: false, scoreboard: false, matchEnd: true })
+    expect(states.filter(s => s.scoreboard)).toEqual([])
+  }, 30000)
 })
