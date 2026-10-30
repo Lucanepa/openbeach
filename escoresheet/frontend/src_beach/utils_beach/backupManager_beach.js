@@ -484,12 +484,15 @@ export async function restoreMatchFromJson(jsonData) {
     }
 
     // Create sets and events with new auto-increment ids (fixed ids would
-    // collide with other local matches' rows)
+    // collide with other local matches' rows); the cloud external_id is
+    // built from them (setsPayload / eventsPayload below).
+    const newSetIds = []
     for (const set of sets || []) {
-      await db.sets.add({ ...set, id: undefined, matchId })
+      newSetIds.push(await db.sets.add({ ...set, id: undefined, matchId }))
     }
+    const newEventIds = []
     for (const event of events || []) {
-      await db.events.add({ ...event, id: undefined, matchId })
+      newEventIds.push(await db.events.add({ ...event, id: undefined, matchId }))
     }
 
     // STEP C: Queue Supabase 'restore' sync job (DELETE first, then UPSERT)
@@ -527,8 +530,13 @@ export async function restoreMatchFromJson(jsonData) {
       }
 
       // Build sets payload (convert local to Supabase format)
-      const setsPayload = (sets || []).map(s => ({
-        external_id: s.externalId || s.external_id || `${externalId}_set_${s.index}`,
+      // external_id from the NEW local id (above): this device's later writes
+      // of the set (the set end, Manual changes) send setExtId(seed, localId),
+      // and an undo's revision eventExtId(seed, localId). The backup's own
+      // ids (`<seed>_set_<index>`, or an imported row's old externalId) left
+      // those writes matching no cloud row.
+      const setsPayload = (sets || []).map((s, i) => ({
+        external_id: setExtId(externalId, newSetIds[i]),
         index: s.index,
         team1_points: s.team1Points ?? s.team1_points ?? 0,
         team2_points: s.team2Points ?? s.team2_points ?? 0,
@@ -538,8 +546,8 @@ export async function restoreMatchFromJson(jsonData) {
       }))
 
       // Build events payload (convert local to Supabase format)
-      const eventsPayload = (events || []).map(e => ({
-        external_id: e.externalId || e.external_id || `${externalId}_event_${e.seq || e.id}`,
+      const eventsPayload = (events || []).map((e, i) => ({
+        external_id: eventExtId(externalId, newEventIds[i]),
         set_index: e.setIndex ?? e.set_index,
         type: e.type,
         payload: e.payload,
@@ -670,26 +678,14 @@ export async function restoreMatchInPlace(matchId, jsonData) {
     // replaced, not undone: the restored events are not voided (db_beach/eventHistory_beach)
     await wipeMatchEvents(db, matchId)
 
-    // Recreate sets
-    if (sets?.length) {
-      for (const set of sets) {
-        await db.sets.add({
-          ...set,
-          id: undefined,
-          matchId
-        })
-      }
+    // Recreate sets and events (new ids: the cloud external_id is built from them)
+    const newSetIds = []
+    for (const set of sets || []) {
+      newSetIds.push(await db.sets.add({ ...set, id: undefined, matchId }))
     }
-
-    // Recreate events
-    if (events?.length) {
-      for (const event of events) {
-        await db.events.add({
-          ...event,
-          id: undefined,
-          matchId
-        })
-      }
+    const newEventIds = []
+    for (const event of events || []) {
+      newEventIds.push(await db.events.add({ ...event, id: undefined, matchId }))
     }
 
     // Queue Supabase 'restore' sync job (same as restoreMatchFromJson)
@@ -730,9 +726,9 @@ export async function restoreMatchInPlace(matchId, jsonData) {
         coin_toss: coinTossForRestore(match)
       }
 
-      // Build sets payload
-      const setsPayload = (sets || []).map(s => ({
-        external_id: s.externalId || s.external_id || `${externalId}_set_${s.index}`,
+      // Build sets payload (external_id from the new local id, as restoreMatchFromJson)
+      const setsPayload = (sets || []).map((s, i) => ({
+        external_id: setExtId(externalId, newSetIds[i]),
         index: s.index,
         team1_points: s.team1Points ?? s.team1_points ?? 0,
         team2_points: s.team2Points ?? s.team2_points ?? 0,
@@ -742,8 +738,8 @@ export async function restoreMatchInPlace(matchId, jsonData) {
       }))
 
       // Build events payload
-      const eventsPayload = (events || []).map(e => ({
-        external_id: e.externalId || e.external_id || `${externalId}_event_${e.seq || e.id}`,
+      const eventsPayload = (events || []).map((e, i) => ({
+        external_id: eventExtId(externalId, newEventIds[i]),
         set_index: e.setIndex ?? e.set_index,
         type: e.type,
         payload: e.payload,
