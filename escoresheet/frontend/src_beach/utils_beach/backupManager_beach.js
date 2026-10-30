@@ -463,6 +463,36 @@ export function matchEndExportData({ match, team1, team2, team1Players, team2Pla
   }
 }
 
+// Ids given out above the highest one a backup carries: the device that
+// wrote it may have used (and undone) more after it wrote the file
+const RESTORE_ID_MARGIN = 1000
+
+/**
+ * Make this device give out set and event ids above every id the backup of
+ * match `seedKey` carries (its rows' local ids, the cloud ids of rows
+ * imported from the cloud, an `idFloor` { set, event } like restore-by-pin's)
+ * plus RESTORE_ID_MARGIN. A restore gives the rows new local ids and its
+ * restore job keys the cloud rows by them; the server re-inserts the events
+ * and one whose external_id has a latest 'void' revision (event_revisions
+ * survives a restore) is born voided (backend db/015). A fresh device
+ * restoring another device's file gave out ids from 1: the restored
+ * ':e:20' was voided because the other device had undone its own ':e:20'.
+ * Inside the restore's transaction (sets, events), after its match row.
+ */
+async function raiseIdsAboveBackup(jsonData, seedKey, matchId) {
+  const floor = jsonData.idFloor || {}
+  const top = (rows, kind, own) => (rows || []).reduce((max, r) => Math.max(
+    max,
+    Number.isSafeInteger(r?.id) ? r.id : 0,
+    cloudLocalId(seedKey, kind, r?.externalId ?? r?.external_id) || 0
+  ), Number.isSafeInteger(Number(own)) ? Number(own) : 0)
+  // the generators' rows are added and removed again: no history
+  await withoutEventHistory(matchId, async () => {
+    await raiseIdGenerator(db.sets, top(jsonData.sets, 'set', floor.set) + RESTORE_ID_MARGIN, { matchId, index: 0 })
+    await raiseIdGenerator(db.events, top(jsonData.events, 'event', floor.event) + RESTORE_ID_MARGIN, { matchId, type: 'rally_start', setIndex: 0, seq: 0 })
+  })
+}
+
 /**
  * Restore match from JSON backup data
  * REPLACE: removes this match's local copy (other local matches are kept),
@@ -582,7 +612,9 @@ export async function restoreMatchFromJson(jsonData) {
 
     // Create sets and events with new auto-increment ids (fixed ids would
     // collide with other local matches' rows); the cloud external_id is
-    // built from them (setsPayload / eventsPayload below).
+    // built from them (setsPayload / eventsPayload below). Above every id
+    // the backup carries: never one the server has voided.
+    if (externalId) await raiseIdsAboveBackup(jsonData, externalId, matchId)
     const newSetIds = []
     for (const set of sets || []) {
       newSetIds.push(await db.sets.add({ ...set, id: undefined, matchId }))
@@ -791,7 +823,9 @@ export async function restoreMatchInPlace(matchId, jsonData) {
     // replaced, not undone: the restored events are not voided (db_beach/eventHistory_beach)
     await wipeMatchEvents(db, matchId)
 
-    // Recreate sets and events (new ids: the cloud external_id is built from them)
+    // Recreate sets and events (new ids: the cloud external_id is built from
+    // them), above every id the backup carries (raiseIdsAboveBackup)
+    if (externalId) await raiseIdsAboveBackup(jsonData, externalId, matchId)
     const newSetIds = []
     for (const set of sets || []) {
       newSetIds.push(await db.sets.add({ ...set, id: undefined, matchId }))
