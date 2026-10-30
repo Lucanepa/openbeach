@@ -18,6 +18,8 @@ import StartupConnectivityModal from './components_beach/StartupConnectivityModa
 import { useSyncQueue, useSyncQueueStats, checkScorerMoved, matchEndUpdateNeeded, isClosedHere } from './hooks_beach/useSyncQueue_beach'
 import { isScorerMoved, takeBackScoring } from './utils_beach/matchHandover_beach'
 import ScorerMovedModal from './components_beach/ScorerMovedModal_beach'
+import { isStaleClosedCopy } from './utils_beach/matchReopen_beach'
+import { BACKGROUND_HOME_MS, clearOpenMatch, lastActivityAt, matchToReopen, newestEventOf, noteOpenMatch, setScore, trackBackground } from './utils_beach/deviceSelfCheck_beach'
 import SyncSignInBanner, { SYNC_BANNER_SPACE_VAR } from './components_beach/auth/SyncSignInBanner_beach'
 import useAutoBackup from './hooks_beach/useAutoBackup_beach'
 import { useDashboardServer } from './hooks_beach/useDashboardServer_beach'
@@ -366,11 +368,14 @@ export default function App() {
     }
   }, [matchId, showMatchSetup, showMatchEnd])
 
+  // Never a copy the server has closed (isStaleClosedCopy): it is not the
+  // live match, for the tray and the close / quit prompts
   const activeMatch = useLiveQuery(async () => {
     try {
       return await db.matches
         .where('status')
         .equals('live')
+        .filter(m => !isStaleClosedCopy(m))
         .first()
     } catch (error) {
       console.error('Unable to load active match', error)
@@ -787,7 +792,12 @@ export default function App() {
     return null
   }, [matchId, currentMatch, currentOfficialMatch, currentTestMatch])
 
-  const restoredRef = useRef(false)
+  // The match on the screen, for the start-up and background effects (read
+  // after awaits, so never a stale render's value)
+  const openMatchIdRef = useRef(matchId)
+  openMatchIdRef.current = matchId
+  // The start-up's one read of the reload marker (matchToReopen)
+  const startupCheckRef = useRef(null)
 
   // Preload ball and logo images when app loads
   useEffect(() => {
@@ -891,42 +901,75 @@ export default function App() {
   }, [])
 
 
+  // Start-up (utils_beach/deviceSelfCheck_beach, rules 1 and 2). Opening
+  // the app always lands on Home: the desktop or Android app started, a new
+  // tab, the reopen after a crash or a kill. It resumed the first 'live'
+  // match on the device by itself (the lowest id, closed on the server or
+  // not), an ended match on Match End and a match with a roster waiting on
+  // Match Setup; 2026-10-29 OpenVolley's desktop app froze on exactly such a
+  // stale copy reopened at start. Home's Continue card resumes the match in
+  // one tap. A reload (the sessionStorage marker of the match screen) or a
+  // tab the browser discarded goes straight back to the screen it showed,
+  // offline too: the update's reload, Clear cache and the error screen's
+  // reload rely on landing there. Never over a match opened in the meantime.
   useEffect(() => {
-    if (activeMatch) {
-      if (!restoredRef.current && !matchId) {
-        setMatchId(activeMatch.id)
-        restoredRef.current = true
+    let alive = true
+    startupCheckRef.current ??= matchToReopen(db).catch(() => null)
+    startupCheckRef.current.then(async (reopen) => {
+      if (!alive) return
+      if (!reopen) {
+        if (openMatchIdRef.current == null) clearOpenMatch()
+        return
       }
-    } else {
-      restoredRef.current = false
+      if (openMatchIdRef.current != null) return
+      // Match Setup and Match End open filled (OB-2)
+      if (reopen.view === 'matchSetup') await preloadMatchSetup(reopen.id).catch(() => {})
+      if (reopen.view === 'matchEnd') await preloadMatchEnd(reopen.id).catch(() => {})
+      if (!alive || openMatchIdRef.current != null) return
+      console.info(`[Start] Reloaded: back to match ${reopen.id} (${reopen.view})`)
+      setMatchId(reopen.id)
+      setShowMatchSetup(reopen.view === 'matchSetup')
+      setShowCoinToss(reopen.view === 'coinToss')
+      setShowMatchEnd(reopen.view === 'matchEnd')
+    }).catch((error) => console.error('[Start] Could not reopen the match:', error))
+    return () => { alive = false }
+  }, [])
+
+  // The match screen on show, for a reload (rule 2): noted whenever it
+  // changes, cleared when the scorer leaves it for Home (Home, Close match,
+  // Delete, the background rule below). Never before the start-up read it.
+  const openView = showMatchEnd || showManualAdjustments ? 'matchEnd' : showCoinToss ? 'coinToss' : showMatchSetup ? 'matchSetup' : 'scoreboard'
+  const markedOpenRef = useRef(false)
+  useEffect(() => {
+    if (matchId != null) {
+      noteOpenMatch({ id: matchId, view: openView })
+      markedOpenRef.current = true
+    } else if (markedOpenRef.current) {
+      clearOpenMatch()
+      markedOpenRef.current = false
     }
-  }, [activeMatch, matchId])
+  }, [matchId, openView])
 
-  // A finished match not approved yet (status 'ended') reopens on Match End,
-  // as a live one reopens on the scoring screen. A reload, a crash or a dead
-  // battery while the captains signed opened Home, where nothing said the
-  // match was not approved, and New match > Delete and start new threw it
-  // away with its signatures (stress test 2026-10-25). Only as the app
-  // starts: Home chosen from Match End stays Home.
-  const endedRestoreRef = useRef(false)
-  useEffect(() => {
-    if (endedRestoreRef.current || currentMatch === undefined) return
-    endedRestoreRef.current = true
-    if (matchId || currentMatch?.status !== 'ended' || currentMatch.approved) return
-    const endedId = currentMatch.id
-    ;(async () => {
-      // Match End opens filled, as from Continue match
-      await preloadMatchEnd(endedId)
-      setMatchId(endedId)
-      setShowMatchSetup(false)
-      setShowCoinToss(false)
-      setShowMatchEnd(true)
-    })()
-  }, [currentMatch, matchId])
+  // Back after 15 minutes or more in the background (rule 3; trackBackground
+  // counts only the time the page was hidden, so a screen left on through a
+  // long set break or a medical time-out is never acted on): Home with its
+  // Continue card. Only the screen changes: nothing is closed, locked or
+  // unlocked, set aside or deleted, and Continue opens the match where it was.
+  useEffect(() => trackBackground((gone) => {
+    if (openMatchIdRef.current == null) return
+    console.info(`[Start] Back after ${Math.round(gone / 60000)} min in the background: the home screen`)
+    setMatchId(null)
+    setShowMatchSetup(false)
+    setShowCoinToss(false)
+    setShowMatchEnd(false)
+    setShowManualAdjustments(false)
+  }, { minHiddenMs: BACKGROUND_HOME_MS }), [])
 
-  // Check for pending roster upload on mount
+  // A roster waiting for the open match (restored from the cloud with it):
+  // its Match Setup. Only for the match on the screen: on Home it opened the
+  // match by itself, at start too
   useEffect(() => {
-    if (!currentMatch) return
+    if (!currentMatch || matchId == null || currentMatch.id !== matchId) return
 
     // Check if there are pending rosters
     const hasPendingTeam1Roster = currentMatch.pendingTeam1Roster !== null && currentMatch.pendingTeam1Roster !== undefined
@@ -934,7 +977,6 @@ export default function App() {
 
     // If there are pending rosters and we're not already in match setup, open it
     if ((hasPendingTeam1Roster || hasPendingTeam2Roster) && !showMatchSetup) {
-      setMatchId(currentMatch.id)
       setShowMatchSetup(true)
     }
   }, [currentMatch, matchId, showMatchSetup])
@@ -2238,6 +2280,35 @@ export default function App() {
   // The header's match chip is held with the home screen: it went away for
   // two frames when an older test match was replaced (verification 2026-10-08)
   const headerMatchStatus = homeWhilePreparing ? homeWhilePreparing.matchStatus : shownMatchStatus
+
+  // Home's Continue card (HomePage_beach): the match Continue resumes, where
+  // it stands (teams, set, score) and when it was last saved. Read on the
+  // home screen only: its sets and events change at every rally.
+  const onHome = matchId == null
+  const continueTargetId = (homeOfficialMatch || homeTestMatch)?.id ?? null
+  const continueRead = useLiveQuery(async () => {
+    if (!onHome || continueTargetId == null) return null
+    try {
+      const m = await db.matches.get(continueTargetId)
+      if (!m) return null
+      const [team1, team2, sets, newest] = await Promise.all([
+        m.team1Id != null ? db.teams.get(m.team1Id) : null,
+        m.team2Id != null ? db.teams.get(m.team2Id) : null,
+        db.sets.where('matchId').equals(m.id).toArray(),
+        newestEventOf(db, m.id)
+      ])
+      return {
+        id: m.id,
+        team1: team1?.name || null,
+        team2: team2?.name || null,
+        score: setScore(sets),
+        lastSaved: lastActivityAt(m, newest)
+      }
+    } catch {
+      return null
+    }
+  }, [onHome, continueTargetId], null)
+  const continueInfo = continueRead && continueRead.id === continueTargetId ? continueRead : null
   const headerMatchInfoData = homeWhilePreparing ? homeWhilePreparing.matchInfoData : shownMatchInfoData
 
   return (
@@ -2508,6 +2579,7 @@ export default function App() {
                     currentTestMatch={homeTestMatch}
                     continueMatch={continueMatch}
                     continueTestMatch={continueTestMatch}
+                    continueInfo={continueInfo}
                     showDeleteMatchModal={showDeleteMatchModal}
                     restartTestMatch={restartTestMatch}
                     onOpenSettings={() => setHomeOptionsModal(true)}

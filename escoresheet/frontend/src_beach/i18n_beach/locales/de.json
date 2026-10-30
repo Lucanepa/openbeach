@@ -1116,6 +1116,11 @@
       "or": "oder",
       "fileTitle": "Aus einer Sicherungsdatei",
       "selectFile": "Sicherungsdatei wählen"
+    },
+    "continueCard": {
+      "score": "Satz {{set}} · {{team1}}:{{team2}} · Sätze {{setsTeam1}}:{{setsTeam2}}",
+      "notStarted": "Nicht gestartet",
+      "lastSaved": "Zuletzt gespeichert {{time}}"
     }
   },
   "options": {

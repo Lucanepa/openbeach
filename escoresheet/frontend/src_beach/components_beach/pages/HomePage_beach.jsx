@@ -7,10 +7,17 @@ import { Button, FOCUS_RING_INSET } from '../../ui/volleyui/Button.jsx'
 import { Card } from '../../ui/volleyui/Card.jsx'
 import { cn } from '../../ui/volleyui/cn.js'
 import { BRAND } from '../../brand_beach'
+import { formatTakeOver } from '../ScorerMovedModal_beach'
+
+/** "Set 3 · 12:10 · sets 1:1", or "Not started" for a match with no set yet. */
+export function scoreText(t, score) {
+  if (!score || score.set == null) return t('home.continueCard.notStarted')
+  return t('home.continueCard.score', { set: score.set, team1: score.team1, team2: score.team2, setsTeam1: score.setsTeam1, setsTeam2: score.setsTeam2 })
+}
 
 // The home page in the Volleyball style (volleyui), the same stack as
 // OpenVolley's home: one card holding the match actions (brand red New match,
-// dark Continue, soft Delete, Restore), then the quieter app actions.
+// the Continue card, soft Delete, Restore), then the quieter app actions.
 export default function HomePage({
   newMatchMenuOpen,
   setNewMatchMenuOpen,
@@ -24,9 +31,11 @@ export default function HomePage({
   showDeleteMatchModal,
   restartTestMatch,
   onOpenSettings,
-  onRestoreMatch
+  onRestoreMatch,
+  // the match Continue resumes (App_beach): { team1, team2, score, lastSaved }
+  continueInfo = null
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [supportFeedbackOpen, setSupportFeedbackOpen] = useState(false)
   const hasMatch = !!(currentOfficialMatch || currentTestMatch)
 
@@ -88,23 +97,42 @@ export default function HomePage({
             )}
           </div>
 
-          {/* Continue match - only when there is a match */}
+          {/* Continue: the match in progress on this device, in one tap.
+              Opening the app always lands here, never on a match (the owner,
+              2026-10-27, as the established e-scoresheets do): the card says
+              which match, where it stands and when it was last saved, so the
+              scorer resumes the right one. */}
           {hasMatch && (
-            <Button
-              variant="dark"
-              block
-              data-help-id="home-continue-button"
-              onClick={() => {
-                if (currentOfficialMatch) {
-                  continueMatch(currentOfficialMatch.id)
-                } else if (currentTestMatch) {
-                  continueTestMatch()
-                }
-              }}
-              className="h-14 rounded-xl text-base font-semibold"
-            >
-              {t('home.continueMatch')}
-            </Button>
+            <div data-testid="continue-card" className="space-y-3 rounded-xl border border-stone-200/70 bg-stone-50/60 p-3">
+              {continueInfo && (
+                <div className="px-1">
+                  <div className="min-w-0 text-base font-semibold leading-snug text-stone-900">
+                    {`${continueInfo.team1 || t('common.team1', 'Team 1')} – ${continueInfo.team2 || t('common.team2', 'Team 2')}`}
+                  </div>
+                  <div className="mt-1 text-xl font-bold tabular-nums text-stone-900">{scoreText(t, continueInfo.score)}</div>
+                  {continueInfo.lastSaved != null && (
+                    <div className="mt-0.5 text-xs tabular-nums text-stone-500">
+                      {t('home.continueCard.lastSaved', { time: formatTakeOver(continueInfo.lastSaved, i18n?.language) || '–' })}
+                    </div>
+                  )}
+                </div>
+              )}
+              <Button
+                variant="dark"
+                block
+                data-help-id="home-continue-button"
+                onClick={() => {
+                  if (currentOfficialMatch) {
+                    continueMatch(currentOfficialMatch.id)
+                  } else if (currentTestMatch) {
+                    continueTestMatch()
+                  }
+                }}
+                className="h-14 rounded-xl text-base font-semibold"
+              >
+                {t('home.continueMatch')}
+              </Button>
+            </div>
           )}
 
           {/* Delete match - only when there is a match */}

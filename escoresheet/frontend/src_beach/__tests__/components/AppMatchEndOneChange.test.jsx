@@ -9,6 +9,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { waitFor, fireEvent } from '@testing-library/react'
 import { db } from '../../db_beach/db_beach'
 import { offline, online, mountApp, sleep, track } from '../helpers/appMount'
+import { reloadInto } from '../helpers/selfCheckFixtures'
 
 beforeAll(offline)
 afterAll(online)
@@ -34,7 +35,9 @@ describe('App: the match end', () => {
     ])
     await db.events.add({ matchId, setIndex: 1, type: 'coin_toss', payload: {}, seq: 1, ts: start })
 
-    mountApp() // opens the live match (App restores it)
+    // the page reloaded on the scoring screen (a fresh start opens Home)
+    reloadInto(matchId)
+    mountApp()
     const dialog = () => [...document.querySelectorAll('[role=dialog]')].find(d => /won the Match/.test(d.textContent))
     await waitFor(() => expect(dialog()).toBeTruthy(), { timeout: 8000 })
 

@@ -1116,6 +1116,11 @@
       "or": "ou",
       "fileTitle": "Depuis un fichier de sauvegarde",
       "selectFile": "Choisir le fichier"
+    },
+    "continueCard": {
+      "score": "Set {{set}} · {{team1}}:{{team2}} · sets {{setsTeam1}}:{{setsTeam2}}",
+      "notStarted": "Pas commencé",
+      "lastSaved": "Dernier enregistrement {{time}}"
     }
   },
   "options": {

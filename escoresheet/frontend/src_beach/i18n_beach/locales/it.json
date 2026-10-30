@@ -1116,6 +1116,11 @@
       "or": "oppure",
       "fileTitle": "Da un file di backup",
       "selectFile": "Scegli il file di backup"
+    },
+    "continueCard": {
+      "score": "Set {{set}} · {{team1}}:{{team2}} · set {{setsTeam1}}:{{setsTeam2}}",
+      "notStarted": "Non iniziata",
+      "lastSaved": "Ultimo salvataggio {{time}}"
     }
   },
   "options": {
