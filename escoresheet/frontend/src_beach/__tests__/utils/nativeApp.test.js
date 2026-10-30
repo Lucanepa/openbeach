@@ -13,6 +13,13 @@ import {
   resetAppLifecycleForTests
 } from '../../utils_beach/appLifecycle_beach'
 import { lockLandscape, unlockOrientation } from '../../utils_beach/nativeOrientation_beach'
+import { flushNativeBackups } from '../../utils_beach/nativeBackup/index_beach'
+
+// The match's last backup file before the app goes (no engine here: at once)
+vi.mock('../../utils_beach/nativeBackup/index_beach', async (importOriginal) => ({
+  ...(await importOriginal()),
+  flushNativeBackups: vi.fn(async () => {})
+}))
 
 const flush = () => new Promise((r) => setTimeout(r, 0))
 
@@ -65,6 +72,22 @@ describe('the Android Back button', () => {
 
     uninstall()
     expect(window[ANDROID_BACK_HOOK]).toBeUndefined()
+  })
+
+  // Exit finishes the activity at once: the last point's backup file first
+  it('Exit writes the match\'s last backup file before the app closes', async () => {
+    const { exitApp } = nativeApp()
+    let written
+    flushNativeBackups.mockClear()
+    flushNativeBackups.mockImplementationOnce(() => new Promise((r) => { written = r }))
+    const uninstall = installAndroidBack({ ask: vi.fn().mockResolvedValue(true) })
+    window[ANDROID_BACK_HOOK]()
+    await vi.waitFor(() => expect(flushNativeBackups).toHaveBeenCalledWith(1500))
+    await flush()
+    expect(exitApp).not.toHaveBeenCalled()
+    written()
+    await vi.waitFor(() => expect(exitApp).toHaveBeenCalled())
+    uninstall()
   })
 
   it('closes an open dialog first, through its close button', async () => {

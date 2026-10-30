@@ -37,12 +37,19 @@
  *
  * Every question goes through the in-app dialog (volleyui confirmDialog),
  * never window.confirm.
+ *
+ * A confirmed quit (desktop) or Exit (Android) first writes the open match's
+ * last backup file (utils_beach/nativeBackup flushNativeBackups, 1.5 s at
+ * most): the app exits at once after it, and a backup still in its quiet
+ * window went with it. The app's own native quit question and the OS ending
+ * the app do not go through the page, so they do not wait for it.
  */
 
 import i18n from 'i18next'
 import { confirmDialog, hasConfirmHost } from '../ui/volleyui/uiStore.js'
 import { pdfBusyInAppWindows } from './openAppWindow_beach.js'
 import { emitActivity, flushActivityNow } from './activity/bus_beach'
+import { flushNativeBackups, QUIT_BACKUP_WAIT_MS } from './nativeBackup/index_beach'
 import { desktopWindowRoleOnce, knownDesktopWindowRole } from '../diagnostics_beach/popupForward_beach.js'
 
 export const LIFECYCLE_EVENT = 'ov-app-lifecycle'
@@ -346,9 +353,11 @@ export async function requestDesktopQuit(win = desktopWin || window, ask = confi
     // ONE question for every app window: the quit closes the scoresheets too
     if (!nothingMore && (await ask(quitQuestion({ live, ...nets, windows, pdfBusy }))) !== true) return false
     quitting = true
-    // The activity log's last line, written before the app goes
+    // The activity log's last line and the match's last backup file, written
+    // before the app goes (app_quit exits at once). Both waits are bounded:
+    // a slow disk never holds the quit.
     emitActivity('app.quit', {})
-    await flushActivityNow(800)
+    await Promise.all([flushActivityNow(800), flushNativeBackups(QUIT_BACKUP_WAIT_MS)])
     await invoke('app_quit')
     return true
   } catch (e) {
@@ -494,7 +503,8 @@ export function installAndroidBack({ win = window, ask, exit = exitAndroidApp })
     asking = true
     Promise.resolve()
       .then(() => ask())
-      .then((ok) => (ok ? exit(win) : undefined))
+      // the match's last backup file first (bounded, as on the desktop)
+      .then((ok) => (ok ? flushNativeBackups(QUIT_BACKUP_WAIT_MS).then(() => exit(win)) : undefined))
       .catch((e) => console.error('[app] exit failed', e))
       .finally(() => { asking = false })
     return true

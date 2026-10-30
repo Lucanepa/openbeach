@@ -46,10 +46,15 @@ vi.mock('../../utils_beach/backupManager_beach', async (importOriginal) => {
 })
 
 const writes = []
+// A disk that never finishes a write (disk.stuck)
+const disk = { stuck: false }
 const invoke = vi.fn(async (cmd, args) => {
   if (cmd === 'backup_info') return { dir: '/data/OpenBeach/backups' }
   if (cmd === 'backup_list') return []
-  if (cmd === 'backup_write') writes.push(args)
+  if (cmd === 'backup_write') {
+    if (disk.stuck) return new Promise(() => {})
+    writes.push(args)
+  }
   return null
 })
 
@@ -151,6 +156,34 @@ describe('useAutoBackup in the desktop app', () => {
     await waitFor(() => expect(writes).toHaveLength(before + 1))
     expect(JSON.parse(writes.at(-1).contents).match).toMatchObject({ status: 'ended', approved: true })
     approved.unmount()
+  })
+
+  // The quit (appLifecycle_beach) exits at once after it: the last point's
+  // file must be on disk by then, and a stuck disk must not hold the quit
+  it('flushNativeBackups: the last backup is written when it resolves; at most its wait', async () => {
+    const { flushNativeBackups, getNativeBackupEngine, QUIT_BACKUP_WAIT_MS } = await import('../../utils_beach/nativeBackup/index_beach')
+    expect(QUIT_BACKUP_WAIT_MS).toBe(1500)
+    const engine = await getNativeBackupEngine()
+    state.match = { id: 7, gameN: 321, seed_key: 'seedabc', status: 'live' }
+    state.events.push({ type: 'point', seq: 2, payload: { team: 'team2' } })
+    const before = writes.length
+    engine.notify(7) // in its quiet window
+    await flushNativeBackups()
+    expect(writes).toHaveLength(before + 1)
+    expect(JSON.parse(writes.at(-1).contents).events.at(-1)).toMatchObject({ seq: 2 })
+
+    disk.stuck = true
+    try {
+      state.events.push({ type: 'point', seq: 3, payload: { team: 'team2' } })
+      engine.notify(7)
+      const started = Date.now()
+      await flushNativeBackups(200)
+      const waited = Date.now() - started
+      expect(waited).toBeGreaterThanOrEqual(150)
+      expect(waited).toBeLessThan(1000)
+    } finally {
+      disk.stuck = false
+    }
   })
 
   it('opens the backup folder through the backup_open_dir command', async () => {

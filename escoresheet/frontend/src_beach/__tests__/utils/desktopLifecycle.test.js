@@ -19,6 +19,13 @@ import {
 } from '../../utils_beach/appLifecycle_beach'
 import { confirmDialog, getConfirmSnapshot, settleConfirm } from '../../ui/volleyui/uiStore'
 import { openAppWindow, resetAppWindowsForTests } from '../../utils_beach/openAppWindow_beach'
+import { flushNativeBackups } from '../../utils_beach/nativeBackup/index_beach'
+
+// The match's last backup file before the app goes (no engine here: at once)
+vi.mock('../../utils_beach/nativeBackup/index_beach', async (importOriginal) => ({
+  ...(await importOriginal()),
+  flushNativeBackups: vi.fn(async () => {})
+}))
 
 // The OpenBeach desktop app (OpenVolley's Tauri shell, beach flavour) only
 // starts its updater once the page has called app_page_state
@@ -281,6 +288,29 @@ describe('desktop app', () => {
     expect(invoke).toHaveBeenCalledWith('app_quit')
     // quitting: the hidden scoresheet windows are not brought back
     expect(invoke).not.toHaveBeenCalledWith('app_quit_cancel')
+  })
+
+  // app_quit exits at once: the last point's backup file is written first,
+  // the wait bounded by flushNativeBackups (QUIT_BACKUP_WAIT_MS)
+  it('a confirmed quit writes the match\'s last backup file before the app exits', async () => {
+    const { win, invoke } = desktopWin()
+    let written
+    flushNativeBackups.mockClear()
+    flushNativeBackups.mockImplementationOnce(() => new Promise((r) => { written = r }))
+    const ask = vi.fn().mockResolvedValue(true)
+    const quitting = requestDesktopQuit(win, ask)
+    await vi.waitFor(() => expect(flushNativeBackups).toHaveBeenCalledWith(1500))
+    await flush()
+    expect(invoke).not.toHaveBeenCalledWith('app_quit')
+    written()
+    expect(await quitting).toBe(true)
+    expect(invoke).toHaveBeenCalledWith('app_quit')
+
+    // Keep running: nothing to write first
+    flushNativeBackups.mockClear()
+    ask.mockResolvedValue(false)
+    expect(await requestDesktopQuit(win, ask)).toBe(false)
+    expect(flushNativeBackups).not.toHaveBeenCalled()
   })
 
   it('Keep running brings back the scoresheet windows the quit request left hidden', async () => {
