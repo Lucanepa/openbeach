@@ -66,11 +66,12 @@ export function useNativeBackupStatus() {
 export const QUIT_BACKUP_WAIT_MS = 1500
 
 /**
- * Before the app quits (appLifecycle_beach): resolves once the backups queued
- * now are written (the last scoring write's file, still in its quiet window
- * or being written), or after timeoutMs at the latest, so a quit never waits
- * longer, whatever the disk does. At once in a browser and when the engine
- * never started. Never throws. (OpenVolley flushNativeBackups.)
+ * Before the app quits (appLifecycle_beach), and on Android when it goes to
+ * the background: the backups queued now are written at once (the last
+ * scoring write's file, still in its quiet window or being written);
+ * resolves when they are, or after timeoutMs at the latest, so a quit never
+ * waits longer, whatever the disk does. At once in a browser and when the
+ * engine never started. Never throws. (OpenVolley flushNativeBackups.)
  */
 export async function flushNativeBackups(timeoutMs = QUIT_BACKUP_WAIT_MS) {
   if (!enginePromise) return

@@ -90,6 +90,93 @@ describe('the Android Back button', () => {
     uninstall()
   })
 
+  // Android may end a backgrounded app without a word (a swipe from the
+  // recent apps): the last backup file is written as it goes
+  describe('going to the background writes the last backup file', () => {
+    function setVisibility(state) {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state })
+    }
+    afterEach(() => {
+      delete document.visibilityState
+    })
+
+    it('on Capacitor\'s pause (the activity\'s onPause), once while it writes', async () => {
+      nativeApp()
+      setVisibility('visible')
+      let written
+      flushNativeBackups.mockClear()
+      flushNativeBackups.mockImplementationOnce(() => new Promise((r) => { written = r }))
+      const ask = vi.fn()
+      const uninstall = installAndroidBack({ ask })
+      document.dispatchEvent(new Event('pause'))
+      expect(flushNativeBackups).toHaveBeenCalledWith(1500)
+      // the page goes hidden with it: the same write
+      setVisibility('hidden')
+      document.dispatchEvent(new Event('visibilitychange'))
+      expect(flushNativeBackups).toHaveBeenCalledTimes(1)
+      written()
+      await flush()
+      // back and away again: a new one
+      setVisibility('visible')
+      document.dispatchEvent(new Event('visibilitychange'))
+      expect(flushNativeBackups).toHaveBeenCalledTimes(1)
+      document.dispatchEvent(new Event('pause'))
+      expect(flushNativeBackups).toHaveBeenCalledTimes(2)
+      expect(ask).not.toHaveBeenCalled()
+      await flush()
+      uninstall()
+      document.dispatchEvent(new Event('pause'))
+      expect(flushNativeBackups).toHaveBeenCalledTimes(2)
+    })
+
+    it('on the page going hidden', () => {
+      nativeApp()
+      flushNativeBackups.mockClear()
+      const uninstall = installAndroidBack({ ask: vi.fn() })
+      setVisibility('hidden')
+      document.dispatchEvent(new Event('visibilitychange'))
+      expect(flushNativeBackups).toHaveBeenCalledWith(1500)
+      uninstall()
+    })
+
+    it('on the App plugin\'s appStateChange, where the app has it', async () => {
+      nativeApp()
+      let listener
+      const remove = vi.fn()
+      window.Capacitor.Plugins = { App: { addListener: vi.fn(async (name, fn) => { listener = fn; return { remove } }) } }
+      flushNativeBackups.mockClear()
+      const uninstall = installAndroidBack({ ask: vi.fn() })
+      await flush()
+      expect(window.Capacitor.Plugins.App.addListener).toHaveBeenCalledWith('appStateChange', expect.any(Function))
+      listener({ isActive: true })
+      expect(flushNativeBackups).not.toHaveBeenCalled()
+      listener({ isActive: false })
+      expect(flushNativeBackups).toHaveBeenCalledWith(1500)
+      uninstall()
+      expect(remove).toHaveBeenCalled()
+    })
+
+    it('a write that fails changes nothing for the app', async () => {
+      nativeApp()
+      flushNativeBackups.mockClear()
+      flushNativeBackups.mockImplementationOnce(async () => { throw new Error('disk gone') })
+      const uninstall = installAndroidBack({ ask: vi.fn() })
+      document.dispatchEvent(new Event('pause'))
+      await flush()
+      document.dispatchEvent(new Event('pause'))
+      expect(flushNativeBackups).toHaveBeenCalledTimes(2)
+      uninstall()
+    })
+
+    it('not in a browser', () => {
+      flushNativeBackups.mockClear()
+      const uninstall = installAndroidBack({ ask: vi.fn() })
+      document.dispatchEvent(new Event('pause'))
+      expect(flushNativeBackups).not.toHaveBeenCalled()
+      uninstall()
+    })
+  })
+
   it('closes an open dialog first, through its close button', async () => {
     nativeApp()
     const ask = vi.fn(() => Promise.resolve(false))

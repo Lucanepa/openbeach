@@ -313,6 +313,46 @@ describe('desktop app', () => {
     expect(flushNativeBackups).not.toHaveBeenCalled()
   })
 
+  // The OS ends the app (logout, shutdown, SIGTERM; OpenVolley's lifecycle.rs
+  // os_exit): the shell waits for app_flush_done, 2 s at most, then exits
+  it('the OS ending the app: the last files are written, then the app is told, nothing asked', async () => {
+    const { win, invoke } = desktopWin()
+    const ask = vi.fn().mockResolvedValue(true)
+    let written
+    flushNativeBackups.mockClear()
+    flushNativeBackups.mockImplementationOnce(() => new Promise((r) => { written = r }))
+    uninstall = installAppLifecycle({ win, ask })
+    fire(win, 'flush-requested')
+    await vi.waitFor(() => expect(flushNativeBackups).toHaveBeenCalledWith(1500))
+    await flush()
+    expect(invoke).not.toHaveBeenCalledWith('app_flush_done')
+    written()
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith('app_flush_done'))
+    expect(ask).not.toHaveBeenCalled()
+    expect(invoke).not.toHaveBeenCalledWith('app_quit')
+    expect(invoke).not.toHaveBeenCalledWith('app_quit_ack')
+  })
+
+  it('the OS ending the app: a failing write still tells the app; a refused app_flush_done changes nothing', async () => {
+    const { win, invoke } = desktopWin()
+    flushNativeBackups.mockImplementationOnce(async () => { throw new Error('disk gone') })
+    uninstall = installAppLifecycle({ win, ask: vi.fn() })
+    fire(win, 'flush-requested')
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith('app_flush_done'))
+    // a shell without the command (or its permission) refuses it
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      invoke.mockImplementation(async (cmd) => {
+        if (cmd === 'app_flush_done') throw 'Command app_flush_done not found'
+        return null
+      })
+      fire(win, 'flush-requested')
+      await vi.waitFor(() => expect(warn).toHaveBeenCalledWith('[app] app_flush_done failed', 'Command app_flush_done not found'))
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
   it('Keep running brings back the scoresheet windows the quit request left hidden', async () => {
     const { win, invoke } = desktopWin({ status: { windows: ['OpenBeach Scoresheet'] } })
     const ask = vi.fn().mockResolvedValue(false)
