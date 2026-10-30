@@ -30,8 +30,45 @@
  */
 
 import { jobMatchKey } from './syncIds_beach'
+import { isScorerMoved } from './matchHandover_beach'
 
 export const CLOSING_STATUSES = ['approved', 'final']
+
+/**
+ * A copy this device was still scoring (not ended / approved / final here)
+ * whose match the server has closed: the server's closed_at on the row, or a
+ * write the server refused as closed (cloudBlock OV_MATCH_CLOSED). Never a
+ * test match; never a match another device took over (isScorerMoved).
+ * Reads only local evidence. (OpenVolley utils/matchReopen
+ * isStaleClosedCopy.) OpenBeach does not record a write refused as closed on
+ * a live copy yet (useSyncQueue_beach sets it aside or drops it): until it
+ * does, only the handover half of isContinuedElsewhere stops a copy's
+ * backups.
+ */
+export function isStaleClosedCopy(match) {
+  if (!match || match.test === true) return false
+  if (isScorerMoved(match)) return false
+  if (['ended', 'approved', 'final'].includes(match.status)) return false
+  return !!match.closed_at || match.cloudBlock?.code === 'OV_MATCH_CLOSED'
+}
+
+/**
+ * A copy whose match another device went on with: another device took it
+ * over (OV_SCORER_MOVED, closed there or not: markScorerMoved makes a copy
+ * closed there 'final'), or the server closed it while this device was still
+ * scoring it (isStaleClosedCopy). Its state is older than the match's and
+ * nothing scores it here any more, so the app writes no new backup file of
+ * it (utils_beach/nativeBackup): opening such a copy wrote a fresh file of
+ * it, the newest of the match with the older score (OpenVolley 2026-10-29,
+ * match 406970). A copy this device ended or approved is never one: its
+ * final state is this device's own. Never a test match. Reads only local
+ * evidence. (OpenVolley utils/matchReopen isContinuedElsewhere.)
+ */
+export function isContinuedElsewhere(match) {
+  if (!match || match.test === true) return false
+  if (match.approved === true || match.status === 'ended') return false
+  return isScorerMoved(match) || isStaleClosedCopy(match)
+}
 
 /** A sync job that marks its match approved/final on the server. */
 export function isClosingSyncJob(job) {

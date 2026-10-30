@@ -24,7 +24,7 @@ import {
 import AccountApprovalDialog from './AccountApprovalDialog_beach'
 import { askConfirm } from '../utils_beach/askConfirm_beach'
 import { scoresheetStoragePath, scoresheetUploadJob, scoresheetJsonBlob, uploadQueuedScoresheet } from '../utils_beach/scoresheetUploader_beach'
-import { exportMatchData } from '../utils_beach/backupManager_beach'
+import { exportMatchData, matchEndExportData } from '../utils_beach/backupManager_beach'
 import { uploadBackupToCloud } from '../utils_beach/logger_beach'
 import { useComponentLogging } from '../contexts_beach/LoggingContext_beach'
 import { exportLogsAsNDJSON } from '../utils_beach/comprehensiveLogger_beach'
@@ -1265,14 +1265,19 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       const allSets = await db.sets.where('matchId').equals(matchId).sortBy('index')
       const allEvents = await db.events.where('matchId').equals(matchId).sortBy('seq')
 
-      const exportData = {
-        match: { ...match, team1, team2 },
+      // In the backup file format: Restore match takes the ZIP's JSON back.
+      // It had the teams inside the match and no version, and the restore
+      // refused it (backupManager_beach.matchBackupFromMatchEndExport still
+      // reads those files).
+      const exportData = matchEndExportData({
+        match,
+        team1,
+        team2,
         team1Players,
         team2Players,
         sets: allSets,
-        events: allEvents,
-        exportedAt: new Date().toISOString()
-      }
+        events: allEvents
+      })
 
       const dataStr = JSON.stringify(exportData, null, 2)
       const matchDate = match.scheduledAt

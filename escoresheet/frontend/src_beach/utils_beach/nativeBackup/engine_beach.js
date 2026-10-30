@@ -14,6 +14,10 @@
  *    IndexedDB and serializing, so the scorer's next tap goes first.
  *  - A state equal to the last one written (ignoring heartbeats, sessions and
  *    sync stamps) is skipped.
+ *  - So is a match skipMatch(match) names (index_beach: a copy another
+ *    device went on with, matchReopen_beach isContinuedElsewhere), read from
+ *    the state the file would hold. backupNow, the scorer's own "Back up
+ *    now", still writes it.
  *  - Rotation of older backups runs after the first file of the session is
  *    written, in small chunks on idle.
  *
@@ -86,6 +90,7 @@ export function createNativeBackupEngine({
   maxBytesPerMatch = DEFAULT_MAX_BYTES_PER_MATCH,
   idleKeep = DEFAULT_IDLE_KEEP,
   idleAfterHours = DEFAULT_IDLE_AFTER_HOURS,
+  skipMatch = () => false,
   log = console
 }) {
   const quiet = quietMs ?? settleMs ?? 150
@@ -111,8 +116,22 @@ export function createNativeBackupEngine({
     }
   }
 
-  const nextIdle = () => new Promise(resolve => {
+  const idleMoment = () => new Promise(resolve => {
     try { idle(resolve) } catch { resolve() }
+  })
+  // The backups' idle moment: none while hurried (flush({ writesOnly })), also
+  // for one already waited for. A hidden Android WebView often gets its idle
+  // callback only at the 1000 ms timeout.
+  let hurry = false
+  const idleWaits = new Set()
+  const nextIdle = () => new Promise(resolve => {
+    if (hurry) return resolve()
+    const done = () => {
+      idleWaits.delete(done)
+      resolve()
+    }
+    idleWaits.add(done)
+    try { idle(done) } catch { done() }
   })
 
   function busy() {
@@ -121,6 +140,7 @@ export function createNativeBackupEngine({
   let writeWaiters = [] // backupNow callers: resolved once the queued files are written
   function maybeSettled() {
     if (timer || running || pending.size) return
+    hurry = false
     for (const resolve of writeWaiters.splice(0)) resolve()
     if (cleanup && !cleanup.done) return
     const r = resolveSettled
@@ -142,19 +162,21 @@ export function createNativeBackupEngine({
   async function removeInChunks(dir, names) {
     for (let i = 0; i < names.length; i += REMOVE_CHUNK) {
       await store.remove(dir, names.slice(i, i + REMOVE_CHUNK))
-      if (i + REMOVE_CHUNK < names.length) await nextIdle()
+      if (i + REMOVE_CHUNK < names.length) await idleMoment()
     }
   }
 
   // Once per session, after the first file is written: list every folder,
   // rotate the ones this session does not write (age, count, size, idle
-  // thinning) and learn the files already in the ones it does.
+  // thinning) and learn the files already in the ones it does. Always on
+  // idle moments, also while the backups are hurried: it never competes with
+  // the last file for the disk.
   function startCleanup() {
     if (cleanup) return
     const job = { done: false }
     cleanup = job
     job.promise = (async () => {
-      await nextIdle()
+      await idleMoment()
       try {
         const dirs = await store.list()
         let removed = 0
@@ -165,7 +187,7 @@ export function createNativeBackupEngine({
           const names = planMatchRotation(known.get(d.dir), { now: now().getTime(), ...rotation })
           if (!names.length) continue
           dropKnown(d.dir, names)
-          await nextIdle()
+          await idleMoment()
           await removeInChunks(d.dir, names)
           removed += names.length
         }
@@ -189,6 +211,7 @@ export function createNativeBackupEngine({
   async function backupOnce(matchId, { force = false } = {}) {
     const data = await exportMatch(matchId)
     if (!data?.match) return null
+    if (!force && skipMatch(data.match)) return null
     const { key, build } = serializeBackup(data)
     if (!force && lastKey.get(matchId) === key) return null // same scoring state: coalesced
 
@@ -243,7 +266,7 @@ export function createNativeBackupEngine({
     if (running) return
     batchStart = null
     running = (async () => {
-      await nextIdle() // the scorer's own work first
+      await nextIdle() // the scorer's own work first (at once while hurried)
       await drain()
     })().finally(() => {
       running = null
@@ -253,10 +276,12 @@ export function createNativeBackupEngine({
   }
 
   // (Re)arm the quiet window; a backup already exporting picks the next
-  // notify up when it ends.
+  // notify up when it ends. Hurried: no quiet window, not even a 0 ms timer
+  // (a hidden page's timers can be held back by a second).
   function schedule() {
     if (running) return
     if (timer) clearTimeout(timer)
+    if (hurry) return start()
     const waited = batchStart == null ? 0 : clock() - batchStart
     timer = setTimeout(start, Math.max(0, Math.min(quiet, maxWaitMs - waited)))
   }
@@ -278,9 +303,30 @@ export function createNativeBackupEngine({
       await written
       return status
     },
-    /** Resolves once every queued backup is written and the rotation is done (tests, shutdown). */
-    async flush() {
-      while (settled) await settled
+    /**
+     * Resolves once every queued backup is written and the rotation is done
+     * (tests). writesOnly: once the queued backups are written, without
+     * waiting for the rotation of older folders (the app quitting or, on
+     * Android, going to the background: flushNativeBackups). Until then the
+     * backups are hurried: the queued one starts at once, not at the end of
+     * its quiet window or on an idle moment (also one already waited for),
+     * and so does a write that lands while one is written. The app may be
+     * gone by then. (OpenVolley 64efd972)
+     */
+    async flush({ writesOnly = false } = {}) {
+      if (!writesOnly) {
+        while (settled) await settled
+        return
+      }
+      if (!timer && !running && !pending.size) return
+      const written = new Promise(resolve => writeWaiters.push(resolve))
+      hurry = true
+      for (const done of [...idleWaits]) done()
+      if (timer) {
+        clearTimeout(timer)
+        start()
+      }
+      await written
     },
     getStatus: () => status,
     subscribe(listener) {

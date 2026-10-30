@@ -252,6 +252,35 @@ describe('MatchEnd_beach: the approval PDF', () => {
     expect(backup.match).toMatchObject({ remarks: 'Team B protested at 18:15', scorerSignature: 'data:s' })
   })
 
+  // The ZIP's MatchData JSON had the teams inside the match and no version,
+  // and Restore match refused it: it is the one file a scorer keeps of an
+  // approved match (Close match removes it from the device)
+  it('the ZIP\'s match data is a backup file Restore match takes as it is', async () => {
+    const { default: JSZip } = await import('jszip')
+    const { matchBackupFromFile } = await import('../../utils_beach/backupManager_beach')
+    const zipFile = vi.spyOn(JSZip.prototype, 'file')
+    try {
+      await seed({ seed_key: 'match_1759740000000_obzip' })
+      renderMatchEnd()
+      await approve()
+      await waitFor(() => expect(opened).toHaveLength(1))
+      await postFromSheet({ type: 'pdfBlob', arrayBuffer: new ArrayBuffer(8), filename: 'x.pdf' })
+      expect(await screen.findByRole('button', { name: 'Close match' })).toBeInTheDocument()
+      await waitFor(() => expect(zipFile.mock.calls.some(([name]) => /^MatchData_.*\.json$/.test(name))).toBe(true))
+      const call = zipFile.mock.calls.find(([name]) => /^MatchData_.*\.json$/.test(name))
+      expect(call[0]).toMatch(/^MatchData_M.*_vs_S/)
+      const data = JSON.parse(call[1])
+      expect(data).toMatchObject({ version: 1, match: { id: matchId, seed_key: 'match_1759740000000_obzip', status: 'ended' }, team1: { name: 'Müller / Weber' }, team2: { name: 'Schmidt / Fischer' } })
+      expect('team1' in data.match || 'team2' in data.match).toBe(false)
+      expect(data.sets.map(x => x.index)).toEqual([1, 2])
+      expect(typeof data.lastUpdated).toBe('string')
+      expect(data.exportedAt).toBe(data.lastUpdated)
+      expect(matchBackupFromFile(data)).toBe(data) // nothing to convert
+    } finally {
+      zipFile.mockRestore()
+    }
+  })
+
   it('Approve without PDF approves the match', async () => {
     await seed()
     renderMatchEnd()

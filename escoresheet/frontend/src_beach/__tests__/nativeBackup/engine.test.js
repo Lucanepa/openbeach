@@ -141,6 +141,85 @@ describe('native backup engine', () => {
     await engine.flush()
   })
 
+  // The app quitting (appLifecycle_beach, flushNativeBackups): the last
+  // point's file must be on disk; the rotation of older folders can wait
+  it('flush({ writesOnly }) resolves once the queued files are written, not waiting for the rotation', async () => {
+    const store = memoryStore({ 'game1-old': [eventFileName(T0 - 45 * DAY, 1), eventFileName(T0 - 44 * DAY, 2)] })
+    let releaseList
+    store.list.mockImplementation(() => new Promise(r => { releaseList = r }))
+    const { engine, m, tick } = setup({ store })
+    await engine.flush({ writesOnly: true }) // nothing queued: at once
+    m.point('team1')
+    engine.notify(1)
+    await engine.flush({ writesOnly: true })
+    expect(eventFiles(store)).toHaveLength(1)
+    await vi.waitFor(() => expect(store.list).toHaveBeenCalled()) // the rotation is still listing
+    m.point('team2')
+    tick()
+    engine.notify(1)
+    await engine.flush({ writesOnly: true })
+    expect(eventFiles(store)).toHaveLength(2)
+    releaseList([])
+    await engine.flush()
+  })
+
+  // The app going away (quitting, Android to the background): the last
+  // point's file is written now, not at the end of its quiet window or on
+  // an idle moment the page may never get
+  it('flush({ writesOnly }) starts the queued backup at once', async () => {
+    const { engine, store, m } = setup({ engine: { quietMs: 60_000, maxWaitMs: 60_000, idle: () => {} } })
+    m.point('team1')
+    engine.notify(1)
+    const outcome = await Promise.race([
+      engine.flush({ writesOnly: true }).then(() => 'written'),
+      new Promise(r => setTimeout(() => r('still waiting'), 500))
+    ])
+    expect(outcome).toBe('written')
+    expect(eventFiles(store)).toHaveLength(1)
+  })
+
+  // A hidden Android WebView gets its idle callback late (the 1000 ms
+  // timeout) or not at all: the quiet window is over, the backup waits for it
+  // (OpenVolley 64efd972)
+  it('flush({ writesOnly }) does not wait for an idle moment the backup is already waiting for', async () => {
+    const idle = vi.fn() // never called back
+    const { engine, store, m } = setup({ engine: { idle } })
+    m.point('team1')
+    engine.notify(1)
+    await vi.waitFor(() => expect(idle).toHaveBeenCalled()) // the quiet window (0 ms) ended
+    expect(m.exportMatch).not.toHaveBeenCalled()
+    const outcome = await Promise.race([
+      engine.flush({ writesOnly: true }).then(() => 'written'),
+      new Promise(r => setTimeout(() => r('still waiting'), 500))
+    ])
+    expect(outcome).toBe('written')
+    expect(eventFiles(store)).toHaveLength(1)
+  })
+
+  it('flush({ writesOnly }) also writes, at once, a write that lands while the last file is written', async () => {
+    const { engine, store, m, tick } = setup({ engine: { quietMs: 60_000, maxWaitMs: 60_000, idle: () => {} } })
+    let release
+    m.exportMatch.mockImplementationOnce(() => new Promise(r => { release = r }))
+    m.point('team1')
+    engine.notify(1)
+    const flushed = engine.flush({ writesOnly: true }).then(() => 'written')
+    await vi.waitFor(() => expect(m.exportMatch).toHaveBeenCalledTimes(1))
+    const first = structuredClone(m.state)
+    m.point('team2')
+    tick()
+    engine.notify(1) // committed while the first file is exported
+    release({ version: 1, ...first })
+    const outcome = await Promise.race([flushed, new Promise(r => setTimeout(() => r('still waiting'), 500))])
+    expect(outcome).toBe('written')
+    expect(m.exportMatch).toHaveBeenCalledTimes(2)
+    expect(eventFiles(store)).toHaveLength(2)
+    // all written: the next write waits for its quiet window again
+    m.point('team1')
+    engine.notify(1)
+    await new Promise(r => setTimeout(r, 50))
+    expect(m.exportMatch).toHaveBeenCalledTimes(2)
+  })
+
   it('never throws: a failing write becomes a status error and the next event retries', async () => {
     const store = memoryStore()
     const { engine, m, log } = setup({ store })
@@ -163,6 +242,39 @@ describe('native backup engine', () => {
     await engine.flush()
     expect(store.write).not.toHaveBeenCalled()
     expect(engine.getStatus().error).toBe('Match not found')
+  })
+
+  // OpenVolley 2026-10-29: a stale copy of match 406970 (continued and
+  // closed on a phone) got a fresh backup file at open on the desktop app
+  it('writes no file of a match skipMatch names, read from the state it would write', async () => {
+    const skipMatch = vi.fn((match) => match.cloudBlock?.code === 'OV_SCORER_MOVED')
+    const { engine, store, m, tick } = setup({ engine: { skipMatch } })
+    m.point('team1')
+    engine.notify(1)
+    await engine.flush()
+    expect(eventFiles(store)).toHaveLength(1)
+    // another device took the match over: that write and the next ones make no file
+    m.state.match.cloudBlock = { code: 'OV_SCORER_MOVED' }
+    tick()
+    engine.notify(1)
+    await engine.flush()
+    m.point('team2')
+    tick()
+    engine.notify(1)
+    await engine.flush()
+    expect(eventFiles(store)).toHaveLength(1)
+    expect(skipMatch).toHaveBeenLastCalledWith(expect.objectContaining({ cloudBlock: { code: 'OV_SCORER_MOVED' } }))
+    expect(engine.getStatus()).toMatchObject({ count: 1, error: null }) // skipped, not failed
+    // the scorer's own "Back up now" still writes it
+    await engine.backupNow(1)
+    expect(eventFiles(store)).toHaveLength(2)
+    // taken back here ("Take back scoring here"): backed up again
+    delete m.state.match.cloudBlock
+    m.point('team1')
+    tick()
+    engine.notify(1)
+    await engine.flush()
+    expect(eventFiles(store)).toHaveLength(3)
   })
 
   it('caps each match at maxPerMatch event files, oldest deleted first', async () => {

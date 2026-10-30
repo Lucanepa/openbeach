@@ -19,6 +19,13 @@ import {
 } from '../../utils_beach/appLifecycle_beach'
 import { confirmDialog, getConfirmSnapshot, settleConfirm } from '../../ui/volleyui/uiStore'
 import { openAppWindow, resetAppWindowsForTests } from '../../utils_beach/openAppWindow_beach'
+import { flushNativeBackups } from '../../utils_beach/nativeBackup/index_beach'
+
+// The match's last backup file before the app goes (no engine here: at once)
+vi.mock('../../utils_beach/nativeBackup/index_beach', async (importOriginal) => ({
+  ...(await importOriginal()),
+  flushNativeBackups: vi.fn(async () => {})
+}))
 
 // The OpenBeach desktop app (OpenVolley's Tauri shell, beach flavour) only
 // starts its updater once the page has called app_page_state
@@ -281,6 +288,69 @@ describe('desktop app', () => {
     expect(invoke).toHaveBeenCalledWith('app_quit')
     // quitting: the hidden scoresheet windows are not brought back
     expect(invoke).not.toHaveBeenCalledWith('app_quit_cancel')
+  })
+
+  // app_quit exits at once: the last point's backup file is written first,
+  // the wait bounded by flushNativeBackups (QUIT_BACKUP_WAIT_MS)
+  it('a confirmed quit writes the match\'s last backup file before the app exits', async () => {
+    const { win, invoke } = desktopWin()
+    let written
+    flushNativeBackups.mockClear()
+    flushNativeBackups.mockImplementationOnce(() => new Promise((r) => { written = r }))
+    const ask = vi.fn().mockResolvedValue(true)
+    const quitting = requestDesktopQuit(win, ask)
+    await vi.waitFor(() => expect(flushNativeBackups).toHaveBeenCalledWith(1500))
+    await flush()
+    expect(invoke).not.toHaveBeenCalledWith('app_quit')
+    written()
+    expect(await quitting).toBe(true)
+    expect(invoke).toHaveBeenCalledWith('app_quit')
+
+    // Keep running: nothing to write first
+    flushNativeBackups.mockClear()
+    ask.mockResolvedValue(false)
+    expect(await requestDesktopQuit(win, ask)).toBe(false)
+    expect(flushNativeBackups).not.toHaveBeenCalled()
+  })
+
+  // The OS ends the app (logout, shutdown, SIGTERM; OpenVolley's lifecycle.rs
+  // os_exit): the shell waits for app_flush_done, 2 s at most, then exits
+  it('the OS ending the app: the last files are written, then the app is told, nothing asked', async () => {
+    const { win, invoke } = desktopWin()
+    const ask = vi.fn().mockResolvedValue(true)
+    let written
+    flushNativeBackups.mockClear()
+    flushNativeBackups.mockImplementationOnce(() => new Promise((r) => { written = r }))
+    uninstall = installAppLifecycle({ win, ask })
+    fire(win, 'flush-requested')
+    await vi.waitFor(() => expect(flushNativeBackups).toHaveBeenCalledWith(1500))
+    await flush()
+    expect(invoke).not.toHaveBeenCalledWith('app_flush_done')
+    written()
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith('app_flush_done'))
+    expect(ask).not.toHaveBeenCalled()
+    expect(invoke).not.toHaveBeenCalledWith('app_quit')
+    expect(invoke).not.toHaveBeenCalledWith('app_quit_ack')
+  })
+
+  it('the OS ending the app: a failing write still tells the app; a refused app_flush_done changes nothing', async () => {
+    const { win, invoke } = desktopWin()
+    flushNativeBackups.mockImplementationOnce(async () => { throw new Error('disk gone') })
+    uninstall = installAppLifecycle({ win, ask: vi.fn() })
+    fire(win, 'flush-requested')
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith('app_flush_done'))
+    // a shell without the command (or its permission) refuses it
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      invoke.mockImplementation(async (cmd) => {
+        if (cmd === 'app_flush_done') throw 'Command app_flush_done not found'
+        return null
+      })
+      fire(win, 'flush-requested')
+      await vi.waitFor(() => expect(warn).toHaveBeenCalledWith('[app] app_flush_done failed', 'Command app_flush_done not found'))
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('Keep running brings back the scoresheet windows the quit request left hidden', async () => {

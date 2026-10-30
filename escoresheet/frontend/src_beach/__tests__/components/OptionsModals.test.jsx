@@ -121,6 +121,29 @@ describe('Home → Options', () => {
   })
 })
 
+// A browser without a backup folder downloads at the set end, at the match
+// end and every few minutes when the match changed (useAutoBackup_beach),
+// but the Options listed the set start and a timeout too
+describe('Home → Options → Backup in a browser without a folder', () => {
+  const backup = (over = {}) => ({
+    hasFileSystemAccess: false, autoBackupEnabled: true, backupFrequency: 5, lastBackup: null, backupError: null,
+    isBackingUp: false, toggleAutoBackup: vi.fn(), selectBackupDir: vi.fn(), clearBackupDir: vi.fn(), manualBackup: vi.fn(), ...over
+  })
+
+  it('lists when it downloads: the set end, the match end, every few minutes', () => {
+    renderHome({ backup: backup() })
+    const list = screen.getByTestId('browser-auto-download')
+    expect([...list.querySelectorAll('li')].map(li => li.textContent)).toEqual(['Set end', 'Match end', 'Every 5 min, if the match changed'])
+    expect(screen.getByText('Auto-download (when enabled):')).toBeInTheDocument()
+  })
+
+  it('with its own minutes, in the page language', async () => {
+    await i18n.changeLanguage('de')
+    renderHome({ backup: backup({ backupFrequency: 10 }) })
+    expect(within(screen.getByTestId('browser-auto-download')).getByText('Alle 10 Min., wenn sich das Spiel geändert hat')).toBeInTheDocument()
+  })
+})
+
 describe('Scoring screen → Options', () => {
   it('its toggles are named switches and its (i) are buttons', () => {
     render(
@@ -137,6 +160,24 @@ describe('Scoring screen → Options', () => {
     }
     expect(screen.getByRole('switch', { name: 'Check accidental rally start' })).toHaveAttribute('aria-checked', 'true')
     expect(screen.getAllByRole('button', { name: 'Show explanation' }).length).toBeGreaterThan(3)
+  })
+
+  // "Automatically download game data when a set ends" described a download
+  // at every set end: the scoreboard downloads only when the set end did not
+  // reach the cloud (Scoreboard_beach shouldDownload: the set-end sync failed,
+  // was set aside or is still not sent after its 10 s; a test match is never
+  // sent), and Restore match takes the file back (OpenVolley 09c450d2)
+  it('the set-end download says when it downloads and that Restore match takes the file back', async () => {
+    render(
+      <AlertProvider>
+        <ScoreboardOptionsModal open onClose={() => {}} matchOptions={matchOptions()} displayOptions={{ ...displayOptions(), autoDownloadAtSetEnd: true, setAutoDownloadAtSetEnd: vi.fn() }} matchId={1} />
+      </AlertProvider>
+    )
+    const row = screen.getByText('Auto-download data at set end').parentElement
+    fireEvent.click(within(row).getByRole('button', { name: 'Show explanation' }))
+    const info = await screen.findByText(/^When a set end does not reach the cloud/)
+    expect(info.textContent).toMatch(/offline, signed out, failed, set aside because another device scores the match, or still not sent after 10 s/)
+    expect(info.textContent).toMatch(/“Restore match” brings the match back from that file\.$/)
   })
 })
 

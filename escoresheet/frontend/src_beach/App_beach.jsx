@@ -55,7 +55,7 @@ import { checkMatchSession, lockMatchSession, unlockMatchSession, verifyGamePin 
 
 // Sport type for beach volleyball
 const SPORT_TYPE = 'beach'
-import { fetchMatchByPin, importMatchFromSupabase, restoreMatchFromJson, selectBackupFile, listCloudBackups, fetchCloudBackup } from './utils_beach/backupManager_beach'
+import { fetchMatchByPin, importMatchFromSupabase, restoreMatchFromJson, selectBackupFile, listCloudBackups, fetchCloudBackup, matchBackupFromFile } from './utils_beach/backupManager_beach'
 import UpdateBanner from './components_beach/UpdateBanner_beach'
 import CompetitionMatchPicker from './components_beach/CompetitionMatchPicker_beach'
 import { COMPETITIONS_ENABLED } from './utils_beach/features_beach'
@@ -2779,8 +2779,11 @@ export default function App() {
                               setRestoreLoading(false)
                               return // User cancelled
                             }
-                            // Show preview instead of immediately restoring
-                            setRestorePreviewData({ data: jsonData, source: 'local' })
+                            // Show preview instead of immediately restoring. A
+                            // whole-database export (the set-end download) and a
+                            // Match End file (the ZIP's MatchData JSON) are
+                            // previewed and restored as the match they hold.
+                            setRestorePreviewData({ data: matchBackupFromFile(jsonData), source: 'local' })
                           } catch (err) {
                             setRestoreError(err.message || 'Failed to restore from file')
                           } finally {

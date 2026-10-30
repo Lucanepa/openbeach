@@ -2,7 +2,7 @@
 // an admin (OpenVolley src/components/__tests__/MatchEndReopen.test.jsx,
 // ported with utils_beach/matchReopen_beach 2026-10-21).
 import { describe, it, expect, vi } from 'vitest'
-import { planReopen, isClosingSyncJob } from '../../utils_beach/matchReopen_beach'
+import { planReopen, isClosingSyncJob, isContinuedElsewhere, isStaleClosedCopy } from '../../utils_beach/matchReopen_beach'
 
 const SEED = 'match_100_aaa'
 const match = (over = {}) => ({ id: 1, seed_key: SEED, test: false, status: 'approved', gameN: 4711, ...over })
@@ -90,5 +90,45 @@ describe('planReopen', () => {
   it('counts restore jobs that carry a closed status as closing', () => {
     expect(isClosingSyncJob({ resource: 'match', action: 'restore', payload: { match: { external_id: SEED, status: 'final' } } })).toBe(true)
     expect(isClosingSyncJob({ resource: 'set', action: 'update', payload: { status: 'approved' } })).toBe(false)
+  })
+})
+
+// OpenVolley 2026-10-29: the desktop app reopened its copy of match 406970,
+// continued and closed on a phone a week before, and wrote a fresh backup
+// file of it. No backup file of such a copy; the final state of a match this
+// device ended or approved is always backed up.
+describe('isContinuedElsewhere', () => {
+  const moved = { code: 'OV_SCORER_MOVED' }
+  const closed = { code: 'OV_MATCH_CLOSED' }
+
+  it('a copy another device took over, closed there or not', () => {
+    expect(isContinuedElsewhere({ status: 'live', cloudBlock: moved })).toBe(true)
+    expect(isContinuedElsewhere({ status: 'scheduled', cloudBlock: moved })).toBe(true)
+    // taken over and closed there (markScorerMoved makes the copy final)
+    expect(isContinuedElsewhere({ status: 'final', cloudBlock: { ...moved, closed: true } })).toBe(true)
+  })
+
+  it('a copy the server closed while it was scored here (the evidence OpenVolley records)', () => {
+    expect(isContinuedElsewhere({ status: 'live', cloudBlock: closed })).toBe(true)
+    expect(isContinuedElsewhere({ status: 'scheduled', closed_at: '2026-10-20T19:09:00Z' })).toBe(true)
+    expect(isStaleClosedCopy({ status: 'live', closed_at: '2026-10-20T19:09:00Z' })).toBe(true)
+    expect(isStaleClosedCopy({ status: 'live', cloudBlock: moved })).toBe(false)
+  })
+
+  it('never a copy this device ended or approved, whatever the server says', () => {
+    expect(isContinuedElsewhere({ status: 'ended', approved: true, cloudBlock: closed })).toBe(false)
+    expect(isContinuedElsewhere({ status: 'ended', approved: true })).toBe(false)
+    expect(isContinuedElsewhere({ status: 'ended', cloudBlock: moved })).toBe(false)
+    expect(isContinuedElsewhere({ status: 'ended', closed_at: '2026-10-20T19:09:00Z' })).toBe(false)
+    // ended here, then closed on the server
+    expect(isContinuedElsewhere({ status: 'final', cloudBlock: closed })).toBe(false)
+  })
+
+  it('not an open copy, a test match or no match', () => {
+    expect(isContinuedElsewhere({ status: 'live' })).toBe(false)
+    expect(isContinuedElsewhere({ status: 'live', cloudBlock: { code: 'OV_GAME_TAKEN' } })).toBe(false)
+    expect(isContinuedElsewhere({ status: 'live', test: true, cloudBlock: closed })).toBe(false)
+    expect(isContinuedElsewhere({ status: 'live', test: true, cloudBlock: moved })).toBe(false)
+    expect(isContinuedElsewhere(null)).toBe(false)
   })
 })

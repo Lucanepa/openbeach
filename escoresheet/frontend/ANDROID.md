@@ -113,7 +113,10 @@ The same as OpenVolley's app:
   screen it asks "Exit OpenBeach?" and only Exit closes the app
   (`appLifecycle_beach.js`, `AndroidExitPrompt_beach.jsx`, `AppExitPlugin.java`).
   Matches stay on the tablet. Swiping the app away in the recent apps cannot
-  be stopped by any app: use Android's App pinning on scorer tablets.
+  be stopped by any app: use Android's App pinning on scorer tablets. Exit
+  and going to the background write the match's last backup file at once
+  (Capacitor's `pause`, or the page going hidden), so it is on disk before a
+  swipe can end the app.
 - **Keyboard.** The WebView is never resized by the keyboard (the app's
   "use a larger screen" notice would replace the form); it slides up just
   enough to show the focused field (`MainActivity.java`).

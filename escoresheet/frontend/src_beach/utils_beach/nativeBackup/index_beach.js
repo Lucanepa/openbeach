@@ -9,6 +9,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { detectBackupPlatform, isNativeBackupPlatform, createPlatformStore } from './platform_beach'
 import { createNativeBackupEngine } from './engine_beach'
+import { isContinuedElsewhere } from '../matchReopen_beach'
 
 export { detectBackupPlatform, isNativeBackupPlatform } from './platform_beach'
 export { subscribeMatchWrites } from './matchWriteHook_beach'
@@ -26,7 +27,9 @@ export function getNativeBackupEngine() {
         createPlatformStore(),
         import('../backupManager_beach')
       ])
-      engine = createNativeBackupEngine({ store, exportMatch: exportMatchData })
+      // No new file of a copy another device went on with: its state is older
+      // than the match's (OpenVolley 2026-10-29, match 406970)
+      engine = createNativeBackupEngine({ store, exportMatch: exportMatchData, skipMatch: isContinuedElsewhere })
       engine.subscribe(emit)
       emit()
       return engine
@@ -57,6 +60,32 @@ export function useNativeBackupStatus() {
     getNativeBackupEngine().then(e => e?.loadFolder())
   }, [])
   return status
+}
+
+/** How long the app's quit waits at most for the last backup file. */
+export const QUIT_BACKUP_WAIT_MS = 1500
+
+/**
+ * Before the app quits (appLifecycle_beach), and on Android when it goes to
+ * the background: the backups queued now are written at once (the last
+ * scoring write's file, still in its quiet window or being written);
+ * resolves when they are, or after timeoutMs at the latest, so a quit never
+ * waits longer, whatever the disk does. At once in a browser and when the
+ * engine never started. Never throws. (OpenVolley flushNativeBackups.)
+ */
+export async function flushNativeBackups(timeoutMs = QUIT_BACKUP_WAIT_MS) {
+  if (!enginePromise) return
+  let timer
+  try {
+    await Promise.race([
+      enginePromise.then(e => e?.flush({ writesOnly: true })),
+      new Promise(resolve => { timer = setTimeout(resolve, timeoutMs) })
+    ])
+  } catch (e) {
+    console.warn('[NativeBackup] last backup before quitting:', e?.message || e)
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 /** Opens the backup folder in the file manager (desktop). */
