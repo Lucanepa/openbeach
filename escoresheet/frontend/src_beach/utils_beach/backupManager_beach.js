@@ -16,7 +16,7 @@ import { labelsInDesignation, eventTeamA } from './coinToss_beach'
 import { cleanIntervalChoices } from './intervalChoice_beach'
 import { refereeConnectionDefault } from '../constants_beach/testSeeds_beach'
 import { jobMatchKey, setExtId, eventExtId, parseExtId } from './syncIds_beach'
-import { queueScorerClaim, isScorerMoved } from './matchHandover_beach'
+import { queueScorerClaim, isScorerMoved, isKnownClosedOnServer, MATCH_CLOSED } from './matchHandover_beach'
 import { CLOSING_STATUSES } from './matchReopen_beach'
 import { postMatchSignaturesFromServer } from './signatures_beach'
 import { listMatchBackups } from './logger_beach'
@@ -464,12 +464,94 @@ export function matchEndExportData({ match, team1, team2, team1Players, team2Pla
   }
 }
 
+// How long a restore waits for the server's answer before it goes on without
+// it: the restore's Confirm must never wait long on a slow backend.
+const SERVER_CLOSED_TIMEOUT_MS = 4000
+const TIMED_OUT = Symbol('timedOut')
+
+// Public columns behind a public filter, so this also works signed out and
+// sees every match, not only this account's.
+const readServerStatus = (key) =>
+  apiFrom('matches').select('external_id, status, test').eq('external_id', key).maybeSingle()
+
+/**
+ * Is this match closed on the server? Closed is the server guard's rule
+ * (db/007): a non-test match at approved/final (closed_at is set on the first
+ * such write and is not a public column; an admin reopen writes 'ended').
+ * true / false, or null when unknown: no key, offline, the read failed or did
+ * not answer within timeoutMs. A match the server does not have is not closed.
+ * (OpenVolley backupManager serverClosedState.)
+ * @param {string} externalId
+ * @param {{read?: (key: string) => PromiseLike<{data: object|null, error: object|null}>, timeoutMs?: number}} [options]
+ * @returns {Promise<boolean|null>}
+ */
+export async function serverClosedState(externalId, { read = readServerStatus, timeoutMs = SERVER_CLOSED_TIMEOUT_MS } = {}) {
+  if (!externalId) return null
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return null
+  let timer
+  try {
+    const timeout = new Promise(resolve => { timer = setTimeout(() => resolve(TIMED_OUT), timeoutMs) })
+    const result = await Promise.race([read(externalId), timeout])
+    if (result === TIMED_OUT || !result || result.error) return null
+    const row = result.data
+    if (!row) return false
+    return row.test !== true && CLOSING_STATUSES.includes(row.status)
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/** The error a restore of a match closed on the server is refused with. */
+export function closedOnServerError(externalId, gameN) {
+  const err = new Error('This match is closed on the server')
+  err.code = MATCH_CLOSED
+  err.externalId = externalId
+  err.gameN = gameN ?? null
+  return err
+}
+
+// A backup of a match the server has closed restores a live copy whose
+// restore job the server refuses for good (409 OV_MATCH_CLOSED: OpenVolley
+// 2026-10-20, match 406970). Such a restore is refused before anything is
+// replaced (a backup of the closed match itself is restored on the device
+// only, isClosedBackup, and never asked about). The server's answer decides; an explicit "open" (an admin
+// reopened it) wins over stale local evidence. Only when the server cannot be
+// asked does local evidence decide: the backup row or a local copy known
+// closed there. (OpenVolley 4032fc8b.)
+async function refuseIfClosedOnServer(externalId, backupMatch, localCopies, checkServer) {
+  const server = await checkServer(externalId)
+  const closed = server === true ||
+    (server == null && (isKnownClosedOnServer(backupMatch) || localCopies.some(isKnownClosedOnServer)))
+  if (closed) {
+    console.warn('[Restore] Refused: match is closed on the server:', externalId)
+    throw closedOnServerError(externalId, backupMatch?.gameN ?? backupMatch?.game_n ?? localCopies[0]?.gameN)
+  }
+}
+
+// A restore the guard let through drops this device's "closed on the server"
+// evidence (the OV_MATCH_CLOSED block, the server's closed_at) from the rows
+// it writes. Rows carrying it pass the guard only when the server answered
+// open (an admin reopened the match), but every backup taken after the first
+// refusal keeps it (exportMatchData writes the whole row): restored with it,
+// the copy would open as closed on the server instead of the scoring screen.
+// If the match is still closed, the restore job's own refusal records it again.
+function withoutClosedEvidence(...rows) {
+  const changes = {}
+  if (rows.some(r => r?.cloudBlock?.code === MATCH_CLOSED)) changes.cloudBlock = null
+  if (rows.some(r => r?.closed_at)) changes.closed_at = null
+  return changes
+}
+
 // A backup of an approved or final match: once the match is closed on the
 // server, the server refuses every write of it (db/007, 409
 // OV_MATCH_CLOSED), a restore job on every retry. Such a file is restored on
-// the device only, until the restore asks the server whether the match is
-// closed there. (An approval here keeps the status 'ended' and sets
-// approved; approved / final come from the server.)
+// the device only: it holds the closed match itself, which opens on Match
+// End and is never written to the server again, so the closed guard
+// (refuseIfClosedOnServer) does not ask about it. (An approval here keeps
+// the status 'ended' and sets approved; approved / final come from the
+// server.)
 const isClosedBackup = (match) => match?.approved === true || CLOSING_STATUSES.includes(match?.status)
 
 // Ids given out above the highest one a backup carries: the device that
@@ -506,8 +588,13 @@ async function raiseIdsAboveBackup(jsonData, seedKey, matchId) {
  * Restore match from JSON backup data
  * REPLACE: removes this match's local copy (other local matches are kept),
  * restores it from the backup and queues the Supabase restore.
+ * Refused (err.code 'OV_MATCH_CLOSED', nothing changed) for a backup of a
+ * match still open in it that the server has closed; a test backup, and the
+ * backup of an approved or final match, never ask.
+ * @param {object} jsonData the backup
+ * @param {{checkServer?: (externalId: string) => Promise<boolean|null>}} [options]
  */
-export async function restoreMatchFromJson(jsonData) {
+export async function restoreMatchFromJson(jsonData, { checkServer = serverClosedState } = {}) {
   // A whole-database export holds the match it was written for, a Match End
   // file the match in its own shape
   jsonData = matchBackupFromFile(jsonData)
@@ -526,6 +613,15 @@ export async function restoreMatchFromJson(jsonData) {
   const externalId = localMatchKey(match)
   if (!externalId) {
     console.warn('[Restore] No external_id found - Supabase sync will be skipped')
+  }
+
+  // Before anything is deleted, added or queued (test matches never sync;
+  // the backup of a closed match is restored on the device only, without a
+  // restore job: isClosedBackup)
+  const guarded = !!externalId && !match.test && !isClosedBackup(match)
+  if (guarded) {
+    const localCopies = await db.matches.filter(m => localMatchKey(m) === externalId).toArray()
+    await refuseIfClosedOnServer(externalId, match, localCopies, checkServer)
   }
 
   let restoredMatchId = null
@@ -594,6 +690,7 @@ export async function restoreMatchFromJson(jsonData) {
     const matchId = await db.matches.add({
       ...match,
       ...restoredBlock(match),
+      ...(guarded ? withoutClosedEvidence(match) : {}),
       id: undefined,
       team1Id,
       team2Id,
@@ -794,8 +891,9 @@ export function restoredTossChoices(coinToss = {}, events = []) {
  * Restore match in place - overwrite existing match with backup data
  * Used for cloud backup restore during active match
  * IMPORTANT: Queues sync job to update match_live_state in Supabase
+ * Refused like restoreMatchFromJson for a match closed on the server.
  */
-export async function restoreMatchInPlace(matchId, jsonData) {
+export async function restoreMatchInPlace(matchId, jsonData, { checkServer = serverClosedState } = {}) {
   jsonData = matchBackupFromFile(jsonData)
   if (!jsonData?.version || !jsonData.match) {
     throw new Error('Invalid backup file format')
@@ -818,12 +916,21 @@ export async function restoreMatchInPlace(matchId, jsonData) {
     throw new Error('This backup belongs to a different match')
   }
 
+  // Before the open match is overwritten (test matches never sync; the
+  // backup of a closed match is restored on the device only, isClosedBackup)
+  const guarded = !!externalId && !match.test && !isClosedBackup(match)
+  if (guarded) {
+    await refuseIfClosedOnServer(externalId, match, currentMatch ? [currentMatch] : [], checkServer)
+  }
+
   await db.transaction('rw', db.matches, db.sets, db.events, db.sync_queue, async () => {
-    // Update match data (keep same ID)
+    // Update match data (keep same ID). The backup is merged over the current
+    // row, so the current row's closed evidence is dropped as well.
     await db.matches.update(matchId, {
       ...match,
       ...connectionsForRestore(match),
       ...restoredBlock(match),
+      ...(guarded ? withoutClosedEvidence(match, currentMatch) : {}),
       id: matchId,
       // The backup's team ids are local ids of the device and the copy that
       // wrote it: restoreMatchFromJson gives a restored match new team rows

@@ -27,9 +27,9 @@ async function settleJob(job, jobId, result) {
   if (result === DROP_JOB) {
     await db.sync_queue.update(jobId, { status: 'dropped' })
     // Set aside because another device scores the match (db/019,
-    // ScorerMovedModal_beach shows), or a match update for a match closed
-    // here: nothing failed, the set-end modal must not say "Sync failed"
-    // behind the handover notice
+    // ScorerMovedModal_beach shows) or the server has closed it
+    // (utils_beach/matchHandover_beach setAsideClosedJobs): nothing failed,
+    // the set-end modal must not say "Sync failed" behind the notice
     if (SET_ASIDE_CODES.includes(lastError?.code)) {
       return { success: false, offline: true, setAside: true, jobId }
     }

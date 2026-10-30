@@ -1105,7 +1105,14 @@
       "title": "«{{name}}» löschen?",
       "body": "Das löscht alle Sätze, Ereignisse, Spieler und Teamdaten dieses Spiels, auf diesem Gerät und in der Cloud. Das kann nicht rückgängig gemacht werden.",
       "pinLabel": "Spiel-PIN zur Bestätigung eingeben",
-      "confirm": "Löschen"
+      "confirm": "Löschen",
+      "removeCopyOnly": "Nur diese Kopie wird gelöscht. Die andere Kopie dieses Spiels auf diesem Gerät und das Spiel auf dem Server bleiben.",
+      "lossTitle": "Diese Kopie enthält, was der Server nicht hat:",
+      "lossChanges_one": "{{count}} nicht gesendete Änderung",
+      "lossChanges_other": "{{count}} nicht gesendete Änderungen",
+      "lossEvents_one": "{{count}} Ereignis, das nicht auf dem Server ist",
+      "lossEvents_other": "{{count}} Ereignisse, die nicht auf dem Server sind",
+      "lossEnd": "Beim Löschen gehen sie endgültig verloren."
     },
     "restoreModal": {
       "title": "Spiel wiederherstellen",
@@ -1116,6 +1123,31 @@
       "or": "oder",
       "fileTitle": "Aus einer Sicherungsdatei",
       "selectFile": "Sicherungsdatei wählen"
+    },
+    "continueCard": {
+      "score": "Satz {{set}} · {{team1}}:{{team2}} · Sätze {{setsTeam1}}:{{setsTeam2}}",
+      "notStarted": "Nicht gestartet",
+      "lastSaved": "Zuletzt gespeichert {{time}}"
+    },
+    "selfCheck": {
+      "closedCopy": "Spiel {{game}} ist auf dem Server abgeschlossen. Die Kopie auf diesem Gerät ist veraltet und wurde nicht geöffnet.",
+      "duplicateCopy": "Spiel {{game}} ist zweimal auf diesem Gerät, und jede Kopie enthält etwas, das der anderen fehlt. Entferne die, die du nicht geführt hast.",
+      "removedCopy": "Eine zweite Kopie von Spiel {{game}} wurde von diesem Gerät entfernt: Die andere Kopie enthält alles, was sie hatte.",
+      "show": "Anzeigen",
+      "remove": "Entfernen",
+      "dismiss": "Ausblenden",
+      "cleanUpLine_one": "Spiel {{game}} hat {{count}} weitere Kopie auf diesem Gerät, die nichts Eigenes enthält.",
+      "cleanUpLine_other": "Spiel {{game}} hat {{count}} weitere Kopien auf diesem Gerät, die nichts Eigenes enthalten.",
+      "cleanUp": "Aufräumen",
+      "cleanUpConfirm_one": "Die weitere Kopie von Spiel {{game}} von diesem Gerät entfernen? Sie enthält nichts, was der anderen Kopie fehlt. Auf dem Server ändert sich nichts.",
+      "cleanUpConfirm_other": "Die {{count}} weiteren Kopien von Spiel {{game}} von diesem Gerät entfernen? Sie enthalten nichts, was der anderen Kopie fehlt. Auf dem Server ändert sich nichts."
+    },
+    "matchState": {
+      "here": "Wird hier geführt",
+      "moved": "Auf anderem Gerät",
+      "closed": "Auf dem Server abgeschlossen",
+      "unchecked": "Nicht geprüft",
+      "unsent": "Nicht gesendete Änderungen"
     }
   },
   "options": {
@@ -3232,5 +3264,22 @@
       "desktop": "Desktop-App",
       "web": "Browser"
     }
+  },
+  "cloudBlock": {
+    "restoreRefused": "Dieses Spiel ist auf dem Server abgeschlossen, darum lässt sich dieses Backup nicht wiederherstellen. Lade die offizielle Version mit Spielnummer und Spiel-PIN.",
+    "closedCopy": {
+      "title": "Auf dem Server abgeschlossen",
+      "body": "Dieses Spiel ist auf dem Server abgeschlossen. Die Kopie auf diesem Gerät weicht von der offiziellen Version ab und kann weder weitergeführt noch synchronisiert werden.",
+      "loadOfficial": "Offizielle Version laden",
+      "remove": "Von diesem Gerät entfernen",
+      "usePin": "Spielnummer und PIN eingeben",
+      "errors": {
+        "offline": "Zum Laden der offiziellen Version braucht es eine Verbindung.",
+        "needsPin": "Mit dem Spiel-PIN auf diesem Gerät lässt sich die offizielle Version nicht laden. Gib Spielnummer und Spiel-PIN ein.",
+        "failed": "Die offizielle Version konnte nicht geladen werden. Versuche es nochmals oder gib Spielnummer und Spiel-PIN ein."
+      }
+    },
+    "removeLocalOnly": "Nur die Kopie auf diesem Gerät wird gelöscht. Die offizielle Version bleibt auf dem Server.",
+    "removeMovedLocalOnly": "Nur die Kopie auf diesem Gerät wird gelöscht. Das Spiel bleibt auf dem Server und auf dem Gerät, das es führt."
   }
 }

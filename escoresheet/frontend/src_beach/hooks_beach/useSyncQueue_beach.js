@@ -11,7 +11,7 @@ import { parseExtId, resolveJobExternalId, jobMatchKey, SCORESHEET_UPLOAD_RESOUR
 import { uploadQueuedScoresheet } from '../utils_beach/scoresheetUploader_beach'
 import { buildConnectionPins } from '../utils_beach/connectionPins_beach'
 import { sendHeldLiveState, sendHeldLiveStates } from '../utils_beach/liveStateOutbox_beach'
-import { SCORER_CLAIM_ACTION, SCORER_MOVED, isScorerMoved, noteScorerMoved, markScorerMoved, hasUnsentClaim, closeMovedMatches } from '../utils_beach/matchHandover_beach'
+import { SCORER_CLAIM_ACTION, SCORER_MOVED, MATCH_CLOSED, SERVER_CLOSED_BY, isScorerMoved, noteScorerMoved, markScorerMoved, hasUnsentClaim, closeMovedMatches, setAsideClosedJobs, setAsideClosedCopies } from '../utils_beach/matchHandover_beach'
 
 // Beach rows share OpenVolley's tables (matches / sets / events /
 // match_live_state) with sport_type 'beach'.
@@ -707,7 +707,7 @@ export async function processJob(job) {
       safeLog.log('[SyncQueue] Write waits for this device\'s scoring claim:', jobMatchKey(job), job.resource, job.action)
       return null
     }
-    if (error?.code === SCORER_MOVED || (error?.code === 'OV_MATCH_CLOSED' && await isMovedMatch(job))) {
+    if (error?.code === SCORER_MOVED || (error?.code === MATCH_CLOSED && await isMovedMatch(job))) {
       // Another device scores the match: this write is set aside with the
       // match's others (utils_beach/matchHandover_beach setAsideMovedJobs),
       // not refused
@@ -716,15 +716,27 @@ export async function processJob(job) {
         return DROP_JOB
       }
     }
-    if (error?.code === 'OV_MATCH_CLOSED' && await isNeedlessAfterClose(job)) {
-      safeLog.log('[SyncQueue] Dropping a match update refused after the match was closed here (nothing of the score in it):',
-        jobMatchKey(job), Object.keys(job.payload || {}).filter(k => k !== 'id').join(','))
-      return DROP_JOB
+    if (error?.code === MATCH_CLOSED) {
+      // Closed on the server: this write and every other unsent one of the
+      // match are set aside (utils_beach/matchHandover_beach
+      // setAsideClosedJobs), whatever the local status, and the copy carries
+      // the block. The server refuses each of them; kept 'failed', one held
+      // back every newer write of its match (OpenVolley 2026-10-23).
+      if (await recordMatchClosed(job)) {
+        if (job?.id != null) setAsideJobIds.add(job.id)
+        return DROP_JOB
+      }
+      if (await isNeedlessAfterClose(job)) {
+        safeLog.log('[SyncQueue] Dropping a match update refused after the match was closed here (nothing of the score in it):',
+          jobMatchKey(job), Object.keys(job.payload || {}).filter(k => k !== 'id').join(','))
+        return DROP_JOB
+      }
     }
   }
   if (result === true && job?.resource === 'match' && TAKE_OVER_ACTIONS.includes(job.action)) {
     await clearScorerMoved(job)
   }
+  if (result === true && SCORING_RESOURCES.includes(job?.resource)) await clearClosedBlock(job)
   return result
 }
 
@@ -773,11 +785,11 @@ async function isMovedMatch(job) {
  * closed, the local copy is final too.
  * @returns {Promise<boolean>} true when the match was marked
  */
-async function recordScorerMoved(job, error) {
-  const seedKey = jobMatchKey(job)
+async function recordScorerMoved(job, error, { local: given = null } = {}) {
+  const seedKey = given ? given.seed_key : jobMatchKey(job)
   if (!seedKey) return false
   try {
-    const local = await findLocalMatchBySeed(seedKey)
+    const local = given || await findLocalMatchBySeed(seedKey)
     if (!local) return false
     const n = await markScorerMoved(db, local, {
       scorer: error.code === SCORER_MOVED ? (error.scorer ?? null) : null,
@@ -798,6 +810,138 @@ async function recordScorerMoved(job, error) {
 // ScorerMovedModal_beach)
 export const SCORER_MOVED_EVENT = 'ob-scorer-moved'
 
+// seed_keys of local matches with the OV_MATCH_CLOSED block, loaded once, so
+// a sent job does not scan the matches table to find out there is nothing to
+// clear (OpenVolley getBlockedSeeds)
+let closedSeeds = null
+async function getClosedSeeds() {
+  if (closedSeeds) return closedSeeds
+  const seeds = new Set()
+  try {
+    for (const m of await db.matches.filter(m => m.cloudBlock?.code === MATCH_CLOSED).toArray()) if (m.seed_key) seeds.add(m.seed_key)
+  } catch { /* no table yet: nothing blocked */ }
+  closedSeeds = seeds
+  return seeds
+}
+export function resetClosedBlockCache() {
+  closedSeeds = null
+}
+
+// A match that ended here and that the server already closed (approved on
+// another device, or a backup of it restored here) is the server's official
+// record: the local copy is finished too and no longer counts as an open
+// match on the home screen. A copy still being scored here (scheduled, live)
+// keeps its status and gets the block: marked final it would leave the home
+// screen, and with it the way to remove it or to load the official version.
+// A copy approved on this device keeps its status too: the server is closed
+// by its own approval, and only its Match End's Close match takes it further
+// (marked final, it left the home screen without Close match, and the
+// server's match stayed 'approved' for good: OpenVolley 81e746df). Either way
+// its unsent writes are set aside. (OpenVolley closesLocalCopy.)
+const FINISHED_HERE = ['ended', 'approved']
+export const closesLocalCopy = (local) => !!local && local.test !== true && local.approved !== true && FINISHED_HERE.includes(local.status)
+
+/**
+ * The server has closed the match of `job` (409 OV_MATCH_CLOSED), or its own
+ * row says so (`local` given, no job: noteMatchClosedOnServer). The local
+ * copy carries cloudBlock { code: 'OV_MATCH_CLOSED' } (final when it ended
+ * here, closesLocalCopy) and every unsent write of the match is set aside,
+ * this job too. A copy approved here only has its writes set aside: its
+ * approval closed the match. Closed with no local copy (Close match removed
+ * it while older writes of the match were still queued): the writes are set
+ * aside all the same. Never a test match. (OpenVolley recordCloudBlock.)
+ * @returns {Promise<boolean>} true when the writes were set aside
+ */
+async function recordMatchClosed(job, { local: given = null } = {}) {
+  const seedKey = given ? given.seed_key : jobMatchKey(job)
+  if (!seedKey) return false
+  try {
+    const local = given || await findLocalMatchBySeed(seedKey)
+    if (local?.test === true) return false
+    // Another device took it over: the moved notice stays, closed there
+    // (final here, as a refusal of its writes marks it)
+    if (isScorerMoved(local)) return recordScorerMoved(job, { code: MATCH_CLOSED }, { local })
+    if (local && local.approved !== true) {
+      const prev = local.cloudBlock?.code === MATCH_CLOSED ? local.cloudBlock : null
+      const mods = { cloudBlock: { code: MATCH_CLOSED, claim: null, at: prev?.at || Date.now() } }
+      if (closesLocalCopy(local)) {
+        mods.status = 'final'
+        safeLog.log('[SyncQueue] Match is closed on the server, local copy marked final:', seedKey)
+      }
+      await db.matches.update(local.id, mods)
+      ;(await getClosedSeeds()).add(seedKey)
+    }
+    const n = await setAsideClosed(job, seedKey)
+    safeLog.log(`[SyncQueue] Match ${seedKey} is closed on the server${local ? '' : ' and has no local copy'}: ${n} unsent write(s) of this device set aside`)
+    return true
+  } catch (err) {
+    safeLog.warn('[SyncQueue] Could not record that the server closed a match:', err?.message)
+    return false
+  }
+}
+
+// setAsideClosedJobs, and the mark on the refused job's own row: a direct
+// send (useSequentialSync_beach) holds it as 'sending', which the set-aside
+// leaves alone. Stored as 'dropped' with the mark, it goes out again with the
+// others when the server has the match open again (requeueClosedJobs).
+async function setAsideClosed(job, seedKey) {
+  const n = await setAsideClosedJobs(db, seedKey)
+  if (job?.id != null) await db.sync_queue.update(job.id, { superseded_by: SERVER_CLOSED_BY })
+  return n
+}
+
+// A sent job that proves the server has the match open: a closed match
+// refuses every set, event and revision row written (db/007, db/015) and
+// every restore. Not a claim or a match delete (both answered "closed" count
+// as sent), not a match update (a no-op rewrite, or approved -> final, passes
+// on a closed match), and not a set/event update or delete: one of a row the
+// server does not have touches nothing and passes too.
+const provesMatchOpen = (job) => job?.resource === 'match'
+  ? job.action === 'restore'
+  : (job?.resource === 'set' || job?.resource === 'event') && job.action !== 'update' && job.action !== 'delete'
+
+// "Closed on the server" stays until a write proves the match open again (an
+// admin reopened it): the closed copy's dialog depends on it
+async function clearClosedBlock(job) {
+  if (!provesMatchOpen(job)) return
+  const seedKey = jobMatchKey(job)
+  if (!seedKey) return
+  try {
+    const seeds = await getClosedSeeds()
+    if (!seeds.has(seedKey)) return
+    seeds.delete(seedKey)
+    const local = await findLocalMatchBySeed(seedKey)
+    if (local?.cloudBlock?.code === MATCH_CLOSED) {
+      await db.matches.update(local.id, { cloudBlock: null })
+      safeLog.log('[SyncQueue] The server took a write of a match it had closed (reopened there):', seedKey)
+    }
+  } catch (err) {
+    safeLog.warn('[SyncQueue] Could not clear the closed block of a match:', err?.message)
+  }
+}
+
+/**
+ * The server's own row says match `localId` is closed, and no write of it
+ * was refused: the self-check on open read it (utils_beach/deviceSelfCheck_beach).
+ * A copy that writes nothing never hears of the close otherwise (OpenVolley
+ * 2026-10-27: the owner's PC opened match 406970 live a week after a phone
+ * had closed it). Marked exactly as a write refused with 409 OV_MATCH_CLOSED
+ * marks it (recordMatchClosed): the same block, its unsent writes set aside,
+ * final when it ended here, moved and final when another device took it
+ * over. Never a test match. Never throws.
+ * @returns {Promise<boolean>} true when the copy was marked
+ */
+export async function noteMatchClosedOnServer(localId) {
+  try {
+    const local = localId == null ? null : await db.matches.get(localId)
+    if (!local?.seed_key || local.test === true) return false
+    return await recordMatchClosed(null, { local })
+  } catch (err) {
+    safeLog.warn('[SyncQueue] Could not mark a match closed on the server:', err?.message)
+    return false
+  }
+}
+
 /**
  * The relay said another device took a match over (scorer-moved, db/019):
  * when the server confirms this device no longer scores it, its local match
@@ -806,17 +950,49 @@ export const SCORER_MOVED_EVENT = 'ob-scorer-moved'
  */
 export async function checkScorerMoved(seedKey) {
   try {
-    const marked = await noteScorerMoved(db, seedKey, { check: (key) => apiMatchScorer(key, { claim: false }) })
-    if (!marked) return false
-    safeLog.log('[SyncQueue] Another device scores this match now:', seedKey)
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent(SCORER_MOVED_EVENT, { detail: { seedKey } }))
-    }
-    return true
+    return (await scorerCheck(seedKey)).moved
   } catch (err) {
     safeLog.warn('[SyncQueue] Could not check the scoring device of a match:', err?.message)
     return false
   }
+}
+
+/**
+ * Which device scores `seedKey`, for the home screen's state of a copy (the
+ * self-check, utils_beach/deviceSelfCheck_beach): 'moved' when another
+ * device does (the copy is marked, as by checkScorerMoved), 'here' when the
+ * server answered that this device does or that none does, null when it was
+ * not asked or gave no answer (no connection, a claim of this device still
+ * unsent, a test or final copy). Never throws. (OpenVolley askScoringDevice.)
+ * @returns {Promise<'moved'|'here'|null>}
+ */
+export async function askScoringDevice(seedKey) {
+  try {
+    const { moved, answer } = await scorerCheck(seedKey)
+    if (moved) return 'moved'
+    return answer && !answer.error && answer.data && answer.data.mine !== false ? 'here' : null
+  } catch (err) {
+    safeLog.warn('[SyncQueue] Could not check the scoring device of a match:', err?.message)
+    return null
+  }
+}
+
+// checkScorerMoved and askScoringDevice: the server's answer, and the marking
+async function scorerCheck(seedKey) {
+  let answer = null
+  const moved = await noteScorerMoved(db, seedKey, {
+    check: async (key) => {
+      answer = await apiMatchScorer(key, { claim: false })
+      return answer
+    }
+  })
+  if (moved) {
+    safeLog.log('[SyncQueue] Another device scores this match now:', seedKey)
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(SCORER_MOVED_EVENT, { detail: { seedKey } }))
+    }
+  }
+  return { moved, answer }
 }
 
 async function processJobOnce(job) {
@@ -866,10 +1042,12 @@ async function requeueParkedJobsOf(matchKey, exceptId) {
 const CLOSING_STATUSES = ['approved', 'final']
 
 // A match that is closed here: approved on this device (the local status
-// stays 'ended' until Close Match), final, or closed on the device that took
-// it over (OV_SCORER_MOVED, closed).
+// stays 'ended' until Close Match), final, closed on the device that took it
+// over (OV_SCORER_MOVED, closed), or already known to be closed on the
+// server (an earlier refusal).
 export const isClosedHere = (local) => !!local && local.test !== true &&
-  (local.approved === true || CLOSING_STATUSES.includes(local.status) || (isScorerMoved(local) && local.cloudBlock?.closed === true))
+  (local.approved === true || CLOSING_STATUSES.includes(local.status) || local.cloudBlock?.code === MATCH_CLOSED ||
+    (isScorerMoved(local) && local.cloudBlock?.closed === true))
 
 /**
  * The match-end update { status: 'ended', set_results, ... } (App_beach
@@ -896,9 +1074,10 @@ export function matchEndUpdateNeeded(match, pendingJobs, payload) {
  * match that is closed here too: the server's closed copy is the official
  * record, which this device approved with every set and event before it
  * (closingMustWait), so a later update of the match row (status, results,
- * signatures, remarks) has nothing left to deliver. Dropped instead of
- * staying a permanent "refused by the server". Sets, events and restores
- * refused as closed are never dropped: they carry the score.
+ * signatures, remarks) has nothing left to deliver. Only a fallback now:
+ * recordMatchClosed sets aside every write refused as closed (sets, events,
+ * restores and updates alike), and the local rows keep the score. This drops
+ * the update when that could not be recorded.
  */
 async function isNeedlessAfterClose(job) {
   if (job?.resource !== 'match' || job.action !== 'update') return false
@@ -1693,6 +1872,18 @@ let lastRequeueAt = 0
 let lastPruneAt = 0
 // 'failed' jobs are requeued once per page load (the first connected mount)
 let startupFailedRetryDone = false
+// The unsent writes of matches closed on the server are set aside once per
+// page load, offline too, before the startup retry sends them again, also
+// the ones an older version parked as 'failed' (utils_beach/matchHandover_beach
+// setAsideClosedCopies): they would only be refused again, and held back the
+// match's newer writes (OpenVolley 2026-10-23, match 406970)
+let closedCopiesSweep = null
+function setAsideClosedCopiesOnce() {
+  closedCopiesSweep ??= setAsideClosedCopies(db)
+    .then((n) => { if (n) safeLog.log(`[SyncQueue] Set aside ${n} unsent write(s) of matches closed on the server`) })
+    .catch((err) => safeLog.warn('[SyncQueue] Could not set aside the writes of matches closed on the server:', err?.message))
+  return closedCopiesSweep
+}
 // Matches this device lost to another one (OV_SCORER_MOVED) are asked about
 // once per page load: closed there meanwhile, they are final here too
 let movedMatchesCheck = null
@@ -1711,7 +1902,9 @@ export function resetQueueHousekeeping() {
   lastRequeueAt = 0
   lastPruneAt = 0
   claimAttempts.clear()
+  closedCopiesSweep = null
   movedMatchesCheck = null
+  closedSeeds = null
 }
 
 // Sync status is shared by every mounted instance: whichever instance runs the
@@ -1950,10 +2143,12 @@ export function useSyncQueue() {
     window.addEventListener('offline', handleOffline)
 
     // Initial check
+    const sweep = setAsideClosedCopiesOnce()
     if (isOnline) {
       if (hasBackend()) {
         checkSupabaseConnection(true).then(async (connected) => {
           if (connected) {
+            await sweep
             checkMovedMatchesOnce()
             // On initial load, retry errored jobs if any; once per page load
             // also the ones the backend refused (a fix may have been deployed)

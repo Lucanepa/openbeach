@@ -38,7 +38,7 @@ import { compareEvents } from '../utils_beach/medicalRemarks_beach'
 import { plausibleMinutes } from '../../scoresheet_pdf_beach/components_beach/sheetFormat_beach'
 import { isoOf, matchTimes, setEndMs, setStartMs } from '../../scoresheet_pdf_beach/components_beach/matchTimes_beach'
 import { formatTimeLocal } from '../utils_beach/timeUtils_beach'
-import { isKnownClosedOnServer } from '../utils_beach/matchHandover_beach'
+import { isKnownClosedOnServer, requeueClosedJobs } from '../utils_beach/matchHandover_beach'
 import { planReopen } from '../utils_beach/matchReopen_beach'
 import { apiFrom, apiAdminReopenMatch, BACKEND_REACHED_EVENT } from '../lib_beach/apiClient_beach'
 import { saveMatchSignature, signatureEditLocked, signaturesPayload, clearedPostMatchSignatures, reopenedMatchUpdate } from '../utils_beach/signatures_beach'
@@ -1546,8 +1546,9 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     cLogger.logHandler('handleReopenMatchClick', { matchId, plan: plan.kind })
     switch (plan.kind) {
       case 'local':
-      case 'serverOpen':
         return handleReopenMatch()
+      case 'serverOpen':
+        return handleReopenMatch({ requeueSetAside: true })
       case 'localUnsynced':
         try {
           for (const id of plan.supersedeIds || []) await db.sync_queue.update(id, { status: 'superseded' })
@@ -1588,25 +1589,37 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
     }
     setReopenDialog(null)
     // The admin reopen voided the account approvals on the server (db/011)
-    await handleReopenMatch({ voidApprovals: true })
+    await handleReopenMatch({ voidApprovals: true, requeueSetAside: true })
   }
 
   // Handle reopening match after approval - allows re-approval or adjustments.
   // Nothing is queued: the server has the match open (or never saw it closed).
   // voidApprovals: the admin reopen, which voided them on the server.
-  const handleReopenMatch = async ({ voidApprovals = false } = {}) => {
-    cLogger.logHandler('handleReopenMatch', { matchId, voidApprovals })
+  // requeueSetAside: the server is known to have the match open, so the
+  // writes it refused as closed and this device set aside go out again.
+  const handleReopenMatch = async ({ voidApprovals = false, requeueSetAside = false } = {}) => {
+    cLogger.logHandler('handleReopenMatch', { matchId, voidApprovals, requeueSetAside })
 
     try {
-      // Clear approval state in database
+      const match = data?.match
+      // Clear approval state in database (and the closed block: the server
+      // has it open again, or never had it closed)
       await db.matches.update(matchId, {
         approved: false,
         approvedAt: null,
         status: 'ended', // Match is finished but not final
-        // (the server has it open again, or never had it closed)
         closed_at: null,
+        ...(match?.cloudBlock?.code === 'OV_MATCH_CLOSED' ? { cloudBlock: null } : {}),
         ...(voidApprovals ? { accountApprovals: null } : {})
       })
+
+      // The writes set aside when the server refused them as closed go out
+      // again (utils_beach/matchHandover_beach requeueClosedJobs), except a
+      // closing one and those of a local copy this one replaced
+      if (requeueSetAside && !match?.test && match?.seed_key) {
+        const n = await requeueClosedJobs(db, match.seed_key, { since: match.restoredAt || match.importedAt || null })
+        if (n) console.log(`[MatchEnd] Reopened on the server: ${n} write(s) set aside as closed queued again`)
+      }
 
       // Update local state
       setIsApproved(false)

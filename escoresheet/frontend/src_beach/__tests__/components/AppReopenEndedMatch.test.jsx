@@ -3,19 +3,23 @@
 // Nothing there said the match was not approved, and the next tap, New match
 // > Official match > Delete and start new, threw it away with the captains'
 // signatures; the server kept it ended and unapproved, for good (stress test
-// 2026-10-25, 3/3 reopens). The app now reopens it on Match End, as a live
-// match on the scoring screen, and replacing it says it is not approved.
+// 2026-10-25, 3/3 reopens). A reload goes back to Match End now; an opening
+// (the app started, a crash, a kill) lands on Home, whose Continue card says
+// which match is there and opens its Match End in one tap (the owner's start
+// rules, 2026-10-27), and replacing it says it is not approved.
 import '../helpers/fakeIndexedDb'
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
 import { render, waitFor, fireEvent, cleanup } from '@testing-library/react'
 import { db } from '../../db_beach/db_beach'
 import { offline, online, mountApp, button, sleep, track } from '../helpers/appMount'
+import { reloadInto } from '../helpers/selfCheckFixtures'
 import { UiHost } from '../../ui/volleyui/UiHost.jsx'
 
 beforeAll(offline)
 afterAll(online)
 afterEach(async () => {
   cleanup()
+  sessionStorage.clear()
   await Promise.all(db.tables.map(t => t.clear()))
 })
 
@@ -48,8 +52,9 @@ const see = () => ({
 })
 
 describe('App: a finished match not approved, as the app opens', () => {
-  it('reopens on Match End, with no scoreboard first', async () => {
+  it('a reload on Match End goes back to Match End, with no scoreboard first', async () => {
     const matchId = await finishedMatch()
+    reloadInto(matchId, 'matchEnd')
     const { states, stop } = track(see)
     mountApp()
     await waitFor(() => expect(states.at(-1)?.matchEnd).toBe(true), { timeout: 15000 })
@@ -60,6 +65,22 @@ describe('App: a finished match not approved, as the app opens', () => {
     expect(states.filter(s => s.scoreboard)).toEqual([])
     const match = await db.matches.get(matchId)
     expect([match.team1CaptainSignature, match.team2CaptainSignature]).toEqual(['x', 'x'])
+  }, 30000)
+
+  it('an opening lands on Home with the Continue card; Continue opens Match End, with no scoreboard first', async () => {
+    const matchId = await finishedMatch()
+    mountApp()
+    const card = () => document.querySelector('[data-testid="continue-card"]')
+    await waitFor(() => expect(card()?.textContent).toContain('Müller / Weber – Schmidt / Fischer'), { timeout: 8000 })
+    expect(card().textContent).toContain('Set 3 · 15:12 · sets 2:1')
+    await sleep(800)
+    expect(see()).toEqual({ home: true, scoreboard: false, matchEnd: false })
+    const { states, stop } = track(see)
+    fireEvent.click(button('Continue match'))
+    await waitFor(() => expect(states.at(-1)?.matchEnd).toBe(true), { timeout: 8000 })
+    stop()
+    expect(states.filter(s => s.scoreboard)).toEqual([])
+    expect(JSON.parse(sessionStorage.getItem('ob.openMatch'))).toEqual({ id: matchId, view: 'matchEnd' })
   }, 30000)
 
   it('an approved one stays on the home screen', async () => {

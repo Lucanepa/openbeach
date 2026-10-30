@@ -5,12 +5,20 @@ import { ChevronDown, LifeBuoy, Loader2, MonitorPlay, Settings } from 'lucide-re
 import SupportFeedbackModal from '../SupportFeedbackModal_beach'
 import { Button, FOCUS_RING_INSET } from '../../ui/volleyui/Button.jsx'
 import { Card } from '../../ui/volleyui/Card.jsx'
+import { StatusPill } from '../../ui/volleyui/StatusPill.jsx'
 import { cn } from '../../ui/volleyui/cn.js'
 import { BRAND } from '../../brand_beach'
+import { formatTakeOver } from '../ScorerMovedModal_beach'
+
+/** "Set 3 · 12:10 · sets 1:1", or "Not started" for a match with no set yet. */
+export function scoreText(t, score) {
+  if (!score || score.set == null) return t('home.continueCard.notStarted')
+  return t('home.continueCard.score', { set: score.set, team1: score.team1, team2: score.team2, setsTeam1: score.setsTeam1, setsTeam2: score.setsTeam2 })
+}
 
 // The home page in the Volleyball style (volleyui), the same stack as
 // OpenVolley's home: one card holding the match actions (brand red New match,
-// dark Continue, soft Delete, Restore), then the quieter app actions.
+// the Continue card, soft Delete, Restore), then the quieter app actions.
 export default function HomePage({
   newMatchMenuOpen,
   setNewMatchMenuOpen,
@@ -24,9 +32,13 @@ export default function HomePage({
   showDeleteMatchModal,
   restartTestMatch,
   onOpenSettings,
-  onRestoreMatch
+  onRestoreMatch,
+  // what the self-check found (App_beach, SelfCheckNotice_beach)
+  selfCheckNotice = null,
+  // the match Continue resumes (App_beach): { team1, team2, score, lastSaved, state, unsent }
+  continueInfo = null
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [supportFeedbackOpen, setSupportFeedbackOpen] = useState(false)
   const hasMatch = !!(currentOfficialMatch || currentTestMatch)
 
@@ -42,6 +54,8 @@ export default function HomePage({
             draggable={false}
           />
         </div>
+
+        {selfCheckNotice}
 
         <Card className="w-full space-y-3">
           {/* New match, with its menu (pushes the stack down) */}
@@ -88,23 +102,49 @@ export default function HomePage({
             )}
           </div>
 
-          {/* Continue match - only when there is a match */}
+          {/* Continue: the match in progress on this device, in one tap.
+              Opening the app always lands here, never on a match (the owner,
+              2026-10-27, as the established e-scoresheets do): the card says
+              which match, where it stands, when it was last saved and what
+              the server said about it, so the scorer resumes the right one,
+              and sees a copy closed on the server or scored on another
+              device before opening it (read-only then). */}
           {hasMatch && (
-            <Button
-              variant="dark"
-              block
-              data-help-id="home-continue-button"
-              onClick={() => {
-                if (currentOfficialMatch) {
-                  continueMatch(currentOfficialMatch.id)
-                } else if (currentTestMatch) {
-                  continueTestMatch()
-                }
-              }}
-              className="h-14 rounded-xl text-base font-semibold"
-            >
-              {t('home.continueMatch')}
-            </Button>
+            <div data-testid="continue-card" className="space-y-3 rounded-xl border border-stone-200/70 bg-stone-50/60 p-3">
+              {continueInfo && (
+                <div className="px-1">
+                  <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
+                    <span className="min-w-0 text-base font-semibold leading-snug text-stone-900">
+                      {`${continueInfo.team1 || t('common.team1', 'Team 1')} – ${continueInfo.team2 || t('common.team2', 'Team 2')}`}
+                    </span>
+                    <span className="flex flex-wrap items-center gap-1">
+                      <MatchStateChips state={continueInfo.state} unsent={continueInfo.unsent} />
+                    </span>
+                  </div>
+                  <div className="mt-1 text-xl font-bold tabular-nums text-stone-900">{scoreText(t, continueInfo.score)}</div>
+                  {continueInfo.lastSaved != null && (
+                    <div className="mt-0.5 text-xs tabular-nums text-stone-500">
+                      {t('home.continueCard.lastSaved', { time: formatTakeOver(continueInfo.lastSaved, i18n?.language) || '–' })}
+                    </div>
+                  )}
+                </div>
+              )}
+              <Button
+                variant="dark"
+                block
+                data-help-id="home-continue-button"
+                onClick={() => {
+                  if (currentOfficialMatch) {
+                    continueMatch(currentOfficialMatch.id)
+                  } else if (currentTestMatch) {
+                    continueTestMatch()
+                  }
+                }}
+                className="h-14 rounded-xl text-base font-semibold"
+              >
+                {t('home.continueMatch')}
+              </Button>
+            </div>
           )}
 
           {/* Delete match - only when there is a match */}
@@ -177,5 +217,27 @@ export default function HomePage({
         />
       </div>
     </div>
+  )
+}
+
+// What the server said about a copy (utils_beach/deviceSelfCheck_beach
+// copyState), and whether it holds changes the server does not have yet
+const MATCH_STATE_TONE = { here: 'done', moved: 'attention', closed: 'brand', unchecked: 'neutral' }
+
+function MatchStateChips({ state, unsent = 0 }) {
+  const { t } = useTranslation()
+  return (
+    <>
+      {state && (
+        <span data-testid="match-state" className="inline-flex">
+          <StatusPill tone={MATCH_STATE_TONE[state] || 'neutral'}>{t(`home.matchState.${state}`)}</StatusPill>
+        </span>
+      )}
+      {unsent > 0 && (
+        <span data-testid="match-state" className="inline-flex">
+          <StatusPill tone="todo">{t('home.matchState.unsent')}</StatusPill>
+        </span>
+      )}
+    </>
   )
 }
