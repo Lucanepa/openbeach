@@ -8,6 +8,7 @@ import { Card } from '../../ui/volleyui/Card.jsx'
 import { StatusPill } from '../../ui/volleyui/StatusPill.jsx'
 import { cn } from '../../ui/volleyui/cn.js'
 import { BRAND } from '../../brand_beach'
+import { MadeBy } from '../LegalLinks_beach'
 import { formatTakeOver } from '../ScorerMovedModal_beach'
 
 /** "Set 3 · 12:10 · sets 1:1", or "Not started" for a match with no set yet. */
@@ -46,7 +47,7 @@ export default function HomePage({
     <div className="ov-kit flex w-full flex-1 flex-col items-center justify-center px-4 py-6 sm:py-8">
       <div className="w-full max-w-md">
         <h1 className="text-center text-2xl sm:text-3xl font-bold tracking-tight text-stone-900">{t('home.title')}</h1>
-        <div className="my-4 flex justify-center">
+        <div className="mt-4 flex justify-center">
           <img
             src={BRAND.mark}
             alt="OpenBeach"
@@ -54,6 +55,8 @@ export default function HomePage({
             draggable={false}
           />
         </div>
+        {/* Who makes it: a quiet line under the logo (owner 2026-11-10) */}
+        <MadeBy className="mt-2 mb-4 text-center text-sm text-stone-500" />
 
         {selfCheckNotice}
 

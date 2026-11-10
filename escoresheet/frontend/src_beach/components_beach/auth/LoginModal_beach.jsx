@@ -116,7 +116,9 @@ export default function LoginModal({ open, onClose }) {
           </div>
           {/* Next to "Create account" the privacy policy matters most: the
               account is made on manager-beach, which shows the terms sentence */}
-          <LegalLinks docs={['privacy', 'terms', 'impressum']} className="pt-2 text-center text-[11px] text-stone-400" />
+          {/* The sign-in dialog keeps to signing in: no "Made by Swiss
+              referees" line (Home, Options and the menus carry it) */}
+          <LegalLinks docs={['privacy', 'terms', 'impressum']} madeBy={false} className="pt-2 text-center text-[11px] text-stone-400" />
         </form>
       </Modal>
     </AuthLayer>

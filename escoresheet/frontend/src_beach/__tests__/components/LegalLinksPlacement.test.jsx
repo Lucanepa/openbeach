@@ -87,6 +87,9 @@ describe('legal links in OpenBeach', () => {
     const section = screen.getByTestId('options-app-version')
     expect(section.contains(screen.getByTestId('legal-links'))).toBe(true)
     expect(hrefs()).toEqual([...EN_THREE, 'https://openvolley.app/en/open-source'])
+    // who makes it, above the links (owner 2026-11-10)
+    expect(section.contains(screen.getByTestId('made-by'))).toBe(true)
+    expect(screen.getByTestId('made-by')).toHaveTextContent('Made by Swiss referees')
   })
 
   it('the sign-in dialog links the privacy policy, terms and legal notice', () => {
@@ -97,6 +100,8 @@ describe('legal links in OpenBeach', () => {
       'https://openvolley.app/fr/conditions',
       'https://openvolley.app/fr/mentions-legales'
     ])
+    // the dialog keeps to signing in
+    expect(screen.queryByTestId('made-by')).toBeNull()
   })
 
   it('the referee / livescore menu ends with the legal links in the app language', () => {
@@ -109,6 +114,7 @@ describe('legal links in OpenBeach', () => {
       'https://openvolley.app/nutzungsbedingungen',
       'https://openvolley.app/impressum'
     ])
+    expect(screen.getByTestId('made-by')).toHaveTextContent('Made by Swiss referees')
   })
 
   it('the public livescore list has a footer line (it shows the players\' names)', async () => {
@@ -116,6 +122,7 @@ describe('legal links in OpenBeach', () => {
     await waitFor(() => expect(screen.getAllByTestId('legal-links').length).toBeGreaterThan(0))
     const footer = screen.getAllByTestId('legal-links').find((n) => !n.closest('.dashboard-header-menu'))
     expect([...footer.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual(EN_THREE)
+    expect(footer.parentElement.querySelector('[data-testid="made-by"]')).toHaveTextContent('Made by Swiss referees')
   })
 
   it('the scoresheet archive has a footer line', async () => {

@@ -3197,6 +3197,9 @@
       "beachOff": "De Server genehmigt Beachresultat no nöd mit PIN: vo Hand underschriibe"
     }
   },
+  "brand": {
+    "madeBy": "Vo Schwiizer Schiris entwicklet"
+  },
   "legal": {
     "nav": "Rächtlichs",
     "privacy": "Datenschutzerklärig",
