@@ -3197,6 +3197,9 @@
       "beachOff": "Questo server non approva ancora i risultati di beach con un PIN: firma a mano"
     }
   },
+  "brand": {
+    "madeBy": "Creato da arbitri svizzeri"
+  },
   "legal": {
     "nav": "Note legali",
     "privacy": "Protezione dei dati",

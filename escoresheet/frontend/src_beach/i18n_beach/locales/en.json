@@ -3197,6 +3197,9 @@
       "beachOff": "This server does not approve beach results with a PIN yet: sign by hand"
     }
   },
+  "brand": {
+    "madeBy": "Made by Swiss referees"
+  },
   "legal": {
     "nav": "Legal",
     "privacy": "Privacy policy",

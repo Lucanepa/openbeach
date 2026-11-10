@@ -3197,6 +3197,9 @@
       "beachOff": "Dieser Server genehmigt Beachresultate noch nicht mit PIN: von Hand unterschreiben"
     }
   },
+  "brand": {
+    "madeBy": "Von Schweizer Schiedsrichtern entwickelt"
+  },
   "legal": {
     "nav": "Rechtliches",
     "privacy": "Datenschutzerklärung",
