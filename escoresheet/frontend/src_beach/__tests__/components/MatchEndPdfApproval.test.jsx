@@ -33,6 +33,13 @@ vi.mock('../../lib_beach/apiClient_beach', async (orig) => ({
     })
   }
 }))
+// The activity log's bus: what MatchEnd reports about the PDF (scoresheet.pdf)
+const activity = vi.hoisted(() => ({ calls: [] }))
+vi.mock('../../utils_beach/activity/bus_beach', async (orig) => ({
+  ...(await orig()),
+  emitActivity: (kind, data, opts) => { activity.calls.push({ kind, data, level: opts?.level, matchId: opts?.matchId }) }
+}))
+const pdfLog = () => activity.calls.filter(c => c.kind === 'scoresheet.pdf').map(({ data, level, matchId }) => ({ ...data, level, matchId }))
 
 // The scoresheet window: each open gets a fresh fake window the test can close
 const opened = []
@@ -80,6 +87,7 @@ beforeEach(async () => {
   backend.on = false
   uploads.paths = []
   uploads.fail = false
+  activity.calls.length = 0
   await db.open()
   await Promise.all(db.tables.map(t => t.clear()))
 })
@@ -329,6 +337,56 @@ describe('MatchEnd_beach: the approval PDF', () => {
     await postFromSheet({ type: 'pdfBlob', arrayBuffer: new ArrayBuffer(8), filename: 'x.pdf', req: secondReq })
     expect(await screen.findByRole('button', { name: 'Close match' }, { timeout: 3000 })).toBeEnabled()
     expect((await db.matches.get(matchId)).approved).toBe(true)
+  })
+
+  it('the activity log: a failed attempt, the retry and the PDF that came', async () => {
+    await seed()
+    renderMatchEnd()
+    await approve()
+    await waitFor(() => expect(opened).toHaveLength(1))
+    await postFromSheet({ type: 'pdfError', reason: 'closed' })
+    await click(await screen.findByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(opened).toHaveLength(2))
+    await postFromSheet({ type: 'pdfBlob', arrayBuffer: new ArrayBuffer(8), filename: 'x.pdf' })
+    await screen.findByRole('button', { name: 'Close match' })
+    const log = pdfLog()
+    expect(log.map(e => [e.step, e.level, e.attempt, e.reason])).toEqual([
+      ['requested', 'info', 1, undefined],
+      ['failed', 'warn', 1, 'closed'],
+      ['requested', 'info', 2, undefined],
+      ['received', 'info', 2, undefined]
+    ])
+    expect(log.every(e => e.purpose === 'approval' && e.matchId === matchId)).toBe(true)
+    expect(log[3].bytes).toBe(8)
+    expect(typeof log[3].ms).toBe('number')
+  })
+
+  it('the activity log: Approve without PDF is an error entry with the reason', async () => {
+    await seed()
+    renderMatchEnd()
+    await approve()
+    await waitFor(() => expect(opened).toHaveLength(1))
+    await postFromSheet({ type: 'pdfError', reason: 'failed', message: 'boom' })
+    await click(await screen.findByRole('button', { name: 'Approve without PDF' }))
+    await screen.findByRole('button', { name: 'Close match' })
+    expect(pdfLog().map(e => [e.step, e.level, e.reason])).toEqual([
+      ['requested', 'info', undefined],
+      ['failed', 'warn', 'failed'],
+      ['approved_without_pdf', 'error', 'failed']
+    ])
+  })
+
+  it('the activity log: Cancel while the PDF is made is logged as cancelled', async () => {
+    await seed()
+    renderMatchEnd()
+    await approve()
+    await waitFor(() => expect(opened).toHaveLength(1))
+    await click(await screen.findByTestId('export-cancel'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm and approve' })).toBeEnabled())
+    expect(pdfLog().map(e => [e.step, e.level, e.reason])).toEqual([
+      ['requested', 'info', undefined],
+      ['cancelled', 'info', 'cancelled']
+    ])
   })
 
   it('an approved match shows the approved view after a remount', async () => {

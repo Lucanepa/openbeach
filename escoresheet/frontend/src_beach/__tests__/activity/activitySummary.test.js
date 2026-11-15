@@ -10,7 +10,7 @@ import {
 } from '../../utils_beach/activitySummary_beach'
 
 // The server's catalog (backend lib/activitySanitize.js on OpenVolley main,
-// 97be90d3): kind -> keys. Beach sends nothing beyond it.
+// 97be90d3, scoresheet.pdf 3f9e6ebb): kind -> keys. Beach sends nothing beyond it.
 const SERVER_KINDS = {
   'event.add': ['type', 'seq', 'set', 'team', 'playerIn', 'playerOut', 'player', 'sanction', 'libero', 'scoreA', 'scoreB'],
   'event.bulk_add': ['count', 'types'],
@@ -41,6 +41,7 @@ const SERVER_KINDS = {
   'app.quit': [],
   'app.error': ['message', 'frames', 'source', 'repeats'],
   'backup.error': ['message'],
+  'scoresheet.pdf': ['step', 'purpose', 'attempt', 'reason', 'bytes', 'ms'],
   'auth.sign_in': [],
   'auth.sign_out': [],
   'activity.overflow': ['dropped']
