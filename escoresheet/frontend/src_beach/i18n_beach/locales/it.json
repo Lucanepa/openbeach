@@ -479,7 +479,7 @@
     "returnToMatch": "Torna alla partita",
     "lineupModal": {
       "availablePlayers": "Giocatori disponibili:",
-      "dragInstruction": "Scrivete il numero, trascinatelo o cliccate sul giocatore disponibile per occupare ciascuna delle posizioni disponibili",
+      "dragInstruction": "Scrivi il numero, trascinalo o clicca sul giocatore disponibile per occupare ciascuna delle posizioni disponibili",
       "clickOrDragTooltip": "Fare clic o trascinare per assegnare una posizione",
       "undoLastEdit": "Annullamento dell'ultima modifica",
       "clearLineup": "Una formazione chiara",
@@ -3145,9 +3145,9 @@
     "nameDiffers": "Il nome dell'account {{account}} è diverso dall'ufficiale inserito ({{entered}})",
     "revalidateFailed": "Un'approvazione con account non è più valida. Controlla le firme e approva di nuovo.",
     "errors": {
-      "pinInvalid": "E-mail o PIN non accettati. Dopo diversi PIN sbagliati il PIN va in pausa: l’ufficiale lo vede nel suo profilo. Oppure firmi a mano.",
+      "pinInvalid": "E-mail o PIN non accettati. Dopo diversi PIN sbagliati il PIN va in pausa: l’ufficiale lo vede nel suo profilo. Oppure firma a mano.",
       "pinFormat": "Il PIN deve avere da 4 a 6 cifre.",
-      "pinWeak": "Questo PIN è troppo facile da indovinare. Eviti date, anni e schemi come 1212, 2580 o 1234.",
+      "pinWeak": "Questo PIN è troppo facile da indovinare. Evita date, anni e schemi come 1212, 2580 o 1234.",
       "passwordInvalid": "Password errata.",
       "roleRequired": "Questo account non ha il ruolo per questa firma.",
       "notMatchScorer": "Solo il segnapunti di questa partita può approvare come segnapunti.",
@@ -3168,8 +3168,8 @@
       "generic": "Qualcosa è andato storto. Riprova."
     },
     "mine": {
-      "title": "Le sue approvazioni",
-      "hint": "Ogni approvazione fatta con il suo PIN. Se una non è sua, la annulli finché la partita è aperta e cambi il PIN.",
+      "title": "Le tue approvazioni",
+      "hint": "Ogni approvazione fatta con il tuo PIN. Se una non è tua, annullala finché la partita è aperta e cambia il PIN.",
       "empty": "Ancora nessuna approvazione.",
       "sentBy": "Inviata da {{name}}",
       "test": "Partita di prova",
