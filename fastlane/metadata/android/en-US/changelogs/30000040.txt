@@ -1,0 +1,4 @@
+OpenBeach 3.0.4
+- German, French and Italian now address you informally (du/tu).
+- Swiss German (de-CH) reviewed throughout, with the same terms as OpenVolley.
+- "Made by Swiss referees" under the logo on the home screen.
