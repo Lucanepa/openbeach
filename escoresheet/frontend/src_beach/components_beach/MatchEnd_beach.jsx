@@ -33,6 +33,7 @@ import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { sanitizeForFilename } from '../utils_beach/stringUtils_beach'
 import { openAppWindow } from '../utils_beach/openAppWindow_beach'
 import { waitForScoresheetPdf, PDF_FAIL, PDF_REQUEST_PARAM } from '../utils_beach/scoresheetPdfRequest_beach'
+import { logScoresheetPdf } from '../utils_beach/scoresheetPdfLog_beach'
 import { sheetRemarksText } from '../utils_beach/sheetRemarks_beach'
 import { compareEvents } from '../utils_beach/medicalRemarks_beach'
 import { plausibleMinutes } from '../../scoresheet_pdf_beach/components_beach/sheetFormat_beach'
@@ -1329,12 +1330,15 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       // without PDF (the JSON, the approval and the ZIP go ahead and the PDF
       // is saved from the scoresheet later) or Cancel (nothing is approved).
       // OpenBeach 2026-10-08: closing the window hung the approval.
+      // Each attempt and its outcome go to the activity log (scoresheet.pdf).
       let pdfResult = null
       let pdfError = null
-      for (;;) {
+      for (let attempt = 1; ; attempt += 1) {
         const abort = new AbortController()
         exportAbortRef.current = abort
         setExportPdfProgress(null)
+        const startedAt = Date.now()
+        logScoresheetPdf('requested', { purpose: 'approval', attempt }, { matchId })
         try {
           pdfResult = await waitForScoresheetPdf(
             // a popup, a desktop app window or the Android in-app view;
@@ -1343,11 +1347,15 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
             (req) => openAppWindow(`/scoresheet_beach.html?action=getBlob&${PDF_REQUEST_PARAM}=${encodeURIComponent(req)}`, { features: 'width=1600,height=1200', title: t('matchEnd.scoresheet') }),
             { signal: abort.signal, onProgress: setExportPdfProgress }
           )
+          logScoresheetPdf('received', { purpose: 'approval', attempt, bytes: pdfResult?.blob?.size, ms: Date.now() - startedAt }, { matchId })
           break
         } catch (err) {
           console.warn('[MatchEnd] No PDF:', err)
+          const reason = err?.reason || PDF_FAIL.FAILED
+          const cancelled = reason === PDF_FAIL.CANCELLED
+          logScoresheetPdf(cancelled ? 'cancelled' : 'failed', { purpose: 'approval', attempt, reason, ms: Date.now() - startedAt }, { matchId })
           // Cancel during the wait: stop here, nothing approved
-          const choice = err?.reason === PDF_FAIL.CANCELLED ? 'cancel' : await askPdfFailure(err)
+          const choice = cancelled ? 'cancel' : await askPdfFailure(err)
           if (choice === 'retry') continue
           if (choice === 'skip') { pdfError = err; break }
           exportAbortRef.current = null
@@ -1459,6 +1467,7 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
       setIsSaving(false)
       setIsApproved(true)
       if (pdfError) {
+        logScoresheetPdf('approved_without_pdf', { purpose: 'approval', reason: pdfError?.reason || PDF_FAIL.FAILED }, { matchId })
         showAlert(t('matchEnd.pdfFailedAfterApprove', { error: pdfError.message }), 'warning')
       }
     } catch (error) {
