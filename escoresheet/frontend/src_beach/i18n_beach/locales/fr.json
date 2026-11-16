@@ -1,5 +1,7 @@
 {
   "common": {
+    "showPassword": "Afficher le mot de passe",
+    "hidePassword": "Masquer le mot de passe",
     "back": "Retour",
     "team1": "Team 1",
     "team2": "Team 2",
