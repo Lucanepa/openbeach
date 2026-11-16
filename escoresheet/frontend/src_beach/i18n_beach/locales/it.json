@@ -1,5 +1,7 @@
 {
   "common": {
+    "showPassword": "Mostra password",
+    "hidePassword": "Nascondi password",
     "back": "Indietro",
     "team1": "Team 1",
     "team2": "Team 2",
