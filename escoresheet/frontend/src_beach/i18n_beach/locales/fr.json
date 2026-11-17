@@ -3287,5 +3287,22 @@
     },
     "removeLocalOnly": "Seule la copie de cet appareil est supprimée. La version officielle reste sur le serveur.",
     "removeMovedLocalOnly": "Seule la copie de cet appareil est supprimée. Le match reste sur le serveur et sur l'appareil qui le tient."
+  },
+  "liveScreen": {
+    "title": "Écran en direct",
+    "label": "Scores sur les TV",
+    "hint": "Tous les terrains de ton événement sur des TV ou un beamer.",
+    "intro": "Affiche le score de tous les terrains de ton événement sur des TV ou un beamer, pour n’importe quel match. Lance-le sur un appareil de marque et saisis son code sur les autres. Seul le score est en ligne (noms d’équipes, points, sets), jamais les données des joueurs. En beach, les noms d’équipes sont souvent ceux des joueurs : ils apparaissent alors sur la page publique.",
+    "codeLabel": "Code de l’écran en direct",
+    "smartTv": "Sur une Smart TV : ouvre le navigateur web de la TV et tape {{url}}.",
+    "venueUrl": "Sans internet sur place, les TV sur le Wi-Fi du site ouvrent : {{url}}",
+    "otherDevices": "Sur les autres appareils de marque de l’événement, saisis ce code sous Options › Écran en direct.",
+    "copyLink": "Copier le lien",
+    "copied": "Copié",
+    "turnOff": "Désactiver sur cet appareil",
+    "start": "Lancer un écran en direct",
+    "enterCode": "Code de l’écran en direct",
+    "join": "Rejoindre",
+    "badCode": "Ce n’est pas un code d’écran en direct (8 lettres et chiffres)."
   }
 }

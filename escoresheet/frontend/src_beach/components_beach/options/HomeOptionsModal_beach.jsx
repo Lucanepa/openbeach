@@ -9,6 +9,7 @@ import DesktopUpdateSection from './DesktopUpdateSection_beach'
 import KeybindingsModal from './KeybindingsModal_beach'
 import ActivityLogSection from './ActivityLogSection_beach'
 import ThemeOption from './ThemeOption_beach'
+import LiveScreenSection from './LiveScreenSection_beach'
 import { OptionNumber, OptionRow, OptionSection, OptionSwitch } from './optionRows_beach'
 import LegalLinks from '../LegalLinks_beach'
 import { copyToClipboard } from '../../utils_beach/networkInfo_beach'
@@ -232,6 +233,11 @@ export default function HomeOptionsModal({
             checked={wakeLockActive}
             onChange={() => toggleWakeLock()}
           />
+        </OptionSection>
+
+        {/* TVs at the event: every court's score (utils_beach/liveScreen_beach.js) */}
+        <OptionSection title={t('liveScreen.title')} testId="options-live-screen">
+          <LiveScreenSection />
         </OptionSection>
 
         {dashboardServer && (

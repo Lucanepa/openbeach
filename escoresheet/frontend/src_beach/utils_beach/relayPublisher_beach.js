@@ -285,9 +285,19 @@ export function relayLiveState(state) {
   }
 }
 
-/** The live-state-update message of a match. */
-export function liveStateMessage(key, liveState) {
-  return { type: 'live-state-update', matchId: key, liveState: relayLiveState(liveState) }
+/**
+ * The live-state-update message of a match. `extra`: the Live screen fields
+ * (utils_beach/liveScreen_beach.js liveScreenFields): `globalLive` (the live
+ * screen code) and `globalLiveCourt` (the match's court token), on the
+ * message beside the live state; the server reads those names.
+ */
+export function liveStateMessage(key, liveState, extra = null) {
+  const msg = { type: 'live-state-update', matchId: key, liveState: relayLiveState(liveState) }
+  if (typeof extra?.globalLive === 'string' && extra.globalLive) {
+    msg.globalLive = extra.globalLive
+    if (typeof extra.globalLiveCourt === 'string' && extra.globalLiveCourt) msg.globalLiveCourt = extra.globalLiveCourt
+  }
+  return msg
 }
 
 /**
@@ -550,7 +560,8 @@ export function createScorerRelay({
  * - sync(key, local): the sync-match-data, then the last live state again
  *   (a relay may drop its stored live state on a sync, and a referee or the
  *   LedBox that joined meanwhile needs it at once);
- * - liveState(key, state): the live-state-update, remembered for the next sync;
+ * - liveState(key, state, extra): the live-state-update (extra: the Live
+ *   screen fields), remembered for the next sync;
  * - remove(key): delete-match (the scorer deleted or finished the match);
  * - answer(message, local): the relay's match-data-request / game-number-request.
  * Nothing is sent without a key (a blank match before Create Match) or
@@ -558,13 +569,13 @@ export function createScorerRelay({
  * @param {{ relay: { send: (payload: object) => boolean }, now?: () => number }} deps
  */
 export function createRelayMatchPublisher({ relay, now = () => Date.now() }) {
-  const lastLive = new Map() // key -> liveState
+  const lastLive = new Map() // key -> { state, extra }
   const MAX_KEYS = 8
 
-  const remember = (key, state) => {
+  const remember = (key, state, extra) => {
     lastLive.delete(key)
     if (lastLive.size >= MAX_KEYS) lastLive.delete(lastLive.keys().next().value)
-    lastLive.set(key, state)
+    lastLive.set(key, { state, extra })
   }
 
   return {
@@ -572,16 +583,17 @@ export function createRelayMatchPublisher({ relay, now = () => Date.now() }) {
       if (!key || !local?.match) return false
       if (!relay.send(syncMatchMessage(key, local, { now: now() }))) return false
       const live = lastLive.get(key)
-      if (live) relay.send(liveStateMessage(key, live))
+      if (live) relay.send(liveStateMessage(key, live.state, live.extra))
       return true
     },
-    liveState(key, state) {
+    /** `extra`: the Live screen fields, see liveStateMessage. */
+    liveState(key, state, extra = null) {
       if (!key || !state) return false
-      remember(key, state)
-      return relay.send(liveStateMessage(key, state))
+      remember(key, state, extra)
+      return relay.send(liveStateMessage(key, state, extra))
     },
     lastLiveState(key) {
-      return lastLive.get(key) || null
+      return lastLive.get(key)?.state || null
     },
     remove(key) {
       if (!key) return false

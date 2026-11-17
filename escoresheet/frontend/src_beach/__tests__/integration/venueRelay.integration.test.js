@@ -40,7 +40,7 @@ vi.mock('../../utils_beach/backendConfig_beach', () => ({
   isRelayOriginPage: () => false
 }))
 // The referee's cloud reads: none at this venue
-vi.mock('../../lib_beach/apiClient_beach', () => ({ apiFrom: vi.fn(() => { throw new Error('no cloud at the venue') }) }))
+vi.mock('../../lib_beach/apiClient_beach', () => ({ apiFrom: vi.fn(() => { throw new Error('no cloud at the venue') }), writingDevice: () => null }))
 
 const freePort = () => new Promise((resolve, reject) => {
   const srv = createServer()
@@ -70,7 +70,8 @@ describe.skipIf(!RELAY_DIR && !RELAY_URL_ENV)('two beach courts on one venue rel
   beforeAll(async () => {
     if (!relay.base) {
       const port = await freePort()
-      const env = { ...process.env, PORT: String(port), OV_PIN_SECRET: randomBytes(36).toString('base64url') }
+      // OV_GLOBAL_LIVE_FORWARD off: the Live screen test courts never go to the real cloud
+      const env = { ...process.env, PORT: String(port), OV_PIN_SECRET: randomBytes(36).toString('base64url'), OV_GLOBAL_LIVE_FORWARD: 'off' }
       for (const k of ['DATABASE_URL', 'IS_CLOUD', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'POCKETBASE_URL']) delete env[k]
       relay.child = spawn(process.execPath, ['server.js', '--local'], { cwd: RELAY_DIR, env, stdio: ['ignore', 'pipe', 'pipe'] })
       relay.output = []
@@ -274,6 +275,37 @@ describe.skipIf(!RELAY_DIR && !RELAY_URL_ENV)('two beach courts on one venue rel
     }, 'both still listed')
     expect(rows.filter(m => [courts['1'].seed, courts['2'].seed].includes(m.id))).toHaveLength(2)
     for (const s of scorers) expect(s.errors).toEqual([])
+  }, 20000)
+
+  // The Live screen (utils_beach/liveScreen_beach.js): both courts under one
+  // live screen code, on the venue relay's own /api/global/live/<code> (the
+  // TV page's data). Skipped on an OpenVolley server without it.
+  it('the Live screen: both courts under one code, home/away as team1/team2, no player or PIN', async () => {
+    const probe = await fetch(`${relay.base}/api/global/live/ABCD2345`)
+    if (probe.status === 404) return
+    const live = await import('../../utils_beach/liveScreen_beach')
+    const [s1, s2] = scorers
+    const code = live.newLiveCode()
+    const c1 = courts['1']
+    const c2 = courts['2']
+    // court 2: team A is team2 (the coin toss)
+    await db.matches.update(c2.id, { coinTossTeamA: 'team2' })
+    await s2.sync()
+    await s1.sync()
+    const field = async (c) => ({ globalLive: code, globalLiveCourt: await live.courtTokenFor({ seed_key: c.seed }) })
+    s1.publisher.liveState(c1.seed, { match_id: c1.seed, team_a_name: 'Muster / Beispiel', team_b_name: 'Rossi / Bianchi', points_a: 4, points_b: 2, sets_won_a: 0, sets_won_b: 0, side_a: 'left', serving_team: 'left', best_of: 3, match_status: 'live', current_set: 1 }, await field(c1))
+    s2.publisher.liveState(c2.seed, { match_id: c2.seed, team_a_name: 'Dubois / Martin', team_b_name: 'Keller / Huber', points_a: 5, points_b: 3, sets_won_a: 1, sets_won_b: 0, side_a: 'right', serving_team: 'right', best_of: 3, match_status: 'live', current_set: 2 }, await field(c2))
+    const data = await waitFor(async () => {
+      const r = await (await fetch(`${relay.base}/api/global/live/${code}`)).json()
+      return r?.data?.courts?.length === 2 ? r.data : null
+    }, 'both courts on the live screen')
+    const byHome = Object.fromEntries(data.courts.map((c) => [c.home.name, c]))
+    expect(byHome['Muster / Beispiel']).toMatchObject({ away: { name: 'Rossi / Bianchi' }, points: { home: 4, away: 2 }, serving: 'home', bestOf: 3, hall: '1' })
+    // court 2: A (Dubois / Martin) is away, its points and set go to away
+    expect(byHome['Keller / Huber']).toMatchObject({ away: { name: 'Dubois / Martin' }, points: { home: 3, away: 5 }, setsWon: { home: 0, away: 1 }, serving: 'away', bestOf: 3, hall: '2' })
+    const all = JSON.stringify(data)
+    for (const c of Object.values(courts)) for (const p of [c.gamePin, c.refereePin, c.team1Pin, c.team2Pin, c.matchPin, c.seed]) expect(all.includes(p), p).toBe(false)
+    expect(all).not.toMatch(/firstName|lastName|dob|2001-05-06/)
   }, 20000)
 
   it('deleting court 2\'s match removes only court 2', async () => {

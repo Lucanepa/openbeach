@@ -42,6 +42,8 @@ import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
 import { useDiagCommits } from '../diagnostics_beach/commits_beach'
 import { exportMatchData, getBackupSettings, saveBackupSettings } from '../utils_beach/backupManager_beach'
 import { captureFullStateSnapshot as captureStateSnapshot, refreshIntervalSnapshots } from '../utils_beach/stateSnapshot_beach'
+import { liveScreenFields } from '../utils_beach/liveScreen_beach'
+import { pushLiveScreen, pushesLiveScreen } from '../utils_beach/liveScreenPush_beach'
 import { leftTeamInSet, isTeam1LeftInSet, switchSidesUpdate, nextSetStartSides } from '../utils_beach/courtSides_beach'
 import { swapTeamDesignation, coinTossCloud, setFirstServer, switchFirstServeUpdate, labelsInDesignation, eventTeamA } from '../utils_beach/coinToss_beach'
 import { set3TossBefore, set3TossUndoUpdate, undoKeepsMatch } from '../utils_beach/set3Toss_beach'
@@ -1221,6 +1223,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
         timeout_started_at: ((timeoutModal?.running || timeoutModal)?.started && (timeoutModal?.running || timeoutModal).startedAt) || null,
         set_interval_active: false,
         match_status: snapshot.matchStatus || 'live',
+        // beach is always best of 3 (the Live screen reads it; it defaults to 5)
+        best_of: 3,
         game_n: gameNumberValue(match.gameN || match.game_n),
         league: match.league || null,
         gender: match.match_type_2 || null,
@@ -1244,7 +1248,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Never while another device scores the match (db/019): its tablets
       // follow that one
       const relayKey = relayMatchKey(match)
-      if (relayKey && !isScorerMoved(match)) scorerPublisher.liveState(relayKey, { ...broadcastData, match_id: relayKey })
+      if (relayKey && !isScorerMoved(match)) {
+        // The Live screen for TVs (utils_beach/liveScreen_beach.js): the live
+        // screen code and the court token, once this device opted in
+        const liveScreen = liveScreenFields(match)
+        scorerPublisher.liveState(relayKey, { ...broadcastData, match_id: relayKey }, liveScreen)
+        // the desktop app's relay feeds no cloud page: it sends the court itself
+        if (liveScreen.globalLive && pushesLiveScreen()) pushLiveScreen({ code: liveScreen.globalLive, match, liveState: broadcastData, db, matchId })
+      }
 
       const ch = new BroadcastChannel('openbeach-scoreboard')
       ch.postMessage({ type: 'LIVE_STATE_UPDATE', data: broadcastData })

@@ -3287,5 +3287,22 @@
     },
     "removeLocalOnly": "Viene eliminata solo la copia di questo dispositivo. La versione ufficiale resta sul server.",
     "removeMovedLocalOnly": "Viene eliminata solo la copia di questo dispositivo. La partita resta sul server e sul dispositivo che la referta."
+  },
+  "liveScreen": {
+    "title": "Schermo live",
+    "label": "Punteggi sulle TV",
+    "hint": "Tutti i campi del tuo evento su TV o un proiettore.",
+    "intro": "Mostra il punteggio di tutti i campi del tuo evento su TV o un proiettore, per qualsiasi partita. Avvialo su un dispositivo segnapunti e inserisci il suo codice sugli altri. Online va solo il punteggio (nomi delle squadre, punti, set), mai i dati dei giocatori. Nel beach i nomi delle squadre sono spesso quelli dei giocatori: in quel caso appaiono sulla pagina pubblica.",
+    "codeLabel": "Codice schermo live",
+    "smartTv": "Su una smart TV: apri il browser web della TV e digita {{url}}.",
+    "venueUrl": "Senza internet sul posto, le TV sul Wi-Fi del posto aprono: {{url}}",
+    "otherDevices": "Sugli altri dispositivi segnapunti dell’evento, inserisci questo codice in Opzioni › Schermo live.",
+    "copyLink": "Copia link",
+    "copied": "Copiato",
+    "turnOff": "Disattiva su questo dispositivo",
+    "start": "Avvia uno schermo live",
+    "enterCode": "Codice schermo live",
+    "join": "Partecipa",
+    "badCode": "Questo non è un codice schermo live (8 lettere e cifre)."
   }
 }

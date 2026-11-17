@@ -14,6 +14,7 @@ import { reloadWithReason } from '../../diagnostics_beach/reload_beach'
 import DiagnosticsSection from '../../diagnostics_beach/DiagnosticsSection_beach'
 import ActivityLogSection from './ActivityLogSection_beach'
 import ThemeOption from './ThemeOption_beach'
+import LiveScreenSection from './LiveScreenSection_beach'
 
 // The kit InfoHint (a real button, opens on tap) and Switch (role="switch",
 // aria-checked, named, focus ring): the hand-made dot and toggle had no role,
@@ -700,6 +701,13 @@ export default function ScoreboardOptionsModal({
               <ThemeOption />
             </div>
           </Row>
+        </Section>
+
+        {/* TVs at the event: every court's score (utils_beach/liveScreen_beach.js) */}
+        <Section title={t('liveScreen.title')}>
+          <div className="ov-kit" data-testid="scoreboard-options-live-screen">
+            <LiveScreenSection />
+          </div>
         </Section>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
