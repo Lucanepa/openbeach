@@ -15,6 +15,22 @@
  * sending its heartbeat, on the scorer's Cancel (an AbortSignal) or after a
  * hard timeout, and the error says which (`error.reason`).
  *
+ * The stall and the hard timeout count only the time this window could
+ * have heard the page. The Android app's in-app view (openAppWindow_beach.js)
+ * is an iframe of this page: same origin, same renderer, ONE main thread.
+ * While the scoresheet captures its pages (rasterizeHTML, toDataURL) that
+ * thread runs nothing else: no heartbeat leaves the page and no timer runs
+ * here. OpenVolley, league match 2026-11-17 on a slow tablet (Galaxy Tab A7
+ * Lite): the capture held the thread longer than the stall limit; once free,
+ * the expired stall timer ran before the page's next heartbeat, closed the
+ * view and threw the almost finished PDF away ("The scoresheet window
+ * stopped answering", then "Approve without PDF"; OpenVolley #243). Here the
+ * stall limit is shorter still (PDF_STALL_MS). So a watchdog ticks every
+ * PDF_CLOSED_POLL_MS and a tick that comes more than PDF_BLOCKED_TICK_MS late
+ * (the thread was busy: the page is working, or the tablet slept) counts as
+ * one tick only. A popup or desktop window (its own thread) is timed as
+ * before: every tick comes on time.
+ *
  * Each wait has a request id: `open(requestId)` puts it in the window's URL
  * (`pdfReq`, PDF_REQUEST_PARAM) and the page echoes it as `req`. An answer
  * for another request (a window of an earlier attempt, closed by Cancel or a
@@ -35,8 +51,14 @@ function newRequestId() {
 export const PDF_TIMEOUT_MS = 90000
 /** No heartbeat from the scoresheet for this long: it is gone or stuck. */
 export const PDF_STALL_MS = 10000
-/** How often the opened window is checked for being closed. */
+/** How often the watchdog ticks: the opened window checked for being closed, the stall and the hard timeout. */
 export const PDF_CLOSED_POLL_MS = 500
+/**
+ * A watchdog tick this much later than due: this window's main thread was
+ * blocked meanwhile (the in-app view's page shares it), so that time does
+ * not count toward the stall or the hard timeout.
+ */
+export const PDF_BLOCKED_TICK_MS = 2000
 
 /** Error reasons: why no PDF came. */
 export const PDF_FAIL = Object.freeze({
@@ -79,30 +101,35 @@ function closeOpened(opened) {
  * closed, so none is left behind.
  * @param {(requestId: string) => ({ ok?: boolean, window?: Window|null, close?: () => void, isClosed?: () => boolean } | undefined)} open
  *   opens the page with `pdfReq=<requestId>` in its URL
- * @param {{ win?: Window, timeoutMs?: number, stallMs?: number, pollMs?: number, signal?: AbortSignal, onProgress?: (p: { page?: number, pages?: number }) => void, requestId?: string }} [opts]
+ * @param {{ win?: Window, timeoutMs?: number, stallMs?: number, pollMs?: number, blockedTickMs?: number, now?: () => number, signal?: AbortSignal, onProgress?: (p: { page?: number, pages?: number }) => void, requestId?: string }} [opts]
  */
 export function waitForScoresheetPdf(open, {
   win = window,
   timeoutMs = PDF_TIMEOUT_MS,
   stallMs = PDF_STALL_MS,
   pollMs = PDF_CLOSED_POLL_MS,
+  blockedTickMs = PDF_BLOCKED_TICK_MS,
+  now = () => Date.now(),
   signal,
   onProgress,
   requestId = newRequestId()
 } = {}) {
   let opened
   let settled = false
-  let timer = null
-  let stallTimer = null
-  let pollTimer = null
+  let watchdog = null
   let onAbort = null
+  // Time this window could have heard the page (see the header): since the
+  // start (hard timeout) and since the last heartbeat (stall; the page's
+  // load counts as well, as before)
+  let waited = 0
+  let silent = 0
+  let lastTick = now()
+  let watching = false // the window is open: check whether it closes
 
   return new Promise((resolve, reject) => {
     const done = () => {
       settled = true
-      clearTimeout(timer)
-      clearTimeout(stallTimer)
-      clearInterval(pollTimer)
+      clearInterval(watchdog)
       win.removeEventListener('message', handler)
       if (onAbort) signal?.removeEventListener?.('abort', onAbort)
     }
@@ -112,9 +139,20 @@ export function waitForScoresheetPdf(open, {
       if (close) closeOpened(opened)
       reject(pdfError(reason, message))
     }
-    const armStall = () => {
-      clearTimeout(stallTimer)
-      stallTimer = setTimeout(() => fail(PDF_FAIL.STALLED, 'The scoresheet window stopped answering'), stallMs)
+    const armStall = () => { silent = 0 }
+    const tick = () => {
+      if (settled) return
+      const t = now()
+      const late = t - lastTick
+      lastTick = t
+      // Late: this thread was blocked (the page capturing in the in-app view,
+      // or the tablet asleep): one tick, not the whole gap
+      const counted = late > blockedTickMs ? pollMs : Math.max(0, late)
+      waited += counted
+      silent += counted
+      if (waited >= timeoutMs) return fail(PDF_FAIL.TIMEOUT, 'PDF generation timed out')
+      if (silent >= stallMs) return fail(PDF_FAIL.STALLED, 'The scoresheet window stopped answering')
+      if (watching && openedWindowClosed(opened)) fail(PDF_FAIL.CLOSED, 'The scoresheet window was closed before the PDF was ready', { close: false })
     }
 
     function handler(event) {
@@ -147,8 +185,8 @@ export function waitForScoresheetPdf(open, {
       onAbort = () => fail(PDF_FAIL.CANCELLED, 'Cancelled')
       signal.addEventListener('abort', onAbort, { once: true })
     }
-    timer = setTimeout(() => fail(PDF_FAIL.TIMEOUT, 'PDF generation timed out'), timeoutMs)
-    armStall()
+    // one watchdog: hard timeout, stall, closed window
+    watchdog = setInterval(tick, pollMs)
 
     try {
       opened = open(requestId)
@@ -161,8 +199,8 @@ export function waitForScoresheetPdf(open, {
       fail(PDF_FAIL.BLOCKED, 'The scoresheet window could not be opened', { close: false })
       return
     }
-    pollTimer = setInterval(() => {
-      if (openedWindowClosed(opened)) fail(PDF_FAIL.CLOSED, 'The scoresheet window was closed before the PDF was ready', { close: false })
-    }, pollMs)
+    // (open() itself may have held the thread: that is not the page's time)
+    lastTick = now()
+    watching = true
   })
 }
