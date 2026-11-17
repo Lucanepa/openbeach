@@ -128,16 +128,30 @@ The same as OpenVolley's app:
   without them it is 962×601. A swipe from the screen's edge shows the bars
   over the page for a few seconds; the page keeps its size. Leaving the
   scoring screen shows them again.
+- **The scoresheet in an in-app view.** The WebView has no second window, so
+  the scoresheet (and its PDF modes) opens in a full-screen in-app view over
+  the untouched scorer screen: an iframe of the app page with a Back bar
+  (`openAppWindow_beach.js`; the page answers through
+  `appWindowGuest_beach.js`). Android Back closes it.
+- **The approval PDF (`action=getBlob`) on a slow tablet.** The view's
+  iframe and the scorer app under it share ONE main thread (same origin,
+  same renderer). The sheet's capture (rasterizeHTML, the JPEG encode of
+  each page) holds that thread in one piece: no heartbeat leaves the page
+  and no timer of the approval runs meanwhile. In OpenVolley (league match
+  2026-11-17, Galaxy Tab A7 Lite; OpenVolley #243) that block outlasted the
+  approval's stall limit; when the thread was free, the expired stall timer
+  ran before the page's next heartbeat, closed the view and threw the PDF
+  away ("The scoresheet window stopped answering", then "Approve without
+  PDF"). OpenBeach's stall limit is shorter (10 s), so the same holds here.
+  Now the approval's watchdog (`scoresheetPdfRequest_beach.js`) counts only
+  the time its thread was free: a tick that comes more than 2 s late counts
+  as one tick, for the stall and the 90 s limit alike. Popups and desktop
+  app windows run on their own thread: their ticks come on time, timed as
+  before. Not yet checked on a slow device or a slowed emulator for
+  OpenBeach (unit tests only).
 
 ## Known limits (2.0.0)
 
-- The scoresheet and its PDF open in a new window (`window.open`), which the
-  Android WebView does not have: it loads the scoresheet page in place of the
-  scorer's (checked on the emulator). Back returns to the scorer, which
-  reloads and offers the match under Continue Match; nothing is lost, but a
-  flow that waits for the scoresheet window (the PDF for the match-end ZIP)
-  does not get it. OpenVolley shows such pages in an in-app view
-  (`openAppWindow.js`); OpenBeach does not have that yet.
 - The scoresheet pages (`scoresheet_beach.html`,
   `scoresheet_archive_beach.html`) load Tailwind from a CDN, so they are
   unstyled offline.
